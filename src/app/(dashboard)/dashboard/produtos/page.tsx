@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -12,8 +15,17 @@ import {
 } from "@/components/ui/table";
 import { Search, Package, Plus, Eye } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { ModalDetalhesProduto } from "@/components/produtos/modal-detalhes-produto";
 
 export default function ProdutosPage() {
+  const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const visualizarProduto = (produto: any) => {
+    setProdutoSelecionado(produto);
+    setModalOpen(true);
+  };
+
   // Mock data - dados realistas para ótica
   const produtos = [
     {
@@ -23,9 +35,11 @@ export default function ProdutosPage() {
       categoria: "ARMACAO",
       marca: "Ray-Ban",
       preco: 899.90,
+      custoProduto: 450.00,
       estoque: 15,
       estoqueMinimo: 5,
       status: "active",
+      descricao: "Óculos aviador clássico em metal dourado com lentes de proteção UV400. Design atemporal e confortável para uso diário.",
     },
     {
       id: "2",
@@ -34,9 +48,11 @@ export default function ProdutosPage() {
       categoria: "ARMACAO",
       marca: "Oakley",
       preco: 1249.90,
+      custoProduto: 625.00,
       estoque: 8,
       estoqueMinimo: 5,
       status: "active",
+      descricao: "Armação esportiva em acetato premium com design moderno. Ideal para atividades ao ar livre com proteção e estilo.",
     },
     {
       id: "3",
@@ -45,9 +61,11 @@ export default function ProdutosPage() {
       categoria: "LENTE",
       marca: "Transitions",
       preco: 580.00,
+      custoProduto: 290.00,
       estoque: 2,
       estoqueMinimo: 3,
       status: "active",
+      descricao: "Lente fotossensível de última geração que escurece rapidamente ao sol e clareia em ambientes internos. Índice 1.67 para lentes mais finas.",
     },
     {
       id: "4",
@@ -276,7 +294,11 @@ export default function ProdutosPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => visualizarProduto(produto)}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
@@ -337,6 +359,12 @@ export default function ProdutosPage() {
           </CardContent>
         </Card>
       </div>
+
+      <ModalDetalhesProduto
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        produto={produtoSelecionado}
+      />
     </div>
   );
 }
