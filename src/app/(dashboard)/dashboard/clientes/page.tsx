@@ -6,52 +6,78 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Eye, Phone, Mail, Calendar } from "lucide-react";
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Avatar, AvatarFallback, AvatarImage } from "@/components/ui/avatar";
+import {
+  Search,
+  Plus,
+  Eye,
+  Phone,
+  Mail,
+  Calendar,
+  Upload,
+  Download,
+  Building2,
+  ShoppingBag,
+  AlertTriangle
+} from "lucide-react";
 import { formatCPF } from "@/lib/utils";
 import { ModalDetalhesCliente } from "@/components/clientes/modal-detalhes-cliente";
+import Link from "next/link";
 
 export default function ClientesPage() {
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [busca, setBusca] = useState("");
+  const [filtroStatus, setFiltroStatus] = useState("ativos");
+  const [filtroOrigem, setFiltroOrigem] = useState("todas");
+  const [filtroCidade, setFiltroCidade] = useState("");
 
   const visualizarCliente = (cliente: any) => {
     setClienteSelecionado(cliente);
     setModalOpen(true);
   };
 
-  // Mock data - clientes realistas para ótica
+  // Mock data - clientes realistas para ótica (estilo SSÓtica)
   const clientes = [
     {
       id: "1",
-      nome: "Maria Silva Santos",
-      email: "maria.santos@email.com",
-      telefone: "(11) 98765-4321",
+      nome: "Maria Adelaide Faco",
+      email: "maria.faco@email.com",
+      telefone: "(85) 98529-2608",
       cpf: "12345678901",
       dataNascimento: "1985-03-15",
+      dataCadastro: "2024-03-04",
       ultimaCompra: "2024-01-28",
-      totalCompras: 3,
-      valorTotal: 2850.50,
+      totalCompras: 1,
+      valorTotal: 190.00,
       status: "active",
+      filial: "Ado Cascavel",
+      cidade: "Cascavel-CE",
+      origem: "Indicação",
+      foto: null,
     },
     {
       id: "2",
-      nome: "João Pedro Oliveira",
-      email: "joao.oliveira@email.com",
-      telefone: "(11) 97654-3210",
+      nome: "Abel Jackson Lopes dos Santos",
+      email: "abel.lopes@email.com",
+      telefone: "(85) 99264-2481",
       cpf: "23456789012",
       dataNascimento: "1992-07-22",
+      dataCadastro: "2020-01-25",
       ultimaCompra: "2024-01-30",
       totalCompras: 1,
       valorTotal: 1249.90,
       status: "active",
+      filial: "Ado Pacajus",
+      cidade: "Pacajus-CE",
+      origem: "Indicação",
+      foto: null,
     },
     {
       id: "3",
@@ -199,8 +225,46 @@ export default function ClientesPage() {
   const ticketMedio =
     clientes.reduce((acc, c) => acc + c.valorTotal, 0) / clientes.length;
 
+  // Filtrar clientes
+  const clientesFiltrados = clientes.filter((cliente) => {
+    const matchBusca =
+      cliente.nome.toLowerCase().includes(busca.toLowerCase()) ||
+      cliente.email.toLowerCase().includes(busca.toLowerCase()) ||
+      cliente.telefone.includes(busca) ||
+      cliente.cpf.includes(busca);
+
+    const matchStatus =
+      filtroStatus === "todos" ||
+      (filtroStatus === "ativos" && cliente.status !== "inactive") ||
+      (filtroStatus === "inativos" && cliente.status === "inactive");
+
+    const matchCidade =
+      !filtroCidade || cliente.cidade?.toLowerCase().includes(filtroCidade.toLowerCase());
+
+    return matchBusca && matchStatus && matchCidade;
+  });
+
   return (
     <div className="space-y-6">
+      {/* Banner de Aviso */}
+      <div className="rounded-lg border border-red-300 bg-red-50 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-red-200">
+              <AlertTriangle className="h-5 w-5 text-red-700" />
+            </div>
+            <div>
+              <p className="font-medium text-red-900">
+                <strong>Aviso:</strong> Estamos adotando uma nova política de senhas para proteger ainda mais sua conta. Atualize sua senha agora e mantenha sua segurança em dia.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+            Alterar Senha
+          </Button>
+        </div>
+      </div>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -209,10 +273,16 @@ export default function ClientesPage() {
             Gerencie os clientes da ótica
           </p>
         </div>
-        <Button>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Cliente
-        </Button>
+        <div className="flex gap-2">
+          <Button variant="outline">
+            <Upload className="mr-2 h-4 w-4" />
+            Importar Clientes
+          </Button>
+          <Button>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Cliente
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -259,113 +329,159 @@ export default function ClientesPage() {
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Filters - Estilo SSÓtica */}
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-          <CardDescription>
-            Busque e filtre clientes cadastrados
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle>Busca</CardTitle>
+              <CardDescription className="text-xs mt-1">
+                Para garantir a importação, envie um arquivo no formato Excel(.xlsx) com no máximo 1.000 linhas.
+              </CardDescription>
+            </div>
+          </div>
         </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+        <CardContent className="space-y-4">
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Busque por código externo, nome, apelido, e-mail, telefone ou documento"
+              className="pl-9"
+              value={busca}
+              onChange={(e) => setBusca(e.target.value)}
+            />
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div>
+              <label className="text-sm font-medium mb-2 block">Origem do Cliente</label>
+              <Select value={filtroOrigem} onValueChange={setFiltroOrigem}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Escolha uma opção" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todas">Todas</SelectItem>
+                  <SelectItem value="indicacao">Indicação</SelectItem>
+                  <SelectItem value="redes-sociais">Redes Sociais</SelectItem>
+                  <SelectItem value="google">Google</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Mostrar Clientes</label>
+              <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="todos">Todos</SelectItem>
+                  <SelectItem value="ativos">Somente Ativos</SelectItem>
+                  <SelectItem value="inativos">Inativos</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div>
+              <label className="text-sm font-medium mb-2 block">Cidade</label>
               <Input
-                placeholder="Buscar por nome, email, telefone ou CPF..."
-                className="pl-9"
+                placeholder="Selecione uma cidade..."
+                value={filtroCidade}
+                onChange={(e) => setFiltroCidade(e.target.value)}
               />
             </div>
-            <Button variant="outline">
-              Todos os Status
-            </Button>
+
+            <div className="flex items-end">
+              <Button className="w-full">
+                <Search className="mr-2 h-4 w-4" />
+                Buscar
+              </Button>
+            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Customers Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Clientes</CardTitle>
-          <CardDescription>
-            {clientes.length} clientes cadastrados
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>CPF</TableHead>
-                <TableHead className="text-center">Compras</TableHead>
-                <TableHead className="text-right">Total Gasto</TableHead>
-                <TableHead className="text-center">Última Compra</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {clientes.map((cliente) => (
-                <TableRow key={cliente.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback>{getInitials(cliente.nome)}</AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{cliente.nome}</p>
-                        <p className="text-xs text-muted-foreground flex items-center gap-1">
-                          <Calendar className="h-3 w-3" />
-                          {formatDate(cliente.dataNascimento)}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p className="text-sm flex items-center gap-1">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        {cliente.email}
+      {/* Botões de Exportar */}
+      <div className="flex gap-2">
+        <Button variant="outline">
+          <Download className="mr-2 h-4 w-4" />
+          Exportar Clientes
+        </Button>
+        <Button variant="outline">
+          <Download className="mr-2 h-4 w-4" />
+          Exportar Receitas
+        </Button>
+      </div>
+
+      {/* Resultado da busca */}
+      <p className="text-sm text-muted-foreground">
+        Foram encontrados <strong>{clientesFiltrados.length} clientes ativos</strong>. Mostrando página 1 de {Math.ceil(clientesFiltrados.length / 20)}.
+      </p>
+
+      {/* Lista de Clientes em Cards - Estilo SSÓtica */}
+      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        {clientesFiltrados.map((cliente) => (
+          <Card key={cliente.id} className="hover:shadow-md transition-shadow cursor-pointer" onClick={() => visualizarCliente(cliente)}>
+            <CardContent className="p-6">
+              <div className="flex items-start gap-4">
+                {/* Avatar/Foto */}
+                <Avatar className="h-16 w-16">
+                  {(cliente as any).foto ? (
+                    <AvatarImage src={(cliente as any).foto} alt={cliente.nome} />
+                  ) : (
+                    <AvatarFallback className="text-lg">{getInitials(cliente.nome)}</AvatarFallback>
+                  )}
+                </Avatar>
+
+                {/* Informações */}
+                <div className="flex-1 space-y-2">
+                  <div>
+                    <h3 className="font-semibold text-lg">{cliente.nome}</h3>
+                    {(cliente as any).filial && (
+                      <p className="text-xs text-muted-foreground flex items-center gap-1">
+                        <Building2 className="h-3 w-3" />
+                        {(cliente as any).filial}
                       </p>
-                      <p className="text-sm flex items-center gap-1">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        {cliente.telefone}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell className="font-mono text-sm">
-                    {formatCPF(cliente.cpf)}
-                  </TableCell>
-                  <TableCell className="text-center font-medium">
-                    {cliente.totalCompras}
-                  </TableCell>
-                  <TableCell className="text-right font-semibold">
-                    {formatCurrency(cliente.valorTotal)}
-                  </TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">
-                    {formatDate(cliente.ultimaCompra)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={getStatusVariant(cliente.status)}>
-                      {getStatusLabel(cliente.status)}
+                    )}
+                  </div>
+
+                  {(cliente as any).dataCadastro && (
+                    <p className="text-xs text-muted-foreground">
+                      {formatDate((cliente as any).dataCadastro)}
+                    </p>
+                  )}
+
+                  <div className="space-y-1">
+                    <p className="text-sm flex items-center gap-1">
+                      <Phone className="h-3 w-3 text-muted-foreground" />
+                      {cliente.telefone}
+                    </p>
+                  </div>
+
+                  <div className="flex items-center justify-between pt-2">
+                    <Badge variant="default" className="bg-blue-500">
+                      {cliente.totalCompras} Venda{cliente.totalCompras !== 1 ? 's' : ''}
                     </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      onClick={() => visualizarCliente(cliente)}
-                    >
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                  </div>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+
+      {/* Paginação */}
+      <div className="flex justify-center gap-2 mt-6">
+        <Button variant="outline" size="sm">«</Button>
+        {[...Array(Math.min(5, Math.ceil(clientesFiltrados.length / 20)))].map((_, i) => (
+          <Button key={i} variant={i === 0 ? "default" : "outline"} size="sm">
+            {i + 1}
+          </Button>
+        ))}
+        <Button variant="outline" size="sm">...</Button>
+        <Button variant="outline" size="sm">{Math.ceil(clientesFiltrados.length / 20)}</Button>
+        <Button variant="outline" size="sm">»</Button>
+      </div>
 
       <ModalDetalhesCliente
         open={modalOpen}
