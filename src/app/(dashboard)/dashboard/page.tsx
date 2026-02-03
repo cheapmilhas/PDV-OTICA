@@ -1,3 +1,5 @@
+"use client";
+
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
@@ -9,6 +11,17 @@ import {
   AlertTriangle,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import {
+  BarChart,
+  Bar,
+  XAxis,
+  YAxis,
+  CartesianGrid,
+  Tooltip,
+  ResponsiveContainer,
+  LineChart,
+  Line,
+} from "recharts";
 
 export default function DashboardPage() {
   // Mock data - será substituído por dados reais do banco
@@ -22,15 +35,38 @@ export default function DashboardPage() {
   };
 
   const recentSales = [
-    { id: "1", customer: "Maria Silva", value: 450.00, status: "completed" },
-    { id: "2", customer: "João Santos", value: 1200.00, status: "completed" },
-    { id: "3", customer: "Ana Costa", value: 680.00, status: "completed" },
+    { id: "1", customer: "Maria Silva", value: 450.00, status: "completed", time: "14:30" },
+    { id: "2", customer: "João Santos", value: 1200.00, status: "completed", time: "13:15" },
+    { id: "3", customer: "Ana Costa", value: 680.00, status: "completed", time: "11:45" },
+    { id: "4", customer: "Carlos Lima", value: 899.90, status: "completed", time: "10:20" },
+    { id: "5", customer: "Fernanda Souza", value: 1580.00, status: "completed", time: "09:30" },
   ];
 
   const lowStockProducts = [
     { id: "1", name: "Ray-Ban Aviador Clássico", stock: 2, min: 5 },
     { id: "2", name: "Lente Transitions Gen 8", stock: 1, min: 3 },
     { id: "3", name: "Oakley Holbrook", stock: 3, min: 5 },
+    { id: "4", name: "Tommy Hilfiger TH 1770", stock: 1, min: 5 },
+  ];
+
+  // Dados para gráfico de vendas dos últimos 7 dias
+  const salesChartData = [
+    { day: "Seg", vendas: 8, valor: 6850 },
+    { day: "Ter", vendas: 12, valor: 9240 },
+    { day: "Qua", vendas: 15, valor: 12350 },
+    { day: "Qui", vendas: 10, valor: 8450 },
+    { day: "Sex", vendas: 18, valor: 15890 },
+    { day: "Sáb", vendas: 22, valor: 18750 },
+    { day: "Dom", vendas: 5, valor: 4200 },
+  ];
+
+  // Dados para produtos mais vendidos
+  const topProductsData = [
+    { name: "Ray-Ban Aviador", vendas: 45 },
+    { name: "Lentes AR", vendas: 38 },
+    { name: "Oakley Sport", vendas: 32 },
+    { name: "Armação Infantil", vendas: 28 },
+    { name: "Óculos de Sol", vendas: 25 },
   ];
 
   return (
@@ -98,6 +134,57 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Charts */}
+      <div className="grid gap-4 md:grid-cols-2">
+        {/* Sales Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Vendas dos Últimos 7 Dias</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <LineChart data={salesChartData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="day" />
+                <YAxis />
+                <Tooltip
+                  formatter={(value: any, name: string) => {
+                    if (name === "valor") return formatCurrency(value);
+                    return value;
+                  }}
+                  labelFormatter={(label) => `Dia: ${label}`}
+                />
+                <Line
+                  type="monotone"
+                  dataKey="valor"
+                  stroke="#8884d8"
+                  strokeWidth={2}
+                  name="Valor (R$)"
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+
+        {/* Top Products Chart */}
+        <Card>
+          <CardHeader>
+            <CardTitle>Produtos Mais Vendidos</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={300}>
+              <BarChart data={topProductsData}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                <YAxis />
+                <Tooltip />
+                <Bar dataKey="vendas" fill="#82ca9d" name="Vendas" />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
       <div className="grid gap-4 md:grid-cols-2">
         {/* Recent Sales */}
         <Card>
@@ -110,12 +197,12 @@ export default function DashboardPage() {
                 <div key={sale.id} className="flex items-center justify-between">
                   <div className="space-y-1">
                     <p className="text-sm font-medium">{sale.customer}</p>
-                    <p className="text-xs text-muted-foreground">Venda #{sale.id}</p>
+                    <p className="text-xs text-muted-foreground">{sale.time}</p>
                   </div>
                   <div className="text-right">
                     <p className="text-sm font-bold">{formatCurrency(sale.value)}</p>
                     <Badge variant="secondary" className="mt-1">
-                      {sale.status === "completed" ? "Concluída" : "Pendente"}
+                      Concluída
                     </Badge>
                   </div>
                 </div>

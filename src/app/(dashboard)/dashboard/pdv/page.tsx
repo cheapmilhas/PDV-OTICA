@@ -20,9 +20,13 @@ import {
   Package,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
+import { useToast } from "@/hooks/use-toast";
 
 export default function PDVPage() {
   const [carrinho, setCarrinho] = useState<any[]>([]);
+  const [modalVendaOpen, setModalVendaOpen] = useState(false);
+  const { toast } = useToast();
 
   // Mock produtos disponíveis
   const produtosDisponiveis = [
@@ -104,7 +108,25 @@ export default function PDVPage() {
   const total = subtotal - desconto;
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantidade, 0);
 
+  const handleConfirmarVenda = (payments: any[]) => {
+    // Aqui seria a integração com o backend
+    toast({
+      title: "Venda Finalizada!",
+      description: `Venda de ${formatCurrency(total)} finalizada com sucesso.`,
+    });
+
+    setCarrinho([]);
+    setModalVendaOpen(false);
+  };
+
   return (
+    <>
+      <ModalFinalizarVenda
+        open={modalVendaOpen}
+        onOpenChange={setModalVendaOpen}
+        total={total}
+        onConfirm={handleConfirmarVenda}
+      />
     <div className="h-[calc(100vh-120px)] space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -313,6 +335,7 @@ export default function PDVPage() {
                   className="w-full"
                   size="lg"
                   disabled={carrinho.length === 0}
+                  onClick={() => setModalVendaOpen(true)}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
                   Finalizar Venda
@@ -331,5 +354,6 @@ export default function PDVPage() {
         </div>
       </div>
     </div>
+    </>
   );
 }
