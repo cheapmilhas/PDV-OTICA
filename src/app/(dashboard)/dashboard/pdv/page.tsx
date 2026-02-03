@@ -26,10 +26,11 @@ import { useToast } from "@/hooks/use-toast";
 export default function PDVPage() {
   const [carrinho, setCarrinho] = useState<any[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
+  const [buscaProduto, setBuscaProduto] = useState("");
   const { toast } = useToast();
 
-  // Mock produtos disponíveis
-  const produtosDisponiveis = [
+  // Mock produtos disponíveis - lista completa
+  const todosOsProdutos = [
     {
       id: "1",
       codigo: "ARM001",
@@ -65,7 +66,37 @@ export default function PDVPage() {
       preco: 25.00,
       estoque: 45,
     },
+    {
+      id: "6",
+      codigo: "ARM003",
+      nome: "Armação Infantil Flexível Azul",
+      preco: 320.00,
+      estoque: 12,
+    },
+    {
+      id: "7",
+      codigo: "LEN002",
+      nome: "Lente Zeiss Single Vision 1.74",
+      preco: 1200.00,
+      estoque: 5,
+    },
+    {
+      id: "8",
+      codigo: "EST001",
+      nome: "Estojo Rígido Premium",
+      preco: 35.00,
+      estoque: 50,
+    },
   ];
+
+  // Filtrar produtos com base na busca
+  const produtosDisponiveis = buscaProduto
+    ? todosOsProdutos.filter(
+        (p) =>
+          p.codigo.toLowerCase().includes(buscaProduto.toLowerCase()) ||
+          p.nome.toLowerCase().includes(buscaProduto.toLowerCase())
+      ).slice(0, 6)
+    : todosOsProdutos.slice(0, 5);
 
   const adicionarProduto = (produto: any) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
@@ -167,13 +198,27 @@ export default function PDVPage() {
                   <Input
                     placeholder="Código ou nome do produto..."
                     className="pl-9"
+                    value={buscaProduto}
+                    onChange={(e) => setBuscaProduto(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && produtosDisponiveis.length > 0) {
+                        adicionarProduto(produtosDisponiveis[0]);
+                        setBuscaProduto("");
+                      }
+                    }}
                   />
                 </div>
-                <Button>
-                  <Search className="mr-2 h-4 w-4" />
-                  Buscar
-                </Button>
+                {buscaProduto && (
+                  <Button variant="outline" onClick={() => setBuscaProduto("")}>
+                    Limpar
+                  </Button>
+                )}
               </div>
+              {buscaProduto && produtosDisponiveis.length === 0 && (
+                <p className="mt-2 text-sm text-muted-foreground">
+                  Nenhum produto encontrado
+                </p>
+              )}
             </CardContent>
           </Card>
 
