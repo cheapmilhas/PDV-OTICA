@@ -1,3 +1,6 @@
+"use client";
+
+import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,8 +16,17 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Search, Plus, Eye, Phone, Mail, Calendar } from "lucide-react";
 import { formatCPF } from "@/lib/utils";
+import { ModalDetalhesCliente } from "@/components/clientes/modal-detalhes-cliente";
 
 export default function ClientesPage() {
+  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
+  const [modalOpen, setModalOpen] = useState(false);
+
+  const visualizarCliente = (cliente: any) => {
+    setClienteSelecionado(cliente);
+    setModalOpen(true);
+  };
+
   // Mock data - clientes realistas para ótica
   const clientes = [
     {
@@ -340,7 +352,11 @@ export default function ClientesPage() {
                     </Badge>
                   </TableCell>
                   <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => visualizarCliente(cliente)}
+                    >
                       <Eye className="h-4 w-4" />
                     </Button>
                   </TableCell>
@@ -350,6 +366,12 @@ export default function ClientesPage() {
           </Table>
         </CardContent>
       </Card>
+
+      <ModalDetalhesCliente
+        open={modalOpen}
+        onOpenChange={setModalOpen}
+        cliente={clienteSelecionado}
+      />
     </div>
   );
 }
