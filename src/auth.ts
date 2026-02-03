@@ -44,9 +44,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const user = await prisma.user.findUnique({
             where: { email },
             include: {
-              branch: {
+              company: true,
+              branches: {
                 include: {
-                  company: true,
+                  branch: {
+                    include: {
+                      company: true,
+                    },
+                  },
                 },
               },
             },
@@ -65,13 +70,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null;
           }
 
+          // Pegar o primeiro branch do usuário
+          const firstBranch = user.branches[0]?.branch;
+
           return {
             id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
-            branchId: user.branchId,
-            companyId: user.branch?.companyId,
+            branchId: firstBranch?.id || "mock-branch-id",
+            companyId: user.companyId,
           };
         } catch (error) {
           console.error("Auth error:", error);
@@ -84,18 +92,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async jwt({ token, user }) {
       if (user) {
         token.id = user.id;
-        token.role = user.role;
-        token.branchId = user.branchId;
-        token.companyId = user.companyId;
+        token.role = (user as any).role;
+        token.branchId = (user as any).branchId;
+        token.companyId = (user as any).companyId;
       }
       return token;
     },
     async session({ session, token }) {
       if (token && session.user) {
-        session.user.id = token.id as string;
-        session.user.role = token.role as string;
-        session.user.branchId = token.branchId as string;
-        session.user.companyId = token.companyId as string;
+        (session.user as any).id = token.id as string;
+        (session.user as any).role = token.role as string;
+        (session.user as any).branchId = token.branchId as string;
+        (session.user as any).companyId = token.companyId as string;
       }
       return session;
     },

@@ -371,7 +371,7 @@ export default function DashboardPage() {
                 <XAxis dataKey="day" />
                 <YAxis />
                 <Tooltip
-                  formatter={(value: any, name: string) => {
+                  formatter={(value: any, name?: string) => {
                     if (name === "valor") return formatCurrency(value);
                     return value;
                   }}
@@ -461,7 +461,7 @@ export default function DashboardPage() {
                   cx="50%"
                   cy="50%"
                   labelLine={false}
-                  label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                  label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
                   outerRadius={80}
                   fill="#8884d8"
                   dataKey="value"
