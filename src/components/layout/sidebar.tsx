@@ -16,6 +16,8 @@ import {
   ClipboardList,
   Stethoscope,
   Gift,
+  Truck,
+  UserCog,
 } from "lucide-react";
 
 const menuItems = [
@@ -29,31 +31,31 @@ const menuItems = [
   {
     title: "Vendas",
     items: [
-      { name: "Vendas", href: "/dashboard/sales", icon: CreditCard },
-      { name: "Orçamentos", href: "/dashboard/quotes", icon: FileText },
-      { name: "Ordens de Serviço", href: "/dashboard/service-orders", icon: ClipboardList },
+      { name: "Ordens de Serviço", href: "/dashboard/ordens-servico", icon: ClipboardList },
     ],
   },
   {
     title: "Cadastros",
     items: [
-      { name: "Clientes", href: "/dashboard/customers", icon: Users, hotkey: "F3" },
-      { name: "Produtos", href: "/dashboard/products", icon: Package, hotkey: "F4" },
-      { name: "Receitas", href: "/dashboard/prescriptions", icon: Stethoscope },
+      { name: "Clientes", href: "/dashboard/clientes", icon: Users, hotkey: "F3" },
+      { name: "Produtos", href: "/dashboard/produtos", icon: Package, hotkey: "F4" },
+      { name: "Fornecedores", href: "/dashboard/fornecedores", icon: Truck },
+      { name: "Funcionários", href: "/dashboard/funcionarios", icon: UserCog },
     ],
   },
   {
     title: "Gestão",
     items: [
-      { name: "Estoque", href: "/dashboard/stock", icon: Warehouse },
-      { name: "Caixa", href: "/dashboard/cash", icon: CreditCard },
-      { name: "Comissões", href: "/dashboard/commissions", icon: Gift },
-      { name: "Relatórios", href: "/dashboard/reports", icon: BarChart3 },
+      { name: "Estoque", href: "/dashboard/estoque", icon: Warehouse },
+      { name: "Caixa", href: "/dashboard/caixa", icon: CreditCard },
+      { name: "Financeiro", href: "/dashboard/financeiro", icon: FileText },
+      { name: "Metas", href: "/dashboard/metas", icon: Gift },
+      { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3 },
     ],
   },
   {
     title: "Configurações",
-    items: [{ name: "Configurações", href: "/dashboard/settings", icon: Settings }],
+    items: [{ name: "Configurações", href: "/dashboard/configuracoes", icon: Settings }],
   },
 ];
 
