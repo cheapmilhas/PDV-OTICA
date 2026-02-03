@@ -21,12 +21,15 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
+import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
 import { useToast } from "@/hooks/use-toast";
 
 export default function PDVPage() {
   const [carrinho, setCarrinho] = useState<any[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
+  const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
+  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const { toast } = useToast();
 
   // Mock produtos disponíveis - lista completa
@@ -158,6 +161,17 @@ export default function PDVPage() {
         total={total}
         onConfirm={handleConfirmarVenda}
       />
+      <ModalNovoCliente
+        open={modalClienteOpen}
+        onOpenChange={setModalClienteOpen}
+        onClienteCriado={(cliente) => {
+          setClienteSelecionado(cliente);
+          toast({
+            title: "Cliente selecionado!",
+            description: `${cliente.nome} foi adicionado à venda.`,
+          });
+        }}
+      />
     <div className="h-[calc(100vh-120px)] space-y-4">
       {/* Header */}
       <div className="flex items-center justify-between">
@@ -269,10 +283,31 @@ export default function PDVPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <Button variant="outline" className="w-full">
-                <Plus className="mr-2 h-4 w-4" />
-                Selecionar Cliente (F3)
-              </Button>
+              {clienteSelecionado ? (
+                <div className="space-y-2">
+                  <div className="rounded-lg border bg-muted/50 p-3">
+                    <p className="font-medium">{clienteSelecionado.nome}</p>
+                    <p className="text-sm text-muted-foreground">{clienteSelecionado.telefone}</p>
+                  </div>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    className="w-full"
+                    onClick={() => setClienteSelecionado(null)}
+                  >
+                    Remover Cliente
+                  </Button>
+                </div>
+              ) : (
+                <Button
+                  variant="outline"
+                  className="w-full"
+                  onClick={() => setModalClienteOpen(true)}
+                >
+                  <Plus className="mr-2 h-4 w-4" />
+                  Adicionar Cliente (F3)
+                </Button>
+              )}
             </CardContent>
           </Card>
 
