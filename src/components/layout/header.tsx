@@ -1,6 +1,7 @@
 "use client";
 
-import { Bell, Search, User } from "lucide-react";
+import { useState } from "react";
+import { Bell, Search, User, Building2, ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -20,9 +21,16 @@ export function Header() {
     name: "Admin",
     email: "admin@pdvotica.com",
     role: "ADMIN",
-    branch: "Matriz",
   };
 
+  // Mock de filiais
+  const branches = [
+    { id: "1", name: "Matriz - Centro" },
+    { id: "2", name: "Filial Pacajus" },
+    { id: "3", name: "Filial Shopping" },
+  ];
+
+  const [selectedBranch, setSelectedBranch] = useState(branches[0]);
   const notifications = 3;
 
   return (
@@ -41,10 +49,30 @@ export function Header() {
 
       {/* Actions */}
       <div className="flex items-center gap-4">
-        {/* Branch Badge */}
-        <Badge variant="outline" className="hidden md:flex">
-          {user.branch}
-        </Badge>
+        {/* Branch Selector */}
+        <DropdownMenu>
+          <DropdownMenuTrigger asChild>
+            <Button variant="outline" className="hidden md:flex gap-2">
+              <Building2 className="h-4 w-4" />
+              <span className="max-w-[150px] truncate">{selectedBranch.name}</span>
+              <ChevronDown className="h-4 w-4 text-muted-foreground" />
+            </Button>
+          </DropdownMenuTrigger>
+          <DropdownMenuContent align="end" className="w-56">
+            <DropdownMenuLabel>Selecionar Filial</DropdownMenuLabel>
+            <DropdownMenuSeparator />
+            {branches.map((branch) => (
+              <DropdownMenuItem
+                key={branch.id}
+                onClick={() => setSelectedBranch(branch)}
+                className={selectedBranch.id === branch.id ? "bg-accent" : ""}
+              >
+                <Building2 className="mr-2 h-4 w-4" />
+                {branch.name}
+              </DropdownMenuItem>
+            ))}
+          </DropdownMenuContent>
+        </DropdownMenu>
 
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">

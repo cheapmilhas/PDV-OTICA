@@ -53,18 +53,28 @@ export default function DashboardPage() {
   const metrics = {
     salesToday: 4850.00,
     salesYesterday: 3920.00,
-    salesMonth: 125340.50,
-    salesLastMonth: 111500.00,
+    salesMonth: 14380.00,
+    salesLastMonth: 660.00,
+    salesMonthAccumulated: 75400.20,
     customersTotal: 342,
     customersNew: 12,
     productsLowStock: 12,
     productsTotal: 156,
     salesCount: 23,
     avgTicket: 545.50,
-    goalMonth: 150000.00,
+    goalMonth: 75400.20,
     osOpen: 8,
     osPending: 3,
   };
+
+  // Calcular crescimento percentual
+  const calculateGrowth = (current: number, previous: number) => {
+    if (previous === 0) return 0;
+    return ((current - previous) / previous) * 100;
+  };
+
+  const monthGrowth = calculateGrowth(metrics.salesMonth, metrics.salesLastMonth);
+  const monthProgress = (metrics.salesMonth / metrics.goalMonth) * 100;
 
   const recentSales = [
     { id: "1", customer: "Maria Silva", value: 450.00, status: "completed", time: "14:30", paymentMethod: "Crédito" },
@@ -96,6 +106,20 @@ export default function DashboardPage() {
     { day: "Sex", vendas: 18, valor: 15890 },
     { day: "Sáb", vendas: 22, valor: 18750 },
     { day: "Dom", vendas: 5, valor: 4200 },
+  ];
+
+  // Dados para gráfico acumulativo mensal (como no SSÓtica)
+  const accumulatedSalesData = [
+    { dia: 1, atual: 880, anterior: 650 },
+    { dia: 2, atual: 1920, anterior: 1180 },
+    { dia: 3, atual: 4200, anterior: 1850 },
+    { dia: 4, atual: 5800, anterior: 2400 },
+    { dia: 5, atual: 7650, anterior: 3100 },
+    { dia: 6, atual: 9420, anterior: 3850 },
+    { dia: 7, atual: 10580, anterior: 4200 },
+    { dia: 8, atual: 11840, anterior: 4650 },
+    { dia: 9, atual: 12920, anterior: 5100 },
+    { dia: 10, atual: 14380, anterior: 5450 },
   ];
 
   // Dados para produtos mais vendidos
@@ -130,6 +154,25 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Aviso/Notificação - Estilo SSÓtica */}
+      <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-200">
+              <AlertTriangle className="h-5 w-5 text-yellow-700" />
+            </div>
+            <div>
+              <p className="font-medium text-yellow-900">
+                <strong>Aviso:</strong> Estamos adotando uma nova política de senhas para proteger ainda mais sua conta. Atualize sua senha agora e mantenha sua segurança em dia.
+              </p>
+            </div>
+          </div>
+          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
+            Alterar Senha
+          </Button>
+        </div>
+      </div>
+
       {/* Header com Hora */}
       <div className="flex items-center justify-between">
         <div>
@@ -185,14 +228,23 @@ export default function DashboardPage() {
 
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Vendas do Mês</CardTitle>
-            <TrendingUp className="h-4 w-4 text-muted-foreground" />
+            <CardTitle className="text-sm font-medium">Período Atual</CardTitle>
+            <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
             <div className="text-2xl font-bold">{formatCurrency(metrics.salesMonth)}</div>
             <div className="flex items-center gap-1 text-xs mt-1">
-              <TrendingUp className="h-3 w-3 text-green-600" />
-              <span className="text-green-600 font-medium">+{crescimentoMes}%</span>
+              {monthGrowth >= 0 ? (
+                <>
+                  <TrendingUp className="h-3 w-3 text-green-600" />
+                  <span className="text-green-600 font-medium">+{monthGrowth.toFixed(2)}%</span>
+                </>
+              ) : (
+                <>
+                  <TrendingDown className="h-3 w-3 text-red-600" />
+                  <span className="text-red-600 font-medium">{monthGrowth.toFixed(2)}%</span>
+                </>
+              )}
               <span className="text-muted-foreground">vs mês anterior</span>
             </div>
           </CardContent>
@@ -355,6 +407,95 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Card Vendas Acumuladas - Estilo SSÓtica */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="text-lg">VENDAS ACUMULADAS</CardTitle>
+              <CardDescription className="mt-1">
+                Total de vendas acumuladas no mês anterior: {formatCurrency(metrics.salesMonthAccumulated)}
+              </CardDescription>
+            </div>
+            <div className="flex gap-2">
+              <Button variant="outline" size="sm">Mês anterior</Button>
+              <Button variant="outline" size="sm">Fevereiro de 2025</Button>
+              <Button variant="outline" size="sm">Últimos 12 meses</Button>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <div className="space-y-4">
+            {/* Comparação Período Atual vs Anterior */}
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-lg border bg-blue-50 p-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">PERÍODO ATUAL</p>
+                    <p className="text-sm text-muted-foreground">01/02 a 03/02</p>
+                    <div className="mt-2">
+                      <p className="text-2xl font-bold">{formatCurrency(metrics.salesMonth)}</p>
+                      <Progress value={monthProgress} className="mt-2 h-2" />
+                      <p className="mt-1 text-xs text-muted-foreground">
+                        {monthProgress.toFixed(2)}%
+                      </p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatCurrency(metrics.salesMonth)} / {formatCurrency(metrics.goalMonth)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div className="space-y-2">
+                <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-4">
+                  <div>
+                    <p className="text-xs text-muted-foreground">PERÍODO ANTERIOR</p>
+                    <p className="text-sm text-muted-foreground">01/01 a 03/01</p>
+                    <div className="mt-2">
+                      <p className="text-2xl font-bold">{formatCurrency(metrics.salesLastMonth)}</p>
+                      <Progress value={0.88} className="mt-2 h-2" />
+                      <p className="mt-1 text-xs text-muted-foreground">0,88%</p>
+                      <p className="text-sm text-muted-foreground">
+                        {formatCurrency(metrics.salesLastMonth)} / {formatCurrency(metrics.goalMonth)}
+                      </p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Gráfico Acumulativo */}
+            <div className="mt-4">
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={accumulatedSalesData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="dia" />
+                  <YAxis />
+                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                  <Line
+                    type="monotone"
+                    dataKey="atual"
+                    stroke="#FF8C42"
+                    strokeWidth={2}
+                    name="Período Atual"
+                    dot={{ r: 3 }}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="anterior"
+                    stroke="#4A90E2"
+                    strokeWidth={2}
+                    name="Período Anterior"
+                    dot={{ r: 3 }}
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Charts */}
       <div className="grid gap-4 md:grid-cols-2">
