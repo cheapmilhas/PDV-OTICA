@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -8,9 +8,11 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Switch } from "@/components/ui/switch";
 import toast from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { calculateMargin, calculateSalePrice } from "@/lib/validations/product.schema";
 
 export default function NovoProdutoPage() {
   const router = useRouter();
@@ -28,6 +30,7 @@ export default function NovoProdutoPage() {
     salePrice: "",
     costPrice: "",
     marginPercent: "",
+    stockControlled: true,
     stockQty: "0",
     stockMin: "5",
     stockMax: "",
@@ -46,6 +49,28 @@ export default function NovoProdutoPage() {
     lensDiameter: "",
   });
 
+  // Cálculo automático de margem quando alterar preços
+  useEffect(() => {
+    const sale = parseFloat(formData.salePrice);
+    const cost = parseFloat(formData.costPrice);
+
+    if (sale > 0 && cost >= 0) {
+      const margin = calculateMargin(sale, cost);
+      setFormData(prev => ({ ...prev, marginPercent: margin.toFixed(2) }));
+    }
+  }, [formData.salePrice, formData.costPrice]);
+
+  // Cálculo automático de preço de venda quando alterar margem
+  useEffect(() => {
+    const cost = parseFloat(formData.costPrice);
+    const margin = parseFloat(formData.marginPercent);
+
+    if (cost > 0 && margin > 0 && margin < 100) {
+      const sale = calculateSalePrice(cost, margin);
+      setFormData(prev => ({ ...prev, salePrice: sale.toFixed(2) }));
+    }
+  }, [formData.marginPercent, formData.costPrice]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -57,6 +82,7 @@ export default function NovoProdutoPage() {
         name: formData.name,
         sku: formData.sku,
         salePrice: parseFloat(formData.salePrice),
+        stockControlled: formData.stockControlled,
         stockQty: parseInt(formData.stockQty) || 0,
       };
 
@@ -97,10 +123,14 @@ export default function NovoProdutoPage() {
         throw new Error(error.error?.message || "Erro ao criar produto");
       }
 
-      toast.success("Produto criado com sucesso!");
+      const { data: createdProduct } = await res.json();
+
+      toast.success(`Produto ${createdProduct.name} criado com sucesso!`);
       router.push("/dashboard/produtos");
     } catch (error: any) {
-      toast.error(error.message);
+      console.error("Erro ao criar produto:", error);
+      const errorMessage = error.message || "Erro ao criar produto. Tente novamente.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }
@@ -291,6 +321,24 @@ export default function NovoProdutoPage() {
             {/* Estoque */}
             <div>
               <h3 className="font-semibold mb-4">Estoque</h3>
+
+              {/* Toggle Controla Estoque */}
+              <div className="flex items-center space-x-2 mb-4">
+                <Switch
+                  id="stockControlled"
+                  checked={formData.stockControlled}
+                  onCheckedChange={(checked) => setFormData({ ...formData, stockControlled: checked })}
+                />
+                <Label htmlFor="stockControlled" className="cursor-pointer">
+                  Controlar Estoque
+                </Label>
+                <span className="text-sm text-muted-foreground">
+                  {formData.stockControlled
+                    ? "(Não permitir vendas com estoque zero)"
+                    : "(Permite vendas independente do estoque)"}
+                </span>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="stockQty">Quantidade em Estoque</Label>
@@ -300,6 +348,7 @@ export default function NovoProdutoPage() {
                     min="0"
                     value={formData.stockQty}
                     onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })}
+                    disabled={!formData.stockControlled}
                   />
                 </div>
 
@@ -311,6 +360,7 @@ export default function NovoProdutoPage() {
                     min="0"
                     value={formData.stockMin}
                     onChange={(e) => setFormData({ ...formData, stockMin: e.target.value })}
+                    disabled={!formData.stockControlled}
                   />
                 </div>
 
@@ -322,6 +372,7 @@ export default function NovoProdutoPage() {
                     min="0"
                     value={formData.stockMax}
                     onChange={(e) => setFormData({ ...formData, stockMax: e.target.value })}
+                    disabled={!formData.stockControlled}
                   />
                 </div>
               </div>
@@ -331,54 +382,52 @@ export default function NovoProdutoPage() {
             {isLensType && (
               <div>
                 <h3 className="font-semibold mb-4">Especificações de Lente</h3>
+                <p className="text-sm text-muted-foreground mb-4">
+                  Informe a disponibilidade da lente (ranges de dioptrias disponíveis para venda)
+                </p>
                 <div className="grid gap-4 md:grid-cols-3">
                   <div className="space-y-2">
                     <Label htmlFor="spherical">Esférico</Label>
                     <Input
                       id="spherical"
-                      type="number"
-                      step="0.25"
                       value={formData.spherical}
                       onChange={(e) => setFormData({ ...formData, spherical: e.target.value })}
-                      placeholder="-10.00 a +10.00"
+                      placeholder="-6.00 a +6.00"
                     />
+                    <p className="text-xs text-muted-foreground">Ex: -10.00 a +9.00</p>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="cylindrical">Cilíndrico</Label>
                     <Input
                       id="cylindrical"
-                      type="number"
-                      step="0.25"
                       value={formData.cylindrical}
                       onChange={(e) => setFormData({ ...formData, cylindrical: e.target.value })}
                       placeholder="-6.00 a +6.00"
                     />
+                    <p className="text-xs text-muted-foreground">Ex: -4.00 a 0.00</p>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="axis">Eixo</Label>
                     <Input
                       id="axis"
-                      type="number"
-                      min="0"
-                      max="180"
                       value={formData.axis}
                       onChange={(e) => setFormData({ ...formData, axis: e.target.value })}
                       placeholder="0 a 180"
                     />
+                    <p className="text-xs text-muted-foreground">Graus (0° a 180°)</p>
                   </div>
 
                   <div className="space-y-2">
                     <Label htmlFor="addition">Adição</Label>
                     <Input
                       id="addition"
-                      type="number"
-                      step="0.25"
                       value={formData.addition}
                       onChange={(e) => setFormData({ ...formData, addition: e.target.value })}
                       placeholder="+0.75 a +4.00"
                     />
+                    <p className="text-xs text-muted-foreground">Ex: +0.75 a +3.50 (multifocal)</p>
                   </div>
 
                   <div className="space-y-2">
@@ -425,10 +474,9 @@ export default function NovoProdutoPage() {
                     <Label htmlFor="lensDiameter">Diâmetro (mm)</Label>
                     <Input
                       id="lensDiameter"
-                      type="number"
-                      step="0.1"
                       value={formData.lensDiameter}
                       onChange={(e) => setFormData({ ...formData, lensDiameter: e.target.value })}
+                      placeholder="Ex: 65, 70, 75"
                     />
                   </div>
                 </div>
