@@ -15,13 +15,14 @@ import { successResponse } from "@/lib/api-response";
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const { id } = await params;
 
-    const supplier = await supplierService.getById(params.id, companyId);
+    const supplier = await supplierService.getById(id, companyId);
 
     return successResponse(supplier);
   } catch (error) {
@@ -35,18 +36,19 @@ export async function GET(
  */
 export async function PUT(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const { id } = await params;
 
     const body = await request.json();
     const data = updateSupplierSchema.parse(body);
     const sanitizedData = sanitizeSupplierDTO(data) as UpdateSupplierDTO;
 
     const supplier = await supplierService.update(
-      params.id,
+      id,
       sanitizedData,
       companyId
     );
@@ -60,18 +62,28 @@ export async function PUT(
 /**
  * DELETE /api/suppliers/[id]
  * Desativa (soft delete) um fornecedor
+ * Se ?permanent=true, deleta permanentemente do banco de dados
  */
 export async function DELETE(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const { id } = await params;
 
-    await supplierService.delete(params.id, companyId);
+    // Verifica se é delete permanente
+    const { searchParams } = new URL(request.url);
+    const isPermanent = searchParams.get("permanent") === "true";
 
-    return successResponse({ message: "Fornecedor desativado com sucesso" });
+    if (isPermanent) {
+      await supplierService.hardDelete(id, companyId);
+      return successResponse({ message: "Fornecedor excluído permanentemente" });
+    } else {
+      await supplierService.delete(id, companyId);
+      return successResponse({ message: "Fornecedor desativado com sucesso" });
+    }
   } catch (error) {
     return handleApiError(error);
   }

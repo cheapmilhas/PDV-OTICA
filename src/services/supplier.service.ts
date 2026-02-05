@@ -161,6 +161,19 @@ export class SupplierService {
       data: { active: false },
     });
   }
+
+  /**
+   * Deleta permanentemente supplier do banco de dados
+   */
+  async hardDelete(id: string, companyId: string): Promise<void> {
+    // Verifica se existe
+    await this.getById(id, companyId, true);
+
+    // Hard delete - remove permanentemente
+    await prisma.supplier.delete({
+      where: { id },
+    });
+  }
 }
 
 // Exporta instância única (singleton)

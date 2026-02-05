@@ -5,17 +5,17 @@ import { z } from "zod";
  */
 export const createSupplierSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  tradeName: z.string().optional(),
-  cnpj: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
-  website: z.string().optional(),
-  contactPerson: z.string().optional(),
-  address: z.string().optional(),
-  city: z.string().optional(),
-  state: z.string().optional(),
-  zipCode: z.string().optional(),
-  notes: z.string().optional(),
+  tradeName: z.string().nullable().optional(),
+  cnpj: z.string().nullable().optional(),
+  phone: z.string().nullable().optional(),
+  email: z.string().email("Email inválido").nullable().optional().or(z.literal("")),
+  website: z.string().nullable().optional(),
+  contactPerson: z.string().nullable().optional(),
+  address: z.string().nullable().optional(),
+  city: z.string().nullable().optional(),
+  state: z.string().nullable().optional(),
+  zipCode: z.string().nullable().optional(),
+  notes: z.string().nullable().optional(),
 });
 
 export type CreateSupplierDTO = z.infer<typeof createSupplierSchema>;

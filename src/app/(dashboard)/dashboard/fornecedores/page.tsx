@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -22,7 +23,8 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Eye, Mail, Phone, MapPin, TrendingUp, Loader2, Edit, Trash2, Package } from "lucide-react";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Search, Plus, Eye, Mail, Phone, MapPin, TrendingUp, Loader2, Edit, Trash2, Package, AlertTriangle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
@@ -50,17 +52,20 @@ interface Supplier {
 export default function FornecedoresPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
   const [suppliers, setSuppliers] = useState<Supplier[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [loadingDetails, setLoadingDetails] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<Supplier>>({});
 
   // Buscar fornecedores da API
   useEffect(() => {
     fetchSuppliers();
-  }, [search, page]);
+  }, [search, page, statusFilter]);
 
   async function fetchSuppliers() {
     setLoading(true);
@@ -69,7 +74,7 @@ export default function FornecedoresPage() {
         search,
         page: page.toString(),
         pageSize: "20",
-        status: "ativos",
+        status: statusFilter,
       });
 
       const res = await fetch(`/api/suppliers?${params}`);
@@ -89,6 +94,7 @@ export default function FornecedoresPage() {
   async function handleViewDetails(id: string) {
     setLoadingDetails(true);
     setDetailsDialogOpen(true);
+    setIsEditing(false);
 
     try {
       const res = await fetch(`/api/suppliers/${id}`);
@@ -96,12 +102,66 @@ export default function FornecedoresPage() {
 
       const { data } = await res.json();
       setSelectedSupplier(data);
+      setEditForm(data);
     } catch (error: any) {
       console.error("Erro ao carregar detalhes:", error);
       toast.error("Erro ao carregar detalhes do fornecedor");
       setDetailsDialogOpen(false);
     } finally {
       setLoadingDetails(false);
+    }
+  }
+
+  function handleStartEdit() {
+    setIsEditing(true);
+  }
+
+  function handleCancelEdit() {
+    setIsEditing(false);
+    if (selectedSupplier) {
+      setEditForm(selectedSupplier);
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!selectedSupplier) return;
+
+    // Filtrar apenas os campos permitidos para atualização
+    const allowedFields = [
+      'name', 'tradeName', 'cnpj', 'phone', 'email',
+      'website', 'contactPerson', 'address', 'city',
+      'state', 'zipCode', 'notes', 'active'
+    ];
+
+    const updateData: any = {};
+    for (const field of allowedFields) {
+      if (field in editForm) {
+        const value = (editForm as any)[field];
+        // Converter strings vazias em null para campos opcionais
+        updateData[field] = value === "" ? null : value;
+      }
+    }
+
+    try {
+      const res = await fetch(`/api/suppliers/${selectedSupplier.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erro ao atualizar fornecedor");
+      }
+
+      const { data } = await res.json();
+      toast.success("Fornecedor atualizado com sucesso!");
+      setSelectedSupplier(data);
+      setEditForm(data);
+      setIsEditing(false);
+      fetchSuppliers();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao atualizar fornecedor");
     }
   }
 
@@ -128,6 +188,27 @@ export default function FornecedoresPage() {
     }
   }
 
+  async function handlePermanentDelete(id: string) {
+    if (!confirm("⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL!\n\nTem certeza que deseja EXCLUIR PERMANENTEMENTE este fornecedor do banco de dados?\n\nTodos os dados serão perdidos e não poderão ser recuperados.")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/suppliers/${id}?permanent=true`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Erro ao excluir fornecedor");
+
+      toast.success("Fornecedor excluído permanentemente!");
+      fetchSuppliers();
+      setDetailsDialogOpen(false);
+    } catch (error: any) {
+      console.error("Erro ao excluir fornecedor:", error);
+      toast.error(error.message || "Erro ao excluir fornecedor");
+    }
+  }
+
   const getInitials = (name: string) => {
     const parts = name.split(" ");
     return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
@@ -151,7 +232,7 @@ export default function FornecedoresPage() {
             Gerencie os fornecedores da ótica
           </p>
         </div>
-        <Button onClick={() => toast.info("Em desenvolvimento")}>
+        <Button onClick={() => toast("Em desenvolvimento")}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Fornecedor
         </Button>
@@ -209,7 +290,7 @@ export default function FornecedoresPage() {
         </Card>
       </div>
 
-      {/* Search */}
+      {/* Search and Filters */}
       <Card>
         <CardHeader>
           <CardTitle>Buscar Fornecedores</CardTitle>
@@ -218,17 +299,32 @@ export default function FornecedoresPage() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="relative">
-            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-            <Input
-              placeholder="Digite para buscar..."
-              value={search}
-              onChange={(e) => {
-                setSearch(e.target.value);
-                setPage(1);
-              }}
-              className="pl-9"
-            />
+          <div className="flex flex-col gap-4 md:flex-row">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+              <Input
+                placeholder="Digite para buscar..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
+                className="pl-9"
+              />
+            </div>
+            <Select value={statusFilter} onValueChange={(value: any) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Filtrar status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ativos">Ativos</SelectItem>
+                <SelectItem value="inativos">Inativos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
@@ -373,131 +469,271 @@ export default function FornecedoresPage() {
               <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
             </div>
           ) : selectedSupplier ? (
-            <div className="space-y-6">
-              {/* Dados Principais */}
+            isEditing ? (
+              // Modo de Edição
               <div className="space-y-4">
-                <div className="flex items-center gap-4">
-                  <Avatar className="h-16 w-16">
-                    <AvatarFallback className="bg-blue-100 text-blue-600 text-xl">
-                      {getInitials(selectedSupplier.name)}
-                    </AvatarFallback>
-                  </Avatar>
-                  <div className="flex-1">
-                    <h3 className="text-lg font-semibold">{selectedSupplier.name}</h3>
-                    {selectedSupplier.tradeName && (
-                      <p className="text-sm text-muted-foreground">{selectedSupplier.tradeName}</p>
-                    )}
-                    <Badge variant={selectedSupplier.active ? "default" : "secondary"} className="mt-2">
-                      {selectedSupplier.active ? "Ativo" : "Inativo"}
-                    </Badge>
-                  </div>
-                </div>
-
-                {/* CNPJ */}
-                {selectedSupplier.cnpj && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">CNPJ</p>
-                    <p className="text-sm">{selectedSupplier.cnpj}</p>
-                  </div>
-                )}
-
-                {/* Contato */}
                 <div className="grid gap-4 md:grid-cols-2">
-                  {selectedSupplier.email && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                        <Mail className="h-3 w-3" /> Email
-                      </p>
-                      <p className="text-sm">{selectedSupplier.email}</p>
-                    </div>
-                  )}
-                  {selectedSupplier.phone && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                        <Phone className="h-3 w-3" /> Telefone
-                      </p>
-                      <p className="text-sm">{selectedSupplier.phone}</p>
-                    </div>
-                  )}
-                  {selectedSupplier.website && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Website</p>
-                      <p className="text-sm">{selectedSupplier.website}</p>
-                    </div>
-                  )}
-                  {selectedSupplier.contactPerson && (
-                    <div>
-                      <p className="text-sm font-medium text-muted-foreground">Contato</p>
-                      <p className="text-sm">{selectedSupplier.contactPerson}</p>
-                    </div>
-                  )}
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome *</Label>
+                    <Input
+                      id="name"
+                      value={editForm.name || ""}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tradeName">Nome Fantasia</Label>
+                    <Input
+                      id="tradeName"
+                      value={editForm.tradeName || ""}
+                      onChange={(e) => setEditForm({ ...editForm, tradeName: e.target.value })}
+                    />
+                  </div>
                 </div>
 
-                {/* Endereço */}
-                {(selectedSupplier.address || selectedSupplier.city || selectedSupplier.state) && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
-                      <MapPin className="h-3 w-3" /> Endereço
-                    </p>
-                    {selectedSupplier.address && <p className="text-sm">{selectedSupplier.address}</p>}
-                    {(selectedSupplier.city || selectedSupplier.state) && (
-                      <p className="text-sm text-muted-foreground">
-                        {selectedSupplier.city}{selectedSupplier.city && selectedSupplier.state ? " - " : ""}{selectedSupplier.state}
-                        {selectedSupplier.zipCode && ` - CEP: ${selectedSupplier.zipCode}`}
-                      </p>
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="cnpj">CNPJ</Label>
+                    <Input
+                      id="cnpj"
+                      value={editForm.cnpj || ""}
+                      onChange={(e) => setEditForm({ ...editForm, cnpj: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="contactPerson">Pessoa de Contato</Label>
+                    <Input
+                      id="contactPerson"
+                      value={editForm.contactPerson || ""}
+                      onChange={(e) => setEditForm({ ...editForm, contactPerson: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={editForm.email || ""}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="phone">Telefone</Label>
+                    <Input
+                      id="phone"
+                      value={editForm.phone || ""}
+                      onChange={(e) => setEditForm({ ...editForm, phone: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="website">Website</Label>
+                  <Input
+                    id="website"
+                    value={editForm.website || ""}
+                    onChange={(e) => setEditForm({ ...editForm, website: e.target.value })}
+                  />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Endereço</Label>
+                  <Input
+                    id="address"
+                    value={editForm.address || ""}
+                    onChange={(e) => setEditForm({ ...editForm, address: e.target.value })}
+                  />
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-3">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">Cidade</Label>
+                    <Input
+                      id="city"
+                      value={editForm.city || ""}
+                      onChange={(e) => setEditForm({ ...editForm, city: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">Estado</Label>
+                    <Input
+                      id="state"
+                      value={editForm.state || ""}
+                      onChange={(e) => setEditForm({ ...editForm, state: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="zipCode">CEP</Label>
+                    <Input
+                      id="zipCode"
+                      value={editForm.zipCode || ""}
+                      onChange={(e) => setEditForm({ ...editForm, zipCode: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="notes">Observações</Label>
+                  <Input
+                    id="notes"
+                    value={editForm.notes || ""}
+                    onChange={(e) => setEditForm({ ...editForm, notes: e.target.value })}
+                  />
+                </div>
+              </div>
+            ) : (
+              // Modo de Visualização
+              <div className="space-y-6">
+                {/* Dados Principais */}
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarFallback className="bg-blue-100 text-blue-600 text-xl">
+                        {getInitials(selectedSupplier.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{selectedSupplier.name}</h3>
+                      {selectedSupplier.tradeName && (
+                        <p className="text-sm text-muted-foreground">{selectedSupplier.tradeName}</p>
+                      )}
+                      <Badge variant={selectedSupplier.active ? "default" : "secondary"} className="mt-2">
+                        {selectedSupplier.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  {/* CNPJ */}
+                  {selectedSupplier.cnpj && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">CNPJ</p>
+                      <p className="text-sm">{selectedSupplier.cnpj}</p>
+                    </div>
+                  )}
+
+                  {/* Contato */}
+                  <div className="grid gap-4 md:grid-cols-2">
+                    {selectedSupplier.email && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                          <Mail className="h-3 w-3" /> Email
+                        </p>
+                        <p className="text-sm">{selectedSupplier.email}</p>
+                      </div>
+                    )}
+                    {selectedSupplier.phone && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                          <Phone className="h-3 w-3" /> Telefone
+                        </p>
+                        <p className="text-sm">{selectedSupplier.phone}</p>
+                      </div>
+                    )}
+                    {selectedSupplier.website && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Website</p>
+                        <p className="text-sm">{selectedSupplier.website}</p>
+                      </div>
+                    )}
+                    {selectedSupplier.contactPerson && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Contato</p>
+                        <p className="text-sm">{selectedSupplier.contactPerson}</p>
+                      </div>
                     )}
                   </div>
-                )}
 
-                {/* Observações */}
-                {selectedSupplier.notes && (
-                  <div>
-                    <p className="text-sm font-medium text-muted-foreground">Observações</p>
-                    <p className="text-sm">{selectedSupplier.notes}</p>
-                  </div>
-                )}
+                  {/* Endereço */}
+                  {(selectedSupplier.address || selectedSupplier.city || selectedSupplier.state) && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                        <MapPin className="h-3 w-3" /> Endereço
+                      </p>
+                      {selectedSupplier.address && <p className="text-sm">{selectedSupplier.address}</p>}
+                      {(selectedSupplier.city || selectedSupplier.state) && (
+                        <p className="text-sm text-muted-foreground">
+                          {selectedSupplier.city}{selectedSupplier.city && selectedSupplier.state ? " - " : ""}{selectedSupplier.state}
+                          {selectedSupplier.zipCode && ` - CEP: ${selectedSupplier.zipCode}`}
+                        </p>
+                      )}
+                    </div>
+                  )}
 
-                {/* Datas */}
-                <div className="grid gap-4 md:grid-cols-2 text-xs text-muted-foreground">
-                  <div>
-                    <p className="font-medium">Cadastrado em</p>
-                    <p>{formatDate(selectedSupplier.createdAt)}</p>
-                  </div>
-                  <div>
-                    <p className="font-medium">Última atualização</p>
-                    <p>{formatDate(selectedSupplier.updatedAt)}</p>
+                  {/* Observações */}
+                  {selectedSupplier.notes && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Observações</p>
+                      <p className="text-sm">{selectedSupplier.notes}</p>
+                    </div>
+                  )}
+
+                  {/* Datas */}
+                  <div className="grid gap-4 md:grid-cols-2 text-xs text-muted-foreground">
+                    <div>
+                      <p className="font-medium">Cadastrado em</p>
+                      <p>{formatDate(selectedSupplier.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Última atualização</p>
+                      <p>{formatDate(selectedSupplier.updatedAt)}</p>
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
+            )
           ) : null}
 
           <DialogFooter className="gap-2">
-            <Button
-              variant="outline"
-              onClick={() => setDetailsDialogOpen(false)}
-            >
-              Fechar
-            </Button>
-            {selectedSupplier && (
+            {isEditing ? (
+              <>
+                <Button variant="outline" onClick={handleCancelEdit}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit}>
+                  Salvar Alterações
+                </Button>
+              </>
+            ) : (
               <>
                 <Button
-                  variant={selectedSupplier.active ? "destructive" : "default"}
-                  onClick={() => handleToggleStatus(selectedSupplier.id, selectedSupplier.active)}
+                  variant="outline"
+                  onClick={() => setDetailsDialogOpen(false)}
                 >
-                  {selectedSupplier.active ? (
-                    <>
-                      <Trash2 className="h-4 w-4 mr-2" />
-                      Desativar
-                    </>
-                  ) : (
-                    "Ativar"
-                  )}
+                  Fechar
                 </Button>
-                <Button onClick={() => toast.info("Edição em desenvolvimento")}>
-                  <Edit className="h-4 w-4 mr-2" />
-                  Editar
-                </Button>
+                {selectedSupplier && (
+                  <>
+                    {!selectedSupplier.active && (
+                      <Button
+                        variant="destructive"
+                        onClick={() => handlePermanentDelete(selectedSupplier.id)}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Excluir Permanentemente
+                      </Button>
+                    )}
+                    <Button
+                      variant={selectedSupplier.active ? "destructive" : "default"}
+                      onClick={() => handleToggleStatus(selectedSupplier.id, selectedSupplier.active)}
+                    >
+                      {selectedSupplier.active ? (
+                        <>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Desativar
+                        </>
+                      ) : (
+                        "Ativar"
+                      )}
+                    </Button>
+                    <Button onClick={handleStartEdit}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar
+                    </Button>
+                  </>
+                )}
               </>
             )}
           </DialogFooter>
