@@ -105,6 +105,16 @@ export function SupplierSelect({
     }
   }
 
+  // Formata CNPJ: 20.606.235/0001-39
+  function formatCNPJ(value: string) {
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 2) return numbers;
+    if (numbers.length <= 5) return `${numbers.slice(0, 2)}.${numbers.slice(2)}`;
+    if (numbers.length <= 8) return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5)}`;
+    if (numbers.length <= 12) return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8)}`;
+    return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8, 12)}-${numbers.slice(12, 14)}`;
+  }
+
   function handleSelectSupplier(supplier: Supplier) {
     setSelectedSupplier(supplier);
     setSearchTerm(supplier.name);
@@ -127,10 +137,16 @@ export function SupplierSelect({
     setLoading(true);
 
     try {
+      // Remove formatação do CNPJ antes de enviar
+      const supplierData = {
+        ...newSupplier,
+        cnpj: newSupplier.cnpj.replace(/\D/g, ""),
+      };
+
       const res = await fetch("/api/suppliers", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(newSupplier),
+        body: JSON.stringify(supplierData),
       });
 
       if (!res.ok) {
@@ -247,12 +263,12 @@ export function SupplierSelect({
                 <Label htmlFor="new-supplier-cnpj">CNPJ</Label>
                 <Input
                   id="new-supplier-cnpj"
-                  value={newSupplier.cnpj}
+                  value={formatCNPJ(newSupplier.cnpj)}
                   onChange={(e) =>
                     setNewSupplier({ ...newSupplier, cnpj: e.target.value.replace(/\D/g, "") })
                   }
-                  maxLength={14}
-                  placeholder="Apenas números"
+                  maxLength={18}
+                  placeholder="00.000.000/0000-00"
                 />
               </div>
               <div className="space-y-2">
