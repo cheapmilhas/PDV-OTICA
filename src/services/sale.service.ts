@@ -92,7 +92,7 @@ export class SaleService {
               qty: true,
               unitPrice: true,
               discount: true,
-              total: true,
+              lineTotal: true,
               product: {
                 select: { id: true, name: true, sku: true },
               },
@@ -269,7 +269,7 @@ export class SaleService {
             qty: item.qty,
             unitPrice: item.unitPrice,
             discount: item.discount || 0,
-            total: itemTotal,
+            lineTotal: itemTotal,
           },
         });
 
@@ -372,7 +372,7 @@ export class SaleService {
             qty: true,
             unitPrice: true,
             discount: true,
-            total: true,
+            lineTotal: true,
             product: {
               select: { name: true, sku: true },
             },

@@ -14,6 +14,15 @@ const nextConfig: NextConfig = {
       },
     ],
   },
+  async redirects() {
+    return [
+      {
+        source: "/dashboard/vendas/nova",
+        destination: "/dashboard/pdv",
+        permanent: true,
+      },
+    ];
+  },
 };
 
 export default nextConfig;

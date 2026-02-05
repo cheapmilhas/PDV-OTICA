@@ -40,7 +40,7 @@ interface SaleDetails {
     qty: number;
     unitPrice: number;
     discount: number;
-    total: number;
+    lineTotal: number;
     product: {
       id: string;
       name: string;
@@ -321,7 +321,7 @@ export default function DetalhesVendaPage() {
                 </div>
                 <div className="text-right">
                   <p className="font-bold text-lg">
-                    {formatCurrency(Number(item.total))}
+                    {formatCurrency(Number(item.lineTotal))}
                   </p>
                 </div>
               </div>
