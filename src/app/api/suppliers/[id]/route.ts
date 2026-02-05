@@ -7,7 +7,7 @@ import {
 } from "@/lib/validations/supplier.schema";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
-import { okResponse } from "@/lib/api-response";
+import { successResponse } from "@/lib/api-response";
 
 /**
  * GET /api/suppliers/[id]
@@ -23,7 +23,7 @@ export async function GET(
 
     const supplier = await supplierService.getById(params.id, companyId);
 
-    return okResponse(supplier);
+    return successResponse(supplier);
   } catch (error) {
     return handleApiError(error);
   }
@@ -51,7 +51,7 @@ export async function PUT(
       companyId
     );
 
-    return okResponse(supplier);
+    return successResponse(supplier);
   } catch (error) {
     return handleApiError(error);
   }
@@ -71,7 +71,7 @@ export async function DELETE(
 
     await supplierService.delete(params.id, companyId);
 
-    return okResponse({ message: "Fornecedor desativado com sucesso" });
+    return successResponse({ message: "Fornecedor desativado com sucesso" });
   } catch (error) {
     return handleApiError(error);
   }
