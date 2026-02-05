@@ -50,10 +50,14 @@ export default function NovoClientePage() {
         throw new Error(error.error?.message || "Erro ao criar cliente");
       }
 
-      toast.success("Cliente criado com sucesso!");
+      const { data: createdCustomer } = await res.json();
+
+      toast.success(`Cliente ${createdCustomer.name} criado com sucesso!`);
       router.push("/dashboard/clientes");
     } catch (error: any) {
-      toast.error(error.message);
+      console.error("Erro ao criar cliente:", error);
+      const errorMessage = error.message || "Erro ao criar cliente. Tente novamente.";
+      toast.error(errorMessage);
     } finally {
       setLoading(false);
     }

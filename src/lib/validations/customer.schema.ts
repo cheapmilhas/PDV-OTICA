@@ -49,10 +49,14 @@ export const createCustomerSchema = z.object({
     .or(z.literal("")),
 
   birthDate: z.string()
-    .datetime()
+    .regex(/^\d{4}-\d{2}-\d{2}$/, "Data inválida (formato: AAAA-MM-DD)")
     .optional()
     .or(z.literal(""))
-    .transform((val) => (val === "" ? undefined : val)),
+    .transform((val) => {
+      if (!val || val === "") return undefined;
+      // Converte formato date (YYYY-MM-DD) para ISO datetime para o Prisma
+      return new Date(val + "T00:00:00.000Z").toISOString();
+    }),
 
   gender: z.enum(["M", "F", "Outro"])
     .optional()
