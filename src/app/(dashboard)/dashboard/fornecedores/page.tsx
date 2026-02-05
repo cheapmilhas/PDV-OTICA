@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -13,98 +13,123 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Eye, Building2, Phone, Mail, MapPin, TrendingUp } from "lucide-react";
+import { Search, Plus, Eye, Mail, Phone, MapPin, TrendingUp, Loader2, Edit, Trash2, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import toast from "react-hot-toast";
+import { Pagination } from "@/components/shared/pagination";
+import { EmptyState } from "@/components/shared/empty-state";
+
+interface Supplier {
+  id: string;
+  name: string;
+  tradeName?: string | null;
+  cnpj?: string | null;
+  email?: string | null;
+  phone?: string | null;
+  website?: string | null;
+  contactPerson?: string | null;
+  address?: string | null;
+  city?: string | null;
+  state?: string | null;
+  zipCode?: string | null;
+  notes?: string | null;
+  active: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function FornecedoresPage() {
-  // Mock data - fornecedores
-  const fornecedores = [
-    {
-      id: "1",
-      nome: "Ray-Ban do Brasil Ltda",
-      cnpj: "12.345.678/0001-90",
-      email: "comercial@rayban.com.br",
-      telefone: "(11) 3456-7890",
-      endereco: "Av. Paulista, 1000",
-      cidade: "São Paulo",
-      estado: "SP",
-      categoria: "Armações",
-      totalCompras: 45600.00,
-      ultimaCompra: "2024-01-28",
-      status: "ativo",
-    },
-    {
-      id: "2",
-      nome: "Essilor do Brasil",
-      cnpj: "23.456.789/0001-01",
-      email: "vendas@essilor.com.br",
-      telefone: "(11) 3567-8901",
-      endereco: "Rua das Indústrias, 500",
-      cidade: "São Paulo",
-      estado: "SP",
-      categoria: "Lentes",
-      totalCompras: 32400.00,
-      ultimaCompra: "2024-01-30",
-      status: "ativo",
-    },
-    {
-      id: "3",
-      nome: "Oakley Brasil Importadora",
-      cnpj: "34.567.890/0001-12",
-      email: "contato@oakley.com.br",
-      telefone: "(11) 3678-9012",
-      endereco: "Av. das Nações, 2000",
-      cidade: "São Paulo",
-      estado: "SP",
-      categoria: "Armações",
-      totalCompras: 28900.00,
-      ultimaCompra: "2024-01-25",
-      status: "ativo",
-    },
-    {
-      id: "4",
-      nome: "Zeiss Optical do Brasil",
-      cnpj: "45.678.901/0001-23",
-      email: "vendas@zeiss.com.br",
-      telefone: "(11) 3789-0123",
-      endereco: "Rua Alemanha, 750",
-      cidade: "São Paulo",
-      estado: "SP",
-      categoria: "Lentes",
-      totalCompras: 42800.00,
-      ultimaCompra: "2024-01-29",
-      status: "ativo",
-    },
-    {
-      id: "5",
-      nome: "Acessórios Plus Comércio",
-      cnpj: "56.789.012/0001-34",
-      email: "vendas@acessoriosplus.com.br",
-      telefone: "(11) 3890-1234",
-      endereco: "Rua do Comércio, 123",
-      cidade: "São Paulo",
-      estado: "SP",
-      categoria: "Acessórios",
-      totalCompras: 5600.00,
-      ultimaCompra: "2024-01-20",
-      status: "ativo",
-    },
-  ];
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [suppliers, setSuppliers] = useState<Supplier[]>([]);
+  const [pagination, setPagination] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedSupplier, setSelectedSupplier] = useState<Supplier | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
 
-  const getStatusVariant = (status: string) => {
-    switch (status) {
-      case "ativo":
-        return "default";
-      case "inativo":
-        return "secondary";
-      default:
-        return "outline";
+  // Buscar fornecedores da API
+  useEffect(() => {
+    fetchSuppliers();
+  }, [search, page]);
+
+  async function fetchSuppliers() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        search,
+        page: page.toString(),
+        pageSize: "20",
+        status: "ativos",
+      });
+
+      const res = await fetch(`/api/suppliers?${params}`);
+      if (!res.ok) throw new Error("Erro ao buscar fornecedores");
+
+      const data = await res.json();
+      setSuppliers(data.data || []);
+      setPagination(data.pagination);
+    } catch (error: any) {
+      console.error("Erro ao carregar fornecedores:", error);
+      toast.error("Erro ao carregar fornecedores");
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  const getInitials = (nome: string) => {
-    const parts = nome.split(" ");
+  async function handleViewDetails(id: string) {
+    setLoadingDetails(true);
+    setDetailsDialogOpen(true);
+
+    try {
+      const res = await fetch(`/api/suppliers/${id}`);
+      if (!res.ok) throw new Error("Erro ao buscar detalhes");
+
+      const { data } = await res.json();
+      setSelectedSupplier(data);
+    } catch (error: any) {
+      console.error("Erro ao carregar detalhes:", error);
+      toast.error("Erro ao carregar detalhes do fornecedor");
+      setDetailsDialogOpen(false);
+    } finally {
+      setLoadingDetails(false);
+    }
+  }
+
+  async function handleToggleStatus(id: string, currentStatus: boolean) {
+    if (!confirm(`Tem certeza que deseja ${currentStatus ? "desativar" : "ativar"} este fornecedor?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/suppliers/${id}`, {
+        method: currentStatus ? "DELETE" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: currentStatus ? undefined : JSON.stringify({ active: true }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao atualizar fornecedor");
+
+      toast.success(`Fornecedor ${currentStatus ? "desativado" : "ativado"} com sucesso!`);
+      fetchSuppliers();
+      setDetailsDialogOpen(false);
+    } catch (error: any) {
+      console.error("Erro ao atualizar fornecedor:", error);
+      toast.error(error.message || "Erro ao atualizar fornecedor");
+    }
+  }
+
+  const getInitials = (name: string) => {
+    const parts = name.split(" ");
     return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
   };
 
@@ -113,9 +138,8 @@ export default function FornecedoresPage() {
     return date.toLocaleDateString("pt-BR");
   };
 
-  const totalFornecedores = fornecedores.length;
-  const fornecedoresAtivos = fornecedores.filter(f => f.status === "ativo").length;
-  const totalCompras = fornecedores.reduce((acc, f) => acc + f.totalCompras, 0);
+  const totalFornecedores = pagination?.total || 0;
+  const fornecedoresAtivos = suppliers.filter(s => s.active).length;
 
   return (
     <div className="space-y-6">
@@ -127,7 +151,7 @@ export default function FornecedoresPage() {
             Gerencie os fornecedores da ótica
           </p>
         </div>
-        <Button>
+        <Button onClick={() => toast.info("Em desenvolvimento")}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Fornecedor
         </Button>
@@ -152,15 +176,15 @@ export default function FornecedoresPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total em Compras
+              Fornecedores Ativos
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-blue-600">
-              {formatCurrency(totalCompras)}
+            <p className="text-2xl font-bold text-green-600">
+              {fornecedoresAtivos}
             </p>
             <p className="text-xs text-muted-foreground">
-              Acumulado
+              Cadastros ativos
             </p>
           </CardContent>
         </Card>
@@ -168,140 +192,317 @@ export default function FornecedoresPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ticket Médio
+              Cadastros Recentes
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatCurrency(totalCompras / totalFornecedores)}
+              {suppliers.filter(s => {
+                const days = (Date.now() - new Date(s.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+                return days <= 30;
+              }).length}
             </p>
             <p className="text-xs text-muted-foreground">
-              Por fornecedor
+              Últimos 30 dias
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Search */}
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+          <CardTitle>Buscar Fornecedores</CardTitle>
           <CardDescription>
-            Busque fornecedores cadastrados
+            Pesquise por nome, CNPJ, email ou telefone
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome, CNPJ ou categoria..."
-                className="pl-9"
-              />
-            </div>
-            <Button variant="outline">
-              Todas Categorias
-            </Button>
+          <div className="relative">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              placeholder="Digite para buscar..."
+              value={search}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(1);
+              }}
+              className="pl-9"
+            />
           </div>
         </CardContent>
       </Card>
 
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && suppliers.length === 0 && (
+        <EmptyState
+          icon={<Package className="h-12 w-12" />}
+          title="Nenhum fornecedor encontrado"
+          description={
+            search
+              ? `Não encontramos resultados para "${search}"`
+              : "Comece adicionando seu primeiro fornecedor"
+          }
+        />
+      )}
+
       {/* Fornecedores Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Fornecedores</CardTitle>
-          <CardDescription>
-            {fornecedores.length} fornecedores cadastrados
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Fornecedor</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Localização</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead className="text-right">Total Compras</TableHead>
-                <TableHead className="text-center">Última Compra</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {fornecedores.map((fornecedor) => (
-                <TableRow key={fornecedor.id}>
-                  <TableCell>
-                    <div className="flex items-center gap-3">
-                      <Avatar>
-                        <AvatarFallback className="bg-blue-100 text-blue-600">
-                          {getInitials(fornecedor.nome)}
-                        </AvatarFallback>
-                      </Avatar>
-                      <div>
-                        <p className="font-medium">{fornecedor.nome}</p>
-                        <p className="text-xs text-muted-foreground">
-                          CNPJ: {fornecedor.cnpj}
-                        </p>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p className="text-sm flex items-center gap-1">
-                        <Mail className="h-3 w-3 text-muted-foreground" />
-                        {fornecedor.email}
-                      </p>
-                      <p className="text-sm flex items-center gap-1">
-                        <Phone className="h-3 w-3 text-muted-foreground" />
-                        {fornecedor.telefone}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <div className="space-y-1">
-                      <p className="text-sm flex items-center gap-1">
-                        <MapPin className="h-3 w-3 text-muted-foreground" />
-                        {fornecedor.endereco}
-                      </p>
-                      <p className="text-xs text-muted-foreground">
-                        {fornecedor.cidade} - {fornecedor.estado}
-                      </p>
-                    </div>
-                  </TableCell>
-                  <TableCell>
-                    <Badge variant="outline">{fornecedor.categoria}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <div className="space-y-1">
-                      <p className="font-semibold">
-                        {formatCurrency(fornecedor.totalCompras)}
-                      </p>
-                      <div className="flex items-center justify-end gap-1 text-xs text-green-600">
-                        <TrendingUp className="h-3 w-3" />
-                        <span>Ativo</span>
-                      </div>
-                    </div>
-                  </TableCell>
-                  <TableCell className="text-center text-sm text-muted-foreground">
-                    {formatDate(fornecedor.ultimaCompra)}
-                  </TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={getStatusVariant(fornecedor.status)}>
-                      {fornecedor.status === "ativo" ? "Ativo" : "Inativo"}
-                    </Badge>
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Button variant="ghost" size="sm">
-                      <Eye className="h-4 w-4" />
-                    </Button>
-                  </TableCell>
+      {!loading && suppliers.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Lista de Fornecedores</CardTitle>
+            <CardDescription>
+              {pagination?.total || 0} fornecedores cadastrados
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Fornecedor</TableHead>
+                  <TableHead>Contato</TableHead>
+                  <TableHead>Localização</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+              </TableHeader>
+              <TableBody>
+                {suppliers.map((supplier) => (
+                  <TableRow key={supplier.id}>
+                    <TableCell>
+                      <div className="flex items-center gap-3">
+                        <Avatar>
+                          <AvatarFallback className="bg-blue-100 text-blue-600">
+                            {getInitials(supplier.name)}
+                          </AvatarFallback>
+                        </Avatar>
+                        <div>
+                          <p className="font-medium">{supplier.name}</p>
+                          {supplier.cnpj && (
+                            <p className="text-xs text-muted-foreground">
+                              CNPJ: {supplier.cnpj}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      <div className="space-y-1">
+                        {supplier.email && (
+                          <p className="text-sm flex items-center gap-1">
+                            <Mail className="h-3 w-3 text-muted-foreground" />
+                            {supplier.email}
+                          </p>
+                        )}
+                        {supplier.phone && (
+                          <p className="text-sm flex items-center gap-1">
+                            <Phone className="h-3 w-3 text-muted-foreground" />
+                            {supplier.phone}
+                          </p>
+                        )}
+                      </div>
+                    </TableCell>
+                    <TableCell>
+                      {supplier.city || supplier.state ? (
+                        <div className="space-y-1">
+                          {supplier.address && (
+                            <p className="text-sm flex items-center gap-1">
+                              <MapPin className="h-3 w-3 text-muted-foreground" />
+                              {supplier.address}
+                            </p>
+                          )}
+                          <p className="text-xs text-muted-foreground">
+                            {supplier.city}{supplier.city && supplier.state ? " - " : ""}{supplier.state}
+                          </p>
+                        </div>
+                      ) : (
+                        <span className="text-sm text-muted-foreground">-</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-center">
+                      <Badge variant={supplier.active ? "default" : "secondary"}>
+                        {supplier.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-right">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDetails(supplier.id)}
+                      >
+                        <Eye className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Paginação */}
+      {!loading && pagination && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={pagination.totalPages}
+          onPageChange={setPage}
+          showInfo
+        />
+      )}
+
+      {/* Modal de Detalhes */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Fornecedor</DialogTitle>
+            <DialogDescription>
+              Informações completas do fornecedor
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingDetails ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : selectedSupplier ? (
+            <div className="space-y-6">
+              {/* Dados Principais */}
+              <div className="space-y-4">
+                <div className="flex items-center gap-4">
+                  <Avatar className="h-16 w-16">
+                    <AvatarFallback className="bg-blue-100 text-blue-600 text-xl">
+                      {getInitials(selectedSupplier.name)}
+                    </AvatarFallback>
+                  </Avatar>
+                  <div className="flex-1">
+                    <h3 className="text-lg font-semibold">{selectedSupplier.name}</h3>
+                    {selectedSupplier.tradeName && (
+                      <p className="text-sm text-muted-foreground">{selectedSupplier.tradeName}</p>
+                    )}
+                    <Badge variant={selectedSupplier.active ? "default" : "secondary"} className="mt-2">
+                      {selectedSupplier.active ? "Ativo" : "Inativo"}
+                    </Badge>
+                  </div>
+                </div>
+
+                {/* CNPJ */}
+                {selectedSupplier.cnpj && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">CNPJ</p>
+                    <p className="text-sm">{selectedSupplier.cnpj}</p>
+                  </div>
+                )}
+
+                {/* Contato */}
+                <div className="grid gap-4 md:grid-cols-2">
+                  {selectedSupplier.email && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                        <Mail className="h-3 w-3" /> Email
+                      </p>
+                      <p className="text-sm">{selectedSupplier.email}</p>
+                    </div>
+                  )}
+                  {selectedSupplier.phone && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                        <Phone className="h-3 w-3" /> Telefone
+                      </p>
+                      <p className="text-sm">{selectedSupplier.phone}</p>
+                    </div>
+                  )}
+                  {selectedSupplier.website && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Website</p>
+                      <p className="text-sm">{selectedSupplier.website}</p>
+                    </div>
+                  )}
+                  {selectedSupplier.contactPerson && (
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Contato</p>
+                      <p className="text-sm">{selectedSupplier.contactPerson}</p>
+                    </div>
+                  )}
+                </div>
+
+                {/* Endereço */}
+                {(selectedSupplier.address || selectedSupplier.city || selectedSupplier.state) && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground flex items-center gap-1">
+                      <MapPin className="h-3 w-3" /> Endereço
+                    </p>
+                    {selectedSupplier.address && <p className="text-sm">{selectedSupplier.address}</p>}
+                    {(selectedSupplier.city || selectedSupplier.state) && (
+                      <p className="text-sm text-muted-foreground">
+                        {selectedSupplier.city}{selectedSupplier.city && selectedSupplier.state ? " - " : ""}{selectedSupplier.state}
+                        {selectedSupplier.zipCode && ` - CEP: ${selectedSupplier.zipCode}`}
+                      </p>
+                    )}
+                  </div>
+                )}
+
+                {/* Observações */}
+                {selectedSupplier.notes && (
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground">Observações</p>
+                    <p className="text-sm">{selectedSupplier.notes}</p>
+                  </div>
+                )}
+
+                {/* Datas */}
+                <div className="grid gap-4 md:grid-cols-2 text-xs text-muted-foreground">
+                  <div>
+                    <p className="font-medium">Cadastrado em</p>
+                    <p>{formatDate(selectedSupplier.createdAt)}</p>
+                  </div>
+                  <div>
+                    <p className="font-medium">Última atualização</p>
+                    <p>{formatDate(selectedSupplier.updatedAt)}</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          ) : null}
+
+          <DialogFooter className="gap-2">
+            <Button
+              variant="outline"
+              onClick={() => setDetailsDialogOpen(false)}
+            >
+              Fechar
+            </Button>
+            {selectedSupplier && (
+              <>
+                <Button
+                  variant={selectedSupplier.active ? "destructive" : "default"}
+                  onClick={() => handleToggleStatus(selectedSupplier.id, selectedSupplier.active)}
+                >
+                  {selectedSupplier.active ? (
+                    <>
+                      <Trash2 className="h-4 w-4 mr-2" />
+                      Desativar
+                    </>
+                  ) : (
+                    "Ativar"
+                  )}
+                </Button>
+                <Button onClick={() => toast.info("Edição em desenvolvimento")}>
+                  <Edit className="h-4 w-4 mr-2" />
+                  Editar
+                </Button>
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
