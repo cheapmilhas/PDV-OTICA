@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -17,7 +17,6 @@ import { calculateMargin, calculateSalePrice } from "@/lib/validations/product.s
 export default function NovoProdutoPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [lastEditedField, setLastEditedField] = useState<"price" | "margin" | null>(null);
   const [formData, setFormData] = useState({
     type: "",
     name: "",
@@ -50,33 +49,56 @@ export default function NovoProdutoPage() {
     lensDiameter: "",
   });
 
-  // Cálculo automático de margem quando alterar preços (apenas se o usuário editou preço)
-  useEffect(() => {
-    if (lastEditedField !== "price") return;
-
-    const sale = parseFloat(formData.salePrice);
+  // Handler para atualizar preço de venda (calcula margem automaticamente)
+  const handleSalePriceChange = (value: string) => {
+    const sale = parseFloat(value);
     const cost = parseFloat(formData.costPrice);
 
+    let newMargin = "";
     if (sale > 0 && cost >= 0) {
-      const margin = calculateMargin(sale, cost);
-      setFormData(prev => ({ ...prev, marginPercent: margin.toFixed(2) }));
+      newMargin = calculateMargin(sale, cost).toFixed(2);
     }
-    setLastEditedField(null);
-  }, [formData.salePrice, formData.costPrice, lastEditedField]);
 
-  // Cálculo automático de preço de venda quando alterar margem (apenas se o usuário editou margem)
-  useEffect(() => {
-    if (lastEditedField !== "margin") return;
+    setFormData({
+      ...formData,
+      salePrice: value,
+      marginPercent: newMargin,
+    });
+  };
 
+  // Handler para atualizar preço de custo (calcula margem automaticamente)
+  const handleCostPriceChange = (value: string) => {
+    const cost = parseFloat(value);
+    const sale = parseFloat(formData.salePrice);
+
+    let newMargin = "";
+    if (sale > 0 && cost >= 0) {
+      newMargin = calculateMargin(sale, cost).toFixed(2);
+    }
+
+    setFormData({
+      ...formData,
+      costPrice: value,
+      marginPercent: newMargin,
+    });
+  };
+
+  // Handler para atualizar margem (calcula preço de venda automaticamente)
+  const handleMarginChange = (value: string) => {
+    const margin = parseFloat(value);
     const cost = parseFloat(formData.costPrice);
-    const margin = parseFloat(formData.marginPercent);
 
+    let newSalePrice = formData.salePrice;
     if (cost > 0 && margin > 0 && margin < 100) {
-      const sale = calculateSalePrice(cost, margin);
-      setFormData(prev => ({ ...prev, salePrice: sale.toFixed(2) }));
+      newSalePrice = calculateSalePrice(cost, margin).toFixed(2);
     }
-    setLastEditedField(null);
-  }, [formData.marginPercent, formData.costPrice, lastEditedField]);
+
+    setFormData({
+      ...formData,
+      marginPercent: value,
+      salePrice: newSalePrice,
+    });
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -294,10 +316,7 @@ export default function NovoProdutoPage() {
                     min="0"
                     required
                     value={formData.salePrice}
-                    onChange={(e) => {
-                      setFormData({ ...formData, salePrice: e.target.value });
-                      setLastEditedField("price");
-                    }}
+                    onChange={(e) => handleSalePriceChange(e.target.value)}
                   />
                 </div>
 
@@ -309,10 +328,7 @@ export default function NovoProdutoPage() {
                     step="0.01"
                     min="0"
                     value={formData.costPrice}
-                    onChange={(e) => {
-                      setFormData({ ...formData, costPrice: e.target.value });
-                      setLastEditedField("price");
-                    }}
+                    onChange={(e) => handleCostPriceChange(e.target.value)}
                   />
                 </div>
 
@@ -325,10 +341,7 @@ export default function NovoProdutoPage() {
                     min="0"
                     max="100"
                     value={formData.marginPercent}
-                    onChange={(e) => {
-                      setFormData({ ...formData, marginPercent: e.target.value });
-                      setLastEditedField("margin");
-                    }}
+                    onChange={(e) => handleMarginChange(e.target.value)}
                   />
                 </div>
               </div>
