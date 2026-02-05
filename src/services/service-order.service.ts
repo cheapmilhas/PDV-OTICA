@@ -9,8 +9,8 @@ import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } 
  *
  * Características:
  * - Multi-tenancy (companyId filter)
- * - Soft delete (active boolean)
- * - Status flow: PENDENTE -> EM_ANDAMENTO -> PRONTO -> ENTREGUE
+ * - Status-based filtering (CANCELED represents inactive)
+ * - Status flow: DRAFT -> APPROVED -> SENT_TO_LAB -> IN_PROGRESS -> READY -> DELIVERED
  * - Não permite editar/deletar OS entregue
  */
 export class ServiceOrderService {
@@ -33,8 +33,8 @@ export class ServiceOrderService {
 
     const where: Prisma.ServiceOrderWhereInput = {
       companyId,
-      ...(status === "ativos" && { active: true }),
-      ...(status === "inativos" && { active: false }),
+      ...(status === "ativos" && { status: { not: "CANCELED" } }),
+      ...(status === "inativos" && { status: "CANCELED" }),
       ...(customerId && { customerId }),
       ...(orderStatus && { status: orderStatus }),
       ...(startDate && { createdAt: { gte: new Date(startDate) } }),
@@ -99,7 +99,7 @@ export class ServiceOrderService {
       where: {
         id,
         companyId,
-        ...(includeInactive ? {} : { active: true }),
+        ...(includeInactive ? {} : { status: { not: "CANCELED" } }),
       },
       include: {
         customer: true,
@@ -146,7 +146,6 @@ export class ServiceOrderService {
           expectedDate: expectedDate ? new Date(expectedDate) : undefined,
           prescription,
           notes,
-          active: true,
         },
       });
 
@@ -270,7 +269,7 @@ export class ServiceOrderService {
   async cancel(id: string, companyId: string, reason?: string) {
     const existing = await this.getById(id, companyId);
 
-    if (!existing.active) {
+    if (existing.status === "CANCELED") {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
         "Ordem de serviço já está cancelada",
@@ -289,7 +288,6 @@ export class ServiceOrderService {
     await prisma.serviceOrder.update({
       where: { id },
       data: {
-        active: false,
         status: "CANCELED",
         notes: reason ? `CANCELADA: ${reason}` : "CANCELADA",
       },
@@ -306,7 +304,7 @@ export class ServiceOrderService {
       where: {
         customerId,
         companyId,
-        active: true,
+        status: { not: "CANCELED" },
       },
       include: {
         items: true,
@@ -322,7 +320,6 @@ export class ServiceOrderService {
     return prisma.serviceOrder.findMany({
       where: {
         companyId,
-        active: true,
         status: { in: ["DRAFT", "APPROVED", "SENT_TO_LAB", "IN_PROGRESS"] },
         ...(branchId && { branchId }),
       },
@@ -341,7 +338,7 @@ export class ServiceOrderService {
    */
   async countActive(companyId: string): Promise<number> {
     return prisma.serviceOrder.count({
-      where: { companyId, active: true },
+      where: { companyId, status: { not: "CANCELED" } },
     });
   }
 
@@ -351,7 +348,7 @@ export class ServiceOrderService {
   async countByStatus(companyId: string) {
     const result = await prisma.serviceOrder.groupBy({
       by: ["status"],
-      where: { companyId, active: true },
+      where: { companyId, status: { not: "CANCELED" } },
       _count: true,
     });
 

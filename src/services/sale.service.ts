@@ -9,7 +9,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
  *
  * Características:
  * - Multi-tenancy (companyId filter)
- * - Soft delete (active boolean)
+ * - Status-based filtering (OPEN, COMPLETED, CANCELED, REFUNDED)
  * - Transações Prisma (venda + itens + pagamentos + estoque)
  * - Validações de negócio (estoque, pagamentos)
  */
@@ -34,8 +34,8 @@ export class SaleService {
     // Build where clause
     const where: Prisma.SaleWhereInput = {
       companyId,
-      ...(status === "ativos" && { active: true }),
-      ...(status === "inativos" && { active: false }),
+      ...(status === "ativos" && { status: { notIn: ["CANCELED", "REFUNDED"] } }),
+      ...(status === "inativos" && { status: { in: ["CANCELED", "REFUNDED"] } }),
       ...(customerId && { customerId }),
       ...(paymentMethod && {
         payments: {
@@ -127,7 +127,7 @@ export class SaleService {
       where: {
         id,
         companyId,
-        ...(includeInactive ? {} : { active: true }),
+        ...(includeInactive ? {} : { status: { notIn: ["CANCELED", "REFUNDED"] } }),
       },
       include: {
         customer: true,
@@ -255,7 +255,7 @@ export class SaleService {
           discountTotal: discount,
           total,
           notes,
-          active: true,
+          status: "COMPLETED",
         },
       });
 
@@ -315,7 +315,7 @@ export class SaleService {
     // Busca venda
     const sale = await this.getById(id, companyId);
 
-    if (!sale.active) {
+    if (sale.status === "CANCELED" || sale.status === "REFUNDED") {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
         "Venda já está cancelada",
@@ -325,11 +325,11 @@ export class SaleService {
 
     // Cancelar venda e estornar estoque em transação
     await prisma.$transaction(async (tx) => {
-      // 1. Marcar venda como inativa
+      // 1. Marcar venda como cancelada
       await tx.sale.update({
         where: { id },
         data: {
-          active: false,
+          status: "CANCELED",
           notes: reason ? `CANCELADA: ${reason}` : "CANCELADA",
         },
       });
@@ -364,7 +364,7 @@ export class SaleService {
       where: {
         customerId,
         companyId,
-        active: true,
+        status: { notIn: ["CANCELED", "REFUNDED"] },
       },
       include: {
         items: {
@@ -403,7 +403,7 @@ export class SaleService {
 
     const where: Prisma.SaleWhereInput = {
       companyId,
-      active: true,
+      status: { notIn: ["CANCELED", "REFUNDED"] },
       createdAt: {
         gte: startOfDay,
         lte: endOfDay,
@@ -466,7 +466,7 @@ export class SaleService {
    */
   async countActive(companyId: string): Promise<number> {
     return prisma.sale.count({
-      where: { companyId, active: true },
+      where: { companyId, status: { notIn: ["CANCELED", "REFUNDED"] } },
     });
   }
 }
