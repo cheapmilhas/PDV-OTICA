@@ -115,6 +115,15 @@ export function SupplierSelect({
     return `${numbers.slice(0, 2)}.${numbers.slice(2, 5)}.${numbers.slice(5, 8)}/${numbers.slice(8, 12)}-${numbers.slice(12, 14)}`;
   }
 
+  // Formata Telefone: (85)98608-4000
+  function formatPhone(value: string) {
+    const numbers = value.replace(/\D/g, "");
+    if (numbers.length <= 2) return numbers;
+    if (numbers.length <= 6) return `(${numbers.slice(0, 2)})${numbers.slice(2)}`;
+    if (numbers.length <= 10) return `(${numbers.slice(0, 2)})${numbers.slice(2, 6)}-${numbers.slice(6)}`;
+    return `(${numbers.slice(0, 2)})${numbers.slice(2, 7)}-${numbers.slice(7, 11)}`;
+  }
+
   function handleSelectSupplier(supplier: Supplier) {
     setSelectedSupplier(supplier);
     setSearchTerm(supplier.name);
@@ -275,8 +284,10 @@ export function SupplierSelect({
                 <Label htmlFor="new-supplier-phone">Telefone</Label>
                 <Input
                   id="new-supplier-phone"
-                  value={newSupplier.phone}
-                  onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value })}
+                  value={formatPhone(newSupplier.phone)}
+                  onChange={(e) => setNewSupplier({ ...newSupplier, phone: e.target.value.replace(/\D/g, "") })}
+                  maxLength={15}
+                  placeholder="(00)00000-0000"
                 />
               </div>
               <div className="space-y-2">

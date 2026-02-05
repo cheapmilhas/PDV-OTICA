@@ -83,31 +83,13 @@ export default function NovoProdutoPage() {
         stockQty: parseInt(formData.stockQty) || 0,
       };
 
-      // Optional fields
+      // Optional fields (apenas campos que existem no schema)
       if (formData.barcode) sanitizedData.barcode = formData.barcode;
-      if (formData.brand) sanitizedData.brand = formData.brand;
-      if (formData.model) sanitizedData.model = formData.model;
-      if (formData.color) sanitizedData.color = formData.color;
-      if (formData.size) sanitizedData.size = formData.size;
-      if (formData.material) sanitizedData.material = formData.material;
       if (formData.costPrice) sanitizedData.costPrice = parseFloat(formData.costPrice);
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
-      if (formData.category) sanitizedData.category = formData.category;
       if (formData.supplierId) sanitizedData.supplierId = formData.supplierId;
-      if (formData.notes) sanitizedData.notes = formData.notes;
-
-      // Lens-specific fields
-      if (formData.spherical) sanitizedData.spherical = parseFloat(formData.spherical);
-      if (formData.cylindrical) sanitizedData.cylindrical = parseFloat(formData.cylindrical);
-      if (formData.axis) sanitizedData.axis = parseFloat(formData.axis);
-      if (formData.addition) sanitizedData.addition = parseFloat(formData.addition);
-      if (formData.lensType) sanitizedData.lensType = formData.lensType;
-      if (formData.lensMaterial) sanitizedData.lensMaterial = formData.lensMaterial;
-      if (formData.lensIndex) sanitizedData.lensIndex = formData.lensIndex;
-      if (formData.lensTreatment) sanitizedData.lensTreatment = formData.lensTreatment;
-      if (formData.lensDiameter) sanitizedData.lensDiameter = parseFloat(formData.lensDiameter);
 
       const res = await fetch("/api/products", {
         method: "POST",
