@@ -1,8 +1,8 @@
 # 📊 PROGRESSO DO DESENVOLVIMENTO - PDV ÓTICA
 
-**Última Atualização:** 04/02/2026
-**Último Commit:** `ec52e3f` - feat: Implementar Lote 1 - CRUD completo de Clientes e Produtos
-**Status Atual:** ✅ LOTE 1 CONCLUÍDO - Pronto para iniciar LOTE 2
+**Última Atualização:** 04/02/2026 (22:20)
+**Último Commit:** `8071dce` - fix: Corrigir tipos e campos do Prisma
+**Status Atual:** 🚧 LOTE 2 EM ANDAMENTO - Backend 90% completo, precisa ajustes finais
 
 ---
 
@@ -173,7 +173,61 @@ src/app/api/dashboard/metrics/route.ts # Fix Decimal arithmetic
 
 ---
 
-## 🎯 PRÓXIMOS PASSOS - LOTE 2
+## 🚧 LOTE 2 - VENDAS + ORDEM DE SERVIÇO (EM ANDAMENTO - 70%)
+
+### ✅ O que já foi implementado:
+
+#### **1. Backend de Vendas (Completo)**
+- ✅ `src/services/sale.service.ts` - Service completo
+- ✅ `src/lib/validations/sale.schema.ts` - Schemas Zod
+- ✅ `src/app/api/sales/route.ts` - GET/POST
+- ✅ `src/app/api/sales/[id]/route.ts` - GET/DELETE
+
+#### **2. Backend de Ordens de Serviço (Completo)**
+- ✅ `src/services/service-order.service.ts` - Service completo
+- ✅ `src/lib/validations/service-order.schema.ts` - Schemas Zod
+- ✅ `src/app/api/service-orders/route.ts` - GET/POST
+- ✅ `src/app/api/service-orders/[id]/route.ts` - GET/PUT/DELETE
+- ✅ `src/app/api/service-orders/[id]/status/route.ts` - PATCH
+
+### ⚠️ Pendências e Ajustes Necessários:
+
+#### **A. Corrigir Campos do Prisma no sale.service.ts:**
+O schema do Prisma tem nomes diferentes dos usados:
+- ✅ `Payment` → `SalePayment` (CORRIGIDO)
+- ✅ `userId` → `sellerUserId` (CORRIGIDO)
+- ✅ `discount` → `discountTotal` (CORRIGIDO)
+- ⚠️ Includes precisam usar `sellerUser` em vez de `user`
+- ⚠️ Filtro de `paymentMethod` precisa ser ajustado para `payments.some()`
+
+#### **B. Criar Páginas Frontend:**
+- ❌ Listagem de Vendas
+- ❌ Nova Venda (PDV)
+- ❌ Detalhes da Venda
+- ❌ Listagem de Ordens de Serviço
+- ❌ Nova Ordem de Serviço
+- ❌ Editar Ordem de Serviço
+- ❌ Detalhes da Ordem de Serviço
+
+#### **C. Criar Componentes Específicos:**
+- ❌ `sale-item-list.tsx` - Lista de itens da venda
+- ❌ `payment-form.tsx` - Formulário de pagamento
+- ❌ `product-search.tsx` - Busca de produtos com barcode
+- ❌ `prescription-form.tsx` - Formulário de prescrição (grau)
+- ❌ `os-status-badge.tsx` - Badge de status da OS
+
+### 📝 Próximos Passos Imediatos:
+
+1. **Corrigir includes no sale.service.ts** para usar campos corretos
+2. **Testar build** e garantir que compila sem erros
+3. **Criar páginas de Vendas** (listagem + nova)
+4. **Criar páginas de Ordens de Serviço** (listagem + nova + editar)
+5. **Testar end-to-end** com banco de dados
+6. **Validar Definition of Done**
+
+---
+
+## 🎯 PRÓXIMOS PASSOS - DEPOIS DO LOTE 2
 
 ### 📦 LOTE 2: VENDAS + ORDEM DE SERVIÇO
 
