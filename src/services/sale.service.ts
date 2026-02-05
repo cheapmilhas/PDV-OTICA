@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { Sale, SaleItem, Payment, Prisma } from "@prisma/client";
+import { Sale, SaleItem, SalePayment, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
@@ -250,9 +250,9 @@ export class SaleService {
           companyId,
           customerId,
           branchId,
-          userId,
+          sellerUserId: userId,
           subtotal,
-          discount,
+          discountTotal: discount,
           total,
           notes,
           active: true,
@@ -286,10 +286,9 @@ export class SaleService {
 
       // 4. Criar pagamentos
       for (const payment of payments) {
-        await tx.payment.create({
+        await tx.salePayment.create({
           data: {
             saleId: newSale.id,
-            companyId,
             method: payment.method,
             amount: payment.amount,
             installments: payment.installments || 1,
@@ -348,7 +347,7 @@ export class SaleService {
       }
 
       // 3. Marcar pagamentos como cancelados
-      await tx.payment.updateMany({
+      await tx.salePayment.updateMany({
         where: { saleId: id },
         data: { status: "CANCELLED" },
       });

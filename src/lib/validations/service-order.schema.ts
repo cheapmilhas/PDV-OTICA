@@ -119,11 +119,14 @@ export function validateStatusTransition(
   currentStatus: ServiceOrderStatus,
   newStatus: ServiceOrderStatus
 ): boolean {
-  const transitions: Record<ServiceOrderStatus, ServiceOrderStatus[]> = {
-    PENDENTE: ["EM_ANDAMENTO", "PRONTO", "ENTREGUE"],
-    EM_ANDAMENTO: ["PRONTO", "ENTREGUE", "PENDENTE"],
-    PRONTO: ["ENTREGUE", "EM_ANDAMENTO"],
-    ENTREGUE: [], // Não pode mudar status depois de entregue
+  const transitions: Partial<Record<ServiceOrderStatus, ServiceOrderStatus[]>> = {
+    DRAFT: ["APPROVED", "CANCELED"],
+    APPROVED: ["SENT_TO_LAB", "CANCELED"],
+    SENT_TO_LAB: ["IN_PROGRESS", "CANCELED"],
+    IN_PROGRESS: ["READY", "CANCELED"],
+    READY: ["DELIVERED"],
+    DELIVERED: [], // Não pode mudar status depois de entregue
+    CANCELED: [],
   };
 
   return transitions[currentStatus]?.includes(newStatus) || false;
@@ -134,10 +137,13 @@ export function validateStatusTransition(
  */
 export function getStatusLabel(status: ServiceOrderStatus): string {
   const labels: Record<ServiceOrderStatus, string> = {
-    PENDENTE: "Pendente",
-    EM_ANDAMENTO: "Em Andamento",
-    PRONTO: "Pronto",
-    ENTREGUE: "Entregue",
+    DRAFT: "Rascunho",
+    APPROVED: "Aprovado",
+    SENT_TO_LAB: "Enviado Lab",
+    IN_PROGRESS: "Em Progresso",
+    READY: "Pronto",
+    DELIVERED: "Entregue",
+    CANCELED: "Cancelado",
   };
 
   return labels[status] || status;
@@ -148,10 +154,13 @@ export function getStatusLabel(status: ServiceOrderStatus): string {
  */
 export function getStatusColor(status: ServiceOrderStatus): string {
   const colors: Record<ServiceOrderStatus, string> = {
-    PENDENTE: "secondary",
-    EM_ANDAMENTO: "default",
-    PRONTO: "outline",
-    ENTREGUE: "success",
+    DRAFT: "secondary",
+    APPROVED: "default",
+    SENT_TO_LAB: "outline",
+    IN_PROGRESS: "default",
+    READY: "success",
+    DELIVERED: "success",
+    CANCELED: "destructive",
   };
 
   return colors[status] || "default";

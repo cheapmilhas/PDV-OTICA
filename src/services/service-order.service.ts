@@ -141,7 +141,7 @@ export class ServiceOrderService {
           companyId,
           customerId,
           branchId,
-          status: "PENDENTE",
+          status: "DRAFT",
           total,
           expectedDate: expectedDate ? new Date(expectedDate) : undefined,
           prescription,
@@ -176,7 +176,7 @@ export class ServiceOrderService {
   async update(id: string, data: UpdateServiceOrderDTO, companyId: string) {
     const existing = await this.getById(id, companyId);
 
-    if (existing.status === "ENTREGUE") {
+    if (existing.status === "DELIVERED") {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
         "Não é possível atualizar ordem de serviço já entregue",
@@ -226,7 +226,7 @@ export class ServiceOrderService {
   /**
    * Atualiza status da ordem de serviço
    *
-   * Flow: PENDENTE -> EM_ANDAMENTO -> PRONTO -> ENTREGUE
+   * Flow: DRAFT -> APPROVED -> SENT_TO_LAB -> IN_PROGRESS -> READY -> DELIVERED
    */
   async updateStatus(
     id: string,
@@ -236,7 +236,7 @@ export class ServiceOrderService {
   ) {
     const existing = await this.getById(id, companyId);
 
-    if (existing.status === "ENTREGUE") {
+    if (existing.status === "DELIVERED") {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
         "Ordem de serviço já foi entregue",
@@ -246,7 +246,7 @@ export class ServiceOrderService {
 
     const updateData: any = { status };
 
-    if (status === "ENTREGUE") {
+    if (status === "DELIVERED") {
       updateData.deliveredAt = new Date();
     }
 
@@ -278,7 +278,7 @@ export class ServiceOrderService {
       );
     }
 
-    if (existing.status === "ENTREGUE") {
+    if (existing.status === "DELIVERED") {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
         "Não é possível cancelar ordem de serviço já entregue",
@@ -290,7 +290,7 @@ export class ServiceOrderService {
       where: { id },
       data: {
         active: false,
-        status: "PENDENTE",
+        status: "CANCELED",
         notes: reason ? `CANCELADA: ${reason}` : "CANCELADA",
       },
     });
@@ -323,7 +323,7 @@ export class ServiceOrderService {
       where: {
         companyId,
         active: true,
-        status: { in: ["PENDENTE", "EM_ANDAMENTO"] },
+        status: { in: ["DRAFT", "APPROVED", "SENT_TO_LAB", "IN_PROGRESS"] },
         ...(branchId && { branchId }),
       },
       include: {
