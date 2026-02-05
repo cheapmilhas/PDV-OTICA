@@ -9,6 +9,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
+import { SupplierSelect } from "@/components/supplier-select";
 import toast from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
@@ -35,7 +36,7 @@ export default function NovoProdutoPage() {
     stockMin: "5",
     stockMax: "",
     category: "",
-    supplier: "",
+    supplierId: "",
     notes: "",
     // Campos específicos para lentes
     spherical: "",
@@ -94,7 +95,7 @@ export default function NovoProdutoPage() {
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
       if (formData.category) sanitizedData.category = formData.category;
-      if (formData.supplier) sanitizedData.supplier = formData.supplier;
+      if (formData.supplierId) sanitizedData.supplierId = formData.supplierId;
       if (formData.notes) sanitizedData.notes = formData.notes;
 
       // Lens-specific fields
@@ -485,14 +486,10 @@ export default function NovoProdutoPage() {
             )}
 
             {/* Fornecedor */}
-            <div className="space-y-2">
-              <Label htmlFor="supplier">Fornecedor</Label>
-              <Input
-                id="supplier"
-                value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
-              />
-            </div>
+            <SupplierSelect
+              value={formData.supplierId}
+              onChange={(supplierId) => setFormData({ ...formData, supplierId })}
+            />
 
             {/* Observações */}
             <div className="space-y-2">
