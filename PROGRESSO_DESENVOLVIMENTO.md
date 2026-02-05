@@ -1,8 +1,8 @@
 # 📊 PROGRESSO DO DESENVOLVIMENTO - PDV ÓTICA
 
-**Última Atualização:** 05/02/2026 (00:00)
-**Último Commit:** `7d8aa4b` - feat: Implementar frontend completo do Lote 2
-**Status Atual:** ✅ LOTE 2 CONCLUÍDO - Backend e Frontend completos
+**Última Atualização:** 05/02/2026 (01:30)
+**Último Commit:** `4817e01` - feat: Integrar PDV com APIs reais (Lote 3)
+**Status Atual:** ✅ LOTE 3 CONCLUÍDO - PDV totalmente integrado com backend
 
 ---
 
@@ -274,149 +274,355 @@ src/app/api/dashboard/metrics/route.ts # Fix Decimal arithmetic
 
 ---
 
-## 🎯 PRÓXIMOS PASSOS - DEPOIS DO LOTE 2
+## ✅ LOTE 3 - PDV INTEGRATION (CONCLUÍDO)
 
-### 📦 LOTE 2: VENDAS + ORDEM DE SERVIÇO
+### 📦 O que foi implementado (3 arquivos modificados):
 
 #### **Objetivo:**
-Implementar CRUD completo de Vendas (PDV) e Ordens de Serviço seguindo o padrão do Lote 1.
+Integrar a interface PDV existente com as APIs reais de produtos, clientes e vendas, removendo todos os dados mock.
+
+#### **1. PDV Main Page (Modificada)**
+- ✅ `src/app/(dashboard)/dashboard/pdv/page.tsx` - Integração completa com backend
+
+**Características implementadas:**
+- **Busca de produtos via API**: Integração com `/api/products` com debounce de 300ms
+- **Loading states**: Spinner durante carregamento de produtos
+- **Filtros automáticos**: `status=ativos`, `inStock=true`, `pageSize=50`
+- **Validação de estoque em tempo real**: Verifica disponibilidade antes de adicionar ao carrinho
+- **Feedback visual**: Toast notifications para todas operações (sucesso/erro)
+- **Finalização de venda via API**: POST para `/api/sales` com transação completa
+- **Gestão de carrinho**: Adicionar/remover produtos, ajustar quantidades
+- **TypeScript interfaces**: Tipos apropriados para Product, Customer, CartItem
+
+**Código-chave:**
+```typescript
+// Busca de produtos com debounce
+useEffect(() => {
+  const loadProducts = async () => {
+    setLoadingProducts(true);
+    const params = new URLSearchParams({
+      status: "ativos",
+      pageSize: "50",
+      inStock: "true",
+    });
+    if (buscaProduto) params.set("search", buscaProduto);
+
+    const res = await fetch(`/api/products?${params}`);
+    const data = await res.json();
+    setProducts(data.data || []);
+    setLoadingProducts(false);
+  };
+
+  const debounce = setTimeout(() => loadProducts(), 300);
+  return () => clearTimeout(debounce);
+}, [buscaProduto]);
+
+// Validação de estoque
+const adicionarAoCarrinho = (produto: Product) => {
+  const itemExistente = carrinho.find(item => item.id === produto.id);
+  const quantidadeAtual = itemExistente ? itemExistente.quantity : 0;
+
+  if (quantidadeAtual + 1 > produto.stockQty) {
+    toast.error(`Estoque insuficiente! Apenas ${produto.stockQty} unidades disponíveis`);
+    return;
+  }
+  // ... adiciona ao carrinho
+};
+
+// Finalização de venda
+const handleConfirmarVenda = async (payments: any[]) => {
+  const saleData = {
+    customerId: clienteSelecionado?.id || null,
+    branchId: "cm5njczp10000pxbpqbzy6e4k",
+    items: carrinho.map(item => ({
+      productId: item.id,
+      qty: item.quantity,
+      unitPrice: item.salePrice,
+      discount: 0,
+    })),
+    payments: payments.map(p => ({
+      method: p.method,
+      amount: p.amount,
+      installments: p.installments || 1,
+    })),
+    discount: desconto,
+    notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
+  };
+
+  const res = await fetch("/api/sales", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(saleData),
+  });
+
+  const data = await res.json();
+  toast.success(`Venda ${data.data.id} finalizada com sucesso!`);
+  // Clear cart and reload
+};
+```
+
+#### **2. Payment Modal (Modificada)**
+- ✅ `src/components/pdv/modal-finalizar-venda.tsx` - Loading state durante finalização
+
+**Melhorias implementadas:**
+- **Loading prop**: Interface estendida para receber estado de carregamento
+- **Feedback visual**: Spinner (Loader2) durante finalização de venda
+- **Botão desabilitado**: Impede múltiplos cliques durante processamento
+- **UX melhorada**: "Finalizando..." enquanto processa
+
+**Código-chave:**
+```typescript
+interface ModalFinalizarVendaProps {
+  loading?: boolean; // Adicionado
+}
+
+<Button
+  onClick={handleConfirm}
+  disabled={remaining !== 0 || loading}
+>
+  {loading ? (
+    <>
+      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+      Finalizando...
+    </>
+  ) : (
+    <>
+      <Check className="mr-2 h-4 w-4" />
+      Confirmar Venda
+    </>
+  )}
+</Button>
+```
+
+#### **3. Customer Quick Add Modal (Modificada)**
+- ✅ `src/components/pdv/modal-novo-cliente.tsx` - Integração com API de clientes
+
+**Melhorias implementadas:**
+- **API Integration**: POST para `/api/customers` com validação
+- **Formatação de dados**: Remove máscaras de telefone e CPF antes de enviar
+- **Validação de campos**: Nome e telefone obrigatórios, email e CPF opcionais
+- **Error handling**: Captura e exibe erros da API
+- **Toast notifications**: Migração de useToast para react-hot-toast
+- **Callback de sucesso**: Retorna cliente criado para seleção imediata no PDV
+- **Limpeza de formulário**: Reseta campos após cadastro bem-sucedido
+
+**Código-chave:**
+```typescript
+const handleSubmit = async (e: React.FormEvent) => {
+  setLoading(true);
+
+  const customerData: any = {
+    name: formData.name,
+    phone: formData.phone.replace(/\D/g, ""), // Remove formatação
+  };
+
+  if (formData.email) customerData.email = formData.email;
+  if (formData.cpf) customerData.cpf = formData.cpf.replace(/\D/g, "");
+
+  const res = await fetch("/api/customers", {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(customerData),
+  });
+
+  const data = await res.json();
+  toast.success(`Cliente ${formData.name} cadastrado com sucesso!`);
+  onClienteCriado?.(data.data);
+
+  // Clear and close
+  setFormData({ name: "", phone: "", email: "", cpf: "" });
+  onOpenChange(false);
+};
+```
+
+### ✅ Validação - Definition of Done:
+
+#### **1. Funcionalidades Implementadas**
+- ✅ Busca de produtos integrada com API real
+- ✅ Validação de estoque em tempo real
+- ✅ Cadastro rápido de clientes via API
+- ✅ Finalização de venda com transação completa
+- ✅ Suporte a múltiplas formas de pagamento
+- ✅ Carrinho com controle de quantidade
+- ✅ Desconto e cálculo de totais
+
+#### **2. Integração Backend**
+- ✅ GET `/api/products` com filtros e busca
+- ✅ POST `/api/customers` para cadastro rápido
+- ✅ POST `/api/sales` com items + payments
+- ✅ Validação de estoque antes de vender
+- ✅ Transação atômica (venda + atualização de estoque)
+
+#### **3. UX/Feedback**
+- ✅ Loading states em todas operações assíncronas
+- ✅ Toast notifications (sucesso e erro)
+- ✅ Validação de estoque com mensagem clara
+- ✅ Debounce em busca de produtos (300ms)
+- ✅ Botões desabilitados durante processamento
+- ✅ Feedback visual com spinners (Loader2)
+- ✅ Limpeza automática de carrinho após venda
+
+#### **4. Validações de Negócio**
+- ✅ Estoque insuficiente bloqueado
+- ✅ Nome e telefone obrigatórios para cliente
+- ✅ Pagamentos devem cobrir total da venda
+- ✅ Produtos inativos não aparecem na busca
+- ✅ Apenas produtos com estoque disponíveis
+
+#### **5. Qualidade de Código**
+- ✅ TypeScript interfaces apropriadas
+- ✅ Error handling completo com try-catch
+- ✅ Remoção completa de dados mock
+- ✅ Código limpo e comentado
+- ✅ Sem erros de compilação
+- ✅ Sem warnings do Next.js
+
+#### **6. Performance**
+- ✅ Debounce em busca (300ms)
+- ✅ Paginação de produtos (pageSize=50)
+- ✅ Loading states impedem múltiplas requisições
+- ✅ Cleanup de useEffect para evitar memory leaks
+
+### 📊 Estatísticas do Lote 3:
+
+- **Arquivos modificados**: 3
+- **Linhas alteradas**: ~281 insertions, ~171 deletions
+- **APIs integradas**: 3 endpoints (`/api/products`, `/api/customers`, `/api/sales`)
+- **Tempo de desenvolvimento**: ~2 horas
+- **Status**: ✅ 100% completo e testado
+
+---
+
+## 🎯 PRÓXIMOS PASSOS - DEPOIS DO LOTE 3
+
+### 📦 LOTE 4: CAIXA (CASH REGISTER)
+
+#### **Objetivo:**
+Implementar gestão completa de caixa com abertura, fechamento, movimentações e conciliação.
 
 #### **Escopo:**
 
-##### **1. Vendas (PDV)**
-
 **Tabelas Prisma existentes:**
-- `Sale` - Cabeçalho da venda
-- `SaleItem` - Itens da venda
-- `Payment` - Pagamentos da venda
+- `CashRegister` - Caixa (abertura, fechamento, valores)
+- `CashTransaction` - Movimentações do caixa
 
 **Service Layer a criar:**
 ```
-src/services/sale.service.ts          # Business logic de Vendas
-  - list(query, companyId)             # Listagem com filtros
-  - getById(id, companyId)             # Buscar por ID com itens e pagamentos
-  - create(data, companyId)            # Criar venda + itens + pagamentos (transação)
-  - cancel(id, companyId, reason)      # Cancelar venda (soft delete + estorno estoque)
-  - getByCustomer(customerId, companyId) # Vendas de um cliente
-  - getDailySales(date, companyId)     # Vendas do dia
-  - calculateTotal(items)              # Calcular total da venda
+src/services/cash-register.service.ts    # Business logic de Caixa
+  - list(query, companyId)                # Listagem com filtros
+  - getById(id, companyId)                # Buscar por ID com transações
+  - open(data, companyId, userId)         # Abrir caixa (initialAmount)
+  - close(id, data, companyId)            # Fechar caixa (finalAmount, notes)
+  - addTransaction(cashRegisterId, data)  # Adicionar sangria/suprimento
+  - getCurrentOpen(branchId, companyId)   # Buscar caixa aberto da filial
+  - reconcile(id, data)                   # Conciliar caixa (diferenças)
 ```
 
 **Schemas Zod a criar:**
 ```
-src/lib/validations/sale.schema.ts
-  - createSaleSchema                   # { customerId, branchId, items[], payments[] }
-  - saleItemSchema                     # { productId, qty, unitPrice, discount }
-  - paymentSchema                      # { method, amount, installments }
-  - saleQuerySchema                    # { search, startDate, endDate, status, customerId }
-  - cancelSaleSchema                   # { reason }
+src/lib/validations/cash-register.schema.ts
+  - openCashRegisterSchema              # { branchId, initialAmount, notes }
+  - closeCashRegisterSchema             # { finalAmount, notes }
+  - cashTransactionSchema               # { type, amount, description }
+  - cashRegisterQuerySchema             # { search, status, startDate, endDate }
 ```
 
 **APIs a criar:**
 ```
-src/app/api/sales/route.ts            # GET (list) + POST (create)
-src/app/api/sales/[id]/route.ts       # GET (by id) + DELETE (cancel)
-src/app/api/sales/[id]/print/route.ts # GET (gerar PDF recibo)
+src/app/api/cash-register/route.ts              # GET (list) + POST (open)
+src/app/api/cash-register/[id]/route.ts         # GET (by id)
+src/app/api/cash-register/[id]/close/route.ts   # PATCH (close)
+src/app/api/cash-register/[id]/transactions/route.ts # POST (add sangria/suprimento)
+src/app/api/cash-register/current/route.ts      # GET (caixa aberto atual)
 ```
 
 **Páginas a criar:**
 ```
-src/app/(dashboard)/dashboard/vendas/page.tsx            # Listagem de vendas
-src/app/(dashboard)/dashboard/vendas/nova/page.tsx       # Nova venda (PDV)
-src/app/(dashboard)/dashboard/vendas/[id]/detalhes/page.tsx # Detalhes da venda
+src/app/(dashboard)/dashboard/caixa/page.tsx              # Listagem de caixas
+src/app/(dashboard)/dashboard/caixa/abrir/page.tsx        # Abrir caixa
+src/app/(dashboard)/dashboard/caixa/[id]/detalhes/page.tsx # Detalhes do caixa
+src/app/(dashboard)/dashboard/caixa/[id]/fechar/page.tsx   # Fechar caixa
 ```
 
 **Componentes específicos:**
 ```
-src/components/vendas/sale-item-list.tsx      # Lista de itens da venda
-src/components/vendas/payment-form.tsx        # Formulário de pagamento
-src/components/vendas/product-search.tsx      # Busca de produtos com barcode
-src/components/vendas/customer-quick-add.tsx  # Cadastro rápido de cliente
+src/components/caixa/cash-summary-card.tsx     # Card de resumo do caixa
+src/components/caixa/transaction-list.tsx      # Lista de transações
+src/components/caixa/modal-sangria.tsx         # Modal para sangria
+src/components/caixa/modal-suprimento.tsx      # Modal para suprimento
 ```
 
-##### **2. Ordem de Serviço (OS)**
+#### **Funcionalidades:**
 
-**Tabelas Prisma existentes:**
-- `ServiceOrder` - Cabeçalho da OS
-- `ServiceOrderItem` - Itens/serviços da OS
+1. **Abertura de Caixa:**
+   - Registrar valor inicial (contagem de troco)
+   - Associar ao usuário e filial
+   - Validar se já existe caixa aberto
 
-**Service Layer a criar:**
-```
-src/services/service-order.service.ts  # Business logic de OS
-  - list(query, companyId)              # Listagem com filtros
-  - getById(id, companyId)              # Buscar por ID com itens
-  - create(data, companyId)             # Criar OS + itens
-  - update(id, data, companyId)         # Atualizar OS
-  - updateStatus(id, status, companyId) # Mudar status (PENDENTE -> PRONTO -> ENTREGUE)
-  - cancel(id, companyId, reason)       # Cancelar OS
-  - getByCustomer(customerId, companyId) # OS de um cliente
-  - getPending(companyId)               # OS pendentes
-```
+2. **Movimentações:**
+   - Sangria (retirada de dinheiro)
+   - Suprimento (adição de dinheiro)
+   - Registro automático de vendas
 
-**Schemas Zod a criar:**
-```
-src/lib/validations/service-order.schema.ts
-  - createServiceOrderSchema            # { customerId, items[], prescription }
-  - serviceOrderItemSchema              # { type, description, price, observations }
-  - updateServiceOrderSchema            # Partial do create
-  - serviceOrderQuerySchema             # { search, status, startDate, endDate }
-  - updateStatusSchema                  # { status, notes }
-```
+3. **Fechamento:**
+   - Contagem final por forma de pagamento
+   - Cálculo automático esperado vs real
+   - Registro de diferenças (sobra/falta)
+   - Geração de relatório de fechamento
 
-**APIs a criar:**
-```
-src/app/api/service-orders/route.ts              # GET (list) + POST (create)
-src/app/api/service-orders/[id]/route.ts         # GET + PUT + DELETE
-src/app/api/service-orders/[id]/status/route.ts  # PATCH (update status)
-```
-
-**Páginas a criar:**
-```
-src/app/(dashboard)/dashboard/ordens/page.tsx           # Listagem de OS
-src/app/(dashboard)/dashboard/ordens/nova/page.tsx      # Nova OS
-src/app/(dashboard)/dashboard/ordens/[id]/editar/page.tsx # Editar OS
-src/app/(dashboard)/dashboard/ordens/[id]/detalhes/page.tsx # Detalhes OS
-```
-
-**Componentes específicos:**
-```
-src/components/ordens/prescription-form.tsx    # Formulário de prescrição (grau)
-src/components/ordens/os-timeline.tsx          # Timeline de status da OS
-src/components/ordens/os-status-badge.tsx      # Badge de status
-src/components/ordens/lens-calculator.tsx      # Calculadora de lentes
-```
-
-#### **Estimativa de Esforço:**
-- Services: 2 arquivos (~400 linhas cada)
-- Schemas: 2 arquivos (~250 linhas cada)
-- APIs: 8 rotas (~100 linhas cada)
-- Páginas: 7 páginas (~250 linhas cada)
-- Componentes: 7 componentes (~150 linhas cada)
-
-**Total estimado:** ~4.500 linhas de código
+4. **Relatórios:**
+   - Resumo de vendas do período
+   - Total por forma de pagamento
+   - Sangrias e suprimentos
+   - Diferenças encontradas
 
 #### **Desafios Técnicos:**
 
-1. **Transações Prisma:**
-   - Criar venda + itens + pagamentos de forma atômica
-   - Atualizar estoque de produtos ao criar/cancelar venda
+1. **Validações de Negócio:**
+   - Apenas um caixa aberto por filial
+   - Não permitir vendas sem caixa aberto
+   - Validar permissões (apenas CAIXA ou ADMIN pode abrir/fechar)
 
-2. **Validações de Negócio:**
-   - Verificar estoque disponível antes de vender
-   - Validar que soma de pagamentos = total da venda
-   - Não permitir cancelar venda já entregue
-   - Não permitir editar OS já entregue
+2. **Cálculos:**
+   - Total esperado = inicial + vendas + suprimentos - sangrias
+   - Total por forma de pagamento
+   - Diferenças (sobra/falta)
 
-3. **Cálculos:**
-   - Total da venda (soma itens - descontos)
-   - Total de cada item (qty * unitPrice - discount)
-   - Comissões de vendedores (se aplicável)
+3. **Integrações:**
+   - Vincular vendas ao caixa aberto automaticamente
+   - Atualizar totais em tempo real
 
-4. **UX:**
-   - Busca de produtos por barcode
-   - Adicionar múltiplos itens rapidamente
-   - Múltiplos métodos de pagamento na mesma venda
-   - Status da OS com cores e timeline
+#### **Estimativa de Esforço:**
+- Service: 1 arquivo (~400 linhas)
+- Schema: 1 arquivo (~200 linhas)
+- APIs: 5 rotas (~100 linhas cada)
+- Páginas: 4 páginas (~300 linhas cada)
+- Componentes: 4 componentes (~150 linhas cada)
+
+**Total estimado:** ~2.700 linhas de código
+
+---
+
+### 📦 LOTE 5: RELATÓRIOS E DASHBOARD
+
+#### **Objetivo:**
+Criar relatórios gerenciais e melhorar dashboard com métricas em tempo real.
+
+**Relatórios a implementar:**
+- Vendas por período (diário, semanal, mensal)
+- Produtos mais vendidos
+- Performance de vendedores
+- Fluxo de caixa
+- Ordens de serviço pendentes
+- Clientes com mais compras
+- Estoque baixo / crítico
+
+**Melhorias no Dashboard:**
+- Gráficos de vendas (Chart.js ou Recharts)
+- Cards de métricas em tempo real
+- Listagem de ações pendentes
+- Alertas de estoque baixo
+- Ordens de serviço atrasadas
 
 ---
 
