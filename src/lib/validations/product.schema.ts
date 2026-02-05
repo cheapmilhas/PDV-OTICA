@@ -54,6 +54,10 @@ export const createProductSchema = z.object({
     .optional()
     .or(z.literal("")),
 
+  supplierId: z.string()
+    .optional()
+    .or(z.literal("")),
+
   // Preços
   costPrice: z.coerce.number()
     .min(0, "Preço de custo não pode ser negativo")
