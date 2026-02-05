@@ -64,7 +64,10 @@ export async function POST(request: Request) {
 
     // Parse e valida body
     const body = await request.json();
+    console.log("📦 [API] Body recebido:", JSON.stringify(body, null, 2));
+
     const data = createProductSchema.parse(body);
+    console.log("✅ [API] Validação passou!");
 
     // Sanitiza dados (remove strings vazias)
     const sanitizedData = sanitizeProductDTO(data) as CreateProductDTO;
@@ -75,6 +78,10 @@ export async function POST(request: Request) {
     // Retorna 201 Created
     return createdResponse(product);
   } catch (error) {
+    console.error("❌ [API] Erro ao criar produto:", error);
+    if (error instanceof Error && 'issues' in error) {
+      console.error("🔍 [API] Detalhes da validação Zod:", JSON.stringify((error as any).issues, null, 2));
+    }
     return handleApiError(error);
   }
 }

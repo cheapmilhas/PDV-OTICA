@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   Plus,
   Edit,
@@ -23,6 +24,7 @@ export default function ProdutosPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [typeFilter, setTypeFilter] = useState("");
   const [produtos, setProdutos] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -33,9 +35,13 @@ export default function ProdutosPage() {
     const params = new URLSearchParams({
       search,
       page: page.toString(),
-      pageSize: "20",
+      pageSize: "50",
       status: "ativos",
     });
+
+    if (typeFilter) {
+      params.set("type", typeFilter);
+    }
 
     fetch(`/api/products?${params}`)
       .then((res) => res.json())
@@ -49,7 +55,7 @@ export default function ProdutosPage() {
         toast.error("Erro ao carregar produtos");
         setLoading(false);
       });
-  }, [search, page]);
+  }, [search, page, typeFilter]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja deletar este produto?")) return;
@@ -66,28 +72,36 @@ export default function ProdutosPage() {
   };
 
   const typeLabels: Record<string, string> = {
-    ARMACAO: "Armação",
-    LENTE: "Lente",
-    OCULOS_SOL: "Óculos de Sol",
-    ACESSORIO: "Acessório",
+    FRAME: "Armação",
+    LENS_SERVICE: "Lente",
+    SUNGLASSES: "Óculos de Sol",
+    CONTACT_LENS: "Lente de Contato",
+    ACCESSORY: "Acessório",
+    SERVICE: "Serviço",
   };
 
   const getTypeVariant = (type: string) => {
     switch (type) {
-      case "ARMACAO":
+      case "FRAME":
         return "default";
-      case "LENTE":
+      case "LENS_SERVICE":
+      case "CONTACT_LENS":
         return "secondary";
-      case "OCULOS_SOL":
+      case "SUNGLASSES":
         return "outline";
-      case "ACESSORIO":
+      case "ACCESSORY":
+      case "SERVICE":
         return "secondary";
       default:
         return "default";
     }
   };
 
-  const getStockStatus = (stockQty: number, stockMin: number) => {
+  const getStockStatus = (produto: any) => {
+    // Se não controla estoque, não mostrar status
+    if (!produto.stockControlled) return null;
+
+    const { stockQty, stockMin = 0 } = produto;
     if (stockQty === 0) return { variant: "destructive" as const, label: "Esgotado" };
     if (stockQty <= stockMin) return { variant: "destructive" as const, label: "Baixo" };
     if (stockQty <= stockMin * 2) return { variant: "default" as const, label: "Médio" };
@@ -158,13 +172,31 @@ export default function ProdutosPage() {
         </Card>
       </div>
 
-      {/* Search */}
-      <SearchBar
-        value={search}
-        onSearch={setSearch}
-        placeholder="Buscar por nome, SKU, marca ou código de barras..."
-        clearable
-      />
+      {/* Search and Filters */}
+      <div className="flex flex-col gap-4 md:flex-row">
+        <div className="flex-1">
+          <SearchBar
+            value={search}
+            onSearch={setSearch}
+            placeholder="Buscar por nome, SKU, marca ou código de barras..."
+            clearable
+          />
+        </div>
+        <Select value={typeFilter} onValueChange={setTypeFilter}>
+          <SelectTrigger className="w-full md:w-[200px]">
+            <SelectValue placeholder="Todos os tipos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="">Todos os tipos</SelectItem>
+            <SelectItem value="FRAME">Armação</SelectItem>
+            <SelectItem value="LENS_SERVICE">Lente</SelectItem>
+            <SelectItem value="SUNGLASSES">Óculos de Sol</SelectItem>
+            <SelectItem value="CONTACT_LENS">Lente de Contato</SelectItem>
+            <SelectItem value="ACCESSORY">Acessório</SelectItem>
+            <SelectItem value="SERVICE">Serviço</SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
       {/* Loading */}
       {loading && (
@@ -196,41 +228,40 @@ export default function ProdutosPage() {
 
       {/* Lista de Produtos */}
       {!loading && produtos.length > 0 && (
-        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3 xl:grid-cols-4">
           {produtos.map((produto) => {
-            const stockStatus = getStockStatus(produto.stockQty, produto.stockMin || 0);
+            const stockStatus = getStockStatus(produto);
             return (
               <Card key={produto.id} className="hover:shadow-md transition-shadow">
-                <CardContent className="p-6">
-                  <div className="space-y-4">
-                    <div className="flex items-start justify-between">
-                      <div className="space-y-1">
-                        <Badge variant={getTypeVariant(produto.type)}>
+                <CardContent className="p-4">
+                  <div className="space-y-3">
+                    <div className="flex items-start justify-between gap-2">
+                      <div className="space-y-1 flex-1 min-w-0">
+                        <Badge variant={getTypeVariant(produto.type)} className="text-xs">
                           {typeLabels[produto.type]}
                         </Badge>
-                        <h3 className="font-semibold text-lg line-clamp-2">{produto.name}</h3>
+                        <h3 className="font-semibold text-base line-clamp-2">{produto.name}</h3>
                         <p className="text-xs text-muted-foreground font-mono">{produto.sku}</p>
                       </div>
                     </div>
 
                     <div className="space-y-2">
-                      {produto.brand && (
-                        <p className="text-sm text-muted-foreground">
-                          Marca: <span className="font-medium text-foreground">{produto.brand}</span>
-                        </p>
-                      )}
-                      <p className="text-2xl font-bold text-primary">
+                      <p className="text-xl font-bold text-primary">
                         {formatCurrency(produto.salePrice)}
                       </p>
-                      <div className="flex items-center justify-between text-sm">
-                        <span className="text-muted-foreground">Estoque:</span>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{produto.stockQty}</span>
-                          <Badge variant={stockStatus.variant} className="text-xs">
-                            {stockStatus.label}
-                          </Badge>
+                      {produto.stockControlled && (
+                        <div className="flex items-center justify-between text-sm">
+                          <span className="text-muted-foreground">Estoque:</span>
+                          <div className="flex items-center gap-2">
+                            <span className="font-semibold">{produto.stockQty}</span>
+                            {stockStatus && (
+                              <Badge variant={stockStatus.variant} className="text-xs">
+                                {stockStatus.label}
+                              </Badge>
+                            )}
+                          </div>
                         </div>
-                      </div>
+                      )}
                     </div>
 
                     <div className="flex items-center gap-2 pt-2">

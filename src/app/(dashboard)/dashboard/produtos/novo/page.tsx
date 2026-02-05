@@ -72,6 +72,8 @@ export default function NovoProdutoPage() {
     e.preventDefault();
     setLoading(true);
 
+    console.log("🚀 [FORM] Iniciando submit com formData.type:", formData.type);
+
     try {
       // Sanitize data - remove empty strings and convert numbers
       const sanitizedData: any = {
@@ -91,14 +93,35 @@ export default function NovoProdutoPage() {
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
       if (formData.supplierId) sanitizedData.supplierId = formData.supplierId;
 
+      console.log("📤 [FORM] Enviando dados:", sanitizedData);
+
       const res = await fetch("/api/products", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(sanitizedData),
       });
 
+      console.log("📥 [FORM] Response status:", res.status);
+
       if (!res.ok) {
-        const error = await res.json();
+        let error;
+        try {
+          error = await res.json();
+          console.error("❌ [FORM] Erro da API:", error);
+        } catch (e) {
+          console.error("❌ [FORM] Erro ao parsear resposta:", e);
+          const text = await res.text();
+          console.error("❌ [FORM] Resposta raw:", text);
+          throw new Error(`Erro HTTP ${res.status}: ${text || res.statusText}`);
+        }
+
+        // Mostrar detalhes dos campos inválidos
+        if (error.error?.details) {
+          const fieldErrors = error.error.details.map((d: any) => `${d.field}: ${d.message}`).join("\n");
+          console.error("🔍 [FORM] Campos inválidos:", fieldErrors);
+          throw new Error(`Dados inválidos:\n${fieldErrors}`);
+        }
+
         throw new Error(error.error?.message || "Erro ao criar produto");
       }
 
@@ -115,7 +138,7 @@ export default function NovoProdutoPage() {
     }
   };
 
-  const isLensType = formData.type === "LENTE";
+  const isLensType = formData.type === "LENS_SERVICE" || formData.type === "CONTACT_LENS";
 
   return (
     <div className="space-y-6">
@@ -153,10 +176,12 @@ export default function NovoProdutoPage() {
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ARMACAO">Armação</SelectItem>
-                    <SelectItem value="LENTE">Lente</SelectItem>
-                    <SelectItem value="OCULOS_SOL">Óculos de Sol</SelectItem>
-                    <SelectItem value="ACESSORIO">Acessório</SelectItem>
+                    <SelectItem value="FRAME">Armação</SelectItem>
+                    <SelectItem value="LENS_SERVICE">Lente</SelectItem>
+                    <SelectItem value="SUNGLASSES">Óculos de Sol</SelectItem>
+                    <SelectItem value="CONTACT_LENS">Lente de Contato</SelectItem>
+                    <SelectItem value="ACCESSORY">Acessório</SelectItem>
+                    <SelectItem value="SERVICE">Serviço</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
