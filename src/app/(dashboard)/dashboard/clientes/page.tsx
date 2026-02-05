@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -37,14 +37,35 @@ export default function ClientesPage() {
   const [filtroStatus, setFiltroStatus] = useState("ativos");
   const [filtroOrigem, setFiltroOrigem] = useState("todas");
   const [filtroCidade, setFiltroCidade] = useState("");
+  const [clientes, setClientes] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Buscar clientes da API
+  useEffect(() => {
+    const params = new URLSearchParams({
+      search: busca,
+      status: filtroStatus,
+    });
+
+    fetch(`/api/customers?${params}`)
+      .then(res => res.json())
+      .then(data => {
+        setClientes(data.customers);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erro ao carregar clientes:', err);
+        setLoading(false);
+      });
+  }, [busca, filtroStatus]);
 
   const visualizarCliente = (cliente: any) => {
     setClienteSelecionado(cliente);
     setModalOpen(true);
   };
 
-  // Mock data - clientes realistas para ótica (estilo SSÓtica)
-  const clientes = [
+  // Mock data para compatibilidade (será removido quando API estiver completa)
+  const mockClientes = [
     {
       id: "1",
       nome: "Maria Adelaide Faco",
@@ -220,29 +241,12 @@ export default function ClientesPage() {
     }).format(value);
   };
 
-  const clientesAtivos = clientes.filter((c) => c.status !== "inactive").length;
-  const clientesVip = clientes.filter((c) => c.status === "vip").length;
-  const ticketMedio =
-    clientes.reduce((acc, c) => acc + c.valorTotal, 0) / clientes.length;
+  const clientesAtivos = clientes.filter((c) => c.active !== false).length;
+  const clientesVip = 0; // TODO: Implementar lógica de VIP
+  const ticketMedio = clientes.length > 0 ? 0 : 0; // TODO: Calcular do banco
 
-  // Filtrar clientes
-  const clientesFiltrados = clientes.filter((cliente) => {
-    const matchBusca =
-      cliente.nome.toLowerCase().includes(busca.toLowerCase()) ||
-      cliente.email.toLowerCase().includes(busca.toLowerCase()) ||
-      cliente.telefone.includes(busca) ||
-      cliente.cpf.includes(busca);
-
-    const matchStatus =
-      filtroStatus === "todos" ||
-      (filtroStatus === "ativos" && cliente.status !== "inactive") ||
-      (filtroStatus === "inativos" && cliente.status === "inactive");
-
-    const matchCidade =
-      !filtroCidade || cliente.cidade?.toLowerCase().includes(filtroCidade.toLowerCase());
-
-    return matchBusca && matchStatus && matchCidade;
-  });
+  // Clientes já vêm filtrados da API
+  const clientesFiltrados = clientes;
 
   return (
     <div className="space-y-6">
@@ -426,41 +430,39 @@ export default function ClientesPage() {
               <div className="flex items-start gap-4">
                 {/* Avatar/Foto */}
                 <Avatar className="h-16 w-16">
-                  {(cliente as any).foto ? (
-                    <AvatarImage src={(cliente as any).foto} alt={cliente.nome} />
-                  ) : (
-                    <AvatarFallback className="text-lg">{getInitials(cliente.nome)}</AvatarFallback>
-                  )}
+                  <AvatarFallback className="text-lg">{getInitials(cliente.name)}</AvatarFallback>
                 </Avatar>
 
                 {/* Informações */}
                 <div className="flex-1 space-y-2">
                   <div>
-                    <h3 className="font-semibold text-lg">{cliente.nome}</h3>
-                    {(cliente as any).filial && (
+                    <h3 className="font-semibold text-lg">{cliente.name}</h3>
+                    {cliente.city && (
                       <p className="text-xs text-muted-foreground flex items-center gap-1">
                         <Building2 className="h-3 w-3" />
-                        {(cliente as any).filial}
+                        {cliente.city} - {cliente.state}
                       </p>
                     )}
                   </div>
 
-                  {(cliente as any).dataCadastro && (
+                  {cliente.createdAt && (
                     <p className="text-xs text-muted-foreground">
-                      {formatDate((cliente as any).dataCadastro)}
+                      {formatDate(cliente.createdAt)}
                     </p>
                   )}
 
                   <div className="space-y-1">
-                    <p className="text-sm flex items-center gap-1">
-                      <Phone className="h-3 w-3 text-muted-foreground" />
-                      {cliente.telefone}
-                    </p>
+                    {cliente.phone && (
+                      <p className="text-sm flex items-center gap-1">
+                        <Phone className="h-3 w-3 text-muted-foreground" />
+                        {cliente.phone}
+                      </p>
+                    )}
                   </div>
 
                   <div className="flex items-center justify-between pt-2">
                     <Badge variant="default" className="bg-blue-500">
-                      {cliente.totalCompras} Venda{cliente.totalCompras !== 1 ? 's' : ''}
+                      Cliente Ativo
                     </Badge>
                   </div>
                 </div>

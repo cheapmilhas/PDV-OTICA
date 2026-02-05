@@ -42,30 +42,43 @@ import Link from "next/link";
 
 export default function DashboardPage() {
   const [currentTime, setCurrentTime] = useState(new Date());
+  const [metrics, setMetrics] = useState({
+    salesToday: 0,
+    salesYesterday: 0,
+    salesMonth: 0,
+    salesLastMonth: 0,
+    salesMonthAccumulated: 0,
+    customersTotal: 0,
+    customersNew: 0,
+    productsLowStock: 0,
+    productsTotal: 0,
+    salesCount: 0,
+    avgTicket: 0,
+    goalMonth: 75400.20,
+    osOpen: 0,
+    osPending: 0,
+  });
+  const [loading, setLoading] = useState(true);
+
+  // Buscar métricas da API
+  useEffect(() => {
+    fetch('/api/dashboard/metrics')
+      .then(res => res.json())
+      .then(data => {
+        setMetrics(data.metrics);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erro ao carregar métricas:', err);
+        setLoading(false);
+      });
+  }, []);
 
   // Atualizar relógio a cada minuto
   useEffect(() => {
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
-
-  // Mock data - será substituído por dados reais do banco
-  const metrics = {
-    salesToday: 4850.00,
-    salesYesterday: 3920.00,
-    salesMonth: 14380.00,
-    salesLastMonth: 660.00,
-    salesMonthAccumulated: 75400.20,
-    customersTotal: 342,
-    customersNew: 12,
-    productsLowStock: 12,
-    productsTotal: 156,
-    salesCount: 23,
-    avgTicket: 545.50,
-    goalMonth: 75400.20,
-    osOpen: 8,
-    osPending: 3,
-  };
 
   // Calcular crescimento percentual
   const calculateGrowth = (current: number, previous: number) => {

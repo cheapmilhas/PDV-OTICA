@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -20,14 +20,30 @@ import { ModalDetalhesProduto } from "@/components/produtos/modal-detalhes-produ
 export default function ProdutosPage() {
   const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
+  const [produtos, setProdutos] = useState<any[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  // Buscar produtos da API
+  useEffect(() => {
+    fetch('/api/products')
+      .then(res => res.json())
+      .then(data => {
+        setProdutos(data.products);
+        setLoading(false);
+      })
+      .catch(err => {
+        console.error('Erro ao carregar produtos:', err);
+        setLoading(false);
+      });
+  }, []);
 
   const visualizarProduto = (produto: any) => {
     setProdutoSelecionado(produto);
     setModalOpen(true);
   };
 
-  // Mock data - dados realistas para ótica
-  const produtos = [
+  // Mock data para compatibilidade (será removido quando API estiver completa)
+  const mockProdutos = [
     {
       id: "1",
       codigo: "ARM001",
