@@ -1,60 +1,74 @@
 import { NextResponse } from "next/server";
-import { prisma } from "@/lib/prisma";
+import { customerService } from "@/services/customer.service";
+import {
+  customerQuerySchema,
+  createCustomerSchema,
+  sanitizeCustomerDTO,
+  type CreateCustomerDTO,
+} from "@/lib/validations/customer.schema";
+import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { handleApiError } from "@/lib/error-handler";
+import { paginatedResponse, createdResponse } from "@/lib/api-response";
 
+/**
+ * GET /api/customers
+ * Lista clientes com paginação, busca e filtros
+ *
+ * Query params:
+ * - search: string (busca em nome, email, cpf, telefone)
+ * - page: number (default: 1)
+ * - pageSize: number (default: 20, max: 100)
+ * - status: "ativos" | "inativos" | "todos" (default: "ativos")
+ * - city: string (filtro por cidade)
+ * - referralSource: string (filtro por origem)
+ * - sortBy: "name" | "createdAt" | "city" (default: "createdAt")
+ * - sortOrder: "asc" | "desc" (default: "desc")
+ */
 export async function GET(request: Request) {
   try {
+    // Requer autenticação
+    await requireAuth();
+    const companyId = await getCompanyId();
+
+    // Parse e valida query params
     const { searchParams } = new URL(request.url);
-    const search = searchParams.get("search") || "";
-    const status = searchParams.get("status") || "ativos";
+    const query = customerQuerySchema.parse(Object.fromEntries(searchParams));
 
-    const where: any = {
-      AND: [
-        search ? {
-          OR: [
-            { name: { contains: search, mode: "insensitive" } },
-            { email: { contains: search, mode: "insensitive" } },
-            { phone: { contains: search } },
-            { cpf: { contains: search } },
-          ],
-        } : {},
-        status === "ativos" ? { active: true } :
-        status === "inativos" ? { active: false } : {},
-      ],
-    };
+    // Busca clientes via service
+    const result = await customerService.list(query, companyId);
 
-    const customers = await prisma.customer.findMany({
-      where,
-      orderBy: { createdAt: "desc" },
-      take: 50,
-    });
-
-    return NextResponse.json({ customers });
+    // Retorna resposta paginada
+    return paginatedResponse(result.data, result.pagination);
   } catch (error) {
-    console.error("Erro ao buscar clientes:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar clientes" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
 
+/**
+ * POST /api/customers
+ * Cria novo cliente
+ *
+ * Body: CreateCustomerDTO
+ */
 export async function POST(request: Request) {
   try {
+    // Requer autenticação
+    await requireAuth();
+    const companyId = await getCompanyId();
+
+    // Parse e valida body
     const body = await request.json();
+    const data = createCustomerSchema.parse(body);
 
-    const customer = await prisma.customer.create({
-      data: {
-        ...body,
-        companyId: "cm_001", // TODO: Pegar do contexto da sessão
-      },
-    });
+    // Sanitiza dados (remove strings vazias)
+    const sanitizedData = sanitizeCustomerDTO(data) as CreateCustomerDTO;
 
-    return NextResponse.json({ customer }, { status: 201 });
+    // Cria cliente via service
+    const customer = await customerService.create(sanitizedData, companyId);
+
+    // Retorna 201 Created
+    return createdResponse(customer);
   } catch (error) {
-    console.error("Erro ao criar cliente:", error);
-    return NextResponse.json(
-      { error: "Erro ao criar cliente" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

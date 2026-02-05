@@ -1,198 +1,79 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import { Search, Package, Plus, Eye } from "lucide-react";
+  Plus,
+  Edit,
+  Trash2,
+  Loader2,
+  Package,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { ModalDetalhesProduto } from "@/components/produtos/modal-detalhes-produto";
+import { SearchBar } from "@/components/shared/search-bar";
+import { Pagination } from "@/components/shared/pagination";
+import { EmptyState } from "@/components/shared/empty-state";
+import { Can } from "@/components/shared/can";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
 
 export default function ProdutosPage() {
-  const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
-  const [modalOpen, setModalOpen] = useState(false);
+  const router = useRouter();
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
   const [produtos, setProdutos] = useState<any[]>([]);
+  const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
 
   // Buscar produtos da API
   useEffect(() => {
-    fetch('/api/products')
-      .then(res => res.json())
-      .then(data => {
-        setProdutos(data.products);
+    setLoading(true);
+    const params = new URLSearchParams({
+      search,
+      page: page.toString(),
+      pageSize: "20",
+      status: "ativos",
+    });
+
+    fetch(`/api/products?${params}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setProdutos(data.data || []);
+        setPagination(data.pagination);
         setLoading(false);
       })
-      .catch(err => {
-        console.error('Erro ao carregar produtos:', err);
+      .catch((err) => {
+        console.error("Erro ao carregar produtos:", err);
+        toast.error("Erro ao carregar produtos");
         setLoading(false);
       });
-  }, []);
+  }, [search, page]);
 
-  const visualizarProduto = (produto: any) => {
-    setProdutoSelecionado(produto);
-    setModalOpen(true);
+  const handleDelete = async (id: string) => {
+    if (!confirm("Tem certeza que deseja deletar este produto?")) return;
+
+    try {
+      const res = await fetch(`/api/products/${id}`, { method: "DELETE" });
+      if (!res.ok) throw new Error("Erro ao deletar produto");
+
+      toast.success("Produto deletado com sucesso!");
+      setPage(1);
+    } catch (error: any) {
+      toast.error(error.message);
+    }
   };
 
-  // Mock data para compatibilidade (será removido quando API estiver completa)
-  const mockProdutos = [
-    {
-      id: "1",
-      codigo: "ARM001",
-      nome: "Ray-Ban Aviador Clássico RB3025",
-      categoria: "ARMACAO",
-      marca: "Ray-Ban",
-      preco: 899.90,
-      custoProduto: 450.00,
-      estoque: 15,
-      estoqueMinimo: 5,
-      status: "active",
-      descricao: "Óculos aviador clássico em metal dourado com lentes de proteção UV400. Design atemporal e confortável para uso diário.",
-    },
-    {
-      id: "2",
-      codigo: "ARM002",
-      nome: "Oakley Holbrook OO9102",
-      categoria: "ARMACAO",
-      marca: "Oakley",
-      preco: 1249.90,
-      custoProduto: 625.00,
-      estoque: 8,
-      estoqueMinimo: 5,
-      status: "active",
-      descricao: "Armação esportiva em acetato premium com design moderno. Ideal para atividades ao ar livre com proteção e estilo.",
-    },
-    {
-      id: "3",
-      codigo: "LEN001",
-      nome: "Lente Transitions Gen 8 1.67",
-      categoria: "LENTE",
-      marca: "Transitions",
-      preco: 580.00,
-      custoProduto: 290.00,
-      estoque: 2,
-      estoqueMinimo: 3,
-      status: "active",
-      descricao: "Lente fotossensível de última geração que escurece rapidamente ao sol e clareia em ambientes internos. Índice 1.67 para lentes mais finas.",
-    },
-    {
-      id: "4",
-      codigo: "LEN002",
-      nome: "Lente Zeiss Single Vision 1.74",
-      categoria: "LENTE",
-      marca: "Zeiss",
-      preco: 1200.00,
-      estoque: 5,
-      estoqueMinimo: 3,
-      status: "active",
-    },
-    {
-      id: "5",
-      codigo: "ARM003",
-      nome: "Armação Infantil Flexível Azul",
-      categoria: "ARMACAO",
-      marca: "Disney",
-      preco: 320.00,
-      estoque: 12,
-      estoqueMinimo: 8,
-      status: "active",
-    },
-    {
-      id: "6",
-      codigo: "SOL001",
-      nome: "Ray-Ban Wayfarer RB2140",
-      categoria: "OCULOS_SOL",
-      marca: "Ray-Ban",
-      preco: 799.90,
-      estoque: 20,
-      estoqueMinimo: 10,
-      status: "active",
-    },
-    {
-      id: "7",
-      codigo: "LEN003",
-      nome: "Lente Antirreflexo Premium",
-      categoria: "LENTE",
-      marca: "Essilor",
-      preco: 350.00,
-      estoque: 30,
-      estoqueMinimo: 15,
-      status: "active",
-    },
-    {
-      id: "8",
-      codigo: "ARM004",
-      nome: "Prada VPR 16M Feminino",
-      categoria: "ARMACAO",
-      marca: "Prada",
-      preco: 1890.00,
-      estoque: 4,
-      estoqueMinimo: 3,
-      status: "active",
-    },
-    {
-      id: "9",
-      codigo: "SOL002",
-      nome: "Oakley Radar EV Path Esportivo",
-      categoria: "OCULOS_SOL",
-      marca: "Oakley",
-      preco: 1499.90,
-      estoque: 6,
-      estoqueMinimo: 5,
-      status: "active",
-    },
-    {
-      id: "10",
-      codigo: "LIQ001",
-      nome: "Líquido de Limpeza 50ml",
-      categoria: "ACESSORIO",
-      marca: "Genérico",
-      preco: 25.00,
-      estoque: 45,
-      estoqueMinimo: 20,
-      status: "active",
-    },
-    {
-      id: "11",
-      codigo: "EST001",
-      nome: "Estojo Rígido Premium",
-      categoria: "ACESSORIO",
-      marca: "Genérico",
-      preco: 35.00,
-      estoque: 50,
-      estoqueMinimo: 25,
-      status: "active",
-    },
-    {
-      id: "12",
-      codigo: "ARM005",
-      nome: "Tommy Hilfiger TH 1770 Masculino",
-      categoria: "ARMACAO",
-      marca: "Tommy Hilfiger",
-      preco: 650.00,
-      estoque: 1,
-      estoqueMinimo: 5,
-      status: "active",
-    },
-  ];
-
-  const categoriaLabels: Record<string, string> = {
+  const typeLabels: Record<string, string> = {
     ARMACAO: "Armação",
     LENTE: "Lente",
     OCULOS_SOL: "Óculos de Sol",
     ACESSORIO: "Acessório",
   };
 
-  const getCategoriaVariant = (categoria: string) => {
-    switch (categoria) {
+  const getTypeVariant = (type: string) => {
+    switch (type) {
       case "ARMACAO":
         return "default";
       case "LENTE":
@@ -206,10 +87,10 @@ export default function ProdutosPage() {
     }
   };
 
-  const getEstoqueStatus = (estoque: number, estoqueMinimo: number) => {
-    if (estoque === 0) return { variant: "destructive" as const, label: "Esgotado" };
-    if (estoque <= estoqueMinimo) return { variant: "destructive" as const, label: "Baixo" };
-    if (estoque <= estoqueMinimo * 2) return { variant: "default" as const, label: "Médio" };
+  const getStockStatus = (stockQty: number, stockMin: number) => {
+    if (stockQty === 0) return { variant: "destructive" as const, label: "Esgotado" };
+    if (stockQty <= stockMin) return { variant: "destructive" as const, label: "Baixo" };
+    if (stockQty <= stockMin * 2) return { variant: "default" as const, label: "Médio" };
     return { variant: "secondary" as const, label: "Normal" };
   };
 
@@ -219,112 +100,13 @@ export default function ProdutosPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Produtos</h1>
-          <p className="text-muted-foreground">
-            Gerencie o catálogo de produtos da ótica
-          </p>
+          <p className="text-muted-foreground">Gerencie o catálogo de produtos da ótica</p>
         </div>
-        <Button>
+        <Button onClick={() => router.push("/dashboard/produtos/novo")}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Produto
         </Button>
       </div>
-
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-          <CardDescription>
-            Busque e filtre produtos no catálogo
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por nome, código ou marca..."
-                className="pl-9"
-              />
-            </div>
-            <Button variant="outline">
-              <Package className="mr-2 h-4 w-4" />
-              Todas Categorias
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-
-      {/* Products Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Catálogo de Produtos</CardTitle>
-          <CardDescription>
-            {produtos.length} produtos cadastrados
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Código</TableHead>
-                <TableHead>Nome</TableHead>
-                <TableHead>Categoria</TableHead>
-                <TableHead>Marca</TableHead>
-                <TableHead className="text-right">Preço</TableHead>
-                <TableHead className="text-center">Estoque</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {produtos.map((produto) => {
-                const estoqueStatus = getEstoqueStatus(produto.estoque, produto.estoqueMinimo);
-                return (
-                  <TableRow key={produto.id}>
-                    <TableCell className="font-mono text-sm">
-                      {produto.codigo}
-                    </TableCell>
-                    <TableCell className="font-medium">{produto.nome}</TableCell>
-                    <TableCell>
-                      <Badge variant={getCategoriaVariant(produto.categoria)}>
-                        {categoriaLabels[produto.categoria]}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-muted-foreground">
-                      {produto.marca}
-                    </TableCell>
-                    <TableCell className="text-right font-semibold">
-                      {formatCurrency(produto.preco)}
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex flex-col items-center gap-1">
-                        <span className="font-medium">{produto.estoque}</span>
-                        <span className="text-xs text-muted-foreground">
-                          min: {produto.estoqueMinimo}
-                        </span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={estoqueStatus.variant}>
-                        {estoqueStatus.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => visualizarProduto(produto)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
@@ -335,7 +117,7 @@ export default function ProdutosPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{produtos.length}</p>
+            <p className="text-2xl font-bold">{pagination?.total || 0}</p>
           </CardContent>
         </Card>
         <Card>
@@ -346,7 +128,7 @@ export default function ProdutosPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {produtos.filter((p) => p.categoria === "ARMACAO").length}
+              {produtos.filter((p) => p.type === "ARMACAO").length}
             </p>
           </CardContent>
         </Card>
@@ -358,7 +140,7 @@ export default function ProdutosPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {produtos.filter((p) => p.categoria === "LENTE").length}
+              {produtos.filter((p) => p.type === "LENTE").length}
             </p>
           </CardContent>
         </Card>
@@ -370,17 +152,125 @@ export default function ProdutosPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-destructive">
-              {produtos.filter((p) => p.estoque <= p.estoqueMinimo).length}
+              {produtos.filter((p) => p.stockQty <= (p.stockMin || 0)).length}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      <ModalDetalhesProduto
-        open={modalOpen}
-        onOpenChange={setModalOpen}
-        produto={produtoSelecionado}
+      {/* Search */}
+      <SearchBar
+        value={search}
+        onSearch={setSearch}
+        placeholder="Buscar por nome, SKU, marca ou código de barras..."
+        clearable
       />
+
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
+
+      {/* Empty State */}
+      {!loading && produtos.length === 0 && (
+        <EmptyState
+          icon={<Package className="h-12 w-12" />}
+          title="Nenhum produto encontrado"
+          description={
+            search
+              ? `Não encontramos resultados para "${search}"`
+              : "Comece adicionando seu primeiro produto"
+          }
+          action={
+            !search && (
+              <Button onClick={() => router.push("/dashboard/produtos/novo")}>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Produto
+              </Button>
+            )
+          }
+        />
+      )}
+
+      {/* Lista de Produtos */}
+      {!loading && produtos.length > 0 && (
+        <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+          {produtos.map((produto) => {
+            const stockStatus = getStockStatus(produto.stockQty, produto.stockMin || 0);
+            return (
+              <Card key={produto.id} className="hover:shadow-md transition-shadow">
+                <CardContent className="p-6">
+                  <div className="space-y-4">
+                    <div className="flex items-start justify-between">
+                      <div className="space-y-1">
+                        <Badge variant={getTypeVariant(produto.type)}>
+                          {typeLabels[produto.type]}
+                        </Badge>
+                        <h3 className="font-semibold text-lg line-clamp-2">{produto.name}</h3>
+                        <p className="text-xs text-muted-foreground font-mono">{produto.sku}</p>
+                      </div>
+                    </div>
+
+                    <div className="space-y-2">
+                      {produto.brand && (
+                        <p className="text-sm text-muted-foreground">
+                          Marca: <span className="font-medium text-foreground">{produto.brand}</span>
+                        </p>
+                      )}
+                      <p className="text-2xl font-bold text-primary">
+                        {formatCurrency(produto.salePrice)}
+                      </p>
+                      <div className="flex items-center justify-between text-sm">
+                        <span className="text-muted-foreground">Estoque:</span>
+                        <div className="flex items-center gap-2">
+                          <span className="font-semibold">{produto.stockQty}</span>
+                          <Badge variant={stockStatus.variant} className="text-xs">
+                            {stockStatus.label}
+                          </Badge>
+                        </div>
+                      </div>
+                    </div>
+
+                    <div className="flex items-center gap-2 pt-2">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => router.push(`/dashboard/produtos/${produto.id}/editar`)}
+                        className="flex-1"
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Editar
+                      </Button>
+
+                      <Can roles={["ADMIN", "GERENTE"]}>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(produto.id)}
+                        >
+                          <Trash2 className="h-4 w-4" />
+                        </Button>
+                      </Can>
+                    </div>
+                  </div>
+                </CardContent>
+              </Card>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Paginação */}
+      {!loading && pagination && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={pagination.totalPages}
+          onPageChange={setPage}
+          showInfo
+        />
+      )}
     </div>
   );
 }

@@ -81,7 +81,7 @@ export async function GET() {
     // Ticket médio
     const avgTicket =
       salesMonth._count > 0
-        ? (salesMonth._sum.total || 0) / salesMonth._count
+        ? Number(salesMonth._sum.total || 0) / salesMonth._count
         : 0;
 
     const metrics = {
