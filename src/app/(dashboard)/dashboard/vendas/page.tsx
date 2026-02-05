@@ -1,175 +1,67 @@
 "use client";
 
-import { useState } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { useState, useEffect } from "react";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
-  Search,
+  Plus,
   Eye,
-  Printer,
-  FileText,
-  CheckCircle2,
-  XCircle,
-  Clock,
-  Filter,
-  Download,
-  CreditCard,
-  Calendar,
-  User,
-  Package,
+  Loader2,
+  ShoppingCart,
+  DollarSign,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { SearchBar } from "@/components/shared/search-bar";
+import { Pagination } from "@/components/shared/pagination";
+import { EmptyState } from "@/components/shared/empty-state";
+import { useRouter } from "next/navigation";
+import toast from "react-hot-toast";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 export default function VendasPage() {
-  const [busca, setBusca] = useState("");
-  const [filtroStatus, setFiltroStatus] = useState("todas");
+  const router = useRouter();
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [vendas, setVendas] = useState<any[]>([]);
+  const [pagination, setPagination] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
 
-  // Mock data - vendas
-  const vendas = [
-    {
-      id: "1",
-      numero: "VD-0001",
-      data: "2024-02-03T14:30:00",
-      cliente: "Maria Silva Santos",
-      cpf: "123.456.789-01",
-      vendedor: "Carlos Vendedor",
-      itens: 2,
-      subtotal: 1479.80,
-      desconto: 0,
-      total: 1479.80,
-      formaPagamento: "PIX",
-      parcelas: null,
-      status: "concluida",
-    },
-    {
-      id: "2",
-      numero: "VD-0002",
-      data: "2024-02-03T15:45:00",
-      cliente: "João Pedro Oliveira",
-      cpf: "234.567.890-12",
-      vendedor: "Maria Atendente",
-      itens: 1,
-      subtotal: 899.90,
-      desconto: 50.00,
-      total: 849.90,
-      formaPagamento: "Crédito",
-      parcelas: 3,
-      status: "concluida",
-    },
-    {
-      id: "3",
-      numero: "VD-0003",
-      data: "2024-02-03T16:20:00",
-      cliente: "Ana Paula Costa",
-      cpf: "345.678.901-23",
-      vendedor: "Carlos Vendedor",
-      itens: 3,
-      subtotal: 1180.00,
-      desconto: 0,
-      total: 1180.00,
-      formaPagamento: "Dinheiro",
-      parcelas: null,
-      status: "concluida",
-    },
-    {
-      id: "4",
-      numero: "VD-0004",
-      data: "2024-02-03T17:10:00",
-      cliente: "Carlos Eduardo Lima",
-      cpf: "456.789.012-34",
-      vendedor: "João Caixa",
-      itens: 4,
-      subtotal: 640.00,
-      desconto: 40.00,
-      total: 600.00,
-      formaPagamento: "Débito",
-      parcelas: null,
-      status: "concluida",
-    },
-    {
-      id: "5",
-      numero: "VD-0005",
-      data: "2024-02-02T11:30:00",
-      cliente: "Fernanda Souza",
-      cpf: "567.890.123-45",
-      vendedor: "Maria Atendente",
-      itens: 1,
-      subtotal: 1249.90,
-      desconto: 0,
-      total: 1249.90,
-      formaPagamento: "Crédito",
-      parcelas: 6,
-      status: "concluida",
-    },
-    {
-      id: "6",
-      numero: "VD-0006",
-      data: "2024-02-02T14:00:00",
-      cliente: "Roberto Santos",
-      cpf: "678.901.234-56",
-      vendedor: "Carlos Vendedor",
-      itens: 2,
-      subtotal: 325.00,
-      desconto: 25.00,
-      total: 300.00,
-      formaPagamento: "PIX",
-      parcelas: null,
-      status: "cancelada",
-    },
-  ];
-
-  const getStatusBadge = (status: string) => {
-    switch (status) {
-      case "concluida":
-        return { variant: "default" as const, label: "Concluída", icon: <CheckCircle2 className="h-3 w-3" /> };
-      case "pendente":
-        return { variant: "secondary" as const, label: "Pendente", icon: <Clock className="h-3 w-3" /> };
-      case "cancelada":
-        return { variant: "destructive" as const, label: "Cancelada", icon: <XCircle className="h-3 w-3" /> };
-      default:
-        return { variant: "outline" as const, label: status, icon: null };
-    }
-  };
-
-  const formatDate = (dateString: string) => {
-    const date = new Date(dateString);
-    return date.toLocaleString("pt-BR", {
-      day: "2-digit",
-      month: "2-digit",
-      year: "numeric",
-      hour: "2-digit",
-      minute: "2-digit",
+  useEffect(() => {
+    setLoading(true);
+    const params = new URLSearchParams({
+      search,
+      page: page.toString(),
+      pageSize: "20",
+      status: "ativos",
     });
+
+    fetch(`/api/sales?${params}`)
+      .then((res) => res.json())
+      .then((data) => {
+        setVendas(data.data || []);
+        setPagination(data.pagination);
+        setLoading(false);
+      })
+      .catch((err) => {
+        console.error("Erro ao carregar vendas:", err);
+        toast.error("Erro ao carregar vendas");
+        setLoading(false);
+      });
+  }, [search, page]);
+
+  const getPaymentMethodLabel = (method: string) => {
+    const labels: Record<string, string> = {
+      CASH: "Dinheiro",
+      DEBIT_CARD: "Débito",
+      CREDIT_CARD: "Crédito",
+      PIX: "PIX",
+      BANK_SLIP: "Boleto",
+      STORE_CREDIT: "Crédito Loja",
+    };
+    return labels[method] || method;
   };
-
-  const vendasFiltradas = vendas.filter((venda) => {
-    const matchBusca =
-      venda.numero.toLowerCase().includes(busca.toLowerCase()) ||
-      venda.cliente.toLowerCase().includes(busca.toLowerCase()) ||
-      venda.cpf.includes(busca);
-
-    const matchStatus = filtroStatus === "todas" || venda.status === filtroStatus;
-
-    return matchBusca && matchStatus;
-  });
-
-  const totalVendas = vendasFiltradas.filter(v => v.status === "concluida").length;
-  const totalFaturamento = vendasFiltradas
-    .filter(v => v.status === "concluida")
-    .reduce((acc, v) => acc + v.total, 0);
-  const ticketMedio = totalVendas > 0 ? totalFaturamento / totalVendas : 0;
-  const totalCanceladas = vendasFiltradas.filter(v => v.status === "cancelada").length;
 
   return (
     <div className="space-y-6">
@@ -177,20 +69,16 @@ export default function VendasPage() {
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-3xl font-bold">Vendas</h1>
-          <p className="text-muted-foreground">
-            Histórico e gerenciamento de vendas realizadas
-          </p>
+          <p className="text-muted-foreground">Histórico de vendas realizadas</p>
         </div>
-        <div className="flex gap-2">
-          <Button variant="outline">
-            <Download className="mr-2 h-4 w-4" />
-            Exportar
-          </Button>
-        </div>
+        <Button onClick={() => router.push("/dashboard/vendas/nova")}>
+          <Plus className="mr-2 h-4 w-4" />
+          Nova Venda
+        </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -198,201 +86,155 @@ export default function VendasPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{totalVendas}</p>
-            <p className="text-xs text-muted-foreground">
-              {totalCanceladas} canceladas
-            </p>
+            <p className="text-2xl font-bold">{pagination?.total || 0}</p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Faturamento Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-green-600">
-              {formatCurrency(totalFaturamento)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Vendas concluídas
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ticket Médio
+              Vendas Hoje
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatCurrency(ticketMedio)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Por venda
+              {vendas.filter((v) => {
+                const today = new Date().toDateString();
+                const saleDate = new Date(v.createdAt).toDateString();
+                return today === saleDate;
+              }).length}
             </p>
           </CardContent>
         </Card>
-
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Itens Vendidos
+              Valor Total (Página)
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">
-              {vendasFiltradas.filter(v => v.status === "concluida").reduce((acc, v) => acc + v.itens, 0)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              Total de produtos
+            <p className="text-2xl font-bold text-primary">
+              {formatCurrency(
+                vendas.reduce((sum, v) => sum + Number(v.total || 0), 0)
+              )}
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Filtros</CardTitle>
-          <CardDescription>
-            Busque e filtre as vendas realizadas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
-                placeholder="Buscar por número, cliente ou CPF..."
-                className="pl-9"
-                value={busca}
-                onChange={(e) => setBusca(e.target.value)}
-              />
-            </div>
-            <Tabs value={filtroStatus} onValueChange={setFiltroStatus}>
-              <TabsList>
-                <TabsTrigger value="todas">Todas</TabsTrigger>
-                <TabsTrigger value="concluida">Concluídas</TabsTrigger>
-                <TabsTrigger value="cancelada">Canceladas</TabsTrigger>
-              </TabsList>
-            </Tabs>
-          </div>
-        </CardContent>
-      </Card>
+      {/* Search */}
+      <SearchBar
+        value={search}
+        onSearch={setSearch}
+        placeholder="Buscar por cliente, CPF ou telefone..."
+        clearable
+      />
 
-      {/* Tabela de Vendas */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Vendas</CardTitle>
-          <CardDescription>
-            {vendasFiltradas.length} vendas encontradas
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Número</TableHead>
-                <TableHead>Data/Hora</TableHead>
-                <TableHead>Cliente</TableHead>
-                <TableHead>Vendedor</TableHead>
-                <TableHead className="text-center">Itens</TableHead>
-                <TableHead className="text-right">Subtotal</TableHead>
-                <TableHead className="text-right">Desconto</TableHead>
-                <TableHead className="text-right">Total</TableHead>
-                <TableHead>Pagamento</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {vendasFiltradas.map((venda) => {
-                const status = getStatusBadge(venda.status);
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
 
-                return (
-                  <TableRow key={venda.id}>
-                    <TableCell>
+      {/* Empty State */}
+      {!loading && vendas.length === 0 && (
+        <EmptyState
+          icon={<ShoppingCart className="h-12 w-12" />}
+          title="Nenhuma venda encontrada"
+          description={
+            search
+              ? `Não encontramos resultados para "${search}"`
+              : "Comece realizando sua primeira venda"
+          }
+          action={
+            !search && (
+              <Button onClick={() => router.push("/dashboard/vendas/nova")}>
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Venda
+              </Button>
+            )
+          }
+        />
+      )}
+
+      {/* Lista de Vendas */}
+      {!loading && vendas.length > 0 && (
+        <div className="grid gap-4">
+          {vendas.map((venda) => (
+            <Card key={venda.id} className="hover:shadow-md transition-shadow">
+              <CardContent className="p-6">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-3 flex-1">
+                    <div className="flex items-start justify-between">
                       <div>
-                        <p className="font-mono font-medium">{venda.numero}</p>
-                        <p className="text-xs text-muted-foreground">
-                          {venda.cpf}
+                        <h3 className="font-semibold text-lg">
+                          {venda.customer?.name || "Cliente não informado"}
+                        </h3>
+                        <p className="text-sm text-muted-foreground">
+                          {format(new Date(venda.createdAt), "dd/MM/yyyy 'às' HH:mm", {
+                            locale: ptBR,
+                          })}
                         </p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <Calendar className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{formatDate(venda.data)}</span>
+                      <div className="text-right">
+                        <p className="text-2xl font-bold text-primary">
+                          {formatCurrency(Number(venda.total))}
+                        </p>
+                        {Number(venda.discountTotal) > 0 && (
+                          <p className="text-sm text-muted-foreground">
+                            Desconto: {formatCurrency(Number(venda.discountTotal))}
+                          </p>
+                        )}
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <User className="h-4 w-4 text-muted-foreground" />
-                        <span className="text-sm">{venda.cliente}</span>
+                    </div>
+
+                    <div className="flex items-center gap-4 text-sm">
+                      <div className="flex items-center gap-1 text-muted-foreground">
+                        <ShoppingCart className="h-4 w-4" />
+                        <span>{venda._count?.items || 0} itens</span>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <p className="text-sm text-muted-foreground">{venda.vendedor}</p>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Package className="h-4 w-4 text-muted-foreground" />
-                        <span className="font-medium">{venda.itens}</span>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <p className="text-sm">{formatCurrency(venda.subtotal)}</p>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      {venda.desconto > 0 ? (
-                        <p className="text-sm text-green-600">-{formatCurrency(venda.desconto)}</p>
-                      ) : (
-                        <p className="text-sm text-muted-foreground">-</p>
-                      )}
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <p className="font-bold">{formatCurrency(venda.total)}</p>
-                    </TableCell>
-                    <TableCell>
-                      <div className="flex items-center gap-2">
-                        <CreditCard className="h-4 w-4 text-muted-foreground" />
-                        <div>
-                          <p className="text-sm font-medium">{venda.formaPagamento}</p>
-                          {venda.parcelas && (
-                            <p className="text-xs text-muted-foreground">
-                              {venda.parcelas}x de {formatCurrency(venda.total / venda.parcelas)}
-                            </p>
-                          )}
+                      {venda.payments && venda.payments.length > 0 && (
+                        <div className="flex gap-2">
+                          {venda.payments.map((payment: any, idx: number) => (
+                            <Badge key={idx} variant="outline">
+                              {getPaymentMethodLabel(payment.method)}
+                            </Badge>
+                          ))}
                         </div>
-                      </div>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      <Badge variant={status.variant} className="flex items-center gap-1 w-fit mx-auto">
-                        {status.icon}
-                        {status.label}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="text-right">
-                      <div className="flex justify-end gap-1">
-                        <Button variant="ghost" size="sm">
-                          <Eye className="h-4 w-4" />
-                        </Button>
-                        <Button variant="ghost" size="sm">
-                          <Printer className="h-4 w-4" />
-                        </Button>
-                      </div>
-                    </TableCell>
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                      )}
+                      {venda.user && (
+                        <div className="flex items-center gap-1 text-muted-foreground">
+                          <span>Vendedor: {venda.user.name}</span>
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    onClick={() => router.push(`/dashboard/vendas/${venda.id}/detalhes`)}
+                    className="ml-4"
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Detalhes
+                  </Button>
+                </div>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
+
+      {/* Paginação */}
+      {!loading && pagination && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={pagination.totalPages}
+          onPageChange={setPage}
+          showInfo
+        />
+      )}
     </div>
   );
 }
