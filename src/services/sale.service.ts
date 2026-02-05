@@ -82,7 +82,7 @@ export class SaleService {
           customer: {
             select: { id: true, name: true, cpf: true, phone: true },
           },
-          user: {
+          sellerUser: {
             select: { id: true, name: true },
           },
           items: {
@@ -131,7 +131,7 @@ export class SaleService {
       },
       include: {
         customer: true,
-        user: {
+        sellerUser: {
           select: { id: true, name: true, email: true },
         },
         branch: {
@@ -418,7 +418,7 @@ export class SaleService {
           customer: {
             select: { name: true },
           },
-          user: {
+          sellerUser: {
             select: { name: true },
           },
           payments: true,

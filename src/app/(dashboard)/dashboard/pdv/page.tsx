@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -45,6 +46,7 @@ interface Customer {
 }
 
 export default function PDVPage() {
+  const { data: session } = useSession();
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
@@ -165,10 +167,16 @@ export default function PDVPage() {
     setFinalizingVenda(true);
 
     try {
+      // Verificar sessão
+      if (!session?.user?.branchId) {
+        toast.error("Sessão inválida. Faça login novamente.");
+        return;
+      }
+
       // Preparar dados da venda
       const saleData = {
         customerId: clienteSelecionado?.id || null,
-        branchId: "cm5njczp10000pxbpqbzy6e4k", // TODO: Pegar branchId do usuário logado
+        branchId: session.user.branchId,
         items: carrinho.map((item) => ({
           productId: item.id,
           qty: item.quantity,
