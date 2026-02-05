@@ -71,7 +71,7 @@ export default function VendasPage() {
           <h1 className="text-3xl font-bold">Vendas</h1>
           <p className="text-muted-foreground">Histórico de vendas realizadas</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/vendas/nova")}>
+        <Button onClick={() => router.push("/dashboard/pdv")}>
           <Plus className="mr-2 h-4 w-4" />
           Nova Venda
         </Button>
@@ -148,7 +148,7 @@ export default function VendasPage() {
           }
           action={
             !search && (
-              <Button onClick={() => router.push("/dashboard/vendas/nova")}>
+              <Button onClick={() => router.push("/dashboard/pdv")}>
                 <Plus className="mr-2 h-4 w-4" />
                 Nova Venda
               </Button>
@@ -202,9 +202,9 @@ export default function VendasPage() {
                           ))}
                         </div>
                       )}
-                      {venda.user && (
+                      {venda.sellerUser && (
                         <div className="flex items-center gap-1 text-muted-foreground">
-                          <span>Vendedor: {venda.user.name}</span>
+                          <span>Vendedor: {venda.sellerUser.name}</span>
                         </div>
                       )}
                     </div>

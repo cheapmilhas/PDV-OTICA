@@ -19,14 +19,14 @@ interface SaleDetails {
   discountTotal: number;
   total: number;
   notes?: string;
-  active: boolean;
+  status: string;
   customer: {
     id: string;
     name: string;
     cpf?: string;
     phone?: string;
   };
-  user: {
+  sellerUser: {
     id: string;
     name: string;
     email: string;
@@ -158,7 +158,7 @@ export default function DetalhesVendaPage() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {sale.active ? (
+          {sale.status !== "CANCELED" && sale.status !== "REFUNDED" ? (
             <>
               <Badge variant="default">Ativa</Badge>
               <Button
@@ -177,7 +177,7 @@ export default function DetalhesVendaPage() {
       </div>
 
       {/* Venda Cancelada Alert */}
-      {!sale.active && (
+      {(sale.status === "CANCELED" || sale.status === "REFUNDED") && (
         <Card className="border-destructive bg-destructive/10">
           <CardContent className="flex items-center gap-2 p-4">
             <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -268,7 +268,7 @@ export default function DetalhesVendaPage() {
           <CardContent className="space-y-2">
             <div>
               <p className="text-sm text-muted-foreground">Vendedor</p>
-              <p className="font-semibold">{sale.user.name}</p>
+              <p className="font-semibold">{sale.sellerUser.name}</p>
             </div>
             {sale.branch && (
               <div>
