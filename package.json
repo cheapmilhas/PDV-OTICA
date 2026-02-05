@@ -7,7 +7,8 @@
     "build": "next build",
     "start": "next start",
     "lint": "next lint",
-    "postinstall": "prisma generate"
+    "postinstall": "prisma generate",
+    "seed:mock": "npx tsx prisma/seed-mock.ts"
   },
   "prisma": {
     "seed": "node --require esbuild-register prisma/seed.ts"

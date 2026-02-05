@@ -1,7 +1,7 @@
 "use client";
 
 import { useState } from "react";
-import { Bell, Search, User, Building2, ChevronDown } from "lucide-react";
+import { Bell, Search, User, Building2, ChevronDown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
@@ -14,6 +14,7 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
+import { signOut } from "next-auth/react";
 
 export function Header() {
   // Mock data - será substituído por dados reais do NextAuth
@@ -116,7 +117,11 @@ export function Header() {
               Notificações
             </DropdownMenuItem>
             <DropdownMenuSeparator />
-            <DropdownMenuItem className="text-destructive">
+            <DropdownMenuItem
+              className="text-destructive"
+              onClick={() => signOut({ callbackUrl: "/" })}
+            >
+              <LogOut className="mr-2 h-4 w-4" />
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
