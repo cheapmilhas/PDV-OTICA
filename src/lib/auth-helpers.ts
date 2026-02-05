@@ -71,6 +71,14 @@ export async function requireRole(allowedRoles: UserRole[]): Promise<void> {
  */
 export async function getCompanyId(): Promise<string> {
   const session = await requireAuth();
+
+  if (!session.user.companyId) {
+    console.error("Session missing companyId:", JSON.stringify(session.user, null, 2));
+    throw unauthorizedError(
+      "Sessão inválida: companyId não encontrado. Por favor, faça logout e login novamente."
+    );
+  }
+
   return session.user.companyId;
 }
 
@@ -82,6 +90,14 @@ export async function getCompanyId(): Promise<string> {
  */
 export async function getBranchId(): Promise<string> {
   const session = await requireAuth();
+
+  if (!session.user.branchId) {
+    console.error("Session missing branchId:", JSON.stringify(session.user, null, 2));
+    throw unauthorizedError(
+      "Sessão inválida: branchId não encontrado. Por favor, faça logout e login novamente."
+    );
+  }
+
   return session.user.branchId;
 }
 
