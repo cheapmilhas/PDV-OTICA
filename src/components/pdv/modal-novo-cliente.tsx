@@ -5,7 +5,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { useToast } from "@/hooks/use-toast";
+import toast from "react-hot-toast";
 import { UserPlus, Loader2 } from "lucide-react";
 
 interface ModalNovoClienteProps {
@@ -15,11 +15,10 @@ interface ModalNovoClienteProps {
 }
 
 export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalNovoClienteProps) {
-  const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    nome: "",
-    telefone: "",
+    name: "",
+    phone: "",
     email: "",
     cpf: "",
   });
@@ -28,32 +27,53 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
     e.preventDefault();
     setLoading(true);
 
-    // Simular criação do cliente
-    setTimeout(() => {
-      const novoCliente = {
-        id: Date.now().toString(),
-        ...formData,
-        dataCadastro: new Date().toISOString(),
+    try {
+      // Preparar dados do cliente
+      const customerData: any = {
+        name: formData.name,
+        phone: formData.phone.replace(/\D/g, ""), // Remover formatação
       };
 
-      toast({
-        title: "Cliente cadastrado!",
-        description: `${formData.nome} foi adicionado com sucesso.`,
+      if (formData.email) {
+        customerData.email = formData.email;
+      }
+
+      if (formData.cpf) {
+        customerData.cpf = formData.cpf.replace(/\D/g, ""); // Remover formatação
+      }
+
+      const res = await fetch("/api/customers", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(customerData),
       });
 
-      onClienteCriado?.(novoCliente);
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error?.message || "Erro ao cadastrar cliente");
+      }
+
+      const data = await res.json();
+
+      toast.success(`Cliente ${formData.name} cadastrado com sucesso!`);
+
+      onClienteCriado?.(data.data);
 
       // Limpar formulário
       setFormData({
-        nome: "",
-        telefone: "",
+        name: "",
+        phone: "",
         email: "",
         cpf: "",
       });
 
-      setLoading(false);
       onOpenChange(false);
-    }, 1000);
+    } catch (error: any) {
+      console.error("Erro ao cadastrar cliente:", error);
+      toast.error(error.message || "Erro ao cadastrar cliente");
+    } finally {
+      setLoading(false);
+    }
   };
 
   const formatarTelefone = (valor: string) => {
@@ -84,14 +104,14 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
 
         <form onSubmit={handleSubmit} className="space-y-4">
           <div className="space-y-2">
-            <Label htmlFor="nome">
+            <Label htmlFor="name">
               Nome Completo <span className="text-destructive">*</span>
             </Label>
             <Input
-              id="nome"
+              id="name"
               placeholder="Ex: Maria Silva Santos"
-              value={formData.nome}
-              onChange={(e) => setFormData({ ...formData, nome: e.target.value })}
+              value={formData.name}
+              onChange={(e) => setFormData({ ...formData, name: e.target.value })}
               required
               disabled={loading}
             />
@@ -99,16 +119,16 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
 
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
-              <Label htmlFor="telefone">
+              <Label htmlFor="phone">
                 Telefone <span className="text-destructive">*</span>
               </Label>
               <Input
-                id="telefone"
+                id="phone"
                 placeholder="(11) 98765-4321"
-                value={formData.telefone}
+                value={formData.phone}
                 onChange={(e) => {
                   const formatted = formatarTelefone(e.target.value);
-                  setFormData({ ...formData, telefone: formatted });
+                  setFormData({ ...formData, phone: formatted });
                 }}
                 maxLength={15}
                 required

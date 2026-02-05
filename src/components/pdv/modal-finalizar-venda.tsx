@@ -14,6 +14,7 @@ import {
   Wallet,
   Trash2,
   Check,
+  Loader2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
@@ -29,6 +30,7 @@ interface ModalFinalizarVendaProps {
   onOpenChange: (open: boolean) => void;
   total: number;
   onConfirm: (payments: Payment[]) => void;
+  loading?: boolean;
 }
 
 const paymentMethods = [
@@ -39,7 +41,7 @@ const paymentMethods = [
   { id: "STORE_CREDIT", label: "Crediário", icon: Wallet, color: "bg-gray-500" },
 ];
 
-export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm }: ModalFinalizarVendaProps) {
+export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, loading = false }: ModalFinalizarVendaProps) {
   const [payments, setPayments] = useState<Payment[]>([]);
   const [selectedMethod, setSelectedMethod] = useState("");
   const [amount, setAmount] = useState("");
@@ -233,10 +235,19 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm }: Mo
             <Button
               className="flex-1"
               onClick={handleConfirm}
-              disabled={remaining !== 0}
+              disabled={remaining !== 0 || loading}
             >
-              <Check className="mr-2 h-4 w-4" />
-              Confirmar Venda
+              {loading ? (
+                <>
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  Finalizando...
+                </>
+              ) : (
+                <>
+                  <Check className="mr-2 h-4 w-4" />
+                  Confirmar Venda
+                </>
+              )}
             </Button>
           </div>
         </div>

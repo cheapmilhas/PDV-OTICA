@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -18,115 +18,129 @@ import {
   DollarSign,
   User,
   Package,
+  Loader2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
 import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
-import { useToast } from "@/hooks/use-toast";
+import toast from "react-hot-toast";
+
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  salePrice: number;
+  stockQty: number;
+}
+
+interface CartItem extends Product {
+  quantity: number;
+}
+
+interface Customer {
+  id: string;
+  name: string;
+  phone?: string;
+  cpf?: string;
+}
 
 export default function PDVPage() {
-  const [carrinho, setCarrinho] = useState<any[]>([]);
+  const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
-  const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
-  const { toast } = useToast();
+  const [clienteSelecionado, setClienteSelecionado] = useState<Customer | null>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loadingProducts, setLoadingProducts] = useState(false);
+  const [finalizingVenda, setFinalizingVenda] = useState(false);
 
-  // Mock produtos disponíveis - lista completa
-  const todosOsProdutos = [
-    {
-      id: "1",
-      codigo: "ARM001",
-      nome: "Ray-Ban Aviador Clássico RB3025",
-      preco: 899.90,
-      estoque: 15,
-    },
-    {
-      id: "2",
-      codigo: "ARM002",
-      nome: "Oakley Holbrook OO9102",
-      preco: 1249.90,
-      estoque: 8,
-    },
-    {
-      id: "3",
-      codigo: "LEN001",
-      nome: "Lente Transitions Gen 8 1.67",
-      preco: 580.00,
-      estoque: 2,
-    },
-    {
-      id: "4",
-      codigo: "SOL001",
-      nome: "Ray-Ban Wayfarer RB2140",
-      preco: 799.90,
-      estoque: 20,
-    },
-    {
-      id: "5",
-      codigo: "LIQ001",
-      nome: "Líquido de Limpeza 50ml",
-      preco: 25.00,
-      estoque: 45,
-    },
-    {
-      id: "6",
-      codigo: "ARM003",
-      nome: "Armação Infantil Flexível Azul",
-      preco: 320.00,
-      estoque: 12,
-    },
-    {
-      id: "7",
-      codigo: "LEN002",
-      nome: "Lente Zeiss Single Vision 1.74",
-      preco: 1200.00,
-      estoque: 5,
-    },
-    {
-      id: "8",
-      codigo: "EST001",
-      nome: "Estojo Rígido Premium",
-      preco: 35.00,
-      estoque: 50,
-    },
-  ];
+  // Carregar produtos disponíveis
+  useEffect(() => {
+    const loadProducts = async () => {
+      setLoadingProducts(true);
+      try {
+        const params = new URLSearchParams({
+          status: "ativos",
+          pageSize: "50",
+          inStock: "true",
+        });
 
-  // Filtrar produtos com base na busca
-  const produtosDisponiveis = buscaProduto
-    ? todosOsProdutos.filter(
-        (p) =>
-          p.codigo.toLowerCase().includes(buscaProduto.toLowerCase()) ||
-          p.nome.toLowerCase().includes(buscaProduto.toLowerCase())
-      ).slice(0, 6)
-    : todosOsProdutos.slice(0, 5);
+        if (buscaProduto) {
+          params.set("search", buscaProduto);
+        }
 
-  const adicionarProduto = (produto: any) => {
+        const res = await fetch(`/api/products?${params}`);
+        if (!res.ok) throw new Error("Erro ao carregar produtos");
+
+        const data = await res.json();
+        setProducts(data.data || []);
+      } catch (error) {
+        console.error("Erro ao carregar produtos:", error);
+        toast.error("Erro ao carregar produtos");
+      } finally {
+        setLoadingProducts(false);
+      }
+    };
+
+    const debounce = setTimeout(() => {
+      loadProducts();
+    }, 300);
+
+    return () => clearTimeout(debounce);
+  }, [buscaProduto]);
+
+  const produtosDisponiveis = products.slice(0, 6);
+
+  const adicionarProduto = (produto: Product) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
 
     if (itemExistente) {
+      // Verificar se tem estoque disponível
+      if (itemExistente.quantity >= produto.stockQty) {
+        toast.error(`Estoque insuficiente. Disponível: ${produto.stockQty}`);
+        return;
+      }
+
       setCarrinho(
         carrinho.map((item) =>
           item.id === produto.id
-            ? { ...item, quantidade: item.quantidade + 1 }
+            ? { ...item, quantity: item.quantity + 1 }
             : item
         )
       );
+      toast.success(`+1 ${produto.name}`);
     } else {
-      setCarrinho([...carrinho, { ...produto, quantidade: 1 }]);
+      if (produto.stockQty < 1) {
+        toast.error("Produto sem estoque");
+        return;
+      }
+
+      setCarrinho([...carrinho, { ...produto, quantity: 1 }]);
+      toast.success(`${produto.name} adicionado ao carrinho`);
     }
   };
 
   const removerProduto = (produtoId: string) => {
+    const produto = carrinho.find((item) => item.id === produtoId);
     setCarrinho(carrinho.filter((item) => item.id !== produtoId));
+    if (produto) {
+      toast.success(`${produto.name} removido`);
+    }
   };
 
   const alterarQuantidade = (produtoId: string, delta: number) => {
     setCarrinho(
       carrinho.map((item) => {
         if (item.id === produtoId) {
-          const novaQuantidade = Math.max(1, item.quantidade + delta);
-          return { ...item, quantidade: novaQuantidade };
+          const novaQuantidade = Math.max(1, item.quantity + delta);
+
+          // Verificar estoque
+          if (novaQuantidade > item.stockQty) {
+            toast.error(`Estoque insuficiente. Disponível: ${item.stockQty}`);
+            return item;
+          }
+
+          return { ...item, quantity: novaQuantidade };
         }
         return item;
       })
@@ -134,23 +148,70 @@ export default function PDVPage() {
   };
 
   const calcularSubtotal = () => {
-    return carrinho.reduce((acc, item) => acc + item.preco * item.quantidade, 0);
+    return carrinho.reduce((acc, item) => acc + item.salePrice * item.quantity, 0);
   };
 
   const subtotal = calcularSubtotal();
   const desconto = 0;
   const total = subtotal - desconto;
-  const totalItens = carrinho.reduce((acc, item) => acc + item.quantidade, 0);
+  const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
-  const handleConfirmarVenda = (payments: any[]) => {
-    // Aqui seria a integração com o backend
-    toast({
-      title: "Venda Finalizada!",
-      description: `Venda de ${formatCurrency(total)} finalizada com sucesso.`,
-    });
+  const handleConfirmarVenda = async (payments: any[]) => {
+    if (carrinho.length === 0) {
+      toast.error("Carrinho vazio");
+      return;
+    }
 
-    setCarrinho([]);
-    setModalVendaOpen(false);
+    setFinalizingVenda(true);
+
+    try {
+      // Preparar dados da venda
+      const saleData = {
+        customerId: clienteSelecionado?.id || null,
+        branchId: "cm5njczp10000pxbpqbzy6e4k", // TODO: Pegar branchId do usuário logado
+        items: carrinho.map((item) => ({
+          productId: item.id,
+          qty: item.quantity,
+          unitPrice: item.salePrice,
+          discount: 0,
+        })),
+        payments: payments.map((payment) => ({
+          method: payment.method,
+          amount: payment.amount,
+          installments: payment.installments || 1,
+        })),
+        discount: desconto,
+        notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
+      };
+
+      const res = await fetch("/api/sales", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(saleData),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error?.message || "Erro ao finalizar venda");
+      }
+
+      const data = await res.json();
+
+      toast.success(`Venda ${data.data.id} finalizada com sucesso!`);
+
+      // Limpar carrinho e fechar modal
+      setCarrinho([]);
+      setClienteSelecionado(null);
+      setModalVendaOpen(false);
+
+      // Recarregar produtos para atualizar estoque
+      setBuscaProduto("");
+    } catch (error: any) {
+      console.error("Erro ao finalizar venda:", error);
+      toast.error(error.message || "Erro ao finalizar venda");
+    } finally {
+      setFinalizingVenda(false);
+    }
   };
 
   return (
@@ -160,16 +221,14 @@ export default function PDVPage() {
         onOpenChange={setModalVendaOpen}
         total={total}
         onConfirm={handleConfirmarVenda}
+        loading={finalizingVenda}
       />
       <ModalNovoCliente
         open={modalClienteOpen}
         onOpenChange={setModalClienteOpen}
         onClienteCriado={(cliente) => {
           setClienteSelecionado(cliente);
-          toast({
-            title: "Cliente selecionado!",
-            description: `${cliente.nome} foi adicionado à venda.`,
-          });
+          toast.success(`${cliente.name} selecionado`);
         }}
       />
     <div className="h-[calc(100vh-120px)] space-y-4">
@@ -178,15 +237,12 @@ export default function PDVPage() {
         <div>
           <h1 className="text-3xl font-bold">PDV - Ponto de Venda</h1>
           <p className="text-muted-foreground">
-            Finalize vendas e gere ordens de serviço
+            Finalize vendas de forma rápida e eficiente
           </p>
         </div>
         <div className="flex gap-2">
           <Badge variant="outline" className="text-lg px-4 py-2">
-            Caixa Aberto
-          </Badge>
-          <Badge variant="secondary" className="text-lg px-4 py-2">
-            F2 - Atalho
+            {products.length} produtos
           </Badge>
         </div>
       </div>
@@ -202,7 +258,7 @@ export default function PDVPage() {
                 Buscar Produto
               </CardTitle>
               <CardDescription>
-                Digite o código, nome ou passe o leitor de código de barras
+                Digite o SKU, nome ou passe o leitor de código de barras
               </CardDescription>
             </CardHeader>
             <CardContent>
@@ -210,7 +266,7 @@ export default function PDVPage() {
                 <div className="relative flex-1">
                   <Barcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="Código ou nome do produto..."
+                    placeholder="SKU ou nome do produto..."
                     className="pl-9"
                     value={buscaProduto}
                     onChange={(e) => setBuscaProduto(e.target.value)}
@@ -228,7 +284,13 @@ export default function PDVPage() {
                   </Button>
                 )}
               </div>
-              {buscaProduto && produtosDisponiveis.length === 0 && (
+              {loadingProducts && (
+                <div className="flex items-center gap-2 mt-2">
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                  <span className="text-sm text-muted-foreground">Buscando produtos...</span>
+                </div>
+              )}
+              {!loadingProducts && buscaProduto && produtosDisponiveis.length === 0 && (
                 <p className="mt-2 text-sm text-muted-foreground">
                   Nenhum produto encontrado
                 </p>
@@ -239,35 +301,51 @@ export default function PDVPage() {
           {/* Produtos Rápidos */}
           <Card>
             <CardHeader>
-              <CardTitle>Produtos Rápidos</CardTitle>
+              <CardTitle>
+                {buscaProduto ? "Resultados da Busca" : "Produtos Disponíveis"}
+              </CardTitle>
               <CardDescription>
                 Clique para adicionar ao carrinho
               </CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-2">
-                {produtosDisponiveis.map((produto) => (
-                  <Button
-                    key={produto.id}
-                    variant="outline"
-                    className="h-auto flex-col items-start gap-2 p-4"
-                    onClick={() => adicionarProduto(produto)}
-                  >
-                    <div className="flex w-full items-center justify-between">
-                      <span className="font-mono text-xs text-muted-foreground">
-                        {produto.codigo}
-                      </span>
-                      <Badge variant="secondary">{produto.estoque}</Badge>
-                    </div>
-                    <p className="line-clamp-2 text-left text-sm font-medium">
-                      {produto.nome}
-                    </p>
-                    <p className="text-lg font-bold">
-                      {formatCurrency(produto.preco)}
-                    </p>
-                  </Button>
-                ))}
-              </div>
+              {loadingProducts ? (
+                <div className="flex items-center justify-center py-12">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : produtosDisponiveis.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                  <Package className="mb-2 h-12 w-12 opacity-20" />
+                  <p>Nenhum produto disponível</p>
+                </div>
+              ) : (
+                <div className="grid grid-cols-2 gap-2">
+                  {produtosDisponiveis.map((produto) => (
+                    <Button
+                      key={produto.id}
+                      variant="outline"
+                      className="h-auto flex-col items-start gap-2 p-4"
+                      onClick={() => adicionarProduto(produto)}
+                      disabled={produto.stockQty === 0}
+                    >
+                      <div className="flex w-full items-center justify-between">
+                        <span className="font-mono text-xs text-muted-foreground">
+                          {produto.sku}
+                        </span>
+                        <Badge variant={produto.stockQty > 10 ? "secondary" : produto.stockQty > 0 ? "outline" : "destructive"}>
+                          {produto.stockQty}
+                        </Badge>
+                      </div>
+                      <p className="line-clamp-2 text-left text-sm font-medium">
+                        {produto.name}
+                      </p>
+                      <p className="text-lg font-bold">
+                        {formatCurrency(produto.salePrice)}
+                      </p>
+                    </Button>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </div>
@@ -286,8 +364,13 @@ export default function PDVPage() {
               {clienteSelecionado ? (
                 <div className="space-y-2">
                   <div className="rounded-lg border bg-muted/50 p-3">
-                    <p className="font-medium">{clienteSelecionado.nome}</p>
-                    <p className="text-sm text-muted-foreground">{clienteSelecionado.telefone}</p>
+                    <p className="font-medium">{clienteSelecionado.name}</p>
+                    {clienteSelecionado.phone && (
+                      <p className="text-sm text-muted-foreground">{clienteSelecionado.phone}</p>
+                    )}
+                    {clienteSelecionado.cpf && (
+                      <p className="text-sm text-muted-foreground">CPF: {clienteSelecionado.cpf}</p>
+                    )}
                   </div>
                   <Button
                     variant="outline"
@@ -336,10 +419,13 @@ export default function PDVPage() {
                       >
                         <div className="flex-1">
                           <p className="text-sm font-medium line-clamp-2">
-                            {item.nome}
+                            {item.name}
                           </p>
                           <p className="text-xs text-muted-foreground">
-                            {formatCurrency(item.preco)} cada
+                            {formatCurrency(item.salePrice)} cada
+                          </p>
+                          <p className="text-xs text-muted-foreground">
+                            Estoque: {item.stockQty}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
@@ -353,13 +439,14 @@ export default function PDVPage() {
                               <Minus className="h-3 w-3" />
                             </Button>
                             <span className="w-8 text-center text-sm font-medium">
-                              {item.quantidade}
+                              {item.quantity}
                             </span>
                             <Button
                               variant="outline"
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => alterarQuantidade(item.id, 1)}
+                              disabled={item.quantity >= item.stockQty}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
@@ -373,7 +460,7 @@ export default function PDVPage() {
                             </Button>
                           </div>
                           <p className="text-sm font-bold">
-                            {formatCurrency(item.preco * item.quantidade)}
+                            {formatCurrency(item.salePrice * item.quantity)}
                           </p>
                         </div>
                       </div>
@@ -418,15 +505,7 @@ export default function PDVPage() {
                   onClick={() => setModalVendaOpen(true)}
                 >
                   <CreditCard className="mr-2 h-4 w-4" />
-                  Finalizar Venda
-                </Button>
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  disabled={carrinho.length === 0}
-                >
-                  <DollarSign className="mr-2 h-4 w-4" />
-                  Gerar Orçamento
+                  Finalizar Venda (F12)
                 </Button>
               </div>
             </CardContent>
