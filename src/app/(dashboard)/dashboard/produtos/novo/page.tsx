@@ -49,54 +49,21 @@ export default function NovoProdutoPage() {
     lensDiameter: "",
   });
 
-  // Handler para atualizar preço de venda (calcula margem automaticamente)
-  const handleSalePriceChange = (value: string) => {
-    const sale = parseFloat(value);
-    const cost = parseFloat(formData.costPrice);
+  // Handler para atualizar preços (calcula margem automaticamente)
+  const handlePriceChange = (field: "salePrice" | "costPrice", value: string) => {
+    const newSale = field === "salePrice" ? parseFloat(value) : parseFloat(formData.salePrice);
+    const newCost = field === "costPrice" ? parseFloat(value) : parseFloat(formData.costPrice);
 
+    // Calcula a margem sempre que preço de venda ou custo mudar
     let newMargin = "";
-    if (sale > 0 && cost >= 0) {
-      newMargin = calculateMargin(sale, cost).toFixed(2);
+    if (newSale > 0 && newCost >= 0) {
+      newMargin = calculateMargin(newSale, newCost).toFixed(2);
     }
 
     setFormData({
       ...formData,
-      salePrice: value,
+      [field]: value,
       marginPercent: newMargin,
-    });
-  };
-
-  // Handler para atualizar preço de custo (calcula margem automaticamente)
-  const handleCostPriceChange = (value: string) => {
-    const cost = parseFloat(value);
-    const sale = parseFloat(formData.salePrice);
-
-    let newMargin = "";
-    if (sale > 0 && cost >= 0) {
-      newMargin = calculateMargin(sale, cost).toFixed(2);
-    }
-
-    setFormData({
-      ...formData,
-      costPrice: value,
-      marginPercent: newMargin,
-    });
-  };
-
-  // Handler para atualizar margem (calcula preço de venda automaticamente)
-  const handleMarginChange = (value: string) => {
-    const margin = parseFloat(value);
-    const cost = parseFloat(formData.costPrice);
-
-    let newSalePrice = formData.salePrice;
-    if (cost > 0 && margin > 0 && margin < 100) {
-      newSalePrice = calculateSalePrice(cost, margin).toFixed(2);
-    }
-
-    setFormData({
-      ...formData,
-      marginPercent: value,
-      salePrice: newSalePrice,
     });
   };
 
@@ -316,7 +283,7 @@ export default function NovoProdutoPage() {
                     min="0"
                     required
                     value={formData.salePrice}
-                    onChange={(e) => handleSalePriceChange(e.target.value)}
+                    onChange={(e) => handlePriceChange("salePrice", e.target.value)}
                   />
                 </div>
 
@@ -328,12 +295,15 @@ export default function NovoProdutoPage() {
                     step="0.01"
                     min="0"
                     value={formData.costPrice}
-                    onChange={(e) => handleCostPriceChange(e.target.value)}
+                    onChange={(e) => handlePriceChange("costPrice", e.target.value)}
                   />
                 </div>
 
                 <div className="space-y-2">
-                  <Label htmlFor="marginPercent">Margem (%)</Label>
+                  <Label htmlFor="marginPercent">
+                    Margem (%)
+                    <span className="text-xs text-muted-foreground ml-2">(calculado automaticamente)</span>
+                  </Label>
                   <Input
                     id="marginPercent"
                     type="number"
@@ -341,7 +311,9 @@ export default function NovoProdutoPage() {
                     min="0"
                     max="100"
                     value={formData.marginPercent}
-                    onChange={(e) => handleMarginChange(e.target.value)}
+                    readOnly
+                    className="bg-gray-50 cursor-not-allowed"
+                    title="A margem é calculada automaticamente com base no preço de venda e custo"
                   />
                 </div>
               </div>
