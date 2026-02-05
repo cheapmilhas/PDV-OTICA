@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -47,6 +48,7 @@ interface Customer {
 
 export default function PDVPage() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
@@ -204,16 +206,16 @@ export default function PDVPage() {
       }
 
       const data = await res.json();
-
-      toast.success(`Venda ${data.data.id} finalizada com sucesso!`);
+      const vendaId = data.data.id;
 
       // Limpar carrinho e fechar modal
       setCarrinho([]);
       setClienteSelecionado(null);
       setModalVendaOpen(false);
 
-      // Recarregar produtos para atualizar estoque
-      setBuscaProduto("");
+      // Redirecionar para detalhes da venda
+      toast.success("Venda finalizada com sucesso! Redirecionando...");
+      router.push(`/dashboard/vendas/${vendaId}/detalhes`);
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
       toast.error(error.message || "Erro ao finalizar venda");

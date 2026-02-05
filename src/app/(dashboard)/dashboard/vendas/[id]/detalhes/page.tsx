@@ -6,7 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -161,6 +161,14 @@ export default function DetalhesVendaPage() {
           {sale.status !== "CANCELED" && sale.status !== "REFUNDED" ? (
             <>
               <Badge variant="default">Ativa</Badge>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => router.push(`/dashboard/vendas/${id}/imprimir`)}
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Imprimir
+              </Button>
               <Button
                 variant="destructive"
                 size="sm"
