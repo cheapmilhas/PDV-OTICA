@@ -24,7 +24,7 @@ export default function ProdutosPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
-  const [typeFilter, setTypeFilter] = useState("");
+  const [typeFilter, setTypeFilter] = useState("all");
   const [produtos, setProdutos] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -39,7 +39,7 @@ export default function ProdutosPage() {
       status: "ativos",
     });
 
-    if (typeFilter) {
+    if (typeFilter && typeFilter !== "all") {
       params.set("type", typeFilter);
     }
 
@@ -187,7 +187,7 @@ export default function ProdutosPage() {
             <SelectValue placeholder="Todos os tipos" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="">Todos os tipos</SelectItem>
+            <SelectItem value="all">Todos os tipos</SelectItem>
             <SelectItem value="FRAME">Armação</SelectItem>
             <SelectItem value="LENS_SERVICE">Lente</SelectItem>
             <SelectItem value="SUNGLASSES">Óculos de Sol</SelectItem>
