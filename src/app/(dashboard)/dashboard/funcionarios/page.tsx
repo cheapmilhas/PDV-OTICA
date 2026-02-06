@@ -251,6 +251,13 @@ export default function FuncionariosPage() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         console.error("Erro da API:", errorData);
+
+        // Exibir detalhes de validação se houver
+        if (errorData?.error?.details && Array.isArray(errorData.error.details)) {
+          const detailMessages = errorData.error.details.map((d: any) => d.message).join(', ');
+          throw new Error(detailMessages);
+        }
+
         const errorMessage = errorData?.error?.message || errorData?.message || "Erro ao criar usuário";
         throw new Error(errorMessage);
       }
@@ -774,10 +781,11 @@ export default function FuncionariosPage() {
 
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
-                <Label htmlFor="create-password">Senha *</Label>
+                <Label htmlFor="create-password">Senha * (mínimo 6 caracteres)</Label>
                 <Input
                   id="create-password"
                   type="password"
+                  placeholder="Mínimo 6 caracteres"
                   value={createForm.password || ""}
                   onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
                 />
