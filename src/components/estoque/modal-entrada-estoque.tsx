@@ -48,6 +48,13 @@ export function ModalEntradaEstoque({ open, onOpenChange, produto, onSuccess }: 
     notes: "",
   });
 
+  // Atualizar productId quando produto mudar
+  useEffect(() => {
+    if (produto?.id) {
+      setFormData(prev => ({ ...prev, productId: produto.id }));
+    }
+  }, [produto]);
+
   // Buscar produtos
   useEffect(() => {
     if (open && !produto) {

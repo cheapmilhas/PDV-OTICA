@@ -7,9 +7,12 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem, CommandList } from "@/components/ui/command";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Minus, Loader2, Package, AlertTriangle } from "lucide-react";
+import { Minus, Loader2, Package, AlertTriangle, Check, ChevronsUpDown } from "lucide-react";
 import { StockMovementType } from "@prisma/client";
+import { cn } from "@/lib/utils";
 
 interface ModalSaidaEstoqueProps {
   open: boolean;
@@ -22,7 +25,11 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [loadingBranches, setLoadingBranches] = useState(false);
+  const [loadingProducts, setLoadingProducts] = useState(false);
   const [branches, setBranches] = useState<any[]>([]);
+  const [products, setProducts] = useState<any[]>([]);
+  const [openProductCombo, setOpenProductCombo] = useState(false);
+  const [selectedProduct, setSelectedProduct] = useState<any>(produto || null);
 
   const [formData, setFormData] = useState({
     productId: produto?.id || "",
@@ -33,11 +40,22 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
     notes: "",
   });
 
-  const estoqueAtual = produto?.stockQty || 0;
+  const estoqueAtual = selectedProduct?.stockQty || 0;
   const quantidadeSaida = Number(formData.quantity) || 0;
   const estoqueAposMovimentacao = estoqueAtual - quantidadeSaida;
   const estoqueInsuficiente = quantidadeSaida > estoqueAtual;
   const isTransferencia = formData.type === "TRANSFER_OUT";
+
+  // Buscar produtos quando o modal abrir e não houver produto pré-selecionado
+  useEffect(() => {
+    if (open && !produto) {
+      fetchProducts();
+    }
+    if (open && produto) {
+      setSelectedProduct(produto);
+      setFormData(prev => ({ ...prev, productId: produto.id }));
+    }
+  }, [open, produto]);
 
   // Buscar filiais quando o modal abrir e o tipo for transferência
   useEffect(() => {
@@ -45,6 +63,26 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
       fetchBranches();
     }
   }, [open, isTransferencia]);
+
+  async function fetchProducts() {
+    setLoadingProducts(true);
+    try {
+      const res = await fetch("/api/products");
+      if (!res.ok) throw new Error("Erro ao buscar produtos");
+
+      const data = await res.json();
+      setProducts(Array.isArray(data.data) ? data.data : []);
+    } catch (error) {
+      console.error("Erro ao carregar produtos:", error);
+      toast({
+        title: "Erro ao carregar produtos",
+        description: "Não foi possível carregar a lista de produtos.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoadingProducts(false);
+    }
+  }
 
   async function fetchBranches() {
     setLoadingBranches(true);
@@ -90,56 +128,33 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
     setLoading(true);
 
     try {
-      // Se for transferência, usar endpoint específico
-      if (isTransferencia) {
-        // TODO: Precisamos obter o sourceBranchId da sessão do usuário
-        // Por enquanto, vamos usar um valor temporário ou pedir ao usuário
-        const response = await fetch("/api/stock-movements/transfer", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId: formData.productId,
-            quantity: parseInt(formData.quantity),
-            sourceBranchId: "temp", // TODO: Obter da sessão
-            targetBranchId: formData.targetBranchId,
-            reason: formData.reason || undefined,
-            notes: formData.notes || undefined,
+      // Usar sempre o endpoint padrão de stock-movements
+      const response = await fetch("/api/stock-movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          productId: formData.productId,
+          type: formData.type,
+          quantity: parseInt(formData.quantity),
+          ...(isTransferencia && formData.targetBranchId && {
+            targetBranchId: formData.targetBranchId
           }),
-        });
+          reason: formData.reason || undefined,
+          notes: formData.notes || undefined,
+        }),
+      });
 
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Erro ao registrar transferência");
-        }
-
-        toast({
-          title: "Transferência registrada!",
-          description: `${formData.quantity} unidades transferidas.`,
-        });
-      } else {
-        // Saída normal
-        const response = await fetch("/api/stock-movements", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            productId: formData.productId,
-            type: formData.type,
-            quantity: parseInt(formData.quantity),
-            reason: formData.reason || undefined,
-            notes: formData.notes || undefined,
-          }),
-        });
-
-        if (!response.ok) {
-          const error = await response.json();
-          throw new Error(error.message || "Erro ao registrar saída");
-        }
-
-        toast({
-          title: "Saída registrada!",
-          description: `${formData.quantity} unidades removidas do estoque.`,
-        });
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.message || "Erro ao registrar movimentação");
       }
+
+      toast({
+        title: isTransferencia ? "Transferência registrada!" : "Saída registrada!",
+        description: isTransferencia
+          ? `${formData.quantity} unidades transferidas.`
+          : `${formData.quantity} unidades removidas do estoque.`,
+      });
 
       // Limpar formulário
       setFormData({
@@ -178,7 +193,71 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
         </DialogHeader>
 
         <form onSubmit={handleSubmit} className="space-y-4">
-          {/* Produto Selecionado */}
+          {/* Seleção de Produto */}
+          {!produto && (
+            <div className="space-y-2">
+              <Label>
+                Produto <span className="text-destructive">*</span>
+              </Label>
+              <Popover open={openProductCombo} onOpenChange={setOpenProductCombo}>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    role="combobox"
+                    aria-expanded={openProductCombo}
+                    className="w-full justify-between"
+                    disabled={loading || loadingProducts}
+                  >
+                    {selectedProduct ? (
+                      <span className="flex items-center gap-2">
+                        <Package className="h-4 w-4" />
+                        {selectedProduct.name}
+                      </span>
+                    ) : (
+                      "Selecione o produto..."
+                    )}
+                    <ChevronsUpDown className="ml-2 h-4 w-4 shrink-0 opacity-50" />
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-[500px] p-0">
+                  <Command>
+                    <CommandInput placeholder="Buscar produto..." />
+                    <CommandList>
+                      <CommandEmpty>Nenhum produto encontrado.</CommandEmpty>
+                      <CommandGroup>
+                        {products.map((prod) => (
+                          <CommandItem
+                            key={prod.id}
+                            value={`${prod.name} ${prod.sku}`}
+                            onSelect={() => {
+                              setSelectedProduct(prod);
+                              setFormData({ ...formData, productId: prod.id });
+                              setOpenProductCombo(false);
+                            }}
+                          >
+                            <Check
+                              className={cn(
+                                "mr-2 h-4 w-4",
+                                selectedProduct?.id === prod.id ? "opacity-100" : "opacity-0"
+                              )}
+                            />
+                            <div className="flex flex-col">
+                              <span className="font-medium">{prod.name}</span>
+                              <span className="text-xs text-muted-foreground">
+                                SKU: {prod.sku} • Estoque: {prod.stockQty}
+                              </span>
+                            </div>
+                          </CommandItem>
+                        ))}
+                      </CommandGroup>
+                    </CommandList>
+                  </Command>
+                </PopoverContent>
+              </Popover>
+            </div>
+          )}
+
+          {/* Produto Selecionado (quando vem como prop) */}
           {produto && (
             <div className="rounded-lg border bg-muted/50 p-3">
               <div className="flex items-center gap-2">
@@ -187,6 +266,21 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
                   <p className="font-medium">{produto.name}</p>
                   <p className="text-sm text-muted-foreground">
                     SKU: {produto.sku} • Estoque atual: {produto.stockQty}
+                  </p>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Info do Produto Selecionado (quando selecionado via combobox) */}
+          {!produto && selectedProduct && (
+            <div className="rounded-lg border bg-muted/50 p-3">
+              <div className="flex items-center gap-2">
+                <Package className="h-4 w-4 text-muted-foreground" />
+                <div className="flex-1">
+                  <p className="font-medium">{selectedProduct.name}</p>
+                  <p className="text-sm text-muted-foreground">
+                    SKU: {selectedProduct.sku} • Estoque atual: {selectedProduct.stockQty}
                   </p>
                 </div>
               </div>
@@ -209,7 +303,7 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
               required
               disabled={loading}
             />
-            {produto && (
+            {(produto || selectedProduct) && (
               <p className="text-xs text-muted-foreground">
                 Máximo disponível: {estoqueAtual} unidades
               </p>
@@ -305,7 +399,7 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
           </div>
 
           {/* Alerta de Estoque Insuficiente */}
-          {estoqueInsuficiente && formData.quantity && produto && (
+          {estoqueInsuficiente && formData.quantity && (produto || selectedProduct) && (
             <div className="rounded-lg border border-red-200 bg-red-50 p-3">
               <div className="flex items-start gap-2">
                 <AlertTriangle className="h-5 w-5 text-red-600 mt-0.5" />
@@ -320,7 +414,7 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
           )}
 
           {/* Resumo da Movimentação */}
-          {formData.quantity && !estoqueInsuficiente && produto && (
+          {formData.quantity && !estoqueInsuficiente && (produto || selectedProduct) && (
             <div className="rounded-lg border bg-orange-50 p-3">
               <div className="space-y-1">
                 <div className="flex justify-between text-sm">
@@ -333,13 +427,13 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
                 </div>
                 <div className="flex justify-between text-base font-bold border-t pt-1">
                   <span>Estoque Final</span>
-                  <span className={estoqueAposMovimentacao <= produto.stockMin ? "text-red-600" : ""}>
+                  <span className={estoqueAposMovimentacao <= (selectedProduct?.stockMin || produto?.stockMin || 0) ? "text-red-600" : ""}>
                     {estoqueAposMovimentacao} unidades
                   </span>
                 </div>
-                {estoqueAposMovimentacao <= produto.stockMin && (
+                {estoqueAposMovimentacao <= (selectedProduct?.stockMin || produto?.stockMin || 0) && (
                   <p className="text-xs text-orange-700 mt-2">
-                    ⚠️ O estoque ficará abaixo do mínimo ({produto.stockMin} unidades)
+                    ⚠️ O estoque ficará abaixo do mínimo ({selectedProduct?.stockMin || produto?.stockMin} unidades)
                   </p>
                 )}
               </div>

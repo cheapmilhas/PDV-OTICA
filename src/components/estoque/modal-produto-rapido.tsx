@@ -41,6 +41,7 @@ export function ModalProdutoRapido({ open, onOpenChange, onSuccess }: ModalProdu
           salePrice: parseFloat(formData.salePrice),
           costPrice: parseFloat(formData.costPrice),
           stockMin: parseInt(formData.stockMin),
+          stockControlled: true, // Ativar controle de estoque por padrão
         }),
       });
 

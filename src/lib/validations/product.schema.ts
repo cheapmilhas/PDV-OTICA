@@ -166,7 +166,7 @@ export const productQuerySchema = z.object({
   pageSize: z.coerce.number()
     .int()
     .min(1, "PageSize deve ser maior que 0")
-    .max(100, "PageSize deve ser no máximo 100")
+    .max(10000, "PageSize deve ser no máximo 10000")
     .default(20),
 
   // Busca full-text

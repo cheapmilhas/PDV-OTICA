@@ -234,7 +234,7 @@ export class StockMovementService {
           invoiceNumber: data.invoiceNumber || undefined,
           reason: data.reason || undefined,
           notes: data.notes || undefined,
-          createdByUserId: userId,
+          ...(userId && { createdByUserId: userId }),
         },
         include: {
           product: true,

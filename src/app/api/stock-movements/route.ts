@@ -9,6 +9,7 @@ import {
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
+import { prisma } from "@/lib/prisma";
 
 const stockMovementService = new StockMovementService();
 
@@ -60,7 +61,16 @@ export async function POST(request: Request) {
     // Requer autenticação
     const session = await requireAuth();
     const companyId = await getCompanyId();
-    const userId = session.user.id;
+
+    // Verificar se o usuário existe no banco antes de associá-lo
+    let userId: string | undefined;
+    if (session.user.id) {
+      const userExists = await prisma.user.findUnique({
+        where: { id: session.user.id },
+        select: { id: true }
+      });
+      userId = userExists?.id;
+    }
 
     // Parse e valida body
     const body = await request.json();

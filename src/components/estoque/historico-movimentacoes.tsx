@@ -15,12 +15,14 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { Search, Filter, Loader2, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft } from "lucide-react";
+import { Search, Filter, Loader2, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Printer } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
 import { StockMovementType } from "@prisma/client";
 import { getStockMovementTypeLabel } from "@/lib/validations/stock-movement.schema";
+import { ModalHistoricoProduto } from "./modal-historico-produto";
+import { ModalImprimirMovimentacao } from "./modal-imprimir-movimentacao";
 
 interface StockMovement {
   id: string;
@@ -64,10 +66,38 @@ export function HistoricoMovimentacoes() {
   const [typeFilter, setTypeFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
+  const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; sku: string } | null>(null);
+  const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
 
   useEffect(() => {
     fetchMovements();
   }, [page, typeFilter]);
+
+  // Categorizar movimentações
+  const isEntrada = (type: StockMovementType) => {
+    return [
+      StockMovementType.PURCHASE,
+      StockMovementType.CUSTOMER_RETURN,
+      StockMovementType.ADJUSTMENT,
+    ].includes(type);
+  };
+
+  const isSaida = (type: StockMovementType) => {
+    return [
+      StockMovementType.SALE,
+      StockMovementType.LOSS,
+      StockMovementType.SUPPLIER_RETURN,
+      StockMovementType.INTERNAL_USE,
+      StockMovementType.OTHER,
+    ].includes(type);
+  };
+
+  const isTransferencia = (type: StockMovementType) => {
+    return [
+      StockMovementType.TRANSFER_IN,
+      StockMovementType.TRANSFER_OUT,
+    ].includes(type);
+  };
 
   async function fetchMovements() {
     setLoading(true);
@@ -79,10 +109,7 @@ export function HistoricoMovimentacoes() {
         sortOrder: "desc",
       });
 
-      if (typeFilter && typeFilter !== "all") {
-        params.set("type", typeFilter);
-      }
-
+      // Não enviamos filtro para a API, filtraremos no frontend
       const res = await fetch(`/api/stock-movements?${params}`);
       if (!res.ok) throw new Error("Erro ao buscar movimentações");
 
@@ -98,23 +125,29 @@ export function HistoricoMovimentacoes() {
   }
 
   const getTypeIcon = (type: StockMovementType) => {
-    if ([StockMovementType.PURCHASE, StockMovementType.CUSTOMER_RETURN, StockMovementType.TRANSFER_IN].includes(type)) {
+    if (isEntrada(type)) {
       return <ArrowUpCircle className="h-4 w-4 text-green-600" />;
     }
-    if ([StockMovementType.SALE, StockMovementType.LOSS, StockMovementType.SUPPLIER_RETURN, StockMovementType.INTERNAL_USE, StockMovementType.TRANSFER_OUT].includes(type)) {
+    if (isSaida(type)) {
       return <ArrowDownCircle className="h-4 w-4 text-red-600" />;
     }
-    return <ArrowRightLeft className="h-4 w-4 text-blue-600" />;
+    if (isTransferencia(type)) {
+      return <ArrowRightLeft className="h-4 w-4 text-blue-600" />;
+    }
+    return <ArrowRightLeft className="h-4 w-4 text-gray-600" />;
   };
 
   const getTypeBadgeVariant = (type: StockMovementType): "default" | "secondary" | "destructive" | "outline" => {
-    if ([StockMovementType.PURCHASE, StockMovementType.CUSTOMER_RETURN, StockMovementType.TRANSFER_IN].includes(type)) {
+    if (isEntrada(type)) {
       return "default";
     }
-    if ([StockMovementType.SALE, StockMovementType.LOSS, StockMovementType.SUPPLIER_RETURN, StockMovementType.INTERNAL_USE, StockMovementType.TRANSFER_OUT].includes(type)) {
+    if (isSaida(type)) {
       return "destructive";
     }
-    return "secondary";
+    if (isTransferencia(type)) {
+      return "secondary";
+    }
+    return "outline";
   };
 
   const formatDate = (dateString: string) => {
@@ -128,16 +161,27 @@ export function HistoricoMovimentacoes() {
     });
   };
 
-  // Filtrar por busca local
+  // Filtrar por busca e tipo
   const filteredMovements = movements.filter((movement) => {
-    if (!search) return true;
-    const searchLower = search.toLowerCase();
-    return (
-      movement.product.name.toLowerCase().includes(searchLower) ||
-      movement.product.sku.toLowerCase().includes(searchLower) ||
-      movement.supplier?.name.toLowerCase().includes(searchLower) ||
-      movement.invoiceNumber?.toLowerCase().includes(searchLower)
-    );
+    // Filtro de busca
+    if (search) {
+      const searchLower = search.toLowerCase();
+      const matchesSearch = (
+        movement.product.name.toLowerCase().includes(searchLower) ||
+        movement.product.sku.toLowerCase().includes(searchLower) ||
+        movement.supplier?.name.toLowerCase().includes(searchLower) ||
+        movement.invoiceNumber?.toLowerCase().includes(searchLower)
+      );
+      if (!matchesSearch) return false;
+    }
+
+    // Filtro de tipo
+    if (typeFilter === "all") return true;
+    if (typeFilter === "entradas") return isEntrada(movement.type);
+    if (typeFilter === "saidas") return isSaida(movement.type);
+    if (typeFilter === "transferencias") return isTransferencia(movement.type);
+
+    return true;
   });
 
   return (
@@ -173,16 +217,9 @@ export function HistoricoMovimentacoes() {
                 </SelectTrigger>
                 <SelectContent>
                   <SelectItem value="all">Todos</SelectItem>
-                  <SelectItem value={StockMovementType.PURCHASE}>Compras</SelectItem>
-                  <SelectItem value={StockMovementType.SALE}>Vendas</SelectItem>
-                  <SelectItem value={StockMovementType.TRANSFER_IN}>Transferências Recebidas</SelectItem>
-                  <SelectItem value={StockMovementType.TRANSFER_OUT}>Transferências Enviadas</SelectItem>
-                  <SelectItem value={StockMovementType.CUSTOMER_RETURN}>Devoluções de Cliente</SelectItem>
-                  <SelectItem value={StockMovementType.SUPPLIER_RETURN}>Devoluções para Fornecedor</SelectItem>
-                  <SelectItem value={StockMovementType.LOSS}>Perdas/Avarias</SelectItem>
-                  <SelectItem value={StockMovementType.ADJUSTMENT}>Ajustes</SelectItem>
-                  <SelectItem value={StockMovementType.INTERNAL_USE}>Uso Interno</SelectItem>
-                  <SelectItem value={StockMovementType.OTHER}>Outros</SelectItem>
+                  <SelectItem value="entradas">Entradas</SelectItem>
+                  <SelectItem value="saidas">Saídas</SelectItem>
+                  <SelectItem value="transferencias">Transferências</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -231,6 +268,7 @@ export function HistoricoMovimentacoes() {
                   <TableHead>Filiais</TableHead>
                   <TableHead>Usuário</TableHead>
                   <TableHead>Observações</TableHead>
+                  <TableHead className="text-center">Ações</TableHead>
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -248,20 +286,33 @@ export function HistoricoMovimentacoes() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div>
+                      <button
+                        onClick={() => setSelectedProduct({
+                          id: movement.product.id,
+                          name: movement.product.name,
+                          sku: movement.product.sku
+                        })}
+                        className="text-left hover:underline focus:outline-none"
+                      >
                         <p className="font-medium">{movement.product.name}</p>
                         <p className="text-xs text-muted-foreground">
                           SKU: {movement.product.sku}
                         </p>
-                      </div>
+                      </button>
                     </TableCell>
                     <TableCell className="text-center">
                       <span className={
-                        [StockMovementType.PURCHASE, StockMovementType.CUSTOMER_RETURN, StockMovementType.TRANSFER_IN].includes(movement.type)
+                        isEntrada(movement.type)
                           ? "text-green-600 font-semibold"
+                          : isTransferencia(movement.type)
+                          ? "text-blue-600 font-semibold"
                           : "text-red-600 font-semibold"
                       }>
-                        {[StockMovementType.PURCHASE, StockMovementType.CUSTOMER_RETURN, StockMovementType.TRANSFER_IN].includes(movement.type) ? "+" : "-"}
+                        {isEntrada(movement.type) && "+"}
+                        {isSaida(movement.type) && "-"}
+                        {isTransferencia(movement.type) && (
+                          movement.type === StockMovementType.TRANSFER_IN ? "+" : "-"
+                        )}
                         {movement.quantity}
                       </span>
                     </TableCell>
@@ -319,6 +370,16 @@ export function HistoricoMovimentacoes() {
                         )}
                       </div>
                     </TableCell>
+                    <TableCell className="text-center">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setSelectedMovement(movement)}
+                        title="Imprimir comprovante"
+                      >
+                        <Printer className="h-4 w-4" />
+                      </Button>
+                    </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
@@ -353,6 +414,24 @@ export function HistoricoMovimentacoes() {
           </CardContent>
         </Card>
       )}
+
+      {/* Modal de Histórico Detalhado do Produto */}
+      {selectedProduct && (
+        <ModalHistoricoProduto
+          open={!!selectedProduct}
+          onOpenChange={(open) => !open && setSelectedProduct(null)}
+          productId={selectedProduct.id}
+          productName={selectedProduct.name}
+          productSku={selectedProduct.sku}
+        />
+      )}
+
+      {/* Modal de Impressão de Movimentação */}
+      <ModalImprimirMovimentacao
+        open={!!selectedMovement}
+        onOpenChange={(open) => !open && setSelectedMovement(null)}
+        movement={selectedMovement}
+      />
     </div>
   );
 }
