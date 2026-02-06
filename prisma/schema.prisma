@@ -178,6 +178,19 @@ enum AgreementType {
   PARTNERSHIP
 }
 
+enum StockMovementType {
+  PURCHASE
+  CUSTOMER_RETURN
+  TRANSFER_IN
+  TRANSFER_OUT
+  ADJUSTMENT
+  SALE
+  LOSS
+  SUPPLIER_RETURN
+  INTERNAL_USE
+  OTHER
+}
+
 // ==============================
 // ESTRUTURA ORGANIZACIONAL
 // ==============================
@@ -229,6 +242,7 @@ model Company {
   loyaltyPoints   LoyaltyPoints[]
   dreReports      DREReport[]
   appointments    Appointment[]
+  stockMovements  StockMovement[]
 }
 
 model Branch {
@@ -263,6 +277,8 @@ model Branch {
   dreReports        DREReport[]
   auditLogs         AuditLog[]
   cashMovements     CashMovement[]
+  stockMovementsSource StockMovement[] @relation("StockMovementSource")
+  stockMovementsTarget StockMovement[] @relation("StockMovementTarget")
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -298,6 +314,7 @@ model User {
   cashMovementsCreated CashMovement[]    @relation("CashMovementCreator")
   shiftsOpened         CashShift[]       @relation("ShiftOpener")
   shiftsClosed         CashShift[]       @relation("ShiftCloser")
+  stockMovements       StockMovement[]
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -530,7 +547,8 @@ model Supplier {
   createdAt  DateTime @default(now())
   updatedAt  DateTime @updatedAt
 
-  products   Product[]
+  products       Product[]
+  stockMovements StockMovement[]
 
   @@unique([companyId, cnpj])
   @@index([companyId, name])
@@ -682,6 +700,7 @@ model Product {
   quoteItems         QuoteItem[]
   serviceOrderItems  ServiceOrderItem[]
   stockReservations  StockReservation[]
+  stockMovements     StockMovement[]
 
   @@unique([companyId, sku])
   @@index([companyId, name])
@@ -933,6 +952,46 @@ model StockReservation {
   @@index([branchId, productId, status])
   @@index([serviceOrderId])
   @@index([saleId])
+}
+
+// ==============================
+// MOVIMENTAÇÃO DE ESTOQUE
+// ==============================
+
+model StockMovement {
+  id          String   @id @default(cuid())
+  companyId   String
+  company     Company  @relation(fields: [companyId], references: [id])
+
+  productId   String
+  product     Product  @relation(fields: [productId], references: [id])
+
+  type        StockMovementType
+  quantity    Int
+
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+
+  invoiceNumber String?
+
+  sourceBranchId String?
+  sourceBranch   Branch? @relation("StockMovementSource", fields: [sourceBranchId], references: [id])
+
+  targetBranchId String?
+  targetBranch   Branch? @relation("StockMovementTarget", fields: [targetBranchId], references: [id])
+
+  reason      String?
+  notes       String?
+
+  createdByUserId String?
+  createdBy       User?   @relation(fields: [createdByUserId], references: [id])
+
+  createdAt   DateTime @default(now())
+
+  @@index([companyId, productId, createdAt])
+  @@index([companyId, type, createdAt])
+  @@index([productId, createdAt])
+  @@index([supplierId, createdAt])
 }
 
 // ==============================

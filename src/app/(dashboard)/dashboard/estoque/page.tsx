@@ -15,10 +15,11 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Search, Plus, Minus, AlertTriangle, Package, Loader2 } from "lucide-react";
+import { Search, Plus, Minus, AlertTriangle, Package, Loader2, History } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalEntradaEstoque } from "@/components/estoque/modal-entrada-estoque";
 import { ModalSaidaEstoque } from "@/components/estoque/modal-saida-estoque";
+import { HistoricoMovimentacoes } from "@/components/estoque/historico-movimentacoes";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
 
@@ -121,11 +122,13 @@ export default function EstoquePage() {
         open={modalEntradaOpen}
         onOpenChange={setModalEntradaOpen}
         produto={produtoSelecionado}
+        onSuccess={() => fetchProducts()}
       />
       <ModalSaidaEstoque
         open={modalSaidaOpen}
         onOpenChange={setModalSaidaOpen}
         produto={produtoSelecionado}
+        onSuccess={() => fetchProducts()}
       />
 
       <div className="space-y-6">
@@ -250,12 +253,10 @@ export default function EstoquePage() {
               <Package className="mr-2 h-4 w-4" />
               Estoque Atual
             </TabsTrigger>
-            {/* TODO: Implementar tab de Histórico de Movimentações
             <TabsTrigger value="historico">
               <History className="mr-2 h-4 w-4" />
               Histórico de Movimentações
             </TabsTrigger>
-            */}
           </TabsList>
 
           {/* Tab Estoque Atual */}
@@ -403,25 +404,10 @@ export default function EstoquePage() {
             )}
           </TabsContent>
 
-          {/* Tab Histórico - TODO: Implementar em versão futura
+          {/* Tab Histórico de Movimentações */}
           <TabsContent value="historico" className="space-y-4">
-            <Card>
-              <CardHeader>
-                <CardTitle>Histórico de Movimentações</CardTitle>
-                <CardDescription>
-                  Registro de todas as entradas e saídas
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <EmptyState
-                  icon={<History className="h-12 w-12" />}
-                  title="Em desenvolvimento"
-                  description="O histórico de movimentações será implementado em breve"
-                />
-              </CardContent>
-            </Card>
+            <HistoricoMovimentacoes />
           </TabsContent>
-          */}
         </Tabs>
       </div>
     </>
