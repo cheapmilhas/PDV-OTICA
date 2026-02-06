@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -15,199 +15,63 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Search, Plus, Minus, TrendingUp, TrendingDown, AlertTriangle, Package, History } from "lucide-react";
+import { Search, Plus, Minus, AlertTriangle, Package, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalEntradaEstoque } from "@/components/estoque/modal-entrada-estoque";
 import { ModalSaidaEstoque } from "@/components/estoque/modal-saida-estoque";
+import { EmptyState } from "@/components/shared/empty-state";
+import toast from "react-hot-toast";
+
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  stockQty: number;
+  stockMin: number;
+  stockMax: number | null;
+  costPrice: number;
+  salePrice: number;
+  category: {
+    id: string;
+    name: string;
+  } | null;
+  supplier: {
+    id: string;
+    name: string;
+  } | null;
+  active: boolean;
+  updatedAt: string;
+}
 
 export default function EstoquePage() {
   const [modalEntradaOpen, setModalEntradaOpen] = useState(false);
   const [modalSaidaOpen, setModalSaidaOpen] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
+  const [products, setProducts] = useState<Product[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
 
-  // Mock data - produtos em estoque
-  const produtosEstoque = [
-    {
-      id: "1",
-      codigo: "ARM001",
-      nome: "Ray-Ban Aviador Clássico RB3025",
-      categoria: "Armações",
-      estoque: 15,
-      estoqueMinimo: 5,
-      estoqueMaximo: 30,
-      custoUnitario: 450.00,
-      precoVenda: 899.90,
-      fornecedor: "Ray-Ban do Brasil",
-      localizacao: "Prateleira A1",
-      ultimaMovimentacao: "2024-01-30",
-    },
-    {
-      id: "2",
-      codigo: "ARM002",
-      nome: "Oakley Holbrook OO9102",
-      categoria: "Armações",
-      estoque: 8,
-      estoqueMinimo: 5,
-      estoqueMaximo: 20,
-      custoUnitario: 625.00,
-      precoVenda: 1249.90,
-      fornecedor: "Oakley Brasil",
-      localizacao: "Prateleira A2",
-      ultimaMovimentacao: "2024-01-29",
-    },
-    {
-      id: "3",
-      codigo: "LEN001",
-      nome: "Lente Transitions Gen 8 1.67",
-      categoria: "Lentes",
-      estoque: 2,
-      estoqueMinimo: 3,
-      estoqueMaximo: 15,
-      custoUnitario: 290.00,
-      precoVenda: 580.00,
-      fornecedor: "Essilor do Brasil",
-      localizacao: "Gaveta L1",
-      ultimaMovimentacao: "2024-01-28",
-    },
-    {
-      id: "4",
-      codigo: "SOL001",
-      nome: "Ray-Ban Wayfarer RB2140",
-      categoria: "Óculos de Sol",
-      estoque: 20,
-      estoqueMinimo: 8,
-      estoqueMaximo: 40,
-      custoUnitario: 400.00,
-      precoVenda: 799.90,
-      fornecedor: "Ray-Ban do Brasil",
-      localizacao: "Prateleira B1",
-      ultimaMovimentacao: "2024-01-31",
-    },
-    {
-      id: "5",
-      codigo: "LIQ001",
-      nome: "Líquido de Limpeza 50ml",
-      categoria: "Acessórios",
-      estoque: 45,
-      estoqueMinimo: 20,
-      estoqueMaximo: 100,
-      custoUnitario: 12.50,
-      precoVenda: 25.00,
-      fornecedor: "Optica Clean",
-      localizacao: "Prateleira C3",
-      ultimaMovimentacao: "2024-01-30",
-    },
-    {
-      id: "6",
-      codigo: "ARM003",
-      nome: "Armação Infantil Flexível Azul",
-      categoria: "Armações",
-      estoque: 12,
-      estoqueMinimo: 6,
-      estoqueMaximo: 25,
-      custoUnitario: 160.00,
-      precoVenda: 320.00,
-      fornecedor: "Kids Vision",
-      localizacao: "Prateleira A3",
-      ultimaMovimentacao: "2024-01-27",
-    },
-    {
-      id: "7",
-      codigo: "LEN002",
-      nome: "Lente Zeiss Single Vision 1.74",
-      categoria: "Lentes",
-      estoque: 5,
-      estoqueMinimo: 3,
-      estoqueMaximo: 12,
-      custoUnitario: 600.00,
-      precoVenda: 1200.00,
-      fornecedor: "Zeiss do Brasil",
-      localizacao: "Gaveta L2",
-      ultimaMovimentacao: "2024-01-29",
-    },
-    {
-      id: "8",
-      codigo: "EST001",
-      nome: "Estojo Rígido Premium",
-      categoria: "Acessórios",
-      estoque: 50,
-      estoqueMinimo: 25,
-      estoqueMaximo: 100,
-      custoUnitario: 17.50,
-      precoVenda: 35.00,
-      fornecedor: "Acessórios Plus",
-      localizacao: "Prateleira C1",
-      ultimaMovimentacao: "2024-01-30",
-    },
-    {
-      id: "9",
-      codigo: "LEN003",
-      nome: "Lente Multifocal Varilux",
-      categoria: "Lentes",
-      estoque: 1,
-      estoqueMinimo: 2,
-      estoqueMaximo: 10,
-      custoUnitario: 450.00,
-      precoVenda: 900.00,
-      fornecedor: "Essilor do Brasil",
-      localizacao: "Gaveta L3",
-      ultimaMovimentacao: "2024-01-25",
-    },
-  ];
+  // Buscar produtos da API
+  useEffect(() => {
+    fetchProducts();
+  }, []);
 
-  // Histórico de movimentações
-  const historicoMovimentacoes = [
-    {
-      id: "1",
-      tipo: "entrada",
-      produto: "Ray-Ban Aviador Clássico RB3025",
-      codigo: "ARM001",
-      quantidade: 10,
-      motivo: "Compra de fornecedor",
-      usuario: "Carlos Vendedor",
-      data: "2024-01-30 14:30",
-    },
-    {
-      id: "2",
-      tipo: "saida",
-      produto: "Lente Transitions Gen 8 1.67",
-      codigo: "LEN001",
-      quantidade: 2,
-      motivo: "Venda para cliente",
-      usuario: "Maria Atendente",
-      data: "2024-01-30 11:20",
-    },
-    {
-      id: "3",
-      tipo: "entrada",
-      produto: "Estojo Rígido Premium",
-      codigo: "EST001",
-      quantidade: 50,
-      motivo: "Reposição de estoque",
-      usuario: "João Caixa",
-      data: "2024-01-29 16:45",
-    },
-    {
-      id: "4",
-      tipo: "saida",
-      produto: "Oakley Holbrook OO9102",
-      codigo: "ARM002",
-      quantidade: 1,
-      motivo: "Venda para cliente",
-      usuario: "Carlos Vendedor",
-      data: "2024-01-29 10:15",
-    },
-    {
-      id: "5",
-      tipo: "ajuste",
-      produto: "Lente Multifocal Varilux",
-      codigo: "LEN003",
-      quantidade: -1,
-      motivo: "Ajuste de inventário - produto danificado",
-      usuario: "Maria Atendente",
-      data: "2024-01-28 09:00",
-    },
-  ];
+  async function fetchProducts() {
+    setLoading(true);
+    try {
+      const res = await fetch("/api/products?pageSize=1000&status=ativos");
+      if (!res.ok) throw new Error("Erro ao buscar produtos");
+
+      const data = await res.json();
+      const productsArray = Array.isArray(data.data) ? data.data : [];
+      setProducts(productsArray);
+    } catch (error: any) {
+      console.error("Erro ao carregar produtos:", error);
+      toast.error("Erro ao carregar produtos");
+    } finally {
+      setLoading(false);
+    }
+  }
 
   const getStatusEstoque = (estoque: number, estoqueMinimo: number) => {
     if (estoque === 0) return { label: "Sem estoque", variant: "destructive" as const, color: "text-red-600" };
@@ -224,10 +88,22 @@ export default function EstoquePage() {
     return date.toLocaleString("pt-BR");
   };
 
-  const produtosBaixoEstoque = produtosEstoque.filter(p => p.estoque <= p.estoqueMinimo);
-  const produtosSemEstoque = produtosEstoque.filter(p => p.estoque === 0);
-  const valorTotalEstoque = produtosEstoque.reduce((acc, p) => acc + (p.custoUnitario * p.estoque), 0);
-  const totalItens = produtosEstoque.reduce((acc, p) => acc + p.estoque, 0);
+  // Filtrar produtos por busca
+  const filteredProducts = products.filter((product) => {
+    const searchLower = search.toLowerCase();
+    return (
+      product.name.toLowerCase().includes(searchLower) ||
+      product.sku.toLowerCase().includes(searchLower) ||
+      product.category?.name.toLowerCase().includes(searchLower) ||
+      product.supplier?.name.toLowerCase().includes(searchLower)
+    );
+  });
+
+  // Cálculos baseados nos produtos filtrados
+  const produtosBaixoEstoque = filteredProducts.filter(p => p.stockQty <= p.stockMin);
+  const produtosSemEstoque = filteredProducts.filter(p => p.stockQty === 0);
+  const valorTotalEstoque = filteredProducts.reduce((acc, p) => acc + (Number(p.costPrice) * p.stockQty), 0);
+  const totalItens = filteredProducts.reduce((acc, p) => acc + p.stockQty, 0);
 
   const abrirModalEntrada = (produto?: any) => {
     setProdutoSelecionado(produto || null);
@@ -284,7 +160,7 @@ export default function EstoquePage() {
             <CardContent>
               <p className="text-2xl font-bold">{totalItens}</p>
               <p className="text-xs text-muted-foreground">
-                {produtosEstoque.length} produtos
+                {filteredProducts.length} produtos
               </p>
             </CardContent>
           </Card>
@@ -352,9 +228,9 @@ export default function EstoquePage() {
                 {produtosBaixoEstoque.map((produto) => (
                   <div key={produto.id} className="flex items-center justify-between rounded-lg border border-orange-200 bg-white p-3">
                     <div className="flex-1">
-                      <p className="font-medium">{produto.nome}</p>
+                      <p className="font-medium">{produto.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Código: {produto.codigo} • Estoque: {produto.estoque} / Mínimo: {produto.estoqueMinimo}
+                        Código: {produto.sku} • Estoque: {produto.stockQty} / Mínimo: {produto.stockMin}
                       </p>
                     </div>
                     <Button size="sm" onClick={() => abrirModalEntrada(produto)}>
@@ -374,10 +250,12 @@ export default function EstoquePage() {
               <Package className="mr-2 h-4 w-4" />
               Estoque Atual
             </TabsTrigger>
+            {/* TODO: Implementar tab de Histórico de Movimentações
             <TabsTrigger value="historico">
               <History className="mr-2 h-4 w-4" />
               Histórico de Movimentações
             </TabsTrigger>
+            */}
           </TabsList>
 
           {/* Tab Estoque Atual */}
@@ -395,108 +273,137 @@ export default function EstoquePage() {
                   <div className="relative flex-1">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar por código, nome ou categoria..."
+                      placeholder="Buscar por código, nome, categoria ou fornecedor..."
                       className="pl-9"
+                      value={search}
+                      onChange={(e) => setSearch(e.target.value)}
                     />
                   </div>
-                  <Button variant="outline">
-                    Todas Categorias
-                  </Button>
                 </div>
               </CardContent>
             </Card>
 
-            {/* Tabela de Produtos */}
-            <Card>
-              <CardHeader>
-                <CardTitle>Produtos em Estoque</CardTitle>
-                <CardDescription>
-                  {produtosEstoque.length} produtos cadastrados
-                </CardDescription>
-              </CardHeader>
-              <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Produto</TableHead>
-                      <TableHead>Categoria</TableHead>
-                      <TableHead className="text-center">Estoque</TableHead>
-                      <TableHead className="text-center">Status</TableHead>
-                      <TableHead>Localização</TableHead>
-                      <TableHead className="text-right">Custo Unit.</TableHead>
-                      <TableHead className="text-right">Valor Total</TableHead>
-                      <TableHead className="text-right">Ações</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {produtosEstoque.map((produto) => {
-                      const status = getStatusEstoque(produto.estoque, produto.estoqueMinimo);
-                      const progresso = calcularProgressoEstoque(produto.estoque, produto.estoqueMaximo);
+            {/* Loading */}
+            {loading && (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            )}
 
-                      return (
-                        <TableRow key={produto.id}>
-                          <TableCell>
-                            <div>
-                              <p className="font-medium">{produto.nome}</p>
-                              <p className="text-xs text-muted-foreground">
-                                Código: {produto.codigo}
+            {/* Empty State */}
+            {!loading && filteredProducts.length === 0 && (
+              <EmptyState
+                icon={<Package className="h-12 w-12" />}
+                title="Nenhum produto encontrado"
+                description={
+                  search
+                    ? `Não encontramos resultados para "${search}"`
+                    : "Comece adicionando produtos no sistema"
+                }
+              />
+            )}
+
+            {/* Tabela de Produtos */}
+            {!loading && filteredProducts.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Produtos em Estoque</CardTitle>
+                  <CardDescription>
+                    {filteredProducts.length} produtos encontrados
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <Table>
+                    <TableHeader>
+                      <TableRow>
+                        <TableHead>Produto</TableHead>
+                        <TableHead>Categoria</TableHead>
+                        <TableHead className="text-center">Estoque</TableHead>
+                        <TableHead className="text-center">Status</TableHead>
+                        <TableHead>Fornecedor</TableHead>
+                        <TableHead className="text-right">Custo Unit.</TableHead>
+                        <TableHead className="text-right">Valor Total</TableHead>
+                        <TableHead className="text-right">Ações</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
+                      {filteredProducts.map((produto) => {
+                        const status = getStatusEstoque(produto.stockQty, produto.stockMin);
+                        const progresso = calcularProgressoEstoque(
+                          produto.stockQty,
+                          produto.stockMax || produto.stockMin * 3
+                        );
+
+                        return (
+                          <TableRow key={produto.id}>
+                            <TableCell>
+                              <div>
+                                <p className="font-medium">{produto.name}</p>
+                                <p className="text-xs text-muted-foreground">
+                                  SKU: {produto.sku}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell>
+                              <Badge variant="outline">
+                                {produto.category?.name || "Sem categoria"}
+                              </Badge>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <div className="space-y-1">
+                                <p className="font-bold">{produto.stockQty}</p>
+                                <Progress value={progresso} className="h-1 w-20 mx-auto" />
+                                <p className="text-xs text-muted-foreground">
+                                  Min: {produto.stockMin}
+                                  {produto.stockMax && ` / Max: ${produto.stockMax}`}
+                                </p>
+                              </div>
+                            </TableCell>
+                            <TableCell className="text-center">
+                              <Badge variant={status.variant} className={status.color}>
+                                {status.label}
+                              </Badge>
+                            </TableCell>
+                            <TableCell>
+                              <p className="text-sm">
+                                {produto.supplier?.name || "-"}
                               </p>
-                            </div>
-                          </TableCell>
-                          <TableCell>
-                            <Badge variant="outline">{produto.categoria}</Badge>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <div className="space-y-1">
-                              <p className="font-bold">{produto.estoque}</p>
-                              <Progress value={progresso} className="h-1 w-20 mx-auto" />
-                              <p className="text-xs text-muted-foreground">
-                                Min: {produto.estoqueMinimo} / Max: {produto.estoqueMaximo}
-                              </p>
-                            </div>
-                          </TableCell>
-                          <TableCell className="text-center">
-                            <Badge variant={status.variant} className={status.color}>
-                              {status.label}
-                            </Badge>
-                          </TableCell>
-                          <TableCell>
-                            <p className="text-sm">{produto.localizacao}</p>
-                          </TableCell>
-                          <TableCell className="text-right">
-                            {formatCurrency(produto.custoUnitario)}
-                          </TableCell>
-                          <TableCell className="text-right font-semibold">
-                            {formatCurrency(produto.custoUnitario * produto.estoque)}
-                          </TableCell>
-                          <TableCell className="text-right">
-                            <div className="flex justify-end gap-1">
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => abrirModalEntrada(produto)}
-                              >
-                                <Plus className="h-4 w-4" />
-                              </Button>
-                              <Button
-                                variant="ghost"
-                                size="sm"
-                                onClick={() => abrirModalSaida(produto)}
-                              >
-                                <Minus className="h-4 w-4" />
-                              </Button>
-                            </div>
-                          </TableCell>
-                        </TableRow>
-                      );
-                    })}
-                  </TableBody>
-                </Table>
-              </CardContent>
-            </Card>
+                            </TableCell>
+                            <TableCell className="text-right">
+                              {formatCurrency(Number(produto.costPrice))}
+                            </TableCell>
+                            <TableCell className="text-right font-semibold">
+                              {formatCurrency(Number(produto.costPrice) * produto.stockQty)}
+                            </TableCell>
+                            <TableCell className="text-right">
+                              <div className="flex justify-end gap-1">
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => abrirModalEntrada(produto)}
+                                >
+                                  <Plus className="h-4 w-4" />
+                                </Button>
+                                <Button
+                                  variant="ghost"
+                                  size="sm"
+                                  onClick={() => abrirModalSaida(produto)}
+                                >
+                                  <Minus className="h-4 w-4" />
+                                </Button>
+                              </div>
+                            </TableCell>
+                          </TableRow>
+                        );
+                      })}
+                    </TableBody>
+                  </Table>
+                </CardContent>
+              </Card>
+            )}
           </TabsContent>
 
-          {/* Tab Histórico */}
+          {/* Tab Histórico - TODO: Implementar em versão futura
           <TabsContent value="historico" className="space-y-4">
             <Card>
               <CardHeader>
@@ -506,71 +413,15 @@ export default function EstoquePage() {
                 </CardDescription>
               </CardHeader>
               <CardContent>
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data/Hora</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Produto</TableHead>
-                      <TableHead className="text-center">Quantidade</TableHead>
-                      <TableHead>Motivo</TableHead>
-                      <TableHead>Usuário</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {historicoMovimentacoes.map((mov) => (
-                      <TableRow key={mov.id}>
-                        <TableCell>
-                          <p className="text-sm font-medium">{formatDate(mov.data)}</p>
-                        </TableCell>
-                        <TableCell>
-                          <Badge
-                            variant={
-                              mov.tipo === "entrada"
-                                ? "default"
-                                : mov.tipo === "saida"
-                                ? "secondary"
-                                : "outline"
-                            }
-                          >
-                            {mov.tipo === "entrada" && <TrendingUp className="mr-1 h-3 w-3" />}
-                            {mov.tipo === "saida" && <TrendingDown className="mr-1 h-3 w-3" />}
-                            {mov.tipo === "entrada" ? "Entrada" : mov.tipo === "saida" ? "Saída" : "Ajuste"}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <div>
-                            <p className="font-medium">{mov.produto}</p>
-                            <p className="text-xs text-muted-foreground">
-                              Código: {mov.codigo}
-                            </p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-center">
-                          <span className={`font-bold ${
-                            mov.tipo === "entrada"
-                              ? "text-green-600"
-                              : mov.quantidade < 0
-                              ? "text-red-600"
-                              : "text-orange-600"
-                          }`}>
-                            {mov.tipo === "entrada" && "+"}
-                            {mov.quantidade}
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm">{mov.motivo}</p>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm">{mov.usuario}</p>
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <EmptyState
+                  icon={<History className="h-12 w-12" />}
+                  title="Em desenvolvimento"
+                  description="O histórico de movimentações será implementado em breve"
+                />
               </CardContent>
             </Card>
           </TabsContent>
+          */}
         </Tabs>
       </div>
     </>
