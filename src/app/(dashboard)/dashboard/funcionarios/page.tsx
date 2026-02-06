@@ -1,9 +1,10 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
   Table,
@@ -13,118 +14,237 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Eye, User, Mail, Phone, Shield, TrendingUp, DollarSign } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { Search, Plus, Eye, Mail, Shield, Loader2, Edit, Trash2, Package, AlertTriangle, User } from "lucide-react";
+import toast from "react-hot-toast";
+import { Pagination } from "@/components/shared/pagination";
+import { EmptyState } from "@/components/shared/empty-state";
+
+interface UserType {
+  id: string;
+  name: string;
+  email: string;
+  role: "ADMIN" | "GERENTE" | "VENDEDOR" | "CAIXA" | "ATENDENTE";
+  active: boolean;
+  defaultCommissionPercent: number | null;
+  createdAt: string;
+  updatedAt: string;
+}
 
 export default function FuncionariosPage() {
-  // Mock data - funcionários
-  const funcionarios = [
-    {
-      id: "1",
-      nome: "Carlos Vendedor Silva",
-      email: "carlos@otica.com",
-      telefone: "(11) 98765-4321",
-      cargo: "Vendedor",
-      nivel: "vendedor",
-      dataAdmissao: "2023-01-15",
-      salario: 2500.00,
-      comissao: 5,
-      metaMensal: 15000.00,
-      vendasMes: 18450.00,
-      status: "ativo",
-    },
-    {
-      id: "2",
-      nome: "Maria Atendente Costa",
-      email: "maria@otica.com",
-      telefone: "(11) 98765-4322",
-      cargo: "Atendente",
-      nivel: "vendedor",
-      dataAdmissao: "2023-03-20",
-      salario: 2200.00,
-      comissao: 4,
-      metaMensal: 12000.00,
-      vendasMes: 14220.00,
-      status: "ativo",
-    },
-    {
-      id: "3",
-      nome: "João Caixa Santos",
-      email: "joao@otica.com",
-      telefone: "(11) 98765-4323",
-      cargo: "Operador de Caixa",
-      nivel: "caixa",
-      dataAdmissao: "2023-06-10",
-      salario: 2000.00,
-      comissao: 3,
-      metaMensal: 10000.00,
-      vendasMes: 11800.00,
-      status: "ativo",
-    },
-    {
-      id: "4",
-      nome: "Ana Paula Gerente",
-      email: "ana@otica.com",
-      telefone: "(11) 98765-4324",
-      cargo: "Gerente",
-      nivel: "admin",
-      dataAdmissao: "2022-08-01",
-      salario: 4500.00,
-      comissao: 8,
-      metaMensal: 25000.00,
-      vendasMes: 28900.00,
-      status: "ativo",
-    },
-    {
-      id: "5",
-      nome: "Roberto Silva Admin",
-      email: "roberto@otica.com",
-      telefone: "(11) 98765-4325",
-      cargo: "Administrador",
-      nivel: "admin",
-      dataAdmissao: "2022-01-10",
-      salario: 5000.00,
-      comissao: 0,
-      metaMensal: 0,
-      vendasMes: 0,
-      status: "ativo",
-    },
-  ];
+  const [search, setSearch] = useState("");
+  const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
+  const [roleFilter, setRoleFilter] = useState<string>("");
+  const [users, setUsers] = useState<UserType[]>([]);
+  const [pagination, setPagination] = useState<any>(null);
+  const [loading, setLoading] = useState(true);
+  const [selectedUser, setSelectedUser] = useState<UserType | null>(null);
+  const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
+  const [createDialogOpen, setCreateDialogOpen] = useState(false);
+  const [loadingDetails, setLoadingDetails] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [editForm, setEditForm] = useState<Partial<UserType & { password?: string }>>({});
+  const [createForm, setCreateForm] = useState<Partial<UserType & { password: string }>>({
+    password: "",
+    active: true,
+  });
 
-  const getNivelBadgeVariant = (nivel: string) => {
-    switch (nivel) {
-      case "admin":
-        return "default";
-      case "vendedor":
-        return "secondary";
-      case "caixa":
-        return "outline";
-      default:
-        return "outline";
+  // Buscar usuários da API
+  useEffect(() => {
+    fetchUsers();
+  }, [search, page, statusFilter, roleFilter]);
+
+  async function fetchUsers() {
+    setLoading(true);
+    try {
+      const params = new URLSearchParams({
+        search,
+        page: page.toString(),
+        pageSize: "20",
+        status: statusFilter,
+      });
+
+      if (roleFilter) {
+        params.set("role", roleFilter);
+      }
+
+      const res = await fetch(`/api/users?${params}`);
+      if (!res.ok) throw new Error("Erro ao buscar usuários");
+
+      const data = await res.json();
+      setUsers(data.data || []);
+      setPagination(data.pagination);
+    } catch (error: any) {
+      console.error("Erro ao carregar usuários:", error);
+      toast.error("Erro ao carregar usuários");
+    } finally {
+      setLoading(false);
     }
-  };
+  }
 
-  const getNivelLabel = (nivel: string) => {
-    switch (nivel) {
-      case "admin":
-        return "Administrador";
-      case "vendedor":
-        return "Vendedor";
-      case "caixa":
-        return "Caixa";
-      default:
-        return nivel;
+  async function handleViewDetails(id: string) {
+    setLoadingDetails(true);
+    setDetailsDialogOpen(true);
+    setIsEditing(false);
+
+    try {
+      const res = await fetch(`/api/users/${id}`);
+      if (!res.ok) throw new Error("Erro ao buscar detalhes");
+
+      const { data } = await res.json();
+      setSelectedUser(data);
+      setEditForm(data);
+    } catch (error: any) {
+      console.error("Erro ao carregar detalhes:", error);
+      toast.error("Erro ao carregar detalhes do usuário");
+      setDetailsDialogOpen(false);
+    } finally {
+      setLoadingDetails(false);
     }
-  };
+  }
 
-  const getStatusVariant = (status: string) => {
-    return status === "ativo" ? "default" : "destructive";
-  };
+  function handleStartEdit() {
+    setIsEditing(true);
+  }
 
-  const getInitials = (nome: string) => {
-    const parts = nome.split(" ");
-    return `${parts[0][0]}${parts[1]?.[0] || parts[0][1]}`.toUpperCase();
+  function handleCancelEdit() {
+    setIsEditing(false);
+    if (selectedUser) {
+      setEditForm(selectedUser);
+    }
+  }
+
+  async function handleSaveEdit() {
+    if (!selectedUser) return;
+
+    const allowedFields = [
+      'name', 'email', 'password', 'role', 'defaultCommissionPercent', 'active'
+    ];
+
+    const updateData: any = {};
+    for (const field of allowedFields) {
+      if (field in editForm) {
+        const value = (editForm as any)[field];
+        // Não enviar senha vazia
+        if (field === "password" && (!value || value === "")) continue;
+        // Converter strings vazias em null para campos opcionais
+        updateData[field] = value === "" ? null : value;
+      }
+    }
+
+    try {
+      const res = await fetch(`/api/users/${selectedUser.id}`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(updateData),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erro ao atualizar usuário");
+      }
+
+      const { data } = await res.json();
+      toast.success("Usuário atualizado com sucesso!");
+      setSelectedUser(data);
+      setEditForm(data);
+      setIsEditing(false);
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao atualizar usuário");
+    }
+  }
+
+  async function handleToggleStatus(id: string, currentStatus: boolean) {
+    if (!confirm(`Tem certeza que deseja ${currentStatus ? "desativar" : "ativar"} este usuário?`)) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/users/${id}`, {
+        method: currentStatus ? "DELETE" : "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: currentStatus ? undefined : JSON.stringify({ active: true }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao atualizar usuário");
+
+      toast.success(`Usuário ${currentStatus ? "desativado" : "ativado"} com sucesso!`);
+      fetchUsers();
+      setDetailsDialogOpen(false);
+    } catch (error: any) {
+      console.error("Erro ao atualizar usuário:", error);
+      toast.error(error.message || "Erro ao atualizar usuário");
+    }
+  }
+
+  async function handlePermanentDelete(id: string) {
+    if (!confirm("⚠️ ATENÇÃO: Esta ação é IRREVERSÍVEL!\n\nTem certeza que deseja EXCLUIR PERMANENTEMENTE este usuário do banco de dados?\n\nTodos os dados serão perdidos e não poderão ser recuperados.")) {
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/users/${id}?permanent=true`, {
+        method: "DELETE",
+      });
+
+      if (!res.ok) throw new Error("Erro ao excluir usuário");
+
+      toast.success("Usuário excluído permanentemente!");
+      fetchUsers();
+      setDetailsDialogOpen(false);
+    } catch (error: any) {
+      console.error("Erro ao excluir usuário:", error);
+      toast.error(error.message || "Erro ao excluir usuário");
+    }
+  }
+
+  async function handleCreateUser() {
+    if (!createForm.name || !createForm.email || !createForm.password || !createForm.role) {
+      toast.error("Preencha todos os campos obrigatórios");
+      return;
+    }
+
+    try {
+      const res = await fetch(`/api/users`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(createForm),
+      });
+
+      if (!res.ok) {
+        const errorData = await res.json().catch(() => ({}));
+        throw new Error(errorData.message || "Erro ao criar usuário");
+      }
+
+      toast.success("Usuário criado com sucesso!");
+      setCreateDialogOpen(false);
+      setCreateForm({ password: "", active: true });
+      fetchUsers();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao criar usuário");
+    }
+  }
+
+  const getInitials = (name: string) => {
+    const parts = name.split(" ");
+    return `${parts[0][0]}${parts[parts.length - 1]?.[0] || parts[0][1] || ""}`.toUpperCase();
   };
 
   const formatDate = (dateString: string) => {
@@ -132,19 +252,41 @@ export default function FuncionariosPage() {
     return date.toLocaleDateString("pt-BR");
   };
 
-  const calcularPercentualMeta = (vendas: number, meta: number) => {
-    if (meta === 0) return 0;
-    return ((vendas / meta) * 100).toFixed(1);
+  const getRoleBadgeVariant = (role: string) => {
+    switch (role) {
+      case "ADMIN":
+        return "default";
+      case "GERENTE":
+        return "secondary";
+      case "VENDEDOR":
+      case "ATENDENTE":
+        return "outline";
+      case "CAIXA":
+        return "outline";
+      default:
+        return "outline";
+    }
   };
 
-  const calcularComissaoMes = (vendas: number, percentualComissao: number) => {
-    return (vendas * percentualComissao) / 100;
+  const getRoleLabel = (role: string) => {
+    switch (role) {
+      case "ADMIN":
+        return "Administrador";
+      case "GERENTE":
+        return "Gerente";
+      case "VENDEDOR":
+        return "Vendedor";
+      case "CAIXA":
+        return "Caixa";
+      case "ATENDENTE":
+        return "Atendente";
+      default:
+        return role;
+    }
   };
 
-  const totalFuncionarios = funcionarios.length;
-  const funcionariosAtivos = funcionarios.filter(f => f.status === "ativo").length;
-  const totalVendasEquipe = funcionarios.reduce((acc, f) => acc + f.vendasMes, 0);
-  const totalComissoes = funcionarios.reduce((acc, f) => acc + calcularComissaoMes(f.vendasMes, f.comissao), 0);
+  const totalUsers = pagination?.total || 0;
+  const activeUsers = users.filter(u => u.active).length;
 
   return (
     <div className="space-y-6">
@@ -156,14 +298,14 @@ export default function FuncionariosPage() {
             Gerencie a equipe da ótica
           </p>
         </div>
-        <Button>
+        <Button onClick={() => setCreateDialogOpen(true)}>
           <Plus className="mr-2 h-4 w-4" />
           Novo Funcionário
         </Button>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-4">
+      <div className="grid gap-4 md:grid-cols-3">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
@@ -171,9 +313,9 @@ export default function FuncionariosPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{totalFuncionarios}</p>
+            <p className="text-2xl font-bold">{totalUsers}</p>
             <p className="text-xs text-muted-foreground">
-              {funcionariosAtivos} ativos
+              {activeUsers} ativos
             </p>
           </CardContent>
         </Card>
@@ -181,15 +323,15 @@ export default function FuncionariosPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Vendas da Equipe
+              Funcionários Ativos
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-green-600">
-              {formatCurrency(totalVendasEquipe)}
+              {activeUsers}
             </p>
             <p className="text-xs text-muted-foreground">
-              Este mês
+              Cadastros ativos
             </p>
           </CardContent>
         </Card>
@@ -197,189 +339,468 @@ export default function FuncionariosPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Comissões do Mês
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-blue-600">
-              {formatCurrency(totalComissoes)}
-            </p>
-            <p className="text-xs text-muted-foreground">
-              A pagar
-            </p>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Ticket Médio
+              Cadastros Recentes
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {formatCurrency(totalVendasEquipe / funcionariosAtivos)}
+              {users.filter(u => {
+                const days = (Date.now() - new Date(u.createdAt).getTime()) / (1000 * 60 * 60 * 24);
+                return days <= 30;
+              }).length}
             </p>
             <p className="text-xs text-muted-foreground">
-              Por funcionário
+              Últimos 30 dias
             </p>
           </CardContent>
         </Card>
       </div>
 
-      {/* Filters */}
+      {/* Search and Filters */}
       <Card>
         <CardHeader>
-          <CardTitle>Filtros</CardTitle>
+          <CardTitle>Buscar Funcionários</CardTitle>
           <CardDescription>
-            Busque funcionários cadastrados
+            Pesquise por nome ou email
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="flex gap-4">
+          <div className="flex flex-col gap-4 md:flex-row">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
               <Input
-                placeholder="Buscar por nome, email ou cargo..."
+                placeholder="Digite para buscar..."
+                value={search}
+                onChange={(e) => {
+                  setSearch(e.target.value);
+                  setPage(1);
+                }}
                 className="pl-9"
               />
             </div>
-            <Button variant="outline">
-              Todos os Cargos
-            </Button>
+            <Select value={roleFilter} onValueChange={(value: any) => {
+              setRoleFilter(value);
+              setPage(1);
+            }}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Todos os cargos" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="">Todos os cargos</SelectItem>
+                <SelectItem value="ADMIN">Administrador</SelectItem>
+                <SelectItem value="GERENTE">Gerente</SelectItem>
+                <SelectItem value="VENDEDOR">Vendedor</SelectItem>
+                <SelectItem value="CAIXA">Caixa</SelectItem>
+                <SelectItem value="ATENDENTE">Atendente</SelectItem>
+              </SelectContent>
+            </Select>
+            <Select value={statusFilter} onValueChange={(value: any) => {
+              setStatusFilter(value);
+              setPage(1);
+            }}>
+              <SelectTrigger className="w-full md:w-[180px]">
+                <SelectValue placeholder="Filtrar status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ativos">Ativos</SelectItem>
+                <SelectItem value="inativos">Inativos</SelectItem>
+                <SelectItem value="todos">Todos</SelectItem>
+              </SelectContent>
+            </Select>
           </div>
         </CardContent>
       </Card>
 
-      {/* Funcionários Table */}
-      <Card>
-        <CardHeader>
-          <CardTitle>Lista de Funcionários</CardTitle>
-          <CardDescription>
-            {funcionarios.length} funcionários cadastrados
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Funcionário</TableHead>
-                <TableHead>Contato</TableHead>
-                <TableHead>Cargo/Nível</TableHead>
-                <TableHead className="text-right">Salário</TableHead>
-                <TableHead className="text-center">Meta vs Vendas</TableHead>
-                <TableHead className="text-right">Comissão</TableHead>
-                <TableHead className="text-center">Status</TableHead>
-                <TableHead className="text-right">Ações</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {funcionarios.map((func) => {
-                const percentualMeta = calcularPercentualMeta(func.vendasMes, func.metaMensal);
-                const comissaoMes = calcularComissaoMes(func.vendasMes, func.comissao);
-                const metaBatida = func.vendasMes >= func.metaMensal;
+      {/* Loading */}
+      {loading && (
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
+      )}
 
-                return (
-                  <TableRow key={func.id}>
+      {/* Empty State */}
+      {!loading && users.length === 0 && (
+        <EmptyState
+          icon={<User className="h-12 w-12" />}
+          title="Nenhum funcionário encontrado"
+          description={
+            search
+              ? `Não encontramos resultados para "${search}"`
+              : "Comece adicionando seu primeiro funcionário"
+          }
+          action={
+            !search && (
+              <Button onClick={() => setCreateDialogOpen(true)}>
+                <Plus className="mr-2 h-4 w-4" />
+                Novo Funcionário
+              </Button>
+            )
+          }
+        />
+      )}
+
+      {/* Funcionários Table */}
+      {!loading && users.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Lista de Funcionários</CardTitle>
+            <CardDescription>
+              {pagination?.total || 0} funcionários cadastrados
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Funcionário</TableHead>
+                  <TableHead>Email</TableHead>
+                  <TableHead>Cargo</TableHead>
+                  <TableHead>Comissão</TableHead>
+                  <TableHead className="text-center">Status</TableHead>
+                  <TableHead className="text-right">Ações</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {users.map((user) => (
+                  <TableRow key={user.id}>
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback className="bg-purple-100 text-purple-600">
-                            {getInitials(func.nome)}
+                            {getInitials(user.name)}
                           </AvatarFallback>
                         </Avatar>
                         <div>
-                          <p className="font-medium">{func.nome}</p>
+                          <p className="font-medium">{user.name}</p>
                           <p className="text-xs text-muted-foreground">
-                            Admissão: {formatDate(func.dataAdmissao)}
+                            Cadastrado em {formatDate(user.createdAt)}
                           </p>
                         </div>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <p className="text-sm flex items-center gap-1">
-                          <Mail className="h-3 w-3 text-muted-foreground" />
-                          {func.email}
-                        </p>
-                        <p className="text-sm flex items-center gap-1">
-                          <Phone className="h-3 w-3 text-muted-foreground" />
-                          {func.telefone}
-                        </p>
+                      <div className="flex items-center gap-1">
+                        <Mail className="h-3 w-3 text-muted-foreground" />
+                        <span className="text-sm">{user.email}</span>
                       </div>
                     </TableCell>
                     <TableCell>
-                      <div className="space-y-1">
-                        <p className="text-sm font-medium">{func.cargo}</p>
-                        <Badge variant={getNivelBadgeVariant(func.nivel)} className="flex items-center gap-1 w-fit">
-                          <Shield className="h-3 w-3" />
-                          {getNivelLabel(func.nivel)}
-                        </Badge>
-                      </div>
+                      <Badge variant={getRoleBadgeVariant(user.role)} className="flex items-center gap-1 w-fit">
+                        <Shield className="h-3 w-3" />
+                        {getRoleLabel(user.role)}
+                      </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
-                      <p className="font-semibold">{formatCurrency(func.salario)}</p>
-                      <p className="text-xs text-muted-foreground">
-                        + {func.comissao}% comissão
-                      </p>
-                    </TableCell>
-                    <TableCell className="text-center">
-                      {func.metaMensal > 0 ? (
-                        <div className="space-y-1">
-                          <div className="flex items-center justify-center gap-2">
-                            <span className="text-sm font-medium">
-                              {formatCurrency(func.vendasMes)}
-                            </span>
-                            {metaBatida && (
-                              <TrendingUp className="h-4 w-4 text-green-600" />
-                            )}
-                          </div>
-                          <div className="flex items-center justify-center gap-1">
-                            <div className="w-24 h-2 bg-gray-200 rounded-full overflow-hidden">
-                              <div
-                                className={`h-full ${metaBatida ? "bg-green-500" : "bg-blue-500"}`}
-                                style={{ width: `${Math.min(100, Number(percentualMeta))}%` }}
-                              />
-                            </div>
-                            <span className={`text-xs font-medium ${metaBatida ? "text-green-600" : ""}`}>
-                              {percentualMeta}%
-                            </span>
-                          </div>
-                          <p className="text-xs text-muted-foreground">
-                            Meta: {formatCurrency(func.metaMensal)}
-                          </p>
-                        </div>
+                    <TableCell>
+                      {user.defaultCommissionPercent ? (
+                        <span className="text-sm">{user.defaultCommissionPercent}%</span>
                       ) : (
                         <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right">
-                      <div className="space-y-1">
-                        <p className="font-bold text-green-600">
-                          {formatCurrency(comissaoMes)}
-                        </p>
-                        <p className="text-xs text-muted-foreground">
-                          Este mês
-                        </p>
-                      </div>
-                    </TableCell>
                     <TableCell className="text-center">
-                      <Badge variant={getStatusVariant(func.status)}>
-                        {func.status === "ativo" ? "Ativo" : "Inativo"}
+                      <Badge variant={user.active ? "default" : "secondary"}>
+                        {user.active ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button variant="ghost" size="sm">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleViewDetails(user.id)}
+                      >
                         <Eye className="h-4 w-4" />
                       </Button>
                     </TableCell>
                   </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+                ))}
+              </TableBody>
+            </Table>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Paginação */}
+      {!loading && pagination && pagination.totalPages > 1 && (
+        <Pagination
+          currentPage={page}
+          totalPages={pagination.totalPages}
+          onPageChange={setPage}
+          showInfo
+        />
+      )}
+
+      {/* Modal de Detalhes */}
+      <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Detalhes do Funcionário</DialogTitle>
+            <DialogDescription>
+              Informações completas do funcionário
+            </DialogDescription>
+          </DialogHeader>
+
+          {loadingDetails ? (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          ) : selectedUser ? (
+            isEditing ? (
+              // Modo de Edição
+              <div className="space-y-4">
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="name">Nome *</Label>
+                    <Input
+                      id="name"
+                      value={editForm.name || ""}
+                      onChange={(e) => setEditForm({ ...editForm, name: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="email">Email *</Label>
+                    <Input
+                      id="email"
+                      type="email"
+                      value={editForm.email || ""}
+                      onChange={(e) => setEditForm({ ...editForm, email: e.target.value })}
+                    />
+                  </div>
+                </div>
+
+                <div className="grid gap-4 md:grid-cols-2">
+                  <div className="space-y-2">
+                    <Label htmlFor="password">Nova Senha (opcional)</Label>
+                    <Input
+                      id="password"
+                      type="password"
+                      placeholder="Deixe em branco para manter atual"
+                      value={editForm.password || ""}
+                      onChange={(e) => setEditForm({ ...editForm, password: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="role">Cargo *</Label>
+                    <Select
+                      value={editForm.role}
+                      onValueChange={(value) => setEditForm({ ...editForm, role: value as any })}
+                    >
+                      <SelectTrigger>
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="ADMIN">Administrador</SelectItem>
+                        <SelectItem value="GERENTE">Gerente</SelectItem>
+                        <SelectItem value="VENDEDOR">Vendedor</SelectItem>
+                        <SelectItem value="CAIXA">Caixa</SelectItem>
+                        <SelectItem value="ATENDENTE">Atendente</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="commission">Comissão Padrão (%)</Label>
+                  <Input
+                    id="commission"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="0.01"
+                    value={editForm.defaultCommissionPercent || ""}
+                    onChange={(e) => setEditForm({ ...editForm, defaultCommissionPercent: e.target.value ? parseFloat(e.target.value) : null })}
+                  />
+                </div>
+              </div>
+            ) : (
+              // Modo de Visualização
+              <div className="space-y-6">
+                <div className="space-y-4">
+                  <div className="flex items-center gap-4">
+                    <Avatar className="h-16 w-16">
+                      <AvatarFallback className="bg-purple-100 text-purple-600 text-xl">
+                        {getInitials(selectedUser.name)}
+                      </AvatarFallback>
+                    </Avatar>
+                    <div className="flex-1">
+                      <h3 className="text-lg font-semibold">{selectedUser.name}</h3>
+                      <p className="text-sm text-muted-foreground">{selectedUser.email}</p>
+                      <Badge variant={selectedUser.active ? "default" : "secondary"} className="mt-2">
+                        {selectedUser.active ? "Ativo" : "Inativo"}
+                      </Badge>
+                    </div>
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2">
+                    <div>
+                      <p className="text-sm font-medium text-muted-foreground">Cargo</p>
+                      <Badge variant={getRoleBadgeVariant(selectedUser.role)} className="mt-1">
+                        <Shield className="h-3 w-3 mr-1" />
+                        {getRoleLabel(selectedUser.role)}
+                      </Badge>
+                    </div>
+                    {selectedUser.defaultCommissionPercent && (
+                      <div>
+                        <p className="text-sm font-medium text-muted-foreground">Comissão Padrão</p>
+                        <p className="text-sm mt-1">{selectedUser.defaultCommissionPercent}%</p>
+                      </div>
+                    )}
+                  </div>
+
+                  <div className="grid gap-4 md:grid-cols-2 text-xs text-muted-foreground">
+                    <div>
+                      <p className="font-medium">Cadastrado em</p>
+                      <p>{formatDate(selectedUser.createdAt)}</p>
+                    </div>
+                    <div>
+                      <p className="font-medium">Última atualização</p>
+                      <p>{formatDate(selectedUser.updatedAt)}</p>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )
+          ) : null}
+
+          <DialogFooter className="gap-2">
+            {isEditing ? (
+              <>
+                <Button variant="outline" onClick={handleCancelEdit}>
+                  Cancelar
+                </Button>
+                <Button onClick={handleSaveEdit}>
+                  Salvar Alterações
+                </Button>
+              </>
+            ) : (
+              <>
+                <Button
+                  variant="outline"
+                  onClick={() => setDetailsDialogOpen(false)}
+                >
+                  Fechar
+                </Button>
+                {selectedUser && (
+                  <>
+                    {!selectedUser.active && (
+                      <Button
+                        variant="destructive"
+                        onClick={() => handlePermanentDelete(selectedUser.id)}
+                      >
+                        <AlertTriangle className="h-4 w-4 mr-2" />
+                        Excluir Permanentemente
+                      </Button>
+                    )}
+                    <Button
+                      variant={selectedUser.active ? "destructive" : "default"}
+                      onClick={() => handleToggleStatus(selectedUser.id, selectedUser.active)}
+                    >
+                      {selectedUser.active ? (
+                        <>
+                          <Trash2 className="h-4 w-4 mr-2" />
+                          Desativar
+                        </>
+                      ) : (
+                        "Ativar"
+                      )}
+                    </Button>
+                    <Button onClick={handleStartEdit}>
+                      <Edit className="h-4 w-4 mr-2" />
+                      Editar
+                    </Button>
+                  </>
+                )}
+              </>
+            )}
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal de Criar Funcionário */}
+      <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Novo Funcionário</DialogTitle>
+            <DialogDescription>
+              Cadastre um novo funcionário no sistema
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="create-name">Nome *</Label>
+                <Input
+                  id="create-name"
+                  value={createForm.name || ""}
+                  onChange={(e) => setCreateForm({ ...createForm, name: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-email">Email *</Label>
+                <Input
+                  id="create-email"
+                  type="email"
+                  value={createForm.email || ""}
+                  onChange={(e) => setCreateForm({ ...createForm, email: e.target.value })}
+                />
+              </div>
+            </div>
+
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="create-password">Senha *</Label>
+                <Input
+                  id="create-password"
+                  type="password"
+                  value={createForm.password || ""}
+                  onChange={(e) => setCreateForm({ ...createForm, password: e.target.value })}
+                />
+              </div>
+              <div className="space-y-2">
+                <Label htmlFor="create-role">Cargo *</Label>
+                <Select
+                  value={createForm.role}
+                  onValueChange={(value) => setCreateForm({ ...createForm, role: value as any })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o cargo" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="ADMIN">Administrador</SelectItem>
+                    <SelectItem value="GERENTE">Gerente</SelectItem>
+                    <SelectItem value="VENDEDOR">Vendedor</SelectItem>
+                    <SelectItem value="CAIXA">Caixa</SelectItem>
+                    <SelectItem value="ATENDENTE">Atendente</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="create-commission">Comissão Padrão (%)</Label>
+              <Input
+                id="create-commission"
+                type="number"
+                min="0"
+                max="100"
+                step="0.01"
+                placeholder="0.00"
+                value={createForm.defaultCommissionPercent || ""}
+                onChange={(e) => setCreateForm({ ...createForm, defaultCommissionPercent: e.target.value ? parseFloat(e.target.value) : null })}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            <Button variant="outline" onClick={() => setCreateDialogOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleCreateUser}>
+              Criar Funcionário
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
