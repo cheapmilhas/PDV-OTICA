@@ -251,7 +251,8 @@ export default function FuncionariosPage() {
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
         console.error("Erro da API:", errorData);
-        throw new Error(errorData.message || "Erro ao criar usuário");
+        const errorMessage = errorData?.error?.message || errorData?.message || "Erro ao criar usuário";
+        throw new Error(errorMessage);
       }
 
       const result = await res.json();
@@ -746,7 +747,7 @@ export default function FuncionariosPage() {
           <DialogHeader>
             <DialogTitle>Novo Funcionário</DialogTitle>
             <DialogDescription>
-              Cadastre um novo funcionário no sistema
+              Cadastre um novo funcionário no sistema. O email será usado como login e você deve definir uma senha de acesso.
             </DialogDescription>
           </DialogHeader>
 
