@@ -47,12 +47,18 @@ export async function POST(request: Request) {
     const companyId = await getCompanyId();
 
     const body = await request.json();
+    console.log("[API] Body recebido:", body);
+    console.log("[API] CompanyId:", companyId);
+
     const data = createUserSchema.parse(body) as CreateUserDTO;
+    console.log("[API] Dados validados:", data);
 
     const user = await userService.create(data, companyId);
+    console.log("[API] Usuário criado:", user);
 
     return successResponse(user, 201);
   } catch (error) {
+    console.error("[API] Erro ao criar usuário:", error);
     return handleApiError(error);
   }
 }

@@ -223,22 +223,46 @@ export default function FuncionariosPage() {
     }
 
     try {
+      // Limpar dados antes de enviar
+      const cleanData: any = {
+        name: createForm.name,
+        email: createForm.email,
+        password: createForm.password,
+        role: createForm.role,
+        active: createForm.active ?? true,
+      };
+
+      // Adicionar comissão apenas se tiver valor
+      if (createForm.defaultCommissionPercent !== null &&
+          createForm.defaultCommissionPercent !== undefined &&
+          createForm.defaultCommissionPercent !== "") {
+        cleanData.defaultCommissionPercent = createForm.defaultCommissionPercent;
+      }
+
+      console.log("Enviando dados:", cleanData);
       const res = await fetch(`/api/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(createForm),
+        body: JSON.stringify(cleanData),
       });
+
+      console.log("Resposta status:", res.status);
 
       if (!res.ok) {
         const errorData = await res.json().catch(() => ({}));
+        console.error("Erro da API:", errorData);
         throw new Error(errorData.message || "Erro ao criar usuário");
       }
+
+      const result = await res.json();
+      console.log("Usuário criado:", result);
 
       toast.success("Usuário criado com sucesso!");
       setCreateDialogOpen(false);
       setCreateForm({ password: "", active: true });
       fetchUsers();
     } catch (error: any) {
+      console.error("Erro ao criar usuário:", error);
       toast.error(error.message || "Erro ao criar usuário");
     }
   }
