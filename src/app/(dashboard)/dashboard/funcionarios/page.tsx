@@ -89,7 +89,12 @@ export default function FuncionariosPage() {
 
       const data = await res.json();
       console.log("API Response:", data);
-      setUsers(Array.isArray(data.data) ? data.data : []);
+      console.log("data.data type:", typeof data.data, "isArray:", Array.isArray(data.data));
+      console.log("data.data value:", data.data);
+
+      const usersArray = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
+      console.log("Setting users:", usersArray);
+      setUsers(usersArray);
       setPagination(data.pagination);
     } catch (error: any) {
       console.error("Erro ao carregar usuários:", error);

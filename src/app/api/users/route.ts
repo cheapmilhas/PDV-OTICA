@@ -31,7 +31,7 @@ export async function GET(request: Request) {
 
     const result = await userService.list(query, companyId);
 
-    return successResponse(result);
+    return NextResponse.json(result);
   } catch (error) {
     return handleApiError(error);
   }
