@@ -140,10 +140,8 @@ export class ServiceOrderService {
           customerId,
           branchId,
           status: "DRAFT",
-          total,
-          expectedDate: expectedDate ? new Date(expectedDate) : undefined,
-          prescription,
-          notes,
+          promisedDate: expectedDate ? new Date(expectedDate) : undefined,
+          createdByUserId: "temp", // TODO: Pegar do usuário logado
         },
       });
 
@@ -151,10 +149,11 @@ export class ServiceOrderService {
         await tx.serviceOrderItem.create({
           data: {
             serviceOrderId: newOrder.id,
-            type: item.type,
             description: item.description,
-            price: item.price,
-            observations: item.observations,
+            qty: 1,
+            unitPrice: item.price || 0,
+            discount: 0,
+            lineTotal: item.price || 0,
           },
         });
       }
@@ -202,10 +201,11 @@ export class ServiceOrderService {
           await tx.serviceOrderItem.create({
             data: {
               serviceOrderId: id,
-              type: item.type,
               description: item.description,
-              price: item.price,
-              observations: item.observations,
+              qty: 1,
+              unitPrice: item.price || 0,
+              discount: 0,
+              lineTotal: item.price || 0,
             },
           });
         }
@@ -327,7 +327,7 @@ export class ServiceOrderService {
         },
         items: true,
       },
-      orderBy: { expectedDate: "asc" },
+      orderBy: { promisedDate: "asc" },
     });
   }
 
