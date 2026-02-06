@@ -12,6 +12,7 @@ const loginSchema = z.object({
 
 export const { handlers, signIn, signOut, auth } = NextAuth({
   // adapter: PrismaAdapter(prisma), // Comentado temporariamente devido a conflito de tipos no NextAuth v5 beta
+  trustHost: true, // Necessário para produção (Vercel)
   session: {
     strategy: "jwt",
   },
