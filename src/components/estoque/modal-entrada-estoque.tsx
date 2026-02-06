@@ -38,7 +38,15 @@ export function ModalEntradaEstoque({ open, onOpenChange, produto, onSuccess }: 
   const [modalProdutoOpen, setModalProdutoOpen] = useState(false);
   const [modalFornecedorOpen, setModalFornecedorOpen] = useState(false);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    productId: string;
+    quantity: string;
+    supplierId: string;
+    invoiceNumber: string;
+    type: StockMovementType;
+    reason: string;
+    notes: string;
+  }>({
     productId: produto?.id || "",
     quantity: "",
     supplierId: "",

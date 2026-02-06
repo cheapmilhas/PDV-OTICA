@@ -75,28 +75,31 @@ export function HistoricoMovimentacoes() {
 
   // Categorizar movimentações
   const isEntrada = (type: StockMovementType) => {
-    return [
+    const entradas: StockMovementType[] = [
       StockMovementType.PURCHASE,
       StockMovementType.CUSTOMER_RETURN,
       StockMovementType.ADJUSTMENT,
-    ].includes(type);
+    ];
+    return entradas.includes(type);
   };
 
   const isSaida = (type: StockMovementType) => {
-    return [
+    const saidas: StockMovementType[] = [
       StockMovementType.SALE,
       StockMovementType.LOSS,
       StockMovementType.SUPPLIER_RETURN,
       StockMovementType.INTERNAL_USE,
       StockMovementType.OTHER,
-    ].includes(type);
+    ];
+    return saidas.includes(type);
   };
 
   const isTransferencia = (type: StockMovementType) => {
-    return [
+    const transferencias: StockMovementType[] = [
       StockMovementType.TRANSFER_IN,
       StockMovementType.TRANSFER_OUT,
-    ].includes(type);
+    ];
+    return transferencias.includes(type);
   };
 
   async function fetchMovements() {

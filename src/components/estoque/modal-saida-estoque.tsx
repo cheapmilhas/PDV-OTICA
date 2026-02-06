@@ -31,7 +31,14 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
   const [openProductCombo, setOpenProductCombo] = useState(false);
   const [selectedProduct, setSelectedProduct] = useState<any>(produto || null);
 
-  const [formData, setFormData] = useState({
+  const [formData, setFormData] = useState<{
+    productId: string;
+    quantity: string;
+    type: StockMovementType;
+    targetBranchId: string;
+    reason: string;
+    notes: string;
+  }>({
     productId: produto?.id || "",
     quantity: "",
     type: StockMovementType.SALE,
@@ -44,7 +51,7 @@ export function ModalSaidaEstoque({ open, onOpenChange, produto, onSuccess }: Mo
   const quantidadeSaida = Number(formData.quantity) || 0;
   const estoqueAposMovimentacao = estoqueAtual - quantidadeSaida;
   const estoqueInsuficiente = quantidadeSaida > estoqueAtual;
-  const isTransferencia = formData.type === "TRANSFER_OUT";
+  const isTransferencia = formData.type === StockMovementType.TRANSFER_OUT;
 
   // Buscar produtos quando o modal abrir e não houver produto pré-selecionado
   useEffect(() => {

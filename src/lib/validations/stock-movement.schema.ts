@@ -6,17 +6,15 @@ import { StockMovementType } from "@prisma/client";
  */
 export const createStockMovementSchema = z.object({
   productId: z.string({
-    required_error: "Produto é obrigatório",
+    message: "Produto é obrigatório",
   }).min(1, "Produto é obrigatório"),
 
   type: z.nativeEnum(StockMovementType, {
-    required_error: "Tipo de movimentação é obrigatório",
-    invalid_type_error: "Tipo de movimentação inválido",
+    message: "Tipo de movimentação é obrigatório",
   }),
 
   quantity: z.coerce.number({
-    required_error: "Quantidade é obrigatória",
-    invalid_type_error: "Quantidade deve ser um número",
+    message: "Quantidade deve ser um número",
   })
     .int("Quantidade deve ser um número inteiro")
     .positive("Quantidade deve ser maior que zero"),
@@ -46,22 +44,21 @@ export const createStockMovementSchema = z.object({
  */
 export const createTransferSchema = z.object({
   productId: z.string({
-    required_error: "Produto é obrigatório",
+    message: "Produto é obrigatório",
   }).min(1, "Produto é obrigatório"),
 
   quantity: z.coerce.number({
-    required_error: "Quantidade é obrigatória",
-    invalid_type_error: "Quantidade deve ser um número",
+    message: "Quantidade deve ser um número",
   })
     .int("Quantidade deve ser um número inteiro")
     .positive("Quantidade deve ser maior que zero"),
 
   sourceBranchId: z.string({
-    required_error: "Filial de origem é obrigatória",
+    message: "Filial de origem é obrigatória",
   }).min(1, "Filial de origem é obrigatória"),
 
   targetBranchId: z.string({
-    required_error: "Filial de destino é obrigatória",
+    message: "Filial de destino é obrigatória",
   }).min(1, "Filial de destino é obrigatória"),
 
   reason: z.string()
@@ -157,24 +154,26 @@ export function sanitizeStockMovementDTO(
  * Helper para determinar se movimento aumenta ou diminui estoque
  */
 export function isStockIncrease(type: StockMovementType): boolean {
-  return [
+  const increases: StockMovementType[] = [
     StockMovementType.PURCHASE,
     StockMovementType.CUSTOMER_RETURN,
     StockMovementType.TRANSFER_IN,
-  ].includes(type);
+  ];
+  return increases.includes(type);
 }
 
 /**
  * Helper para determinar se movimento diminui estoque
  */
 export function isStockDecrease(type: StockMovementType): boolean {
-  return [
+  const decreases: StockMovementType[] = [
     StockMovementType.SALE,
     StockMovementType.LOSS,
     StockMovementType.SUPPLIER_RETURN,
     StockMovementType.INTERNAL_USE,
     StockMovementType.TRANSFER_OUT,
-  ].includes(type);
+  ];
+  return decreases.includes(type);
 }
 
 /**

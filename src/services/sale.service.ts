@@ -254,7 +254,6 @@ export class SaleService {
           subtotal,
           discountTotal: discount,
           total,
-          notes,
           status: "COMPLETED",
         },
       });
@@ -292,7 +291,7 @@ export class SaleService {
             method: payment.method,
             amount: payment.amount,
             installments: payment.installments || 1,
-            status: "COMPLETED",
+            status: "RECEIVED",
           },
         });
       }
@@ -330,26 +329,27 @@ export class SaleService {
         where: { id },
         data: {
           status: "CANCELED",
-          notes: reason ? `CANCELADA: ${reason}` : "CANCELADA",
         },
       });
 
       // 2. Estornar estoque de cada item
       for (const item of sale.items) {
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stockQty: {
-              increment: item.qty,
+        if (item.productId) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stockQty: {
+                increment: item.qty,
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       // 3. Marcar pagamentos como cancelados
       await tx.salePayment.updateMany({
         where: { saleId: id },
-        data: { status: "CANCELLED" },
+        data: { status: "VOIDED" },
       });
     });
 
@@ -429,7 +429,7 @@ export class SaleService {
         where,
         _sum: {
           total: true,
-          discount: true,
+          discountTotal: true,
         },
         _count: true,
       }),
@@ -440,7 +440,7 @@ export class SaleService {
       summary: {
         count: summary._count,
         totalSales: Number(summary._sum.total || 0),
-        totalDiscount: Number(summary._sum.discount || 0),
+        totalDiscount: Number(summary._sum.discountTotal || 0),
       },
     };
   }

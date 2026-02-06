@@ -73,9 +73,7 @@ export class ServiceOrderService {
           items: {
             select: {
               id: true,
-              type: true,
               description: true,
-              price: true,
             },
           },
           _count: {

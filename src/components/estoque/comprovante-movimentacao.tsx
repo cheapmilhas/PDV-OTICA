@@ -55,23 +55,25 @@ export function ComprovanteMovimentacao({ movement, companyName = "PDV Ótica" }
   };
 
   const isEntrada = (type: StockMovementType) => {
-    return [
+    const entradas: StockMovementType[] = [
       StockMovementType.PURCHASE,
       StockMovementType.CUSTOMER_RETURN,
       StockMovementType.ADJUSTMENT,
       StockMovementType.TRANSFER_IN,
-    ].includes(type);
+    ];
+    return entradas.includes(type);
   };
 
   const isSaida = (type: StockMovementType) => {
-    return [
+    const saidas: StockMovementType[] = [
       StockMovementType.SALE,
       StockMovementType.LOSS,
       StockMovementType.SUPPLIER_RETURN,
       StockMovementType.INTERNAL_USE,
       StockMovementType.TRANSFER_OUT,
       StockMovementType.OTHER,
-    ].includes(type);
+    ];
+    return saidas.includes(type);
   };
 
   return (

@@ -240,7 +240,7 @@ export default function FuncionariosPage() {
       // Adicionar comissão apenas se tiver valor
       if (createForm.defaultCommissionPercent !== null &&
           createForm.defaultCommissionPercent !== undefined &&
-          createForm.defaultCommissionPercent !== "") {
+          createForm.defaultCommissionPercent !== 0) {
         cleanData.defaultCommissionPercent = createForm.defaultCommissionPercent;
       }
 
