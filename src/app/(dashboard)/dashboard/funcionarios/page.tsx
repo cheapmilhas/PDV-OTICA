@@ -88,7 +88,8 @@ export default function FuncionariosPage() {
       if (!res.ok) throw new Error("Erro ao buscar usuários");
 
       const data = await res.json();
-      setUsers(data.data || []);
+      console.log("API Response:", data);
+      setUsers(Array.isArray(data.data) ? data.data : []);
       setPagination(data.pagination);
     } catch (error: any) {
       console.error("Erro ao carregar usuários:", error);
@@ -286,7 +287,7 @@ export default function FuncionariosPage() {
   };
 
   const totalUsers = pagination?.total || 0;
-  const activeUsers = users.filter(u => u.active).length;
+  const activeUsers = Array.isArray(users) ? users.filter(u => u.active).length : 0;
 
   return (
     <div className="space-y-6">
@@ -344,10 +345,10 @@ export default function FuncionariosPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {users.filter(u => {
+              {Array.isArray(users) ? users.filter(u => {
                 const days = (Date.now() - new Date(u.createdAt).getTime()) / (1000 * 60 * 60 * 24);
                 return days <= 30;
-              }).length}
+              }).length : 0}
             </p>
             <p className="text-xs text-muted-foreground">
               Últimos 30 dias
@@ -378,15 +379,15 @@ export default function FuncionariosPage() {
                 className="pl-9"
               />
             </div>
-            <Select value={roleFilter} onValueChange={(value: any) => {
-              setRoleFilter(value);
+            <Select value={roleFilter || "todos"} onValueChange={(value: any) => {
+              setRoleFilter(value === "todos" ? "" : value);
               setPage(1);
             }}>
               <SelectTrigger className="w-full md:w-[180px]">
                 <SelectValue placeholder="Todos os cargos" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os cargos</SelectItem>
+                <SelectItem value="todos">Todos os cargos</SelectItem>
                 <SelectItem value="ADMIN">Administrador</SelectItem>
                 <SelectItem value="GERENTE">Gerente</SelectItem>
                 <SelectItem value="VENDEDOR">Vendedor</SelectItem>
@@ -419,7 +420,7 @@ export default function FuncionariosPage() {
       )}
 
       {/* Empty State */}
-      {!loading && users.length === 0 && (
+      {!loading && Array.isArray(users) && users.length === 0 && (
         <EmptyState
           icon={<User className="h-12 w-12" />}
           title="Nenhum funcionário encontrado"
@@ -440,7 +441,7 @@ export default function FuncionariosPage() {
       )}
 
       {/* Funcionários Table */}
-      {!loading && users.length > 0 && (
+      {!loading && Array.isArray(users) && users.length > 0 && (
         <Card>
           <CardHeader>
             <CardTitle>Lista de Funcionários</CardTitle>
