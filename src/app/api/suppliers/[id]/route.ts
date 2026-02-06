@@ -22,7 +22,8 @@ export async function GET(
     const companyId = await getCompanyId();
     const { id } = await params;
 
-    const supplier = await supplierService.getById(id, companyId);
+    // Incluir fornecedores inativos também
+    const supplier = await supplierService.getById(id, companyId, true);
 
     return successResponse(supplier);
   } catch (error) {
