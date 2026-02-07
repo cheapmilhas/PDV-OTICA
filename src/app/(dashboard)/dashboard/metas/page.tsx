@@ -1,59 +1,78 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Progress } from "@/components/ui/progress";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Target, TrendingUp, Trophy, Award, DollarSign } from "lucide-react";
+import { Target, TrendingUp, Trophy, Award, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
-export default function MetasPage() {
-  // Mock data - metas e desempenho
-  const metaGeral = {
-    mes: "Fevereiro 2024",
-    valorMeta: 150000.00,
-    valorAtual: 125340.50,
-    percentual: 83.6,
-  };
+interface MetaGeral {
+  mes: string;
+  valorMeta: number;
+  valorAtual: number;
+  percentual: number;
+}
 
-  const metasVendedores = [
-    {
-      id: "1",
-      nome: "Ana Paula Gerente",
-      meta: 25000.00,
-      vendas: 28900.00,
-      percentual: 115.6,
-      comissao: 2312.00,
-      posicao: 1,
-    },
-    {
-      id: "2",
-      nome: "Carlos Vendedor Silva",
-      meta: 15000.00,
-      vendas: 18450.00,
-      percentual: 123.0,
-      comissao: 922.50,
-      posicao: 2,
-    },
-    {
-      id: "3",
-      nome: "Maria Atendente Costa",
-      meta: 12000.00,
-      vendas: 14220.00,
-      percentual: 118.5,
-      comissao: 568.80,
-      posicao: 3,
-    },
-    {
-      id: "4",
-      nome: "João Caixa Santos",
-      meta: 10000.00,
-      vendas: 11800.00,
-      percentual: 118.0,
-      comissao: 354.00,
-      posicao: 4,
-    },
-  ];
+interface Resumo {
+  totalComissoes: number;
+  vendedoresNaMeta: number;
+  totalVendedores: number;
+}
+
+interface Vendedor {
+  id: string;
+  nome: string;
+  meta: number;
+  vendas: number;
+  percentual: number;
+  comissao: number;
+  posicao: number;
+}
+
+export default function MetasPage() {
+  const [loading, setLoading] = useState(true);
+  const [metaGeral, setMetaGeral] = useState<MetaGeral>({
+    mes: "",
+    valorMeta: 0,
+    valorAtual: 0,
+    percentual: 0,
+  });
+  const [resumo, setResumo] = useState<Resumo>({
+    totalComissoes: 0,
+    vendedoresNaMeta: 0,
+    totalVendedores: 0,
+  });
+  const [metasVendedores, setMetasVendedores] = useState<Vendedor[]>([]);
+
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [summaryRes, rankingRes] = await Promise.all([
+          fetch('/api/goals/monthly-summary'),
+          fetch('/api/goals/sellers-ranking'),
+        ]);
+
+        if (summaryRes.ok) {
+          const summaryData = await summaryRes.json();
+          setMetaGeral(summaryData.metaGeral);
+          setResumo(summaryData.resumo);
+        }
+
+        if (rankingRes.ok) {
+          const rankingData = await rankingRes.json();
+          setMetasVendedores(rankingData.data);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados de metas:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   const getInitials = (nome: string) => {
     const parts = nome.split(" ");
@@ -73,8 +92,13 @@ export default function MetasPage() {
     }
   };
 
-  const totalComissoes = metasVendedores.reduce((acc, v) => acc + v.comissao, 0);
-  const vendedoresAcimaMeta = metasVendedores.filter(v => v.percentual >= 100).length;
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center h-[600px]">
+        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6">
@@ -127,13 +151,13 @@ export default function MetasPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Vendedores na Meta</p>
                 <p className="text-xl font-bold text-green-600">
-                  {vendedoresAcimaMeta}/{metasVendedores.length}
+                  {resumo.vendedoresNaMeta}/{resumo.totalVendedores}
                 </p>
               </div>
               <div>
                 <p className="text-sm text-muted-foreground">Total Comissões</p>
                 <p className="text-xl font-bold text-blue-600">
-                  {formatCurrency(totalComissoes)}
+                  {formatCurrency(resumo.totalComissoes)}
                 </p>
               </div>
             </div>

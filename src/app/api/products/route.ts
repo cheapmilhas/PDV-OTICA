@@ -43,8 +43,17 @@ export async function GET(request: Request) {
     // Busca produtos via service
     const result = await productService.list(query, companyId);
 
+    // Serializa Decimals para number
+    const serializedData = result.data.map((product) => ({
+      ...product,
+      costPrice: Number(product.costPrice),
+      salePrice: Number(product.salePrice),
+      promoPrice: product.promoPrice ? Number(product.promoPrice) : null,
+      marginPercent: product.marginPercent ? Number(product.marginPercent) : null,
+    }));
+
     // Retorna resposta paginada
-    return paginatedResponse(result.data, result.pagination);
+    return paginatedResponse(serializedData, result.pagination);
   } catch (error) {
     return handleApiError(error);
   }
@@ -64,10 +73,7 @@ export async function POST(request: Request) {
 
     // Parse e valida body
     const body = await request.json();
-    console.log("📦 [API] Body recebido:", JSON.stringify(body, null, 2));
-
     const data = createProductSchema.parse(body);
-    console.log("✅ [API] Validação passou!");
 
     // Sanitiza dados (remove strings vazias)
     const sanitizedData = sanitizeProductDTO(data) as CreateProductDTO;
@@ -75,13 +81,18 @@ export async function POST(request: Request) {
     // Cria produto via service
     const product = await productService.create(sanitizedData, companyId);
 
+    // Serializa Decimals para number
+    const serializedProduct = {
+      ...product,
+      costPrice: Number(product.costPrice),
+      salePrice: Number(product.salePrice),
+      promoPrice: product.promoPrice ? Number(product.promoPrice) : null,
+      marginPercent: product.marginPercent ? Number(product.marginPercent) : null,
+    };
+
     // Retorna 201 Created
-    return createdResponse(product);
+    return createdResponse(serializedProduct);
   } catch (error) {
-    console.error("❌ [API] Erro ao criar produto:", error);
-    if (error instanceof Error && 'issues' in error) {
-      console.error("🔍 [API] Detalhes da validação Zod:", JSON.stringify((error as any).issues, null, 2));
-    }
     return handleApiError(error);
   }
 }

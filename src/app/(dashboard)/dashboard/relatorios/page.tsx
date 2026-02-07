@@ -1,5 +1,6 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
@@ -23,55 +24,70 @@ import { formatCurrency } from "@/lib/utils";
 import {
   Download,
   TrendingUp,
-  TrendingDown,
+  Loader2,
   DollarSign,
   ShoppingBag,
   Users,
-  Package,
 } from "lucide-react";
+import toast from "react-hot-toast";
 
 export default function RelatoriosPage() {
-  // Dados de vendas por mês
-  const vendasMensais = [
-    { mes: "Jan", vendas: 85420, lucro: 42710 },
-    { mes: "Fev", vendas: 92350, lucro: 46175 },
-    { mes: "Mar", vendas: 78900, lucro: 39450 },
-    { mes: "Abr", vendas: 95600, lucro: 47800 },
-    { mes: "Mai", vendas: 102340, lucro: 51170 },
-    { mes: "Jun", vendas: 125340, lucro: 62670 },
-  ];
+  const [loading, setLoading] = useState(true);
+  const [resumoMensal, setResumoMensal] = useState({
+    vendas: 0,
+    lucro: 0,
+    crescimento: 0,
+    ticketMedio: 0,
+    totalVendas: 0,
+    novosClientes: 0,
+  });
+  const [vendasMensais, setVendasMensais] = useState<any[]>([]);
+  const [vendasCategoria, setVendasCategoria] = useState<any[]>([]);
+  const [pagamentos, setPagamentos] = useState<any[]>([]);
+  const [topProdutos, setTopProdutos] = useState<any[]>([]);
+  const [topVendedores, setTopVendedores] = useState<any[]>([]);
 
-  // Vendas por categoria
-  const vendasCategoria = [
-    { name: "Armações", value: 45, color: "#8884d8" },
-    { name: "Lentes", value: 30, color: "#82ca9d" },
-    { name: "Óculos de Sol", value: 20, color: "#ffc658" },
-    { name: "Acessórios", value: 5, color: "#ff8042" },
-  ];
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        setLoading(true);
 
-  // Top vendedores
-  const topVendedores = [
-    { nome: "Carlos Vendedor", vendas: 45, valor: 52340 },
-    { nome: "Maria Atendente", vendas: 38, valor: 45220 },
-    { nome: "João Caixa", vendas: 32, valor: 38900 },
-  ];
+        // Buscar todos os dados em paralelo
+        const [summaryRes, evolutionRes, categoryRes, paymentsRes, productsRes, teamRes] = await Promise.all([
+          fetch('/api/reports/summary'),
+          fetch('/api/reports/sales-evolution?months=6'),
+          fetch('/api/reports/category-distribution'),
+          fetch('/api/reports/payment-methods'),
+          fetch('/api/reports/top-products?limit=3'),
+          fetch('/api/reports/team-performance'),
+        ]);
 
-  // Métodos de pagamento
-  const pagamentos = [
-    { metodo: "Crédito", quantidade: 45, valor: 67500 },
-    { metodo: "Débito", quantidade: 25, valor: 28750 },
-    { metodo: "PIX", quantidade: 30, valor: 35400 },
-    { metodo: "Dinheiro", quantidade: 20, valor: 15600 },
-  ];
+        const [summary, evolution, category, payments, products, team] = await Promise.all([
+          summaryRes.json(),
+          evolutionRes.json(),
+          categoryRes.json(),
+          paymentsRes.json(),
+          productsRes.json(),
+          teamRes.json(),
+        ]);
 
-  const resumoMensal = {
-    vendas: 125340.50,
-    lucro: 62670.25,
-    crescimento: 12.5,
-    ticketMedio: 545.50,
-    totalVendas: 230,
-    novosClientes: 45,
-  };
+        setResumoMensal(summary.summary || resumoMensal);
+        setVendasMensais(evolution.data || []);
+        setVendasCategoria(category.data || []);
+        setPagamentos(payments.data || []);
+        setTopProdutos(products.data || []);
+        setTopVendedores(team.data || []);
+
+        setLoading(false);
+      } catch (error) {
+        console.error('Erro ao carregar relatórios:', error);
+        toast.error('Erro ao carregar relatórios');
+        setLoading(false);
+      }
+    };
+
+    loadData();
+  }, []);
 
   return (
     <div className="space-y-6">
@@ -166,17 +182,27 @@ export default function RelatoriosPage() {
                 <CardDescription>Últimos 6 meses</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <LineChart data={vendasMensais}>
-                    <CartesianGrid strokeDasharray="3 3" />
-                    <XAxis dataKey="mes" />
-                    <YAxis />
-                    <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                    <Legend />
-                    <Line type="monotone" dataKey="vendas" stroke="#8884d8" strokeWidth={2} name="Vendas" />
-                    <Line type="monotone" dataKey="lucro" stroke="#82ca9d" strokeWidth={2} name="Lucro" />
-                  </LineChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : vendasMensais.length === 0 ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <p className="text-muted-foreground">Nenhum dado disponível</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <LineChart data={vendasMensais}>
+                      <CartesianGrid strokeDasharray="3 3" />
+                      <XAxis dataKey="mes" />
+                      <YAxis />
+                      <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                      <Legend />
+                      <Line type="monotone" dataKey="vendas" stroke="#8884d8" strokeWidth={2} name="Vendas" />
+                      <Line type="monotone" dataKey="lucro" stroke="#82ca9d" strokeWidth={2} name="Lucro" />
+                    </LineChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
 
@@ -186,25 +212,35 @@ export default function RelatoriosPage() {
                 <CardDescription>Distribuição de produtos vendidos</CardDescription>
               </CardHeader>
               <CardContent>
-                <ResponsiveContainer width="100%" height={300}>
-                  <PieChart>
-                    <Pie
-                      data={vendasCategoria}
-                      cx="50%"
-                      cy="50%"
-                      labelLine={false}
-                      label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                      outerRadius={80}
-                      fill="#8884d8"
-                      dataKey="value"
-                    >
-                      {vendasCategoria.map((entry, index) => (
-                        <Cell key={`cell-${index}`} fill={entry.color} />
-                      ))}
-                    </Pie>
-                    <Tooltip />
-                  </PieChart>
-                </ResponsiveContainer>
+                {loading ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                  </div>
+                ) : vendasCategoria.length === 0 ? (
+                  <div className="flex items-center justify-center h-[300px]">
+                    <p className="text-muted-foreground">Nenhum dado disponível</p>
+                  </div>
+                ) : (
+                  <ResponsiveContainer width="100%" height={300}>
+                    <PieChart>
+                      <Pie
+                        data={vendasCategoria}
+                        cx="50%"
+                        cy="50%"
+                        labelLine={false}
+                        label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                        outerRadius={80}
+                        fill="#8884d8"
+                        dataKey="value"
+                      >
+                        {vendasCategoria.map((entry, index) => (
+                          <Cell key={`cell-${index}`} fill={entry.color} />
+                        ))}
+                      </Pie>
+                      <Tooltip />
+                    </PieChart>
+                  </ResponsiveContainer>
+                )}
               </CardContent>
             </Card>
           </div>
@@ -218,40 +254,30 @@ export default function RelatoriosPage() {
               <CardDescription>Análise de vendas por produto</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-4">
-                <div className="grid gap-2">
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
-                      <p className="font-medium">Ray-Ban Aviador Clássico</p>
-                      <p className="text-sm text-muted-foreground">45 unidades vendidas</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold">{formatCurrency(40495.50)}</p>
-                      <Badge variant="default">Top #1</Badge>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
-                      <p className="font-medium">Lente Transitions Gen 8</p>
-                      <p className="text-sm text-muted-foreground">38 unidades vendidas</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold">{formatCurrency(22040.00)}</p>
-                      <Badge variant="secondary">Top #2</Badge>
-                    </div>
-                  </div>
-                  <div className="flex items-center justify-between rounded-lg border p-4">
-                    <div>
-                      <p className="font-medium">Oakley Holbrook</p>
-                      <p className="text-sm text-muted-foreground">32 unidades vendidas</p>
-                    </div>
-                    <div className="text-right">
-                      <p className="font-bold">{formatCurrency(39996.80)}</p>
-                      <Badge variant="secondary">Top #3</Badge>
-                    </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : topProdutos.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Nenhum produto vendido este mês</p>
+              ) : (
+                <div className="space-y-4">
+                  <div className="grid gap-2">
+                    {topProdutos.map((produto, index) => (
+                      <div key={index} className="flex items-center justify-between rounded-lg border p-4">
+                        <div>
+                          <p className="font-medium">{produto.name}</p>
+                          <p className="text-sm text-muted-foreground">{produto.unidadesVendidas} unidades vendidas</p>
+                        </div>
+                        <div className="text-right">
+                          <p className="font-bold">{formatCurrency(produto.valorTotal)}</p>
+                          <Badge variant={index === 0 ? "default" : "secondary"}>Top #{produto.rank}</Badge>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </div>
-              </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -264,16 +290,26 @@ export default function RelatoriosPage() {
               <CardDescription>Distribuição por forma de pagamento</CardDescription>
             </CardHeader>
             <CardContent>
-              <ResponsiveContainer width="100%" height={300}>
-                <BarChart data={pagamentos}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="metodo" />
-                  <YAxis />
-                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                  <Legend />
-                  <Bar dataKey="valor" fill="#8884d8" name="Valor Total" />
-                </BarChart>
-              </ResponsiveContainer>
+              {loading ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : pagamentos.length === 0 ? (
+                <div className="flex items-center justify-center h-[300px]">
+                  <p className="text-muted-foreground">Nenhum dado disponível</p>
+                </div>
+              ) : (
+                <ResponsiveContainer width="100%" height={300}>
+                  <BarChart data={pagamentos}>
+                    <CartesianGrid strokeDasharray="3 3" />
+                    <XAxis dataKey="metodo" />
+                    <YAxis />
+                    <Tooltip formatter={(value: any) => formatCurrency(value)} />
+                    <Legend />
+                    <Bar dataKey="valor" fill="#8884d8" name="Valor Total" />
+                  </BarChart>
+                </ResponsiveContainer>
+              )}
             </CardContent>
           </Card>
         </TabsContent>
@@ -286,27 +322,35 @@ export default function RelatoriosPage() {
               <CardDescription>Ranking de vendedores do mês</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="space-y-3">
-                {topVendedores.map((vendedor, index) => (
-                  <div key={index} className="flex items-center justify-between rounded-lg border p-4">
-                    <div className="flex items-center gap-4">
-                      <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">
-                        {index + 1}º
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+                </div>
+              ) : topVendedores.length === 0 ? (
+                <p className="text-center text-muted-foreground py-8">Nenhuma venda registrada este mês</p>
+              ) : (
+                <div className="space-y-3">
+                  {topVendedores.map((vendedor, index) => (
+                    <div key={index} className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="flex items-center gap-4">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary text-primary-foreground font-bold">
+                          {index + 1}º
+                        </div>
+                        <div>
+                          <p className="font-medium">{vendedor.nome}</p>
+                          <p className="text-sm text-muted-foreground">{vendedor.vendas} vendas realizadas</p>
+                        </div>
                       </div>
-                      <div>
-                        <p className="font-medium">{vendedor.nome}</p>
-                        <p className="text-sm text-muted-foreground">{vendedor.vendas} vendas realizadas</p>
+                      <div className="text-right">
+                        <p className="text-lg font-bold">{formatCurrency(vendedor.valor)}</p>
+                        <p className="text-sm text-muted-foreground">
+                          Ticket médio: {formatCurrency(vendedor.ticketMedio)}
+                        </p>
                       </div>
                     </div>
-                    <div className="text-right">
-                      <p className="text-lg font-bold">{formatCurrency(vendedor.valor)}</p>
-                      <p className="text-sm text-muted-foreground">
-                        Ticket médio: {formatCurrency(vendedor.valor / vendedor.vendas)}
-                      </p>
-                    </div>
-                  </div>
-                ))}
-              </div>
+                  ))}
+                </div>
+              )}
             </CardContent>
           </Card>
         </TabsContent>

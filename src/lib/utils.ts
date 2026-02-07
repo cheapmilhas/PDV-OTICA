@@ -58,3 +58,29 @@ export function formatPhone(phone: string): string {
 export function removeFormatting(value: string): string {
   return value.replace(/\D/g, "");
 }
+
+// Serializa Decimal do Prisma para number
+export function serializeDecimal(value: any): number {
+  if (value === null || value === undefined) return 0;
+  if (typeof value === "number") return value;
+  if (typeof value === "string") return parseFloat(value);
+  // Prisma Decimal tem método toNumber()
+  if (typeof value === "object" && "toNumber" in value) {
+    return value.toNumber();
+  }
+  return Number(value);
+}
+
+// Serializa objeto com campos Decimal para JSON-safe
+export function serializeMonetaryFields<T extends Record<string, any>>(
+  obj: T,
+  fields: (keyof T)[]
+): T {
+  const serialized = { ...obj };
+  for (const field of fields) {
+    if (serialized[field] !== undefined && serialized[field] !== null) {
+      serialized[field] = serializeDecimal(serialized[field]) as T[typeof field];
+    }
+  }
+  return serialized;
+}

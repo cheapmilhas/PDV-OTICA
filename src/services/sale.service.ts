@@ -242,7 +242,20 @@ export class SaleService {
       }
     }
 
-    // Criar venda em transação (venda + itens + pagamentos + atualizar estoque)
+    // Validar se há caixa aberto (obrigatório para vender)
+    const openShift = await prisma.cashShift.findFirst({
+      where: { branchId, status: "OPEN" },
+    });
+
+    if (!openShift) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Não há caixa aberto. Abra o caixa antes de realizar vendas.",
+        400
+      );
+    }
+
+    // Criar venda em transação (venda + itens + pagamentos + cashMovement + estoque)
     const sale = await prisma.$transaction(async (tx) => {
       // 1. Criar venda
       const newSale = await tx.sale.create({
@@ -285,16 +298,63 @@ export class SaleService {
 
       // 4. Criar pagamentos
       for (const payment of payments) {
-        await tx.salePayment.create({
+        const salePayment = await tx.salePayment.create({
           data: {
             saleId: newSale.id,
             method: payment.method,
             amount: payment.amount,
             installments: payment.installments || 1,
             status: "RECEIVED",
+            receivedAt: new Date(),
+            receivedByUserId: userId,
           },
         });
+
+        // 5. Criar CashMovement para pagamentos em dinheiro
+        if (payment.method === "CASH") {
+          await tx.cashMovement.create({
+            data: {
+              cashShiftId: openShift.id,
+              branchId,
+              type: "SALE_PAYMENT",
+              direction: "IN",
+              method: "CASH",
+              amount: payment.amount,
+              originType: "SALE_PAYMENT",
+              originId: salePayment.id,
+              salePaymentId: salePayment.id,
+              createdByUserId: userId,
+              note: `Venda #${newSale.id.substring(0, 8)}`,
+            },
+          });
+        }
       }
+
+      // 6. Calcular e criar comissão do vendedor
+      const seller = await tx.user.findUnique({
+        where: { id: userId },
+        select: { defaultCommissionPercent: true },
+      });
+
+      const commissionPercent = seller?.defaultCommissionPercent || new Prisma.Decimal(5); // 5% default
+      const baseAmount = newSale.total; // Base de cálculo é o total da venda
+      const commissionAmount = new Prisma.Decimal(baseAmount)
+        .mul(commissionPercent)
+        .div(100);
+
+      await tx.commission.create({
+        data: {
+          companyId,
+          saleId: newSale.id,
+          userId,
+          baseAmount,
+          percentage: commissionPercent,
+          commissionAmount,
+          status: "PENDING",
+          periodMonth: new Date().getMonth() + 1,
+          periodYear: new Date().getFullYear(),
+        },
+      });
 
       return newSale;
     });
@@ -322,6 +382,11 @@ export class SaleService {
       );
     }
 
+    // Buscar turno de caixa aberto (necessário para criar movimentos de REFUND)
+    const openShift = await prisma.cashShift.findFirst({
+      where: { branchId: sale.branchId, status: "OPEN" },
+    });
+
     // Cancelar venda e estornar estoque em transação
     await prisma.$transaction(async (tx) => {
       // 1. Marcar venda como cancelada
@@ -346,10 +411,42 @@ export class SaleService {
         }
       }
 
-      // 3. Marcar pagamentos como cancelados
-      await tx.salePayment.updateMany({
-        where: { saleId: id },
-        data: { status: "VOIDED" },
+      // 3. Marcar pagamentos como cancelados e criar movimentos de REFUND
+      for (const payment of sale.payments) {
+        await tx.salePayment.update({
+          where: { id: payment.id },
+          data: { status: "VOIDED" },
+        });
+
+        // Se tinha caixa aberto E o pagamento foi em dinheiro, criar movimento de REFUND
+        if (openShift && payment.method === "CASH") {
+          await tx.cashMovement.create({
+            data: {
+              cashShiftId: openShift.id,
+              branchId: sale.branchId,
+              type: "REFUND",
+              direction: "OUT",
+              method: "CASH",
+              amount: payment.amount,
+              originType: "SALE_PAYMENT",
+              originId: payment.id,
+              salePaymentId: payment.id,
+              createdByUserId: sale.sellerUserId,
+              note: `Cancelamento venda #${id.substring(0, 8)}${reason ? ` - ${reason}` : ""}`,
+            },
+          });
+        }
+      }
+
+      // 4. Cancelar comissões pendentes
+      await tx.commission.updateMany({
+        where: {
+          saleId: id,
+          status: "PENDING",
+        },
+        data: {
+          status: "CANCELED",
+        },
       });
     });
 

@@ -4,13 +4,20 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   Plus,
-  Edit,
   Trash2,
+  Edit,
   Loader2,
   Package,
+  Search,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -142,7 +149,7 @@ export default function ProdutosPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {produtos.filter((p) => p.type === "ARMACAO").length}
+              {produtos.filter((p) => p.type === "FRAME" || p.type === "SUNGLASSES").length}
             </p>
           </CardContent>
         </Card>
@@ -154,7 +161,7 @@ export default function ProdutosPage() {
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold">
-              {produtos.filter((p) => p.type === "LENTE").length}
+              {produtos.filter((p) => p.type === "LENS_SERVICE" || p.type === "CONTACT_LENS").length}
             </p>
           </CardContent>
         </Card>

@@ -2,16 +2,17 @@
 
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import {
   Plus,
-  Phone,
   Building2,
   Edit,
-  Trash2,
   Loader2,
+  Phone,
+  Search,
+  Trash2,
 } from "lucide-react";
 import { ModalDetalhesCliente } from "@/components/clientes/modal-detalhes-cliente";
 import { SearchBar } from "@/components/shared/search-bar";

@@ -8,7 +8,10 @@
     "start": "next start",
     "lint": "next lint",
     "postinstall": "prisma generate",
-    "seed:mock": "npx tsx prisma/seed-mock.ts"
+    "seed:mock": "npx tsx prisma/seed-mock.ts",
+    "test:evidencias": "npx tsx scripts/test-evidencias.ts",
+    "validate:imports": "npx tsx scripts/validate-lucide-imports.ts",
+    "fix:imports": "npx tsx scripts/fix-lucide-imports.ts"
   },
   "prisma": {
     "seed": "node --require esbuild-register prisma/seed.ts"

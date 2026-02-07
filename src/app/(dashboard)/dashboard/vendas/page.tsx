@@ -6,10 +6,11 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
   Plus,
+  DollarSign,
   Eye,
   Loader2,
+  Search,
   ShoppingCart,
-  DollarSign,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";

@@ -120,7 +120,7 @@ export class ServiceOrderService {
   /**
    * Cria nova ordem de serviço
    */
-  async create(data: CreateServiceOrderDTO, companyId: string) {
+  async create(data: CreateServiceOrderDTO, companyId: string, userId: string) {
     const { customerId, branchId, items, expectedDate, prescription, notes } = data;
 
     if (!items || items.length === 0) {
@@ -141,7 +141,7 @@ export class ServiceOrderService {
           branchId,
           status: "DRAFT",
           promisedDate: expectedDate ? new Date(expectedDate) : undefined,
-          createdByUserId: "temp", // TODO: Pegar do usuário logado
+          createdByUserId: userId,
         },
       });
 

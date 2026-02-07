@@ -22,6 +22,8 @@ import {
   ShoppingBag,
   Percent,
   CheckCircle2,
+  Loader2,
+  CreditCard,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -60,18 +62,38 @@ export default function DashboardPage() {
   });
   const [loading, setLoading] = useState(true);
 
-  // Buscar métricas da API
+  // Buscar todos os dados da API
   useEffect(() => {
-    fetch('/api/dashboard/metrics')
-      .then(res => res.json())
-      .then(data => {
-        setMetrics(data.metrics);
+    const loadAllData = async () => {
+      try {
+        // Métricas
+        const metricsRes = await fetch('/api/dashboard/metrics');
+        const metricsData = await metricsRes.json();
+        setMetrics(metricsData.metrics);
+
+        // Vendas recentes (hoje)
+        const salesRes = await fetch('/api/sales?pageSize=5&sortBy=createdAt&sortOrder=desc');
+        const salesData = await salesRes.json();
+        setRecentSales(salesData.data || []);
+
+        // Produtos com estoque baixo
+        const productsRes = await fetch('/api/products?lowStock=true&pageSize=4');
+        const productsData = await productsRes.json();
+        setLowStockProducts(productsData.data || []);
+
+        // Ordens de serviço urgentes (buscar apenas APPROVED por enquanto)
+        const osRes = await fetch('/api/service-orders?status=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3');
+        const osData = await osRes.json();
+        setOsUrgentes(osData.data || []);
+
         setLoading(false);
-      })
-      .catch(err => {
-        console.error('Erro ao carregar métricas:', err);
+      } catch (err) {
+        console.error('Erro ao carregar dados:', err);
         setLoading(false);
-      });
+      }
+    };
+
+    loadAllData();
   }, []);
 
   // Atualizar relógio a cada minuto
@@ -89,68 +111,14 @@ export default function DashboardPage() {
   const monthGrowth = calculateGrowth(metrics.salesMonth, metrics.salesLastMonth);
   const monthProgress = (metrics.salesMonth / metrics.goalMonth) * 100;
 
-  const recentSales = [
-    { id: "1", customer: "Maria Silva", value: 450.00, status: "completed", time: "14:30", paymentMethod: "Crédito" },
-    { id: "2", customer: "João Santos", value: 1200.00, status: "completed", time: "13:15", paymentMethod: "PIX" },
-    { id: "3", customer: "Ana Costa", value: 680.00, status: "completed", time: "11:45", paymentMethod: "Débito" },
-    { id: "4", customer: "Carlos Lima", value: 899.90, status: "completed", time: "10:20", paymentMethod: "Crédito" },
-    { id: "5", customer: "Fernanda Souza", value: 1580.00, status: "completed", time: "09:30", paymentMethod: "Crédito" },
-  ];
-
-  const lowStockProducts = [
-    { id: "1", name: "Ray-Ban Aviador Clássico", stock: 2, min: 5, categoria: "Armações" },
-    { id: "2", name: "Lente Transitions Gen 8", stock: 1, min: 3, categoria: "Lentes" },
-    { id: "3", name: "Oakley Holbrook", stock: 3, min: 5, categoria: "Armações" },
-    { id: "4", name: "Lente Multifocal Varilux", stock: 1, min: 2, categoria: "Lentes" },
-  ];
-
-  const osUrgentes = [
-    { id: "OS-001", cliente: "Maria Silva Santos", tipo: "Montagem", prazo: "2024-02-02", dias: 1 },
-    { id: "OS-004", cliente: "Carlos Eduardo Lima", tipo: "Reparo", prazo: "2024-02-01", dias: 0 },
-    { id: "OS-007", cliente: "Paula Fernandes", tipo: "Ajuste", prazo: "2024-02-03", dias: 2 },
-  ];
-
-  // Dados para gráfico de vendas dos últimos 7 dias
-  const salesChartData = [
-    { day: "Seg", vendas: 8, valor: 6850 },
-    { day: "Ter", vendas: 12, valor: 9240 },
-    { day: "Qua", vendas: 15, valor: 12350 },
-    { day: "Qui", vendas: 10, valor: 8450 },
-    { day: "Sex", vendas: 18, valor: 15890 },
-    { day: "Sáb", vendas: 22, valor: 18750 },
-    { day: "Dom", vendas: 5, valor: 4200 },
-  ];
-
-  // Dados para gráfico acumulativo mensal (como no SSÓtica)
-  const accumulatedSalesData = [
-    { dia: 1, atual: 880, anterior: 650 },
-    { dia: 2, atual: 1920, anterior: 1180 },
-    { dia: 3, atual: 4200, anterior: 1850 },
-    { dia: 4, atual: 5800, anterior: 2400 },
-    { dia: 5, atual: 7650, anterior: 3100 },
-    { dia: 6, atual: 9420, anterior: 3850 },
-    { dia: 7, atual: 10580, anterior: 4200 },
-    { dia: 8, atual: 11840, anterior: 4650 },
-    { dia: 9, atual: 12920, anterior: 5100 },
-    { dia: 10, atual: 14380, anterior: 5450 },
-  ];
-
-  // Dados para produtos mais vendidos
-  const topProductsData = [
-    { name: "Ray-Ban Aviador", vendas: 45 },
-    { name: "Lentes AR", vendas: 38 },
-    { name: "Oakley Sport", vendas: 32 },
-    { name: "Armação Infantil", vendas: 28 },
-    { name: "Óculos de Sol", vendas: 25 },
-  ];
-
-  // Dados para métodos de pagamento
-  const paymentMethodsData = [
-    { name: "Crédito", value: 45, color: "#8884d8" },
-    { name: "PIX", value: 30, color: "#82ca9d" },
-    { name: "Débito", value: 20, color: "#ffc658" },
-    { name: "Dinheiro", value: 5, color: "#ff8042" },
-  ];
+  // Estados para dados dinâmicos
+  const [recentSales, setRecentSales] = useState<any[]>([]);
+  const [lowStockProducts, setLowStockProducts] = useState<any[]>([]);
+  const [osUrgentes, setOsUrgentes] = useState<any[]>([]);
+  const [salesChartData, setSalesChartData] = useState<any[]>([]);
+  const [accumulatedSalesData, setAccumulatedSalesData] = useState<any[]>([]);
+  const [topProductsData, setTopProductsData] = useState<any[]>([]);
+  const [paymentMethodsData, setPaymentMethodsData] = useState<any[]>([]);
 
   const calcularCrescimento = (atual: number, anterior: number) => {
     const crescimento = ((atual - anterior) / anterior) * 100;
@@ -355,19 +323,29 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {lowStockProducts.map((product) => (
-                <div key={product.id} className="flex items-center justify-between rounded-lg border border-orange-200 bg-white p-3">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{product.name}</p>
-                    <p className="text-xs text-muted-foreground">
-                      {product.categoria} • Mínimo: {product.min}
-                    </p>
-                  </div>
-                  <Badge variant="destructive">
-                    {product.stock} un.
-                  </Badge>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ))}
+              ) : lowStockProducts.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Nenhum produto com estoque baixo
+                </p>
+              ) : (
+                lowStockProducts.map((product) => (
+                  <div key={product.id} className="flex items-center justify-between rounded-lg border border-orange-200 bg-white p-3">
+                    <div className="space-y-1">
+                      <p className="text-sm font-medium">{product.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        SKU: {product.sku} • Mínimo: {product.stockMin}
+                      </p>
+                    </div>
+                    <Badge variant="destructive">
+                      {product.stockQty} un.
+                    </Badge>
+                  </div>
+                ))
+              )}
             </div>
           </CardContent>
         </Card>
@@ -390,24 +368,40 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
-              {osUrgentes.map((os) => (
-                <div key={os.id} className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3">
-                  <div className="space-y-1">
-                    <div className="flex items-center gap-2">
-                      <p className="text-sm font-mono font-medium">{os.id}</p>
-                      <Badge variant="outline">{os.tipo}</Badge>
-                    </div>
-                    <p className="text-xs text-muted-foreground">
-                      {os.cliente}
-                    </p>
-                  </div>
-                  <div className="text-right">
-                    <Badge variant={os.dias === 0 ? "destructive" : "secondary"}>
-                      {os.dias === 0 ? "Hoje" : `${os.dias}d`}
-                    </Badge>
-                  </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ))}
+              ) : osUrgentes.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Nenhuma OS urgente no momento
+                </p>
+              ) : (
+                osUrgentes.map((os: any) => {
+                  const prazo = os.promisedDate ? new Date(os.promisedDate) : null;
+                  const hoje = new Date();
+                  const dias = prazo ? Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+
+                  return (
+                    <div key={os.id} className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3">
+                      <div className="space-y-1">
+                        <div className="flex items-center gap-2">
+                          <p className="text-sm font-mono font-medium">OS-{os.id.slice(-4)}</p>
+                          <Badge variant="outline">{os.status}</Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {os.customer?.name || 'Cliente não informado'}
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <Badge variant={dias <= 0 ? "destructive" : "secondary"}>
+                          {dias <= 0 ? "Hoje" : `${dias}d`}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
               <div className="flex items-center justify-between pt-2 border-t">
                 <span className="text-sm text-muted-foreground">
                   {metrics.osOpen} OS em andamento
@@ -421,20 +415,15 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Card Vendas Acumuladas - Estilo SSÓtica */}
+      {/* Card Comparação de Períodos */}
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">
             <div>
-              <CardTitle className="text-lg">VENDAS ACUMULADAS</CardTitle>
+              <CardTitle className="text-lg">Comparação de Períodos</CardTitle>
               <CardDescription className="mt-1">
-                Total de vendas acumuladas no mês anterior: {formatCurrency(metrics.salesMonthAccumulated)}
+                Período atual vs período anterior
               </CardDescription>
-            </div>
-            <div className="flex gap-2">
-              <Button variant="outline" size="sm">Mês anterior</Button>
-              <Button variant="outline" size="sm">Fevereiro de 2025</Button>
-              <Button variant="outline" size="sm">Últimos 12 meses</Button>
             </div>
           </div>
         </CardHeader>
@@ -444,14 +433,14 @@ export default function DashboardPage() {
             <div className="grid grid-cols-2 gap-4">
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-lg border bg-blue-50 p-4">
-                  <div>
+                  <div className="w-full">
                     <p className="text-xs text-muted-foreground">PERÍODO ATUAL</p>
-                    <p className="text-sm text-muted-foreground">01/02 a 03/02</p>
+                    <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
                     <div className="mt-2">
                       <p className="text-2xl font-bold">{formatCurrency(metrics.salesMonth)}</p>
                       <Progress value={monthProgress} className="mt-2 h-2" />
                       <p className="mt-1 text-xs text-muted-foreground">
-                        {monthProgress.toFixed(2)}%
+                        {monthProgress.toFixed(2)}% da meta
                       </p>
                       <p className="text-sm text-muted-foreground">
                         {formatCurrency(metrics.salesMonth)} / {formatCurrency(metrics.goalMonth)}
@@ -463,54 +452,36 @@ export default function DashboardPage() {
 
               <div className="space-y-2">
                 <div className="flex items-center justify-between rounded-lg border bg-gray-50 p-4">
-                  <div>
+                  <div className="w-full">
                     <p className="text-xs text-muted-foreground">PERÍODO ANTERIOR</p>
-                    <p className="text-sm text-muted-foreground">01/01 a 03/01</p>
+                    <p className="text-sm text-muted-foreground">Mês passado</p>
                     <div className="mt-2">
                       <p className="text-2xl font-bold">{formatCurrency(metrics.salesLastMonth)}</p>
-                      <Progress value={0.88} className="mt-2 h-2" />
-                      <p className="mt-1 text-xs text-muted-foreground">0,88%</p>
-                      <p className="text-sm text-muted-foreground">
-                        {formatCurrency(metrics.salesLastMonth)} / {formatCurrency(metrics.goalMonth)}
-                      </p>
+                      {Number(crescimentoMes) >= 0 ? (
+                        <div className="flex items-center gap-1 mt-2">
+                          <TrendingUp className="h-4 w-4 text-green-600" />
+                          <span className="text-sm text-green-600 font-medium">
+                            +{crescimentoMes}% de crescimento
+                          </span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1 mt-2">
+                          <TrendingDown className="h-4 w-4 text-red-600" />
+                          <span className="text-sm text-red-600 font-medium">
+                            {crescimentoMes}% de variação
+                          </span>
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
               </div>
             </div>
-
-            {/* Gráfico Acumulativo */}
-            <div className="mt-4">
-              <ResponsiveContainer width="100%" height={300}>
-                <LineChart data={accumulatedSalesData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="dia" />
-                  <YAxis />
-                  <Tooltip formatter={(value: any) => formatCurrency(value)} />
-                  <Line
-                    type="monotone"
-                    dataKey="atual"
-                    stroke="#FF8C42"
-                    strokeWidth={2}
-                    name="Período Atual"
-                    dot={{ r: 3 }}
-                  />
-                  <Line
-                    type="monotone"
-                    dataKey="anterior"
-                    stroke="#4A90E2"
-                    strokeWidth={2}
-                    name="Período Anterior"
-                    dot={{ r: 3 }}
-                  />
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
           </div>
         </CardContent>
       </Card>
 
-      {/* Charts */}
+      {/* Charts - Dados vindos do banco */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Sales Chart */}
         <Card>
@@ -519,27 +490,39 @@ export default function DashboardPage() {
             <CardDescription>Evolução do faturamento semanal</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={salesChartData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="day" />
-                <YAxis />
-                <Tooltip
-                  formatter={(value: any, name?: string) => {
-                    if (name === "valor") return formatCurrency(value);
-                    return value;
-                  }}
-                  labelFormatter={(label) => `Dia: ${label}`}
-                />
-                <Line
-                  type="monotone"
-                  dataKey="valor"
-                  stroke="#8884d8"
-                  strokeWidth={2}
-                  name="Valor (R$)"
-                />
-              </LineChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : salesChartData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                <ShoppingBag className="h-12 w-12 opacity-20 mb-2" />
+                <p>Dados insuficientes para gerar gráfico</p>
+                <p className="text-sm mt-1">Realize vendas para visualizar</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={salesChartData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="day" />
+                  <YAxis />
+                  <Tooltip
+                    formatter={(value: any, name?: string) => {
+                      if (name === "valor") return formatCurrency(value);
+                      return value;
+                    }}
+                    labelFormatter={(label) => `Dia: ${label}`}
+                  />
+                  <Line
+                    type="monotone"
+                    dataKey="valor"
+                    stroke="#8884d8"
+                    strokeWidth={2}
+                    name="Valor (R$)"
+                  />
+                </LineChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
 
@@ -550,15 +533,27 @@ export default function DashboardPage() {
             <CardDescription>Top 5 do mês</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <BarChart data={topProductsData}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
-                <YAxis />
-                <Tooltip />
-                <Bar dataKey="vendas" fill="#82ca9d" name="Vendas" />
-              </BarChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : topProductsData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                <Package className="h-12 w-12 opacity-20 mb-2" />
+                <p>Dados insuficientes para gerar gráfico</p>
+                <p className="text-sm mt-1">Realize vendas para visualizar</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <BarChart data={topProductsData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="name" angle={-45} textAnchor="end" height={100} />
+                  <YAxis />
+                  <Tooltip />
+                  <Bar dataKey="vendas" fill="#82ca9d" name="Vendas" />
+                </BarChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>
@@ -580,23 +575,38 @@ export default function DashboardPage() {
           </CardHeader>
           <CardContent>
             <div className="space-y-4">
-              {recentSales.map((sale) => (
-                <div key={sale.id} className="flex items-center justify-between">
-                  <div className="space-y-1">
-                    <p className="text-sm font-medium">{sale.customer}</p>
-                    <div className="flex items-center gap-2">
-                      <p className="text-xs text-muted-foreground">{sale.time}</p>
-                      <Separator orientation="vertical" className="h-3" />
-                      <Badge variant="outline" className="text-xs">
-                        {sale.paymentMethod}
-                      </Badge>
-                    </div>
-                  </div>
-                  <div className="text-right">
-                    <p className="text-sm font-bold">{formatCurrency(sale.value)}</p>
-                  </div>
+              {loading ? (
+                <div className="flex items-center justify-center py-8">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
                 </div>
-              ))}
+              ) : recentSales.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-8">
+                  Nenhuma venda hoje
+                </p>
+              ) : (
+                recentSales.map((sale: any) => {
+                  const saleTime = sale.createdAt ? new Date(sale.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' }) : '--:--';
+                  const paymentMethod = sale.payments?.[0]?.method || 'N/A';
+
+                  return (
+                    <div key={sale.id} className="flex items-center justify-between">
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">{sale.customer?.name || 'Cliente não informado'}</p>
+                        <div className="flex items-center gap-2">
+                          <p className="text-xs text-muted-foreground">{saleTime}</p>
+                          <Separator orientation="vertical" className="h-3" />
+                          <Badge variant="outline" className="text-xs">
+                            {paymentMethod}
+                          </Badge>
+                        </div>
+                      </div>
+                      <div className="text-right">
+                        <p className="text-sm font-bold">{formatCurrency(sale.total)}</p>
+                      </div>
+                    </div>
+                  );
+                })
+              )}
             </div>
           </CardContent>
         </Card>
@@ -608,25 +618,37 @@ export default function DashboardPage() {
             <CardDescription>Distribuição das formas de pagamento</CardDescription>
           </CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={300}>
-              <PieChart>
-                <Pie
-                  data={paymentMethodsData}
-                  cx="50%"
-                  cy="50%"
-                  labelLine={false}
-                  label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
-                  outerRadius={80}
-                  fill="#8884d8"
-                  dataKey="value"
-                >
-                  {paymentMethodsData.map((entry, index) => (
-                    <Cell key={`cell-${index}`} fill={entry.color} />
-                  ))}
-                </Pie>
-                <Tooltip />
-              </PieChart>
-            </ResponsiveContainer>
+            {loading ? (
+              <div className="flex items-center justify-center h-[300px]">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : paymentMethodsData.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[300px] text-muted-foreground">
+                <CreditCard className="h-12 w-12 opacity-20 mb-2" />
+                <p>Dados insuficientes para gerar gráfico</p>
+                <p className="text-sm mt-1">Realize vendas para visualizar</p>
+              </div>
+            ) : (
+              <ResponsiveContainer width="100%" height={300}>
+                <PieChart>
+                  <Pie
+                    data={paymentMethodsData}
+                    cx="50%"
+                    cy="50%"
+                    labelLine={false}
+                    label={({ name, percent }: any) => `${name} ${((percent || 0) * 100).toFixed(0)}%`}
+                    outerRadius={80}
+                    fill="#8884d8"
+                    dataKey="value"
+                  >
+                    {paymentMethodsData.map((entry, index) => (
+                      <Cell key={`cell-${index}`} fill={entry.color} />
+                    ))}
+                  </Pie>
+                  <Tooltip />
+                </PieChart>
+              </ResponsiveContainer>
+            )}
           </CardContent>
         </Card>
       </div>

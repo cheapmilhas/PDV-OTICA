@@ -40,8 +40,27 @@ export async function GET(request: Request) {
     // Busca vendas via service
     const result = await saleService.list(query, companyId);
 
+    // Serializa Decimals para number
+    const serializedData = result.data.map((sale) => ({
+      ...sale,
+      subtotal: Number(sale.subtotal),
+      discountTotal: Number(sale.discountTotal),
+      total: Number(sale.total),
+      agreementDiscount: sale.agreementDiscount ? Number(sale.agreementDiscount) : null,
+      items: sale.items.map((item) => ({
+        ...item,
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount),
+        lineTotal: Number(item.lineTotal),
+      })),
+      payments: sale.payments.map((payment) => ({
+        ...payment,
+        amount: Number(payment.amount),
+      })),
+    }));
+
     // Retorna resposta paginada
-    return paginatedResponse(result.data, result.pagination);
+    return paginatedResponse(serializedData, result.pagination);
   } catch (error) {
     return handleApiError(error);
   }
@@ -88,8 +107,28 @@ export async function POST(request: Request) {
     // Cria venda via service (transação: venda + itens + pagamentos + estoque)
     const sale = await saleService.create(sanitized, companyId, userId);
 
+    // Serializa Decimals para number
+    const serializedSale = {
+      ...sale,
+      subtotal: Number(sale.subtotal),
+      discountTotal: Number(sale.discountTotal),
+      total: Number(sale.total),
+      agreementDiscount: sale.agreementDiscount ? Number(sale.agreementDiscount) : null,
+      items: sale.items.map((item: any) => ({
+        ...item,
+        unitPrice: Number(item.unitPrice),
+        discount: Number(item.discount),
+        lineTotal: Number(item.lineTotal),
+        costPrice: Number(item.costPrice),
+      })),
+      payments: sale.payments.map((payment: any) => ({
+        ...payment,
+        amount: Number(payment.amount),
+      })),
+    };
+
     // Retorna 201 Created
-    return createdResponse(sale);
+    return createdResponse(serializedSale);
   } catch (error) {
     return handleApiError(error);
   }
