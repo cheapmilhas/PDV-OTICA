@@ -243,6 +243,8 @@ model Company {
   dreReports      DREReport[]
   appointments    Appointment[]
   stockMovements  StockMovement[]
+  accountsPayable       AccountPayable[]
+  accountsReceivable    AccountReceivable[]
 }
 
 model Branch {
@@ -279,6 +281,8 @@ model Branch {
   cashMovements     CashMovement[]
   stockMovementsSource StockMovement[] @relation("StockMovementSource")
   stockMovementsTarget StockMovement[] @relation("StockMovementTarget")
+  accountsPayable       AccountPayable[]
+  accountsReceivable    AccountReceivable[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -315,6 +319,10 @@ model User {
   shiftsOpened         CashShift[]       @relation("ShiftOpener")
   shiftsClosed         CashShift[]       @relation("ShiftCloser")
   stockMovements       StockMovement[]
+  accountsPayableCreated    AccountPayable[] @relation("AccountPayableCreator")
+  accountsPayablePaid       AccountPayable[] @relation("AccountPayablePayer")
+  accountsReceivableCreated AccountReceivable[] @relation("AccountReceivableCreator")
+  accountsReceivableReceived AccountReceivable[] @relation("AccountReceivableReceiver")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -400,6 +408,7 @@ model Customer {
   appointments        Appointment[]
   loyaltyPoints       LoyaltyPoints[]
   agreementBenefits   AgreementBeneficiary[]
+  accountsReceivable    AccountReceivable[]
 
   @@unique([companyId, cpf])
   @@index([companyId, name])
@@ -549,6 +558,7 @@ model Supplier {
 
   products       Product[]
   stockMovements StockMovement[]
+  accountsPayable       AccountPayable[]
 
   @@unique([companyId, cnpj])
   @@index([companyId, name])
@@ -1097,6 +1107,7 @@ model Sale {
   commissions Commission[]
   reservations StockReservation[]
   warranties  Warranty[]
+  accountsReceivable    AccountReceivable[]
 
   @@index([companyId, branchId, createdAt])
   @@index([customerId, createdAt])
@@ -1560,6 +1571,118 @@ model DREReport {
 
   @@unique([companyId, branchId, periodYear, periodMonth])
   @@index([companyId, periodYear, periodMonth])
+}
+
+// ==============================
+// MÓDULO FINANCEIRO
+// ==============================
+
+enum AccountPayableStatus {
+  PENDING
+  PAID
+  OVERDUE
+  CANCELED
+}
+
+enum AccountReceivableStatus {
+  PENDING
+  RECEIVED
+  OVERDUE
+  CANCELED
+}
+
+enum AccountCategory {
+  SUPPLIERS          // Fornecedores
+  RENT               // Aluguel
+  UTILITIES          // Utilidades (água, luz, etc)
+  PERSONNEL          // Folha de pagamento
+  TAXES              // Impostos
+  MARKETING          // Marketing
+  MAINTENANCE        // Manutenção
+  EQUIPMENT          // Equipamentos
+  OTHER              // Outros
+}
+
+// Contas a Pagar
+model AccountPayable {
+  id          String @id @default(cuid())
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id])
+
+  branchId    String?
+  branch      Branch? @relation(fields: [branchId], references: [id])
+
+  supplierId  String?
+  supplier    Supplier? @relation(fields: [supplierId], references: [id])
+
+  description String
+  category    AccountCategory
+
+  amount      Decimal @db.Decimal(12,2)
+  dueDate     DateTime
+  paidDate    DateTime?
+  paidAmount  Decimal? @db.Decimal(12,2)
+
+  status      AccountPayableStatus @default(PENDING)
+
+  invoiceNumber String?
+  notes       String?
+
+  createdByUserId String?
+  createdBy       User? @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
+
+  paidByUserId String?
+  paidBy       User? @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId, status, dueDate])
+  @@index([supplierId, status])
+  @@index([dueDate, status])
+}
+
+// Contas a Receber
+model AccountReceivable {
+  id          String @id @default(cuid())
+  companyId   String
+  company     Company @relation(fields: [companyId], references: [id])
+
+  branchId    String?
+  branch      Branch? @relation(fields: [branchId], references: [id])
+
+  customerId  String?
+  customer    Customer? @relation(fields: [customerId], references: [id])
+
+  saleId      String?
+  sale        Sale? @relation(fields: [saleId], references: [id])
+
+  description String
+  installmentNumber Int @default(1)
+  totalInstallments Int @default(1)
+
+  amount      Decimal @db.Decimal(12,2)
+  dueDate     DateTime
+  receivedDate DateTime?
+  receivedAmount Decimal? @db.Decimal(12,2)
+
+  status      AccountReceivableStatus @default(PENDING)
+
+  notes       String?
+
+  createdByUserId String?
+  createdBy       User? @relation("AccountReceivableCreator", fields: [createdByUserId], references: [id])
+
+  receivedByUserId String?
+  receivedBy       User? @relation("AccountReceivableReceiver", fields: [receivedByUserId], references: [id])
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId, status, dueDate])
+  @@index([customerId, status])
+  @@index([saleId])
+  @@index([dueDate, status])
 }
 
 // =========================================================
