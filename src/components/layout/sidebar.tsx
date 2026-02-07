@@ -32,6 +32,7 @@ const menuItems = [
     title: "Vendas",
     items: [
       { name: "Vendas", href: "/dashboard/vendas", icon: CreditCard },
+      { name: "Orçamentos", href: "/dashboard/orcamentos", icon: FileText },
       { name: "Ordens de Serviço", href: "/dashboard/ordens-servico", icon: ClipboardList },
     ],
   },

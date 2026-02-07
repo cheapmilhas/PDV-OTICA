@@ -1034,6 +1034,7 @@ model Quote {
   conversionReason String?
 
   convertedToSaleId String?
+  convertedToSale   Sale? @relation("QuoteToSale")
   convertedToOsId   String?
 
   createdAt  DateTime @default(now())
@@ -1077,6 +1078,9 @@ model Sale {
 
   serviceOrderId String? @unique
   serviceOrder   ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
+
+  convertedFromQuoteId String? @unique
+  convertedFromQuote   Quote? @relation("QuoteToSale", fields: [convertedFromQuoteId], references: [id])
 
   sellerUserId String
   sellerUser   User @relation("SaleSeller", fields: [sellerUserId], references: [id])
