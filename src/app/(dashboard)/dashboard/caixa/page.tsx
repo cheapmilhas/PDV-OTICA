@@ -27,7 +27,9 @@ import {
   Banknote,
   Wallet,
   Loader2,
+  History,
 } from "lucide-react";
+import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { ModalAberturaCaixa } from "@/components/caixa/modal-abertura-caixa";
 import { ModalFechamentoCaixa } from "@/components/caixa/modal-fechamento-caixa";
@@ -291,6 +293,12 @@ export default function CaixaPage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Link href="/dashboard/caixa/historico">
+              <Button variant="outline">
+                <History className="mr-2 h-4 w-4" />
+                Histórico
+              </Button>
+            </Link>
             {caixaStatus.aberto ? (
               <>
                 <Button

@@ -54,14 +54,52 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
     e.preventDefault();
     setLoading(true);
 
-    // Simular fechamento de caixa
-    setTimeout(() => {
+    try {
+      // Buscar o shift atual
+      const shiftResponse = await fetch("/api/cash/shift");
+      if (!shiftResponse.ok) {
+        throw new Error("Erro ao buscar caixa atual");
+      }
+
+      const shiftData = await shiftResponse.json();
+      const shift = shiftData.shift;
+
+      if (!shift || shift.status !== "OPEN") {
+        throw new Error("Nenhum caixa aberto encontrado");
+      }
+
+      // Preparar dados de fechamento
+      // IMPORTANTE: closingDeclaredCash deve ser apenas o valor de DINHEIRO, não o total
+      const closeData = {
+        shiftId: shift.id,
+        closingDeclaredCash: valorContadoDinheiro,
+        differenceJustification: Math.abs(diferencaDinheiro) > 0.01 ? formData.observacoes : undefined,
+        notes: formData.observacoes,
+      };
+
+      console.log("Dados de fechamento:", closeData);
+
+      // Fechar caixa
+      const closeResponse = await fetch("/api/cash/shift/close", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(closeData),
+      });
+
+      if (!closeResponse.ok) {
+        const error = await closeResponse.json();
+        console.error("Erro da API:", error);
+        throw new Error(error.message || error.error || "Erro ao fechar caixa");
+      }
+
       toast({
         title: "Caixa fechado com sucesso!",
-        description: caixaFechado
-          ? "Caixa conferido sem divergências."
-          : `Divergência de ${formatCurrency(Math.abs(diferencaTotal))} ${diferencaTotal > 0 ? "sobra" : "falta"}.`,
-        variant: caixaFechado ? "default" : "destructive",
+        description: Math.abs(diferencaDinheiro) < 0.01
+          ? "Caixa conferido sem divergências no dinheiro."
+          : `Divergência no dinheiro: ${formatCurrency(Math.abs(diferencaDinheiro))} ${diferencaDinheiro > 0 ? "sobra" : "falta"}.`,
+        variant: Math.abs(diferencaDinheiro) < 0.01 ? "default" : "destructive",
       });
 
       // Limpar formulário
@@ -73,12 +111,20 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
         observacoes: "",
       });
 
-      setLoading(false);
       onOpenChange(false);
 
       // Recarregar página para atualizar status
-      window.location.reload();
-    }, 1500);
+      setTimeout(() => window.location.reload(), 500);
+    } catch (error) {
+      console.error("Erro ao fechar caixa:", error);
+      toast({
+        title: "Erro ao fechar caixa",
+        description: error instanceof Error ? error.message : "Erro desconhecido",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
