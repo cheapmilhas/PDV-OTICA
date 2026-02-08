@@ -1,40 +1,26 @@
 "use client";
 
-import {
-  Bell,
-  Building2,
-  CardContent,
-  CardDescription,
-  CardHeader,
-  CardTitle } from "@/components/ui/card";
+import { useState } from "react";
+import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Separator } from "@/components/ui/separator";
-import { Tabs,
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Switch } from "@/components/ui/switch";
+import { useToast } from "@/hooks/use-toast";
+import {
+  Bell,
+  Building2,
   Mail,
   MapPin,
-  Palette,
   Phone,
   Receipt,
   Save,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue } from "@/components/ui/select";
-import { useToast } from "@/hooks/use-toast";
-import {
   Settings,
   Shield,
   Store,
-  TabsContent,
-  TabsList,
-  TabsTrigger } from "@/components/ui/tabs";
-import { Switch } from "@/components/ui/switch";
-import { Select,
-  Upload,
-  useState } from "react";
-import { Card,
 } from "lucide-react";
 
 export default function ConfiguracoesPage() {

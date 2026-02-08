@@ -5,8 +5,11 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -64,6 +67,10 @@ export default function DetalhesVendaPage() {
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [editSellerOpen, setEditSellerOpen] = useState(false);
+  const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState("");
+  const [updatingSeller, setUpdatingSeller] = useState(false);
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -83,6 +90,25 @@ export default function DetalhesVendaPage() {
 
     fetchSale();
   }, [id, router]);
+
+  useEffect(() => {
+    const fetchUsers = async () => {
+      try {
+        const res = await fetch("/api/users?pageSize=100");
+        if (!res.ok) throw new Error("Erro ao carregar usuários");
+
+        const { data } = await res.json();
+        setUsers(data || []);
+      } catch (error: any) {
+        console.error("Erro ao carregar usuários:", error);
+        toast.error("Erro ao carregar lista de usuários");
+      }
+    };
+
+    if (editSellerOpen) {
+      fetchUsers();
+    }
+  }, [editSellerOpen]);
 
   const handleCancel = async () => {
     if (!confirm("Tem certeza que deseja cancelar esta venda? O estoque será estornado.")) {
@@ -113,6 +139,36 @@ export default function DetalhesVendaPage() {
     }
   };
 
+  const handleUpdateSeller = async () => {
+    if (!selectedSellerId) {
+      toast.error("Selecione um vendedor");
+      return;
+    }
+
+    setUpdatingSeller(true);
+    try {
+      const res = await fetch(`/api/sales/${id}/seller`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ sellerId: selectedSellerId }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error?.message || "Erro ao atualizar vendedor");
+      }
+
+      const { data } = await res.json();
+      setSale(data);
+      setEditSellerOpen(false);
+      toast.success("Vendedor atualizado com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setUpdatingSeller(false);
+    }
+  };
+
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
       CASH: "Dinheiro",
@@ -138,7 +194,63 @@ export default function DetalhesVendaPage() {
   }
 
   return (
-    <div className="space-y-6">
+    <>
+      {/* Modal Editar Vendedor */}
+      <Dialog open={editSellerOpen} onOpenChange={setEditSellerOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Alterar Vendedor</DialogTitle>
+            <DialogDescription>
+              Selecione o novo vendedor responsável por esta venda. Esta alteração não afeta o caixa.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              <Label htmlFor="seller">Vendedor</Label>
+              <Select value={selectedSellerId} onValueChange={setSelectedSellerId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o vendedor" />
+                </SelectTrigger>
+                <SelectContent>
+                  {users.map((user) => (
+                    <SelectItem key={user.id} value={user.id}>
+                      {user.name} ({user.email})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={() => setEditSellerOpen(false)}
+                disabled={updatingSeller}
+              >
+                Cancelar
+              </Button>
+              <Button
+                className="flex-1"
+                onClick={handleUpdateSeller}
+                disabled={updatingSeller || !selectedSellerId}
+              >
+                {updatingSeller ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Salvando...
+                  </>
+                ) : (
+                  "Salvar"
+                )}
+              </Button>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      <div className="space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -274,9 +386,23 @@ export default function DetalhesVendaPage() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
-            <div>
-              <p className="text-sm text-muted-foreground">Vendedor</p>
-              <p className="font-semibold">{sale.sellerUser.name}</p>
+            <div className="flex items-center justify-between">
+              <div className="flex-1">
+                <p className="text-sm text-muted-foreground">Vendedor</p>
+                <p className="font-semibold">{sale.sellerUser.name}</p>
+              </div>
+              {sale.status !== "CANCELED" && sale.status !== "REFUNDED" && (
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => {
+                    setSelectedSellerId(sale.sellerUser.id);
+                    setEditSellerOpen(true);
+                  }}
+                >
+                  <Edit className="h-4 w-4" />
+                </Button>
+              )}
             </div>
             {sale.branch && (
               <div>
@@ -389,6 +515,7 @@ export default function DetalhesVendaPage() {
           </CardContent>
         </Card>
       )}
-    </div>
+      </div>
+    </>
   );
 }

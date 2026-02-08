@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Plus,
   DollarSign,
@@ -11,23 +12,30 @@ import {
   Loader2,
   Search,
   ShoppingCart,
+  AlertTriangle,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export default function VendasPage() {
   const router = useRouter();
+  const { data: session } = useSession();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
   const [vendas, setVendas] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+
+  // Verifica se o usuário tem permissão para ver vendas canceladas
+  const canViewCanceled = ["ADMIN", "MANAGER"].includes(session?.user?.role || "");
 
   useEffect(() => {
     setLoading(true);
@@ -35,7 +43,7 @@ export default function VendasPage() {
       search,
       page: page.toString(),
       pageSize: "20",
-      status: "ativos",
+      status: statusFilter,
     });
 
     fetch(`/api/sales?${params}`)
@@ -50,7 +58,7 @@ export default function VendasPage() {
         toast.error("Erro ao carregar vendas");
         setLoading(false);
       });
-  }, [search, page]);
+  }, [search, page, statusFilter]);
 
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
@@ -77,6 +85,28 @@ export default function VendasPage() {
           Nova Venda
         </Button>
       </div>
+
+      {/* Tabs de Filtro */}
+      {canViewCanceled && (
+        <Tabs value={statusFilter} onValueChange={(v) => {
+          setStatusFilter(v as "ativos" | "inativos" | "todos");
+          setPage(1);
+        }}>
+          <TabsList>
+            <TabsTrigger value="ativos">
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Ativas
+            </TabsTrigger>
+            <TabsTrigger value="inativos">
+              <AlertTriangle className="h-4 w-4 mr-2" />
+              Canceladas
+            </TabsTrigger>
+            <TabsTrigger value="todos">
+              Todas
+            </TabsTrigger>
+          </TabsList>
+        </Tabs>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
