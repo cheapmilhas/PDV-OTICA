@@ -53,9 +53,12 @@ export default function PDVPage() {
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
+  const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<Customer | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
+  const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [finalizingVenda, setFinalizingVenda] = useState(false);
 
   // Carregar produtos disponíveis
@@ -92,6 +95,40 @@ export default function PDVPage() {
 
     return () => clearTimeout(debounce);
   }, [buscaProduto]);
+
+  // Carregar clientes
+  useEffect(() => {
+    const loadCustomers = async () => {
+      if (!buscaCliente || buscaCliente.length < 2) {
+        setCustomers([]);
+        return;
+      }
+
+      setLoadingCustomers(true);
+      try {
+        const params = new URLSearchParams({
+          search: buscaCliente,
+          pageSize: "5",
+        });
+
+        const res = await fetch(`/api/customers?${params}`);
+        if (!res.ok) throw new Error("Erro ao carregar clientes");
+
+        const data = await res.json();
+        setCustomers(data.data || []);
+      } catch (error) {
+        console.error("Erro ao carregar clientes:", error);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+
+    const debounce = setTimeout(() => {
+      loadCustomers();
+    }, 300);
+
+    return () => clearTimeout(debounce);
+  }, [buscaCliente]);
 
   const produtosDisponiveis = products.slice(0, 6);
 
@@ -194,6 +231,8 @@ export default function PDVPage() {
         notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
       };
 
+      console.log("Dados enviados para API:", JSON.stringify(saleData, null, 2));
+
       const res = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -202,7 +241,15 @@ export default function PDVPage() {
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error?.message || "Erro ao finalizar venda");
+        console.error("Erro detalhado:", error);
+
+        // Se houver detalhes de validação, mostra
+        if (error.error?.details) {
+          const details = error.error.details.map((d: any) => `${d.path.join(".")}: ${d.message}`).join(", ");
+          throw new Error(`Erro de validação: ${details}`);
+        }
+
+        throw new Error(error.error?.message || error.message || "Erro ao finalizar venda");
       }
 
       const data = await res.json();
@@ -386,20 +433,82 @@ export default function PDVPage() {
                     variant="outline"
                     size="sm"
                     className="w-full"
-                    onClick={() => setClienteSelecionado(null)}
+                    onClick={() => {
+                      setClienteSelecionado(null);
+                      setBuscaCliente("");
+                    }}
                   >
                     Remover Cliente
                   </Button>
                 </div>
               ) : (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => setModalClienteOpen(true)}
-                >
-                  <Plus className="mr-2 h-4 w-4" />
-                  Adicionar Cliente (F3)
-                </Button>
+                <div className="space-y-2">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                    <Input
+                      placeholder="Buscar cliente..."
+                      className="pl-9"
+                      value={buscaCliente}
+                      onChange={(e) => setBuscaCliente(e.target.value)}
+                    />
+                  </div>
+
+                  {loadingCustomers && (
+                    <div className="flex items-center gap-2 py-2">
+                      <Loader2 className="h-4 w-4 animate-spin" />
+                      <span className="text-sm text-muted-foreground">Buscando...</span>
+                    </div>
+                  )}
+
+                  {!loadingCustomers && customers.length > 0 && (
+                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                      {customers.map((cliente) => (
+                        <Button
+                          key={cliente.id}
+                          variant="ghost"
+                          className="w-full justify-start h-auto py-2"
+                          onClick={() => {
+                            setClienteSelecionado(cliente);
+                            setBuscaCliente("");
+                            toast.success(`${cliente.name} selecionado`);
+                          }}
+                        >
+                          <div className="text-left">
+                            <p className="font-medium text-sm">{cliente.name}</p>
+                            {cliente.phone && (
+                              <p className="text-xs text-muted-foreground">{cliente.phone}</p>
+                            )}
+                          </div>
+                        </Button>
+                      ))}
+                    </div>
+                  )}
+
+                  {!loadingCustomers && buscaCliente.length >= 2 && customers.length === 0 && (
+                    <div className="text-center py-3 text-sm text-muted-foreground">
+                      <p className="mb-2">Cliente não encontrado</p>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => setModalClienteOpen(true)}
+                      >
+                        <Plus className="mr-2 h-3 w-3" />
+                        Cadastrar Novo Cliente
+                      </Button>
+                    </div>
+                  )}
+
+                  {buscaCliente.length < 2 && (
+                    <Button
+                      variant="outline"
+                      className="w-full"
+                      onClick={() => setModalClienteOpen(true)}
+                    >
+                      <Plus className="mr-2 h-4 w-4" />
+                      Adicionar Cliente (F3)
+                    </Button>
+                  )}
+                </div>
               )}
             </CardContent>
           </Card>

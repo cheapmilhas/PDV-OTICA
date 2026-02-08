@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Separator } from "@/components/ui/separator";
 import { Badge } from "@/components/ui/badge";
 import {
   CreditCard,
@@ -85,7 +84,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[600px]">
+      <DialogContent className="sm:max-w-[1000px]">
         <DialogHeader>
           <DialogTitle>Finalizar Venda</DialogTitle>
           <DialogDescription>
@@ -93,55 +92,57 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
-          {/* Resumo */}
-          <div className="rounded-lg border p-4">
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total da venda:</span>
-              <span className="font-semibold">{formatCurrency(total)}</span>
+        {/* Resumo - Full Width */}
+        <div className="rounded-lg border p-4 bg-muted/50">
+          <div className="grid grid-cols-3 gap-4">
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Total da Venda</p>
+              <p className="text-2xl font-bold">{formatCurrency(total)}</p>
             </div>
-            <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Total pago:</span>
-              <span className="font-semibold text-green-600">{formatCurrency(totalPaid)}</span>
+            <div className="text-center border-x">
+              <p className="text-sm text-muted-foreground mb-1">Total Pago</p>
+              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
             </div>
-            <Separator className="my-2" />
-            <div className="flex justify-between">
-              <span className="font-medium">Restante:</span>
-              <span className={`text-lg font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+            <div className="text-center">
+              <p className="text-sm text-muted-foreground mb-1">Restante</p>
+              <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
                 {formatCurrency(remaining)}
-              </span>
+              </p>
             </div>
           </div>
+        </div>
 
-          {/* Formas de Pagamento */}
-          <div className="space-y-3">
-            <Label>Forma de Pagamento</Label>
-            <div className="grid grid-cols-5 gap-2">
-              {paymentMethods.map((method) => {
-                const Icon = method.icon;
-                return (
-                  <button
-                    key={method.id}
-                    onClick={() => setSelectedMethod(method.id)}
-                    className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all hover:bg-accent ${
-                      selectedMethod === method.id
-                        ? "border-primary bg-accent"
-                        : "border-border"
-                    }`}
-                  >
-                    <div className={`rounded-full p-2 ${method.color} text-white`}>
-                      <Icon className="h-4 w-4" />
-                    </div>
-                    <span className="text-xs text-center">{method.label}</span>
-                  </button>
-                );
-              })}
+        <div className="grid grid-cols-2 gap-6">
+          {/* Coluna Esquerda - Adicionar Pagamento */}
+          <div className="space-y-4">
+            {/* Formas de Pagamento */}
+            <div className="space-y-2">
+              <Label>Forma de Pagamento</Label>
+              <div className="grid grid-cols-5 gap-2">
+                {paymentMethods.map((method) => {
+                  const Icon = method.icon;
+                  return (
+                    <button
+                      key={method.id}
+                      onClick={() => setSelectedMethod(method.id)}
+                      className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all hover:bg-accent ${
+                        selectedMethod === method.id
+                          ? "border-primary bg-accent"
+                          : "border-border"
+                      }`}
+                    >
+                      <div className={`rounded-full p-2 ${method.color} text-white`}>
+                        <Icon className="h-4 w-4" />
+                      </div>
+                      <span className="text-xs text-center leading-tight">{method.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
             </div>
-          </div>
 
-          {/* Valor */}
-          <div className="grid gap-4">
-            <div className="grid gap-2">
+            {/* Valor */}
+            <div className="space-y-2">
               <Label htmlFor="amount">Valor</Label>
               <div className="flex gap-2">
                 <Input
@@ -160,7 +161,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
             </div>
 
             {selectedMethod === "CREDIT_CARD" && (
-              <div className="grid gap-2">
+              <div className="space-y-2">
                 <Label htmlFor="installments">Parcelas</Label>
                 <Input
                   id="installments"
@@ -173,23 +174,29 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
               </div>
             )}
 
-            <Button onClick={addPayment} disabled={!selectedMethod || !amount}>
+            <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full" size="lg">
               Adicionar Pagamento
             </Button>
           </div>
 
-          {/* Lista de Pagamentos */}
-          {payments.length > 0 && (
-            <div className="space-y-2">
-              <Label>Pagamentos Adicionados</Label>
-              <div className="space-y-2">
+          {/* Coluna Direita - Lista de Pagamentos */}
+          <div className="space-y-2">
+            <Label>Pagamentos Adicionados ({payments.length})</Label>
+            {payments.length === 0 ? (
+              <div className="flex flex-col items-center justify-center h-[280px] text-center text-muted-foreground border-2 border-dashed rounded-lg">
+                <Wallet className="h-12 w-12 opacity-20 mb-2" />
+                <p className="text-sm">Nenhum pagamento adicionado</p>
+                <p className="text-xs mt-1">Selecione uma forma de pagamento e adicione o valor</p>
+              </div>
+            ) : (
+              <div className="space-y-2 h-[280px] overflow-y-auto pr-2">
                 {payments.map((payment) => {
                   const method = paymentMethods.find((m) => m.id === payment.method);
                   const Icon = method?.icon;
                   return (
                     <div
                       key={payment.id}
-                      className="flex items-center justify-between rounded-lg border p-3"
+                      className="flex items-center justify-between rounded-lg border p-3 bg-muted/30"
                     >
                       <div className="flex items-center gap-3">
                         {Icon && (
@@ -220,36 +227,38 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
                   );
                 })}
               </div>
-            </div>
-          )}
-
-          {/* Botões de Ação */}
-          <div className="flex gap-2">
-            <Button
-              variant="outline"
-              className="flex-1"
-              onClick={() => onOpenChange(false)}
-            >
-              Cancelar
-            </Button>
-            <Button
-              className="flex-1"
-              onClick={handleConfirm}
-              disabled={remaining !== 0 || loading}
-            >
-              {loading ? (
-                <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  Finalizando...
-                </>
-              ) : (
-                <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Confirmar Venda
-                </>
-              )}
-            </Button>
+            )}
           </div>
+        </div>
+
+        {/* Botões de Ação */}
+        <div className="flex gap-3 pt-4 border-t">
+          <Button
+            variant="outline"
+            className="flex-1"
+            size="lg"
+            onClick={() => onOpenChange(false)}
+          >
+            Cancelar
+          </Button>
+          <Button
+            className="flex-1"
+            size="lg"
+            onClick={handleConfirm}
+            disabled={remaining !== 0 || loading}
+          >
+            {loading ? (
+              <>
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                Finalizando...
+              </>
+            ) : (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Confirmar Venda
+              </>
+            )}
+          </Button>
         </div>
       </DialogContent>
     </Dialog>

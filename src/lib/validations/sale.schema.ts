@@ -14,7 +14,7 @@ import { PaymentMethod } from "@prisma/client";
  * Schema para item da venda
  */
 export const saleItemSchema = z.object({
-  productId: z.string().uuid("ID do produto inválido"),
+  productId: z.string().min(1, "ID do produto é obrigatório"),
   qty: z.coerce
     .number()
     .int("Quantidade deve ser inteiro")
@@ -58,8 +58,8 @@ export type PaymentDTO = z.infer<typeof paymentSchema>;
  * Campos opcionais: discount, notes
  */
 export const createSaleSchema = z.object({
-  customerId: z.string().uuid("ID do cliente inválido"),
-  branchId: z.string().uuid("ID da filial inválido"),
+  customerId: z.union([z.string().min(1), z.null()]).optional(),
+  branchId: z.string().min(1, "ID da filial é obrigatório"),
   items: z.array(saleItemSchema).min(1, "Venda deve ter pelo menos 1 item"),
   payments: z.array(paymentSchema).min(1, "Venda deve ter pelo menos 1 pagamento"),
   discount: z.coerce
@@ -89,7 +89,7 @@ export const saleQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(["ativos", "inativos", "todos"]).default("ativos"),
-  customerId: z.string().uuid().optional(),
+  customerId: z.string().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   paymentMethod: z.nativeEnum(PaymentMethod).optional(),
