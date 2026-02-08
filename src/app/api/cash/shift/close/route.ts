@@ -22,13 +22,17 @@ export async function POST(request: Request) {
     const userId = session.user.id;
 
     const body = await request.json();
+    console.log("📥 Request body recebido:", JSON.stringify(body, null, 2));
+
     const { shiftId, ...data } = body;
 
     if (!shiftId) {
       throw new Error("shiftId é obrigatório");
     }
 
+    console.log("📋 Dados para validação:", JSON.stringify(data, null, 2));
     const closeData = closeShiftSchema.parse(data) as CloseShiftDTO;
+    console.log("✅ Validação passou, dados parseados:", JSON.stringify(closeData, null, 2));
 
     const shift = await cashService.closeShift(shiftId, closeData, companyId, userId);
 
@@ -47,6 +51,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializedShift, { status: 200 });
   } catch (error) {
+    console.error("❌ Erro ao fechar caixa:", error);
+    if (error instanceof Error) {
+      console.error("❌ Mensagem do erro:", error.message);
+      console.error("❌ Stack:", error.stack);
+    }
     return handleApiError(error);
   }
 }

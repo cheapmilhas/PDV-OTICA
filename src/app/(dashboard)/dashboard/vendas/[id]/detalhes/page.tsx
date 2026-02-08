@@ -11,7 +11,6 @@ import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit } from "lucide-react";
-import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -89,14 +88,15 @@ export default function DetalhesVendaPage() {
         setSale(data);
       } catch (error: any) {
         toast.error(error.message);
-        router.push("/dashboard/vendas");
+        // Não redireciona em caso de erro, apenas mostra o erro
+        setLoading(false);
       } finally {
         setLoading(false);
       }
     };
 
     fetchSale();
-  }, [id, router]);
+  }, [id]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -261,12 +261,14 @@ export default function DetalhesVendaPage() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/vendas">
-            <Button variant="ghost" size="sm">
-              <ArrowLeft className="h-4 w-4 mr-2" />
-              Voltar
-            </Button>
-          </Link>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.back()}
+          >
+            <ArrowLeft className="h-4 w-4 mr-2" />
+            Voltar
+          </Button>
           <div>
             <h1 className="text-3xl font-bold">Detalhes da Venda</h1>
             <p className="text-muted-foreground">

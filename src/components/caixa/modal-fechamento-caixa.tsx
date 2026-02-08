@@ -73,8 +73,10 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
       const closeData = {
         shiftId: shift.id,
         closingDeclaredCash: valorContadoDinheiro,
-        differenceJustification: Math.abs(diferencaDinheiro) > 0.01 ? formData.observacoes : undefined,
-        notes: formData.observacoes,
+        differenceJustification: Math.abs(diferencaDinheiro) > 0.01 && formData.observacoes.trim()
+          ? formData.observacoes.trim()
+          : undefined,
+        notes: formData.observacoes.trim() || undefined,
       };
 
       console.log("Dados de fechamento:", closeData);
