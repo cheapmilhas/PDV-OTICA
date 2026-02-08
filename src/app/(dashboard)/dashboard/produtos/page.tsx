@@ -18,6 +18,8 @@ import {
   Loader2,
   Package,
   Search,
+  ClipboardList,
+  Barcode,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -26,6 +28,15 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/shared/can";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { ModalAjusteEstoque } from "@/components/estoque/modal-ajuste-estoque";
+import { GerenciadorCodigos } from "@/components/estoque/gerenciador-codigos";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
 
 export default function ProdutosPage() {
   const router = useRouter();
@@ -35,6 +46,8 @@ export default function ProdutosPage() {
   const [produtos, setProdutos] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [ajusteModal, setAjusteModal] = useState<{ open: boolean; produto?: any }>({ open: false });
+  const [barcodeModal, setBarcodeModal] = useState<{ open: boolean; produto?: any }>({ open: false });
 
   // Buscar produtos da API
   useEffect(() => {
@@ -271,26 +284,51 @@ export default function ProdutosPage() {
                       )}
                     </div>
 
-                    <div className="flex items-center gap-2 pt-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => router.push(`/dashboard/produtos/${produto.id}/editar`)}
-                        className="flex-1"
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Editar
-                      </Button>
-
-                      <Can roles={["ADMIN", "GERENTE"]}>
+                    <div className="space-y-2 pt-2">
+                      <div className="flex items-center gap-2">
                         <Button
                           size="sm"
                           variant="outline"
-                          onClick={() => handleDelete(produto.id)}
+                          onClick={() => router.push(`/dashboard/produtos/${produto.id}/editar`)}
+                          className="flex-1"
                         >
-                          <Trash2 className="h-4 w-4" />
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
                         </Button>
-                      </Can>
+
+                        <Can roles={["ADMIN", "GERENTE"]}>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => handleDelete(produto.id)}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </Can>
+                      </div>
+
+                      <div className="flex items-center gap-2">
+                        {produto.stockControlled && (
+                          <Button
+                            size="sm"
+                            variant="secondary"
+                            onClick={() => setAjusteModal({ open: true, produto })}
+                            className="flex-1"
+                          >
+                            <ClipboardList className="h-4 w-4 mr-1" />
+                            Ajustar
+                          </Button>
+                        )}
+                        <Button
+                          size="sm"
+                          variant="secondary"
+                          onClick={() => setBarcodeModal({ open: true, produto })}
+                          className={produto.stockControlled ? "flex-1" : "w-full"}
+                        >
+                          <Barcode className="h-4 w-4 mr-1" />
+                          Códigos
+                        </Button>
+                      </div>
                     </div>
                   </div>
                 </CardContent>
@@ -308,6 +346,39 @@ export default function ProdutosPage() {
           onPageChange={setPage}
           showInfo
         />
+      )}
+
+      {/* Modal de Ajuste de Estoque */}
+      {ajusteModal.produto && (
+        <ModalAjusteEstoque
+          open={ajusteModal.open}
+          onOpenChange={(open) => setAjusteModal({ open, produto: open ? ajusteModal.produto : undefined })}
+          productId={ajusteModal.produto.id}
+          productName={ajusteModal.produto.name}
+          currentStock={ajusteModal.produto.stockQty}
+          onSuccess={() => {
+            // Recarregar produtos após ajuste
+            setPage(page); // Trigger useEffect
+          }}
+        />
+      )}
+
+      {/* Modal de Códigos de Barras */}
+      {barcodeModal.produto && (
+        <Dialog
+          open={barcodeModal.open}
+          onOpenChange={(open) => setBarcodeModal({ open, produto: open ? barcodeModal.produto : undefined })}
+        >
+          <DialogContent className="max-w-4xl max-h-[80vh] overflow-y-auto">
+            <DialogHeader>
+              <DialogTitle>Códigos de Barras - {barcodeModal.produto.name}</DialogTitle>
+              <DialogDescription>
+                SKU: {barcodeModal.produto.sku}
+              </DialogDescription>
+            </DialogHeader>
+            <GerenciadorCodigos productId={barcodeModal.produto.id} />
+          </DialogContent>
+        </Dialog>
       )}
     </div>
   );

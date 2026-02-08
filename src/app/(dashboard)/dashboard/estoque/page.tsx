@@ -15,11 +15,12 @@ import {
 } from "@/components/ui/table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
-import { Search, Plus, Minus, AlertTriangle, Package, Loader2, History } from "lucide-react";
+import { Search, Plus, Minus, AlertTriangle, Package, Loader2, History, Printer, Barcode } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalEntradaEstoque } from "@/components/estoque/modal-entrada-estoque";
 import { ModalSaidaEstoque } from "@/components/estoque/modal-saida-estoque";
 import { HistoricoMovimentacoes } from "@/components/estoque/historico-movimentacoes";
+import { LeitorCodigoBarras } from "@/components/estoque/leitor-codigo-barras";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
 
@@ -60,12 +61,14 @@ export default function EstoquePage() {
   async function fetchProducts() {
     setLoading(true);
     try {
-      const res = await fetch("/api/products?pageSize=1000&status=ativos");
+      const res = await fetch("/api/products?pageSize=10000&status=ativos");
       if (!res.ok) throw new Error("Erro ao buscar produtos");
 
       const data = await res.json();
       const productsArray = Array.isArray(data.data) ? data.data : [];
-      setProducts(productsArray);
+      // Ordena por SKU para facilitar conferência
+      const sortedProducts = productsArray.sort((a, b) => a.sku.localeCompare(b.sku));
+      setProducts(sortedProducts);
     } catch (error: any) {
       console.error("Erro ao carregar produtos:", error);
       toast.error("Erro ao carregar produtos");
@@ -114,6 +117,10 @@ export default function EstoquePage() {
   const abrirModalSaida = (produto?: any) => {
     setProdutoSelecionado(produto || null);
     setModalSaidaOpen(true);
+  };
+
+  const handlePrint = () => {
+    window.print();
   };
 
   return (
@@ -249,6 +256,10 @@ export default function EstoquePage() {
         {/* Tabs */}
         <Tabs defaultValue="estoque" className="space-y-4">
           <TabsList>
+            <TabsTrigger value="scanner">
+              <Barcode className="mr-2 h-4 w-4" />
+              Leitor de Código
+            </TabsTrigger>
             <TabsTrigger value="estoque">
               <Package className="mr-2 h-4 w-4" />
               Estoque Atual
@@ -257,7 +268,54 @@ export default function EstoquePage() {
               <History className="mr-2 h-4 w-4" />
               Histórico de Movimentações
             </TabsTrigger>
+            <TabsTrigger value="impressao">
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir Estoque
+            </TabsTrigger>
           </TabsList>
+
+          {/* Tab Leitor de Código */}
+          <TabsContent value="scanner" className="space-y-4">
+            <Card>
+              <CardHeader>
+                <CardTitle>Leitor de Código de Barras</CardTitle>
+                <CardDescription>
+                  Escaneie ou digite o código de barras para buscar o produto rapidamente
+                </CardDescription>
+              </CardHeader>
+              <CardContent>
+                <LeitorCodigoBarras
+                  onProductFound={(product) => {
+                    // Quando encontrar um produto, podemos abrir modal de entrada ou mostrar detalhes
+                    setProdutoSelecionado(product);
+                  }}
+                />
+              </CardContent>
+            </Card>
+
+            {produtoSelecionado && (
+              <Card>
+                <CardHeader>
+                  <CardTitle>Ações Rápidas</CardTitle>
+                  <CardDescription>
+                    Produto selecionado: {produtoSelecionado.name}
+                  </CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="flex gap-2">
+                    <Button onClick={() => abrirModalEntrada(produtoSelecionado)}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Entrada de Estoque
+                    </Button>
+                    <Button variant="outline" onClick={() => abrirModalSaida(produtoSelecionado)}>
+                      <Minus className="mr-2 h-4 w-4" />
+                      Saída de Estoque
+                    </Button>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+          </TabsContent>
 
           {/* Tab Estoque Atual */}
           <TabsContent value="estoque" className="space-y-4">
@@ -408,8 +466,187 @@ export default function EstoquePage() {
           <TabsContent value="historico" className="space-y-4">
             <HistoricoMovimentacoes />
           </TabsContent>
+
+          {/* Tab Imprimir Estoque */}
+          <TabsContent value="impressao" className="space-y-4">
+            <Card className="print:hidden">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <div>
+                    <CardTitle>Relatório de Estoque para Conferência</CardTitle>
+                    <CardDescription>
+                      Imprima a lista completa do estoque ({products.length} produtos) para conferência física em loja
+                    </CardDescription>
+                  </div>
+                  <Button onClick={handlePrint}>
+                    <Printer className="mr-2 h-4 w-4" />
+                    Imprimir
+                  </Button>
+                </div>
+              </CardHeader>
+              <CardContent>
+                {/* Instruções (não aparecem na impressão) */}
+                <div className="p-4 bg-muted rounded-lg">
+                  <h4 className="font-semibold mb-2">Instruções para Conferência:</h4>
+                  <ul className="text-sm space-y-1 list-disc list-inside">
+                    <li>Clique em "Imprimir" para gerar o relatório completo</li>
+                    <li>Leve o relatório impresso para o local onde está o estoque físico</li>
+                    <li>Conte cada produto fisicamente e anote na coluna "Estoque Físico"</li>
+                    <li>Calcule a diferença entre o estoque do sistema e o físico</li>
+                    <li>Anote observações importantes (produtos danificados, vencidos, etc.)</li>
+                    <li>Após a conferência, faça os ajustes necessários no sistema</li>
+                  </ul>
+                </div>
+
+                {/* Preview da Tabela */}
+                <div className="mt-4">
+                  <p className="text-sm text-muted-foreground mb-2">
+                    Preview: Primeiros 10 produtos (total: {products.length})
+                  </p>
+                  <div className="border rounded-lg overflow-hidden">
+                    <Table className="text-xs">
+                      <TableHeader>
+                        <TableRow>
+                          <TableHead>#</TableHead>
+                          <TableHead>Código/SKU</TableHead>
+                          <TableHead>Produto</TableHead>
+                          <TableHead className="text-center">Estoque</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
+                        {products.slice(0, 10).map((produto, index) => (
+                          <TableRow key={produto.id}>
+                            <TableCell>{index + 1}</TableCell>
+                            <TableCell className="font-mono">{produto.sku}</TableCell>
+                            <TableCell>{produto.name}</TableCell>
+                            <TableCell className="text-center font-bold">{produto.stockQty}</TableCell>
+                          </TableRow>
+                        ))}
+                      </TableBody>
+                    </Table>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+
+            {/* Conteúdo para Impressão */}
+            <div id="print-content" className="hidden print:block">
+              {/* Cabeçalho */}
+              <div className="mb-4 text-center">
+                <h1 className="text-xl font-bold">RELATÓRIO DE ESTOQUE - CONFERÊNCIA FÍSICA</h1>
+                <p className="text-xs mt-1">
+                  Data: {new Date().toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </p>
+                <p className="text-xs font-semibold mt-1">
+                  Total de Produtos: {products.length} | Total de Itens em Estoque: {totalItens}
+                </p>
+              </div>
+
+              {/* Tabela */}
+              <table className="w-full text-[8px] border-collapse">
+                <thead>
+                  <tr className="bg-gray-200">
+                    <th className="border border-black p-0.5 text-left w-[3%]">#</th>
+                    <th className="border border-black p-0.5 text-left w-[10%]">SKU</th>
+                    <th className="border border-black p-0.5 text-left w-[35%]">Produto</th>
+                    <th className="border border-black p-0.5 text-center w-[8%]">Estoque<br/>Sistema</th>
+                    <th className="border border-black p-0.5 text-center w-[10%]">Estoque<br/>Físico</th>
+                    <th className="border border-black p-0.5 text-center w-[8%]">Diferença</th>
+                    <th className="border border-black p-0.5 text-left w-[26%]">Observações</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {products.map((produto, index) => (
+                    <tr key={produto.id}>
+                      <td className="border border-black p-0.5 text-center">{index + 1}</td>
+                      <td className="border border-black p-0.5 font-mono text-[7px]">{produto.sku}</td>
+                      <td className="border border-black p-0.5">
+                        <div className="font-semibold">{produto.name}</div>
+                        {produto.category && (
+                          <div className="text-[7px] text-gray-600">{produto.category.name}</div>
+                        )}
+                      </td>
+                      <td className="border border-black p-0.5 text-center font-bold">{produto.stockQty}</td>
+                      <td className="border border-black p-0.5 bg-gray-100"></td>
+                      <td className="border border-black p-0.5 bg-gray-100"></td>
+                      <td className="border border-black p-0.5"></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+
+              {/* Rodapé */}
+              <div className="mt-4 text-[9px]">
+                <div className="grid grid-cols-3 gap-4">
+                  <div>
+                    <p className="font-bold mb-1">Responsável pela Conferência:</p>
+                    <p className="border-b border-black pb-0.5">____________________________</p>
+                  </div>
+                  <div>
+                    <p className="font-bold mb-1">Data da Conferência:</p>
+                    <p className="border-b border-black pb-0.5">____________________________</p>
+                  </div>
+                  <div>
+                    <p className="font-bold mb-1">Assinatura:</p>
+                    <p className="border-b border-black pb-0.5">____________________________</p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          </TabsContent>
         </Tabs>
       </div>
+
+      {/* Estilos para Impressão */}
+      <style jsx global>{`
+        @media print {
+          /* Esconde tudo menos o conteúdo de impressão */
+          body * {
+            visibility: hidden;
+          }
+
+          #print-content,
+          #print-content * {
+            visibility: visible;
+          }
+
+          #print-content {
+            position: absolute;
+            left: 0;
+            top: 0;
+            width: 100%;
+            padding: 10px;
+          }
+
+          /* Remove margens e paddings extras */
+          @page {
+            size: A4;
+            margin: 0.5cm;
+          }
+
+          /* Garante quebra de página correta */
+          table {
+            page-break-inside: auto;
+          }
+
+          tr {
+            page-break-inside: avoid;
+            page-break-after: auto;
+          }
+
+          /* Remove backgrounds coloridos na impressão */
+          * {
+            -webkit-print-color-adjust: exact !important;
+            print-color-adjust: exact !important;
+          }
+        }
+      `}</style>
     </>
   );
 }

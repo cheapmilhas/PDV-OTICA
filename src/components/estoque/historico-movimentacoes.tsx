@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
 import {
   Table,
   TableBody,
@@ -15,14 +17,17 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { Label } from "@/components/ui/label";
-import { Search, Filter, Loader2, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Printer } from "lucide-react";
-import { formatCurrency } from "@/lib/utils";
+import { Search, Filter, Loader2, ArrowUpCircle, ArrowDownCircle, ArrowRightLeft, Printer, CalendarIcon, X } from "lucide-react";
+import { formatCurrency, cn } from "@/lib/utils";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
-import { StockMovementType } from "@prisma/client";
+import { StockMovementType, ProductType } from "@prisma/client";
 import { getStockMovementTypeLabel } from "@/lib/validations/stock-movement.schema";
+import { getProductTypeLabel, getProductTypeOptions } from "@/lib/validations/product.schema";
 import { ModalHistoricoProduto } from "./modal-historico-produto";
 import { ModalImprimirMovimentacao } from "./modal-imprimir-movimentacao";
+import { format } from "date-fns";
+import { ptBR } from "date-fns/locale";
 
 interface StockMovement {
   id: string;
@@ -64,10 +69,13 @@ export function HistoricoMovimentacoes() {
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [typeFilter, setTypeFilter] = useState<string>("all");
+  const [productTypeFilter, setProductTypeFilter] = useState<string>("all");
   const [page, setPage] = useState(1);
   const [totalPages, setTotalPages] = useState(1);
   const [selectedProduct, setSelectedProduct] = useState<{ id: string; name: string; sku: string } | null>(null);
   const [selectedMovement, setSelectedMovement] = useState<StockMovement | null>(null);
+  const [dateFrom, setDateFrom] = useState<Date | undefined>(undefined);
+  const [dateTo, setDateTo] = useState<Date | undefined>(undefined);
 
   useEffect(() => {
     fetchMovements();
@@ -164,7 +172,7 @@ export function HistoricoMovimentacoes() {
     });
   };
 
-  // Filtrar por busca e tipo
+  // Filtrar por busca, tipo, tipo de produto e data
   const filteredMovements = movements.filter((movement) => {
     // Filtro de busca
     if (search) {
@@ -178,11 +186,30 @@ export function HistoricoMovimentacoes() {
       if (!matchesSearch) return false;
     }
 
-    // Filtro de tipo
-    if (typeFilter === "all") return true;
-    if (typeFilter === "entradas") return isEntrada(movement.type);
-    if (typeFilter === "saidas") return isSaida(movement.type);
-    if (typeFilter === "transferencias") return isTransferencia(movement.type);
+    // Filtro de tipo de movimentação
+    if (typeFilter !== "all") {
+      if (typeFilter === "entradas" && !isEntrada(movement.type)) return false;
+      if (typeFilter === "saidas" && !isSaida(movement.type)) return false;
+      if (typeFilter === "transferencias" && !isTransferencia(movement.type)) return false;
+    }
+
+    // Filtro de tipo de produto
+    if (productTypeFilter !== "all") {
+      if (movement.product.type !== productTypeFilter) return false;
+    }
+
+    // Filtro de data
+    const movementDate = new Date(movement.createdAt);
+    if (dateFrom) {
+      const fromDate = new Date(dateFrom);
+      fromDate.setHours(0, 0, 0, 0);
+      if (movementDate < fromDate) return false;
+    }
+    if (dateTo) {
+      const toDate = new Date(dateTo);
+      toDate.setHours(23, 59, 59, 999);
+      if (movementDate > toDate) return false;
+    }
 
     return true;
   });
@@ -198,7 +225,7 @@ export function HistoricoMovimentacoes() {
           </CardDescription>
         </CardHeader>
         <CardContent>
-          <div className="grid gap-4 md:grid-cols-2">
+          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
             <div className="space-y-2">
               <Label>Buscar</Label>
               <div className="relative">
@@ -226,7 +253,146 @@ export function HistoricoMovimentacoes() {
                 </SelectContent>
               </Select>
             </div>
+
+            <div className="space-y-2">
+              <Label>Tipo de Produto</Label>
+              <Select value={productTypeFilter} onValueChange={setProductTypeFilter}>
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos os Tipos</SelectItem>
+                  {getProductTypeOptions().map((option) => (
+                    <SelectItem key={option.value} value={option.value}>
+                      {option.label}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
           </div>
+
+          <div className="grid gap-4 md:grid-cols-2 mt-4">
+
+            <div className="space-y-2">
+              <Label>Data Inicial</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateFrom && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateFrom ? format(dateFrom, "dd/MM/yyyy", { locale: ptBR }) : "Selecione..."}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateFrom}
+                    onSelect={setDateFrom}
+                    locale={ptBR}
+                    initialFocus
+                  />
+                  {dateFrom && (
+                    <div className="p-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setDateFrom(undefined)}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Limpar
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Data Final</Label>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button
+                    variant="outline"
+                    className={cn(
+                      "w-full justify-start text-left font-normal",
+                      !dateTo && "text-muted-foreground"
+                    )}
+                  >
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {dateTo ? format(dateTo, "dd/MM/yyyy", { locale: ptBR }) : "Selecione..."}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0" align="start">
+                  <Calendar
+                    mode="single"
+                    selected={dateTo}
+                    onSelect={setDateTo}
+                    locale={ptBR}
+                    initialFocus
+                  />
+                  {dateTo && (
+                    <div className="p-3 border-t">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="w-full"
+                        onClick={() => setDateTo(undefined)}
+                      >
+                        <X className="h-4 w-4 mr-2" />
+                        Limpar
+                      </Button>
+                    </div>
+                  )}
+                </PopoverContent>
+              </Popover>
+            </div>
+          </div>
+
+          {/* Filtros Ativos */}
+          {(dateFrom || dateTo || productTypeFilter !== "all") && (
+            <div className="flex flex-wrap gap-2 mt-4">
+              {productTypeFilter !== "all" && (
+                <Badge variant="secondary" className="gap-1">
+                  Tipo: {getProductTypeLabel(productTypeFilter as ProductType)}
+                  <button
+                    onClick={() => setProductTypeFilter("all")}
+                    className="ml-1 hover:bg-secondary-foreground/20 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {dateFrom && (
+                <Badge variant="secondary" className="gap-1">
+                  De: {format(dateFrom, "dd/MM/yyyy", { locale: ptBR })}
+                  <button
+                    onClick={() => setDateFrom(undefined)}
+                    className="ml-1 hover:bg-secondary-foreground/20 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+              {dateTo && (
+                <Badge variant="secondary" className="gap-1">
+                  Até: {format(dateTo, "dd/MM/yyyy", { locale: ptBR })}
+                  <button
+                    onClick={() => setDateTo(undefined)}
+                    className="ml-1 hover:bg-secondary-foreground/20 rounded-full"
+                  >
+                    <X className="h-3 w-3" />
+                  </button>
+                </Badge>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -301,6 +467,9 @@ export function HistoricoMovimentacoes() {
                         <p className="text-xs text-muted-foreground">
                           SKU: {movement.product.sku}
                         </p>
+                        <Badge variant="outline" className="text-xs mt-1">
+                          {getProductTypeLabel(movement.product.type)}
+                        </Badge>
                       </button>
                     </TableCell>
                     <TableCell className="text-center">

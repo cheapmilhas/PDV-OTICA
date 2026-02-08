@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -14,6 +15,7 @@ import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { hasPermission, Permission } from "@/lib/permissions";
 
 interface SaleDetails {
   id: string;
@@ -63,6 +65,7 @@ export default function DetalhesVendaPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
+  const { data: session } = useSession();
 
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -71,6 +74,10 @@ export default function DetalhesVendaPage() {
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedSellerId, setSelectedSellerId] = useState("");
   const [updatingSeller, setUpdatingSeller] = useState(false);
+
+  // Verifica permissões do usuário
+  const canCancelSale = hasPermission(session?.user?.role || "", Permission.SALES_CANCEL);
+  const canEditSeller = hasPermission(session?.user?.role || "", Permission.SALES_EDIT_SELLER);
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -281,14 +288,16 @@ export default function DetalhesVendaPage() {
                 <Printer className="h-4 w-4 mr-2" />
                 Imprimir
               </Button>
-              <Button
-                variant="destructive"
-                size="sm"
-                onClick={handleCancel}
-                disabled={canceling}
-              >
-                {canceling ? "Cancelando..." : "Cancelar Venda"}
-              </Button>
+              {canCancelSale && (
+                <Button
+                  variant="destructive"
+                  size="sm"
+                  onClick={handleCancel}
+                  disabled={canceling}
+                >
+                  {canceling ? "Cancelando..." : "Cancelar Venda"}
+                </Button>
+              )}
             </>
           ) : (
             <Badge variant="destructive">Cancelada</Badge>
@@ -391,7 +400,7 @@ export default function DetalhesVendaPage() {
                 <p className="text-sm text-muted-foreground">Vendedor</p>
                 <p className="font-semibold">{sale.sellerUser.name}</p>
               </div>
-              {sale.status !== "CANCELED" && sale.status !== "REFUNDED" && (
+              {canEditSeller && sale.status !== "CANCELED" && sale.status !== "REFUNDED" && (
                 <Button
                   variant="ghost"
                   size="sm"

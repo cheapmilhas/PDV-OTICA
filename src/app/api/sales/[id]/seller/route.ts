@@ -16,6 +16,9 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    // Extrai o id dos params
+    const { id } = await context.params;
+
     // Requer autenticação
     const session = await auth();
     if (!session?.user?.id) {
@@ -23,7 +26,6 @@ export async function PATCH(
     }
 
     const companyId = await getCompanyId();
-    const { id } = await context.params;
 
     // Parse body
     const body = await request.json();

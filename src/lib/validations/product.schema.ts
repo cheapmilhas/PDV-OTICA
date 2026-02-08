@@ -285,3 +285,50 @@ export function isLowStock(stockQty: number, stockMin: number): boolean {
 export function isOutOfStock(stockQty: number, stockControlled: boolean): boolean {
   return stockControlled && stockQty === 0;
 }
+
+/**
+ * Helper para obter label em português do tipo de produto
+ *
+ * @param type Tipo do produto (enum ProductType)
+ * @returns Label em português
+ */
+export function getProductTypeLabel(type: ProductType): string {
+  const labels: Record<ProductType, string> = {
+    FRAME: "Armação",
+    CONTACT_LENS: "Lente de Contato",
+    OPHTHALMIC_LENS: "Lente Oftálmica",
+    SUNGLASSES: "Óculos Solar",
+    LENS_SERVICE: "Serviço de Lente",
+    SERVICE: "Serviço",
+    OPTICAL_ACCESSORY: "Acessório Óptico",
+    LENS_SOLUTION: "Solução para Lentes",
+    CASE: "Estojo",
+    CLEANING_KIT: "Kit de Limpeza",
+    OTHER: "Outros",
+    // Manter compatibilidade com tipos antigos (caso existam no banco)
+    ACCESSORY: "Acessório",
+  };
+
+  return labels[type] || type;
+}
+
+/**
+ * Helper para obter todos os tipos de produtos com labels
+ *
+ * @returns Array de objetos { value, label }
+ */
+export function getProductTypeOptions() {
+  return [
+    { value: ProductType.FRAME, label: "Armação" },
+    { value: ProductType.CONTACT_LENS, label: "Lente de Contato" },
+    { value: ProductType.OPHTHALMIC_LENS, label: "Lente Oftálmica" },
+    { value: ProductType.SUNGLASSES, label: "Óculos Solar" },
+    { value: ProductType.LENS_SERVICE, label: "Serviço de Lente" },
+    { value: ProductType.SERVICE, label: "Serviço" },
+    { value: ProductType.OPTICAL_ACCESSORY, label: "Acessório Óptico" },
+    { value: ProductType.LENS_SOLUTION, label: "Solução para Lentes" },
+    { value: ProductType.CASE, label: "Estojo" },
+    { value: ProductType.CLEANING_KIT, label: "Kit de Limpeza" },
+    { value: ProductType.OTHER, label: "Outros" },
+  ];
+}

@@ -1,40 +1,47 @@
 "use client";
 
+import { useState, useEffect } from "react";
 import {
   AlertTriangle,
   Check,
   ChevronsUpDown,
+  Info,
+  Loader2,
+  Minus,
+  Package,
+} from "lucide-react";
+import {
+  Command,
   CommandEmpty,
   CommandGroup,
   CommandInput,
   CommandItem,
-  CommandList } from "@/components/ui/command";
-import { Popover,
+  CommandList,
+} from "@/components/ui/command";
+import {
+  Popover,
+  PopoverContent,
+  PopoverTrigger,
+} from "@/components/ui/popover";
+import {
+  Dialog,
   DialogContent,
   DialogDescription,
   DialogHeader,
-  DialogTitle } from "@/components/ui/dialog";
+  DialogTitle,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
-import { Select,
-  Info,
-  Loader2,
-  Package,
-  PopoverContent,
-  PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
-import { Minus,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue } from "@/components/ui/select";
-import { Command,
-  useEffect } from "react";
-import { Dialog,
-  useState,
-} from "lucide-react";
 import { StockMovementType } from "@prisma/client";
 import { cn } from "@/lib/utils";
 

@@ -10,6 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
+import { useRouter } from "next/navigation";
 import {
   Bell,
   Building2,
@@ -21,10 +22,12 @@ import {
   Settings,
   Shield,
   Store,
+  Key,
 } from "lucide-react";
 
 export default function ConfiguracoesPage() {
   const { toast } = useToast();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
 
   // Estados para configurações da loja
@@ -433,12 +436,31 @@ export default function ConfiguracoesPage() {
         <TabsContent value="seguranca" className="space-y-4">
           <Card>
             <CardHeader>
-              <CardTitle>Segurança</CardTitle>
+              <CardTitle>Segurança e Permissões</CardTitle>
               <CardDescription>
-                Configurações de segurança e acesso
+                Configurações de segurança e acesso ao sistema
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
+              <div className="rounded-lg border p-4 bg-muted/30">
+                <div className="flex items-start justify-between">
+                  <div className="space-y-1">
+                    <div className="flex items-center gap-2">
+                      <Key className="h-5 w-5 text-primary" />
+                      <Label className="text-base font-semibold">Permissões por Cargo</Label>
+                    </div>
+                    <p className="text-sm text-muted-foreground">
+                      Visualize as permissões atribuídas a cada cargo do sistema
+                    </p>
+                  </div>
+                  <Button onClick={() => router.push("/dashboard/configuracoes/permissoes")}>
+                    Gerenciar
+                  </Button>
+                </div>
+              </div>
+
+              <Separator />
+
               <div className="space-y-2">
                 <Label>Alterar Senha</Label>
                 <div className="space-y-2">
