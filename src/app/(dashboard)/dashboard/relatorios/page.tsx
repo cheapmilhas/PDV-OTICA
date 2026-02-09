@@ -37,21 +37,25 @@ const reports = [
     color: "text-purple-600",
     bgColor: "bg-purple-100",
   },
-];
-
-const upcomingReports = [
   {
     title: "Posição de Estoque",
-    description: "Análise completa de estoque e movimentações",
+    description: "Análise completa de estoque com alertas de mínimo",
     icon: Package,
-    badge: "Sprint B",
+    href: "/dashboard/relatorios/posicao-estoque",
+    color: "text-orange-600",
+    bgColor: "bg-orange-100",
   },
   {
     title: "Produtos sem Giro",
     description: "Identificação de produtos parados no estoque",
     icon: TrendingUp,
-    badge: "Sprint B",
+    href: "/dashboard/relatorios/produtos-sem-giro",
+    color: "text-red-600",
+    bgColor: "bg-red-100",
   },
+];
+
+const upcomingReports = [
   {
     title: "Contas a Receber",
     description: "Análise de recebíveis e inadimplência",
@@ -87,7 +91,7 @@ export default function RelatoriosPage() {
 
       {/* Relatórios Disponíveis */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Relatórios Disponíveis (Sprint A)</h2>
+        <h2 className="text-xl font-semibold mb-4">Relatórios Disponíveis (Sprint A + B)</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {reports.map((report) => {
             const Icon = report.icon;
