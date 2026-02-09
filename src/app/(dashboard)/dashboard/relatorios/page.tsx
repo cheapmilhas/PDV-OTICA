@@ -53,20 +53,30 @@ const reports = [
     color: "text-red-600",
     bgColor: "bg-red-100",
   },
-];
-
-const upcomingReports = [
+  {
+    title: "Histórico de Caixas",
+    description: "Análise de abertura e fechamento de caixas com diferenças",
+    icon: BarChart3,
+    href: "/dashboard/relatorios/historico-caixas",
+    color: "text-teal-600",
+    bgColor: "bg-teal-100",
+  },
   {
     title: "Contas a Receber",
     description: "Análise de recebíveis e inadimplência",
     icon: FileText,
-    badge: "Sprint C",
+    href: "/dashboard/relatorios/contas-receber",
+    color: "text-indigo-600",
+    bgColor: "bg-indigo-100",
   },
+];
+
+const upcomingReports = [
   {
     title: "Contas a Pagar",
     description: "Gestão de contas a pagar e fornecedores",
     icon: FileText,
-    badge: "Sprint C",
+    badge: "Sprint D",
   },
   {
     title: "DRE Gerencial",
@@ -91,7 +101,7 @@ export default function RelatoriosPage() {
 
       {/* Relatórios Disponíveis */}
       <div>
-        <h2 className="text-xl font-semibold mb-4">Relatórios Disponíveis (Sprint A + B)</h2>
+        <h2 className="text-xl font-semibold mb-4">Relatórios Disponíveis (Sprint A + B + C)</h2>
         <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
           {reports.map((report) => {
             const Icon = report.icon;
