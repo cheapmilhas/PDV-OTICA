@@ -43,6 +43,8 @@
     "clsx": "^2.1.1",
     "cmdk": "^1.1.1",
     "date-fns": "^4.1.0",
+    "jspdf": "^4.1.0",
+    "jspdf-autotable": "^5.0.7",
     "lucide-react": "^0.563.0",
     "next": "^16.1.6",
     "next-auth": "^5.0.0-beta.30",
@@ -62,6 +64,7 @@
   "devDependencies": {
     "@prisma/client": "^5.22.0",
     "@types/bcryptjs": "^2.4.6",
+    "@types/jspdf": "^1.3.3",
     "@types/node": "^25.2.0",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
