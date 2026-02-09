@@ -24,7 +24,7 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
-import { Search, Plus, Eye, Mail, Phone, MapPin, TrendingUp, Loader2, Edit, Trash2, Package, AlertTriangle } from "lucide-react";
+import { Search, Plus, Eye, Mail, Phone, MapPin, TrendingUp, Loader2, Edit, Trash2, Package, AlertTriangle, Download, Upload, FileDown } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
@@ -61,6 +61,8 @@ export default function FornecedoresPage() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Supplier>>({});
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Buscar fornecedores da API
   useEffect(() => {
@@ -219,23 +221,142 @@ export default function FornecedoresPage() {
     return date.toLocaleDateString("pt-BR");
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/suppliers/export");
+      if (!res.ok) throw new Error("Erro ao exportar fornecedores");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `fornecedores_${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success("Fornecedores exportados com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao exportar fornecedores");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch("/api/suppliers/template");
+      if (!res.ok) throw new Error("Erro ao baixar template");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "template_importacao_fornecedores.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success("Template baixado com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao baixar template");
+    }
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/suppliers/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Erro ao importar fornecedores");
+      }
+
+      const result = await res.json();
+      toast.success(
+        `${result.message}\n\n` +
+        `✓ ${result.results.created.length} criados\n` +
+        `↻ ${result.results.updated.length} atualizados\n` +
+        (result.results.errors.length > 0 ? `✗ ${result.results.errors.length} erros` : ""),
+        { duration: 5000 }
+      );
+
+      if (result.results.errors.length > 0) {
+        console.log("Erros de importação:", result.results.errors);
+      }
+
+      // Recarregar lista
+      fetchSuppliers();
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao importar fornecedores");
+    } finally {
+      setImporting(false);
+      // Limpar input
+      event.target.value = "";
+    }
+  };
+
   const totalFornecedores = pagination?.total || 0;
   const fornecedoresAtivos = suppliers.filter(s => s.active).length;
 
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold">Fornecedores</h1>
           <p className="text-muted-foreground">
             Gerencie os fornecedores da ótica
           </p>
         </div>
-        <Button onClick={() => toast("Em desenvolvimento")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Fornecedor
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleDownloadTemplate}>
+            <FileDown className="mr-2 h-4 w-4" />
+            Baixar Template
+          </Button>
+          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Exportar
+          </Button>
+          <Button variant="outline" disabled={importing} asChild>
+            <label className="cursor-pointer">
+              {importing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              Importar
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImport}
+                className="hidden"
+                disabled={importing}
+              />
+            </label>
+          </Button>
+          <Button onClick={() => toast("Em desenvolvimento")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Fornecedor
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}

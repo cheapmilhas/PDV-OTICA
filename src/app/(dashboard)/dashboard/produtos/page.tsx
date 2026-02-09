@@ -20,6 +20,9 @@ import {
   Search,
   ClipboardList,
   Barcode,
+  Download,
+  Upload,
+  FileDown,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -48,6 +51,8 @@ export default function ProdutosPage() {
   const [loading, setLoading] = useState(true);
   const [ajusteModal, setAjusteModal] = useState<{ open: boolean; produto?: any }>({ open: false });
   const [barcodeModal, setBarcodeModal] = useState<{ open: boolean; produto?: any }>({ open: false });
+  const [importing, setImporting] = useState(false);
+  const [exporting, setExporting] = useState(false);
 
   // Buscar produtos da API
   useEffect(() => {
@@ -91,6 +96,94 @@ export default function ProdutosPage() {
     }
   };
 
+  const handleExport = async () => {
+    setExporting(true);
+    try {
+      const res = await fetch("/api/products/export");
+      if (!res.ok) throw new Error("Erro ao exportar produtos");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `produtos_${new Date().toISOString().split("T")[0]}.xlsx`;
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success("Produtos exportados com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao exportar produtos");
+    } finally {
+      setExporting(false);
+    }
+  };
+
+  const handleDownloadTemplate = async () => {
+    try {
+      const res = await fetch("/api/products/template");
+      if (!res.ok) throw new Error("Erro ao baixar template");
+
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "template_importacao_produtos.xlsx";
+      document.body.appendChild(a);
+      a.click();
+      window.URL.revokeObjectURL(url);
+      document.body.removeChild(a);
+
+      toast.success("Template baixado com sucesso!");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao baixar template");
+    }
+  };
+
+  const handleImport = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+
+    setImporting(true);
+    const formData = new FormData();
+    formData.append("file", file);
+
+    try {
+      const res = await fetch("/api/products/import", {
+        method: "POST",
+        body: formData,
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Erro ao importar produtos");
+      }
+
+      const result = await res.json();
+      toast.success(
+        `${result.message}\n\n` +
+        `✓ ${result.results.created.length} criados\n` +
+        `↻ ${result.results.updated.length} atualizados\n` +
+        (result.results.errors.length > 0 ? `✗ ${result.results.errors.length} erros` : ""),
+        { duration: 5000 }
+      );
+
+      if (result.results.errors.length > 0) {
+        console.log("Erros de importação:", result.results.errors);
+      }
+
+      // Recarregar lista
+      setPage(1);
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao importar produtos");
+    } finally {
+      setImporting(false);
+      // Limpar input
+      event.target.value = "";
+    }
+  };
+
   const typeLabels: Record<string, string> = {
     FRAME: "Armação",
     LENS_SERVICE: "Lente",
@@ -131,15 +224,46 @@ export default function ProdutosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-4">
         <div>
           <h1 className="text-3xl font-bold">Produtos</h1>
           <p className="text-muted-foreground">Gerencie o catálogo de produtos da ótica</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/produtos/novo")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Produto
-        </Button>
+        <div className="flex gap-2 flex-wrap">
+          <Button variant="outline" onClick={handleDownloadTemplate}>
+            <FileDown className="mr-2 h-4 w-4" />
+            Baixar Template
+          </Button>
+          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+            {exporting ? (
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+            ) : (
+              <Download className="mr-2 h-4 w-4" />
+            )}
+            Exportar
+          </Button>
+          <Button variant="outline" disabled={importing} asChild>
+            <label className="cursor-pointer">
+              {importing ? (
+                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              ) : (
+                <Upload className="mr-2 h-4 w-4" />
+              )}
+              Importar
+              <input
+                type="file"
+                accept=".xlsx,.xls"
+                onChange={handleImport}
+                className="hidden"
+                disabled={importing}
+              />
+            </label>
+          </Button>
+          <Button onClick={() => router.push("/dashboard/produtos/novo")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Produto
+          </Button>
+        </div>
       </div>
 
       {/* Summary Cards */}
