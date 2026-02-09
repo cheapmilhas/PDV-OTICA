@@ -14,50 +14,125 @@ import {
   BarChart3,
   Settings,
   ClipboardList,
-  Stethoscope,
   Gift,
   Truck,
   UserCog,
 } from "lucide-react";
+import { PermissionGuard } from "@/components/permission-guard";
 
 const menuItems = [
   {
     title: "Principal",
     items: [
       { name: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
-      { name: "PDV", href: "/dashboard/pdv", icon: ShoppingCart, hotkey: "F2" },
+      {
+        name: "PDV",
+        href: "/dashboard/pdv",
+        icon: ShoppingCart,
+        hotkey: "F2",
+        permission: "sales.create"
+      },
     ],
   },
   {
     title: "Vendas",
     items: [
-      { name: "Vendas", href: "/dashboard/vendas", icon: CreditCard },
-      { name: "Orçamentos", href: "/dashboard/orcamentos", icon: FileText },
-      { name: "Ordens de Serviço", href: "/dashboard/ordens-servico", icon: ClipboardList },
+      {
+        name: "Vendas",
+        href: "/dashboard/vendas",
+        icon: CreditCard,
+        permission: "sales.access"
+      },
+      {
+        name: "Orçamentos",
+        href: "/dashboard/orcamentos",
+        icon: FileText,
+        permission: "quotes.access"
+      },
+      {
+        name: "Ordens de Serviço",
+        href: "/dashboard/ordens-servico",
+        icon: ClipboardList,
+        permission: "service_orders.access"
+      },
     ],
   },
   {
     title: "Cadastros",
     items: [
-      { name: "Clientes", href: "/dashboard/clientes", icon: Users, hotkey: "F3" },
-      { name: "Produtos", href: "/dashboard/produtos", icon: Package, hotkey: "F4" },
-      { name: "Fornecedores", href: "/dashboard/fornecedores", icon: Truck },
-      { name: "Funcionários", href: "/dashboard/funcionarios", icon: UserCog },
+      {
+        name: "Clientes",
+        href: "/dashboard/clientes",
+        icon: Users,
+        hotkey: "F3",
+        permission: "customers.access"
+      },
+      {
+        name: "Produtos",
+        href: "/dashboard/produtos",
+        icon: Package,
+        hotkey: "F4",
+        permission: "products.access"
+      },
+      {
+        name: "Fornecedores",
+        href: "/dashboard/fornecedores",
+        icon: Truck,
+        permission: "suppliers.access"
+      },
+      {
+        name: "Funcionários",
+        href: "/dashboard/funcionarios",
+        icon: UserCog,
+        permission: "users.access"
+      },
     ],
   },
   {
     title: "Gestão",
     items: [
-      { name: "Estoque", href: "/dashboard/estoque", icon: Warehouse },
-      { name: "Caixa", href: "/dashboard/caixa", icon: CreditCard },
-      { name: "Financeiro", href: "/dashboard/financeiro", icon: FileText },
-      { name: "Metas", href: "/dashboard/metas", icon: Gift },
-      { name: "Relatórios", href: "/dashboard/relatorios", icon: BarChart3 },
+      {
+        name: "Estoque",
+        href: "/dashboard/estoque",
+        icon: Warehouse,
+        permission: "stock.access"
+      },
+      {
+        name: "Caixa",
+        href: "/dashboard/caixa",
+        icon: CreditCard,
+        permission: "cash.access"
+      },
+      {
+        name: "Financeiro",
+        href: "/dashboard/financeiro",
+        icon: FileText,
+        permission: "financial.access"
+      },
+      {
+        name: "Metas",
+        href: "/dashboard/metas",
+        icon: Gift,
+        permission: "goals.access"
+      },
+      {
+        name: "Relatórios",
+        href: "/dashboard/relatorios",
+        icon: BarChart3,
+        permission: "reports.access"
+      },
     ],
   },
   {
     title: "Configurações",
-    items: [{ name: "Configurações", href: "/dashboard/configuracoes", icon: Settings }],
+    items: [
+      {
+        name: "Configurações",
+        href: "/dashboard/configuracoes",
+        icon: Settings,
+        permission: "settings.access"
+      }
+    ],
   },
 ];
 
@@ -88,25 +163,36 @@ export function Sidebar() {
                 const Icon = item.icon;
                 const isActive = pathname === item.href;
 
+                // Se o item tem permissão, envolve com PermissionGuard
+                const linkContent = (
+                  <Link
+                    href={item.href}
+                    className={cn(
+                      "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                      isActive
+                        ? "bg-primary text-primary-foreground font-medium"
+                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                    )}
+                  >
+                    <Icon className="h-4 w-4" />
+                    <span className="flex-1">{item.name}</span>
+                    {item.hotkey && (
+                      <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-xs font-mono border rounded bg-background">
+                        {item.hotkey}
+                      </kbd>
+                    )}
+                  </Link>
+                );
+
                 return (
                   <li key={item.name}>
-                    <Link
-                      href={item.href}
-                      className={cn(
-                        "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                        isActive
-                          ? "bg-primary text-primary-foreground font-medium"
-                          : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
-                      )}
-                    >
-                      <Icon className="h-4 w-4" />
-                      <span className="flex-1">{item.name}</span>
-                      {item.hotkey && (
-                        <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-xs font-mono border rounded bg-background">
-                          {item.hotkey}
-                        </kbd>
-                      )}
-                    </Link>
+                    {item.permission ? (
+                      <PermissionGuard permission={item.permission}>
+                        {linkContent}
+                      </PermissionGuard>
+                    ) : (
+                      linkContent
+                    )}
                   </li>
                 );
               })}

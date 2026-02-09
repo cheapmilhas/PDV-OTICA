@@ -23,8 +23,18 @@ import { useSession } from "next-auth/react";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { ProtectedAction } from "@/components/auth/ProtectedAction";
 
 export default function VendasPage() {
+  return (
+    <ProtectedRoute permission="sales.access">
+      <VendasContent />
+    </ProtectedRoute>
+  );
+}
+
+function VendasContent() {
   const router = useRouter();
   const { data: session } = useSession();
   const [search, setSearch] = useState("");
@@ -80,10 +90,12 @@ export default function VendasPage() {
           <h1 className="text-3xl font-bold">Vendas</h1>
           <p className="text-muted-foreground">Histórico de vendas realizadas</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/pdv")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Venda
-        </Button>
+        <ProtectedAction permission="sales.create">
+          <Button onClick={() => router.push("/dashboard/pdv")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova Venda
+          </Button>
+        </ProtectedAction>
       </div>
 
       {/* Tabs de Filtro */}
@@ -179,10 +191,12 @@ export default function VendasPage() {
           }
           action={
             !search && (
-              <Button onClick={() => router.push("/dashboard/pdv")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nova Venda
-              </Button>
+              <ProtectedAction permission="sales.create">
+                <Button onClick={() => router.push("/dashboard/pdv")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nova Venda
+                </Button>
+              </ProtectedAction>
             )
           }
         />

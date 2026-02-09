@@ -15,9 +15,21 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
   trustHost: true, // Necessário para produção (Vercel)
   session: {
     strategy: "jwt",
+    maxAge: 30 * 24 * 60 * 60, // 30 dias
   },
   pages: {
     signIn: "/login",
+  },
+  cookies: {
+    sessionToken: {
+      name: "next-auth.session-token",
+      options: {
+        httpOnly: true,
+        sameSite: "lax",
+        path: "/",
+        secure: process.env.NODE_ENV === "production",
+      },
+    },
   },
   providers: [
     Credentials({
@@ -70,13 +82,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           );
 
           if (!isPasswordValid) {
+            console.log(`❌ Senha inválida para ${email}`);
             return null;
           }
 
           // Pegar o primeiro branch do usuário
           const firstBranch = user.branches[0]?.branch;
 
-          return {
+          const authData = {
             id: user.id,
             name: user.name,
             email: user.email,
@@ -84,6 +97,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             branchId: firstBranch?.id || "mock-branch-id",
             companyId: user.companyId,
           };
+
+          console.log(`✅ Login bem-sucedido:`, {
+            name: authData.name,
+            email: authData.email,
+            role: authData.role,
+          });
+
+          return authData;
         } catch (error) {
           console.error("Auth error:", error);
           return null;
@@ -92,18 +113,40 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
-    async jwt({ token, user }) {
+    async jwt({ token, user, trigger }) {
+      // Se for um novo login, atualizar o token com dados do usuário
       if (user) {
+        console.log("🔐 JWT callback - Novo login:", {
+          email: user.email,
+          role: user.role,
+        });
+
         token.id = user.id;
+        token.name = user.name;
+        token.email = user.email;
         token.role = user.role;
         token.branchId = user.branchId;
         token.companyId = user.companyId;
       }
+
+      // Se for um update da sessão (ex: após signOut), resetar o token
+      if (trigger === "update") {
+        console.log("🔄 JWT callback - Update trigger");
+      }
+
       return token;
     },
     async session({ session, token }) {
+      // Sempre pegar dados do token (nunca manter dados antigos)
       if (token && session.user) {
+        console.log("👤 Session callback - Token:", {
+          email: token.email,
+          role: token.role,
+        });
+
         session.user.id = token.id as string;
+        session.user.name = token.name as string;
+        session.user.email = token.email as string;
         session.user.role = token.role as any;
         session.user.branchId = token.branchId as string;
         session.user.companyId = token.companyId as string;

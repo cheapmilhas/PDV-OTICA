@@ -1,29 +1,63 @@
 "use client";
 
 import { useState } from "react";
-import { signIn } from "next-auth/react";
+import { signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
-import { Glasses, Loader2 } from "lucide-react";
+import { Glasses, Loader2, Trash2 } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
 export default function LoginPage() {
   const router = useRouter();
   const { toast } = useToast();
   const [isLoading, setIsLoading] = useState(false);
+  const [isClearing, setIsClearing] = useState(false);
   const [formData, setFormData] = useState({
     email: "",
     password: "",
   });
+
+  const handleClearSession = async () => {
+    setIsClearing(true);
+    try {
+      // Fazer signOut primeiro
+      await signOut({ redirect: false });
+
+      // Limpar cookies via API
+      await fetch("/api/auth/clear-session");
+
+      toast({
+        title: "Sessão limpa!",
+        description: "Todos os dados foram apagados. Faça login novamente.",
+      });
+
+      // Recarregar página
+      window.location.reload();
+    } catch (error) {
+      toast({
+        variant: "destructive",
+        title: "Erro",
+        description: "Erro ao limpar sessão",
+      });
+    } finally {
+      setIsClearing(false);
+    }
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
 
     try {
+      // SEMPRE fazer signOut antes de novo login para limpar sessão anterior
+      await signOut({ redirect: false });
+
+      // Aguardar um momento para garantir que o signOut completou
+      await new Promise((resolve) => setTimeout(resolve, 100));
+
       const result = await signIn("credentials", {
         email: formData.email,
         password: formData.password,
@@ -37,8 +71,8 @@ export default function LoginPage() {
           description: "Email ou senha incorretos",
         });
       } else {
-        router.push("/dashboard");
-        router.refresh();
+        // Forçar reload completo para garantir nova sessão
+        window.location.href = "/dashboard";
       }
     } catch (error) {
       toast({
@@ -95,10 +129,28 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <div className="mt-6 rounded-lg bg-muted p-4 text-sm">
+          <Button
+            type="button"
+            variant="outline"
+            className="mt-4 w-full"
+            onClick={handleClearSession}
+            disabled={isClearing}
+          >
+            {isClearing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            {!isClearing && <Trash2 className="mr-2 h-4 w-4" />}
+            Limpar Sessão Anterior
+          </Button>
+
+          <div className="mt-6 rounded-lg bg-muted p-4 text-sm space-y-2">
             <p className="font-semibold text-foreground">Credenciais de teste:</p>
-            <p className="text-muted-foreground">Email: admin@pdvotica.com</p>
-            <p className="text-muted-foreground">Senha: admin123</p>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">ADMIN:</p>
+              <p className="text-muted-foreground">admin@pdvotica.com / admin123</p>
+            </div>
+            <div>
+              <p className="text-xs text-muted-foreground font-medium">VENDEDOR:</p>
+              <p className="text-muted-foreground">vendedor@pdvotica.com / vendedor123</p>
+            </div>
           </div>
         </CardContent>
       </Card>

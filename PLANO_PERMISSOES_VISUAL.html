@@ -1,0 +1,675 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Sistema de Permissões - Mockup</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: #f5f5f5;
+            padding: 20px;
+        }
+
+        .container {
+            max-width: 1200px;
+            margin: 0 auto;
+        }
+
+        .card {
+            background: white;
+            border-radius: 8px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.1);
+            padding: 24px;
+            margin-bottom: 20px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 20px;
+            color: #1a1a1a;
+        }
+
+        .user-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 24px;
+            padding: 16px;
+            background: #f8f9fa;
+            border-radius: 6px;
+        }
+
+        .avatar {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 20px;
+            font-weight: bold;
+        }
+
+        .user-details h2 {
+            font-size: 18px;
+            margin-bottom: 4px;
+        }
+
+        .role-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            background: #e3f2fd;
+            color: #1976d2;
+            border-radius: 12px;
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .alert {
+            padding: 12px 16px;
+            background: #fff3cd;
+            border-left: 4px solid #ffc107;
+            border-radius: 4px;
+            margin-bottom: 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .alert-icon {
+            font-size: 20px;
+        }
+
+        .permission-section {
+            border: 1px solid #e0e0e0;
+            border-radius: 8px;
+            margin-bottom: 16px;
+            overflow: hidden;
+        }
+
+        .section-header {
+            padding: 16px;
+            background: #fafafa;
+            border-bottom: 1px solid #e0e0e0;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            cursor: pointer;
+            transition: background 0.2s;
+        }
+
+        .section-header:hover {
+            background: #f5f5f5;
+        }
+
+        .section-header.expanded {
+            background: #f0f7ff;
+            border-bottom-color: #2196f3;
+        }
+
+        .section-title {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            font-weight: 600;
+            font-size: 16px;
+        }
+
+        .section-icon {
+            font-size: 24px;
+        }
+
+        .toggle-icon {
+            font-size: 20px;
+            color: #666;
+        }
+
+        .permission-list {
+            padding: 16px;
+            display: none;
+        }
+
+        .permission-list.show {
+            display: block;
+        }
+
+        .permission-item {
+            padding: 12px;
+            margin-bottom: 8px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            transition: background 0.2s;
+        }
+
+        .permission-item:hover {
+            background: #f8f9fa;
+        }
+
+        .permission-item.default {
+            background: #f8f9fa;
+        }
+
+        .permission-item.granted {
+            background: #e8f5e9;
+            border-left: 3px solid #4caf50;
+        }
+
+        .permission-item.denied {
+            background: #ffebee;
+            border-left: 3px solid #f44336;
+            text-decoration: line-through;
+            opacity: 0.7;
+        }
+
+        .permission-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+        }
+
+        .checkbox {
+            width: 20px;
+            height: 20px;
+            cursor: pointer;
+        }
+
+        .permission-label {
+            font-size: 14px;
+            color: #333;
+        }
+
+        .permission-badge {
+            padding: 2px 8px;
+            border-radius: 10px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+
+        .badge-default {
+            background: #e0e0e0;
+            color: #666;
+        }
+
+        .badge-custom-added {
+            background: #c8e6c9;
+            color: #2e7d32;
+        }
+
+        .badge-custom-removed {
+            background: #ffcdd2;
+            color: #c62828;
+        }
+
+        .permission-actions {
+            display: flex;
+            gap: 8px;
+        }
+
+        .btn {
+            padding: 6px 12px;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 13px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .btn-sm {
+            padding: 4px 10px;
+            font-size: 12px;
+        }
+
+        .btn-add {
+            background: #e3f2fd;
+            color: #1976d2;
+        }
+
+        .btn-add:hover {
+            background: #bbdefb;
+        }
+
+        .btn-remove {
+            background: #ffebee;
+            color: #d32f2f;
+        }
+
+        .btn-remove:hover {
+            background: #ffcdd2;
+        }
+
+        .footer-actions {
+            display: flex;
+            gap: 12px;
+            justify-content: flex-end;
+            margin-top: 24px;
+            padding-top: 24px;
+            border-top: 1px solid #e0e0e0;
+        }
+
+        .btn-reset {
+            background: #fff;
+            color: #666;
+            border: 1px solid #ddd;
+        }
+
+        .btn-reset:hover {
+            background: #f5f5f5;
+        }
+
+        .btn-primary {
+            background: #2196f3;
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #1976d2;
+        }
+
+        .schema-box {
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+            border-radius: 8px;
+            font-family: 'Courier New', monospace;
+            font-size: 13px;
+            line-height: 1.6;
+            overflow-x: auto;
+            margin: 20px 0;
+        }
+
+        .keyword { color: #569cd6; }
+        .type { color: #4ec9b0; }
+        .field { color: #9cdcfe; }
+        .comment { color: #6a9955; }
+
+        .flow-diagram {
+            background: white;
+            padding: 24px;
+            border-radius: 8px;
+            margin: 20px 0;
+        }
+
+        .flow-step {
+            padding: 16px;
+            margin: 12px 0;
+            border-left: 4px solid #2196f3;
+            background: #f8f9fa;
+            border-radius: 4px;
+        }
+
+        .flow-step h4 {
+            margin-bottom: 8px;
+            color: #1976d2;
+        }
+
+        .flow-arrow {
+            text-align: center;
+            color: #2196f3;
+            font-size: 24px;
+            margin: 8px 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <div class="card">
+            <h1>📋 Plano de Execução - Sistema de Permissões Granulares</h1>
+
+            <div style="background: #e3f2fd; padding: 16px; border-radius: 6px; margin-bottom: 20px;">
+                <h3 style="margin-bottom: 8px; color: #1976d2;">🎯 Objetivo</h3>
+                <p style="color: #555;">Permitir que administradores customizem permissões específicas por usuário,
+                sobrescrevendo as permissões padrão do cargo (role) quando necessário.</p>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 16px;">🗄️ Schema - Nova Tabela no Banco</h2>
+            <div class="schema-box">
+<span class="keyword">model</span> <span class="type">UserPermission</span> {
+  <span class="field">id</span>         <span class="type">String</span>   @id @default(cuid())
+  <span class="field">userId</span>     <span class="type">String</span>
+  <span class="field">user</span>       <span class="type">User</span>     @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  <span class="field">permission</span> <span class="type">String</span>   <span class="comment">// Ex: "sales.create", "reports.financial"</span>
+  <span class="field">granted</span>    <span class="type">Boolean</span>  <span class="comment">// true = permitido, false = negado</span>
+
+  <span class="field">createdAt</span>  <span class="type">DateTime</span> @default(now())
+  <span class="field">updatedAt</span>  <span class="type">DateTime</span> @updatedAt
+
+  @@unique([userId, permission])
+  @@index([userId])
+}
+
+<span class="comment">// Atualização no model User:</span>
+<span class="keyword">model</span> <span class="type">User</span> {
+  <span class="comment">// ... campos existentes ...</span>
+
+  <span class="field">customPermissions</span> <span class="type">UserPermission[]</span> <span class="comment">// ← NOVA RELAÇÃO</span>
+
+  <span class="comment">// ... outras relações ...</span>
+}
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 16px;">🔄 Fluxo de Resolução de Permissões</h2>
+            <div class="flow-diagram">
+                <div class="flow-step">
+                    <h4>1️⃣ Carregar Role do Usuário</h4>
+                    <p>Ex: <code>user.role = "VENDEDOR"</code></p>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-step">
+                    <h4>2️⃣ Buscar Permissões Padrão do Role</h4>
+                    <p><code>ROLE_PERMISSIONS["VENDEDOR"]</code> = ["sales.create", "sales.view", "customers.view", ...]</p>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-step">
+                    <h4>3️⃣ Buscar Permissões Customizadas</h4>
+                    <p><code>UserPermission.findMany({ where: { userId } })</code></p>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-step">
+                    <h4>4️⃣ Aplicar Overrides</h4>
+                    <p>
+                        • Se <code>granted = true</code> → Adiciona permissão<br>
+                        • Se <code>granted = false</code> → Remove permissão
+                    </p>
+                </div>
+                <div class="flow-arrow">↓</div>
+                <div class="flow-step" style="border-color: #4caf50;">
+                    <h4 style="color: #2e7d32;">5️⃣ Retornar Permissões Efetivas</h4>
+                    <p>Lista final com todas as permissões que o usuário realmente tem</p>
+                </div>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 20px;">🎨 Mockup da Tela de Gerenciamento</h2>
+
+            <div class="user-info">
+                <div class="avatar">LR</div>
+                <div class="user-details">
+                    <h2>Lucas Rebouças</h2>
+                    <span class="role-badge">Vendedor</span>
+                </div>
+            </div>
+
+            <div class="alert">
+                <span class="alert-icon">⚠️</span>
+                <div>
+                    <strong>Permissões customizadas</strong> sobrescrevem as permissões padrão do perfil.
+                    Alterações são aplicadas imediatamente após salvar.
+                </div>
+            </div>
+
+            <!-- Vendas Section -->
+            <div class="permission-section">
+                <div class="section-header expanded" onclick="toggleSection(this)">
+                    <div class="section-title">
+                        <span class="section-icon">🛍️</span>
+                        <span>Vendas</span>
+                    </div>
+                    <span class="toggle-icon">−</span>
+                </div>
+                <div class="permission-list show">
+                    <div class="permission-item default">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox" checked disabled>
+                            <span class="permission-label">Criar vendas</span>
+                            <span class="permission-badge badge-default">Perfil padrão</span>
+                        </div>
+                    </div>
+
+                    <div class="permission-item default">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox" checked disabled>
+                            <span class="permission-label">Visualizar suas vendas</span>
+                            <span class="permission-badge badge-default">Perfil padrão</span>
+                        </div>
+                    </div>
+
+                    <div class="permission-item granted">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox" checked>
+                            <span class="permission-label">Visualizar todas as vendas</span>
+                            <span class="permission-badge badge-custom-added">✨ Customizado - Adicionado</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-remove">× Remover</button>
+                        </div>
+                    </div>
+
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Cancelar vendas</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Aplicar descontos</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Produtos Section -->
+            <div class="permission-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <div class="section-title">
+                        <span class="section-icon">📦</span>
+                        <span>Produtos</span>
+                    </div>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="permission-list">
+                    <div class="permission-item default">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox" checked disabled>
+                            <span class="permission-label">Visualizar produtos</span>
+                            <span class="permission-badge badge-default">Perfil padrão</span>
+                        </div>
+                    </div>
+
+                    <div class="permission-item granted">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox" checked>
+                            <span class="permission-label">Editar produtos</span>
+                            <span class="permission-badge badge-custom-added">✨ Customizado - Adicionado</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-remove">× Remover</button>
+                        </div>
+                    </div>
+
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Cadastrar produtos</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Relatórios Section -->
+            <div class="permission-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <div class="section-title">
+                        <span class="section-icon">📊</span>
+                        <span>Relatórios</span>
+                    </div>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="permission-list">
+                    <div class="permission-item denied">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Relatórios financeiros</span>
+                            <span class="permission-badge badge-custom-removed">🚫 Customizado - Removido</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Restaurar</button>
+                        </div>
+                    </div>
+
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Relatórios de vendas</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Relatórios de estoque</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Financeiro Section -->
+            <div class="permission-section">
+                <div class="section-header" onclick="toggleSection(this)">
+                    <div class="section-title">
+                        <span class="section-icon">💰</span>
+                        <span>Financeiro</span>
+                    </div>
+                    <span class="toggle-icon">+</span>
+                </div>
+                <div class="permission-list">
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Visualizar financeiro</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+
+                    <div class="permission-item">
+                        <div class="permission-info">
+                            <input type="checkbox" class="checkbox">
+                            <span class="permission-label">Gerenciar contas a pagar</span>
+                        </div>
+                        <div class="permission-actions">
+                            <button class="btn btn-sm btn-add">+ Adicionar</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <div class="footer-actions">
+                <button class="btn btn-reset">⟲ Resetar para Padrão do Perfil</button>
+                <button class="btn btn-primary">💾 Salvar Mudanças</button>
+            </div>
+        </div>
+
+        <div class="card">
+            <h2 style="margin-bottom: 16px;">✅ Fases de Implementação</h2>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #2196f3; margin-bottom: 12px;">FASE 1 - Backend (Fundação)</h3>
+                <ul style="list-style: none; padding-left: 0;">
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar migration para tabela UserPermission</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Atualizar schema Prisma</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar PermissionService completo</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar API routes de permissões</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar middleware de proteção</li>
+                </ul>
+            </div>
+
+            <div style="margin-bottom: 20px;">
+                <h3 style="color: #2196f3; margin-bottom: 12px;">FASE 2 - Frontend (UI de Gestão)</h3>
+                <ul style="list-style: none; padding-left: 0;">
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar página /dashboard/usuarios/[id]/permissoes</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Componente de lista de permissões por módulo</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Funcionalidade de adicionar/remover permissões</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Função de resetar para padrão</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Feedback visual de mudanças</li>
+                </ul>
+            </div>
+
+            <div>
+                <h3 style="color: #2196f3; margin-bottom: 12px;">FASE 3 - Integração (Proteções)</h3>
+                <ul style="list-style: none; padding-left: 0;">
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar hook usePermission()</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Criar component &lt;PermissionGuard&gt;</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Proteger principais API routes</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Aplicar guards em botões críticos</li>
+                    <li style="padding: 8px; background: #f8f9fa; margin: 4px 0; border-radius: 4px;">✅ Aplicar guards em menus/navegação</li>
+                </ul>
+            </div>
+        </div>
+
+        <div class="card" style="background: #e8f5e9; border: 2px solid #4caf50;">
+            <h2 style="color: #2e7d32; margin-bottom: 16px;">🎯 Pontos Chave</h2>
+            <ul style="color: #1b5e20;">
+                <li style="margin: 12px 0;">✅ <strong>NÃO INVENTAR NADA</strong> - Usar apenas permissões e roles já existentes no sistema</li>
+                <li style="margin: 12px 0;">✅ <strong>100% FUNCIONAL</strong> - Sistema completo e testado</li>
+                <li style="margin: 12px 0;">✅ <strong>NÃO AFETA USUÁRIOS EXISTENTES</strong> - Se não tiver custom, usa padrão do role</li>
+                <li style="margin: 12px 0;">✅ <strong>SEGURANÇA</strong> - Validação server-side em todas as APIs</li>
+                <li style="margin: 12px 0;">✅ <strong>APENAS ADMIN</strong> pode alterar permissões de outros usuários</li>
+            </ul>
+        </div>
+
+        <div class="card" style="text-align: center; padding: 40px;">
+            <h2 style="color: #2196f3; margin-bottom: 12px;">📸 Aguardando Aprovação</h2>
+            <p style="font-size: 16px; color: #666;">
+                Por favor, revise o plano e o mockup acima.<br>
+                Se aprovado, iniciarei a implementação imediatamente.
+            </p>
+        </div>
+    </div>
+
+    <script>
+        function toggleSection(header) {
+            const list = header.nextElementSibling;
+            const icon = header.querySelector('.toggle-icon');
+
+            if (list.classList.contains('show')) {
+                list.classList.remove('show');
+                header.classList.remove('expanded');
+                icon.textContent = '+';
+            } else {
+                list.classList.add('show');
+                header.classList.add('expanded');
+                icon.textContent = '−';
+            }
+        }
+    </script>
+</body>
+</html>

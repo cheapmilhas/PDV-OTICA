@@ -334,6 +334,7 @@ model User {
   stockAdjustmentsCreated    StockAdjustment[]     @relation("AdjustmentCreator")
   stockAdjustmentsApproved   StockAdjustment[]     @relation("AdjustmentApprover")
   barcodesCreated            ProductBarcode[]      @relation("BarcodeCreator")
+  customPermissions          UserPermission[]      @relation("UserCustomPermissions")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -1826,5 +1827,83 @@ model ProductBarcode {
 }
 
 // =========================================================
-// FIM DO SCHEMA CONSOLIDADO v3.2
+// SISTEMA DE PERMISSÕES GRANULARES
+// =========================================================
+
+// Catálogo de todas as permissões disponíveis no sistema
+model Permission {
+  id          String   @id @default(cuid())
+
+  // Identificação única da permissão (ex: "sales.cancel", "cash.open")
+  code        String   @unique
+
+  // Nome amigável (ex: "Cancelar vendas")
+  name        String
+
+  // Descrição detalhada (opcional)
+  description String?
+
+  // Organização
+  module      String   // Ex: "sales", "cash", "products"
+  category    String   // Ex: "Vendas", "Gestão de Caixa"
+  sortOrder   Int      @default(0)
+
+  // Controle
+  isActive    Boolean  @default(true)
+
+  // Relações
+  roleDefaults RolePermission[]
+  userCustoms  UserPermission[]
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([module])
+  @@index([category])
+  @@index([isActive])
+}
+
+// Permissões padrão por Role (perfil)
+model RolePermission {
+  id           String     @id @default(cuid())
+
+  role         String     // ADMIN, GERENTE, VENDEDOR, CAIXA, ATENDENTE
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  granted      Boolean    @default(true)
+
+  createdAt    DateTime   @default(now())
+
+  @@unique([role, permissionId])
+  @@index([role])
+}
+
+// Permissões customizadas por Usuário (sobrescreve padrão do role)
+model UserPermission {
+  id           String     @id @default(cuid())
+
+  userId       String
+  user         User       @relation("UserCustomPermissions", fields: [userId], references: [id], onDelete: Cascade)
+
+  permissionId String
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  // true = adiciona permissão, false = remove permissão
+  granted      Boolean
+
+  // Auditoria
+  grantedByUserId String?
+  grantedAt       DateTime @default(now())
+
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+}
+
+// =========================================================
+// FIM DO SCHEMA CONSOLIDADO v3.3
 // =========================================================

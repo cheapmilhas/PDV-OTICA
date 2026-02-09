@@ -14,14 +14,16 @@ import {
 } from "@/components/ui/dropdown-menu";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { signOut } from "next-auth/react";
+import { signOut, useSession } from "next-auth/react";
 
 export function Header() {
-  // Mock data - será substituído por dados reais do NextAuth
+  // Usar sessão REAL do NextAuth
+  const { data: session } = useSession();
+
   const user = {
-    name: "Admin",
-    email: "admin@pdvotica.com",
-    role: "ADMIN",
+    name: session?.user?.name || "Usuário",
+    email: session?.user?.email || "",
+    role: session?.user?.role || "USER",
   };
 
   // Mock de filiais

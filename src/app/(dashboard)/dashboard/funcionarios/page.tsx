@@ -30,10 +30,11 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Eye, Mail, Shield, Loader2, Edit, Trash2, Package, AlertTriangle, User } from "lucide-react";
+import { Search, Plus, Eye, Mail, Shield, Loader2, Edit, Trash2, Package, AlertTriangle, User, Settings } from "lucide-react";
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
+import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface UserType {
   id: string;
@@ -47,6 +48,7 @@ interface UserType {
 }
 
 export default function FuncionariosPage() {
+  const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
@@ -541,13 +543,26 @@ export default function FuncionariosPage() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-right">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        onClick={() => handleViewDetails(user.id)}
-                      >
-                        <Eye className="h-4 w-4" />
-                      </Button>
+                      <div className="flex items-center justify-end gap-1">
+                        {isAdmin && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => window.location.href = `/dashboard/funcionarios/${user.id}/permissoes`}
+                            title="Gerenciar Permissões"
+                          >
+                            <Settings className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={() => handleViewDetails(user.id)}
+                          title="Ver Detalhes"
+                        >
+                          <Eye className="h-4 w-4" />
+                        </Button>
+                      </div>
                     </TableCell>
                   </TableRow>
                 ))}
@@ -741,6 +756,15 @@ export default function FuncionariosPage() {
                         "Ativar"
                       )}
                     </Button>
+                    {isAdmin && (
+                      <Button
+                        variant="outline"
+                        onClick={() => window.location.href = `/dashboard/funcionarios/${selectedUser.id}/permissoes`}
+                      >
+                        <Settings className="h-4 w-4 mr-2" />
+                        Permissões
+                      </Button>
+                    )}
                     <Button onClick={handleStartEdit}>
                       <Edit className="h-4 w-4 mr-2" />
                       Editar
