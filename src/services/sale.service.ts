@@ -454,6 +454,136 @@ export class SaleService {
   }
 
   /**
+   * Reativa venda cancelada
+   *
+   * Reverte o cancelamento:
+   * - Retira estoque novamente
+   * - Reativa pagamentos no caixa
+   * - Muda status para COMPLETED
+   * - Valida estoque disponível
+   */
+  async reactivate(id: string, companyId: string, userId: string) {
+    // 1. Buscar venda cancelada
+    const sale = await this.getById(id, companyId, true);
+
+    if (sale.status !== "CANCELED" && sale.status !== "REFUNDED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Apenas vendas canceladas podem ser reativadas",
+        400
+      );
+    }
+
+    // 2. Validar estoque disponível para todos os itens
+    for (const item of sale.items) {
+      if (item.product.type === "PRODUCT") {
+        const product = await prisma.product.findUnique({
+          where: { id: item.product.id },
+          select: { stockQty: true, stockControlled: true, name: true },
+        });
+
+        if (product?.stockControlled && product.stockQty < item.qty) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            `Estoque insuficiente para ${product.name}. Disponível: ${product.stockQty}, Necessário: ${item.qty}`,
+            400
+          );
+        }
+      }
+    }
+
+    // 3. Verificar se há caixa aberto (necessário para registrar pagamentos)
+    const openShift = await prisma.cashShift.findFirst({
+      where: {
+        branchId: sale.branchId,
+        status: "OPEN",
+      },
+    });
+
+    if (!openShift) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "É necessário ter um caixa aberto para reativar a venda",
+        400
+      );
+    }
+
+    // 4. Realizar reativação em transação
+    await prisma.$transaction(async (tx) => {
+      // 4.1. Retirar estoque novamente
+      for (const item of sale.items) {
+        if (item.product.type === "PRODUCT") {
+          const product = await tx.product.findUnique({
+            where: { id: item.product.id },
+            select: { stockControlled: true },
+          });
+
+          if (product?.stockControlled) {
+            await tx.product.update({
+              where: { id: item.product.id },
+              data: {
+                stockQty: { decrement: item.qty },
+              },
+            });
+
+            // Registrar movimentação de estoque
+            await tx.stockMovement.create({
+              data: {
+                productId: item.product.id,
+                branchId: sale.branchId,
+                type: "SALE",
+                quantity: -item.qty,
+                reason: `Reativação venda #${id.substring(0, 8)}`,
+                userId,
+              },
+            });
+          }
+        }
+      }
+
+      // 4.2. Reativar status da venda
+      await tx.sale.update({
+        where: { id },
+        data: {
+          status: "COMPLETED",
+        },
+      });
+
+      // 4.3. Criar movimentos de caixa para os pagamentos
+      for (const payment of sale.payments) {
+        await tx.cashMovement.create({
+          data: {
+            cashShiftId: openShift.id,
+            branchId: sale.branchId,
+            type: "SALE_PAYMENT",
+            direction: "IN",
+            method: payment.method as any,
+            amount: payment.amount,
+            originType: "SALE_PAYMENT",
+            originId: payment.id,
+            salePaymentId: payment.id,
+            createdByUserId: userId,
+            note: `Reativação venda #${id.substring(0, 8)}`,
+          },
+        });
+      }
+
+      // 4.4. Reativar comissões
+      await tx.commission.updateMany({
+        where: {
+          saleId: id,
+          status: "CANCELED",
+        },
+        data: {
+          status: "PENDING",
+        },
+      });
+    });
+
+    return this.getById(id, companyId, true);
+  }
+
+  /**
    * Busca vendas de um cliente específico
    */
   async getByCustomer(customerId: string, companyId: string) {

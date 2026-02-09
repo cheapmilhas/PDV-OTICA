@@ -69,6 +69,7 @@ export default function DetalhesVendaPage() {
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [reactivating, setReactivating] = useState(false);
   const [editSellerOpen, setEditSellerOpen] = useState(false);
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedSellerId, setSelectedSellerId] = useState("");
@@ -176,6 +177,31 @@ export default function DetalhesVendaPage() {
     }
   };
 
+  const handleReactivate = async () => {
+    if (!confirm("Tem certeza que deseja reativar esta venda? O estoque será decrementado e os pagamentos serão registrados no caixa atual.")) {
+      return;
+    }
+
+    setReactivating(true);
+    try {
+      const res = await fetch(`/api/sales/${id}/reactivate`, {
+        method: "POST",
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error?.message || "Erro ao reativar venda");
+      }
+
+      toast.success("Venda reativada com sucesso!");
+      router.push("/dashboard/vendas");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setReactivating(false);
+    }
+  };
+
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
       CASH: "Dinheiro",
@@ -197,7 +223,11 @@ export default function DetalhesVendaPage() {
   }
 
   if (!sale) {
-    return null;
+    return (
+      <div className="flex items-center justify-center h-[50vh]">
+        <p className="text-muted-foreground">Venda não encontrada</p>
+      </div>
+    );
   }
 
   return (
@@ -302,7 +332,19 @@ export default function DetalhesVendaPage() {
               )}
             </>
           ) : (
-            <Badge variant="destructive">Cancelada</Badge>
+            <>
+              <Badge variant="destructive">Cancelada</Badge>
+              {canCancelSale && (
+                <Button
+                  variant="default"
+                  size="sm"
+                  onClick={handleReactivate}
+                  disabled={reactivating}
+                >
+                  {reactivating ? "Reativando..." : "Reativar Venda"}
+                </Button>
+              )}
+            </>
           )}
         </div>
       </div>

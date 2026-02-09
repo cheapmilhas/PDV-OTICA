@@ -162,3 +162,9 @@ export async function isAdmin(): Promise<boolean> {
 export async function isAdminOrManager(): Promise<boolean> {
   return checkPermission(["ADMIN", "GERENTE"]);
 }
+
+/**
+ * Requer que o usuário tenha uma permissão específica (do sistema de permissões)
+ * Wrapper para compatibilidade - redireciona para auth-permissions.ts
+ */
+export { requirePermission } from "./auth-permissions";

@@ -23,8 +23,8 @@ export async function GET(
     const companyId = await getCompanyId();
     const { id } = await params;
 
-    // Busca venda
-    const sale = await saleService.getById(id, companyId);
+    // Busca venda (incluindo canceladas para permitir visualização)
+    const sale = await saleService.getById(id, companyId, true);
 
     return successResponse(sale);
   } catch (error) {
