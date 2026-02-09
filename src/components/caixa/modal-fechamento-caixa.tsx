@@ -16,9 +16,10 @@ interface ModalFechamentoCaixaProps {
   onOpenChange: (open: boolean) => void;
   caixaInfo: any;
   resumoPagamentos: any[];
+  movements?: any[]; // Adicionar movimentos completos
 }
 
-export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPagamentos }: ModalFechamentoCaixaProps) {
+export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPagamentos, movements = [] }: ModalFechamentoCaixaProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -29,7 +30,18 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
     observacoes: "",
   });
 
-  const valorEsperadoDinheiro = resumoPagamentos.find(p => p.forma === "Dinheiro")?.valor || 0;
+  // Calcular valor esperado de dinheiro como o backend faz:
+  // Soma todos os movimentos CASH (IN - OUT)
+  const cashMovements = movements.filter(m => m.method === "CASH");
+  const totalIn = cashMovements
+    .filter(m => m.direction === "IN")
+    .reduce((sum, m) => sum + m.amount, 0);
+  const totalOut = cashMovements
+    .filter(m => m.direction === "OUT")
+    .reduce((sum, m) => sum + m.amount, 0);
+  const valorEsperadoDinheiro = totalIn - totalOut;
+
+  // Outros métodos: usar apenas SALE_PAYMENT como antes
   const valorEsperadoCredito = resumoPagamentos.find(p => p.forma === "Crédito")?.valor || 0;
   const valorEsperadoDebito = resumoPagamentos.find(p => p.forma === "Débito")?.valor || 0;
   const valorEsperadoPix = resumoPagamentos.find(p => p.forma === "PIX")?.valor || 0;
@@ -52,6 +64,26 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Debug: verificar valores
+    console.log("🔍 DEBUG - Valores:", {
+      valorContadoDinheiro,
+      valorEsperadoDinheiro,
+      diferencaDinheiro,
+      observacoes: formData.observacoes,
+    });
+
+    // Validação: exigir justificativa se houver diferença no dinheiro
+    const hasDiferenca = Math.abs(diferencaDinheiro) > 0.01;
+    if (hasDiferenca && !formData.observacoes.trim()) {
+      toast({
+        title: "Justificativa obrigatória",
+        description: `Há uma diferença de ${formatCurrency(Math.abs(diferencaDinheiro))} no dinheiro. Por favor, informe o motivo no campo de observações.`,
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -70,16 +102,19 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
 
       // Preparar dados de fechamento
       // IMPORTANTE: closingDeclaredCash deve ser apenas o valor de DINHEIRO, não o total
+      const justificativa = hasDiferenca && formData.observacoes.trim()
+        ? formData.observacoes.trim()
+        : undefined;
+
       const closeData = {
         shiftId: shift.id,
         closingDeclaredCash: valorContadoDinheiro,
-        differenceJustification: Math.abs(diferencaDinheiro) > 0.01 && formData.observacoes.trim()
-          ? formData.observacoes.trim()
-          : undefined,
+        differenceJustification: justificativa,
         notes: formData.observacoes.trim() || undefined,
       };
 
       console.log("Dados de fechamento:", closeData);
+      console.log("🔍 DEBUG - hasDiferenca:", hasDiferenca, "justificativa:", justificativa);
 
       // Fechar caixa
       const closeResponse = await fetch("/api/cash/shift/close", {
@@ -93,7 +128,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
       if (!closeResponse.ok) {
         const error = await closeResponse.json();
         console.error("Erro da API:", error);
-        throw new Error(error.message || error.error || "Erro ao fechar caixa");
+        throw new Error(error.error?.message || error.message || "Erro ao fechar caixa");
       }
 
       toast({
@@ -176,9 +211,9 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
           {/* Conferência por Forma de Pagamento */}
           <div className="space-y-4">
             {/* Dinheiro */}
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 border-blue-200 bg-blue-50/50">
               <div className="flex items-center justify-between mb-3">
-                <Label htmlFor="dinheiro">💵 Dinheiro</Label>
+                <Label htmlFor="dinheiro" className="font-semibold">💵 Dinheiro (Principal)</Label>
                 <div className="text-right text-sm">
                   <p className="text-muted-foreground">Esperado:</p>
                   <p className="font-semibold">{formatCurrency(valorEsperadoDinheiro)}</p>
@@ -196,20 +231,26 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
                 disabled={loading}
               />
               {formData.valorDinheiro && (
-                <div className={`mt-2 text-sm ${
+                <div className={`mt-2 text-sm font-medium ${
                   Math.abs(diferencaDinheiro) < 0.01
                     ? "text-green-600"
-                    : "text-orange-600"
+                    : "text-red-600"
                 }`}>
                   Diferença: {diferencaDinheiro > 0 ? "+" : ""}{formatCurrency(diferencaDinheiro)}
+                  {Math.abs(diferencaDinheiro) > 0.01 && " (justificativa obrigatória)"}
                 </div>
               )}
+              <p className="text-xs text-blue-700 mt-2">
+                ℹ️ Apenas diferenças no dinheiro exigem justificativa
+                <br />
+                📊 Inclui: abertura + vendas + reforços - sangrias
+              </p>
             </div>
 
             {/* Crédito */}
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 bg-gray-50/50">
               <div className="flex items-center justify-between mb-3">
-                <Label htmlFor="credito">💳 Crédito</Label>
+                <Label htmlFor="credito">💳 Crédito (Informativo)</Label>
                 <div className="text-right text-sm">
                   <p className="text-muted-foreground">Esperado:</p>
                   <p className="font-semibold">{formatCurrency(valorEsperadoCredito)}</p>
@@ -230,7 +271,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
                 <div className={`mt-2 text-sm ${
                   Math.abs(diferencaCredito) < 0.01
                     ? "text-green-600"
-                    : "text-orange-600"
+                    : "text-gray-600"
                 }`}>
                   Diferença: {diferencaCredito > 0 ? "+" : ""}{formatCurrency(diferencaCredito)}
                 </div>
@@ -238,9 +279,9 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
             </div>
 
             {/* Débito */}
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 bg-gray-50/50">
               <div className="flex items-center justify-between mb-3">
-                <Label htmlFor="debito">💳 Débito</Label>
+                <Label htmlFor="debito">💳 Débito (Informativo)</Label>
                 <div className="text-right text-sm">
                   <p className="text-muted-foreground">Esperado:</p>
                   <p className="font-semibold">{formatCurrency(valorEsperadoDebito)}</p>
@@ -261,7 +302,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
                 <div className={`mt-2 text-sm ${
                   Math.abs(diferencaDebito) < 0.01
                     ? "text-green-600"
-                    : "text-orange-600"
+                    : "text-gray-600"
                 }`}>
                   Diferença: {diferencaDebito > 0 ? "+" : ""}{formatCurrency(diferencaDebito)}
                 </div>
@@ -269,9 +310,9 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
             </div>
 
             {/* PIX */}
-            <div className="rounded-lg border p-4">
+            <div className="rounded-lg border p-4 bg-gray-50/50">
               <div className="flex items-center justify-between mb-3">
-                <Label htmlFor="pix">🔑 PIX</Label>
+                <Label htmlFor="pix">🔑 PIX (Informativo)</Label>
                 <div className="text-right text-sm">
                   <p className="text-muted-foreground">Esperado:</p>
                   <p className="font-semibold">{formatCurrency(valorEsperadoPix)}</p>
@@ -292,7 +333,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
                 <div className={`mt-2 text-sm ${
                   Math.abs(diferencaPix) < 0.01
                     ? "text-green-600"
-                    : "text-orange-600"
+                    : "text-gray-600"
                 }`}>
                   Diferença: {diferencaPix > 0 ? "+" : ""}{formatCurrency(diferencaPix)}
                 </div>
@@ -357,14 +398,26 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
 
           {/* Observações */}
           <div className="space-y-2">
-            <Label htmlFor="obs">Observações</Label>
+            <Label htmlFor="obs" className={Math.abs(diferencaDinheiro) > 0.01 ? "text-red-600" : ""}>
+              Observações {Math.abs(diferencaDinheiro) > 0.01 && <span className="text-red-600">*</span>}
+            </Label>
+            {Math.abs(diferencaDinheiro) > 0.01 && (
+              <p className="text-sm text-red-600">
+                ⚠️ Justificativa obrigatória: há diferença de {formatCurrency(Math.abs(diferencaDinheiro))} no dinheiro
+              </p>
+            )}
             <Textarea
               id="obs"
-              placeholder="Informações sobre divergências ou observações do fechamento..."
+              placeholder={
+                Math.abs(diferencaDinheiro) > 0.01
+                  ? "Justifique a diferença no dinheiro (obrigatório)..."
+                  : "Informações sobre divergências ou observações do fechamento..."
+              }
               value={formData.observacoes}
               onChange={(e) => setFormData({ ...formData, observacoes: e.target.value })}
               disabled={loading}
               rows={3}
+              className={Math.abs(diferencaDinheiro) > 0.01 ? "border-red-300" : ""}
             />
           </div>
 

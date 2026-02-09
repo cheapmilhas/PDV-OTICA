@@ -130,6 +130,42 @@ export function HistoricoCaixas() {
     }).format(value);
   }
 
+  async function handleDownloadReport(caixaId: string) {
+    try {
+      toast.loading("Gerando relatório PDF...");
+
+      const response = await fetch(`/api/cash-registers/${caixaId}/report`, {
+        method: "GET",
+      });
+
+      if (!response.ok) {
+        throw new Error("Erro ao gerar relatório");
+      }
+
+      // Converter response para blob
+      const blob = await response.blob();
+
+      // Criar URL temporária para download
+      const url = window.URL.createObjectURL(blob);
+      const link = document.createElement("a");
+      link.href = url;
+      link.download = `relatorio-caixa-${caixaId}.pdf`;
+      document.body.appendChild(link);
+      link.click();
+
+      // Limpar
+      document.body.removeChild(link);
+      window.URL.revokeObjectURL(url);
+
+      toast.dismiss();
+      toast.success("Relatório baixado com sucesso!");
+    } catch (error) {
+      toast.dismiss();
+      toast.error("Erro ao gerar relatório. Tente novamente.");
+      console.error("Erro ao baixar relatório:", error);
+    }
+  }
+
   return (
     <>
       <Card>
@@ -322,6 +358,7 @@ export function HistoricoCaixas() {
                             <Button
                               variant="ghost"
                               size="sm"
+                              onClick={() => handleDownloadReport(caixa.id)}
                               title="Baixar relatório"
                             >
                               <Download className="h-4 w-4" />

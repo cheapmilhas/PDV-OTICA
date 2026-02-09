@@ -267,6 +267,7 @@ export default function CaixaPage() {
         }}
         caixaInfo={caixaStatus}
         resumoPagamentos={resumoPagamentos}
+        movements={movements}
       />
       <ModalSangria
         open={modalSangriaOpen}
