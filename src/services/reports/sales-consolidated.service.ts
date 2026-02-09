@@ -98,6 +98,7 @@ export class SalesConsolidatedService {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 5000, // Limit for performance
     });
 
     // Filter by payment method if specified

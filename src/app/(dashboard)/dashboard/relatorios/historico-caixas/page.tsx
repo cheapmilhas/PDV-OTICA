@@ -102,8 +102,8 @@ export default function RelatorioHistoricoCaixasPage() {
   const [loading, setLoading] = useState(false);
 
   // Filters
-  const [branchId, setBranchId] = useState<string>("");
-  const [status, setStatus] = useState<string>("");
+  const [branchId, setBranchId] = useState<string>("ALL");
+  const [status, setStatus] = useState<string>("ALL");
 
   // Options for selects
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -115,10 +115,18 @@ export default function RelatorioHistoricoCaixasPage() {
         const res = await fetch("/api/branches");
         if (res.ok) {
           const branchesData = await res.json();
-          setBranches(branchesData);
+          // Handle both array and paginated response
+          if (Array.isArray(branchesData)) {
+            setBranches(branchesData);
+          } else if (branchesData.data && Array.isArray(branchesData.data)) {
+            setBranches(branchesData.data);
+          } else {
+            setBranches([]);
+          }
         }
       } catch (error) {
         console.error("Erro ao carregar filiais:", error);
+        setBranches([]);
       }
     };
 
@@ -133,8 +141,8 @@ export default function RelatorioHistoricoCaixasPage() {
         endDate: format(endDate, "yyyy-MM-dd"),
       });
 
-      if (branchId) params.set("branchId", branchId);
-      if (status) params.set("status", status);
+      if (branchId && branchId !== "ALL") params.set("branchId", branchId);
+      if (status && status !== "ALL") params.set("status", status);
 
       const res = await fetch(`/api/reports/financial/cash-history?${params}`);
       if (!res.ok) {
@@ -266,7 +274,7 @@ export default function RelatorioHistoricoCaixasPage() {
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="ALL">Todas</SelectItem>
                   {branches.map((branch) => (
                     <SelectItem key={branch.id} value={branch.id}>
                       {branch.name}
@@ -283,7 +291,7 @@ export default function RelatorioHistoricoCaixasPage() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="ALL">Todos</SelectItem>
                   <SelectItem value="OPEN">Aberto</SelectItem>
                   <SelectItem value="CLOSED">Fechado</SelectItem>
                 </SelectContent>

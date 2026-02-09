@@ -113,6 +113,7 @@ export class StockPositionService {
         },
       },
       orderBy: { name: "asc" },
+      take: 5000, // Limit for performance
     });
 
     // Process products

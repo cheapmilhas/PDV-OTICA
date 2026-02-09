@@ -2,20 +2,18 @@ import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 import { addMonths, startOfMonth, endOfMonth, differenceInDays } from "date-fns";
 
-export interface AccountsReceivableFilters {
-  customerId?: string;
+export interface AccountsPayableFilters {
+  supplierId?: string;
   overdue?: boolean;
   startDate?: Date;
   endDate?: Date;
 }
 
-export interface ReceivableData {
+export interface PayableData {
   id: string;
-  saleId: string | null;
-  customerName: string | null;
-  customerId: string | null;
-  description: string;
-  installment: string;
+  supplierName: string | null;
+  supplierId: string | null;
+  description: string | null;
   dueDate: Date;
   amount: number;
   status: string;
@@ -23,24 +21,24 @@ export interface ReceivableData {
   agingCategory: string;
 }
 
-export interface AccountsReceivableReport {
+export interface AccountsPayableReport {
   summary: {
-    totalReceivable: number;
+    totalPayable: number;
     overdue: number;
-    toReceive: number;
+    toPay: number;
     averageTicket: number;
-    totalCustomers: number;
-    overdueCustomers: number;
-    totalReceivables: number;
-    overdueReceivables: number;
+    totalSuppliers: number;
+    overdueSuppliers: number;
+    totalPayments: number;
+    overduePayments: number;
   };
-  receivables: ReceivableData[];
-  customerBreakdown: Array<{
-    customerId: string;
-    customerName: string;
+  payables: PayableData[];
+  supplierBreakdown: Array<{
+    supplierId: string;
+    supplierName: string;
     totalAmount: number;
     overdueAmount: number;
-    receivableCount: number;
+    paymentCount: number;
   }>;
   agingBreakdown: Array<{
     category: string;
@@ -54,19 +52,19 @@ export interface AccountsReceivableReport {
   }>;
 }
 
-export class AccountsReceivableService {
+export class AccountsPayableService {
   async generateReport(
     companyId: string,
-    filters: AccountsReceivableFilters
-  ): Promise<AccountsReceivableReport> {
-    // Build where clause for AccountReceivable
-    const where: Prisma.AccountReceivableWhereInput = {
+    filters: AccountsPayableFilters
+  ): Promise<AccountsPayableReport> {
+    // Build where clause for AccountPayable
+    const where: Prisma.AccountPayableWhereInput = {
       companyId,
       status: "PENDING",
     };
 
-    if (filters.customerId) {
-      where.customerId = filters.customerId;
+    if (filters.supplierId) {
+      where.supplierId = filters.supplierId;
     }
 
     if (filters.startDate && filters.endDate) {
@@ -76,19 +74,14 @@ export class AccountsReceivableService {
       };
     }
 
-    // Fetch pending receivables with relations
-    const receivables = await prisma.accountReceivable.findMany({
+    // Fetch pending payments with relations
+    const payables = await prisma.accountPayable.findMany({
       where,
       include: {
-        customer: {
+        supplier: {
           select: {
             id: true,
             name: true,
-          },
-        },
-        sale: {
-          select: {
-            id: true,
           },
         },
       },
@@ -98,9 +91,9 @@ export class AccountsReceivableService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    // Process receivables
-    const receivablesData: ReceivableData[] = receivables.map((receivable) => {
-      const dueDate = new Date(receivable.dueDate);
+    // Process payables
+    const payablesData: PayableData[] = payables.map((payable) => {
+      const dueDate = new Date(payable.dueDate);
       dueDate.setHours(0, 0, 0, 0);
 
       const daysOverdue = differenceInDays(today, dueDate);
@@ -120,103 +113,101 @@ export class AccountsReceivableService {
       }
 
       return {
-        id: receivable.id,
-        saleId: receivable.saleId,
-        customerName: receivable.customer?.name || null,
-        customerId: receivable.customerId,
-        description: receivable.description,
-        installment: `${receivable.installmentNumber}/${receivable.totalInstallments}`,
-        dueDate: receivable.dueDate,
-        amount: Number(receivable.amount),
-        status: receivable.status,
+        id: payable.id,
+        supplierName: payable.supplier?.name || null,
+        supplierId: payable.supplierId,
+        description: payable.description,
+        dueDate: payable.dueDate,
+        amount: Number(payable.amount),
+        status: payable.status,
         daysOverdue: isOverdue ? daysOverdue : 0,
         agingCategory,
       };
     });
 
     // Apply overdue filter if specified
-    let filteredReceivables = receivablesData;
+    let filteredPayables = payablesData;
     if (filters.overdue) {
-      filteredReceivables = receivablesData.filter((r) => r.daysOverdue > 0);
+      filteredPayables = payablesData.filter((r) => r.daysOverdue > 0);
     }
 
     // Calculate summary
-    const totalReceivable = filteredReceivables.reduce(
+    const totalPayable = filteredPayables.reduce(
       (sum, r) => sum + r.amount,
       0
     );
 
-    const overdue = filteredReceivables
+    const overdue = filteredPayables
       .filter((r) => r.daysOverdue > 0)
       .reduce((sum, r) => sum + r.amount, 0);
 
-    const toReceive = filteredReceivables
+    const toPay = filteredPayables
       .filter((r) => r.daysOverdue === 0)
       .reduce((sum, r) => sum + r.amount, 0);
 
     const averageTicket =
-      filteredReceivables.length > 0
-        ? totalReceivable / filteredReceivables.length
+      filteredPayables.length > 0
+        ? totalPayable / filteredPayables.length
         : 0;
 
-    // Count unique customers
-    const customerSet = new Set(
-      filteredReceivables.filter((r) => r.customerId).map((r) => r.customerId)
+    // Count unique suppliers
+    const supplierSet = new Set(
+      filteredPayables.filter((r) => r.supplierId).map((r) => r.supplierId)
     );
-    const totalCustomers = customerSet.size;
+    const totalSuppliers = supplierSet.size;
 
-    const overdueCustomerSet = new Set(
-      filteredReceivables
-        .filter((r) => r.customerId && r.daysOverdue > 0)
-        .map((r) => r.customerId)
+    const overdueSupplierSet = new Set(
+      filteredPayables
+        .filter((r) => r.supplierId && r.daysOverdue > 0)
+        .map((r) => r.supplierId)
     );
-    const overdueCustomers = overdueCustomerSet.size;
+    const overdueSuppliers = overdueSupplierSet.size;
 
-    const overdueReceivables = filteredReceivables.filter(
+    const overduePayments = filteredPayables.filter(
       (r) => r.daysOverdue > 0
     ).length;
 
     const summary = {
-      totalReceivable,
+      totalPayable,
       overdue,
-      toReceive,
+      toPay,
       averageTicket,
-      totalCustomers,
-      overdueCustomers,
-      totalReceivables: filteredReceivables.length,
-      overdueReceivables,
+      totalSuppliers,
+      overdueSuppliers,
+      totalPayments: filteredPayables.length,
+      overduePayments,
     };
 
-    // Customer breakdown
-    const customerMap = new Map<
+    // Supplier breakdown
+    const supplierMap = new Map<
       string,
-      { customerName: string; totalAmount: number; overdueAmount: number; receivableCount: number }
+      { supplierName: string; totalAmount: number; overdueAmount: number; paymentCount: number }
     >();
 
-    filteredReceivables.forEach((receivable) => {
-      if (!receivable.customerId || !receivable.customerName) return;
+    filteredPayables.forEach((payable) => {
+      if (!payable.supplierId || !payable.supplierName) return;
 
-      const key = receivable.customerId;
-      const current = customerMap.get(key) || {
-        customerName: receivable.customerName,
+      const key = payable.supplierId;
+      const current = supplierMap.get(key) || {
+        supplierName: payable.supplierName,
         totalAmount: 0,
         overdueAmount: 0,
-        receivableCount: 0,
+        paymentCount: 0,
       };
 
-      customerMap.set(key, {
+      supplierMap.set(key, {
         ...current,
-        totalAmount: current.totalAmount + receivable.amount,
+        totalAmount: current.totalAmount + payable.amount,
         overdueAmount:
           current.overdueAmount +
-          (receivable.daysOverdue > 0 ? receivable.amount : 0),
-        receivableCount: current.receivableCount + 1,
+          (payable.daysOverdue > 0 ? payable.amount : 0),
+        paymentCount: current.paymentCount + 1,
       });
     });
 
-    const customerBreakdown = Array.from(customerMap.entries())
-      .map(([customerId, data]) => ({
-        customerId,
+    const supplierBreakdown = Array.from(supplierMap.entries())
+      .map(([supplierId, data]) => ({
+        supplierId,
         ...data,
       }))
       .sort((a, b) => b.totalAmount - a.totalAmount);
@@ -231,7 +222,7 @@ export class AccountsReceivableService {
     ];
 
     const agingBreakdown = agingCategories.map((category) => {
-      const items = filteredReceivables.filter(
+      const items = filteredPayables.filter(
         (r) => r.agingCategory === category
       );
       return {
@@ -252,7 +243,7 @@ export class AccountsReceivableService {
       const monthStart = startOfMonth(addMonths(today, i));
       const monthEnd = endOfMonth(addMonths(today, i));
 
-      const monthItems = filteredReceivables.filter((r) => {
+      const monthItems = filteredPayables.filter((r) => {
         const dueDate = new Date(r.dueDate);
         return dueDate >= monthStart && dueDate <= monthEnd;
       });
@@ -269,8 +260,8 @@ export class AccountsReceivableService {
 
     return {
       summary,
-      receivables: filteredReceivables,
-      customerBreakdown,
+      payables: filteredPayables,
+      supplierBreakdown,
       agingBreakdown,
       monthBreakdown,
     };

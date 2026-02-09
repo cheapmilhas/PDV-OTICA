@@ -93,6 +93,7 @@ export class ProductsTopSellersService {
           },
         },
       },
+      take: 10000, // Limit for performance
     });
 
     // Filter by product filters

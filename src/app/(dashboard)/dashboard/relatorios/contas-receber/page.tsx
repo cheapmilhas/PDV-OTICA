@@ -96,7 +96,7 @@ export default function RelatorioContasReceberPage() {
   const [loading, setLoading] = useState(false);
 
   // Filters
-  const [customerId, setCustomerId] = useState<string>("");
+  const [customerId, setCustomerId] = useState<string>("ALL");
   const [overdueOnly, setOverdueOnly] = useState(false);
 
   // Options for selects
@@ -109,7 +109,14 @@ export default function RelatorioContasReceberPage() {
         const res = await fetch("/api/customers");
         if (res.ok) {
           const customersData = await res.json();
-          setCustomers(customersData);
+          // Handle both array and paginated response
+          if (Array.isArray(customersData)) {
+            setCustomers(customersData);
+          } else if (customersData.data && Array.isArray(customersData.data)) {
+            setCustomers(customersData.data);
+          } else {
+            setCustomers([]);
+          }
         }
       } catch (error) {
         console.error("Erro ao carregar clientes:", error);
@@ -124,7 +131,7 @@ export default function RelatorioContasReceberPage() {
     try {
       const params = new URLSearchParams();
 
-      if (customerId) params.set("customerId", customerId);
+      if (customerId && customerId !== "ALL") params.set("customerId", customerId);
       if (overdueOnly) params.set("overdue", "true");
 
       const res = await fetch(
@@ -206,7 +213,7 @@ export default function RelatorioContasReceberPage() {
                   <SelectValue placeholder="Todos os clientes" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos os clientes</SelectItem>
+                  <SelectItem value="ALL">Todos os clientes</SelectItem>
                   {customers.map((customer) => (
                     <SelectItem key={customer.id} value={customer.id}>
                       {customer.name}

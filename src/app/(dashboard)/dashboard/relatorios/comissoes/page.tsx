@@ -115,8 +115,8 @@ export default function RelatorioComissoesPage() {
   const [loading, setLoading] = useState(false);
 
   // Filters
-  const [userId, setUserId] = useState<string>("");
-  const [status, setStatus] = useState<string>("");
+  const [userId, setUserId] = useState<string>("ALL");
+  const [status, setStatus] = useState<string>("ALL");
 
   // Options for selects
   const [users, setUsers] = useState<User[]>([]);
@@ -128,10 +128,18 @@ export default function RelatorioComissoesPage() {
         const res = await fetch("/api/users");
         if (res.ok) {
           const usersData = await res.json();
-          setUsers(usersData);
+          // Handle both array and paginated response
+          if (Array.isArray(usersData)) {
+            setUsers(usersData);
+          } else if (usersData.data && Array.isArray(usersData.data)) {
+            setUsers(usersData.data);
+          } else {
+            setUsers([]);
+          }
         }
       } catch (error) {
         console.error("Erro ao carregar vendedores:", error);
+        setUsers([]);
       }
     };
 
@@ -146,8 +154,8 @@ export default function RelatorioComissoesPage() {
         endDate: format(endDate, "yyyy-MM-dd"),
       });
 
-      if (userId) params.set("userId", userId);
-      if (status) params.set("status", status);
+      if (userId && userId !== "ALL") params.set("userId", userId);
+      if (status && status !== "ALL") params.set("status", status);
 
       const res = await fetch(`/api/reports/commissions?${params}`);
       if (!res.ok) {
@@ -272,7 +280,7 @@ export default function RelatorioComissoesPage() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="ALL">Todos</SelectItem>
                   {users.map((user) => (
                     <SelectItem key={user.id} value={user.id}>
                       {user.name}
@@ -289,7 +297,7 @@ export default function RelatorioComissoesPage() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="ALL">Todos</SelectItem>
                   <SelectItem value="PENDING">Pendente</SelectItem>
                   <SelectItem value="APPROVED">Aprovada</SelectItem>
                   <SelectItem value="PAID">Paga</SelectItem>

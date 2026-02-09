@@ -128,9 +128,9 @@ export default function RelatorioPosicaoEstoquePage() {
   const [loading, setLoading] = useState(false);
 
   // Filters
-  const [categoryId, setCategoryId] = useState<string>("");
-  const [brandId, setBrandId] = useState<string>("");
-  const [productType, setProductType] = useState<string>("");
+  const [categoryId, setCategoryId] = useState<string>("ALL");
+  const [brandId, setBrandId] = useState<string>("ALL");
+  const [productType, setProductType] = useState<string>("ALL");
   const [belowMinimum, setBelowMinimum] = useState(false);
 
   // Options for selects
@@ -148,12 +148,26 @@ export default function RelatorioPosicaoEstoquePage() {
 
         if (categoriesRes.ok) {
           const categoriesData = await categoriesRes.json();
-          setCategories(categoriesData);
+          // Handle both array and paginated response
+          if (Array.isArray(categoriesData)) {
+            setCategories(categoriesData);
+          } else if (categoriesData.data && Array.isArray(categoriesData.data)) {
+            setCategories(categoriesData.data);
+          } else {
+            setCategories([]);
+          }
         }
 
         if (brandsRes.ok) {
           const brandsData = await brandsRes.json();
-          setBrands(brandsData);
+          // Handle both array and paginated response
+          if (Array.isArray(brandsData)) {
+            setBrands(brandsData);
+          } else if (brandsData.data && Array.isArray(brandsData.data)) {
+            setBrands(brandsData.data);
+          } else {
+            setBrands([]);
+          }
         }
       } catch (error) {
         console.error("Erro ao carregar opções:", error);
@@ -168,9 +182,9 @@ export default function RelatorioPosicaoEstoquePage() {
     try {
       const params = new URLSearchParams();
 
-      if (categoryId) params.set("categoryId", categoryId);
-      if (brandId) params.set("brandId", brandId);
-      if (productType) params.set("productType", productType);
+      if (categoryId && categoryId !== "ALL") params.set("categoryId", categoryId);
+      if (brandId && brandId !== "ALL") params.set("brandId", brandId);
+      if (productType && productType !== "ALL") params.set("productType", productType);
       if (belowMinimum) params.set("belowMinimum", "true");
 
       const res = await fetch(`/api/reports/stock/position?${params}`);
@@ -257,7 +271,7 @@ export default function RelatorioPosicaoEstoquePage() {
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="ALL">Todas</SelectItem>
                   {categories.map((cat) => (
                     <SelectItem key={cat.id} value={cat.id}>
                       {cat.name}
@@ -274,7 +288,7 @@ export default function RelatorioPosicaoEstoquePage() {
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="ALL">Todas</SelectItem>
                   {brands.map((brand) => (
                     <SelectItem key={brand.id} value={brand.id}>
                       {brand.name}
@@ -291,7 +305,7 @@ export default function RelatorioPosicaoEstoquePage() {
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="ALL">Todos</SelectItem>
                   {Object.entries(PRODUCT_TYPE_LABELS).map(([key, label]) => (
                     <SelectItem key={key} value={key}>
                       {label}
