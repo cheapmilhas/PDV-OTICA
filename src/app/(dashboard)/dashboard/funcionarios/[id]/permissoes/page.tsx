@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -42,7 +43,7 @@ interface ModulePermissions {
   [module: string]: Permission[];
 }
 
-export default function UserPermissionsPage() {
+function UserPermissionsPage() {
   const router = useRouter();
   const params = useParams();
   const userId = params.id as string;
@@ -453,5 +454,13 @@ export default function UserPermissionsPage() {
       )}
     </div>
     </PagePermissionGuard>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="users.permissions">
+      <UserPermissionsPage />
+    </ProtectedRoute>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -41,7 +42,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 
-export default function ProdutosPage() {
+function ProdutosPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -505,5 +506,13 @@ export default function ProdutosPage() {
         </Dialog>
       )}
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="products.access">
+      <ProdutosPage />
+    </ProtectedRoute>
   );
 }

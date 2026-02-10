@@ -86,6 +86,21 @@ export default function DashboardPage() {
         const osData = await osRes.json();
         setOsUrgentes(osData.data || []);
 
+        // Vendas dos últimos 7 dias (para gráfico)
+        const salesChartRes = await fetch('/api/dashboard/sales-last-7-days');
+        const salesChartData = await salesChartRes.json();
+        setSalesChartData(salesChartData.data || []);
+
+        // Top 5 produtos mais vendidos (para gráfico)
+        const topProductsRes = await fetch('/api/dashboard/top-products');
+        const topProductsData = await topProductsRes.json();
+        setTopProductsData(topProductsData.data || []);
+
+        // Distribuição de métodos de pagamento (para gráfico)
+        const paymentDistRes = await fetch('/api/dashboard/payment-distribution');
+        const paymentDistData = await paymentDistRes.json();
+        setPaymentMethodsData(paymentDistData.data || []);
+
         setLoading(false);
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
@@ -135,25 +150,6 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
-      {/* Aviso/Notificação - Estilo SSÓtica */}
-      <div className="rounded-lg border border-yellow-300 bg-yellow-50 p-4">
-        <div className="flex items-center justify-between">
-          <div className="flex items-center gap-3">
-            <div className="flex h-8 w-8 items-center justify-center rounded-full bg-yellow-200">
-              <AlertTriangle className="h-5 w-5 text-yellow-700" />
-            </div>
-            <div>
-              <p className="font-medium text-yellow-900">
-                <strong>Aviso:</strong> Estamos adotando uma nova política de senhas para proteger ainda mais sua conta. Atualize sua senha agora e mantenha sua segurança em dia.
-              </p>
-            </div>
-          </div>
-          <Button size="sm" className="bg-red-600 hover:bg-red-700 text-white">
-            Alterar Senha
-          </Button>
-        </div>
-      </div>
-
       {/* Header com Hora */}
       <div className="flex items-center justify-between">
         <div>

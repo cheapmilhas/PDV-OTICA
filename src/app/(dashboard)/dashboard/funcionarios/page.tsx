@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -47,7 +48,7 @@ interface UserType {
   updatedAt: string;
 }
 
-export default function FuncionariosPage() {
+function FuncionariosPage() {
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -865,5 +866,13 @@ export default function FuncionariosPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="users.access">
+      <FuncionariosPage />
+    </ProtectedRoute>
   );
 }

@@ -11,6 +11,7 @@ import {
   Users,
   ShoppingCart,
 } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 const reports = [
   {
@@ -96,16 +97,21 @@ const upcomingReports: Array<{
 
 export default function RelatoriosPage() {
   return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-3xl font-bold">Relatórios</h1>
-          <p className="text-muted-foreground">
-            Central de análises e relatórios gerenciais
-          </p>
+    <ProtectedRoute
+      permission={["reports.sales", "reports.financial", "reports.inventory", "reports.customers"]}
+      requireAny
+      message="Você não tem permissão para acessar relatórios. Entre em contato com o administrador do sistema."
+    >
+      <div className="space-y-6">
+        {/* Header */}
+        <div className="flex items-center justify-between">
+          <div>
+            <h1 className="text-3xl font-bold">Relatórios</h1>
+            <p className="text-muted-foreground">
+              Central de análises e relatórios gerenciais
+            </p>
+          </div>
         </div>
-      </div>
 
       {/* Relatórios Disponíveis */}
       <div>
@@ -169,6 +175,7 @@ export default function RelatoriosPage() {
           </div>
         </div>
       )}
-    </div>
+      </div>
+    </ProtectedRoute>
   );
 }

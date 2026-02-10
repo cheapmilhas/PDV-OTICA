@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -91,7 +92,7 @@ interface Filters {
   endDate: string;
 }
 
-export default function FinanceiroPage() {
+function FinanceiroPage() {
   // Estados para Contas a Pagar
   const [accountsPayable, setAccountsPayable] = useState<AccountPayable[]>([]);
   const [payableLoading, setPayableLoading] = useState(true);
@@ -976,5 +977,13 @@ export default function FinanceiroPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="financial.access">
+      <FinanceiroPage />
+    </ProtectedRoute>
   );
 }

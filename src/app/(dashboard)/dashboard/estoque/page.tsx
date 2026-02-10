@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -45,7 +46,7 @@ interface Product {
   updatedAt: string;
 }
 
-export default function EstoquePage() {
+function EstoquePage() {
   const [modalEntradaOpen, setModalEntradaOpen] = useState(false);
   const [modalSaidaOpen, setModalSaidaOpen] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
@@ -648,5 +649,13 @@ export default function EstoquePage() {
         }
       `}</style>
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="stock.access">
+      <EstoquePage />
+    </ProtectedRoute>
   );
 }

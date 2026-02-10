@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
@@ -26,7 +27,7 @@ import { Can } from "@/components/shared/can";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
-export default function ClientesPage() {
+function ClientesPage() {
   const router = useRouter();
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -360,5 +361,13 @@ export default function ClientesPage() {
         cliente={clienteSelecionado}
       />
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="customers.access">
+      <ClientesPage />
+    </ProtectedRoute>
   );
 }

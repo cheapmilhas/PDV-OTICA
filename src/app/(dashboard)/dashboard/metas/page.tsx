@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -31,7 +32,7 @@ interface Vendedor {
   posicao: number;
 }
 
-export default function MetasPage() {
+function MetasPage() {
   const [loading, setLoading] = useState(true);
   const [metaGeral, setMetaGeral] = useState<MetaGeral>({
     mes: "",
@@ -254,5 +255,13 @@ export default function MetasPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="goals.access">
+      <MetasPage />
+    </ProtectedRoute>
   );
 }

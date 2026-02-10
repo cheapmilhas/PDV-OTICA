@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -24,7 +25,7 @@ import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export default function OrdensServicoPage() {
+function OrdensServicoPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -345,5 +346,13 @@ export default function OrdensServicoPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="service_orders.access">
+      <OrdensServicoPage />
+    </ProtectedRoute>
   );
 }

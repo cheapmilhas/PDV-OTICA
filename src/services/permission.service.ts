@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { ROLE_PERMISSIONS, UserRole } from "@/lib/permissions";
 
 export interface UserEffectivePermissions {
   role: string;
@@ -21,29 +22,26 @@ export class PermissionService {
     // 1. Buscar usuário com role
     const user = await prisma.user.findUnique({
       where: { id: userId },
-      select: { role: true },
+      select: { id: true, role: true, name: true, email: true },
     });
 
     if (!user) {
       throw new Error("Usuário não encontrado");
     }
 
-    // 2. Buscar permissões padrão do role
+    // 2. Buscar permissões padrão do role DO BANCO
     const rolePermissions = await prisma.rolePermission.findMany({
-      where: {
-        role: user.role,
-        granted: true,
-      },
+      where: { role: user.role },
       include: {
         permission: {
           select: { code: true },
-        },
-      },
+        }
+      }
     });
 
-    const rolePermissionCodes = rolePermissions.map((rp) => rp.permission.code);
+    const rolePermissionStrings = rolePermissions.map(rp => rp.permission.code);
 
-    // 3. Buscar permissões customizadas do usuário
+    // 3. Buscar permissões customizadas do usuário no banco
     const userCustoms = await prisma.userPermission.findMany({
       where: { userId },
       include: {
@@ -54,7 +52,7 @@ export class PermissionService {
     });
 
     // 4. Aplicar customizações
-    const effective = new Set(rolePermissionCodes);
+    const effective = new Set(rolePermissionStrings);
 
     const customPermissions = userCustoms.map((up) => ({
       code: up.permission.code,
@@ -71,9 +69,11 @@ export class PermissionService {
       }
     });
 
+    console.log(`[PermissionService] ${user.email} (${user.role}): ${effective.size} effective permissions`);
+
     return {
       role: user.role,
-      rolePermissions: rolePermissionCodes,
+      rolePermissions: rolePermissionStrings,
       customPermissions,
       effectivePermissions: Array.from(effective).sort(),
     };

@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -25,7 +26,7 @@ import {
   Key,
 } from "lucide-react";
 
-export default function ConfiguracoesPage() {
+function ConfiguracoesPage() {
   const { toast } = useToast();
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -494,5 +495,13 @@ export default function ConfiguracoesPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="settings.access">
+      <ConfiguracoesPage />
+    </ProtectedRoute>
   );
 }

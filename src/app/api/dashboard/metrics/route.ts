@@ -84,6 +84,33 @@ export async function GET() {
         ? Number(salesMonth._sum.total || 0) / salesMonth._count
         : 0;
 
+    // Buscar meta do mês (de SystemRule ou valor padrão)
+    const goalRule = await prisma.systemRule.findFirst({
+      where: {
+        key: "sales.monthly_goal",
+        active: true,
+      },
+    });
+
+    const goalMonth = goalRule?.value
+      ? (typeof goalRule.value === 'number' ? goalRule.value : Number(goalRule.value))
+      : 75400.20; // Valor padrão caso não exista regra
+
+    // Contar Ordens de Serviço
+    const osOpen = await prisma.serviceOrder.count({
+      where: {
+        status: {
+          in: ["APPROVED", "IN_PROGRESS", "READY"],
+        },
+      },
+    });
+
+    const osPending = await prisma.serviceOrder.count({
+      where: {
+        status: "SENT_TO_LAB",
+      },
+    });
+
     const metrics = {
       salesToday: Number(salesToday._sum.total || 0),
       salesYesterday: Number(salesYesterday._sum.total || 0),
@@ -96,9 +123,9 @@ export async function GET() {
       productsLowStock,
       salesCount: salesToday._count,
       avgTicket: Number(avgTicket),
-      goalMonth: 75400.20, // TODO: Buscar meta do banco
-      osOpen: 0, // TODO: Implementar contagem de OS
-      osPending: 0,
+      goalMonth,
+      osOpen,
+      osPending,
     };
 
     return NextResponse.json({ metrics });

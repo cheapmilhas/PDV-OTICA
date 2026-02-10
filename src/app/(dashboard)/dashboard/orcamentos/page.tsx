@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -46,7 +47,7 @@ interface Quote {
   };
 }
 
-export default function OrcamentosPage() {
+function OrcamentosPage() {
   const router = useRouter();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -294,5 +295,13 @@ export default function OrcamentosPage() {
         />
       )}
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="quotes.access">
+      <OrcamentosPage />
+    </ProtectedRoute>
   );
 }

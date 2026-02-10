@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -57,7 +58,7 @@ type CashMovement = {
   salePayment?: { sale: { id: string } };
 };
 
-export default function CaixaPage() {
+function CaixaPage() {
   const [modalAberturaOpen, setModalAberturaOpen] = useState(false);
   const [modalFechamentoOpen, setModalFechamentoOpen] = useState(false);
   const [modalSangriaOpen, setModalSangriaOpen] = useState(false);
@@ -556,5 +557,13 @@ export default function CaixaPage() {
         </Card>
       </div>
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="cash.access">
+      <CaixaPage />
+    </ProtectedRoute>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -49,7 +50,7 @@ interface Supplier {
   updatedAt: string;
 }
 
-export default function FornecedoresPage() {
+function FornecedoresPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
@@ -861,5 +862,13 @@ export default function FornecedoresPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="suppliers.access">
+      <FornecedoresPage />
+    </ProtectedRoute>
   );
 }

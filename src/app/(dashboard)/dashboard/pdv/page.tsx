@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
@@ -46,7 +47,7 @@ interface Customer {
   cpf?: string;
 }
 
-export default function PDVPage() {
+function PDVPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
@@ -633,5 +634,13 @@ export default function PDVPage() {
       </div>
     </div>
     </>
+  );
+}
+
+export default function Page() {
+  return (
+    <ProtectedRoute permission="sales.create">
+      <PDVPage />
+    </ProtectedRoute>
   );
 }
