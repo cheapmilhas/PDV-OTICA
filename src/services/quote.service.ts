@@ -338,7 +338,7 @@ export class QuoteService {
               originType: "SALE_PAYMENT",
               originId: salePayment.id,
               salePaymentId: salePayment.id,
-              sellerUserId: userId,
+              createdByUserId: userId,
               note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
             },
           });
