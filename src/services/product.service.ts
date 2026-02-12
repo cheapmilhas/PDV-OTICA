@@ -29,7 +29,13 @@ export class ProductService {
       type,
       categoryId,
       brandId,
+      supplierId,
       inStock,
+      stockLevel,
+      minPrice,
+      maxPrice,
+      startDate,
+      endDate,
       lowStock,
       featured,
       launch,
@@ -63,6 +69,10 @@ export class ProductService {
       where.brandId = brandId;
     }
 
+    if (supplierId) {
+      where.supplierId = supplierId;
+    }
+
     if (featured !== undefined) {
       where.featured = featured;
     }
@@ -84,11 +94,63 @@ export class ProductService {
       }
     }
 
+    // Filtro de nível de estoque
+    if (stockLevel) {
+      switch (stockLevel) {
+        case "zerado":
+          where.stockQty = 0;
+          break;
+        case "baixo":
+          where.AND = where.AND || [];
+          where.AND.push({
+            stockQty: { gt: 0, lte: prisma.product.fields.stockMin },
+          });
+          break;
+        case "normal":
+          where.AND = where.AND || [];
+          where.AND.push({
+            stockQty: { gt: prisma.product.fields.stockMin },
+          });
+          break;
+        case "alto":
+          where.AND = where.AND || [];
+          where.AND.push({
+            stockQty: { gte: prisma.product.fields.stockMax },
+          });
+          break;
+      }
+    }
+
     // Filtro de estoque baixo (stockQty <= stockMin)
     if (lowStock) {
-      where.AND = [
-        { stockQty: { lte: prisma.product.fields.stockMin } },
-      ];
+      where.AND = where.AND || [];
+      where.AND.push({
+        stockQty: { lte: prisma.product.fields.stockMin },
+      });
+    }
+
+    // Filtro de faixa de preço
+    if (minPrice !== undefined || maxPrice !== undefined) {
+      where.salePrice = {};
+      if (minPrice !== undefined) {
+        where.salePrice.gte = minPrice;
+      }
+      if (maxPrice !== undefined) {
+        where.salePrice.lte = maxPrice;
+      }
+    }
+
+    // Filtro de período de cadastro
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = startDate;
+      }
+      if (endDate) {
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endOfDay;
+      }
     }
 
     // Busca full-text

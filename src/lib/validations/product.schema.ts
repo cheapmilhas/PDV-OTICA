@@ -186,8 +186,30 @@ export const productQuerySchema = z.object({
   brandId: z.string()
     .optional(),
 
+  supplierId: z.string()
+    .optional(),
+
   inStock: z.coerce.boolean()
     .optional(),
+
+  stockLevel: z.enum(["zerado", "baixo", "normal", "alto"])
+    .optional(),
+
+  minPrice: z.coerce.number()
+    .min(0)
+    .optional(),
+
+  maxPrice: z.coerce.number()
+    .min(0)
+    .optional(),
+
+  startDate: z.string()
+    .optional()
+    .transform((val) => val ? new Date(val) : undefined),
+
+  endDate: z.string()
+    .optional()
+    .transform((val) => val ? new Date(val) : undefined),
 
   lowStock: z.coerce.boolean()
     .optional(),
