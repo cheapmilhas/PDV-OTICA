@@ -112,6 +112,7 @@ export const saleQuerySchema = z.object({
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(["ativos", "inativos", "todos"]).default("ativos"),
   customerId: z.string().optional(),
+  sellerUserId: z.string().optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
   paymentMethod: z.nativeEnum(PaymentMethod).optional(),

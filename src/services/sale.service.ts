@@ -26,6 +26,7 @@ export class SaleService {
       pageSize = 20,
       status = "ativos",
       customerId,
+      sellerUserId,
       startDate,
       endDate,
       paymentMethod,
@@ -39,6 +40,7 @@ export class SaleService {
       ...(status === "ativos" && { status: { notIn: ["CANCELED", "REFUNDED"] } }),
       ...(status === "inativos" && { status: { in: ["CANCELED", "REFUNDED"] } }),
       ...(customerId && { customerId }),
+      ...(sellerUserId && { sellerUserId }),
       ...(paymentMethod && {
         payments: {
           some: { method: paymentMethod },

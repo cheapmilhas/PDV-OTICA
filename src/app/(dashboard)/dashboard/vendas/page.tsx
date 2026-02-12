@@ -25,6 +25,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ProtectedAction } from "@/components/auth/ProtectedAction";
+import { VendasFilters, VendasFilterValues } from "@/components/vendas/vendas-filters";
 
 export default function VendasPage() {
   return (
@@ -43,9 +44,23 @@ function VendasContent() {
   const [vendas, setVendas] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [filters, setFilters] = useState<VendasFilterValues>({
+    startDate: undefined,
+    endDate: undefined,
+    sellerUserId: "",
+    paymentMethod: "",
+  });
+  const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
 
   // Verifica se o usuário tem permissão para ver vendas canceladas
   const canViewCanceled = ["ADMIN", "MANAGER"].includes(session?.user?.role || "");
+
+  useEffect(() => {
+    fetch("/api/users/sellers")
+      .then((res) => res.json())
+      .then((data) => setSellers(data.data || []))
+      .catch(console.error);
+  }, []);
 
   useEffect(() => {
     setLoading(true);
@@ -55,6 +70,11 @@ function VendasContent() {
       pageSize: "20",
       status: statusFilter,
     });
+
+    if (filters.startDate) params.set("startDate", filters.startDate.toISOString());
+    if (filters.endDate) params.set("endDate", filters.endDate.toISOString());
+    if (filters.sellerUserId) params.set("sellerUserId", filters.sellerUserId);
+    if (filters.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
 
     fetch(`/api/sales?${params}`)
       .then((res) => res.json())
@@ -68,7 +88,7 @@ function VendasContent() {
         toast.error("Erro ao carregar vendas");
         setLoading(false);
       });
-  }, [search, page, statusFilter]);
+  }, [search, page, statusFilter, filters]);
 
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
@@ -97,6 +117,12 @@ function VendasContent() {
           </Button>
         </ProtectedAction>
       </div>
+
+      {/* Filtros Avançados */}
+      <VendasFilters
+        onFilterChange={setFilters}
+        sellers={sellers}
+      />
 
       {/* Tabs de Filtro */}
       {canViewCanceled && (
