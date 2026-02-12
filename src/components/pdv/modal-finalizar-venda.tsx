@@ -16,12 +16,21 @@ import {
   Loader2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { ModalConfigurarCrediario } from "./modal-configurar-crediario";
+import toast from "react-hot-toast";
+
+interface InstallmentConfig {
+  count: number;
+  firstDueDate: string;
+  interval: number;
+}
 
 interface Payment {
   id: string;
   method: string;
   amount: number;
   installments?: number;
+  installmentConfig?: InstallmentConfig;
 }
 
 interface ModalFinalizarVendaProps {
@@ -46,11 +55,22 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
   const [amount, setAmount] = useState("");
   const [installments, setInstallments] = useState("1");
 
+  // Estados para modal de crediário
+  const [modalCrediarioOpen, setModalCrediarioOpen] = useState(false);
+  const [pendingCrediarioAmount, setPendingCrediarioAmount] = useState(0);
+
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   const remaining = total - totalPaid;
 
   const addPayment = () => {
     if (!selectedMethod || !amount || parseFloat(amount) <= 0) return;
+
+    // Se for crediário, abrir modal de configuração
+    if (selectedMethod === "STORE_CREDIT") {
+      setPendingCrediarioAmount(parseFloat(amount));
+      setModalCrediarioOpen(true);
+      return; // Não adiciona ainda
+    }
 
     const newPayment: Payment = {
       id: Date.now().toString(),
@@ -62,6 +82,24 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
     setPayments([...payments, newPayment]);
     setAmount("");
     setInstallments("1");
+  };
+
+  // Callback para quando confirmar crediário
+  const handleConfirmarCrediario = (config: InstallmentConfig) => {
+    const newPayment: Payment = {
+      id: Date.now().toString(),
+      method: "STORE_CREDIT",
+      amount: pendingCrediarioAmount,
+      installmentConfig: config,
+    };
+
+    setPayments([...payments, newPayment]);
+    setAmount("");
+    setPendingCrediarioAmount(0);
+
+    toast.success(
+      `Crediário configurado: ${config.count}x de R$ ${(pendingCrediarioAmount / config.count).toFixed(2)}`
+    );
   };
 
   const removePayment = (id: string) => {
@@ -211,6 +249,12 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
                               {payment.installments}x de {formatCurrency(payment.amount / payment.installments)}
                             </p>
                           )}
+                          {payment.installmentConfig && (
+                            <p className="text-xs text-muted-foreground">
+                              {payment.installmentConfig.count}x de{" "}
+                              {formatCurrency(payment.amount / payment.installmentConfig.count)}
+                            </p>
+                          )}
                         </div>
                       </div>
                       <div className="flex items-center gap-2">
@@ -261,6 +305,14 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
           </Button>
         </div>
       </DialogContent>
+
+      {/* Modal de Configuração de Crediário */}
+      <ModalConfigurarCrediario
+        open={modalCrediarioOpen}
+        onOpenChange={setModalCrediarioOpen}
+        amount={pendingCrediarioAmount}
+        onConfirm={handleConfirmarCrediario}
+      />
     </Dialog>
   );
 }
