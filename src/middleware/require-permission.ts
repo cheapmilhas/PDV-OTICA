@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getServerSession } from "next-auth";
-import { authOptions } from "@/app/api/auth/[...nextauth]/route";
+import { auth } from "@/auth";
 import { PermissionService } from "@/services/permission.service";
 
 /**
@@ -20,7 +19,7 @@ export async function requirePermission(
   permissionCode: string
 ): Promise<void> {
   // 1. Verificar autenticação
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session?.user?.id) {
     throw new Error("Não autenticado");
@@ -60,7 +59,7 @@ export async function requireAllPermissions(
   request: NextRequest,
   permissions: string[]
 ): Promise<void> {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session?.user?.id) {
     throw new Error("Não autenticado");
@@ -86,7 +85,7 @@ export async function requireAnyPermission(
   request: NextRequest,
   permissions: string[]
 ): Promise<void> {
-  const session = await getServerSession(authOptions);
+  const session = await auth();
 
   if (!session?.user?.id) {
     throw new Error("Não autenticado");
