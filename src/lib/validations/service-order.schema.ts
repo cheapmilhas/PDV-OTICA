@@ -21,8 +21,8 @@ export type ServiceOrderItemDTO = z.infer<typeof serviceOrderItemSchema>;
  * Schema para criar nova ordem de serviço
  */
 export const createServiceOrderSchema = z.object({
-  customerId: z.string().uuid("ID do cliente inválido"),
-  branchId: z.string().uuid("ID da filial inválido"),
+  customerId: z.string().min(1, "ID do cliente é obrigatório"),
+  branchId: z.string().min(1, "ID da filial é obrigatório"),
   items: z.array(serviceOrderItemSchema).min(1, "OS deve ter pelo menos 1 serviço"),
   expectedDate: z.string().datetime().optional(),
   prescription: z.string().max(1000, "Prescrição muito longa").optional(),
@@ -72,7 +72,7 @@ export const serviceOrderQuerySchema = z.object({
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
   status: z.enum(["ativos", "inativos", "todos"]).default("ativos"),
-  customerId: z.string().uuid().optional(),
+  customerId: z.string().optional(),
   orderStatus: z.nativeEnum(ServiceOrderStatus).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),

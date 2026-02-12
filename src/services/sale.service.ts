@@ -324,24 +324,22 @@ export class SaleService {
           },
         });
 
-        // 5. Criar CashMovement para pagamentos em dinheiro
-        if (payment.method === "CASH") {
-          await tx.cashMovement.create({
-            data: {
-              cashShiftId: openShift.id,
-              branchId,
-              type: "SALE_PAYMENT",
-              direction: "IN",
-              method: "CASH",
-              amount: payment.amount,
-              originType: "SALE_PAYMENT",
-              originId: salePayment.id,
-              salePaymentId: salePayment.id,
-              createdByUserId: userId,
-              note: `Venda #${newSale.id.substring(0, 8)}`,
-            },
-          });
-        }
+        // 5. Criar CashMovement para TODOS os métodos de pagamento
+        await tx.cashMovement.create({
+          data: {
+            cashShiftId: openShift.id,
+            branchId,
+            type: "SALE_PAYMENT",
+            direction: "IN",
+            method: payment.method,
+            amount: payment.amount,
+            originType: "SALE_PAYMENT",
+            originId: salePayment.id,
+            salePaymentId: salePayment.id,
+            createdByUserId: userId,
+            note: `Venda #${newSale.id.substring(0, 8)}`,
+          },
+        });
       }
 
       // 6. Calcular e criar comissão do vendedor
@@ -432,15 +430,15 @@ export class SaleService {
           data: { status: "VOIDED" },
         });
 
-        // Se tinha caixa aberto E o pagamento foi em dinheiro, criar movimento de REFUND
-        if (openShift && payment.method === "CASH") {
+        // Se tinha caixa aberto, criar movimento de REFUND para TODOS os métodos
+        if (openShift) {
           await tx.cashMovement.create({
             data: {
               cashShiftId: openShift.id,
               branchId: sale.branchId,
               type: "REFUND",
               direction: "OUT",
-              method: "CASH",
+              method: payment.method,
               amount: payment.amount,
               originType: "SALE_PAYMENT",
               originId: payment.id,
