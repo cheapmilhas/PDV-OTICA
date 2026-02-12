@@ -75,7 +75,7 @@ export function ModalGerarCodigo({
   const [isGeneratingImage, setIsGeneratingImage] = useState(false);
 
   const form = useForm<FormData>({
-    resolver: zodResolver(createBarcodeSchema),
+    resolver: zodResolver(createBarcodeSchema) as any,
     defaultValues: {
       productId,
       type: "EAN13",
