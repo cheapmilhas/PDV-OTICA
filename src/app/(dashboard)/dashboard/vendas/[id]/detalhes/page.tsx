@@ -10,11 +10,12 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { hasPermission, Permission } from "@/lib/permissions";
+import { replaceMessageVariables, openWhatsAppWithMessage } from "@/lib/default-messages";
 
 interface SaleDetails {
   id: string;
@@ -74,6 +75,7 @@ export default function DetalhesVendaPage() {
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedSellerId, setSelectedSellerId] = useState("");
   const [updatingSeller, setUpdatingSeller] = useState(false);
+  const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
 
   // Verifica permissões do usuário
   const canCancelSale = hasPermission(session?.user?.role || "", Permission.SALES_CANCEL);
@@ -202,6 +204,47 @@ export default function DetalhesVendaPage() {
     }
   };
 
+  const handleThankYouWhatsApp = async () => {
+    if (!sale?.customer?.phone) {
+      toast.error("Cliente não possui telefone cadastrado");
+      return;
+    }
+
+    setSendingWhatsApp(true);
+    try {
+      // Buscar configurações da empresa
+      const res = await fetch("/api/settings");
+      if (!res.ok) throw new Error("Erro ao carregar configurações");
+
+      const { data: settings } = await res.json();
+
+      // Pegar mensagem de agradecimento
+      const messageTemplate = settings.messageThankYou || "";
+
+      if (!messageTemplate) {
+        toast.error("Mensagem de agradecimento não configurada");
+        return;
+      }
+
+      // Substituir variáveis
+      const message = replaceMessageVariables(messageTemplate, {
+        cliente: sale.customer.name,
+        valor: formatCurrency(Number(sale.total)),
+        otica: settings.displayName || "Ótica",
+        data: format(new Date(sale.createdAt), "dd/MM/yyyy", { locale: ptBR }),
+        vendedor: sale.sellerUser.name,
+      });
+
+      // Abrir WhatsApp
+      openWhatsAppWithMessage(sale.customer.phone, message);
+      toast.success("WhatsApp aberto com a mensagem!");
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSendingWhatsApp(false);
+    }
+  };
+
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
       CASH: "Dinheiro",
@@ -312,6 +355,18 @@ export default function DetalhesVendaPage() {
           {sale.status !== "CANCELED" && sale.status !== "REFUNDED" ? (
             <>
               <Badge variant="default">Ativa</Badge>
+              {sale.customer?.phone && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={handleThankYouWhatsApp}
+                  disabled={sendingWhatsApp}
+                  className="border-green-600 text-green-600 hover:bg-green-50"
+                >
+                  <MessageCircle className="h-4 w-4 mr-2" />
+                  {sendingWhatsApp ? "Enviando..." : "Agradecer pelo WhatsApp"}
+                </Button>
+              )}
               <Button
                 variant="outline"
                 size="sm"
