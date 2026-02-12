@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import Link from "next/link";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Badge } from "@/components/ui/badge";
 import {
   Select,
   SelectContent,
@@ -41,13 +43,13 @@ import {
 
 interface ReceivableData {
   id: string;
-  saleId: string;
-  saleDate: Date;
+  saleId: string | null;
   customerName: string | null;
   customerId: string | null;
+  description: string;
+  installment: string;
   dueDate: Date;
   amount: number;
-  paymentMethod: string;
   status: string;
   daysOverdue: number;
   agingCategory: string;
@@ -162,12 +164,12 @@ export default function RelatorioContasReceberPage() {
     import("xlsx").then((XLSX) => {
       const ws = XLSX.utils.json_to_sheet(
         data.receivables.map((receivable) => ({
-          "ID Venda": receivable.saleId,
-          "Data Venda": format(new Date(receivable.saleDate), "dd/MM/yyyy"),
+          "ID Venda": receivable.saleId || "N/A",
+          Descrição: receivable.description,
+          Parcela: receivable.installment,
           Cliente: receivable.customerName || "N/A",
           "Data Vencimento": format(new Date(receivable.dueDate), "dd/MM/yyyy"),
           Valor: receivable.amount,
-          "Forma Pagamento": receivable.paymentMethod,
           "Dias Atraso": receivable.daysOverdue,
           Categoria: receivable.agingCategory,
         }))
@@ -410,11 +412,11 @@ export default function RelatorioContasReceberPage() {
                 <table className="w-full text-sm">
                   <thead>
                     <tr className="border-b">
-                      <th className="text-left p-2">Data Venda</th>
+                      <th className="text-left p-2">Descrição</th>
                       <th className="text-left p-2">Cliente</th>
+                      <th className="text-center p-2">Parcela</th>
                       <th className="text-left p-2">Vencimento</th>
                       <th className="text-right p-2">Valor</th>
-                      <th className="text-left p-2">Forma Pagamento</th>
                       <th className="text-center p-2">Dias Atraso</th>
                       <th className="text-left p-2">Categoria</th>
                     </tr>
@@ -430,13 +432,29 @@ export default function RelatorioContasReceberPage() {
                           }`}
                         >
                           <td className="p-2">
-                            {format(
-                              new Date(receivable.saleDate),
-                              "dd/MM/yyyy"
+                            <div className="font-medium">
+                              {receivable.description}
+                            </div>
+                            {receivable.saleId && (
+                              <Link
+                                href={`/dashboard/vendas/${receivable.saleId}/detalhes`}
+                                className="text-xs text-blue-600 hover:underline"
+                              >
+                                Ver Venda #{receivable.saleId.substring(0, 8)}
+                              </Link>
                             )}
                           </td>
                           <td className="p-2 font-medium">
                             {receivable.customerName || "N/A"}
+                          </td>
+                          <td className="p-2 text-center">
+                            {receivable.installment !== "1/1" ? (
+                              <Badge variant="outline">
+                                {receivable.installment}
+                              </Badge>
+                            ) : (
+                              <span className="text-muted-foreground">—</span>
+                            )}
                           </td>
                           <td className="p-2">
                             {format(new Date(receivable.dueDate), "dd/MM/yyyy")}
@@ -444,7 +462,6 @@ export default function RelatorioContasReceberPage() {
                           <td className="p-2 text-right font-medium">
                             {formatCurrency(receivable.amount)}
                           </td>
-                          <td className="p-2">{receivable.paymentMethod}</td>
                           <td
                             className={`p-2 text-center font-medium ${
                               isOverdue ? "text-red-600" : "text-green-600"
