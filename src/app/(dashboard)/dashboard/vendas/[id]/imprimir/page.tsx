@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
 import { Printer, ArrowLeft, Loader2 } from "lucide-react";
@@ -56,7 +56,9 @@ interface SaleDetails {
 export default function ImprimirVendaPage() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const autoprint = searchParams.get("autoprint") === "true";
 
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -79,6 +81,17 @@ export default function ImprimirVendaPage() {
 
     fetchSale();
   }, [id, router]);
+
+  // Auto-abrir diálogo de impressão quando autoprint=true
+  useEffect(() => {
+    if (autoprint && sale && !loading) {
+      // Aguardar um pouco para garantir que o conteúdo foi renderizado
+      const timer = setTimeout(() => {
+        window.print();
+      }, 1000);
+      return () => clearTimeout(timer);
+    }
+  }, [autoprint, sale, loading]);
 
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {

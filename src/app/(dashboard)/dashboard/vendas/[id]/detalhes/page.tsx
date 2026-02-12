@@ -235,9 +235,16 @@ export default function DetalhesVendaPage() {
         vendedor: sale.sellerUser.name,
       });
 
-      // Abrir WhatsApp
-      openWhatsAppWithMessage(sale.customer.phone, message);
-      toast.success("WhatsApp aberto com a mensagem!");
+      // Abrir página de impressão em nova aba (para gerar/baixar PDF)
+      // autoprint=true faz o diálogo de impressão abrir automaticamente
+      window.open(`/dashboard/vendas/${id}/imprimir?autoprint=true`, "_blank");
+
+      // Aguardar 1 segundo para dar tempo da janela de impressão abrir antes do WhatsApp
+      setTimeout(() => {
+        // Abrir WhatsApp
+        openWhatsAppWithMessage(sale.customer.phone, message);
+        toast.success("PDF pronto para salvar e WhatsApp aberto com a mensagem!");
+      }, 1000);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
