@@ -30,7 +30,7 @@ interface QuoteDetails {
     phone?: string;
     email?: string;
   };
-  createdByUser: {
+  sellerUser: {
     id: string;
     name: string;
     email: string;
@@ -235,7 +235,7 @@ export default function DetalhesOrcamentoPage() {
             </div>
             <div>
               <p className="text-sm text-muted-foreground">Criado por</p>
-              <p className="font-medium">{quote.createdByUser.name}</p>
+              <p className="font-medium">{quote.sellerUser.name}</p>
             </div>
             {quote.branch && (
               <div>

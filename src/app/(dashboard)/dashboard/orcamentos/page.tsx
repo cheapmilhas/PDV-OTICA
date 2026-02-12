@@ -38,7 +38,7 @@ interface Quote {
     cpf?: string;
     phone?: string;
   };
-  createdByUser: {
+  sellerUser: {
     id: string;
     name: string;
   };
@@ -266,7 +266,7 @@ function OrcamentosPage() {
                         })}
                       </p>
                       <p className="text-xs text-muted-foreground">
-                        por {quote.createdByUser.name}
+                        por {quote.sellerUser.name}
                       </p>
                     </td>
                     <td className="p-4 text-center">
