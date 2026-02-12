@@ -211,17 +211,19 @@ export class QuoteService {
     }
 
     // 3. Validar se não expirou
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-    const validUntil = new Date(quote.validUntil);
-    validUntil.setHours(0, 0, 0, 0);
+    if (quote.validUntil) {
+      const today = new Date();
+      today.setHours(0, 0, 0, 0);
+      const validUntil = new Date(quote.validUntil);
+      validUntil.setHours(0, 0, 0, 0);
 
-    if (validUntil < today) {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        `Orçamento expirado. Válido até: ${quote.validUntil.toLocaleDateString("pt-BR")}`,
-        400
-      );
+      if (validUntil < today) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          `Orçamento expirado. Válido até: ${quote.validUntil.toLocaleDateString("pt-BR")}`,
+          400
+        );
+      }
     }
 
     // 4. Validar se há caixa aberto
