@@ -82,15 +82,12 @@ export class StockPositionService {
       where.type = filters.productType as any;
     }
 
-    if (filters.minStock !== undefined) {
+    if (filters.minStock !== undefined && filters.maxStock !== undefined) {
+      where.stockQty = { gte: filters.minStock, lte: filters.maxStock };
+    } else if (filters.minStock !== undefined) {
       where.stockQty = { gte: filters.minStock };
-    }
-
-    if (filters.maxStock !== undefined) {
-      where.stockQty = {
-        ...(where.stockQty || {}),
-        lte: filters.maxStock,
-      } as any;
+    } else if (filters.maxStock !== undefined) {
+      where.stockQty = { lte: filters.maxStock };
     }
 
     // Fetch products with stock info
@@ -117,7 +114,7 @@ export class StockPositionService {
     });
 
     // Process products
-    let productsData: ProductStockData[] = products.map((product) => {
+    let productsData: ProductStockData[] = products.map((product: any) => {
       const currentStock = product.stockQty;
       const minimumStock = product.minStockQty || 0;
       const costPrice = Number(product.costPrice);
