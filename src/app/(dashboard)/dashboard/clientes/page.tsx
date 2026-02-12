@@ -21,7 +21,6 @@ import {
 } from "lucide-react";
 import { ModalDetalhesCliente } from "@/components/clientes/modal-detalhes-cliente";
 import { ClientesFilters, ClientesFilterValues } from "@/components/clientes/clientes-filters";
-import { ClientesFiltersSimple } from "@/components/clientes/clientes-filters-simple";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -301,14 +300,7 @@ function ClientesPage() {
         clearable
       />
 
-      {/* Filtros - TESTE */}
-      <div className="bg-yellow-100 border-2 border-yellow-500 p-4 rounded">
-        <p className="text-black font-bold">TESTE: Se você vê este box amarelo, o componente está renderizando</p>
-        <p className="text-sm text-gray-700 mt-2">filterOptions: {JSON.stringify(filterOptions)}</p>
-      </div>
-
-      <ClientesFiltersSimple onFilterChange={setFilters} />
-
+      {/* Filtros */}
       <ClientesFilters
         onFilterChange={setFilters}
         filterOptions={filterOptions}

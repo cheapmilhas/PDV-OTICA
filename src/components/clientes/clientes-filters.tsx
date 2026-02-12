@@ -62,7 +62,6 @@ const MESES = [
 ];
 
 export function ClientesFilters({ onFilterChange, filterOptions }: ClientesFiltersProps) {
-  console.log("ClientesFilters renderizado", { filterOptions });
   const [isExpanded, setIsExpanded] = useState(false);
 
   // Estados dos filtros
