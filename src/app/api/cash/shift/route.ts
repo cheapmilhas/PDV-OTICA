@@ -55,14 +55,21 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    const branchId = await getBranchId();
     const userId = session.user.id;
 
     const body = await request.json();
     console.log("Body recebido:", JSON.stringify(body, null, 2));
 
-    const data = openShiftSchema.parse(body) as OpenShiftDTO;
+    // Adicionar branchId ao body antes de validar
+    const dataToValidate = {
+      ...body,
+      branchId,
+    };
+
+    const data = openShiftSchema.parse(dataToValidate) as OpenShiftDTO;
     console.log("Dados validados:", JSON.stringify(data, null, 2));
-    console.log(`CompanyId: ${companyId}, UserId: ${userId}`);
+    console.log(`CompanyId: ${companyId}, UserId: ${userId}, BranchId: ${branchId}`);
 
     const shift = await cashService.openShift(data, companyId, userId);
     console.log(`✅ Caixa aberto com sucesso! ID: ${shift.id}, BranchId: ${shift.branchId}`);
