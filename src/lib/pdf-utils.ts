@@ -91,7 +91,7 @@ export function generateCarnePDF(data: CarneData): Buffer {
   doc.text(`Nome: ${sale.customer.name}`, margin, yPosition);
   yPosition += 5;
   doc.text(
-    `CPF/CNPJ: ${sale.customer.cpf || sale.customer.cnpj || "Não informado"}`,
+    `CPF: ${sale.customer.cpf || "Não informado"}`,
     margin,
     yPosition
   );

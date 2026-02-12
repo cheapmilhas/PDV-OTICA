@@ -97,7 +97,7 @@ export async function GET(
 
     // Retornar PDF
     const filename = `carne_venda_${sale.id.substring(0, 8)}.pdf`;
-    return new NextResponse(pdfBuffer, {
+    return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {
         "Content-Type": "application/pdf",
