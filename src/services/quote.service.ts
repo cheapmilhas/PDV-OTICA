@@ -139,7 +139,6 @@ export class QuoteService {
               },
             },
           },
-          orderBy: { createdAt: "asc" },
         },
         convertedToSale: true,
       },
