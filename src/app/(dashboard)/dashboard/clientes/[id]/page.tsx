@@ -100,9 +100,12 @@ function ClienteDetalhesPage() {
         setLoading(true);
 
         // Buscar dados do cliente
+        console.log("=== DEBUG: Buscando cliente ID:", customerId);
         const customerRes = await fetch(`/api/customers/${customerId}`);
         if (!customerRes.ok) throw new Error("Cliente não encontrado");
         const customerData = await customerRes.json();
+        console.log("=== DEBUG: Customer Data:", JSON.stringify(customerData, null, 2));
+        console.log("=== DEBUG: Customer name:", customerData?.name);
         setCustomer(customerData);
 
         // Buscar vendas do cliente
@@ -191,7 +194,8 @@ function ClienteDetalhesPage() {
     }
   }, [sales, quotes, serviceOrders]);
 
-  const getInitials = (name: string) => {
+  const getInitials = (name?: string) => {
+    if (!name) return "??";
     const parts = name.split(" ");
     if (parts.length >= 2) {
       return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
@@ -245,7 +249,7 @@ function ClienteDetalhesPage() {
           </Button>
           <div className="flex items-center gap-4">
             <Avatar className="h-16 w-16">
-              <AvatarFallback className="text-xl">{getInitials(customer.name)}</AvatarFallback>
+              <AvatarFallback className="text-xl">{getInitials(customer?.name)}</AvatarFallback>
             </Avatar>
             <div>
               <h1 className="text-3xl font-bold">{customer.name}</h1>
