@@ -9,7 +9,8 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Plus, Trash2 } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, ChevronDown } from "lucide-react";
+import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
 
@@ -33,6 +34,16 @@ export default function NovaOrdemServicoPage() {
     expectedDate: "",
     prescription: "",
     notes: "",
+  });
+
+  const [showPrescription, setShowPrescription] = useState(false);
+  const [prescriptionData, setPrescriptionData] = useState({
+    od: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+    oe: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+    adicao: "",
+    tipoLente: "",
+    material: "",
+    tratamentos: [] as string[],
   });
 
   const [items, setItems] = useState<ServiceItem[]>([
@@ -141,6 +152,11 @@ export default function NovaOrdemServicoPage() {
 
       if (formData.prescription) {
         payload.prescription = formData.prescription;
+      }
+
+      // Adicionar dados da prescrição estruturados se preenchidos
+      if (prescriptionData.od.esf || prescriptionData.oe.esf) {
+        payload.prescriptionData = prescriptionData;
       }
 
       if (formData.notes) {
@@ -271,6 +287,263 @@ export default function NovaOrdemServicoPage() {
               />
             </div>
           </CardContent>
+        </Card>
+
+        {/* Receita (Prescrição) - Colapsável */}
+        <Card className="mb-6">
+          <CardHeader
+            className="cursor-pointer hover:bg-muted/50 transition-colors"
+            onClick={() => setShowPrescription(!showPrescription)}
+          >
+            <CardTitle className="flex items-center justify-between">
+              <span className="flex items-center gap-2">
+                👓 Dados da Receita (Opcional)
+              </span>
+              <ChevronDown
+                className={`h-5 w-5 transition-transform ${showPrescription ? "rotate-180" : ""}`}
+              />
+            </CardTitle>
+          </CardHeader>
+          {showPrescription && (
+            <CardContent className="space-y-6">
+              {/* Olho Direito */}
+              <div className="space-y-3">
+                <h3 className="font-semibold">Olho Direito (OD)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div>
+                    <Label>Esférico</Label>
+                    <Input
+                      value={prescriptionData.od.esf}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          od: { ...prescriptionData.od, esf: e.target.value },
+                        })
+                      }
+                      placeholder="+2.00"
+                    />
+                  </div>
+                  <div>
+                    <Label>Cilíndrico</Label>
+                    <Input
+                      value={prescriptionData.od.cil}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          od: { ...prescriptionData.od, cil: e.target.value },
+                        })
+                      }
+                      placeholder="-0.50"
+                    />
+                  </div>
+                  <div>
+                    <Label>Eixo</Label>
+                    <Input
+                      value={prescriptionData.od.eixo}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          od: { ...prescriptionData.od, eixo: e.target.value },
+                        })
+                      }
+                      placeholder="90°"
+                    />
+                  </div>
+                  <div>
+                    <Label>DNP</Label>
+                    <Input
+                      value={prescriptionData.od.dnp}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          od: { ...prescriptionData.od, dnp: e.target.value },
+                        })
+                      }
+                      placeholder="32mm"
+                    />
+                  </div>
+                  <div>
+                    <Label>Altura</Label>
+                    <Input
+                      value={prescriptionData.od.altura}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          od: { ...prescriptionData.od, altura: e.target.value },
+                        })
+                      }
+                      placeholder="20mm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Olho Esquerdo */}
+              <div className="space-y-3">
+                <h3 className="font-semibold">Olho Esquerdo (OE)</h3>
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                  <div>
+                    <Label>Esférico</Label>
+                    <Input
+                      value={prescriptionData.oe.esf}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          oe: { ...prescriptionData.oe, esf: e.target.value },
+                        })
+                      }
+                      placeholder="+1.75"
+                    />
+                  </div>
+                  <div>
+                    <Label>Cilíndrico</Label>
+                    <Input
+                      value={prescriptionData.oe.cil}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          oe: { ...prescriptionData.oe, cil: e.target.value },
+                        })
+                      }
+                      placeholder="-0.75"
+                    />
+                  </div>
+                  <div>
+                    <Label>Eixo</Label>
+                    <Input
+                      value={prescriptionData.oe.eixo}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          oe: { ...prescriptionData.oe, eixo: e.target.value },
+                        })
+                      }
+                      placeholder="85°"
+                    />
+                  </div>
+                  <div>
+                    <Label>DNP</Label>
+                    <Input
+                      value={prescriptionData.oe.dnp}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          oe: { ...prescriptionData.oe, dnp: e.target.value },
+                        })
+                      }
+                      placeholder="31mm"
+                    />
+                  </div>
+                  <div>
+                    <Label>Altura</Label>
+                    <Input
+                      value={prescriptionData.oe.altura}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          oe: { ...prescriptionData.oe, altura: e.target.value },
+                        })
+                      }
+                      placeholder="20mm"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Dados Adicionais */}
+              <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                <div>
+                  <Label>Adição</Label>
+                  <Input
+                    value={prescriptionData.adicao}
+                    onChange={(e) =>
+                      setPrescriptionData({
+                        ...prescriptionData,
+                        adicao: e.target.value,
+                      })
+                    }
+                    placeholder="+2.00"
+                  />
+                </div>
+                <div>
+                  <Label>Tipo de Lente</Label>
+                  <Select
+                    value={prescriptionData.tipoLente}
+                    onValueChange={(v) =>
+                      setPrescriptionData({ ...prescriptionData, tipoLente: v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Visão Simples">Visão Simples</SelectItem>
+                      <SelectItem value="Bifocal">Bifocal</SelectItem>
+                      <SelectItem value="Multifocal">Multifocal</SelectItem>
+                      <SelectItem value="Ocupacional">Ocupacional</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+                <div>
+                  <Label>Material</Label>
+                  <Select
+                    value={prescriptionData.material}
+                    onValueChange={(v) =>
+                      setPrescriptionData({ ...prescriptionData, material: v })
+                    }
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="Resina 1.50">Resina 1.50</SelectItem>
+                      <SelectItem value="Resina 1.56">Resina 1.56</SelectItem>
+                      <SelectItem value="Resina 1.61">Resina 1.61</SelectItem>
+                      <SelectItem value="Resina 1.67">Resina 1.67</SelectItem>
+                      <SelectItem value="Resina 1.74">Resina 1.74</SelectItem>
+                      <SelectItem value="Policarbonato">Policarbonato</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+
+              {/* Tratamentos */}
+              <div>
+                <Label>Tratamentos</Label>
+                <div className="grid grid-cols-2 md:grid-cols-3 gap-3 mt-2">
+                  {["Antirreflexo", "Fotossensível", "Blue Light", "Anti-risco", "Polarizado"].map((trat) => (
+                    <div key={trat} className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`trat-${trat}`}
+                        checked={prescriptionData.tratamentos.includes(trat)}
+                        onCheckedChange={(checked) => {
+                          if (checked) {
+                            setPrescriptionData({
+                              ...prescriptionData,
+                              tratamentos: [...prescriptionData.tratamentos, trat],
+                            });
+                          } else {
+                            setPrescriptionData({
+                              ...prescriptionData,
+                              tratamentos: prescriptionData.tratamentos.filter(
+                                (t) => t !== trat
+                              ),
+                            });
+                          }
+                        }}
+                      />
+                      <label
+                        htmlFor={`trat-${trat}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      >
+                        {trat}
+                      </label>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         {/* Itens/Serviços */}
