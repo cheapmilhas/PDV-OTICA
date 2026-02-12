@@ -105,8 +105,10 @@ function ClienteDetalhesPage() {
         if (!customerRes.ok) throw new Error("Cliente não encontrado");
         const customerData = await customerRes.json();
         console.log("=== DEBUG: Customer Data:", JSON.stringify(customerData, null, 2));
-        console.log("=== DEBUG: Customer name:", customerData?.name);
-        setCustomer(customerData);
+        // A API retorna { data: customer }, não customer direto
+        const customer = customerData.data || customerData;
+        console.log("=== DEBUG: Customer name:", customer?.name);
+        setCustomer(customer);
 
         // Buscar vendas do cliente
         try {
@@ -171,7 +173,7 @@ function ClienteDetalhesPage() {
       const totalSpent = completedSales.reduce((sum, s) => sum + Number(s.total), 0);
       const averageTicket = completedSales.length > 0 ? totalSpent / completedSales.length : 0;
       const lastSale = completedSales.sort(
-        (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        (a, b) => safeDate(b.createdAt).getTime() - safeDate(a.createdAt).getTime()
       )[0];
 
       setStats({
@@ -193,6 +195,16 @@ function ClienteDetalhesPage() {
       });
     }
   }, [sales, quotes, serviceOrders]);
+
+  // Helper para criar Date seguro
+  const safeDate = (dateStr: any): Date => {
+    try {
+      const d = new Date(dateStr);
+      return isNaN(d.getTime()) ? new Date() : d;
+    } catch {
+      return new Date();
+    }
+  };
 
   const getInitials = (name?: string) => {
     if (!name) return "??";
@@ -254,7 +266,7 @@ function ClienteDetalhesPage() {
             <div>
               <h1 className="text-3xl font-bold">{customer.name}</h1>
               <p className="text-sm text-muted-foreground">
-                Cliente desde {format(new Date(customer.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+                Cliente desde {format(safeDate(customer.createdAt), "dd/MM/yyyy", { locale: ptBR })}
               </p>
             </div>
           </div>
@@ -317,7 +329,7 @@ function ClienteDetalhesPage() {
             <CardContent>
               <p className="text-sm font-medium">
                 {stats.lastPurchase
-                  ? format(new Date(stats.lastPurchase), "dd/MM/yyyy", { locale: ptBR })
+                  ? format(safeDate(stats.lastPurchase), "dd/MM/yyyy", { locale: ptBR })
                   : "Nenhuma compra"}
               </p>
             </CardContent>
@@ -450,7 +462,7 @@ function ClienteDetalhesPage() {
                           {getStatusBadge(sale.status, "sale")}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(sale.createdAt || new Date()), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          {format(safeDate(sale.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {(sale.items || []).length} {(sale.items || []).length === 1 ? "item" : "itens"}
@@ -499,10 +511,10 @@ function ClienteDetalhesPage() {
                           {getStatusBadge(quote.status, "quote")}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Criado em {format(new Date(quote.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR })}
+                          Criado em {format(safeDate(quote.createdAt), "dd/MM/yyyy", { locale: ptBR })}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Válido até {format(new Date(quote.validUntil || new Date()), "dd/MM/yyyy", { locale: ptBR })}
+                          Válido até {format(safeDate(quote.validUntil), "dd/MM/yyyy", { locale: ptBR })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
                           {quote._count?.items || 0} {(quote._count?.items || 0) === 1 ? "item" : "itens"}
@@ -551,11 +563,11 @@ function ClienteDetalhesPage() {
                           {getStatusBadge(order.status, "order")}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Criada em {format(new Date(order.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR })}
+                          Criada em {format(safeDate(order.createdAt), "dd/MM/yyyy", { locale: ptBR })}
                         </p>
                         {order.deliveryDate && (
                           <p className="text-sm text-muted-foreground">
-                            Entrega: {format(new Date(order.deliveryDate), "dd/MM/yyyy", { locale: ptBR })}
+                            Entrega: {format(safeDate(order.deliveryDate), "dd/MM/yyyy", { locale: ptBR })}
                           </p>
                         )}
                       </div>
