@@ -208,7 +208,7 @@ export function ListaAjustes({ canApprove = false, onViewDetails }: ListaAjustes
                   </TableCell>
                   <TableCell>R$ {adj.totalValue.toFixed(2)}</TableCell>
                   <TableCell>
-                    <Badge variant={getStockAdjustmentStatusColor(adj.status)}>
+                    <Badge variant={getStockAdjustmentStatusColor(adj.status) as any}>
                       {getStockAdjustmentStatusLabel(adj.status)}
                     </Badge>
                   </TableCell>
