@@ -122,7 +122,10 @@ export default function DiagnosticoCaixaPage() {
   }
 
   data.recentSales.forEach((sale) => {
-    const paymentsWithoutCashMovement = sale.payments.filter(p => p.cashMovementsCount === 0);
+    // STORE_CREDIT não gera CashMovement na venda (só quando a parcela for paga)
+    const paymentsWithoutCashMovement = sale.payments.filter(
+      p => p.cashMovementsCount === 0 && p.method !== "STORE_CREDIT"
+    );
     if (paymentsWithoutCashMovement.length > 0) {
       problemas.push(
         `❌ VENDA ${sale.id.substring(0, 8)} tem ${paymentsWithoutCashMovement.length} pagamento(s) SEM CashMovement`
@@ -302,6 +305,10 @@ export default function DiagnosticoCaixaPage() {
                       {payment.cashMovementsCount > 0 ? (
                         <Badge className="bg-green-600">
                           ✓ {payment.cashMovementsCount} movimento(s)
+                        </Badge>
+                      ) : payment.method === "STORE_CREDIT" ? (
+                        <Badge className="bg-blue-600">
+                          ✓ Crediário (sem movimento na venda)
                         </Badge>
                       ) : (
                         <Badge className="bg-red-600">✗ SEM movimento</Badge>
