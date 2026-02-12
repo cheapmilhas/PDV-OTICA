@@ -86,9 +86,11 @@ export default function ImprimirVendaPage() {
   useEffect(() => {
     if (autoprint && sale && !loading) {
       // Aguardar um pouco para garantir que o conteúdo foi renderizado
-      const timer = setTimeout(() => {
-        handleDownloadPDF();
-      }, 1500);
+      const timer = setTimeout(async () => {
+        const success = await handleDownloadPDF();
+        // Opcional: fechar aba após download bem-sucedido
+        // if (success) window.close();
+      }, 1200);
       return () => clearTimeout(timer);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -110,7 +112,7 @@ export default function ImprimirVendaPage() {
     window.print();
   };
 
-  const handleDownloadPDF = async () => {
+  const handleDownloadPDF = async (): Promise<boolean> => {
     try {
       const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
@@ -118,7 +120,7 @@ export default function ImprimirVendaPage() {
       const printContainer = document.querySelector(".print-container") as HTMLElement;
       if (!printContainer) {
         toast.error("Erro ao gerar PDF");
-        return;
+        return false;
       }
 
       // Capturar o conteúdo como imagem
@@ -126,6 +128,7 @@ export default function ImprimirVendaPage() {
         scale: 2, // Maior qualidade
         useCORS: true,
         logging: false,
+        backgroundColor: "#ffffff",
       });
 
       // Criar PDF
@@ -136,31 +139,38 @@ export default function ImprimirVendaPage() {
         format: "a4",
       });
 
-      const imgWidth = 210; // A4 width in mm
-      const pageHeight = 297; // A4 height in mm
+      const pdfWidth = pdf.internal.pageSize.getWidth();
+      const pdfHeight = pdf.internal.pageSize.getHeight();
+      const imgWidth = pdfWidth;
       const imgHeight = (canvas.height * imgWidth) / canvas.width;
       let heightLeft = imgHeight;
       let position = 0;
 
       // Adicionar primeira página
       pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-      heightLeft -= pageHeight;
+      heightLeft -= pdfHeight;
 
       // Adicionar páginas extras se necessário
       while (heightLeft > 0) {
         position = heightLeft - imgHeight;
         pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
-        heightLeft -= pageHeight;
+        heightLeft -= pdfHeight;
       }
 
+      // Gerar nome do arquivo com nome do cliente
+      const customerName = sale?.customer?.name?.replace(/\s+/g, "_") || "cliente";
+      const saleDate = sale ? format(new Date(sale.createdAt), "ddMMyyyy") : "";
+      const fileName = `Venda_${customerName}_${saleDate}.pdf`;
+
       // Baixar PDF
-      const fileName = `venda_${sale?.id.substring(0, 8)}_${format(new Date(), "ddMMyyyy")}.pdf`;
       pdf.save(fileName);
       toast.success("PDF baixado com sucesso!");
+      return true;
     } catch (error) {
       console.error("Erro ao gerar PDF:", error);
       toast.error("Erro ao gerar PDF");
+      return false;
     }
   };
 
