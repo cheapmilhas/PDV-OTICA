@@ -41,7 +41,7 @@ export async function GET(request: Request) {
     });
 
     // 3. Buscar todos os CashMovements do caixa aberto
-    let movements = [];
+    let movements: any[] = [];
     if (openShift) {
       movements = await prisma.cashMovement.findMany({
         where: { cashShiftId: openShift.id },
