@@ -298,15 +298,17 @@ export class QuoteService {
           },
         });
 
-        // 7.3. Decrementar estoque
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stockQty: {
-              decrement: item.qty,
+        // 7.3. Decrementar estoque (somente se tiver productId)
+        if (item.productId) {
+          await tx.product.update({
+            where: { id: item.productId },
+            data: {
+              stockQty: {
+                decrement: Number(item.qty),
+              },
             },
-          },
-        });
+          });
+        }
       }
 
       // 7.4. Criar pagamentos
