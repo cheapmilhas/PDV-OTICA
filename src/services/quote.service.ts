@@ -81,7 +81,7 @@ export class QuoteService {
           customer: {
             select: { id: true, name: true, cpf: true, phone: true },
           },
-          createdByUser: {
+          sellerUser: {
             select: { id: true, name: true },
           },
           items: {
@@ -119,7 +119,7 @@ export class QuoteService {
       },
       include: {
         customer: true,
-        createdByUser: {
+        sellerUser: {
           select: { id: true, name: true, email: true },
         },
         branch: {
@@ -335,7 +335,7 @@ export class QuoteService {
               originType: "SALE_PAYMENT",
               originId: salePayment.id,
               salePaymentId: salePayment.id,
-              createdByUserId: userId,
+              sellerUserId: userId,
               note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
             },
           });
