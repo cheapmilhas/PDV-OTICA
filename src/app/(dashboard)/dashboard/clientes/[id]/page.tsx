@@ -106,24 +106,48 @@ function ClienteDetalhesPage() {
         setCustomer(customerData);
 
         // Buscar vendas do cliente
-        const salesRes = await fetch(`/api/sales?customerId=${customerId}&pageSize=100`);
-        if (salesRes.ok) {
-          const salesData = await salesRes.json();
-          setSales(salesData.data || []);
+        try {
+          const salesRes = await fetch(`/api/sales?customerId=${customerId}&pageSize=100`);
+          if (salesRes.ok) {
+            const salesData = await salesRes.json();
+            setSales(salesData.data || []);
+          } else {
+            console.warn("Erro ao buscar vendas:", await salesRes.text());
+            setSales([]);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar vendas:", err);
+          setSales([]);
         }
 
         // Buscar orçamentos do cliente
-        const quotesRes = await fetch(`/api/quotes?customerId=${customerId}&pageSize=100`);
-        if (quotesRes.ok) {
-          const quotesData = await quotesRes.json();
-          setQuotes(quotesData.data || []);
+        try {
+          const quotesRes = await fetch(`/api/quotes?customerId=${customerId}&pageSize=100`);
+          if (quotesRes.ok) {
+            const quotesData = await quotesRes.json();
+            setQuotes(quotesData.data || []);
+          } else {
+            console.warn("Erro ao buscar orçamentos:", await quotesRes.text());
+            setQuotes([]);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar orçamentos:", err);
+          setQuotes([]);
         }
 
         // Buscar ordens de serviço do cliente
-        const ordersRes = await fetch(`/api/service-orders?customerId=${customerId}&pageSize=100`);
-        if (ordersRes.ok) {
-          const ordersData = await ordersRes.json();
-          setServiceOrders(ordersData.data || []);
+        try {
+          const ordersRes = await fetch(`/api/service-orders?customerId=${customerId}&pageSize=100`);
+          if (ordersRes.ok) {
+            const ordersData = await ordersRes.json();
+            setServiceOrders(ordersData.data || []);
+          } else {
+            console.warn("Erro ao buscar ordens de serviço:", await ordersRes.text());
+            setServiceOrders([]);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar ordens de serviço:", err);
+          setServiceOrders([]);
         }
       } catch (error: any) {
         console.error("Erro ao carregar dados do cliente:", error);
