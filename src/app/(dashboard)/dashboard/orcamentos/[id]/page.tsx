@@ -88,9 +88,9 @@ export default function DetalhesOrcamentoPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: any }> = {
-      PENDING: { label: "Pendente", variant: "secondary" },
+      OPEN: { label: "Aberto", variant: "secondary" },
+      SENT: { label: "Enviado", variant: "default" },
       APPROVED: { label: "Aprovado", variant: "default" },
-      REJECTED: { label: "Rejeitado", variant: "destructive" },
       CONVERTED: { label: "Convertido", variant: "default" },
       EXPIRED: { label: "Expirado", variant: "secondary" },
       CANCELED: { label: "Cancelado", variant: "destructive" },

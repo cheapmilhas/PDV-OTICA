@@ -35,8 +35,8 @@ export class QuoteService {
     // Build where clause
     const where: Prisma.QuoteWhereInput = {
       companyId,
-      ...(status === "ativos" && { status: { notIn: ["REJECTED", "CANCELED", "EXPIRED"] } }),
-      ...(status === "inativos" && { status: { in: ["REJECTED", "CANCELED", "EXPIRED"] } }),
+      ...(status === "ativos" && { status: { notIn: ["CANCELED", "EXPIRED"] } }),
+      ...(status === "inativos" && { status: { in: ["CANCELED", "EXPIRED"] } }),
       ...(quoteStatus && { status: quoteStatus }),
       ...(customerId && { customerId }),
       ...(startDate && {
@@ -115,7 +115,7 @@ export class QuoteService {
       where: {
         id,
         companyId,
-        ...(includeInactive ? {} : { status: { notIn: ["REJECTED", "CANCELED", "EXPIRED"] } }),
+        ...(includeInactive ? {} : { status: { notIn: ["CANCELED", "EXPIRED"] } }),
       },
       include: {
         customer: true,

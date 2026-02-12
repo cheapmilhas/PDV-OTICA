@@ -80,9 +80,9 @@ function OrcamentosPage() {
 
   const getStatusBadge = (status: string) => {
     const statusConfig: Record<string, { label: string; variant: any; icon: any }> = {
-      PENDING: { label: "Pendente", variant: "secondary", icon: Clock },
+      OPEN: { label: "Aberto", variant: "secondary", icon: Clock },
+      SENT: { label: "Enviado", variant: "default", icon: CheckCircle2 },
       APPROVED: { label: "Aprovado", variant: "default", icon: CheckCircle2 },
-      REJECTED: { label: "Rejeitado", variant: "destructive", icon: XCircle },
       CONVERTED: { label: "Convertido", variant: "default", icon: DollarSign },
       EXPIRED: { label: "Expirado", variant: "secondary", icon: Clock },
       CANCELED: { label: "Cancelado", variant: "destructive", icon: XCircle },
