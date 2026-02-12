@@ -144,12 +144,20 @@ enum FiscalStatus {
 }
 
 enum QuoteStatus {
-  OPEN
-  SENT
-  APPROVED
-  CONVERTED
-  EXPIRED
-  CANCELED
+  PENDING   // Aguardando resposta do cliente
+  SENT      // Enviado para o cliente (WhatsApp/Email)
+  APPROVED  // Cliente aprovou, aguardando conversão
+  CONVERTED // Convertido em venda
+  EXPIRED   // Passou da validade
+  CANCELLED // Cancelado manualmente
+  OPEN      // Manter por compatibilidade
+  CANCELED  // Manter por compatibilidade
+}
+
+enum QuoteItemType {
+  PRODUCT // Produto do estoque (armação, lente, acessório)
+  SERVICE // Serviço (montagem, ajuste, consulta)
+  CUSTOM  // Item customizado (lente especial não cadastrada)
 }
 
 enum CommissionStatus {
@@ -319,6 +327,7 @@ model User {
   // Relações nomeadas (múltiplas refs de User)
   salesAsSeller              Sale[]                @relation("SaleSeller")
   quotesAsSeller             Quote[]               @relation("QuoteSeller")
+  quotesConverted            Quote[]               @relation("QuoteConverter")
   serviceOrdersCreated       ServiceOrder[]        @relation("SOCreator")
   soHistoryChanges           ServiceOrderHistory[] @relation("SOHistoryChanger")
   qualityChecks              QualityChecklist[]    @relation("QualityChecker")
@@ -1030,51 +1039,96 @@ model Quote {
 
   branchId   String
   branch     Branch    @relation(fields: [branchId], references: [id])
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
+
+  // Cliente (opcional - pode ser orçamento para cliente não cadastrado)
+  customerId    String?
+  customer      Customer? @relation(fields: [customerId], references: [id])
+  customerName  String?   // Nome do cliente se não cadastrado
+  customerPhone String?   // Telefone para contato
+  customerEmail String?   // Email para envio
 
   sellerUserId String
   sellerUser   User   @relation("QuoteSeller", fields: [sellerUserId], references: [id])
 
-  status     QuoteStatus @default(OPEN)
+  // Valores
+  subtotal        Decimal @default(0) @db.Decimal(12, 2)
+  discountTotal   Decimal @default(0) @db.Decimal(12, 2)
+  discountPercent Decimal @default(0) @db.Decimal(5, 2)
+  total           Decimal @default(0) @db.Decimal(12, 2)
+
+  // Status e Validade
+  status     QuoteStatus @default(PENDING)
   validUntil DateTime?
-  notes      String?
 
-  subtotal      Decimal @default(0) @db.Decimal(12, 2)
-  discountTotal Decimal @default(0) @db.Decimal(12, 2)
-  total         Decimal @default(0) @db.Decimal(12, 2)
+  // Observações
+  notes         String? @db.Text // Observações que aparecem no PDF
+  internalNotes String? @db.Text // Notas internas (não aparecem no PDF)
 
-  lastFollowUpAt   DateTime?
-  followUpCount    Int       @default(0)
+  // Condições de pagamento sugeridas
+  paymentConditions String? @db.Text // Ex: "3x sem juros no cartão, 10% desconto à vista"
+
+  // Conversão em venda
+  convertedToSaleId String?   @unique
+  convertedToSale   Sale?     @relation("QuoteToSale")
+  convertedAt       DateTime?
+  convertedByUserId String?
+  convertedBy       User?     @relation("QuoteConverter", fields: [convertedByUserId], references: [id])
+
+  // Motivo de não conversão (IMPORTANTE para relatórios)
+  lostReason String? // Ex: "Preço alto", "Comprou concorrente", "Desistiu"
+
+  // Follow-up
+  lastFollowUpAt DateTime?
+  followUpCount  Int       @default(0)
+
+  // Legacy (manter por compatibilidade)
   conversionReason String?
-
-  convertedToSaleId String?
-  convertedToSale   Sale?   @relation("QuoteToSale")
-  convertedToOsId   String?
+  convertedToOsId  String?
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   items QuoteItem[]
 
+  @@index([companyId, status])
+  @@index([companyId, createdAt])
+  @@index([customerId])
+  @@index([validUntil])
+  @@index([sellerUserId])
   @@index([branchId, status, createdAt])
-  @@index([customerId, createdAt])
   @@index([status, validUntil])
 }
 
 model QuoteItem {
   id      String @id @default(cuid())
   quoteId String
-  quote   Quote  @relation(fields: [quoteId], references: [id])
+  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
+  // Produto (opcional - pode ser item customizado)
   productId String?
   product   Product? @relation(fields: [productId], references: [id])
 
-  description String?
-  qty         Int     @default(1)
-  unitPrice   Decimal @db.Decimal(12, 2)
-  discount    Decimal @default(0) @db.Decimal(12, 2)
-  lineTotal   Decimal @db.Decimal(12, 2)
+  // Descrição (obrigatória se não tiver productId)
+  description String // Nome/descrição do item
+
+  // Valores
+  qty       Int     @default(1)
+  unitPrice Decimal @db.Decimal(12, 2)
+  discount  Decimal @default(0) @db.Decimal(12, 2)
+  total     Decimal @db.Decimal(12, 2)
+
+  // Tipo do item
+  itemType QuoteItemType @default(PRODUCT)
+
+  // DADOS DA RECEITA DO ÓCULOS (ESSENCIAL PARA ÓTICA!)
+  prescriptionData Json?
+
+  // Observações do item
+  notes String? @db.Text
+
+  createdAt DateTime @default(now())
+
+  @@index([quoteId])
 }
 
 // ==============================

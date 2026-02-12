@@ -1,10 +1,19 @@
 import { prisma } from "@/lib/prisma";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
-import { Prisma } from "@prisma/client";
+import { Prisma, QuoteStatus } from "@prisma/client";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { PaymentDTO } from "@/lib/validations/sale.schema";
-import type { QuoteQuery } from "@/lib/validations/quote.schema";
-import { validateQuotePayments } from "@/lib/validations/quote.schema";
+import type {
+  QuoteQuery,
+  CreateQuoteDTO,
+  UpdateQuoteDTO,
+  CancelQuoteDTO,
+} from "@/lib/validations/quote.schema";
+import {
+  validateQuotePayments,
+  calculateQuoteTotals,
+  calculateQuoteItemTotal,
+} from "@/lib/validations/quote.schema";
 
 /**
  * Service para operações de Orçamentos
@@ -26,6 +35,7 @@ export class QuoteService {
       status = "ativos",
       quoteStatus,
       customerId,
+      sellerUserId,
       startDate,
       endDate,
       sortBy = "createdAt",
@@ -35,10 +45,11 @@ export class QuoteService {
     // Build where clause
     const where: Prisma.QuoteWhereInput = {
       companyId,
-      ...(status === "ativos" && { status: { notIn: ["CANCELED", "EXPIRED"] } }),
-      ...(status === "inativos" && { status: { in: ["CANCELED", "EXPIRED"] } }),
+      ...(status === "ativos" && { status: { notIn: ["CANCELED", "EXPIRED", "CANCELLED"] } }),
+      ...(status === "inativos" && { status: { in: ["CANCELED", "EXPIRED", "CANCELLED"] } }),
       ...(quoteStatus && { status: quoteStatus }),
       ...(customerId && { customerId }),
+      ...(sellerUserId && { sellerUserId }),
       ...(startDate && {
         createdAt: { gte: new Date(startDate) },
       }),
@@ -88,10 +99,14 @@ export class QuoteService {
             select: {
               id: true,
               productId: true,
+              description: true,
               qty: true,
               unitPrice: true,
               discount: true,
-              lineTotal: true,
+              total: true,
+              itemType: true,
+              prescriptionData: true,
+              notes: true,
             },
           },
           _count: {
@@ -150,6 +165,432 @@ export class QuoteService {
 
     return quote;
   }
+
+  /**
+   * Cria novo orçamento
+   *
+   * Validações:
+   * - Pelo menos 1 item
+   * - Se customerId não fornecido, customerName é obrigatório
+   * - Calcula subtotal, discountTotal, total
+   * - Define validUntil baseado em validDays
+   */
+  async create(data: CreateQuoteDTO, companyId: string, userId: string, branchId: string) {
+    const {
+      customerId,
+      customerName,
+      customerPhone,
+      customerEmail,
+      items,
+      discountTotal = 0,
+      discountPercent = 0,
+      notes,
+      internalNotes,
+      paymentConditions,
+      validDays = 15,
+    } = data;
+
+    // Validação: Cliente cadastrado OU nome do cliente avulso
+    if (!customerId && !customerName) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Informe um cliente cadastrado ou o nome do cliente",
+        400
+      );
+    }
+
+    // Validação: Pelo menos 1 item
+    if (!items || items.length === 0) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Orçamento deve ter pelo menos 1 item",
+        400
+      );
+    }
+
+    // Calcular totais
+    const totals = calculateQuoteTotals(items, discountTotal, discountPercent);
+
+    // Calcular data de validade
+    const validUntil = new Date();
+    validUntil.setDate(validUntil.getDate() + validDays);
+
+    // Criar orçamento em transação
+    const quote = await prisma.$transaction(async (tx) => {
+      const newQuote = await tx.quote.create({
+        data: {
+          companyId,
+          branchId,
+          customerId: customerId || null,
+          customerName: customerName || null,
+          customerPhone: customerPhone || null,
+          customerEmail: customerEmail || null,
+          sellerUserId: userId,
+          subtotal: totals.subtotal,
+          discountTotal: totals.discountTotal,
+          discountPercent: discountPercent || 0,
+          total: totals.total,
+          status: QuoteStatus.PENDING,
+          validUntil,
+          notes,
+          internalNotes,
+          paymentConditions,
+        },
+      });
+
+      // Criar itens
+      for (const item of items) {
+        const itemTotal = calculateQuoteItemTotal(item);
+        await tx.quoteItem.create({
+          data: {
+            quoteId: newQuote.id,
+            productId: item.productId || null,
+            description: item.description,
+            qty: item.quantity,
+            unitPrice: item.unitPrice,
+            discount: item.discount || 0,
+            total: itemTotal,
+            itemType: item.itemType || "PRODUCT",
+            prescriptionData: item.prescriptionData as Prisma.InputJsonValue,
+            notes: item.notes,
+          },
+        });
+      }
+
+      return newQuote;
+    });
+
+    // Retornar orçamento completo
+    return this.getById(quote.id, companyId, true);
+  }
+
+  /**
+   * Atualiza orçamento existente
+   *
+   * Validações:
+   * - Apenas orçamentos PENDING, SENT ou OPEN podem ser editados
+   * - Se items mudarem, recalcula totais
+   * - Deleta itens antigos e cria novos (replace)
+   */
+  async update(id: string, data: UpdateQuoteDTO, companyId: string) {
+    // Buscar orçamento
+    const existing = await this.getById(id, companyId, true);
+
+    // Validar status
+    if (!["PENDING", "SENT", "OPEN"].includes(existing.status)) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Orçamento com status ${existing.status} não pode ser editado`,
+        400
+      );
+    }
+
+    const {
+      customerId,
+      customerName,
+      customerPhone,
+      customerEmail,
+      items,
+      discountTotal,
+      discountPercent,
+      notes,
+      internalNotes,
+      paymentConditions,
+      validDays,
+    } = data;
+
+    // Calcular novos totais se items mudarem
+    let totals = {
+      subtotal: Number(existing.subtotal),
+      discountTotal: Number(existing.discountTotal),
+      total: Number(existing.total),
+    };
+
+    if (items && items.length > 0) {
+      totals = calculateQuoteTotals(
+        items,
+        discountTotal ?? Number(existing.discountTotal),
+        discountPercent ?? Number(existing.discountPercent)
+      );
+    }
+
+    // Calcular nova validade se validDays fornecido
+    let validUntil: Date | undefined = undefined;
+    if (validDays) {
+      validUntil = new Date();
+      validUntil.setDate(validUntil.getDate() + validDays);
+    }
+
+    // Atualizar em transação
+    const quote = await prisma.$transaction(async (tx) => {
+      // Atualizar orçamento
+      const updated = await tx.quote.update({
+        where: { id },
+        data: {
+          ...(customerId !== undefined && { customerId }),
+          ...(customerName !== undefined && { customerName }),
+          ...(customerPhone !== undefined && { customerPhone }),
+          ...(customerEmail !== undefined && { customerEmail }),
+          ...(notes !== undefined && { notes }),
+          ...(internalNotes !== undefined && { internalNotes }),
+          ...(paymentConditions !== undefined && { paymentConditions }),
+          ...(validUntil && { validUntil }),
+          ...(items && {
+            subtotal: totals.subtotal,
+            discountTotal: totals.discountTotal,
+            discountPercent: discountPercent ?? Number(existing.discountPercent),
+            total: totals.total,
+          }),
+        },
+      });
+
+      // Se items fornecidos, deletar antigos e criar novos
+      if (items && items.length > 0) {
+        // Deletar itens antigos
+        await tx.quoteItem.deleteMany({
+          where: { quoteId: id },
+        });
+
+        // Criar novos itens
+        for (const item of items) {
+          const itemTotal = calculateQuoteItemTotal(item);
+          await tx.quoteItem.create({
+            data: {
+              quoteId: id,
+              productId: item.productId || null,
+              description: item.description,
+              qty: item.quantity,
+              unitPrice: item.unitPrice,
+              discount: item.discount || 0,
+              total: itemTotal,
+              itemType: item.itemType || "PRODUCT",
+              prescriptionData: item.prescriptionData as Prisma.InputJsonValue,
+              notes: item.notes,
+            },
+          });
+        }
+      }
+
+      return updated;
+    });
+
+    // Retornar orçamento completo
+    return this.getById(quote.id, companyId, true);
+  }
+
+  /**
+   * Atualiza status do orçamento
+   *
+   * Incrementa followUpCount e atualiza lastFollowUpAt
+   */
+  async updateStatus(
+    id: string,
+    status: QuoteStatus,
+    companyId: string,
+    lostReason?: string
+  ) {
+    const existing = await this.getById(id, companyId, true);
+
+    // Validar transições permitidas
+    const allowedTransitions: Record<QuoteStatus, QuoteStatus[]> = {
+      PENDING: ["SENT", "APPROVED", "CANCELLED", "EXPIRED"],
+      SENT: ["APPROVED", "CANCELLED", "EXPIRED", "PENDING"],
+      APPROVED: ["CONVERTED", "CANCELLED", "EXPIRED"],
+      CONVERTED: [], // Não pode mudar status de convertido
+      EXPIRED: ["PENDING", "SENT"], // Pode reativar
+      CANCELLED: ["PENDING"], // Pode reativar
+      OPEN: ["PENDING", "SENT", "APPROVED", "CANCELLED"], // Legacy
+      CANCELED: ["PENDING"], // Legacy
+    };
+
+    if (!allowedTransitions[existing.status as QuoteStatus]?.includes(status)) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Não é permitido mudar de ${existing.status} para ${status}`,
+        400
+      );
+    }
+
+    const quote = await prisma.quote.update({
+      where: { id },
+      data: {
+        status,
+        lastFollowUpAt: new Date(),
+        followUpCount: { increment: 1 },
+        ...(lostReason && { lostReason }),
+      },
+      include: {
+        customer: true,
+        sellerUser: {
+          select: { id: true, name: true, email: true },
+        },
+        items: {
+          include: {
+            product: {
+              select: { id: true, name: true, sku: true },
+            },
+          },
+        },
+      },
+    });
+
+    return quote;
+  }
+
+  /**
+   * Cancela orçamento com motivo
+   */
+  async cancel(id: string, data: CancelQuoteDTO, companyId: string) {
+    const existing = await this.getById(id, companyId, true);
+
+    if (existing.status === "CONVERTED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Orçamento já foi convertido em venda e não pode ser cancelado",
+        400
+      );
+    }
+
+    return this.updateStatus(id, QuoteStatus.CANCELLED, companyId, data.lostReason);
+  }
+
+  /**
+   * Retorna estatísticas de orçamentos
+   *
+   * Filtros: branchId, startDate, endDate
+   */
+  async getStats(
+    companyId: string,
+    branchId?: string,
+    startDate?: string,
+    endDate?: string
+  ) {
+    const where: Prisma.QuoteWhereInput = {
+      companyId,
+      ...(branchId && { branchId }),
+      ...(startDate && {
+        createdAt: { gte: new Date(startDate) },
+      }),
+      ...(endDate && {
+        createdAt: { lte: new Date(endDate) },
+      }),
+    };
+
+    // Query paralela para métricas
+    const [byStatus, totals, lostReasons, conversionMetrics] = await Promise.all([
+      // Contar por status
+      prisma.quote.groupBy({
+        by: ["status"],
+        where,
+        _count: { _all: true },
+      }),
+
+      // Totais gerais
+      prisma.quote.aggregate({
+        where,
+        _count: true,
+        _sum: {
+          total: true,
+        },
+      }),
+
+      // Motivos de perda
+      prisma.quote.groupBy({
+        by: ["lostReason"],
+        where: {
+          ...where,
+          status: { in: ["CANCELLED", "EXPIRED"] },
+          lostReason: { not: null },
+        },
+        _count: { _all: true },
+      }),
+
+      // Métricas de conversão (apenas count, cálculo manual depois)
+      prisma.quote.count({
+        where: {
+          ...where,
+          status: "CONVERTED",
+          convertedAt: { not: null },
+        },
+      }),
+    ]);
+
+    // Montar objeto de resposta
+    const statusMap: Record<string, number> = {};
+    byStatus.forEach((item) => {
+      statusMap[item.status] = item._count._all;
+    });
+
+    const total = totals._count;
+    const converted = statusMap["CONVERTED"] || 0;
+    const conversionRate = total > 0 ? (converted / total) * 100 : 0;
+
+    const lostReasonsMap: Record<string, number> = {};
+    lostReasons.forEach((item) => {
+      if (item.lostReason) {
+        lostReasonsMap[item.lostReason] = item._count._all;
+      }
+    });
+
+    // Calcular tempo médio de conversão manualmente
+    const convertedQuotes = await prisma.quote.findMany({
+      where: {
+        ...where,
+        status: "CONVERTED",
+        convertedAt: { not: null },
+      },
+      select: {
+        createdAt: true,
+        convertedAt: true,
+      },
+    });
+
+    let avgTimeToConversion = 0;
+    if (convertedQuotes.length > 0) {
+      const totalDays = convertedQuotes.reduce((sum, q) => {
+        if (q.convertedAt) {
+          const diff = q.convertedAt.getTime() - q.createdAt.getTime();
+          return sum + diff / (1000 * 60 * 60 * 24); // ms para dias
+        }
+        return sum;
+      }, 0);
+      avgTimeToConversion = totalDays / convertedQuotes.length;
+    }
+
+    return {
+      total,
+      byStatus: statusMap,
+      conversionRate: parseFloat(conversionRate.toFixed(2)),
+      totalQuotedValue: Number(totals._sum.total || 0),
+      totalConvertedValue: 0, // TODO: Calcular somando Sale.total de vendas convertidas
+      avgTimeToConversion: parseFloat(avgTimeToConversion.toFixed(1)),
+      lostReasons: lostReasonsMap,
+    };
+  }
+
+  /**
+   * Marca orçamentos expirados automaticamente
+   *
+   * Atualiza status de PENDING/SENT para EXPIRED se validUntil < hoje
+   */
+  async markExpired(companyId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const result = await prisma.quote.updateMany({
+      where: {
+        companyId,
+        status: { in: ["PENDING", "SENT", "OPEN"] },
+        validUntil: { lt: today },
+      },
+      data: {
+        status: QuoteStatus.EXPIRED,
+      },
+    });
+
+    return { expired: result.count };
+  }
+
   /**
    * Converte orçamento aprovado em venda (B1)
    *
@@ -294,7 +735,7 @@ export class QuoteService {
             qty: item.qty,
             unitPrice: item.unitPrice,
             discount: item.discount,
-            lineTotal: item.lineTotal,
+            lineTotal: item.total, // Usar 'total' do novo schema
           },
         });
 
