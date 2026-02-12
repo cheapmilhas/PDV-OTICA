@@ -5,242 +5,268 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
-import { Separator } from "@/components/ui/separator";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, FileText, CheckCircle2 } from "lucide-react";
-import Link from "next/link";
+import {
+  ArrowLeft,
+  Loader2,
+  Edit,
+  Printer,
+  CheckCircle2,
+  XCircle,
+  Send,
+  ShoppingCart,
+} from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { ConvertQuoteButton } from "@/components/quotes/convert-quote-button";
-
-interface QuoteDetails {
-  id: string;
-  status: string;
-  createdAt: string;
-  validUntil: string;
-  subtotal: number;
-  discountTotal: number;
-  total: number;
-  notes?: string;
-  customer: {
-    id: string;
-    name: string;
-    cpf?: string;
-    phone?: string;
-    email?: string;
-  };
-  sellerUser: {
-    id: string;
-    name: string;
-    email: string;
-  };
-  branch?: {
-    id: string;
-    name: string;
-  };
-  items: Array<{
-    id: string;
-    qty: number;
-    unitPrice: number;
-    discount: number;
-    lineTotal: number;
-    product: {
-      id: string;
-      name: string;
-      sku: string;
-      barcode?: string;
-      stockQty: number;
-    };
-  }>;
-  convertedToSale?: {
-    id: string;
-    total: number;
-  } | null;
-}
 
 export default function DetalhesOrcamentoPage() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
 
-  const [quote, setQuote] = useState<QuoteDetails | null>(null);
+  const [quote, setQuote] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const [cancelModalOpen, setCancelModalOpen] = useState(false);
+  const [cancelReason, setCancelReason] = useState("");
+  const [otherReason, setOtherReason] = useState("");
+  const [actionLoading, setActionLoading] = useState(false);
 
   useEffect(() => {
-    const fetchQuote = async () => {
-      try {
-        const res = await fetch(`/api/quotes/${id}`);
-        if (!res.ok) throw new Error("Erro ao carregar orçamento");
-
-        const data = await res.json();
-        setQuote(data);
-      } catch (error: any) {
-        toast.error(error.message);
-        router.push("/dashboard/orcamentos");
-      } finally {
-        setLoading(false);
-      }
-    };
-
     fetchQuote();
-  }, [id, router]);
+  }, [id]);
+
+  const fetchQuote = async () => {
+    try {
+      const res = await fetch(`/api/quotes/${id}`);
+      if (!res.ok) throw new Error("Erro ao carregar orçamento");
+      const data = await res.json();
+      setQuote(data);
+    } catch (error: any) {
+      toast.error(error.message);
+      router.push("/dashboard/orcamentos");
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleStatusChange = async (newStatus: string) => {
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/quotes/${id}/status`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao atualizar status");
+
+      toast.success(`Status atualizado para ${newStatus}`);
+      fetchQuote();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
+
+  const handleCancel = async () => {
+    const finalReason = cancelReason === "Outro" ? otherReason : cancelReason;
+
+    if (!finalReason) {
+      toast.error("Selecione um motivo");
+      return;
+    }
+
+    setActionLoading(true);
+    try {
+      const res = await fetch(`/api/quotes/${id}/cancel`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ lostReason: finalReason }),
+      });
+
+      if (!res.ok) throw new Error("Erro ao cancelar orçamento");
+
+      toast.success("Orçamento cancelado");
+      setCancelModalOpen(false);
+      fetchQuote();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setActionLoading(false);
+    }
+  };
 
   const getStatusBadge = (status: string) => {
-    const statusConfig: Record<string, { label: string; variant: any }> = {
-      OPEN: { label: "Aberto", variant: "secondary" },
-      SENT: { label: "Enviado", variant: "default" },
-      APPROVED: { label: "Aprovado", variant: "default" },
-      CONVERTED: { label: "Convertido", variant: "default" },
-      EXPIRED: { label: "Expirado", variant: "secondary" },
-      CANCELED: { label: "Cancelado", variant: "destructive" },
+    const configs: Record<string, { label: string; className: string }> = {
+      PENDING: { label: "Pendente", className: "bg-blue-100 text-blue-800" },
+      SENT: { label: "Enviado", className: "bg-purple-100 text-purple-800" },
+      APPROVED: { label: "Aprovado", className: "bg-green-100 text-green-800" },
+      CONVERTED: { label: "Convertido", className: "bg-teal-100 text-teal-800" },
+      EXPIRED: { label: "Expirado", className: "bg-orange-100 text-orange-800" },
+      CANCELLED: { label: "Cancelado", className: "bg-red-100 text-red-800" },
+      OPEN: { label: "Aberto", className: "bg-blue-100 text-blue-800" },
+      CANCELED: { label: "Cancelado", className: "bg-red-100 text-red-800" },
     };
-
-    const config = statusConfig[status] || statusConfig.PENDING;
-    return <Badge variant={config.variant}>{config.label}</Badge>;
+    const config = configs[status] || configs.PENDING;
+    return <Badge className={config.className}>{config.label}</Badge>;
   };
 
   if (loading) {
     return (
-      <div className="flex items-center justify-center min-h-[400px]">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="flex items-center justify-center min-h-screen">
+        <Loader2 className="h-8 w-8 animate-spin" />
       </div>
     );
   }
 
-  if (!quote) {
-    return null;
-  }
+  if (!quote) return null;
+
+  const canEdit = ["PENDING", "SENT", "OPEN"].includes(quote.status);
+  const canApprove = ["PENDING", "SENT"].includes(quote.status);
+  const canConvert = quote.status === "APPROVED";
 
   return (
-    <div className="space-y-6">
+    <div className="space-y-6 max-w-5xl mx-auto">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Button variant="ghost" size="icon" asChild>
-            <Link href="/dashboard/orcamentos">
-              <ArrowLeft className="h-4 w-4" />
-            </Link>
+          <Button variant="outline" size="icon" onClick={() => router.back()}>
+            <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Detalhes do Orçamento</h1>
-            <p className="text-sm text-muted-foreground">ID: {id.substring(0, 8)}</p>
+            <h1 className="text-3xl font-bold">Orçamento #{quote.id.substring(0, 8)}</h1>
+            <div className="flex items-center gap-2 mt-1">
+              {getStatusBadge(quote.status)}
+              <span className="text-sm text-muted-foreground">
+                Criado em {format(new Date(quote.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              </span>
+            </div>
           </div>
-        </div>
-
-        <div className="flex items-center gap-2">
-          {getStatusBadge(quote.status)}
         </div>
       </div>
 
-      {/* Botão Converter em Venda - APENAS se APPROVED */}
-      {quote.status === "APPROVED" && !quote.convertedToSale && (
-        <Card className="bg-primary/5 border-primary/20">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold flex items-center gap-2">
-                  <CheckCircle2 className="h-5 w-5 text-primary" />
-                  Orçamento Aprovado
-                </h3>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Este orçamento está pronto para ser convertido em venda
-                </p>
-              </div>
-              <ConvertQuoteButton
-                quoteId={quote.id}
-                quoteTotal={quote.total}
-                quoteStatus={quote.status}
-                validUntil={new Date(quote.validUntil)}
-              />
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Ações */}
+      <Card>
+        <CardHeader>
+          <CardTitle>Ações</CardTitle>
+        </CardHeader>
+        <CardContent className="flex flex-wrap gap-2">
+          {canEdit && (
+            <Button variant="outline" onClick={() => router.push(`/dashboard/orcamentos/${id}/editar`)}>
+              <Edit className="h-4 w-4 mr-2" />
+              Editar
+            </Button>
+          )}
 
-      {/* Se já foi convertido, mostrar link para venda */}
-      {quote.convertedToSale && (
-        <Card className="bg-green-50 border-green-200">
-          <CardContent className="pt-6">
-            <div className="flex items-center justify-between">
-              <div>
-                <h3 className="font-semibold flex items-center gap-2 text-green-700">
-                  <DollarSign className="h-5 w-5" />
-                  Orçamento Convertido em Venda
-                </h3>
-                <p className="text-sm text-green-600 mt-1">
-                  Este orçamento foi convertido em venda com sucesso
-                </p>
-              </div>
-              <Button
-                variant="outline"
-                onClick={() => router.push(`/dashboard/vendas/${quote.convertedToSale?.id}/detalhes`)}
-              >
-                Ver Venda
+          <Button variant="outline" onClick={() => window.print()}>
+            <Printer className="h-4 w-4 mr-2" />
+            Imprimir
+          </Button>
+
+          {canApprove && (
+            <>
+              <Button variant="outline" onClick={() => handleStatusChange("SENT")}>
+                <Send className="h-4 w-4 mr-2" />
+                Marcar como Enviado
               </Button>
-            </div>
+              <Button variant="default" onClick={() => handleStatusChange("APPROVED")}>
+                <CheckCircle2 className="h-4 w-4 mr-2" />
+                Aprovar
+              </Button>
+            </>
+          )}
+
+          {canConvert && (
+            <Button onClick={() => router.push(`/dashboard/pdv?quoteId=${id}`)}>
+              <ShoppingCart className="h-4 w-4 mr-2" />
+              Converter em Venda
+            </Button>
+          )}
+
+          {!["CONVERTED", "CANCELLED", "CANCELED"].includes(quote.status) && (
+            <Button variant="destructive" onClick={() => setCancelModalOpen(true)}>
+              <XCircle className="h-4 w-4 mr-2" />
+              Cancelar
+            </Button>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Convertido */}
+      {quote.convertedToSale && (
+        <Card className="border-teal-200 bg-teal-50">
+          <CardContent className="p-4">
+            <p className="text-sm">
+              ✅ Este orçamento foi convertido em venda.{" "}
+              <Button
+                variant="link"
+                className="p-0 h-auto"
+                onClick={() => router.push(`/dashboard/vendas/${quote.convertedToSale.id}`)}
+              >
+                Ver venda
+              </Button>
+            </p>
           </CardContent>
         </Card>
       )}
 
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Cliente */}
+      {/* Cliente */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <User className="h-5 w-5" />
-              Cliente
-            </CardTitle>
+            <CardTitle>Cliente</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <div>
-              <p className="text-sm text-muted-foreground">Nome</p>
-              <p className="font-medium">{quote.customer.name}</p>
+              <span className="text-sm text-muted-foreground">Nome:</span>
+              <p className="font-semibold">{quote.customer?.name || quote.customerName}</p>
             </div>
-            {quote.customer.cpf && (
+            {quote.customer?.phone && (
               <div>
-                <p className="text-sm text-muted-foreground">CPF</p>
-                <p className="font-medium">{quote.customer.cpf}</p>
+                <span className="text-sm text-muted-foreground">Telefone:</span>
+                <p>{quote.customer.phone}</p>
               </div>
             )}
-            {quote.customer.phone && (
+            {quote.customer?.email && (
               <div>
-                <p className="text-sm text-muted-foreground">Telefone</p>
-                <p className="font-medium">{quote.customer.phone}</p>
+                <span className="text-sm text-muted-foreground">Email:</span>
+                <p>{quote.customer.email}</p>
               </div>
             )}
           </CardContent>
         </Card>
 
-        {/* Informações do Orçamento */}
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <Calendar className="h-5 w-5" />
-              Informações
-            </CardTitle>
+            <CardTitle>Informações</CardTitle>
           </CardHeader>
           <CardContent className="space-y-2">
             <div>
-              <p className="text-sm text-muted-foreground">Criado em</p>
-              <p className="font-medium">
-                {format(new Date(quote.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+              <span className="text-sm text-muted-foreground">Válido até:</span>
+              <p className="font-semibold">
+                {format(new Date(quote.validUntil), "dd/MM/yyyy")}
               </p>
             </div>
             <div>
-              <p className="text-sm text-muted-foreground">Válido até</p>
-              <p className="font-medium">
-                {format(new Date(quote.validUntil), "dd/MM/yyyy", { locale: ptBR })}
-              </p>
-            </div>
-            <div>
-              <p className="text-sm text-muted-foreground">Criado por</p>
-              <p className="font-medium">{quote.sellerUser.name}</p>
+              <span className="text-sm text-muted-foreground">Vendedor:</span>
+              <p>{quote.sellerUser.name}</p>
             </div>
             {quote.branch && (
               <div>
-                <p className="text-sm text-muted-foreground">Filial</p>
-                <p className="font-medium">{quote.branch.name}</p>
+                <span className="text-sm text-muted-foreground">Filial:</span>
+                <p>{quote.branch.name}</p>
               </div>
             )}
           </CardContent>
@@ -250,77 +276,201 @@ export default function DetalhesOrcamentoPage() {
       {/* Itens */}
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <ShoppingCart className="h-5 w-5" />
-            Itens do Orçamento ({quote.items.length})
-          </CardTitle>
+          <CardTitle>Itens do Orçamento</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
-            {quote.items.map((item) => (
-              <div key={item.id} className="flex items-center justify-between py-3 border-b last:border-0">
-                <div className="flex-1">
-                  <p className="font-medium">{item.product.name}</p>
-                  <p className="text-sm text-muted-foreground">SKU: {item.product.sku}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Estoque disponível: {item.product.stockQty} un.
-                  </p>
-                </div>
-                <div className="text-right">
-                  <p className="text-sm text-muted-foreground">
-                    {item.qty} x {formatCurrency(item.unitPrice)}
-                  </p>
-                  {item.discount > 0 && (
-                    <p className="text-xs text-red-600">Desconto: {formatCurrency(item.discount)}</p>
-                  )}
-                  <p className="font-semibold">{formatCurrency(item.lineTotal)}</p>
-                </div>
-              </div>
-            ))}
+          <div className="border rounded-lg overflow-hidden">
+            <table className="w-full">
+              <thead className="bg-muted">
+                <tr>
+                  <th className="text-left p-3">Descrição</th>
+                  <th className="text-center p-3 w-20">Qtd</th>
+                  <th className="text-right p-3 w-32">Preço Unit.</th>
+                  <th className="text-right p-3 w-32">Total</th>
+                </tr>
+              </thead>
+              <tbody>
+                {quote.items.map((item: any) => (
+                  <tr key={item.id} className="border-t">
+                    <td className="p-3">
+                      {item.description}
+                      {item.product && (
+                        <span className="text-sm text-muted-foreground block">
+                          SKU: {item.product.sku}
+                        </span>
+                      )}
+                    </td>
+                    <td className="text-center p-3">{item.qty || item.quantity}</td>
+                    <td className="text-right p-3">{formatCurrency(item.unitPrice)}</td>
+                    <td className="text-right p-3 font-semibold">
+                      {formatCurrency(item.total || item.lineTotal)}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+              <tfoot className="border-t-2">
+                <tr>
+                  <td colSpan={3} className="p-3 text-right font-semibold">
+                    Subtotal:
+                  </td>
+                  <td className="p-3 text-right font-semibold">
+                    {formatCurrency(quote.subtotal)}
+                  </td>
+                </tr>
+                {quote.discountTotal > 0 && (
+                  <tr className="text-red-600">
+                    <td colSpan={3} className="p-3 text-right font-semibold">
+                      Desconto:
+                    </td>
+                    <td className="p-3 text-right font-semibold">
+                      - {formatCurrency(quote.discountTotal)}
+                    </td>
+                  </tr>
+                )}
+                <tr className="bg-muted">
+                  <td colSpan={3} className="p-3 text-right text-lg font-bold">
+                    TOTAL:
+                  </td>
+                  <td className="p-3 text-right text-lg font-bold text-primary">
+                    {formatCurrency(quote.total)}
+                  </td>
+                </tr>
+              </tfoot>
+            </table>
           </div>
         </CardContent>
       </Card>
 
-      {/* Totais */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <DollarSign className="h-5 w-5" />
-            Totais
-          </CardTitle>
-        </CardHeader>
-        <CardContent className="space-y-2">
-          <div className="flex justify-between">
-            <span className="text-muted-foreground">Subtotal</span>
-            <span className="font-medium">{formatCurrency(quote.subtotal)}</span>
-          </div>
-          {quote.discountTotal > 0 && (
-            <div className="flex justify-between text-red-600">
-              <span>Desconto</span>
-              <span className="font-medium">- {formatCurrency(quote.discountTotal)}</span>
-            </div>
-          )}
-          <Separator />
-          <div className="flex justify-between text-lg">
-            <span className="font-semibold">Total</span>
-            <span className="font-bold text-primary">{formatCurrency(quote.total)}</span>
-          </div>
-        </CardContent>
-      </Card>
-
-      {quote.notes && (
+      {/* Receita */}
+      {quote.items.some((item: any) => item.prescriptionData) && (
         <Card>
           <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Observações
-            </CardTitle>
+            <CardTitle>Dados da Receita</CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-sm text-muted-foreground">{quote.notes}</p>
+            {quote.items.map((item: any) => {
+              if (!item.prescriptionData) return null;
+              const rx = item.prescriptionData;
+              return (
+                <div key={item.id} className="space-y-4">
+                  <div className="grid grid-cols-2 gap-4">
+                    <div>
+                      <h4 className="font-semibold mb-2">Olho Direito (OD)</h4>
+                      <div className="text-sm space-y-1">
+                        {rx.od?.esf && <p>Esférico: {rx.od.esf}</p>}
+                        {rx.od?.cil && <p>Cilíndrico: {rx.od.cil}</p>}
+                        {rx.od?.eixo && <p>Eixo: {rx.od.eixo}</p>}
+                        {rx.od?.dnp && <p>DNP: {rx.od.dnp}</p>}
+                        {rx.od?.altura && <p>Altura: {rx.od.altura}</p>}
+                      </div>
+                    </div>
+                    <div>
+                      <h4 className="font-semibold mb-2">Olho Esquerdo (OE)</h4>
+                      <div className="text-sm space-y-1">
+                        {rx.oe?.esf && <p>Esférico: {rx.oe.esf}</p>}
+                        {rx.oe?.cil && <p>Cilíndrico: {rx.oe.cil}</p>}
+                        {rx.oe?.eixo && <p>Eixo: {rx.oe.eixo}</p>}
+                        {rx.oe?.dnp && <p>DNP: {rx.oe.dnp}</p>}
+                        {rx.oe?.altura && <p>Altura: {rx.oe.altura}</p>}
+                      </div>
+                    </div>
+                  </div>
+                  {(rx.adicao || rx.tipoLente || rx.material) && (
+                    <div className="border-t pt-4">
+                      {rx.adicao && <p className="text-sm">Adição: {rx.adicao}</p>}
+                      {rx.tipoLente && <p className="text-sm">Tipo: {rx.tipoLente}</p>}
+                      {rx.material && <p className="text-sm">Material: {rx.material}</p>}
+                      {rx.tratamentos && rx.tratamentos.length > 0 && (
+                        <p className="text-sm">
+                          Tratamentos: {rx.tratamentos.join(", ")}
+                        </p>
+                      )}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
           </CardContent>
         </Card>
       )}
+
+      {/* Observações */}
+      {(quote.notes || quote.paymentConditions) && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Observações e Condições</CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {quote.paymentConditions && (
+              <div>
+                <h4 className="font-semibold mb-2">Condições de Pagamento:</h4>
+                <p className="text-sm whitespace-pre-wrap">{quote.paymentConditions}</p>
+              </div>
+            )}
+            {quote.notes && (
+              <div>
+                <h4 className="font-semibold mb-2">Observações:</h4>
+                <p className="text-sm whitespace-pre-wrap">{quote.notes}</p>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Modal de Cancelamento */}
+      <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Cancelar Orçamento</DialogTitle>
+            <DialogDescription>
+              Por que o cliente não fechou? Essa informação ajuda a melhorar suas vendas.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4">
+            <div className="space-y-2">
+              {["Preço alto", "Comprou em concorrente", "Cliente desistiu", "Produto indisponível", "Outro"].map((reason) => (
+                <div key={reason} className="flex items-center space-x-2">
+                  <input
+                    type="radio"
+                    id={reason}
+                    name="cancelReason"
+                    value={reason}
+                    checked={cancelReason === reason}
+                    onChange={(e) => setCancelReason(e.target.value)}
+                    className="h-4 w-4"
+                  />
+                  <Label htmlFor={reason} className="cursor-pointer">{reason}</Label>
+                </div>
+              ))}
+            </div>
+
+            {cancelReason === "Outro" && (
+              <div>
+                <Label>Especifique o motivo:</Label>
+                <Textarea
+                  value={otherReason}
+                  onChange={(e) => setOtherReason(e.target.value)}
+                  placeholder="Digite o motivo..."
+                />
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setCancelModalOpen(false)}>
+              Voltar
+            </Button>
+            <Button
+              variant="destructive"
+              onClick={handleCancel}
+              disabled={actionLoading || !cancelReason}
+            >
+              {actionLoading ? "Cancelando..." : "Confirmar Cancelamento"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
