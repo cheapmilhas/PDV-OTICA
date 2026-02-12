@@ -87,7 +87,7 @@ export class NoMovementProductsService {
     // Fetch products with movements and sales
     const products = await prisma.product.findMany({
       where,
-      include: ({
+      include: {
         category: {
           select: { id: true, name: true },
         },
@@ -109,20 +109,20 @@ export class NoMovementProductsService {
             },
           },
           orderBy: {
-            createdAt: "desc",
+            createdAt: "desc" as const,
           },
           take: 1,
           select: {
             createdAt: true,
           },
         },
-      }) as any,
-    });
+      },
+    } as any);
 
     // Filter products without movement in the specified period
     const productsWithoutMovement: ProductNoMovementData[] = [];
 
-    products.forEach((product) => {
+    products.forEach((product: any) => {
       const lastMovement = product.stockMovements[0];
       const lastSale = product.saleItems[0];
 
