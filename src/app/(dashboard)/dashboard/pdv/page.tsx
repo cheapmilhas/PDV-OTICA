@@ -227,6 +227,7 @@ function PDVPage() {
           method: payment.method,
           amount: payment.amount,
           installments: payment.installments || 1,
+          installmentConfig: payment.installmentConfig,
         })),
         discount: desconto,
         notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
@@ -255,6 +256,34 @@ function PDVPage() {
 
       const data = await res.json();
       const vendaId = data.data.id;
+
+      // Verificar se tem crediário e oferecer download do carnê
+      const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
+      if (hasCrediario) {
+        const downloadCarne = confirm("Venda parcelada! Deseja baixar o carnê de pagamento?");
+        if (downloadCarne) {
+          try {
+            const carneRes = await fetch(`/api/sales/${vendaId}/carne`);
+            if (carneRes.ok) {
+              const carneBlob = await carneRes.blob();
+              const url = window.URL.createObjectURL(carneBlob);
+              const link = document.createElement("a");
+              link.href = url;
+              link.download = `carne_venda_${vendaId.substring(0, 8)}.pdf`;
+              document.body.appendChild(link);
+              link.click();
+              document.body.removeChild(link);
+              window.URL.revokeObjectURL(url);
+              toast.success("Carnê baixado com sucesso!");
+            } else {
+              toast.error("Erro ao gerar carnê. Você pode baixá-lo depois na tela de vendas.");
+            }
+          } catch (err) {
+            console.error("Erro ao baixar carnê:", err);
+            toast.error("Erro ao baixar carnê. Você pode baixá-lo depois na tela de vendas.");
+          }
+        }
+      }
 
       // Limpar carrinho e fechar modal
       setCarrinho([]);
