@@ -476,7 +476,7 @@ export class SaleService {
 
     // 2. Validar estoque disponível para todos os itens
     for (const item of sale.items) {
-      if (item.product.type === "PRODUCT") {
+      if (item.product && item.product.type !== "SERVICE" && item.product.type !== "LENS_SERVICE") {
         const product = await prisma.product.findUnique({
           where: { id: item.product.id },
           select: { stockQty: true, stockControlled: true, name: true },
@@ -512,7 +512,7 @@ export class SaleService {
     await prisma.$transaction(async (tx) => {
       // 4.1. Retirar estoque novamente
       for (const item of sale.items) {
-        if (item.product.type === "PRODUCT") {
+        if (item.product && item.product.type !== "SERVICE" && item.product.type !== "LENS_SERVICE") {
           const product = await tx.product.findUnique({
             where: { id: item.product.id },
             select: { stockControlled: true },
@@ -529,12 +529,13 @@ export class SaleService {
             // Registrar movimentação de estoque
             await tx.stockMovement.create({
               data: {
+                companyId: sale.companyId,
                 productId: item.product.id,
-                branchId: sale.branchId,
+                sourceBranchId: sale.branchId,
                 type: "SALE",
                 quantity: -item.qty,
                 reason: `Reativação venda #${id.substring(0, 8)}`,
-                userId,
+                createdByUserId: userId,
               },
             });
           }
