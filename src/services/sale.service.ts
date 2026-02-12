@@ -325,7 +325,14 @@ export class SaleService {
         });
 
         // 5. Criar CashMovement para TODOS os métodos de pagamento
-        await tx.cashMovement.create({
+        console.log(`💰 Criando CashMovement para pagamento:`, {
+          cashShiftId: openShift.id,
+          method: payment.method,
+          amount: payment.amount,
+          salePaymentId: salePayment.id,
+        });
+
+        const cashMovement = await tx.cashMovement.create({
           data: {
             cashShiftId: openShift.id,
             branchId,
@@ -340,6 +347,8 @@ export class SaleService {
             note: `Venda #${newSale.id.substring(0, 8)}`,
           },
         });
+
+        console.log(`✅ CashMovement criado com sucesso! ID: ${cashMovement.id}`);
       }
 
       // 6. Calcular e criar comissão do vendedor

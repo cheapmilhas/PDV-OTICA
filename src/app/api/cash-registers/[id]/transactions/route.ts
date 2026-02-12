@@ -27,6 +27,8 @@ export async function GET(
       );
     }
 
+    console.log(`🔍 Buscando movimentos para cashShiftId: ${id}`);
+
     const movements = await prisma.cashMovement.findMany({
       where: {
         cashShiftId: id,
@@ -42,6 +44,8 @@ export async function GET(
         createdAt: "desc",
       },
     });
+
+    console.log(`✅ Encontrados ${movements.length} movimentos`);
 
     const data = movements.map((mov) => ({
       id: mov.id,
