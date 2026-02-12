@@ -37,6 +37,10 @@ export const supplierQuerySchema = z.object({
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(100).default(20),
   status: z.enum(["ativos", "inativos", "todos"]).default("ativos"),
+  city: z.string().optional(),
+  state: z.string().length(2).optional().or(z.literal("")),
+  startDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
+  endDate: z.string().optional().transform((val) => val ? new Date(val) : undefined),
   sortBy: z.enum(["name", "createdAt", "city"]).default("name"),
   sortOrder: z.enum(["asc", "desc"]).default("asc"),
 });

@@ -20,7 +20,7 @@ export class SupplierService {
    * Lista suppliers com paginação, busca e filtros
    */
   async list(query: SupplierQuery, companyId: string) {
-    const { search, page, pageSize, status, sortBy, sortOrder } = query;
+    const { search, page, pageSize, status, city, state, startDate, endDate, sortBy, sortOrder } = query;
 
     // Build where clause
     const where: any = {
@@ -32,6 +32,30 @@ export class SupplierService {
       where.active = true;
     } else if (status === "inativos") {
       where.active = false;
+    }
+
+    // Filtro de cidade
+    if (city) {
+      where.city = city;
+    }
+
+    // Filtro de estado (UF)
+    if (state) {
+      where.state = state;
+    }
+
+    // Filtro de período de cadastro
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = startDate;
+      }
+      if (endDate) {
+        // Adiciona 23:59:59 ao endDate para incluir todo o dia
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endOfDay;
+      }
     }
 
     // Busca full-text (OR entre múltiplos campos)
