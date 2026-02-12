@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
-import { Printer, ArrowLeft, Loader2 } from "lucide-react";
+import { Printer, ArrowLeft, Loader2, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -82,15 +82,16 @@ export default function ImprimirVendaPage() {
     fetchSale();
   }, [id, router]);
 
-  // Auto-abrir diálogo de impressão quando autoprint=true
+  // Auto-baixar PDF quando autoprint=true
   useEffect(() => {
     if (autoprint && sale && !loading) {
       // Aguardar um pouco para garantir que o conteúdo foi renderizado
       const timer = setTimeout(() => {
-        window.print();
-      }, 1000);
+        handleDownloadPDF();
+      }, 1500);
       return () => clearTimeout(timer);
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoprint, sale, loading]);
 
   const getPaymentMethodLabel = (method: string) => {
@@ -107,6 +108,60 @@ export default function ImprimirVendaPage() {
 
   const handlePrint = () => {
     window.print();
+  };
+
+  const handleDownloadPDF = async () => {
+    try {
+      const html2canvas = (await import("html2canvas")).default;
+      const jsPDF = (await import("jspdf")).default;
+
+      const printContainer = document.querySelector(".print-container") as HTMLElement;
+      if (!printContainer) {
+        toast.error("Erro ao gerar PDF");
+        return;
+      }
+
+      // Capturar o conteúdo como imagem
+      const canvas = await html2canvas(printContainer, {
+        scale: 2, // Maior qualidade
+        useCORS: true,
+        logging: false,
+      });
+
+      // Criar PDF
+      const imgData = canvas.toDataURL("image/png");
+      const pdf = new jsPDF({
+        orientation: "portrait",
+        unit: "mm",
+        format: "a4",
+      });
+
+      const imgWidth = 210; // A4 width in mm
+      const pageHeight = 297; // A4 height in mm
+      const imgHeight = (canvas.height * imgWidth) / canvas.width;
+      let heightLeft = imgHeight;
+      let position = 0;
+
+      // Adicionar primeira página
+      pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+      heightLeft -= pageHeight;
+
+      // Adicionar páginas extras se necessário
+      while (heightLeft > 0) {
+        position = heightLeft - imgHeight;
+        pdf.addPage();
+        pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
+        heightLeft -= pageHeight;
+      }
+
+      // Baixar PDF
+      const fileName = `venda_${sale?.id.substring(0, 8)}_${format(new Date(), "ddMMyyyy")}.pdf`;
+      pdf.save(fileName);
+      toast.success("PDF baixado com sucesso!");
+    } catch (error) {
+      console.error("Erro ao gerar PDF:", error);
+      toast.error("Erro ao gerar PDF");
+    }
   };
 
   if (loading) {
@@ -128,6 +183,10 @@ export default function ImprimirVendaPage() {
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
+        </Button>
+        <Button variant="outline" onClick={handleDownloadPDF}>
+          <Download className="h-4 w-4 mr-2" />
+          Baixar PDF
         </Button>
         <Button onClick={handlePrint}>
           <Printer className="h-4 w-4 mr-2" />

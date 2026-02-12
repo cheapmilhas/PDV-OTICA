@@ -236,15 +236,15 @@ export default function DetalhesVendaPage() {
       });
 
       // Abrir página de impressão em nova aba (para gerar/baixar PDF)
-      // autoprint=true faz o diálogo de impressão abrir automaticamente
+      // autoprint=true faz o download do PDF acontecer automaticamente
       window.open(`/dashboard/vendas/${id}/imprimir?autoprint=true`, "_blank");
 
-      // Aguardar 1 segundo para dar tempo da janela de impressão abrir antes do WhatsApp
+      // Aguardar 2 segundos para dar tempo do PDF começar a baixar antes do WhatsApp
       setTimeout(() => {
         // Abrir WhatsApp
         openWhatsAppWithMessage(sale.customer.phone, message);
-        toast.success("PDF pronto para salvar e WhatsApp aberto com a mensagem!");
-      }, 1000);
+        toast.success("PDF baixado! Anexe no WhatsApp que acabou de abrir.");
+      }, 2000);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
