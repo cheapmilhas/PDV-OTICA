@@ -1300,6 +1300,7 @@ model CashMovement {
   createdByUser   User?   @relation("CashMovementCreator", fields: [createdByUserId], references: [id])
 
   note      String?
+  migrated  Boolean  @default(false) // Identifica registros criados por migração
   createdAt DateTime @default(now())
 
   @@index([cashShiftId, createdAt])
