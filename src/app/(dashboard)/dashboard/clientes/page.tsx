@@ -316,7 +316,15 @@ function ClientesPage() {
                       </p>
                     )}
 
-                    <div className="flex items-center gap-2 pt-2">
+                    <div className="flex items-center gap-2 pt-2 flex-wrap">
+                      <Button
+                        size="sm"
+                        onClick={() => router.push(`/dashboard/clientes/${cliente.id}`)}
+                      >
+                        <Search className="h-4 w-4 mr-1" />
+                        Ver Detalhes
+                      </Button>
+
                       <Button
                         size="sm"
                         variant="outline"
