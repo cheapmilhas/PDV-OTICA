@@ -441,21 +441,21 @@ function ClienteDetalhesPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium">
-                            Venda #{sale.id.substring(0, 8)}
+                            Venda #{(sale.id || "").substring(0, 8)}
                           </p>
                           {getStatusBadge(sale.status, "sale")}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          {format(new Date(sale.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          {format(new Date(sale.createdAt || new Date()), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {sale.items.length} {sale.items.length === 1 ? "item" : "itens"}
+                          {(sale.items || []).length} {(sale.items || []).length === 1 ? "item" : "itens"}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-green-600">{formatCurrency(sale.total)}</p>
+                        <p className="text-lg font-bold text-green-600">{formatCurrency(sale.total || 0)}</p>
                         <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/dashboard/vendas/${sale.id}/detalhes`}>
+                          <Link href={`/dashboard/vendas/${sale.id || ""}/detalhes`}>
                             Ver detalhes
                           </Link>
                         </Button>
@@ -490,24 +490,24 @@ function ClienteDetalhesPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium">
-                            Orçamento #{quote.id.substring(0, 8)}
+                            Orçamento #{(quote.id || "").substring(0, 8)}
                           </p>
                           {getStatusBadge(quote.status, "quote")}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Criado em {format(new Date(quote.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+                          Criado em {format(new Date(quote.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR })}
                         </p>
                         <p className="text-sm text-muted-foreground">
-                          Válido até {format(new Date(quote.validUntil), "dd/MM/yyyy", { locale: ptBR })}
+                          Válido até {format(new Date(quote.validUntil || new Date()), "dd/MM/yyyy", { locale: ptBR })}
                         </p>
                         <p className="text-xs text-muted-foreground mt-1">
-                          {quote._count.items} {quote._count.items === 1 ? "item" : "itens"}
+                          {quote._count?.items || 0} {(quote._count?.items || 0) === 1 ? "item" : "itens"}
                         </p>
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-blue-600">{formatCurrency(quote.total)}</p>
+                        <p className="text-lg font-bold text-blue-600">{formatCurrency(quote.total || 0)}</p>
                         <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/dashboard/orcamentos/${quote.id}`}>
+                          <Link href={`/dashboard/orcamentos/${quote.id || ""}`}>
                             Ver detalhes
                           </Link>
                         </Button>
@@ -542,12 +542,12 @@ function ClienteDetalhesPage() {
                       <div className="flex-1">
                         <div className="flex items-center gap-2 mb-1">
                           <p className="font-medium">
-                            OS #{order.id.substring(0, 8)}
+                            OS #{(order.id || "").substring(0, 8)}
                           </p>
                           {getStatusBadge(order.status, "order")}
                         </div>
                         <p className="text-sm text-muted-foreground">
-                          Criada em {format(new Date(order.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+                          Criada em {format(new Date(order.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR })}
                         </p>
                         {order.deliveryDate && (
                           <p className="text-sm text-muted-foreground">
@@ -556,9 +556,9 @@ function ClienteDetalhesPage() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-purple-600">{formatCurrency(order.totalValue)}</p>
+                        <p className="text-lg font-bold text-purple-600">{formatCurrency(order.totalValue || 0)}</p>
                         <Button variant="ghost" size="sm" asChild>
-                          <Link href={`/dashboard/ordens-servico/${order.id}/detalhes`}>
+                          <Link href={`/dashboard/ordens-servico/${order.id || ""}/detalhes`}>
                             Ver detalhes
                           </Link>
                         </Button>

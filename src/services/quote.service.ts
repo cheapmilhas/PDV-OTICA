@@ -325,24 +325,22 @@ export class QuoteService {
           },
         });
 
-        // 7.5. Criar CashMovement para pagamentos em dinheiro
-        if (payment.method === "CASH") {
-          await tx.cashMovement.create({
-            data: {
-              cashShiftId: openShift.id,
-              branchId,
-              type: "SALE_PAYMENT",
-              direction: "IN",
-              method: "CASH",
-              amount: payment.amount,
-              originType: "SALE_PAYMENT",
-              originId: salePayment.id,
-              salePaymentId: salePayment.id,
-              createdByUserId: userId,
-              note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
-            },
-          });
-        }
+        // 7.5. Criar CashMovement para TODOS os métodos de pagamento
+        await tx.cashMovement.create({
+          data: {
+            cashShiftId: openShift.id,
+            branchId,
+            type: "SALE_PAYMENT",
+            direction: "IN",
+            method: payment.method,
+            amount: payment.amount,
+            originType: "SALE_PAYMENT",
+            originId: salePayment.id,
+            salePaymentId: salePayment.id,
+            createdByUserId: userId,
+            note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
+          },
+        });
       }
 
       // 7.6. Criar comissão do vendedor
