@@ -113,6 +113,14 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     }),
   ],
   callbacks: {
+    async redirect({ url, baseUrl }) {
+      // URLs relativas: adicionar baseUrl
+      if (url.startsWith("/")) return `${baseUrl}${url}`;
+      // URLs do mesmo domínio: permitir
+      else if (new URL(url).origin === baseUrl) return url;
+      // Padrão: dashboard
+      return `${baseUrl}/dashboard`;
+    },
     async jwt({ token, user, trigger }) {
       // Se for um novo login, atualizar o token com dados do usuário
       if (user) {

@@ -71,8 +71,9 @@ export default function LoginPage() {
           description: "Email ou senha incorretos",
         });
       } else {
-        // Forçar reload completo para garantir nova sessão
-        window.location.href = "/dashboard";
+        // Redirecionar e forçar refresh da sessão
+        router.push("/dashboard");
+        router.refresh();
       }
     } catch (error) {
       toast({

@@ -5,7 +5,7 @@ import { NextResponse } from "next/server";
  * GET /api/auth/clear-session
  * Limpa completamente a sessão do usuário e redireciona para login
  */
-export async function GET() {
+export async function GET(request: Request) {
   const cookieStore = await cookies();
 
   // Deletar TODOS os cookies
@@ -21,6 +21,7 @@ export async function GET() {
 
   console.log(`🧹 Cookies deletados: ${allCookies.length}`);
 
-  // Redirecionar para login
-  return NextResponse.redirect(new URL("/login", process.env.NEXTAUTH_URL || "http://localhost:3000"));
+  // Redirecionar para login usando origin da requisição
+  const url = new URL(request.url);
+  return NextResponse.redirect(new URL("/login", url.origin));
 }
