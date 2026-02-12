@@ -47,6 +47,8 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
+    console.log("=== POST /api/cash/shift - Abrindo caixa ===");
+
     const session = await auth();
     if (!session?.user?.id) {
       throw new Error("Usuário não autenticado");
@@ -56,9 +58,14 @@ export async function POST(request: Request) {
     const userId = session.user.id;
 
     const body = await request.json();
+    console.log("Body recebido:", JSON.stringify(body, null, 2));
+
     const data = openShiftSchema.parse(body) as OpenShiftDTO;
+    console.log("Dados validados:", JSON.stringify(data, null, 2));
+    console.log(`CompanyId: ${companyId}, UserId: ${userId}`);
 
     const shift = await cashService.openShift(data, companyId, userId);
+    console.log(`✅ Caixa aberto com sucesso! ID: ${shift.id}, BranchId: ${shift.branchId}`);
 
     // Serializar Decimals
     const serializedShift = {
@@ -68,6 +75,7 @@ export async function POST(request: Request) {
 
     return createdResponse(serializedShift);
   } catch (error) {
+    console.error("❌ Erro ao abrir caixa:", error);
     return handleApiError(error);
   }
 }
