@@ -204,7 +204,7 @@ export default function RelatorioPosicaoEstoquePage() {
   };
 
   const handleExportPDF = () => {
-    toast.info("Exportação em PDF será implementada em breve");
+    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
   };
 
   const handleExportExcel = () => {
@@ -392,7 +392,7 @@ export default function RelatorioPosicaoEstoquePage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={(entry) =>
+                      label={(entry: any) =>
                         `${STATUS_LABELS[entry.status]}: ${entry.count}`
                       }
                     >

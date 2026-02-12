@@ -33,7 +33,7 @@ import { auth } from "@/auth";
  */
 export async function POST(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Requer autenticação
@@ -42,6 +42,7 @@ export async function POST(
       throw new Error("Usuário não autenticado");
     }
 
+    const { id } = await params;
     const companyId = await getCompanyId();
     const userId = session.user.id;
 
@@ -54,7 +55,7 @@ export async function POST(
     }
 
     const branchId = session.user.branchId;
-    const quoteId = params.id;
+    const quoteId = id;
 
     // Parse e valida body
     const body = await request.json();
@@ -71,7 +72,7 @@ export async function POST(
 
     // Serializa Decimals para number
     const serializedResult = {
-      sale: {
+      sale: result.sale ? {
         ...result.sale,
         subtotal: Number(result.sale.subtotal),
         discountTotal: Number(result.sale.discountTotal),
@@ -89,7 +90,7 @@ export async function POST(
           ...payment,
           amount: Number(payment.amount),
         })),
-      },
+      } : null,
       quote: {
         ...result.quote,
         subtotal: Number(result.quote.subtotal),

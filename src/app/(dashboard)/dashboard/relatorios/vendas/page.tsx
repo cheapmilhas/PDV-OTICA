@@ -103,7 +103,7 @@ export default function RelatorioVendasPage() {
   };
 
   const handleExportPDF = () => {
-    toast.info("Exportação em PDF será implementada em breve");
+    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
   };
 
   const handleExportExcel = () => {
@@ -277,7 +277,7 @@ export default function RelatorioVendasPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={(entry) => `${PAYMENT_METHOD_LABELS[entry.method]}: ${entry.percentage.toFixed(1)}%`}
+                      label={(entry: any) => `${PAYMENT_METHOD_LABELS[entry.method]}: ${entry.percentage.toFixed(1)}%`}
                     >
                       {data.paymentMethods.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

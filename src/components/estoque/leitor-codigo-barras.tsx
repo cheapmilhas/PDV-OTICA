@@ -33,7 +33,7 @@ export function LeitorCodigoBarras({
   const [isSearching, setIsSearching] = useState(false);
   const [lastProduct, setLastProduct] = useState<Product | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
-  const searchTimeoutRef = useRef<NodeJS.Timeout>();
+  const searchTimeoutRef = useRef<NodeJS.Timeout | null>(null);
 
   useEffect(() => {
     if (autoFocus && inputRef.current) {

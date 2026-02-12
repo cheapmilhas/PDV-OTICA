@@ -1,7 +1,7 @@
 import { Metadata } from "next";
 import { redirect } from "next/navigation";
 import { requireAuth } from "@/lib/auth-helpers";
-import { hasPermission } from "@/lib/auth-permissions";
+import { checkPermission } from "@/lib/auth-permissions";
 import { Permission } from "@/lib/permissions";
 import { EditorRegras } from "@/components/configuracoes/editor-regras";
 import { Settings } from "lucide-react";
@@ -15,7 +15,7 @@ export default async function RegrasPage() {
   await requireAuth();
 
   // Apenas ADMIN pode acessar esta página
-  const canManageSettings = await hasPermission(Permission.SETTINGS_MANAGE);
+  const canManageSettings = await checkPermission(Permission.SETTINGS_EDIT);
 
   if (!canManageSettings) {
     redirect("/dashboard");

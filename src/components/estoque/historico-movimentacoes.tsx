@@ -468,7 +468,7 @@ export function HistoricoMovimentacoes() {
                           SKU: {movement.product.sku}
                         </p>
                         <Badge variant="outline" className="text-xs mt-1">
-                          {getProductTypeLabel(movement.product.type)}
+                          {getProductTypeLabel(movement.product.type as ProductType)}
                         </Badge>
                       </button>
                     </TableCell>

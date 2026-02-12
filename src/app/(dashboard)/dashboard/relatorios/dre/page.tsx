@@ -186,10 +186,7 @@ export default function RelatorioDREPage() {
         <>
           {/* Export */}
           <div className="flex justify-end">
-            <ExportButtons
-              data={data}
-              filename="dre-gerencial"
-              pdfTitle="DRE Gerencial"
+            <ExportButtons disabled={!data}
             />
           </div>
 
@@ -199,28 +196,25 @@ export default function RelatorioDREPage() {
               title="Receita Líquida"
               value={formatCurrency(data.consolidated.netRevenue)}
               icon={DollarSign}
-              description="No período"
+              subtitle="No período"
             />
             <KPICard
               title="Lucro Bruto"
               value={formatCurrency(data.consolidated.grossProfit)}
               icon={TrendingUp}
-              description={`${data.consolidated.grossMargin.toFixed(1)}% margem`}
-              trend={data.consolidated.grossProfit > 0 ? "positive" : "negative"}
+              subtitle={`${data.consolidated.grossMargin.toFixed(1)}% margem`}
             />
             <KPICard
               title="EBITDA"
               value={formatCurrency(data.consolidated.ebitda)}
               icon={BarChart3}
-              description="Resultado operacional"
-              trend={data.consolidated.ebitda > 0 ? "positive" : "negative"}
+              subtitle="Resultado operacional"
             />
             <KPICard
               title="Lucro Líquido"
               value={formatCurrency(data.consolidated.netProfit)}
               icon={data.consolidated.netProfit >= 0 ? TrendingUp : TrendingDown}
-              description={`${data.consolidated.netMargin.toFixed(1)}% margem`}
-              trend={data.consolidated.netProfit > 0 ? "positive" : "negative"}
+              subtitle={`${data.consolidated.netMargin.toFixed(1)}% margem`}
             />
           </div>
 

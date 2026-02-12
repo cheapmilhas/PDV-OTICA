@@ -33,14 +33,14 @@ export async function GET(
  * DELETE /api/settings/rules/[key]
  * Remove regra customizada (volta ao default)
  *
- * Requer permissão: SETTINGS_MANAGE (ADMIN apenas)
+ * Requer permissão: SETTINGS_EDIT (ADMIN apenas)
  */
 export async function DELETE(
   request: Request,
   { params }: { params: Promise<{ key: string }> }
 ) {
   try {
-    await requirePermission(Permission.SETTINGS_MANAGE);
+    await requirePermission(Permission.SETTINGS_EDIT);
     const companyId = await getCompanyId();
     const { key } = await params;
 

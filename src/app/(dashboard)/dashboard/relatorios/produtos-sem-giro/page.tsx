@@ -185,7 +185,7 @@ export default function RelatorioProdutosSemGiroPage() {
   };
 
   const handleExportPDF = () => {
-    toast.info("Exportação em PDF será implementada em breve");
+    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
   };
 
   const handleExportExcel = () => {
@@ -388,7 +388,7 @@ export default function RelatorioProdutosSemGiroPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={(entry) =>
+                      label={(entry: any) =>
                         `${entry.categoryName}: ${formatCurrency(entry.stockValue)}`
                       }
                     >

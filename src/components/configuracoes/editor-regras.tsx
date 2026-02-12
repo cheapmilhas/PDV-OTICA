@@ -47,7 +47,6 @@ const categoryLabels: Record<RuleCategory, string> = {
   PRODUCTS: "Produtos",
   CUSTOMERS: "Clientes",
   REPORTS: "Relatórios",
-  SYSTEM: "Sistema",
 };
 
 export function EditorRegras() {

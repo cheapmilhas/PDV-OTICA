@@ -30,7 +30,7 @@ export async function GET() {
       "Código do Fabricante": product.manufacturerCode || "",
       Nome: product.name,
       Descrição: product.description || "",
-      Tipo: product.type === "PRODUCT" ? "Produto" : "Serviço",
+      Tipo: product.type === "FRAME" ? "Armação" : product.type === "CONTACT_LENS" ? "Lente de Contato" : "Lente Oftálmica",
       Categoria: product.category?.name || "",
       Marca: product.brand?.name || "",
       Fornecedor: product.supplier?.name || "",

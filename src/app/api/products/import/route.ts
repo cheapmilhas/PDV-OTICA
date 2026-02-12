@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { ProductType } from "@prisma/client";
 import * as XLSX from "xlsx";
 
 /**
@@ -62,12 +63,14 @@ export async function POST(request: NextRequest) {
           continue;
         }
 
-        // Determinar tipo
-        let type = "PRODUCT";
+        // Determinar tipo (FRAME, CONTACT_LENS, OPHTHALMIC_LENS)
+        let type: ProductType = ProductType.FRAME; // Default
         if (row["Tipo"]) {
           const tipoLower = row["Tipo"].toLowerCase();
-          if (tipoLower.includes("serv") || tipoLower === "servico") {
-            type = "SERVICE";
+          if (tipoLower.includes("lente de contato") || tipoLower === "contact_lens") {
+            type = ProductType.CONTACT_LENS;
+          } else if (tipoLower.includes("lente oft") || tipoLower === "ophthalmic_lens") {
+            type = ProductType.OPHTHALMIC_LENS;
           }
         }
 
@@ -93,15 +96,18 @@ export async function POST(request: NextRequest) {
         // Buscar ou criar marca
         let brandId = null;
         if (row["Marca"]) {
+          // Gera código da marca baseado no nome
+          const brandCode = row["Marca"].toUpperCase().replace(/\s+/g, "_").slice(0, 20);
           const brand = await prisma.brand.upsert({
             where: {
-              companyId_name: {
+              companyId_code: {
                 companyId,
-                name: row["Marca"],
+                code: brandCode,
               },
             },
             create: {
               companyId,
+              code: brandCode,
               name: row["Marca"],
             },
             update: {},

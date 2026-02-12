@@ -11,11 +11,11 @@ const systemRuleService = new SystemRuleService();
  * POST /api/settings/rules/restore-defaults
  * Restaura todas as regras para os valores padrão
  *
- * Requer permissão: SETTINGS_MANAGE (ADMIN apenas)
+ * Requer permissão: SETTINGS_EDIT (ADMIN apenas)
  */
 export async function POST(request: Request) {
   try {
-    await requirePermission(Permission.SETTINGS_MANAGE);
+    await requirePermission(Permission.SETTINGS_EDIT);
     const companyId = await getCompanyId();
 
     const rules = await systemRuleService.restoreDefaults(companyId);

@@ -68,7 +68,7 @@ function EstoquePage() {
       const data = await res.json();
       const productsArray = Array.isArray(data.data) ? data.data : [];
       // Ordena por SKU para facilitar conferência
-      const sortedProducts = productsArray.sort((a, b) => a.sku.localeCompare(b.sku));
+      const sortedProducts = productsArray.sort((a: any, b: any) => a.sku.localeCompare(b.sku));
       setProducts(sortedProducts);
     } catch (error: any) {
       console.error("Erro ao carregar produtos:", error);

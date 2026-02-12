@@ -19,10 +19,10 @@ export async function GET() {
     });
 
     // Preparar dados para exportação
-    const data = suppliers.map((supplier) => ({
+    const data = suppliers.map((supplier: any) => ({
       Nome: supplier.name,
       "CNPJ/CPF": supplier.cnpj || "",
-      "Inscrição Estadual": supplier.stateRegistration || "",
+      "Inscrição Estadual": (supplier as any).stateRegistration || "",
       Telefone: supplier.phone || "",
       Email: supplier.email || "",
       Endereço: supplier.address || "",

@@ -189,10 +189,14 @@ export async function GET(request: Request) {
         : null,
     }));
 
+    const totalPages = Math.ceil(total / query.pageSize);
     return paginatedResponse(serializedData, {
       total,
       page: query.page,
       pageSize: query.pageSize,
+      totalPages,
+      hasNext: query.page < totalPages,
+      hasPrevious: query.page > 1,
     });
   } catch (error) {
     return handleApiError(error);

@@ -35,12 +35,12 @@ export async function GET(request: Request) {
     const result = await quoteService.list(query, companyId);
 
     // Serializa Decimals para number
-    const serializedData = result.data.map((quote) => ({
+    const serializedData = result.data.map((quote: any) => ({
       ...quote,
       subtotal: Number(quote.subtotal),
       discountTotal: Number(quote.discountTotal),
       total: Number(quote.total),
-      items: quote.items.map((item) => ({
+      items: quote.items.map((item: any) => ({
         ...item,
         unitPrice: Number(item.unitPrice),
         discount: Number(item.discount),

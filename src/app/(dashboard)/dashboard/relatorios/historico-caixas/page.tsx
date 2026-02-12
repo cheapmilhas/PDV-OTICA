@@ -161,7 +161,7 @@ export default function RelatorioHistoricoCaixasPage() {
   };
 
   const handleExportPDF = () => {
-    toast.info("Exportação em PDF será implementada em breve");
+    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
   };
 
   const handleExportExcel = () => {

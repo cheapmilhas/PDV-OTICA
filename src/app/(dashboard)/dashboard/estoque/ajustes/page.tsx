@@ -1,6 +1,6 @@
 import { Metadata } from "next";
 import { requireAuth } from "@/lib/auth-helpers";
-import { hasPermission } from "@/lib/auth-permissions";
+import { checkPermission } from "@/lib/auth-permissions";
 import { Permission } from "@/lib/permissions";
 import { ListaAjustes } from "@/components/estoque/lista-ajustes";
 import {
@@ -19,7 +19,7 @@ export const metadata: Metadata = {
 
 export default async function AjustesEstoquePage() {
   const session = await requireAuth();
-  const canApprove = await hasPermission(Permission.STOCK_ADJUSTMENT_APPROVE);
+  const canApprove = !!(await checkPermission(Permission.STOCK_ADJUST));
 
   return (
     <div className="space-y-6">

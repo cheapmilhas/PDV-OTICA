@@ -27,7 +27,7 @@ export async function GET(request: Request) {
     const product = await barcodeService.findProductByCode(code, companyId);
 
     if (!product) {
-      return successResponse(null, { status: 404 });
+      return successResponse(null, 404);
     }
 
     return successResponse(product);

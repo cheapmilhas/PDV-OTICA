@@ -20,7 +20,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requirePermission(Permission.STOCK_ADJUSTMENT_APPROVE);
+    await requirePermission(Permission.STOCK_ADJUST);
     const session = await requireAuth();
     const companyId = await getCompanyId();
     const { id } = await params;

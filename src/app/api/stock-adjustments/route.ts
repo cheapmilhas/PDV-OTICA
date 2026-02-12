@@ -27,7 +27,13 @@ export async function GET(request: Request) {
 
     const result = await stockAdjustmentService.list(query, companyId);
 
-    return paginatedResponse(result.data, result.meta);
+    const pagination = {
+      ...result.meta,
+      hasNext: result.meta.page < result.meta.totalPages,
+      hasPrevious: result.meta.page > 1,
+    };
+
+    return paginatedResponse(result.data, pagination);
   } catch (error) {
     return handleApiError(error);
   }

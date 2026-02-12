@@ -28,7 +28,7 @@ export async function GET(request: NextRequest) {
     const endDate = parseISO(endDateParam);
 
     const service = new DREService();
-    const report = await service.generateReport(companyId, startDate, endDate);
+    const report = await service.generateReport(companyId, { startDate, endDate });
 
     return NextResponse.json(report);
   } catch (error) {

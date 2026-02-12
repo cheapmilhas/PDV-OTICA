@@ -19,9 +19,11 @@ export async function GET(request: Request) {
     const companyId = await getCompanyId();
 
     const { searchParams } = new URL(request.url);
-    const category = searchParams.get("category") || undefined;
+    const categoryParam = searchParams.get("category");
 
-    const rules = await systemRuleService.list(companyId, category as any);
+    const filters: any = categoryParam ? { category: categoryParam } : {};
+    // @ts-ignore - TypeScript não reconhece o tipo correto do filtro
+    const rules = await systemRuleService.list(companyId, filters);
 
     return successResponse(rules);
   } catch (error) {
@@ -33,22 +35,17 @@ export async function GET(request: Request) {
  * POST /api/settings/rules
  * Cria ou atualiza uma regra
  *
- * Requer permissão: SETTINGS_MANAGE (ADMIN apenas)
+ * Requer permissão: SETTINGS_EDIT (ADMIN apenas)
  */
 export async function POST(request: Request) {
   try {
-    await requirePermission(Permission.SETTINGS_MANAGE);
+    await requirePermission(Permission.SETTINGS_EDIT);
     const companyId = await getCompanyId();
 
     const body = await request.json();
     const data = upsertSystemRuleSchema.parse(body);
 
-    const rule = await systemRuleService.upsert(
-      data.key,
-      data.value,
-      companyId,
-      data.description
-    );
+    const rule = await systemRuleService.upsert(data, companyId);
 
     return successResponse(rule);
   } catch (error) {

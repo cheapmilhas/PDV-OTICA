@@ -224,11 +224,7 @@ export default function RelatorioContasPagarPage() {
         <>
           {/* Export */}
           <div className="flex justify-end">
-            <ExportButtons
-              data={data}
-              filename="contas-a-pagar"
-              pdfTitle="Relatório de Contas a Pagar"
-            />
+            <ExportButtons disabled={!data} />
           </div>
 
           {/* KPIs */}
@@ -237,26 +233,25 @@ export default function RelatorioContasPagarPage() {
               title="Total a Pagar"
               value={formatCurrency(data.summary.totalPayable)}
               icon={DollarSign}
-              description={`${data.summary.totalPayments} conta(s)`}
+              subtitle={`${data.summary.totalPayments} conta(s)`}
             />
             <KPICard
               title="Vencidos"
               value={formatCurrency(data.summary.overdue)}
               icon={AlertTriangle}
-              description={`${data.summary.overduePayments} conta(s)`}
-              trend="negative"
+              subtitle={`${data.summary.overduePayments} conta(s)`}
             />
             <KPICard
               title="A Vencer"
               value={formatCurrency(data.summary.toPay)}
               icon={TrendingUp}
-              description={`${data.summary.totalPayments - data.summary.overduePayments} conta(s)`}
+              subtitle={`${data.summary.totalPayments - data.summary.overduePayments} conta(s)`}
             />
             <KPICard
               title="Fornecedores"
               value={data.summary.totalSuppliers.toString()}
               icon={Building2}
-              description={`${data.summary.overdueSuppliers} com atraso`}
+              subtitle={`${data.summary.overdueSuppliers} com atraso`}
             />
           </div>
 
@@ -277,7 +272,7 @@ export default function RelatorioContasPagarPage() {
                       cx="50%"
                       cy="50%"
                       outerRadius={80}
-                      label={(entry) => `${entry.category}: ${formatCurrency(entry.amount)}`}
+                      label={(entry: any) => `${entry.category}: ${formatCurrency(entry.amount)}`}
                     >
                       {data.agingBreakdown.map((entry, index) => (
                         <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />

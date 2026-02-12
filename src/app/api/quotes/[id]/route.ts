@@ -9,17 +9,17 @@ import { handleApiError } from "@/lib/error-handler";
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
 
-    const quoteId = params.id;
+    const { id: quoteId } = await params;
 
     // Busca orçamento via service
-    const quote = await quoteService.getById(quoteId, companyId);
+    const quote = await quoteService.getById(quoteId, companyId) as any;
 
     // Serializa Decimals para number
     const serializedQuote = {
