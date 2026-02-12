@@ -62,6 +62,14 @@ export default function ImprimirVendaPage() {
 
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
+  const [downloading, setDownloading] = useState(false);
+
+  // Debug: Log quando componente monta
+  useEffect(() => {
+    console.log("🔍 ImprimirVendaPage montado");
+    console.log("📋 autoprint:", autoprint);
+    console.log("🆔 sale ID:", id);
+  }, []);
 
   useEffect(() => {
     const fetchSale = async () => {
@@ -84,14 +92,26 @@ export default function ImprimirVendaPage() {
 
   // Auto-baixar PDF quando autoprint=true
   useEffect(() => {
+    console.log("🔄 useEffect autodownload - autoprint:", autoprint, "sale:", !!sale, "loading:", loading);
+
     if (autoprint && sale && !loading) {
+      console.log("✅ Condições atendidas! Agendando download em 1.2s...");
+
       // Aguardar um pouco para garantir que o conteúdo foi renderizado
       const timer = setTimeout(async () => {
+        console.log("⏰ Timeout completado! Iniciando download...");
         const success = await handleDownloadPDF();
+        console.log("📊 Resultado do download:", success);
         // Opcional: fechar aba após download bem-sucedido
         // if (success) window.close();
       }, 1200);
-      return () => clearTimeout(timer);
+
+      return () => {
+        console.log("🧹 Limpando timeout");
+        clearTimeout(timer);
+      };
+    } else {
+      console.log("⏭️ Condições NÃO atendidas para autodownload");
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoprint, sale, loading]);
@@ -113,25 +133,34 @@ export default function ImprimirVendaPage() {
   };
 
   const handleDownloadPDF = async (): Promise<boolean> => {
+    console.log("📥 handleDownloadPDF - INICIANDO");
+    setDownloading(true);
+
     try {
+      console.log("📦 Importando bibliotecas...");
       const html2canvas = (await import("html2canvas")).default;
       const jsPDF = (await import("jspdf")).default;
+      console.log("✅ Bibliotecas importadas");
 
+      console.log("🔍 Procurando .print-container...");
       const printContainer = document.querySelector(".print-container") as HTMLElement;
       if (!printContainer) {
-        toast.error("Erro ao gerar PDF");
+        console.error("❌ .print-container não encontrado!");
+        toast.error("Erro ao gerar PDF - container não encontrado");
         return false;
       }
+      console.log("✅ Container encontrado:", printContainer);
 
-      // Capturar o conteúdo como imagem
+      console.log("📸 Capturando imagem com html2canvas...");
       const canvas = await html2canvas(printContainer, {
         scale: 2, // Maior qualidade
         useCORS: true,
-        logging: false,
+        logging: true, // Ativar logs do html2canvas
         backgroundColor: "#ffffff",
       });
+      console.log("✅ Canvas gerado:", canvas.width, "x", canvas.height);
 
-      // Criar PDF
+      console.log("📄 Criando PDF...");
       const imgData = canvas.toDataURL("image/png");
       const pdf = new jsPDF({
         orientation: "portrait",
@@ -146,6 +175,9 @@ export default function ImprimirVendaPage() {
       let heightLeft = imgHeight;
       let position = 0;
 
+      console.log("📐 Dimensões do PDF:", pdfWidth, "x", pdfHeight);
+      console.log("📐 Dimensões da imagem:", imgWidth, "x", imgHeight);
+
       // Adicionar primeira página
       pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
       heightLeft -= pdfHeight;
@@ -156,6 +188,7 @@ export default function ImprimirVendaPage() {
         pdf.addPage();
         pdf.addImage(imgData, "PNG", 0, position, imgWidth, imgHeight);
         heightLeft -= pdfHeight;
+        console.log("📄 Página extra adicionada");
       }
 
       // Gerar nome do arquivo com nome do cliente
@@ -163,14 +196,18 @@ export default function ImprimirVendaPage() {
       const saleDate = sale ? format(new Date(sale.createdAt), "ddMMyyyy") : "";
       const fileName = `Venda_${customerName}_${saleDate}.pdf`;
 
-      // Baixar PDF
+      console.log("💾 Salvando PDF:", fileName);
       pdf.save(fileName);
+      console.log("✅ PDF salvo com sucesso!");
+
       toast.success("PDF baixado com sucesso!");
       return true;
     } catch (error) {
-      console.error("Erro ao gerar PDF:", error);
-      toast.error("Erro ao gerar PDF");
+      console.error("❌ ERRO ao gerar PDF:", error);
+      toast.error("Erro ao gerar PDF: " + (error as Error).message);
       return false;
+    } finally {
+      setDownloading(false);
     }
   };
 
@@ -188,15 +225,30 @@ export default function ImprimirVendaPage() {
 
   return (
     <>
+      {/* Indicador de download automático */}
+      {autoprint && downloading && (
+        <div className="no-print fixed top-1/2 left-1/2 transform -translate-x-1/2 -translate-y-1/2 z-50 bg-black/80 text-white px-6 py-4 rounded-lg shadow-xl flex items-center gap-3">
+          <Loader2 className="h-6 w-6 animate-spin" />
+          <div>
+            <p className="font-semibold">Gerando PDF...</p>
+            <p className="text-sm text-gray-300">Aguarde enquanto o documento é preparado</p>
+          </div>
+        </div>
+      )}
+
       {/* Botões - Ocultos na impressão */}
       <div className="no-print fixed top-4 right-4 z-50 flex gap-2">
         <Button variant="outline" onClick={() => router.back()}>
           <ArrowLeft className="h-4 w-4 mr-2" />
           Voltar
         </Button>
-        <Button variant="outline" onClick={handleDownloadPDF}>
+        <Button
+          variant="outline"
+          onClick={handleDownloadPDF}
+          disabled={downloading}
+        >
           <Download className="h-4 w-4 mr-2" />
-          Baixar PDF
+          {downloading ? "Gerando..." : "Baixar PDF"}
         </Button>
         <Button onClick={handlePrint}>
           <Printer className="h-4 w-4 mr-2" />
