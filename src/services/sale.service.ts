@@ -327,28 +327,37 @@ export class SaleService {
         // 5. Criar CashMovement para TODOS os métodos de pagamento
         console.log(`💰 Criando CashMovement para pagamento:`, {
           cashShiftId: openShift.id,
+          branchId,
           method: payment.method,
           amount: payment.amount,
           salePaymentId: salePayment.id,
         });
 
-        const cashMovement = await tx.cashMovement.create({
-          data: {
-            cashShiftId: openShift.id,
-            branchId,
-            type: "SALE_PAYMENT",
-            direction: "IN",
-            method: payment.method,
-            amount: payment.amount,
-            originType: "SALE_PAYMENT",
-            originId: salePayment.id,
-            salePaymentId: salePayment.id,
-            createdByUserId: userId,
-            note: `Venda #${newSale.id.substring(0, 8)}`,
-          },
-        });
+        try {
+          const cashMovement = await tx.cashMovement.create({
+            data: {
+              cashShiftId: openShift.id,
+              branchId,
+              type: "SALE_PAYMENT",
+              direction: "IN",
+              method: payment.method,
+              amount: payment.amount,
+              originType: "SALE_PAYMENT",
+              originId: salePayment.id,
+              salePaymentId: salePayment.id,
+              createdByUserId: userId,
+              note: `Venda #${newSale.id.substring(0, 8)}`,
+            },
+          });
 
-        console.log(`✅ CashMovement criado com sucesso! ID: ${cashMovement.id}`);
+          console.log(`✅ CashMovement criado com sucesso! ID: ${cashMovement.id}`);
+        } catch (cashMovementError: any) {
+          console.error(`❌ ERRO ao criar CashMovement:`, cashMovementError);
+          console.error(`❌ Stack:`, cashMovementError.stack);
+          console.error(`❌ Detalhes:`, JSON.stringify(cashMovementError, null, 2));
+          // Re-throw para falhar a transação
+          throw cashMovementError;
+        }
       }
 
       // 6. Calcular e criar comissão do vendedor
