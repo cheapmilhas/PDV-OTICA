@@ -27,8 +27,21 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
     e.preventDefault();
     setLoading(true);
 
-    // Simular abertura de caixa
-    setTimeout(() => {
+    try {
+      const response = await fetch("/api/cash/shift", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          openingFloatAmount: Number(formData.valorAbertura),
+          notes: formData.observacoes || undefined,
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json();
+        throw new Error(error.error?.message || "Erro ao abrir caixa");
+      }
+
       toast({
         title: "Caixa aberto com sucesso!",
         description: `Valor de abertura: ${formatCurrency(Number(formData.valorAbertura))}`,
@@ -40,12 +53,20 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
         observacoes: "",
       });
 
-      setLoading(false);
       onOpenChange(false);
 
       // Recarregar página para atualizar status
       window.location.reload();
-    }, 1000);
+    } catch (error: any) {
+      console.error("Erro ao abrir caixa:", error);
+      toast({
+        title: "Erro ao abrir caixa",
+        description: error.message || "Ocorreu um erro ao abrir o caixa",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
