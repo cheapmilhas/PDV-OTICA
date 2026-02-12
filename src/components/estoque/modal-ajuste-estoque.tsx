@@ -69,7 +69,7 @@ export function ModalAjusteEstoque({
   const [isSubmitting, setIsSubmitting] = useState(false);
 
   const form = useForm<FormData>({
-    resolver: zodResolver(createStockAdjustmentSchema),
+    resolver: zodResolver(createStockAdjustmentSchema) as any,
     defaultValues: {
       productId,
       type: "DAMAGE",
