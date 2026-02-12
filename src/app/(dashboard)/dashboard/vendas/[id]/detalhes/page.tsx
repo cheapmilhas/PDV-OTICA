@@ -205,7 +205,9 @@ export default function DetalhesVendaPage() {
   };
 
   const handleThankYouWhatsApp = async () => {
-    if (!sale?.customer?.phone) {
+    // Verificar se cliente tem telefone e salvar em variável local
+    const customerPhone = sale?.customer?.phone;
+    if (!customerPhone) {
       toast.error("Cliente não possui telefone cadastrado");
       return;
     }
@@ -219,34 +221,33 @@ export default function DetalhesVendaPage() {
       const { data: settings } = await res.json();
 
       // Pegar mensagem de agradecimento
-      const messageTemplate = settings.messageThankYou || "";
-
+      const messageTemplate = settings?.messageThankYou;
       if (!messageTemplate) {
-        toast.error("Mensagem de agradecimento não configurada");
+        toast.error("Mensagem de agradecimento não configurada. Acesse Configurações.");
         return;
       }
 
-      // Substituir variáveis
+      // Substituir variáveis na mensagem
       const message = replaceMessageVariables(messageTemplate, {
-        cliente: sale.customer.name,
-        valor: formatCurrency(Number(sale.total)),
-        otica: settings.displayName || "Ótica",
-        data: format(new Date(sale.createdAt), "dd/MM/yyyy", { locale: ptBR }),
-        vendedor: sale.sellerUser.name,
+        cliente: sale?.customer?.name || "Cliente",
+        valor: formatCurrency(Number(sale?.total || 0)),
+        otica: settings?.displayName || "Ótica",
+        data: format(new Date(sale?.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR }),
+        vendedor: sale?.sellerUser?.name || "Vendedor",
       });
 
-      // Abrir página de impressão em nova aba (para gerar/baixar PDF)
-      // autoprint=true faz o download do PDF acontecer automaticamente
+      // Abrir página de impressão com autodownload para baixar PDF
       window.open(`/dashboard/vendas/${id}/imprimir?autoprint=true`, "_blank");
 
-      // Aguardar 2 segundos para dar tempo do PDF começar a baixar antes do WhatsApp
+      // Aguardar PDF baixar e abrir WhatsApp
       setTimeout(() => {
-        // Abrir WhatsApp
-        openWhatsAppWithMessage(sale.customer.phone, message);
-        toast.success("PDF baixado! Anexe no WhatsApp que acabou de abrir.");
+        openWhatsAppWithMessage(customerPhone, message);
+        toast.success("PDF baixado! Anexe no WhatsApp e envie para o cliente.");
       }, 2000);
+
     } catch (error: any) {
-      toast.error(error.message);
+      console.error("Erro ao enviar WhatsApp:", error);
+      toast.error(error.message || "Erro ao processar");
     } finally {
       setSendingWhatsApp(false);
     }
