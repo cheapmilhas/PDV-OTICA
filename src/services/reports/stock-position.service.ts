@@ -88,7 +88,7 @@ export class StockPositionService {
 
     if (filters.maxStock !== undefined) {
       where.stockQty = {
-        ...where.stockQty,
+        ...(where.stockQty || {}),
         lte: filters.maxStock,
       } as any;
     }
