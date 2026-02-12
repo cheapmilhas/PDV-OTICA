@@ -3,6 +3,8 @@ import { Sale, SaleItem, SalePayment, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
+import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
+import { validateStoreCredit } from "@/lib/validations/sale.schema";
 
 /**
  * Service para operações de Vendas (PDV)
@@ -242,6 +244,27 @@ export class SaleService {
       }
     }
 
+    // Validar crediário (cliente obrigatório + limite de crédito)
+    for (const payment of payments) {
+      if (payment.method === "STORE_CREDIT") {
+        validateStoreCredit(payment, customerId);
+
+        // Validar limite de crédito (se aplicável)
+        const creditCheck = await validateCreditLimit(
+          customerId!,
+          payment.amount,
+          companyId
+        );
+        if (!creditCheck.approved) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            creditCheck.message || "Limite de crédito excedido",
+            400
+          );
+        }
+      }
+    }
+
     // Validar se há caixa aberto (obrigatório para vender)
     console.log(`🔍 Buscando caixa aberto para branchId: ${branchId}`);
     const openShift = await prisma.cashShift.findFirst({
@@ -317,7 +340,7 @@ export class SaleService {
             saleId: newSale.id,
             method: payment.method,
             amount: payment.amount,
-            installments: payment.installments || 1,
+            installments: payment.installmentConfig?.count || payment.installments || 1,
             status: "RECEIVED",
             receivedAt: new Date(),
             receivedByUserId: userId,
@@ -357,6 +380,35 @@ export class SaleService {
           console.error(`❌ Detalhes:`, JSON.stringify(cashMovementError, null, 2));
           // Re-throw para falhar a transação
           throw cashMovementError;
+        }
+
+        // 6. Se for crediário, criar parcelas em AccountReceivable
+        if (payment.method === "STORE_CREDIT" && payment.installmentConfig) {
+          const installments = calculateInstallments(
+            payment.amount,
+            payment.installmentConfig.count,
+            new Date(payment.installmentConfig.firstDueDate),
+            payment.installmentConfig.interval
+          );
+
+          for (const inst of installments) {
+            await tx.accountReceivable.create({
+              data: {
+                companyId,
+                customerId: customerId!,
+                saleId: newSale.id,
+                description: `Parcela ${inst.installmentNumber}/${installments.length} - Venda #${newSale.id.substring(0, 8)}`,
+                amount: inst.amount,
+                dueDate: inst.dueDate,
+                installmentNumber: inst.installmentNumber,
+                totalInstallments: installments.length,
+                status: "PENDING",
+                createdByUserId: userId,
+              },
+            });
+          }
+
+          console.log(`✅ Criadas ${installments.length} parcelas em AccountReceivable para venda ${newSale.id}`);
         }
       }
 

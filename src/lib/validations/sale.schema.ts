@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { PaymentMethod } from "@prisma/client";
+import { AppError, ERROR_CODES } from "@/lib/error-handler";
 
 /**
  * Schemas de validação para Vendas (PDV)
@@ -7,7 +8,7 @@ import { PaymentMethod } from "@prisma/client";
  * Estrutura de uma venda:
  * - Sale (cabeçalho): customerId, branchId, total, discount, notes
  * - SaleItem[]: productId, qty, unitPrice, discount, total
- * - Payment[]: method, amount, installments
+ * - Payment[]: method, amount, installments, installmentConfig (se crediário)
  */
 
 /**
@@ -32,6 +33,25 @@ export const saleItemSchema = z.object({
 export type SaleItemDTO = z.infer<typeof saleItemSchema>;
 
 /**
+ * Schema para configuração de parcelamento (crediário)
+ */
+export const installmentConfigSchema = z.object({
+  count: z.coerce
+    .number()
+    .int("Número de parcelas deve ser inteiro")
+    .min(2, "Mínimo de 2 parcelas")
+    .max(24, "Máximo de 24 parcelas"),
+  firstDueDate: z.string().datetime("Data inválida"),
+  interval: z.coerce
+    .number()
+    .int("Intervalo deve ser inteiro")
+    .positive("Intervalo deve ser positivo")
+    .default(30), // 30 dias padrão
+});
+
+export type InstallmentConfigDTO = z.infer<typeof installmentConfigSchema>;
+
+/**
  * Schema para pagamento da venda
  */
 export const paymentSchema = z.object({
@@ -47,6 +67,8 @@ export const paymentSchema = z.object({
     .positive("Parcelas deve ser positivo")
     .optional()
     .default(1),
+  // Configuração de parcelamento (apenas para STORE_CREDIT)
+  installmentConfig: installmentConfigSchema.optional(),
 });
 
 export type PaymentDTO = z.infer<typeof paymentSchema>;
@@ -162,4 +184,30 @@ export function calculateSaleTotal(items: SaleItemDTO[], discount = 0): {
 export function validatePayments(payments: PaymentDTO[], total: number): boolean {
   const paymentTotal = payments.reduce((sum, p) => sum + p.amount, 0);
   return Math.abs(paymentTotal - total) < 0.01; // Tolerância de 1 centavo
+}
+
+/**
+ * Valida pagamento com crediário
+ *
+ * Regras:
+ * - Cliente é obrigatório para crediário
+ * - installmentConfig é obrigatório para crediário
+ */
+export function validateStoreCredit(payment: PaymentDTO, customerId?: string | null): void {
+  if (payment.method === "STORE_CREDIT") {
+    if (!customerId) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Cliente é obrigatório para vendas no crediário",
+        400
+      );
+    }
+    if (!payment.installmentConfig) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Configuração de parcelamento é obrigatória para crediário",
+        400
+      );
+    }
+  }
 }
