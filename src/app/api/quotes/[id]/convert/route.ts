@@ -84,7 +84,7 @@ export async function POST(
           ...item,
           unitPrice: Number(item.unitPrice),
           discount: Number(item.discount),
-          lineTotal: Number(item.lineTotal),
+          lineTotal: Number(item.lineTotal || item.total),
         })),
         payments: result.sale.payments.map((payment: any) => ({
           ...payment,
@@ -100,7 +100,7 @@ export async function POST(
           ...item,
           unitPrice: Number(item.unitPrice),
           discount: Number(item.discount),
-          lineTotal: Number(item.lineTotal),
+          lineTotal: Number(item.lineTotal || item.total),
         })),
       },
     };
