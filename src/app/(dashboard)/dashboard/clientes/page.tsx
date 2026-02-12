@@ -20,6 +20,7 @@ import {
   Users,
 } from "lucide-react";
 import { ModalDetalhesCliente } from "@/components/clientes/modal-detalhes-cliente";
+import { ClientesFilters, ClientesFilterValues } from "@/components/clientes/clientes-filters";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -38,6 +39,37 @@ function ClientesPage() {
   const [loading, setLoading] = useState(true);
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [filters, setFilters] = useState<ClientesFilterValues>({
+    startDate: undefined,
+    endDate: undefined,
+    city: "",
+    state: "",
+    gender: "",
+    acceptsMarketing: "",
+    referralSource: "",
+    birthdayMonth: "",
+  });
+  const [filterOptions, setFilterOptions] = useState<{
+    cities: string[];
+    states: string[];
+    referralSources: string[];
+  }>({
+    cities: [],
+    states: [],
+    referralSources: [],
+  });
+
+  // Carregar opções de filtros
+  useEffect(() => {
+    fetch("/api/customers/filters")
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) {
+          setFilterOptions(data.data);
+        }
+      })
+      .catch(console.error);
+  }, []);
 
   // Buscar clientes da API
   useEffect(() => {
@@ -48,6 +80,16 @@ function ClientesPage() {
       pageSize: "20",
       status: "ativos",
     });
+
+    // Adicionar filtros
+    if (filters.startDate) params.set("startDate", filters.startDate.toISOString());
+    if (filters.endDate) params.set("endDate", filters.endDate.toISOString());
+    if (filters.city) params.set("city", filters.city);
+    if (filters.state) params.set("state", filters.state);
+    if (filters.gender) params.set("gender", filters.gender);
+    if (filters.acceptsMarketing) params.set("acceptsMarketing", filters.acceptsMarketing);
+    if (filters.referralSource) params.set("referralSource", filters.referralSource);
+    if (filters.birthdayMonth) params.set("birthdayMonth", filters.birthdayMonth);
 
     fetch(`/api/customers?${params}`)
       .then((res) => res.json())
@@ -61,7 +103,7 @@ function ClientesPage() {
         toast.error("Erro ao carregar clientes");
         setLoading(false);
       });
-  }, [search, page]);
+  }, [search, page, filters]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja deletar este cliente?")) return;
@@ -256,6 +298,12 @@ function ClientesPage() {
         onSearch={setSearch}
         placeholder="Buscar por nome, email, CPF ou telefone..."
         clearable
+      />
+
+      {/* Filtros */}
+      <ClientesFilters
+        onFilterChange={setFilters}
+        filterOptions={filterOptions}
       />
 
       {/* Loading */}

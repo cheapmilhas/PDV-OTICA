@@ -15,10 +15,19 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Package } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { ProductSearch } from "@/components/quotes/product-search";
+
+interface Product {
+  id: string;
+  sku: string;
+  name: string;
+  salePrice: number;
+  stockQty: number;
+}
 
 interface QuoteItem {
   id: string;
@@ -30,6 +39,8 @@ interface QuoteItem {
   itemType: "PRODUCT" | "SERVICE" | "CUSTOM";
   prescriptionData?: any;
   notes?: string;
+  sku?: string;
+  stockQty?: number;
 }
 
 function NovoOrcamentoPage() {
@@ -44,6 +55,7 @@ function NovoOrcamentoPage() {
 
   // Itens
   const [items, setItems] = useState<QuoteItem[]>([]);
+  const [showManualItem, setShowManualItem] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState(1);
   const [newItemPrice, setNewItemPrice] = useState(0);
@@ -68,7 +80,24 @@ function NovoOrcamentoPage() {
   const [validDays, setValidDays] = useState(15);
   const [showPrescription, setShowPrescription] = useState(false);
 
-  const addItem = () => {
+  const addProductFromSearch = (product: Product) => {
+    const newItem: QuoteItem = {
+      id: Math.random().toString(36).substr(2, 9),
+      productId: product.id,
+      description: product.name,
+      quantity: 1,
+      unitPrice: product.salePrice,
+      discount: 0,
+      itemType: "PRODUCT",
+      sku: product.sku,
+      stockQty: product.stockQty,
+    };
+
+    setItems([...items, newItem]);
+    toast.success("Produto adicionado");
+  };
+
+  const addManualItem = () => {
     if (!newItemDescription || newItemPrice <= 0) {
       toast.error("Preencha descrição e preço do item");
       return;
@@ -87,7 +116,13 @@ function NovoOrcamentoPage() {
     setNewItemDescription("");
     setNewItemQuantity(1);
     setNewItemPrice(0);
+    setShowManualItem(false);
     toast.success("Item adicionado");
+  };
+
+  const updateItemQuantity = (id: string, quantity: number) => {
+    if (quantity < 1) return;
+    setItems(items.map((item) => (item.id === id ? { ...item, quantity } : item)));
   };
 
   const removeItem = (id: string) => {
@@ -241,60 +276,81 @@ function NovoOrcamentoPage() {
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          {/* Adicionar Item */}
+          {/* Buscar Produto do Estoque */}
           <div className="border rounded-lg p-4 space-y-3">
-            <h3 className="font-semibold">Adicionar Item</h3>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
-              <div className="md:col-span-2">
-                <Label>Descrição *</Label>
-                <Input
-                  value={newItemDescription}
-                  onChange={(e) => setNewItemDescription(e.target.value)}
-                  placeholder="Ex: Armação Ray-Ban"
-                />
-              </div>
-              <div>
-                <Label>Qtd *</Label>
-                <Input
-                  type="number"
-                  min="1"
-                  value={newItemQuantity}
-                  onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 1)}
-                />
-              </div>
-              <div>
-                <Label>Preço Unit. *</Label>
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={newItemPrice}
-                  onChange={(e) => setNewItemPrice(parseFloat(e.target.value) || 0)}
-                  placeholder="0,00"
-                />
-              </div>
-              <div>
-                <Label>Tipo</Label>
-                <Select
-                  value={newItemType}
-                  onValueChange={(v: any) => setNewItemType(v)}
-                >
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="PRODUCT">Produto</SelectItem>
-                    <SelectItem value="SERVICE">Serviço</SelectItem>
-                    <SelectItem value="CUSTOM">Customizado</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
+            <div className="flex items-center justify-between">
+              <h3 className="font-semibold flex items-center gap-2">
+                <Package className="h-5 w-5" />
+                Buscar Produto do Estoque
+              </h3>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => setShowManualItem(!showManualItem)}
+              >
+                {showManualItem ? "Ocultar" : "Item Manual/Customizado"}
+              </Button>
             </div>
-            <Button onClick={addItem} size="sm">
-              <Plus className="h-4 w-4 mr-2" />
-              Adicionar Item
-            </Button>
+            <ProductSearch onSelectProduct={addProductFromSearch} />
           </div>
+
+          {/* Adicionar Item Manual (Opcional) */}
+          {showManualItem && (
+            <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
+              <h3 className="font-semibold text-sm text-muted-foreground">
+                Adicionar Item Manual (Serviço/Customizado)
+              </h3>
+              <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
+                <div className="md:col-span-2">
+                  <Label>Descrição *</Label>
+                  <Input
+                    value={newItemDescription}
+                    onChange={(e) => setNewItemDescription(e.target.value)}
+                    placeholder="Ex: Manutenção de Armação"
+                  />
+                </div>
+                <div>
+                  <Label>Qtd *</Label>
+                  <Input
+                    type="number"
+                    min="1"
+                    value={newItemQuantity}
+                    onChange={(e) => setNewItemQuantity(parseInt(e.target.value) || 1)}
+                  />
+                </div>
+                <div>
+                  <Label>Preço Unit. *</Label>
+                  <Input
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    value={newItemPrice}
+                    onChange={(e) => setNewItemPrice(parseFloat(e.target.value) || 0)}
+                    placeholder="0,00"
+                  />
+                </div>
+                <div>
+                  <Label>Tipo</Label>
+                  <Select
+                    value={newItemType}
+                    onValueChange={(v: any) => setNewItemType(v)}
+                  >
+                    <SelectTrigger>
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="SERVICE">Serviço</SelectItem>
+                      <SelectItem value="CUSTOM">Customizado</SelectItem>
+                    </SelectContent>
+                  </Select>
+                </div>
+              </div>
+              <Button onClick={addManualItem} size="sm">
+                <Plus className="h-4 w-4 mr-2" />
+                Adicionar Item Manual
+              </Button>
+            </div>
+          )}
 
           {/* Lista de Itens */}
           {items.length > 0 && (
@@ -303,6 +359,8 @@ function NovoOrcamentoPage() {
                 <thead className="bg-muted">
                   <tr>
                     <th className="text-left p-2">Descrição</th>
+                    <th className="text-left p-2 w-28">SKU</th>
+                    <th className="text-center p-2 w-24">Estoque</th>
                     <th className="text-center p-2 w-20">Qtd</th>
                     <th className="text-right p-2 w-32">Preço Unit.</th>
                     <th className="text-right p-2 w-32">Total</th>
@@ -312,8 +370,45 @@ function NovoOrcamentoPage() {
                 <tbody>
                   {items.map((item) => (
                     <tr key={item.id} className="border-t">
-                      <td className="p-2">{item.description}</td>
-                      <td className="text-center p-2">{item.quantity}</td>
+                      <td className="p-2">
+                        <div>
+                          <p className="font-medium">{item.description}</p>
+                          {item.itemType !== "PRODUCT" && (
+                            <span className="text-xs text-muted-foreground">
+                              {item.itemType === "SERVICE" ? "Serviço" : "Customizado"}
+                            </span>
+                          )}
+                        </div>
+                      </td>
+                      <td className="p-2 text-sm text-muted-foreground">
+                        {item.sku || "-"}
+                      </td>
+                      <td className="text-center p-2 text-sm">
+                        {item.stockQty !== undefined ? (
+                          <span
+                            className={
+                              item.stockQty < item.quantity
+                                ? "text-red-600 font-semibold"
+                                : "text-muted-foreground"
+                            }
+                          >
+                            {item.stockQty}
+                          </span>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )}
+                      </td>
+                      <td className="text-center p-2">
+                        <Input
+                          type="number"
+                          min="1"
+                          value={item.quantity}
+                          onChange={(e) =>
+                            updateItemQuantity(item.id, parseInt(e.target.value) || 1)
+                          }
+                          className="w-16 text-center"
+                        />
+                      </td>
                       <td className="text-right p-2">
                         {formatCurrency(item.unitPrice)}
                       </td>

@@ -151,7 +151,37 @@ export const customerQuerySchema = z.object({
   city: z.string()
     .optional(),
 
+  state: z.string()
+    .length(2, "Estado deve ter 2 caracteres (UF)")
+    .optional()
+    .or(z.literal("")),
+
+  gender: z.string()
+    .optional(),
+
+  acceptsMarketing: z.string()
+    .optional()
+    .transform((val) => {
+      if (val === "true") return true;
+      if (val === "false") return false;
+      return undefined;
+    }),
+
   referralSource: z.string()
+    .optional(),
+
+  startDate: z.string()
+    .optional()
+    .transform((val) => val ? new Date(val) : undefined),
+
+  endDate: z.string()
+    .optional()
+    .transform((val) => val ? new Date(val) : undefined),
+
+  birthdayMonth: z.coerce.number()
+    .int()
+    .min(1, "Mês deve ser entre 1 e 12")
+    .max(12, "Mês deve ser entre 1 e 12")
     .optional(),
 
   // Ordenação

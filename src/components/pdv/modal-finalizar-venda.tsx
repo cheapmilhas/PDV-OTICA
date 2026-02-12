@@ -60,7 +60,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
   const [pendingCrediarioAmount, setPendingCrediarioAmount] = useState(0);
 
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
-  const remaining = total - totalPaid;
+  // Arredondar para 2 casas decimais para evitar erro de precisão de ponto flutuante
+  const remaining = Math.round((total - totalPaid) * 100) / 100;
 
   const addPayment = () => {
     if (!selectedMethod || !amount || parseFloat(amount) <= 0) return;
@@ -107,7 +108,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
   };
 
   const handleConfirm = () => {
-    if (remaining === 0) {
+    // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
+    if (Math.abs(remaining) < 0.01) {
       onConfirm(payments);
       setPayments([]);
       setAmount("");
@@ -289,7 +291,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
             className="flex-1"
             size="lg"
             onClick={handleConfirm}
-            disabled={remaining !== 0 || loading}
+            disabled={Math.abs(remaining) >= 0.01 || loading}
           >
             {loading ? (
               <>

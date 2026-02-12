@@ -27,7 +27,22 @@ export class CustomerService {
    * const result = await customerService.list({ page: 1, pageSize: 20, search: "João" }, "cm_001")
    */
   async list(query: CustomerQuery, companyId: string) {
-    const { search, page, pageSize, status, city, referralSource, sortBy, sortOrder } = query;
+    const {
+      search,
+      page,
+      pageSize,
+      status,
+      city,
+      state,
+      gender,
+      acceptsMarketing,
+      referralSource,
+      startDate,
+      endDate,
+      birthdayMonth,
+      sortBy,
+      sortOrder
+    } = query;
 
     // Build where clause
     const where: any = {
@@ -47,9 +62,38 @@ export class CustomerService {
       where.city = city;
     }
 
+    // Filtro de estado (UF)
+    if (state) {
+      where.state = state;
+    }
+
+    // Filtro de gênero
+    if (gender) {
+      where.gender = gender;
+    }
+
+    // Filtro de aceita marketing
+    if (acceptsMarketing !== undefined) {
+      where.acceptsMarketing = acceptsMarketing;
+    }
+
     // Filtro de origem
     if (referralSource) {
       where.referralSource = referralSource;
+    }
+
+    // Filtro de período de cadastro
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = startDate;
+      }
+      if (endDate) {
+        // Adiciona 23:59:59 ao endDate para incluir todo o dia
+        const endOfDay = new Date(endDate);
+        endOfDay.setHours(23, 59, 59, 999);
+        where.createdAt.lte = endOfDay;
+      }
     }
 
     // Busca full-text (OR entre múltiplos campos)
@@ -66,19 +110,39 @@ export class CustomerService {
     const orderBy: any = {};
     orderBy[sortBy] = sortOrder;
 
+    // Filtro de aniversariantes (por mês)
+    // Como Prisma não suporta EXTRACT(MONTH), filtramos após buscar
+    if (birthdayMonth) {
+      where.birthDate = { not: null };
+    }
+
     // Paginação
     const { skip, take } = getPaginationParams(page, pageSize);
 
     // Execute query + count em paralelo (performance)
-    const [data, total] = await Promise.all([
+    let [data, total] = await Promise.all([
       prisma.customer.findMany({
         where,
-        skip,
-        take,
+        skip: birthdayMonth ? undefined : skip,
+        take: birthdayMonth ? undefined : take,
         orderBy,
       }),
       prisma.customer.count({ where }),
     ]);
+
+    // Filtrar por mês de aniversário no JavaScript (pós-processamento)
+    if (birthdayMonth) {
+      data = data.filter((customer) => {
+        if (!customer.birthDate) return false;
+        const month = new Date(customer.birthDate).getMonth() + 1; // getMonth() retorna 0-11
+        return month === birthdayMonth;
+      });
+
+      // Recalcular total e aplicar paginação manualmente
+      total = data.length;
+      const start = (page - 1) * pageSize;
+      data = data.slice(start, start + pageSize);
+    }
 
     // Retorna dados + metadados de paginação
     return {
