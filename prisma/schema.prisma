@@ -261,6 +261,7 @@ model Company {
   accountsReceivable AccountReceivable[]
   stockAdjustments   StockAdjustment[]
   systemRules        SystemRule[]
+  companySettings    CompanySettings? @relation("CompanySettings")
 }
 
 model Branch {
@@ -1962,3 +1963,47 @@ model UserPermission {
 // =========================================================
 // FIM DO SCHEMA CONSOLIDADO v3.3
 // =========================================================
+
+// =========================================================
+// CONFIGURAÇÕES DA EMPRESA
+// =========================================================
+
+model CompanySettings {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation("CompanySettings", fields: [companyId], references: [id])
+  
+  // Dados da Empresa
+  displayName String?
+  cnpj        String?
+  phone       String?
+  whatsapp    String?
+  email       String?
+  address     String?
+  city        String?
+  state       String?
+  zipCode     String?
+  
+  // Logo (URL)
+  logoUrl String?
+  
+  // Mensagens Personalizáveis
+  messageThankYou  String? @db.Text
+  messageQuote     String? @db.Text
+  messageReminder  String? @db.Text
+  messageBirthday  String? @db.Text
+  
+  // Configurações do PDF
+  pdfHeaderText String?
+  pdfFooterText String?
+  
+  // Configurações de Orçamento
+  defaultQuoteValidDays Int     @default(15)
+  defaultPaymentTerms   String?
+  
+  // Timestamps
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  
+  @@index([companyId])
+}
