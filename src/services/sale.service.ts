@@ -243,17 +243,31 @@ export class SaleService {
     }
 
     // Validar se há caixa aberto (obrigatório para vender)
+    console.log(`🔍 Buscando caixa aberto para branchId: ${branchId}`);
     const openShift = await prisma.cashShift.findFirst({
       where: { branchId, status: "OPEN" },
     });
 
     if (!openShift) {
+      // Buscar todos os caixas da filial para debug
+      const allShifts = await prisma.cashShift.findMany({
+        where: { branchId },
+        select: { id: true, status: true, openedAt: true, closedAt: true },
+        orderBy: { openedAt: "desc" },
+        take: 3,
+      });
+
+      console.error(`❌ Nenhum caixa aberto encontrado para branchId: ${branchId}`);
+      console.error(`📋 Últimos 3 caixas desta filial:`, JSON.stringify(allShifts, null, 2));
+
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
-        "Não há caixa aberto. Abra o caixa antes de realizar vendas.",
+        `Não há caixa aberto para esta filial (${branchId}). Abra o caixa antes de realizar vendas.`,
         400
       );
     }
+
+    console.log(`✅ Caixa aberto encontrado: ${openShift.id}`);
 
     // Criar venda em transação (venda + itens + pagamentos + cashMovement + estoque)
     const sale = await prisma.$transaction(async (tx) => {
