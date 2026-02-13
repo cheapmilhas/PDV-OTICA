@@ -206,6 +206,65 @@ enum StockMovementType {
 }
 
 // ==============================
+// NOVOS ENUMS - MÓDULOS AVANÇADOS
+// ==============================
+
+enum CashbackMovementType {
+  CREDIT          // Ganhou cashback
+  DEBIT           // Usou cashback
+  EXPIRED         // Expirou
+  ADJUSTMENT      // Ajuste manual
+  BONUS           // Bônus especial
+}
+
+enum ContactType {
+  PRESCRIPTION_REMINDER   // Lembrete de receita vencendo
+  BIRTHDAY_GREETING       // Feliz aniversário
+  INACTIVE_REACTIVATION   // Reativação de cliente inativo
+  CASHBACK_EXPIRING       // Cashback expirando
+  CASHBACK_AVAILABLE      // Lembrete que tem cashback disponível
+  SALE_THANK_YOU          // Agradecimento pós-venda
+  ORDER_READY             // Óculos pronto (futuro)
+  CUSTOM                  // Contato personalizado
+}
+
+enum ContactChannel {
+  WHATSAPP
+  PHONE
+  EMAIL
+  SMS
+}
+
+enum ContactStatus {
+  PENDING     // Aguardando envio
+  SENT        // Enviado (clicou no WhatsApp)
+  CONFIRMED   // Confirmado como enviado pelo usuário
+  SKIPPED     // Pulado
+  FAILED      // Falhou
+}
+
+enum ReminderStatus {
+  PENDING     // Aguardando ação
+  IN_PROGRESS // Em andamento (abriu para contatar)
+  COMPLETED   // Concluído (cliente contatado)
+  DISMISSED   // Dispensado (não vai contatar)
+  EXPIRED     // Expirou sem ação
+}
+
+enum GoalStatus {
+  ACTIVE
+  CLOSED
+  CANCELLED
+}
+
+enum LensType {
+  SINGLE_VISION     // Visão simples
+  BIFOCAL           // Bifocal
+  MULTIFOCAL        // Multifocal
+  OCCUPATIONAL      // Ocupacional
+}
+
+// ==============================
 // ESTRUTURA ORGANIZACIONAL
 // ==============================
 
@@ -301,6 +360,16 @@ model Branch {
   accountsPayable      AccountPayable[]
   accountsReceivable   AccountReceivable[]
 
+  // Novos módulos
+  cashbackConfig       CashbackConfig?
+  reminderConfig       ReminderConfig?
+  commissionConfig     CommissionConfig?
+  salesGoals           SalesGoal[]
+  sellerCommissions    SellerCommission[]
+  customerCashbacks    CustomerCashback[]
+  customerContacts     CustomerContact[]
+  reminders            Reminder[]
+
   @@unique([companyId, code])
   @@index([companyId, name])
 }
@@ -345,6 +414,13 @@ model User {
   stockAdjustmentsApproved   StockAdjustment[]     @relation("AdjustmentApprover")
   barcodesCreated            ProductBarcode[]      @relation("BarcodeCreator")
   customPermissions          UserPermission[]      @relation("UserCustomPermissions")
+
+  // Novos módulos
+  sellerGoals                SellerGoal[]
+  sellerCommissions          SellerCommission[]    @relation("SellerCommissions")
+  contactsExecuted           CustomerContact[]     @relation("ContactExecutedBy")
+  remindersDismissed         Reminder[]            @relation("ReminderDismissedBy")
+  cashbackMovementsCreated   CashbackMovement[]    @relation("CashbackMovementCreatedBy")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -432,6 +508,11 @@ model Customer {
   loyaltyPoints      LoyaltyPoints[]
   agreementBenefits  AgreementBeneficiary[]
   accountsReceivable AccountReceivable[]
+
+  // Novos módulos
+  cashback           CustomerCashback[]
+  contacts           CustomerContact[]
+  reminders          Reminder[]
 
   @@unique([companyId, cpf])
   @@index([companyId, name])
@@ -1182,6 +1263,9 @@ model Sale {
   reservations       StockReservation[]
   warranties         Warranty[]
   accountsReceivable AccountReceivable[]
+
+  // Novos módulos
+  cashbackMovements  CashbackMovement[]
 
   @@index([companyId, branchId, createdAt])
   @@index([customerId, createdAt])
@@ -2006,4 +2090,299 @@ model CompanySettings {
   updatedAt DateTime @updatedAt
   
   @@index([companyId])
+}
+
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║                    MÓDULO: CASHBACK                           ║
+// ╚═══════════════════════════════════════════════════════════════╝
+
+// Configuração de Cashback (por filial)
+model CashbackConfig {
+  id                    String   @id @default(cuid())
+  branchId              String   @unique
+  branch                Branch   @relation(fields: [branchId], references: [id])
+
+  // Ativar/Desativar
+  enabled               Boolean  @default(false)
+
+  // Regras de GERAÇÃO
+  earnPercent           Decimal  @default(3) @db.Decimal(5,2)  // 3% de cashback
+  minPurchaseToEarn     Decimal  @default(100) @db.Decimal(10,2) // Mínimo R$100 para gerar
+  maxCashbackPerSale    Decimal? @db.Decimal(10,2) // Máximo por venda (null = sem limite)
+  expirationDays        Int      @default(90) // Dias para expirar
+
+  // Regras de USO
+  minPurchaseMultiplier Decimal  @default(3) @db.Decimal(3,1) // Compra mínima = 3x o cashback usado
+  maxUsagePercent       Decimal  @default(50) @db.Decimal(5,2) // Máximo 50% da compra pode ser cashback
+
+  // Regras especiais
+  birthdayMultiplier    Decimal  @default(2) @db.Decimal(3,1) // Dobro no aniversário
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+}
+
+// Saldo de Cashback do Cliente
+model CustomerCashback {
+  id                    String   @id @default(cuid())
+  customerId            String
+  customer              Customer @relation(fields: [customerId], references: [id])
+  branchId              String
+  branch                Branch   @relation(fields: [branchId], references: [id])
+
+  // Saldo atual
+  balance               Decimal  @default(0) @db.Decimal(10,2)
+
+  // Totais históricos
+  totalEarned           Decimal  @default(0) @db.Decimal(10,2)
+  totalUsed             Decimal  @default(0) @db.Decimal(10,2)
+  totalExpired          Decimal  @default(0) @db.Decimal(10,2)
+
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+
+  movements             CashbackMovement[]
+
+  @@unique([customerId, branchId])
+  @@index([customerId])
+  @@index([branchId])
+}
+
+// Movimentações de Cashback
+model CashbackMovement {
+  id                    String   @id @default(cuid())
+  customerCashbackId    String
+  customerCashback      CustomerCashback @relation(fields: [customerCashbackId], references: [id])
+
+  type                  CashbackMovementType
+  amount                Decimal  @db.Decimal(10,2)
+
+  // Referências
+  saleId                String?
+  sale                  Sale?    @relation(fields: [saleId], references: [id])
+
+  // Validade (para créditos)
+  expiresAt             DateTime?
+  expired               Boolean  @default(false)
+
+  description           String?
+
+  createdAt             DateTime @default(now())
+  createdByUserId       String?
+  createdByUser         User?    @relation("CashbackMovementCreatedBy", fields: [createdByUserId], references: [id])
+
+  @@index([customerCashbackId])
+  @@index([saleId])
+  @@index([expiresAt])
+}
+
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║                 MÓDULO: LEMBRETES                             ║
+// ╚═══════════════════════════════════════════════════════════════╝
+
+// Configuração de Lembretes (por filial)
+model ReminderConfig {
+  id                              String   @id @default(cuid())
+  branchId                        String   @unique
+  branch                          Branch   @relation(fields: [branchId], references: [id])
+
+  // Receita vencendo
+  prescriptionReminderEnabled     Boolean  @default(true)
+  prescriptionReminderDays        Int      @default(30) // Dias antes para alertar
+  prescriptionValidityMonths      Int      @default(12) // Validade da receita
+
+  // Clientes inativos
+  inactiveReminderEnabled         Boolean  @default(true)
+  inactiveAfterDays               Int      @default(180) // 6 meses
+
+  // Aniversário
+  birthdayReminderEnabled         Boolean  @default(true)
+  birthdayReminderDaysBefore      Int      @default(0) // 0 = no dia, 1 = dia antes
+
+  // Cashback expirando
+  cashbackExpiringReminderEnabled Boolean  @default(true)
+  cashbackExpiringDaysBefore      Int      @default(7)
+
+  // Tipos habilitados
+  enabledReminderTypes            String[] // Ex: { prescriptionReminder, birthday, inactive, cashbackExpiring }
+
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+}
+
+// Registro de Contatos com Clientes
+model CustomerContact {
+  id                    String        @id @default(cuid())
+  customerId            String
+  customer              Customer      @relation(fields: [customerId], references: [id])
+  branchId              String
+  branch                Branch        @relation(fields: [branchId], references: [id])
+
+  // Tipo e canal
+  type                  ContactType
+  channel               ContactChannel @default(WHATSAPP)
+
+  // Status
+  status                ContactStatus  @default(PENDING)
+
+  // Referência (ex: lembrete que gerou este contato)
+  reminderId            String?
+  reminder              Reminder?      @relation(fields: [reminderId], references: [id])
+
+  // Conteúdo
+  message               String?        @db.Text
+  notes                 String?        // Observações do atendente
+
+  // Quem executou
+  executedByUserId      String?
+  executedByUser        User?          @relation("ContactExecutedBy", fields: [executedByUserId], references: [id])
+  executedAt            DateTime?
+
+  createdAt             DateTime       @default(now())
+
+  @@index([customerId])
+  @@index([branchId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+// Lembretes Gerados (fila de lembretes)
+model Reminder {
+  id                    String         @id @default(cuid())
+  branchId              String
+  branch                Branch         @relation(fields: [branchId], references: [id])
+  customerId            String
+  customer              Customer       @relation(fields: [customerId], references: [id])
+
+  // Tipo
+  type                  ContactType
+
+  // Status
+  status                ReminderStatus @default(PENDING)
+
+  // Agendamento
+  scheduledFor          DateTime       // Data para aparecer no dashboard
+
+  // Dados extras (JSON) - ex: valor do cashback, data da receita, etc
+  metadata              Json?
+
+  // Ações
+  dismissedAt           DateTime?
+  dismissedByUserId     String?
+  dismissedByUser       User?          @relation("ReminderDismissedBy", fields: [dismissedByUserId], references: [id])
+  dismissReason         String?
+
+  // Contatos gerados
+  contacts              CustomerContact[]
+
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
+
+  @@index([branchId])
+  @@index([customerId])
+  @@index([type])
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+// ╔═══════════════════════════════════════════════════════════════╗
+// ║              MÓDULO: METAS E COMISSÕES                        ║
+// ╚═══════════════════════════════════════════════════════════════╝
+
+// Meta de Vendas (por filial/mês)
+model SalesGoal {
+  id                    String       @id @default(cuid())
+  branchId              String
+  branch                Branch       @relation(fields: [branchId], references: [id])
+
+  // Período
+  year                  Int
+  month                 Int          // 1-12
+
+  // Meta da loja
+  branchGoal            Decimal      @db.Decimal(12,2)
+
+  // Status
+  status                GoalStatus   @default(ACTIVE)
+
+  createdAt             DateTime     @default(now())
+  updatedAt             DateTime     @updatedAt
+
+  sellerGoals           SellerGoal[]
+
+  @@unique([branchId, year, month])
+  @@index([branchId])
+  @@index([year, month])
+}
+
+// Meta Individual do Vendedor
+model SellerGoal {
+  id                    String     @id @default(cuid())
+  salesGoalId           String
+  salesGoal             SalesGoal  @relation(fields: [salesGoalId], references: [id], onDelete: Cascade)
+  userId                String
+  user                  User       @relation(fields: [userId], references: [id])
+
+  goalAmount            Decimal    @db.Decimal(12,2)
+
+  createdAt             DateTime   @default(now())
+  updatedAt             DateTime   @updatedAt
+
+  @@unique([salesGoalId, userId])
+  @@index([userId])
+}
+
+// Configuração de Comissões (por filial)
+model CommissionConfig {
+  id                      String   @id @default(cuid())
+  branchId                String   @unique
+  branch                  Branch   @relation(fields: [branchId], references: [id])
+
+  // Comissão base
+  baseCommissionPercent   Decimal  @default(5) @db.Decimal(5,2) // 5%
+
+  // Bônus por bater meta
+  goalBonusPercent        Decimal  @default(2) @db.Decimal(5,2) // +2%
+
+  // Comissão por categoria (opcional)
+  categoryCommissions     Json?    // { "armacoes": 5, "lentes": 4 }
+
+  createdAt               DateTime @default(now())
+  updatedAt               DateTime @updatedAt
+}
+
+// Registro de Comissão (calculado mensalmente) - NOME ALTERADO PARA EVITAR CONFLITO
+model SellerCommission {
+  id                    String           @id @default(cuid())
+  userId                String
+  user                  User             @relation("SellerCommissions", fields: [userId], references: [id])
+  branchId              String
+  branch                Branch           @relation(fields: [branchId], references: [id])
+
+  // Período
+  year                  Int
+  month                 Int
+
+  // Valores
+  totalSales            Decimal          @db.Decimal(12,2)
+  goalAmount            Decimal?         @db.Decimal(12,2)
+  goalAchieved          Boolean          @default(false)
+
+  // Comissão
+  baseCommission        Decimal          @db.Decimal(10,2)
+  bonusCommission       Decimal          @default(0) @db.Decimal(10,2)
+  totalCommission       Decimal          @db.Decimal(10,2)
+
+  // Status
+  status                CommissionStatus @default(PENDING)
+  paidAt                DateTime?
+
+  createdAt             DateTime         @default(now())
+  updatedAt             DateTime         @updatedAt
+
+  @@unique([userId, branchId, year, month])
+  @@index([userId])
+  @@index([branchId])
+  @@index([year, month])
 }
