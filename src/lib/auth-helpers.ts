@@ -102,6 +102,25 @@ export async function getBranchId(): Promise<string> {
 }
 
 /**
+ * Retorna o userId do usuário autenticado
+ *
+ * @throws {AppError} 401 se não autenticado
+ * @returns userId do usuário
+ */
+export async function getUserId(): Promise<string> {
+  const session = await requireAuth();
+
+  if (!session.user.id) {
+    console.error("Session missing id:", JSON.stringify(session.user, null, 2));
+    throw unauthorizedError(
+      "Sessão inválida: userId não encontrado. Por favor, faça logout e login novamente."
+    );
+  }
+
+  return session.user.id;
+}
+
+/**
  * Retorna a session completa do usuário (se autenticado)
  * ou null (se não autenticado)
  *
