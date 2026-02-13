@@ -1,0 +1,192 @@
+
+> pdv-otica@1.0.0 build
+> next build
+
+▲ Next.js 16.1.6 (Turbopack)
+- Environments: .env
+
+⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+  Creating an optimized production build ...
+✓ Compiled successfully in 80s
+  Running TypeScript ...
+  Collecting page data using 3 workers ...
+  Generating static pages using 3 workers (0/127) ...
+  Generating static pages using 3 workers (31/127) 
+  Generating static pages using 3 workers (63/127) 
+  Generating static pages using 3 workers (95/127) 
+✓ Generating static pages using 3 workers (127/127) in 4.8s
+  Finalizing page optimization ...
+
+Route (app)
+┌ ○ /
+├ ○ /_not-found
+├ ƒ /api/accounts-payable
+├ ƒ /api/accounts-receivable
+├ ƒ /api/admin/migrate-cash-movements
+├ ƒ /api/auth/[...nextauth]
+├ ƒ /api/auth/clear-session
+├ ƒ /api/barcodes/generate-image
+├ ƒ /api/branches
+├ ƒ /api/cash-registers
+├ ƒ /api/cash-registers/[id]/transactions
+├ ƒ /api/cash/debug
+├ ƒ /api/cash/migrate-old-sales
+├ ƒ /api/cash/movements
+├ ƒ /api/cash/shift
+├ ƒ /api/cash/shift/close
+├ ƒ /api/cashback/config
+├ ƒ /api/cashback/customer/[customerId]
+├ ƒ /api/cashback/customers
+├ ƒ /api/cashback/expiring
+├ ƒ /api/cashback/summary
+├ ƒ /api/cashback/validate
+├ ƒ /api/customers
+├ ƒ /api/customers/[id]
+├ ƒ /api/customers/export
+├ ƒ /api/customers/filters
+├ ƒ /api/customers/import
+├ ƒ /api/customers/template
+├ ƒ /api/dashboard/metrics
+├ ƒ /api/dashboard/payment-distribution
+├ ƒ /api/dashboard/sales-last-7-days
+├ ƒ /api/dashboard/top-products
+├ ƒ /api/goals
+├ ƒ /api/goals/commissions
+├ ƒ /api/goals/commissions/[id]
+├ ƒ /api/goals/config
+├ ƒ /api/goals/dashboard
+├ ƒ /api/goals/monthly-summary
+├ ƒ /api/goals/sellers
+├ ƒ /api/goals/sellers-ranking
+├ ƒ /api/permissions
+├ ƒ /api/permissions/by-module
+├ ƒ /api/prescriptions
+├ ƒ /api/prescriptions/[id]
+├ ƒ /api/prescriptions/customer/[customerId]
+├ ƒ /api/products
+├ ƒ /api/products/[id]
+├ ƒ /api/products/[id]/barcodes
+├ ƒ /api/products/[id]/barcodes/[barcodeId]
+├ ƒ /api/products/[id]/barcodes/generate-all
+├ ƒ /api/products/export
+├ ƒ /api/products/filters
+├ ƒ /api/products/import
+├ ƒ /api/products/search-by-barcode
+├ ƒ /api/products/template
+├ ƒ /api/quotes
+├ ƒ /api/quotes/[id]
+├ ƒ /api/quotes/[id]/cancel
+├ ƒ /api/quotes/[id]/convert
+├ ƒ /api/quotes/[id]/status
+├ ƒ /api/quotes/stats
+├ ƒ /api/reminders
+├ ƒ /api/reminders/[id]
+├ ƒ /api/reminders/config
+├ ƒ /api/reminders/contacts
+├ ƒ /api/reminders/summary
+├ ƒ /api/reports/category-distribution
+├ ƒ /api/reports/commissions
+├ ƒ /api/reports/customers
+├ ƒ /api/reports/dashboard
+├ ƒ /api/reports/financial/accounts-payable
+├ ƒ /api/reports/financial/accounts-receivable
+├ ƒ /api/reports/financial/cash-history
+├ ƒ /api/reports/financial/dre
+├ ƒ /api/reports/optical
+├ ƒ /api/reports/payment-methods
+├ ƒ /api/reports/products
+├ ƒ /api/reports/products/top-sellers
+├ ƒ /api/reports/sales-evolution
+├ ƒ /api/reports/sales/consolidated
+├ ƒ /api/reports/stock/no-movement
+├ ƒ /api/reports/stock/position
+├ ƒ /api/reports/summary
+├ ƒ /api/reports/team-performance
+├ ƒ /api/reports/temporal
+├ ƒ /api/reports/top-products
+├ ƒ /api/sales
+├ ƒ /api/sales/[id]
+├ ƒ /api/sales/[id]/carne
+├ ƒ /api/sales/[id]/reactivate
+├ ƒ /api/sales/[id]/seller
+├ ƒ /api/service-orders
+├ ƒ /api/service-orders/[id]
+├ ƒ /api/service-orders/[id]/status
+├ ƒ /api/settings
+├ ƒ /api/settings/reset-message
+├ ƒ /api/settings/rules
+├ ƒ /api/settings/rules/[key]
+├ ƒ /api/settings/rules/restore-defaults
+├ ƒ /api/stock-adjustments
+├ ƒ /api/stock-adjustments/[id]
+├ ƒ /api/stock-adjustments/[id]/approve
+├ ƒ /api/stock-adjustments/[id]/reject
+├ ƒ /api/stock-movements
+├ ƒ /api/stock-movements/transfer
+├ ƒ /api/suppliers
+├ ƒ /api/suppliers/[id]
+├ ƒ /api/suppliers/export
+├ ƒ /api/suppliers/filters
+├ ƒ /api/suppliers/import
+├ ƒ /api/suppliers/template
+├ ƒ /api/users
+├ ƒ /api/users/[id]
+├ ƒ /api/users/[id]/permissions
+├ ƒ /api/users/[id]/permissions/reset
+├ ƒ /api/users/sellers
+├ ○ /dashboard
+├ ○ /dashboard/caixa
+├ ○ /dashboard/caixa/historico
+├ ○ /dashboard/cashback
+├ ○ /dashboard/clientes
+├ ƒ /dashboard/clientes/[id]
+├ ƒ /dashboard/clientes/[id]/editar
+├ ○ /dashboard/clientes/novo
+├ ○ /dashboard/configuracoes
+├ ○ /dashboard/configuracoes/cashback
+├ ○ /dashboard/configuracoes/comissoes
+├ ○ /dashboard/configuracoes/lembretes
+├ ○ /dashboard/configuracoes/permissoes
+├ ƒ /dashboard/configuracoes/regras
+├ ○ /dashboard/diagnostico-caixa
+├ ○ /dashboard/estoque
+├ ƒ /dashboard/estoque/ajustes
+├ ○ /dashboard/financeiro
+├ ○ /dashboard/fornecedores
+├ ○ /dashboard/funcionarios
+├ ƒ /dashboard/funcionarios/[id]/permissoes
+├ ○ /dashboard/lembretes
+├ ○ /dashboard/metas
+├ ○ /dashboard/orcamentos
+├ ƒ /dashboard/orcamentos/[id]
+├ ○ /dashboard/orcamentos/novo
+├ ○ /dashboard/ordens-servico
+├ ƒ /dashboard/ordens-servico/[id]/detalhes
+├ ƒ /dashboard/ordens-servico/[id]/editar
+├ ○ /dashboard/ordens-servico/nova
+├ ○ /dashboard/pdv
+├ ○ /dashboard/produtos
+├ ƒ /dashboard/produtos/[id]/editar
+├ ○ /dashboard/produtos/novo
+├ ○ /dashboard/relatorios
+├ ○ /dashboard/relatorios/comissoes
+├ ○ /dashboard/relatorios/contas-pagar
+├ ○ /dashboard/relatorios/contas-receber
+├ ○ /dashboard/relatorios/dre
+├ ○ /dashboard/relatorios/historico-caixas
+├ ○ /dashboard/relatorios/posicao-estoque
+├ ○ /dashboard/relatorios/produtos-sem-giro
+├ ○ /dashboard/relatorios/produtos-vendidos
+├ ○ /dashboard/relatorios/vendas
+├ ○ /dashboard/vendas
+├ ƒ /dashboard/vendas/[id]/detalhes
+├ ƒ /dashboard/vendas/[id]/imprimir
+├ ○ /force-logout
+└ ○ /login
+
+
+ƒ Proxy (Middleware)
+
+○  (Static)   prerendered as static content
+ƒ  (Dynamic)  server-rendered on demand
+
