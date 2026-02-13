@@ -1,6 +1,7 @@
 "use client";
 
 import { usePermission } from "@/hooks/use-permission";
+import { useSession } from "next-auth/react";
 import { ReactNode } from "react";
 
 interface PermissionGuardProps {
@@ -18,19 +19,30 @@ export function PermissionGuard({
   fallback = null,
   children,
 }: PermissionGuardProps) {
+  const { data: session } = useSession();
   const { hasPermission, hasAnyPermission, hasAllPermissions, isLoading } =
     usePermission();
+
+  // ADMIN sempre mostra tudo - verificação direta da sessão
+  if (session?.user?.role === "ADMIN") {
+    return <>{children}</>;
+  }
 
   if (isLoading) {
     return null; // Ou um skeleton/loading
   }
 
+  // Se não tem permissão definida, mostra o conteúdo
+  if (!permission && (!permissions || permissions.length === 0)) {
+    return <>{children}</>;
+  }
+
   // Verificar permissão única
   if (permission) {
-    if (!hasPermission(permission)) {
-      return <>{fallback}</>;
+    if (hasPermission(permission)) {
+      return <>{children}</>;
     }
-    return <>{children}</>;
+    return <>{fallback}</>;
   }
 
   // Verificar múltiplas permissões
@@ -39,12 +51,10 @@ export function PermissionGuard({
       ? hasAllPermissions(permissions)
       : hasAnyPermission(permissions);
 
-    if (!hasAccess) {
-      return <>{fallback}</>;
+    if (hasAccess) {
+      return <>{children}</>;
     }
-    return <>{children}</>;
   }
 
-  // Se não especificou permissão, mostrar
-  return <>{children}</>;
+  return <>{fallback}</>;
 }

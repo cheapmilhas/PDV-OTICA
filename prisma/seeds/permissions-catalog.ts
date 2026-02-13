@@ -799,6 +799,42 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   },
 
   // =================================================================
+  // CASHBACK
+  // =================================================================
+  {
+    code: "cashback.access",
+    name: "Acessar Cashback",
+    description: "Entrar na seção de cashback",
+    module: "cashback",
+    category: "Cashback",
+    sortOrder: 130,
+  },
+  {
+    code: "cashback.view",
+    name: "Ver Cashback",
+    description: "Visualizar saldos e movimentações",
+    module: "cashback",
+    category: "Cashback",
+    sortOrder: 131,
+  },
+  {
+    code: "cashback.manage",
+    name: "Gerenciar Cashback",
+    description: "Ajustar saldos e processar cashback",
+    module: "cashback",
+    category: "Cashback",
+    sortOrder: 132,
+  },
+  {
+    code: "cashback.config",
+    name: "Configurar Cashback",
+    description: "Alterar configurações do programa",
+    module: "cashback",
+    category: "Cashback",
+    sortOrder: 133,
+  },
+
+  // =================================================================
   // LEMBRETES
   // =================================================================
   {

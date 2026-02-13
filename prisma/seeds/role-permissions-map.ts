@@ -126,6 +126,12 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "settings.rules_edit",
     "settings.branches",
 
+    // Cashback - TODAS
+    "cashback.access",
+    "cashback.view",
+    "cashback.manage",
+    "cashback.config",
+
     // Lembretes - TODAS
     "reminders.access",
     "reminders.view",
@@ -253,6 +259,12 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "settings.access",
     "settings.rules_view",
 
+    // Cashback - TODAS
+    "cashback.access",
+    "cashback.view",
+    "cashback.manage",
+    "cashback.config",
+
     // Lembretes - TODAS
     "reminders.access",
     "reminders.view",
@@ -303,6 +315,10 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     // Relatórios - apenas próprios
     "reports.access",
     "reports.commissions_own",
+
+    // Cashback - visualização
+    "cashback.access",
+    "cashback.view",
 
     // Lembretes
     "reminders.access",

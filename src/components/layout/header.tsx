@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Bell, Search, User, Building2, ChevronDown, LogOut } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -16,9 +16,19 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { signOut, useSession } from "next-auth/react";
 
+interface Branch {
+  id: string;
+  name: string;
+  code: string;
+  city?: string;
+  state?: string;
+}
+
 export function Header() {
-  // Usar sessão REAL do NextAuth
   const { data: session } = useSession();
+  const [branches, setBranches] = useState<Branch[]>([]);
+  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const [notifications] = useState(0);
 
   const user = {
     name: session?.user?.name || "Usuário",
@@ -26,15 +36,32 @@ export function Header() {
     role: session?.user?.role || "USER",
   };
 
-  // Mock de filiais
-  const branches = [
-    { id: "1", name: "Matriz - Centro" },
-    { id: "2", name: "Filial Pacajus" },
-    { id: "3", name: "Filial Shopping" },
-  ];
+  // Carregar filiais da empresa
+  useEffect(() => {
+    async function loadBranches() {
+      try {
+        const response = await fetch("/api/branches");
+        if (response.ok) {
+          const result = await response.json();
+          const branchesData = result.data || [];
+          setBranches(branchesData);
 
-  const [selectedBranch, setSelectedBranch] = useState(branches[0]);
-  const notifications = 3;
+          // Selecionar a filial do usuário logado ou a primeira disponível
+          if (branchesData.length > 0) {
+            const userBranchId = session?.user?.branchId;
+            const userBranch = branchesData.find((b: Branch) => b.id === userBranchId);
+            setSelectedBranch(userBranch || branchesData[0]);
+          }
+        }
+      } catch (error) {
+        console.error("Erro ao carregar filiais:", error);
+      }
+    }
+
+    if (session?.user) {
+      loadBranches();
+    }
+  }, [session]);
 
   return (
     <header className="flex h-16 items-center justify-between border-b bg-background px-6">
@@ -53,29 +80,31 @@ export function Header() {
       {/* Actions */}
       <div className="flex items-center gap-4">
         {/* Branch Selector */}
-        <DropdownMenu>
-          <DropdownMenuTrigger asChild>
-            <Button variant="outline" className="hidden md:flex gap-2">
-              <Building2 className="h-4 w-4" />
-              <span className="max-w-[150px] truncate">{selectedBranch.name}</span>
-              <ChevronDown className="h-4 w-4 text-muted-foreground" />
-            </Button>
-          </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
-            <DropdownMenuLabel>Selecionar Filial</DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            {branches.map((branch) => (
-              <DropdownMenuItem
-                key={branch.id}
-                onClick={() => setSelectedBranch(branch)}
-                className={selectedBranch.id === branch.id ? "bg-accent" : ""}
-              >
-                <Building2 className="mr-2 h-4 w-4" />
-                {branch.name}
-              </DropdownMenuItem>
-            ))}
-          </DropdownMenuContent>
-        </DropdownMenu>
+        {selectedBranch && branches.length > 0 && (
+          <DropdownMenu>
+            <DropdownMenuTrigger asChild>
+              <Button variant="outline" className="hidden md:flex gap-2">
+                <Building2 className="h-4 w-4" />
+                <span className="max-w-[150px] truncate">{selectedBranch.name}</span>
+                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+              </Button>
+            </DropdownMenuTrigger>
+            <DropdownMenuContent align="end" className="w-56">
+              <DropdownMenuLabel>Selecionar Filial</DropdownMenuLabel>
+              <DropdownMenuSeparator />
+              {branches.map((branch) => (
+                <DropdownMenuItem
+                  key={branch.id}
+                  onClick={() => setSelectedBranch(branch)}
+                  className={selectedBranch.id === branch.id ? "bg-accent" : ""}
+                >
+                  <Building2 className="mr-2 h-4 w-4" />
+                  {branch.name}
+                </DropdownMenuItem>
+              ))}
+            </DropdownMenuContent>
+          </DropdownMenu>
+        )}
 
         {/* Notifications */}
         <Button variant="ghost" size="icon" className="relative">

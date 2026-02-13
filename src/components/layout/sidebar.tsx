@@ -18,6 +18,8 @@ import {
   Truck,
   UserCog,
   Bell,
+  Wallet,
+  Target,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 
@@ -111,9 +113,15 @@ const menuItems = [
         permission: "financial.access"
       },
       {
+        name: "Cashback",
+        href: "/dashboard/cashback",
+        icon: Wallet,
+        permission: "cashback.access"
+      },
+      {
         name: "Metas",
         href: "/dashboard/metas",
-        icon: Gift,
+        icon: Target,
         permission: "goals.access"
       },
       {

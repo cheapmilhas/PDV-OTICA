@@ -41,20 +41,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const { email, password } = loginSchema.parse(credentials);
 
-          // Mock user (apenas se AUTH_MOCK=true no .env)
-          if (process.env.AUTH_MOCK === "true") {
-            if (email === "admin@pdvotica.com" && password === "admin123") {
-              return {
-                id: "mock-user-id",
-                name: "Admin Mock",
-                email: "admin@pdvotica.com",
-                role: "ADMIN",
-                branchId: "mock-branch-id",
-                companyId: "mock-company-id",
-              };
-            }
-          }
-
           // Buscar usuário no banco de dados
           const user = await prisma.user.findUnique({
             where: { email },
@@ -89,12 +75,17 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           // Pegar o primeiro branch do usuário
           const firstBranch = user.branches[0]?.branch;
 
+          if (!firstBranch) {
+            console.log(`❌ Usuário ${email} não possui filial vinculada`);
+            return null;
+          }
+
           const authData = {
             id: user.id,
             name: user.name,
             email: user.email,
             role: user.role,
-            branchId: firstBranch?.id || "mock-branch-id",
+            branchId: firstBranch.id,
             companyId: user.companyId,
           };
 
