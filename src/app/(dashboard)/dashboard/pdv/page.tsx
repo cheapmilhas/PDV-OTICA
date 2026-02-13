@@ -199,13 +199,7 @@ function PDVPage() {
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
   const handleConfirmarVenda = async (payments: any[]) => {
-    console.log("🚀 [PDV] handleConfirmarVenda iniciado");
-    console.log("🚀 [PDV] Payments recebidos:", payments);
-    console.log("🚀 [PDV] Carrinho:", carrinho);
-    console.log("🚀 [PDV] Cliente:", clienteSelecionado);
-
     if (carrinho.length === 0) {
-      console.error("❌ [PDV] Carrinho vazio!");
       toast.error("Carrinho vazio");
       return;
     }
@@ -214,14 +208,11 @@ function PDVPage() {
 
     try {
       // Verificar sessão
-      console.log("🔍 [PDV] Verificando sessão...");
       if (!session?.user?.branchId) {
-        console.error("❌ [PDV] Sessão inválida!");
         toast.error("Sessão inválida. Faça login novamente.");
         setFinalizingVenda(false);
         return;
       }
-      console.log("✅ [PDV] Sessão válida. BranchId:", session.user.branchId);
 
       // Preparar dados da venda
       const saleData = {
@@ -305,7 +296,10 @@ function PDVPage() {
       router.push(`/dashboard/vendas/${vendaId}/detalhes`);
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
-      toast.error(error.message || "Erro ao finalizar venda");
+
+      // Mensagem mais amigável
+      const mensagem = error.message || "Erro ao finalizar venda. Tente novamente.";
+      toast.error(mensagem, { duration: 5000 });
     } finally {
       setFinalizingVenda(false);
     }
