@@ -151,7 +151,11 @@ const menuItems = [
   },
 ];
 
-export function Sidebar() {
+interface SidebarProps {
+  onNavigate?: () => void;
+}
+
+export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const pathname = usePathname();
 
   return (
@@ -182,6 +186,7 @@ export function Sidebar() {
                 const linkContent = (
                   <Link
                     href={item.href}
+                    onClick={onNavigate}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
                       isActive

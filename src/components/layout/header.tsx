@@ -15,6 +15,7 @@ import {
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { signOut, useSession } from "next-auth/react";
+import { MobileSidebar } from "./mobile-sidebar";
 
 interface Branch {
   id: string;
@@ -64,9 +65,12 @@ export function Header() {
   }, [session]);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-background px-6">
-      {/* Search */}
-      <div className="flex flex-1 items-center gap-4 max-w-md">
+    <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+      {/* Mobile menu button */}
+      <MobileSidebar />
+
+      {/* Search - esconde em mobile */}
+      <div className="hidden sm:flex flex-1 items-center gap-4 max-w-md">
         <div className="relative w-full">
           <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
           <Input
@@ -78,7 +82,7 @@ export function Header() {
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-4">
+      <div className="flex items-center gap-2 md:gap-4">
         {/* Branch Selector */}
         {selectedBranch && branches.length > 0 && (
           <DropdownMenu>
