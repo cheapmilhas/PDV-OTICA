@@ -108,13 +108,21 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
   };
 
   const handleConfirm = () => {
+    console.log("🔍 [Modal] handleConfirm chamado");
+    console.log("🔍 [Modal] Remaining:", remaining);
+    console.log("🔍 [Modal] Payments:", payments);
+
     // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
     if (Math.abs(remaining) < 0.01) {
+      console.log("✅ [Modal] Confirmando venda com pagamentos:", payments);
       onConfirm(payments);
       setPayments([]);
       setAmount("");
       setInstallments("1");
       setSelectedMethod("");
+    } else {
+      console.warn("⚠️ [Modal] Ainda há valor restante:", remaining);
+      toast.error(`Ainda falta pagar R$ ${remaining.toFixed(2)}`);
     }
   };
 
@@ -277,6 +285,13 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
           </div>
         </div>
 
+        {/* Mensagem de ajuda */}
+        {payments.length === 0 && (
+          <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
+            💡 <strong>Como finalizar:</strong> Selecione uma forma de pagamento, digite o valor e clique em &quot;Adicionar Pagamento&quot;
+          </div>
+        )}
+
         {/* Botões de Ação */}
         <div className="flex gap-3 pt-4 border-t">
           <Button
@@ -297,6 +312,11 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                 Finalizando...
+              </>
+            ) : Math.abs(remaining) >= 0.01 ? (
+              <>
+                <Check className="mr-2 h-4 w-4" />
+                Adicione pagamentos para confirmar
               </>
             ) : (
               <>
