@@ -17,6 +17,7 @@ import {
   Gift,
   Truck,
   UserCog,
+  Bell,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 
@@ -114,6 +115,12 @@ const menuItems = [
         href: "/dashboard/metas",
         icon: Gift,
         permission: "goals.access"
+      },
+      {
+        name: "Lembretes",
+        href: "/dashboard/lembretes",
+        icon: Bell,
+        permission: "reminders.access"
       },
       {
         name: "Relatórios",

@@ -126,6 +126,12 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "settings.rules_edit",
     "settings.branches",
 
+    // Lembretes - TODAS
+    "reminders.access",
+    "reminders.view",
+    "reminders.manage",
+    "reminders.config",
+
     // Metas - TODAS
     "goals.access",
     "goals.view_own",
@@ -247,6 +253,12 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "settings.access",
     "settings.rules_view",
 
+    // Lembretes - TODAS
+    "reminders.access",
+    "reminders.view",
+    "reminders.manage",
+    "reminders.config",
+
     // Metas - TODAS
     "goals.access",
     "goals.view_own",
@@ -291,6 +303,13 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     // Relatórios - apenas próprios
     "reports.access",
     "reports.commissions_own",
+
+    // Lembretes
+    "reminders.access",
+    "reminders.view",
+    "reminders.manage",
+
+    // Metas
     "goals.access",
     "goals.view_own",
   ],

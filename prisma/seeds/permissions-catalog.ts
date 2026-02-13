@@ -799,6 +799,42 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   },
 
   // =================================================================
+  // LEMBRETES
+  // =================================================================
+  {
+    code: "reminders.access",
+    name: "Acessar Lembretes",
+    description: "Entrar na seção de lembretes de retorno",
+    module: "reminders",
+    category: "Lembretes",
+    sortOrder: 140,
+  },
+  {
+    code: "reminders.view",
+    name: "Ver Lembretes",
+    description: "Visualizar lembretes de clientes",
+    module: "reminders",
+    category: "Lembretes",
+    sortOrder: 141,
+  },
+  {
+    code: "reminders.manage",
+    name: "Gerenciar Lembretes",
+    description: "Criar, editar e excluir lembretes",
+    module: "reminders",
+    category: "Lembretes",
+    sortOrder: 142,
+  },
+  {
+    code: "reminders.config",
+    name: "Configurar Lembretes",
+    description: "Configurar regras de lembretes automáticos",
+    module: "reminders",
+    category: "Lembretes",
+    sortOrder: 143,
+  },
+
+  // =================================================================
   // METAS E PERFORMANCE
   // =================================================================
   {
