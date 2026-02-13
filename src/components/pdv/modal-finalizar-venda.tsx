@@ -63,6 +63,9 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
   // Arredondar para 2 casas decimais para evitar erro de precisão de ponto flutuante
   const remaining = Math.round((total - totalPaid) * 100) / 100;
 
+  // Debug: log sempre que mudar
+  console.log("💰 [Modal] Total:", total, "| Pago:", totalPaid, "| Restante:", remaining);
+
   const addPayment = () => {
     if (!selectedMethod || !amount || parseFloat(amount) <= 0) return;
 
@@ -109,20 +112,37 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
 
   const handleConfirm = () => {
     console.log("🔍 [Modal] handleConfirm chamado");
+    console.log("🔍 [Modal] Total:", total);
+    console.log("🔍 [Modal] Total Paid:", totalPaid);
     console.log("🔍 [Modal] Remaining:", remaining);
+    console.log("🔍 [Modal] Math.abs(remaining):", Math.abs(remaining));
     console.log("🔍 [Modal] Payments:", payments);
+    console.log("🔍 [Modal] Payments length:", payments.length);
 
     // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
     if (Math.abs(remaining) < 0.01) {
-      console.log("✅ [Modal] Confirmando venda com pagamentos:", payments);
-      onConfirm(payments);
-      setPayments([]);
-      setAmount("");
-      setInstallments("1");
-      setSelectedMethod("");
+      console.log("✅ [Modal] Validação passou! Confirmando venda...");
+      console.log("✅ [Modal] Chamando onConfirm com:", payments);
+
+      try {
+        onConfirm(payments);
+        console.log("✅ [Modal] onConfirm executado com sucesso");
+
+        // Limpar só depois de confirmar
+        setPayments([]);
+        setAmount("");
+        setInstallments("1");
+        setSelectedMethod("");
+        console.log("✅ [Modal] Estado limpo");
+      } catch (error) {
+        console.error("❌ [Modal] Erro ao chamar onConfirm:", error);
+        toast.error("Erro ao confirmar venda. Veja o console.");
+      }
     } else {
+      console.warn("⚠️ [Modal] Validação falhou!");
       console.warn("⚠️ [Modal] Ainda há valor restante:", remaining);
-      toast.error(`Ainda falta pagar R$ ${remaining.toFixed(2)}`);
+      console.warn("⚠️ [Modal] Diferença para zero:", Math.abs(remaining));
+      toast.error(`Ainda falta pagar R$ ${Math.abs(remaining).toFixed(2)}`);
     }
   };
 
@@ -289,6 +309,29 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, onConfirm, load
         {payments.length === 0 && (
           <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
             💡 <strong>Como finalizar:</strong> Selecione uma forma de pagamento, digite o valor e clique em &quot;Adicionar Pagamento&quot;
+          </div>
+        )}
+
+        {/* Botão de debug - remove depois */}
+        {payments.length > 0 && Math.abs(remaining) >= 0.01 && (
+          <div className="rounded-lg bg-yellow-50 dark:bg-yellow-950 border border-yellow-200 dark:border-yellow-800 p-3 text-sm">
+            <p className="text-yellow-800 dark:text-yellow-200 mb-2">
+              🐛 <strong>DEBUG:</strong> Restante = {remaining.toFixed(4)} (deve ser 0.00)
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={() => {
+                console.log("🔧 [DEBUG] Forçando confirmação...");
+                onConfirm(payments);
+                setPayments([]);
+                setAmount("");
+                setInstallments("1");
+                setSelectedMethod("");
+              }}
+            >
+              🔧 Forçar Confirmação (DEBUG)
+            </Button>
           </div>
         )}
 
