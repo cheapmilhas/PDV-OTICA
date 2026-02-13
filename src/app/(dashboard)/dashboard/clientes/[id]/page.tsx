@@ -23,6 +23,13 @@ import {
   TrendingUp,
   Calendar,
   DollarSign,
+  Wallet,
+  AlertCircle,
+  History,
+  TrendingDown,
+  XCircle,
+  Gift,
+  Clock,
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
@@ -73,6 +80,26 @@ interface ServiceOrder {
   deliveryDate?: string;
 }
 
+interface CashbackInfo {
+  balance: number;
+  totalEarned: number;
+  totalUsed: number;
+  totalExpired: number;
+  expiringAmount: number;
+  expiringCount: number;
+  nextExpirationDate: Date | null;
+}
+
+interface CashbackMovement {
+  id: string;
+  type: "CREDIT" | "DEBIT" | "EXPIRED" | "BONUS" | "ADJUSTMENT";
+  amount: number;
+  expiresAt: string | null;
+  expired: boolean;
+  description: string | null;
+  createdAt: string;
+}
+
 interface CustomerStats {
   totalSales: number;
   totalSpent: number;
@@ -80,6 +107,7 @@ interface CustomerStats {
   lastPurchase: string | null;
   totalQuotes: number;
   totalServiceOrders: number;
+  cashback: CashbackInfo | null;
 }
 
 function ClienteDetalhesPage() {
@@ -93,6 +121,7 @@ function ClienteDetalhesPage() {
   const [quotes, setQuotes] = useState<Quote[]>([]);
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
+  const [cashbackMovements, setCashbackMovements] = useState<CashbackMovement[]>([]);
 
   useEffect(() => {
     const fetchCustomerData = async () => {
@@ -154,6 +183,55 @@ function ClienteDetalhesPage() {
           console.error("Erro ao buscar ordens de serviço:", err);
           setServiceOrders([]);
         }
+
+        // Buscar cashback do cliente
+        try {
+          const cashbackRes = await fetch(`/api/cashback/customer/${customerId}`);
+          if (cashbackRes.ok) {
+            const cashbackData = await cashbackRes.json();
+            const data = cashbackData.data;
+
+            // Calcular próximos vencimentos (30 dias)
+            const expiringMovements = (data.movements || []).filter((m: any) => {
+              if (m.type !== 'CREDIT' || m.expired || !m.expiresAt) return false;
+              const expiresAt = new Date(m.expiresAt);
+              const daysUntilExpiration = Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
+              return daysUntilExpiration > 0 && daysUntilExpiration <= 30;
+            });
+
+            const expiringAmount = expiringMovements.reduce((sum: number, m: any) => sum + Number(m.amount), 0);
+            const nextExpiration = expiringMovements.length > 0
+              ? expiringMovements.sort((a: any, b: any) =>
+                  new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()
+                )[0].expiresAt
+              : null;
+
+            // Pegar movimentos recentes (últimos 20)
+            const recentMovements = (data.movements || [])
+              .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+              .slice(0, 20);
+
+            setCashbackMovements(recentMovements);
+
+            // Atualizar stats com cashback
+            setStats((prev) => ({
+              ...prev!,
+              cashback: {
+                balance: Number(data.cashback?.balance || 0),
+                totalEarned: Number(data.cashback?.totalEarned || 0),
+                totalUsed: Number(data.cashback?.totalUsed || 0),
+                totalExpired: Number(data.cashback?.totalExpired || 0),
+                expiringAmount,
+                expiringCount: expiringMovements.length,
+                nextExpirationDate: nextExpiration ? new Date(nextExpiration) : null,
+              },
+            }));
+          } else {
+            console.warn("Erro ao buscar cashback:", await cashbackRes.text());
+          }
+        } catch (err) {
+          console.error("Erro ao buscar cashback:", err);
+        }
       } catch (error: any) {
         console.error("Erro ao carregar dados do cliente:", error);
         toast.error(error.message || "Erro ao carregar dados do cliente");
@@ -176,23 +254,25 @@ function ClienteDetalhesPage() {
         (a, b) => safeDate(b.createdAt).getTime() - safeDate(a.createdAt).getTime()
       )[0];
 
-      setStats({
+      setStats((prev) => ({
         totalSales: completedSales.length,
         totalSpent,
         averageTicket,
         lastPurchase: lastSale?.createdAt || null,
         totalQuotes: quotes.length,
         totalServiceOrders: serviceOrders.length,
-      });
+        cashback: prev?.cashback || null,
+      }));
     } else {
-      setStats({
+      setStats((prev) => ({
         totalSales: 0,
         totalSpent: 0,
         averageTicket: 0,
         lastPurchase: null,
         totalQuotes: quotes.length,
         totalServiceOrders: serviceOrders.length,
-      });
+        cashback: prev?.cashback || null,
+      }));
     }
   }, [sales, quotes, serviceOrders]);
 
@@ -204,6 +284,18 @@ function ClienteDetalhesPage() {
     } catch {
       return new Date();
     }
+  };
+
+  // Helper para label de movimentação de cashback
+  const getMovementLabel = (type: string): string => {
+    const labels: Record<string, string> = {
+      CREDIT: "Crédito de Cashback",
+      DEBIT: "Uso de Cashback",
+      EXPIRED: "Cashback Expirado",
+      BONUS: "Bônus de Cashback",
+      ADJUSTMENT: "Ajuste Manual",
+    };
+    return labels[type] || type;
   };
 
   const getInitials = (name?: string) => {
@@ -282,7 +374,7 @@ function ClienteDetalhesPage() {
 
       {/* Estatísticas */}
       {stats && (
-        <div className="grid gap-4 md:grid-cols-4">
+        <div className="grid gap-4 md:grid-cols-5">
           <Card>
             <CardHeader className="pb-2">
               <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -334,12 +426,32 @@ function ClienteDetalhesPage() {
               </p>
             </CardContent>
           </Card>
+
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
+                <Wallet className="h-4 w-4" />
+                Cashback Disponível
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-purple-600">
+                {formatCurrency(stats.cashback?.balance || 0)}
+              </p>
+              {stats.cashback && stats.cashback.expiringCount > 0 && (
+                <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                  <AlertCircle className="h-3 w-3" />
+                  {formatCurrency(stats.cashback.expiringAmount)} expirando
+                </p>
+              )}
+            </CardContent>
+          </Card>
         </div>
       )}
 
       {/* Tabs */}
       <Tabs defaultValue="dados" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-5">
           <TabsTrigger value="dados">Dados Cadastrais</TabsTrigger>
           <TabsTrigger value="vendas">
             Vendas ({sales.length})
@@ -349,6 +461,14 @@ function ClienteDetalhesPage() {
           </TabsTrigger>
           <TabsTrigger value="ordens">
             Ordens de Serviço ({serviceOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="cashback" className="flex items-center gap-2">
+            Cashback
+            {stats?.cashback && stats.cashback.balance > 0 && (
+              <Badge variant="secondary" className="ml-1">
+                {formatCurrency(stats.cashback.balance)}
+              </Badge>
+            )}
           </TabsTrigger>
         </TabsList>
 
@@ -585,6 +705,137 @@ function ClienteDetalhesPage() {
               )}
             </CardContent>
           </Card>
+        </TabsContent>
+
+        {/* Tab: Cashback */}
+        <TabsContent value="cashback">
+          <div className="space-y-4">
+            {/* Card: Resumo de Cashback */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <Wallet className="h-5 w-5" />
+                  Resumo de Cashback
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {!stats?.cashback ? (
+                  <p className="text-muted-foreground">Cliente sem cashback cadastrado</p>
+                ) : (
+                  <div className="grid gap-4 md:grid-cols-4">
+                    <div>
+                      <p className="text-sm text-muted-foreground">Saldo Disponível</p>
+                      <p className="text-2xl font-bold text-green-600">
+                        {formatCurrency(stats.cashback.balance)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Ganho</p>
+                      <p className="text-lg font-semibold">
+                        {formatCurrency(stats.cashback.totalEarned)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Usado</p>
+                      <p className="text-lg font-semibold text-blue-600">
+                        {formatCurrency(stats.cashback.totalUsed)}
+                      </p>
+                    </div>
+                    <div>
+                      <p className="text-sm text-muted-foreground">Total Expirado</p>
+                      <p className="text-lg font-semibold text-red-600">
+                        {formatCurrency(stats.cashback.totalExpired)}
+                      </p>
+                    </div>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+
+            {/* Card: Alertas de Vencimento */}
+            {stats?.cashback && stats.cashback.expiringCount > 0 && (
+              <Card className="border-amber-200 bg-amber-50">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-amber-700">
+                    <AlertCircle className="h-5 w-5" />
+                    Cashback Próximo ao Vencimento
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <p className="text-sm">
+                      <span className="font-semibold text-amber-700">
+                        {formatCurrency(stats.cashback.expiringAmount)}
+                      </span>
+                      {' '}em {stats.cashback.expiringCount} crédito(s) irá(ão) expirar nos próximos 30 dias
+                    </p>
+                    {stats.cashback.nextExpirationDate && (
+                      <p className="text-sm text-muted-foreground">
+                        Próximo vencimento: {format(stats.cashback.nextExpirationDate, "dd/MM/yyyy", { locale: ptBR })}
+                      </p>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Card: Histórico de Movimentações */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <History className="h-5 w-5" />
+                  Histórico de Movimentações
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {cashbackMovements.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <Wallet className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <p>Nenhuma movimentação de cashback</p>
+                  </div>
+                ) : (
+                  <div className="space-y-3">
+                    {cashbackMovements.map((movement) => (
+                      <div key={movement.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            {movement.type === 'CREDIT' && <TrendingUp className="h-4 w-4 text-green-600" />}
+                            {movement.type === 'DEBIT' && <TrendingDown className="h-4 w-4 text-blue-600" />}
+                            {movement.type === 'EXPIRED' && <XCircle className="h-4 w-4 text-red-600" />}
+                            {movement.type === 'BONUS' && <Gift className="h-4 w-4 text-purple-600" />}
+                            <p className="font-medium">{getMovementLabel(movement.type)}</p>
+                          </div>
+                          <p className="text-sm text-muted-foreground">{movement.description || 'Sem descrição'}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {format(safeDate(movement.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                          {movement.expiresAt && !movement.expired && (
+                            <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                              <Clock className="h-3 w-3" />
+                              Expira em: {format(safeDate(movement.expiresAt), "dd/MM/yyyy", { locale: ptBR })}
+                            </p>
+                          )}
+                          {movement.expired && (
+                            <Badge variant="destructive" className="mt-1 text-xs">Expirado</Badge>
+                          )}
+                        </div>
+                        <div className="text-right">
+                          <p className={`text-lg font-bold ${
+                            movement.type === 'CREDIT' || movement.type === 'BONUS' ? 'text-green-600' :
+                            movement.type === 'DEBIT' ? 'text-blue-600' :
+                            'text-red-600'
+                          }`}>
+                            {movement.type === 'CREDIT' || movement.type === 'BONUS' ? '+' : ''}
+                            {formatCurrency(Math.abs(Number(movement.amount)))}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
         </TabsContent>
       </Tabs>
     </div>
