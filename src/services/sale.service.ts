@@ -5,6 +5,7 @@ import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
+import { cashbackService } from "@/services/cashback.service";
 
 /**
  * Service para operações de Vendas (PDV)
@@ -451,6 +452,24 @@ export class SaleService {
 
       return newSale;
     });
+
+    // 7. Gerar cashback (se aplicável - fora da transação principal)
+    if (customerId) {
+      try {
+        console.log(`💰 Gerando cashback para venda ${sale.id}, cliente ${customerId}`);
+        await cashbackService.earnCashback(
+          customerId,
+          sale.id,
+          total,
+          branchId,
+          companyId
+        );
+        console.log(`✅ Cashback gerado com sucesso para venda ${sale.id}`);
+      } catch (cashbackError) {
+        // Log mas não falha a venda se cashback der erro
+        console.error(`❌ Erro ao gerar cashback (venda criada com sucesso):`, cashbackError);
+      }
+    }
 
     // Retornar venda completa
     return this.getById(sale.id, companyId);
