@@ -192,7 +192,7 @@ function ClienteDetalhesPage() {
             const data = cashbackData.data;
 
             // Calcular próximos vencimentos (30 dias)
-            const expiringMovements = (data.movements || []).filter((m: any) => {
+            const expiringMovements = (data.history || []).filter((m: any) => {
               if (m.type !== 'CREDIT' || m.expired || !m.expiresAt) return false;
               const expiresAt = new Date(m.expiresAt);
               const daysUntilExpiration = Math.ceil((expiresAt.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
@@ -207,7 +207,7 @@ function ClienteDetalhesPage() {
               : null;
 
             // Pegar movimentos recentes (últimos 20)
-            const recentMovements = (data.movements || [])
+            const recentMovements = (data.history || [])
               .sort((a: any, b: any) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
               .slice(0, 20);
 
@@ -217,10 +217,10 @@ function ClienteDetalhesPage() {
             setStats((prev) => ({
               ...prev!,
               cashback: {
-                balance: Number(data.cashback?.balance || 0),
-                totalEarned: Number(data.cashback?.totalEarned || 0),
-                totalUsed: Number(data.cashback?.totalUsed || 0),
-                totalExpired: Number(data.cashback?.totalExpired || 0),
+                balance: Number(data.customerCashback?.balance || 0),
+                totalEarned: Number(data.customerCashback?.totalEarned || 0),
+                totalUsed: Number(data.customerCashback?.totalUsed || 0),
+                totalExpired: Number(data.customerCashback?.totalExpired || 0),
                 expiringAmount,
                 expiringCount: expiringMovements.length,
                 nextExpirationDate: nextExpiration ? new Date(nextExpiration) : null,

@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, Clock } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -76,6 +76,7 @@ export default function DetalhesVendaPage() {
   const [selectedSellerId, setSelectedSellerId] = useState("");
   const [updatingSeller, setUpdatingSeller] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
+  const [cashbackInfo, setCashbackInfo] = useState<{ amount: number; expiresAt: string | null } | null>(null);
 
   // Verifica permissões do usuário
   const canCancelSale = hasPermission(session?.user?.role || "", Permission.SALES_CANCEL);
@@ -100,6 +101,23 @@ export default function DetalhesVendaPage() {
 
     fetchSale();
   }, [id]);
+
+  // Buscar cashback da venda
+  useEffect(() => {
+    const fetchCashback = async () => {
+      if (!sale?.id) return;
+      try {
+        const res = await fetch(`/api/sales/${sale.id}/cashback`);
+        if (res.ok) {
+          const data = await res.json();
+          setCashbackInfo(data.data);
+        }
+      } catch (e) {
+        console.log("Cashback não disponível");
+      }
+    };
+    fetchCashback();
+  }, [sale?.id]);
 
   useEffect(() => {
     const fetchUsers = async () => {
@@ -619,6 +637,42 @@ export default function DetalhesVendaPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Cashback Gerado */}
+      {cashbackInfo && cashbackInfo.amount > 0 && (
+        <Card className="border-purple-200 bg-purple-50">
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2 text-purple-700">
+              <Gift className="h-5 w-5" />
+              Cashback Gerado
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-3">
+            <div className="grid gap-4 md:grid-cols-2">
+              <div>
+                <p className="text-sm text-muted-foreground">Valor Creditado</p>
+                <p className="text-2xl font-bold text-purple-600">
+                  {formatCurrency(Number(cashbackInfo.amount))}
+                </p>
+              </div>
+              {cashbackInfo.expiresAt && (
+                <div>
+                  <p className="text-sm text-muted-foreground">Válido até</p>
+                  <p className="font-medium flex items-center gap-1">
+                    <Calendar className="h-4 w-4" />
+                    {format(new Date(cashbackInfo.expiresAt), "dd/MM/yyyy", { locale: ptBR })}
+                  </p>
+                </div>
+              )}
+            </div>
+            {sale?.customer && (
+              <p className="text-sm text-muted-foreground border-t pt-3">
+                💰 Cashback creditado para {sale.customer.name}
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Observações */}
       {sale.notes && (
