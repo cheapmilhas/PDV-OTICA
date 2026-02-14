@@ -258,6 +258,20 @@ function PDVPage() {
       const data = await res.json();
       const vendaId = data.data.id;
 
+      // Buscar cashback gerado (se cliente foi informado)
+      let cashbackGerado = 0;
+      if (clienteSelecionado?.id) {
+        try {
+          const cashbackRes = await fetch(`/api/sales/${vendaId}/cashback`);
+          if (cashbackRes.ok) {
+            const cashbackData = await cashbackRes.json();
+            cashbackGerado = cashbackData.data?.amount || 0;
+          }
+        } catch (e) {
+          console.log("Cashback não disponível");
+        }
+      }
+
       // Verificar se tem crediário e oferecer download do carnê
       const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
       if (hasCrediario) {
@@ -291,9 +305,20 @@ function PDVPage() {
       setClienteSelecionado(null);
       setModalVendaOpen(false);
 
+      // Toast de sucesso com cashback
+      if (cashbackGerado > 0) {
+        toast.success(
+          `✅ Venda finalizada!\n💰 Cliente ganhou R$ ${cashbackGerado.toFixed(2)} de cashback`,
+          { duration: 5000 }
+        );
+      } else {
+        toast.success("✅ Venda finalizada com sucesso!");
+      }
+
       // Redirecionar para detalhes da venda
-      toast.success("Venda finalizada com sucesso! Redirecionando...");
-      router.push(`/dashboard/vendas/${vendaId}/detalhes`);
+      setTimeout(() => {
+        router.push(`/dashboard/vendas/${vendaId}/detalhes`);
+      }, 1500);
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
 
