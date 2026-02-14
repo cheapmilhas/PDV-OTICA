@@ -105,15 +105,23 @@ export default function DetalhesVendaPage() {
   // Buscar cashback da venda
   useEffect(() => {
     const fetchCashback = async () => {
-      if (!sale?.id) return;
+      if (!sale?.id) {
+        console.log("⚠️ Sale ID não disponível para buscar cashback");
+        return;
+      }
+      console.log("🔍 Buscando cashback para venda:", sale.id);
       try {
         const res = await fetch(`/api/sales/${sale.id}/cashback`);
+        console.log("📡 Resposta da API cashback:", res.status);
         if (res.ok) {
           const data = await res.json();
+          console.log("💰 Dados de cashback recebidos:", data);
           setCashbackInfo(data.data);
+        } else {
+          console.log("❌ Erro na API de cashback:", res.status, await res.text());
         }
       } catch (e) {
-        console.log("Cashback não disponível");
+        console.log("❌ Erro ao buscar cashback:", e);
       }
     };
     fetchCashback();
@@ -639,7 +647,12 @@ export default function DetalhesVendaPage() {
       </Card>
 
       {/* Cashback Gerado */}
-      {cashbackInfo && cashbackInfo.amount > 0 && (
+      {(() => {
+        console.log("🔍 DEBUG cashbackInfo:", cashbackInfo);
+        console.log("🔍 DEBUG amount:", cashbackInfo?.amount);
+        return null;
+      })()}
+      {cashbackInfo && Number(cashbackInfo.amount) > 0 ? (
         <Card className="border-purple-200 bg-purple-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-purple-700">
@@ -670,6 +683,16 @@ export default function DetalhesVendaPage() {
                 💰 Cashback creditado para {sale.customer.name}
               </p>
             )}
+          </CardContent>
+        </Card>
+      ) : (
+        <Card className="border-gray-200 bg-gray-50">
+          <CardContent className="p-4">
+            <p className="text-sm text-muted-foreground">
+              {cashbackInfo === null
+                ? "⏳ Carregando informações de cashback..."
+                : "ℹ️ Nenhum cashback gerado nesta venda"}
+            </p>
           </CardContent>
         </Card>
       )}
