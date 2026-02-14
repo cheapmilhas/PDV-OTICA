@@ -49,24 +49,45 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
+    const endOfToday = new Date();
+    endOfToday.setHours(23, 59, 59, 999);
+
+    let newStartDate: Date;
+    let newEndDate: Date;
+
     switch (type) {
       case "today":
-        setStartDate(today);
-        setEndDate(today);
+        newStartDate = today;
+        newEndDate = endOfToday;
         break;
       case "week":
-        setStartDate(startOfWeek(today, { weekStartsOn: 0 }));
-        setEndDate(endOfWeek(today, { weekStartsOn: 0 }));
+        newStartDate = startOfWeek(today, { weekStartsOn: 0 });
+        newEndDate = endOfWeek(endOfToday, { weekStartsOn: 0 });
         break;
       case "month":
-        setStartDate(subDays(today, 30));
-        setEndDate(today);
+        newStartDate = subDays(today, 30);
+        newEndDate = endOfToday;
         break;
       case "year":
-        setStartDate(subYears(today, 1));
-        setEndDate(today);
+        newStartDate = subYears(today, 1);
+        newEndDate = endOfToday;
         break;
+      default:
+        return;
     }
+
+    setStartDate(newStartDate);
+    setEndDate(newEndDate);
+
+    // Aplicar filtros automaticamente após definir o período rápido
+    setTimeout(() => {
+      onFilterChange({
+        startDate: newStartDate,
+        endDate: newEndDate,
+        sellerUserId: sellerUserId === "ALL" ? "" : sellerUserId,
+        paymentMethod: paymentMethod === "ALL" ? "" : paymentMethod,
+      });
+    }, 100);
   };
 
   const handleApplyFilters = () => {
