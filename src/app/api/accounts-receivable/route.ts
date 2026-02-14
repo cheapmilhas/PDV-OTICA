@@ -405,25 +405,42 @@ export async function PATCH(request: Request) {
       });
 
       // Se foi marcado como RECEBIDA e tem forma de pagamento, criar movimento no caixa
-      if (data.status === AccountReceivableStatus.RECEIVED && data.paymentMethod) {
-        // Buscar caixa aberto do usuário
-        const openCashRegister = await tx.cashRegister.findFirst({
+      if (data.status === AccountReceivableStatus.RECEIVED && data.paymentMethod && updated.branchId) {
+        // Buscar caixa aberto da filial
+        const openCashShift = await tx.cashShift.findFirst({
           where: {
-            userId,
+            branchId: updated.branchId,
             status: "OPEN",
           },
+          orderBy: { openedAt: "desc" },
         });
 
-        if (openCashRegister) {
+        if (openCashShift) {
+          // Mapear forma de pagamento para PaymentMethod do Prisma
+          const paymentMethodMap: Record<string, string> = {
+            CASH: "CASH",
+            PIX: "PIX",
+            DEBIT_CARD: "DEBIT_CARD",
+            CREDIT_CARD: "CREDIT_CARD",
+            BANK_TRANSFER: "OTHER",
+            BANK_SLIP: "BOLETO",
+          };
+
+          const mappedMethod = paymentMethodMap[data.paymentMethod] || "OTHER";
+
           // Criar movimento de entrada no caixa
           await tx.cashMovement.create({
             data: {
-              cashRegisterId: openCashRegister.id,
-              type: "INCOME",
+              cashShiftId: openCashShift.id,
+              branchId: updated.branchId,
+              type: "SALE_PAYMENT", // Recebimento de conta a receber
+              direction: "IN",
+              method: mappedMethod as any,
               amount: updateData.receivedAmount || Number(existing.amount),
-              description: `Recebimento: ${existing.description}`,
-              paymentMethod: data.paymentMethod,
-              accountReceivableId: data.id,
+              originType: "AccountReceivable",
+              originId: data.id,
+              note: `Recebimento: ${existing.description}${updated.customer ? ` - ${updated.customer.name}` : ""}`,
+              createdByUserId: userId,
             },
           });
         }

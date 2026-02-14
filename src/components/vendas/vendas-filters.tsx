@@ -29,6 +29,7 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
+import { Tabs, TabsList, TabsTrigger } from "@/components/ui/tabs";
 
 interface VendasFiltersProps {
   onFilterChange: (filters: VendasFilterValues) => void;
@@ -204,27 +205,35 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
 
       {isExpanded && (
         <CardContent className="space-y-3 pt-0">
-          {/* Layout Compacto - Tudo em Grid */}
-          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
-            {/* Período Rápido */}
-            <Button variant="outline" size="sm" onClick={() => setQuickFilter("today")}>
-              Hoje
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuickFilter("yesterday")}>
-              Ontem
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisWeek")}>
-              Esta Semana
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisMonth")}>
-              Mês Atual
-            </Button>
-            <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastMonth")}>
-              Mês Passado
-            </Button>
+          {/* Tabs Compactas para Período */}
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tabs defaultValue="all" className="w-auto">
+              <TabsList className="h-9">
+                <TabsTrigger value="all" className="text-xs px-3 py-1" onClick={handleClearFilters}>
+                  Todos
+                </TabsTrigger>
+                <TabsTrigger value="today" className="text-xs px-3 py-1" onClick={() => setQuickFilter("today")}>
+                  Hoje
+                </TabsTrigger>
+                <TabsTrigger value="yesterday" className="text-xs px-3 py-1" onClick={() => setQuickFilter("yesterday")}>
+                  Ontem
+                </TabsTrigger>
+                <TabsTrigger value="thisWeek" className="text-xs px-3 py-1" onClick={() => setQuickFilter("thisWeek")}>
+                  Semana
+                </TabsTrigger>
+                <TabsTrigger value="thisMonth" className="text-xs px-3 py-1" onClick={() => setQuickFilter("thisMonth")}>
+                  Mês
+                </TabsTrigger>
+                <TabsTrigger value="lastMonth" className="text-xs px-3 py-1" onClick={() => setQuickFilter("lastMonth")}>
+                  Mês Passado
+                </TabsTrigger>
+              </TabsList>
+            </Tabs>
+
             <Button
               variant={showCustomDates ? "default" : "outline"}
               size="sm"
+              className="h-9 text-xs"
               onClick={() => {
                 setShowCustomDates(!showCustomDates);
                 if (showCustomDates) {
@@ -233,7 +242,8 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
                 }
               }}
             >
-              {showCustomDates ? "✓ Customizado" : "📅 Personalizado"}
+              <CalendarIcon className="h-3 w-3 mr-1" />
+              {showCustomDates ? "Personalizado ✓" : "Personalizado"}
             </Button>
           </div>
 
