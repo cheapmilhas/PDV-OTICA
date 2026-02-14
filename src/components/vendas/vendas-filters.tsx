@@ -14,7 +14,19 @@ import {
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon, Filter, X } from "lucide-react";
-import { format, subDays, startOfWeek, endOfWeek, subYears } from "date-fns";
+import {
+  format,
+  subDays,
+  startOfWeek,
+  endOfWeek,
+  subYears,
+  startOfMonth,
+  endOfMonth,
+  subMonths,
+  startOfYear,
+  endOfYear,
+  subWeeks
+} from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Badge } from "@/components/ui/badge";
 
@@ -45,33 +57,90 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
     { value: "STORE_CREDIT", label: "Crediário" },
   ];
 
-  const setQuickFilter = (type: "today" | "week" | "month" | "year") => {
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const endOfToday = new Date();
-    endOfToday.setHours(23, 59, 59, 999);
+  const setQuickFilter = (
+    type:
+      | "today"
+      | "yesterday"
+      | "thisWeek"
+      | "lastWeek"
+      | "thisMonth"
+      | "lastMonth"
+      | "last30Days"
+      | "thisYear"
+      | "lastYear"
+      | "last12Months"
+  ) => {
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 0, 0, 0, 0);
+    const endOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate(), 23, 59, 59, 999);
 
     let newStartDate: Date;
     let newEndDate: Date;
 
     switch (type) {
       case "today":
+        // Hoje (00:00 até 23:59)
         newStartDate = today;
         newEndDate = endOfToday;
         break;
-      case "week":
+
+      case "yesterday":
+        // Ontem
+        newStartDate = subDays(today, 1);
+        newEndDate = new Date(subDays(today, 1).setHours(23, 59, 59, 999));
+        break;
+
+      case "thisWeek":
+        // Esta semana (domingo a hoje)
         newStartDate = startOfWeek(today, { weekStartsOn: 0 });
-        newEndDate = endOfWeek(endOfToday, { weekStartsOn: 0 });
-        break;
-      case "month":
-        newStartDate = subDays(today, 30);
         newEndDate = endOfToday;
         break;
-      case "year":
-        newStartDate = subYears(today, 1);
+
+      case "lastWeek":
+        // Semana passada (domingo a sábado)
+        const lastWeekStart = subWeeks(startOfWeek(today, { weekStartsOn: 0 }), 1);
+        newStartDate = lastWeekStart;
+        newEndDate = endOfWeek(lastWeekStart, { weekStartsOn: 0 });
+        break;
+
+      case "thisMonth":
+        // Mês atual (dia 1 até hoje)
+        newStartDate = startOfMonth(today);
         newEndDate = endOfToday;
         break;
+
+      case "lastMonth":
+        // Mês passado completo (dia 1 ao último dia)
+        const lastMonth = subMonths(today, 1);
+        newStartDate = startOfMonth(lastMonth);
+        newEndDate = endOfMonth(lastMonth);
+        break;
+
+      case "last30Days":
+        // Últimos 30 dias (hoje - 30 dias até hoje)
+        newStartDate = subDays(today, 29); // 29 + hoje = 30 dias
+        newEndDate = endOfToday;
+        break;
+
+      case "thisYear":
+        // Ano atual (1º de janeiro até hoje)
+        newStartDate = startOfYear(today);
+        newEndDate = endOfToday;
+        break;
+
+      case "lastYear":
+        // Ano passado completo (1º jan a 31 dez)
+        const lastYear = subYears(today, 1);
+        newStartDate = startOfYear(lastYear);
+        newEndDate = endOfYear(lastYear);
+        break;
+
+      case "last12Months":
+        // Últimos 12 meses (hoje - 12 meses até hoje)
+        newStartDate = subMonths(today, 12);
+        newEndDate = endOfToday;
+        break;
+
       default:
         return;
     }
@@ -135,13 +204,53 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
       {isExpanded && (
         <CardContent className="space-y-4 pt-0">
           {/* Filtros Rápidos */}
-          <div className="space-y-2">
-            <Label className="text-sm">Período Rápido</Label>
+          <div className="space-y-3">
+            <Label className="text-sm font-semibold">Período Rápido</Label>
+
+            {/* Linha 1: Dia */}
             <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("today")}>Hoje</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("week")}>Esta Semana</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("month")}>Último Mês</Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("year")}>Último Ano</Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("today")}>
+                Hoje
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("yesterday")}>
+                Ontem
+              </Button>
+            </div>
+
+            {/* Linha 2: Semana */}
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisWeek")}>
+                Esta Semana
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastWeek")}>
+                Semana Passada
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("last30Days")}>
+                Últimos 30 Dias
+              </Button>
+            </div>
+
+            {/* Linha 3: Mês */}
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisMonth")}>
+                Mês Atual
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastMonth")}>
+                Mês Passado
+              </Button>
+            </div>
+
+            {/* Linha 4: Ano */}
+            <div className="flex gap-2 flex-wrap">
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisYear")}>
+                Ano Atual
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastYear")}>
+                Ano Passado
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setQuickFilter("last12Months")}>
+                Últimos 12 Meses
+              </Button>
             </div>
           </div>
 
