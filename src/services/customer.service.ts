@@ -86,14 +86,17 @@ export class CustomerService {
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
+        console.log("🔍 Filtro startDate:", startDate);
         where.createdAt.gte = startDate;
       }
       if (endDate) {
         // Adiciona 23:59:59 ao endDate para incluir todo o dia
         const endOfDay = new Date(endDate);
         endOfDay.setHours(23, 59, 59, 999);
+        console.log("🔍 Filtro endDate:", endOfDay);
         where.createdAt.lte = endOfDay;
       }
+      console.log("🔍 Where createdAt final:", where.createdAt);
     }
 
     // Busca full-text (OR entre múltiplos campos)
@@ -120,6 +123,7 @@ export class CustomerService {
     const { skip, take } = getPaginationParams(page, pageSize);
 
     // Execute query + count em paralelo (performance)
+    console.log("🔍 Query where completa:", JSON.stringify(where, null, 2));
     let [data, total] = await Promise.all([
       prisma.customer.findMany({
         where,
@@ -129,6 +133,7 @@ export class CustomerService {
       }),
       prisma.customer.count({ where }),
     ]);
+    console.log(`✅ Encontrados ${data.length} clientes (total: ${total})`);
 
     // Filtrar por mês de aniversário no JavaScript (pós-processamento)
     if (birthdayMonth) {

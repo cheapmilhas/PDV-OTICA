@@ -3,7 +3,7 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
@@ -50,6 +50,8 @@ interface Customer {
 function PDVPage() {
   const { data: session } = useSession();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const quoteId = searchParams.get("quoteId");
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
@@ -61,6 +63,42 @@ function PDVPage() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [finalizingVenda, setFinalizingVenda] = useState(false);
+
+  // Carregar cliente do orçamento se houver quoteId
+  useEffect(() => {
+    const loadQuoteCustomer = async () => {
+      if (!quoteId) return;
+
+      try {
+        const res = await fetch(`/api/quotes/${quoteId}`);
+        if (!res.ok) {
+          console.error("Erro ao carregar orçamento");
+          return;
+        }
+
+        const quote = await res.json();
+
+        // Se o orçamento tem cliente, pré-preencher
+        if (quote.customer) {
+          setClienteSelecionado({
+            id: quote.customer.id,
+            name: quote.customer.name,
+            phone: quote.customer.phone,
+            cpf: quote.customer.cpf,
+          });
+          toast.success(`Cliente ${quote.customer.name} pré-selecionado do orçamento`);
+        } else if (quote.customerName) {
+          toast(`Orçamento para: ${quote.customerName} (cliente não cadastrado)`, {
+            icon: 'ℹ️',
+          });
+        }
+      } catch (error) {
+        console.error("Erro ao carregar cliente do orçamento:", error);
+      }
+    };
+
+    loadQuoteCustomer();
+  }, [quoteId]);
 
   // Carregar produtos disponíveis
   useEffect(() => {

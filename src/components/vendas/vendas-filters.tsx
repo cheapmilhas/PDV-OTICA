@@ -48,6 +48,7 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
   const [sellerUserId, setSellerUserId] = useState("ALL");
   const [paymentMethod, setPaymentMethod] = useState("ALL");
   const [isExpanded, setIsExpanded] = useState(true);
+  const [showCustomDates, setShowCustomDates] = useState(false);
 
   const paymentMethods = [
     { value: "CASH", label: "Dinheiro" },
@@ -252,47 +253,71 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
                 Últimos 12 Meses
               </Button>
             </div>
+
+            {/* Botão Customizado */}
+            <div className="flex gap-2 flex-wrap">
+              <Button
+                variant={showCustomDates ? "default" : "outline"}
+                size="sm"
+                onClick={() => {
+                  setShowCustomDates(!showCustomDates);
+                  if (showCustomDates) {
+                    // Se estava mostrando e vai esconder, limpa as datas
+                    setStartDate(undefined);
+                    setEndDate(undefined);
+                  }
+                }}
+              >
+                {showCustomDates ? "✓ Customizado" : "📅 Customizado"}
+              </Button>
+            </div>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-            {/* Data Inicial */}
-            <div className="space-y-2">
-              <Label className="text-sm">Data Inicial</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {startDate ? format(startDate, "dd/MM/yyyy") : "Selecione"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} locale={ptBR} />
-                </PopoverContent>
-              </Popover>
-            </div>
+          {/* Campos de Data Customizada (aparecem quando clicar em Customizado) */}
+          {showCustomDates && (
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30">
+              {/* Data Inicial */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Data Inicial</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {startDate ? format(startDate, "dd/MM/yyyy") : "Selecione"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} locale={ptBR} />
+                  </PopoverContent>
+                </Popover>
+              </div>
 
-            {/* Data Final */}
-            <div className="space-y-2">
-              <Label className="text-sm">Data Final</Label>
-              <Popover>
-                <PopoverTrigger asChild>
-                  <Button variant="outline" className="w-full justify-start text-left font-normal">
-                    <CalendarIcon className="mr-2 h-4 w-4" />
-                    {endDate ? format(endDate, "dd/MM/yyyy") : "Selecione"}
-                  </Button>
-                </PopoverTrigger>
-                <PopoverContent className="w-auto p-0">
-                  <Calendar
-                    mode="single"
-                    selected={endDate}
-                    onSelect={setEndDate}
-                    locale={ptBR}
-                    disabled={(date) => startDate ? date < startDate : false}
-                  />
-                </PopoverContent>
-              </Popover>
+              {/* Data Final */}
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Data Final</Label>
+                <Popover>
+                  <PopoverTrigger asChild>
+                    <Button variant="outline" className="w-full justify-start text-left font-normal">
+                      <CalendarIcon className="mr-2 h-4 w-4" />
+                      {endDate ? format(endDate, "dd/MM/yyyy") : "Selecione"}
+                    </Button>
+                  </PopoverTrigger>
+                  <PopoverContent className="w-auto p-0">
+                    <Calendar
+                      mode="single"
+                      selected={endDate}
+                      onSelect={setEndDate}
+                      locale={ptBR}
+                      disabled={(date) => (startDate ? date < startDate : false)}
+                    />
+                  </PopoverContent>
+                </Popover>
+              </div>
             </div>
+          )}
 
+          {/* Outros Filtros */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Vendedor */}
             <div className="space-y-2">
               <Label className="text-sm">Vendedor</Label>

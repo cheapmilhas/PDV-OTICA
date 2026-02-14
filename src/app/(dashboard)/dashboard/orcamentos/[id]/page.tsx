@@ -63,17 +63,23 @@ export default function DetalhesOrcamentoPage() {
   const handleStatusChange = async (newStatus: string) => {
     setActionLoading(true);
     try {
+      console.log("📤 Atualizando status para:", newStatus);
       const res = await fetch(`/api/quotes/${id}/status`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ status: newStatus }),
       });
 
-      if (!res.ok) throw new Error("Erro ao atualizar status");
+      if (!res.ok) {
+        const error = await res.json();
+        console.error("❌ Erro na resposta:", error);
+        throw new Error(error.message || "Erro ao atualizar status");
+      }
 
       toast.success(`Status atualizado para ${newStatus}`);
       fetchQuote();
     } catch (error: any) {
+      console.error("❌ Erro completo:", error);
       toast.error(error.message);
     } finally {
       setActionLoading(false);
@@ -170,7 +176,7 @@ export default function DetalhesOrcamentoPage() {
             </Button>
           )}
 
-          <Button variant="outline" onClick={() => window.print()}>
+          <Button variant="outline" onClick={() => router.push(`/dashboard/orcamentos/${id}/imprimir`)}>
             <Printer className="h-4 w-4 mr-2" />
             Imprimir
           </Button>
