@@ -185,7 +185,7 @@ export class SaleService {
    * - Pelo menos 1 pagamento
    */
   async create(data: CreateSaleDTO, companyId: string, userId: string) {
-    const { customerId, branchId, items, payments, discount = 0, notes } = data;
+    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes } = data;
 
     // Validação: pelo menos 1 item
     if (!items || items.length === 0) {
@@ -214,12 +214,43 @@ export class SaleService {
 
     const total = subtotal - discount;
 
-    // Validação: soma de pagamentos = total
-    const paymentTotal = payments.reduce((sum, p) => sum + p.amount, 0);
-    if (Math.abs(paymentTotal - total) > 0.01) {
+    // Validação: cashback não pode ser maior que o total
+    if (cashbackUsed > total) {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
-        `Soma dos pagamentos (R$ ${paymentTotal.toFixed(2)}) deve ser igual ao total da venda (R$ ${total.toFixed(2)})`,
+        `Cashback usado (R$ ${cashbackUsed.toFixed(2)}) não pode ser maior que o total da venda (R$ ${total.toFixed(2)})`,
+        400
+      );
+    }
+
+    // Validar saldo de cashback se estiver usando
+    if (cashbackUsed > 0 && customerId) {
+      const cashback = await prisma.customerCashback.findUnique({
+        where: {
+          customerId_branchId: {
+            customerId,
+            branchId,
+          },
+        },
+      });
+
+      if (!cashback || Number(cashback.balance) < cashbackUsed) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          `Saldo de cashback insuficiente. Disponível: R$ ${cashback ? Number(cashback.balance).toFixed(2) : '0.00'}`,
+          400
+        );
+      }
+    }
+
+    const totalAfterCashback = total - cashbackUsed;
+
+    // Validação: soma de pagamentos = total após cashback
+    const paymentTotal = payments.reduce((sum, p) => sum + p.amount, 0);
+    if (Math.abs(paymentTotal - totalAfterCashback) > 0.01) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Soma dos pagamentos (R$ ${paymentTotal.toFixed(2)}) deve ser igual ao total da venda após cashback (R$ ${totalAfterCashback.toFixed(2)})`,
         400
       );
     }
@@ -320,6 +351,7 @@ export class SaleService {
           sellerUserId: userId,
           subtotal,
           discountTotal: discount,
+          cashbackUsed,
           total,
           status: "COMPLETED",
         },
@@ -429,7 +461,44 @@ export class SaleService {
         }
       }
 
-      // 6. Calcular e criar comissão do vendedor
+      // 6. Debitar cashback se foi usado
+      if (cashbackUsed > 0 && customerId) {
+        console.log(`💸 Debitando cashback: R$ ${cashbackUsed.toFixed(2)} do cliente ${customerId}`);
+
+        // Atualizar CustomerCashback (já validamos que existe antes da transação)
+        const customerCashback = await tx.customerCashback.update({
+          where: {
+            customerId_branchId: {
+              customerId,
+              branchId,
+            },
+          },
+          data: {
+            balance: {
+              decrement: cashbackUsed,
+            },
+            totalUsed: {
+              increment: cashbackUsed,
+            },
+          },
+        });
+
+        // Criar movimento de DEBIT
+        await tx.cashbackMovement.create({
+          data: {
+            customerCashbackId: customerCashback.id,
+            type: "DEBIT",
+            amount: cashbackUsed, // POSITIVO! O type "DEBIT" já indica que é saída
+            saleId: newSale.id,
+            description: `Cashback usado na venda #${newSale.id.substring(0, 8)}`,
+            createdByUserId: userId,
+          },
+        });
+
+        console.log(`✅ Cashback debitado com sucesso!`);
+      }
+
+      // 7. Calcular e criar comissão do vendedor
       const seller = await tx.user.findUnique({
         where: { id: userId },
         select: { defaultCommissionPercent: true },
@@ -458,7 +527,7 @@ export class SaleService {
       return newSale;
     });
 
-    // 7. Gerar cashback (se aplicável - fora da transação principal)
+    // 8. Gerar cashback (se aplicável - fora da transação principal)
     if (customerId) {
       try {
         console.log(`💰 Gerando cashback para venda ${sale.id}, cliente ${customerId}`);
