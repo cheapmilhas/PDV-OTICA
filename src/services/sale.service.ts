@@ -47,13 +47,18 @@ export class SaleService {
           some: { method: paymentMethod },
         },
       }),
-      ...(startDate && {
-        createdAt: { gte: new Date(startDate) },
-      }),
-      ...(endDate && {
-        createdAt: { lte: new Date(endDate) },
-      }),
     };
+
+    // Filtro de data (combinar startDate e endDate no mesmo objeto)
+    if (startDate || endDate) {
+      where.createdAt = {};
+      if (startDate) {
+        where.createdAt.gte = new Date(startDate);
+      }
+      if (endDate) {
+        where.createdAt.lte = new Date(endDate);
+      }
+    }
 
     // Busca em múltiplos campos
     if (search) {
