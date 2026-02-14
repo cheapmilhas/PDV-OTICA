@@ -203,158 +203,108 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
       </CardHeader>
 
       {isExpanded && (
-        <CardContent className="space-y-4 pt-0">
-          {/* Filtros Rápidos */}
-          <div className="space-y-3">
-            <Label className="text-sm font-semibold">Período Rápido</Label>
-
-            {/* Linha 1: Dia */}
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("today")}>
-                Hoje
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("yesterday")}>
-                Ontem
-              </Button>
-            </div>
-
-            {/* Linha 2: Semana */}
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisWeek")}>
-                Esta Semana
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastWeek")}>
-                Semana Passada
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("last30Days")}>
-                Últimos 30 Dias
-              </Button>
-            </div>
-
-            {/* Linha 3: Mês */}
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisMonth")}>
-                Mês Atual
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastMonth")}>
-                Mês Passado
-              </Button>
-            </div>
-
-            {/* Linha 4: Ano */}
-            <div className="flex gap-2 flex-wrap">
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisYear")}>
-                Ano Atual
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastYear")}>
-                Ano Passado
-              </Button>
-              <Button variant="outline" size="sm" onClick={() => setQuickFilter("last12Months")}>
-                Últimos 12 Meses
-              </Button>
-            </div>
-
-            {/* Botão Customizado */}
-            <div className="flex gap-2 flex-wrap">
-              <Button
-                variant={showCustomDates ? "default" : "outline"}
-                size="sm"
-                onClick={() => {
-                  setShowCustomDates(!showCustomDates);
-                  if (showCustomDates) {
-                    // Se estava mostrando e vai esconder, limpa as datas
-                    setStartDate(undefined);
-                    setEndDate(undefined);
-                  }
-                }}
-              >
-                {showCustomDates ? "✓ Customizado" : "📅 Customizado"}
-              </Button>
-            </div>
+        <CardContent className="space-y-3 pt-0">
+          {/* Layout Compacto - Tudo em Grid */}
+          <div className="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-6 gap-2">
+            {/* Período Rápido */}
+            <Button variant="outline" size="sm" onClick={() => setQuickFilter("today")}>
+              Hoje
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setQuickFilter("yesterday")}>
+              Ontem
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisWeek")}>
+              Esta Semana
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setQuickFilter("thisMonth")}>
+              Mês Atual
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setQuickFilter("lastMonth")}>
+              Mês Passado
+            </Button>
+            <Button
+              variant={showCustomDates ? "default" : "outline"}
+              size="sm"
+              onClick={() => {
+                setShowCustomDates(!showCustomDates);
+                if (showCustomDates) {
+                  setStartDate(undefined);
+                  setEndDate(undefined);
+                }
+              }}
+            >
+              {showCustomDates ? "✓ Customizado" : "📅 Personalizado"}
+            </Button>
           </div>
 
-          {/* Campos de Data Customizada (aparecem quando clicar em Customizado) */}
+          {/* Campos de Data Customizada + Outros Filtros - Tudo em uma linha */}
           {showCustomDates && (
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg bg-muted/30">
-              {/* Data Inicial */}
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Data Inicial</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {startDate ? format(startDate, "dd/MM/yyyy") : "Selecione"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar mode="single" selected={startDate} onSelect={setStartDate} locale={ptBR} />
-                  </PopoverContent>
-                </Popover>
-              </div>
+            <div className="grid grid-cols-2 md:grid-cols-4 gap-2 p-3 border rounded-lg bg-muted/30">
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {startDate ? format(startDate, "dd/MM/yyyy") : "Data Início"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar mode="single" selected={startDate} onSelect={setStartDate} locale={ptBR} />
+                </PopoverContent>
+              </Popover>
 
-              {/* Data Final */}
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Data Final</Label>
-                <Popover>
-                  <PopoverTrigger asChild>
-                    <Button variant="outline" className="w-full justify-start text-left font-normal">
-                      <CalendarIcon className="mr-2 h-4 w-4" />
-                      {endDate ? format(endDate, "dd/MM/yyyy") : "Selecione"}
-                    </Button>
-                  </PopoverTrigger>
-                  <PopoverContent className="w-auto p-0">
-                    <Calendar
-                      mode="single"
-                      selected={endDate}
-                      onSelect={setEndDate}
-                      locale={ptBR}
-                      disabled={(date) => (startDate ? date < startDate : false)}
-                    />
-                  </PopoverContent>
-                </Popover>
-              </div>
+              <Popover>
+                <PopoverTrigger asChild>
+                  <Button variant="outline" size="sm" className="justify-start text-left font-normal">
+                    <CalendarIcon className="mr-2 h-4 w-4" />
+                    {endDate ? format(endDate, "dd/MM/yyyy") : "Data Fim"}
+                  </Button>
+                </PopoverTrigger>
+                <PopoverContent className="w-auto p-0">
+                  <Calendar
+                    mode="single"
+                    selected={endDate}
+                    onSelect={setEndDate}
+                    locale={ptBR}
+                    disabled={(date) => (startDate ? date < startDate : false)}
+                  />
+                </PopoverContent>
+              </Popover>
             </div>
           )}
 
-          {/* Outros Filtros */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          {/* Outros Filtros - Grid Horizontal */}
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
             {/* Vendedor */}
-            <div className="space-y-2">
-              <Label className="text-sm">Vendedor</Label>
-              <Select value={sellerUserId} onValueChange={setSellerUserId}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Todos os vendedores</SelectItem>
-                  {sellers.map((seller) => (
-                    <SelectItem key={seller.id} value={seller.id}>{seller.name}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
+            <Select value={sellerUserId} onValueChange={setSellerUserId}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Vendedor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos vendedores</SelectItem>
+                {sellers.map((seller) => (
+                  <SelectItem key={seller.id} value={seller.id}>{seller.name}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
             {/* Meio de Pagamento */}
-            <div className="space-y-2">
-              <Label className="text-sm">Pagamento</Label>
-              <Select value={paymentMethod} onValueChange={setPaymentMethod}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Todos" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="ALL">Todos os meios</SelectItem>
-                  {paymentMethods.map((method) => (
-                    <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          </div>
+            <Select value={paymentMethod} onValueChange={setPaymentMethod}>
+              <SelectTrigger className="h-9">
+                <SelectValue placeholder="Pagamento" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ALL">Todos meios</SelectItem>
+                {paymentMethods.map((method) => (
+                  <SelectItem key={method.value} value={method.value}>{method.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
 
-          {/* Botões */}
-          <div className="flex gap-2 pt-2">
-            <Button onClick={handleApplyFilters} className="flex-1">Aplicar Filtros</Button>
-            <Button variant="outline" onClick={handleClearFilters} disabled={!hasActiveFilters}>
+            {/* Botão Aplicar */}
+            <Button onClick={handleApplyFilters} size="sm">Aplicar</Button>
+
+            {/* Botão Limpar */}
+            <Button variant="outline" size="sm" onClick={handleClearFilters} disabled={!hasActiveFilters}>
               <X className="mr-2 h-4 w-4" />Limpar
             </Button>
           </div>

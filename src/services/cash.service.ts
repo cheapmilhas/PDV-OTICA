@@ -232,6 +232,29 @@ export class CashService {
   }
 
   /**
+   * Busca turno de caixa por ID
+   */
+  async getShiftById(shiftId: string, companyId: string): Promise<CashShift | null> {
+    return prisma.cashShift.findFirst({
+      where: {
+        id: shiftId,
+        companyId,
+      },
+      include: {
+        movements: {
+          orderBy: { createdAt: "asc" },
+        },
+        openedByUser: {
+          select: { id: true, name: true },
+        },
+        closedByUser: {
+          select: { id: true, name: true },
+        },
+      },
+    });
+  }
+
+  /**
    * Lista movimentos de um turno
    */
   async getShiftMovements(shiftId: string, companyId: string): Promise<CashMovement[]> {

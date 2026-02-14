@@ -20,8 +20,12 @@ import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
-import { format } from "date-fns";
+import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { Input } from "@/components/ui/input";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Calendar } from "@/components/ui/calendar";
+import { CalendarIcon } from "lucide-react";
 
 interface Quote {
   id: string;
@@ -61,6 +65,9 @@ function OrcamentosPage() {
   const [pagination, setPagination] = useState<any>(null);
   const [stats, setStats] = useState<Stats | null>(null);
   const [loading, setLoading] = useState(true);
+  const [daysFilter, setDaysFilter] = useState<number | null>(null);
+  const [customDate, setCustomDate] = useState<Date | undefined>();
+  const [showCustomDate, setShowCustomDate] = useState(false);
 
   useEffect(() => {
     // Carregar estatísticas
@@ -79,6 +86,14 @@ function OrcamentosPage() {
       status: "ativos",
     });
 
+    // Adicionar filtro de data se houver
+    if (daysFilter !== null) {
+      const filterDate = subDays(new Date(), daysFilter);
+      params.set("createdBefore", filterDate.toISOString());
+    } else if (customDate) {
+      params.set("createdBefore", customDate.toISOString());
+    }
+
     fetch(`/api/quotes?${params}`)
       .then((res) => res.json())
       .then((data) => {
@@ -91,7 +106,26 @@ function OrcamentosPage() {
         toast.error("Erro ao carregar orçamentos");
         setLoading(false);
       });
-  }, [search, page]);
+  }, [search, page, daysFilter, customDate]);
+
+  const handleDaysFilter = (days: number) => {
+    setDaysFilter(days);
+    setCustomDate(undefined);
+    setShowCustomDate(false);
+    setPage(1); // Reset para primeira página
+  };
+
+  const handleCustomDateFilter = () => {
+    setShowCustomDate(true);
+    setDaysFilter(null);
+  };
+
+  const clearFilters = () => {
+    setDaysFilter(null);
+    setCustomDate(undefined);
+    setShowCustomDate(false);
+    setPage(1);
+  };
 
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { label: string; className: string }> = {
@@ -184,6 +218,90 @@ function OrcamentosPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Filtro por Dias */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base">Filtrar orçamentos antigos</CardTitle>
+          <p className="text-sm text-muted-foreground">
+            Identificar clientes que fizeram orçamento e não compraram
+          </p>
+        </CardHeader>
+        <CardContent>
+          <div className="flex flex-wrap gap-2">
+            <Button
+              variant={daysFilter === 3 ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleDaysFilter(3)}
+            >
+              Há 3 dias
+            </Button>
+            <Button
+              variant={daysFilter === 7 ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleDaysFilter(7)}
+            >
+              Há 7 dias
+            </Button>
+            <Button
+              variant={daysFilter === 15 ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleDaysFilter(15)}
+            >
+              Há 15 dias
+            </Button>
+            <Button
+              variant={daysFilter === 30 ? "default" : "outline"}
+              size="sm"
+              onClick={() => handleDaysFilter(30)}
+            >
+              Há 30 dias
+            </Button>
+
+            {/* Data Personalizada */}
+            <Popover open={showCustomDate} onOpenChange={setShowCustomDate}>
+              <PopoverTrigger asChild>
+                <Button
+                  variant={customDate ? "default" : "outline"}
+                  size="sm"
+                  onClick={handleCustomDateFilter}
+                >
+                  <CalendarIcon className="mr-2 h-4 w-4" />
+                  {customDate ? format(customDate, "dd/MM/yyyy", { locale: ptBR }) : "Data específica"}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0">
+                <Calendar
+                  mode="single"
+                  selected={customDate}
+                  onSelect={(date) => {
+                    setCustomDate(date);
+                    setDaysFilter(null);
+                    setShowCustomDate(false);
+                    setPage(1);
+                  }}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+
+            {/* Limpar Filtros */}
+            {(daysFilter !== null || customDate) && (
+              <Button variant="ghost" size="sm" onClick={clearFilters}>
+                Limpar filtro
+              </Button>
+            )}
+          </div>
+
+          {(daysFilter !== null || customDate) && (
+            <p className="text-sm text-muted-foreground mt-2">
+              {daysFilter !== null
+                ? `Mostrando orçamentos criados há ${daysFilter} dias ou mais`
+                : `Mostrando orçamentos criados antes de ${format(customDate!, "dd/MM/yyyy", { locale: ptBR })}`}
+            </p>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Search */}
       <SearchBar

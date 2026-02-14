@@ -73,7 +73,19 @@ export default function CashbackPage() {
       ]);
 
       setSummary(summaryData.data);
-      setCustomers(customersData.data.customers || []);
+
+      // Mapear dados da API para o formato esperado
+      const mappedCustomers = (customersData.data || []).map((item: any) => ({
+        customerId: item.customer.id,
+        customerName: item.customer.name,
+        balance: Number(item.balance),
+        totalEarned: Number(item.totalEarned),
+        totalUsed: Number(item.totalUsed),
+        totalExpired: Number(item.totalExpired),
+        lastMovement: item.updatedAt || null,
+      }));
+
+      setCustomers(mappedCustomers);
     } catch (error) {
       toast({
         title: "Erro",

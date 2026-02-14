@@ -14,6 +14,7 @@ import { ArrowLeft, Plus, Trash2, ChevronDown, Search } from "lucide-react";
 import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { format } from "date-fns";
+import { ModalNovoClienteSimples } from "@/components/ordens-servico/modal-novo-cliente-simples";
 
 interface ServiceItem {
   productId: string;
@@ -38,6 +39,12 @@ export default function NovaOrdemServicoPage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loadingData, setLoadingData] = useState(true);
   const [searchProduct, setSearchProduct] = useState("");
+
+  // Estados para busca de cliente
+  const [searchCustomer, setSearchCustomer] = useState("");
+  const [selectedCustomer, setSelectedCustomer] = useState<any | null>(null);
+  const [loadingCustomers, setLoadingCustomers] = useState(false);
+  const [showNewCustomerModal, setShowNewCustomerModal] = useState(false);
 
   const today = format(new Date(), "yyyy-MM-dd");
   const defaultDelivery = format(new Date(Date.now() + 7 * 24 * 60 * 60 * 1000), "yyyy-MM-dd"); // +7 dias
@@ -123,16 +130,10 @@ export default function NovaOrdemServicoPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [customersRes, branchesRes, productsRes] = await Promise.all([
-          fetch("/api/customers?status=ativos&pageSize=1000"),
+        const [branchesRes, productsRes] = await Promise.all([
           fetch("/api/branches?status=ativos&pageSize=100"),
           fetch("/api/products?status=ativos&pageSize=100&inStock=true"),
         ]);
-
-        if (customersRes.ok) {
-          const customersData = await customersRes.json();
-          setCustomers(customersData.data || []);
-        }
 
         if (branchesRes.ok) {
           const branchesData = await branchesRes.json();
@@ -153,6 +154,32 @@ export default function NovaOrdemServicoPage() {
 
     loadData();
   }, []);
+
+  // Buscar clientes conforme digitação (debounce 300ms)
+  useEffect(() => {
+    if (!searchCustomer || searchCustomer.length < 2) {
+      setCustomers([]);
+      return;
+    }
+
+    const searchCustomers = async () => {
+      setLoadingCustomers(true);
+      try {
+        const res = await fetch(`/api/customers?status=ativos&search=${searchCustomer}&pageSize=10`);
+        if (res.ok) {
+          const data = await res.json();
+          setCustomers(data.data || []);
+        }
+      } catch (error) {
+        console.error("Erro ao buscar clientes:", error);
+      } finally {
+        setLoadingCustomers(false);
+      }
+    };
+
+    const debounce = setTimeout(searchCustomers, 300);
+    return () => clearTimeout(debounce);
+  }, [searchCustomer]);
 
   // Buscar produtos conforme digitação
   useEffect(() => {
@@ -347,23 +374,88 @@ export default function NovaOrdemServicoPage() {
                 <Label htmlFor="customerId">
                   Cliente <span className="text-red-500">*</span>
                 </Label>
-                <Select
-                  value={formData.customerId}
-                  onValueChange={(value) => setFormData({ ...formData, customerId: value })}
-                  required
-                  disabled={loadingData}
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder={loadingData ? "Carregando..." : "Selecione o cliente"} />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {customers.map((customer) => (
-                      <SelectItem key={customer.id} value={customer.id}>
-                        {customer.name} {customer.phone && `- ${customer.phone}`}
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
+                {selectedCustomer ? (
+                  <div className="flex items-center gap-2">
+                    <div className="flex-1 border rounded-lg p-3 bg-muted">
+                      <p className="font-medium">{selectedCustomer.name}</p>
+                      {selectedCustomer.phone && (
+                        <p className="text-sm text-muted-foreground">{selectedCustomer.phone}</p>
+                      )}
+                    </div>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        setSelectedCustomer(null);
+                        setFormData({ ...formData, customerId: "" });
+                        setSearchCustomer("");
+                      }}
+                    >
+                      Alterar
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="relative">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Digite nome, CPF ou telefone..."
+                        value={searchCustomer}
+                        onChange={(e) => setSearchCustomer(e.target.value)}
+                        className="pl-9"
+                      />
+                    </div>
+
+                    {loadingCustomers && (
+                      <div className="absolute top-full left-0 right-0 mt-1 border rounded-lg bg-white shadow-lg p-2 z-10">
+                        <p className="text-sm text-muted-foreground">Buscando...</p>
+                      </div>
+                    )}
+
+                    {!loadingCustomers && searchCustomer.length >= 2 && customers.length > 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 border rounded-lg bg-white shadow-lg max-h-60 overflow-y-auto z-10">
+                        {customers.map((customer) => (
+                          <button
+                            key={customer.id}
+                            type="button"
+                            className="w-full text-left p-3 hover:bg-muted transition-colors border-b last:border-0"
+                            onClick={() => {
+                              setSelectedCustomer(customer);
+                              setFormData({ ...formData, customerId: customer.id });
+                              setSearchCustomer("");
+                              setCustomers([]);
+                            }}
+                          >
+                            <p className="font-medium">{customer.name}</p>
+                            {customer.phone && (
+                              <p className="text-sm text-muted-foreground">{customer.phone}</p>
+                            )}
+                            {customer.cpf && (
+                              <p className="text-xs text-muted-foreground">CPF: {customer.cpf}</p>
+                            )}
+                          </button>
+                        ))}
+                      </div>
+                    )}
+
+                    {!loadingCustomers && searchCustomer.length >= 2 && customers.length === 0 && (
+                      <div className="absolute top-full left-0 right-0 mt-1 border rounded-lg bg-white shadow-lg p-4 z-10">
+                        <p className="text-sm text-muted-foreground mb-2">Nenhum cliente encontrado</p>
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          className="w-full"
+                          onClick={() => setShowNewCustomerModal(true)}
+                        >
+                          <Plus className="h-4 w-4 mr-2" />
+                          Criar novo cliente: "{searchCustomer}"
+                        </Button>
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
 
               <div className="space-y-2">
@@ -861,6 +953,19 @@ export default function NovaOrdemServicoPage() {
           </Button>
         </div>
       </form>
+
+      {/* Modal de Cadastro Rápido de Cliente */}
+      <ModalNovoClienteSimples
+        open={showNewCustomerModal}
+        onOpenChange={setShowNewCustomerModal}
+        initialName={searchCustomer}
+        onClienteCreated={(cliente) => {
+          setSelectedCustomer(cliente);
+          setFormData({ ...formData, customerId: cliente.id });
+          setSearchCustomer("");
+          toast.success(`${cliente.name} cadastrado e selecionado!`);
+        }}
+      />
     </div>
   );
 }

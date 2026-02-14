@@ -22,6 +22,8 @@ interface ModalFechamentoCaixaProps {
 export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPagamentos, movements = [] }: ModalFechamentoCaixaProps) {
   const { toast } = useToast();
   const [loading, setLoading] = useState(false);
+  const [showPrintModal, setShowPrintModal] = useState(false);
+  const [closedShiftId, setClosedShiftId] = useState<string | null>(null);
   const [formData, setFormData] = useState({
     valorDinheiro: "",
     valorCredito: "",
@@ -131,6 +133,8 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
         throw new Error(error.error?.message || error.message || "Erro ao fechar caixa");
       }
 
+      const closeResult = await closeResponse.json();
+
       toast({
         title: "Caixa fechado com sucesso!",
         description: Math.abs(diferencaDinheiro) < 0.01
@@ -150,8 +154,9 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
 
       onOpenChange(false);
 
-      // Recarregar página para atualizar status
-      setTimeout(() => window.location.reload(), 500);
+      // Guardar ID do caixa fechado e abrir modal de impressão
+      setClosedShiftId(shift.id);
+      setShowPrintModal(true);
     } catch (error) {
       console.error("Erro ao fechar caixa:", error);
       toast({
@@ -452,6 +457,52 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
           </div>
         </form>
       </DialogContent>
+
+      {/* Modal de Impressão */}
+      <Dialog open={showPrintModal} onOpenChange={(open) => {
+        setShowPrintModal(open);
+        if (!open) {
+          // Recarregar página quando fechar modal
+          setTimeout(() => window.location.reload(), 300);
+        }
+      }}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <CheckCircle2 className="h-5 w-5 text-green-600" />
+              Caixa Fechado!
+            </DialogTitle>
+            <DialogDescription>
+              Deseja imprimir o relatório de fechamento?
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="flex gap-3 pt-4">
+            <Button
+              variant="outline"
+              className="flex-1"
+              onClick={() => {
+                setShowPrintModal(false);
+                setTimeout(() => window.location.reload(), 300);
+              }}
+            >
+              Não
+            </Button>
+            <Button
+              className="flex-1"
+              onClick={() => {
+                if (closedShiftId) {
+                  window.open(`/dashboard/caixa/${closedShiftId}/relatorio`, '_blank');
+                }
+                setShowPrintModal(false);
+                setTimeout(() => window.location.reload(), 300);
+              }}
+            >
+              Imprimir Relatório
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

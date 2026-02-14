@@ -89,6 +89,11 @@ export const createSaleSchema = z.object({
     .min(0, "Desconto não pode ser negativo")
     .optional()
     .default(0),
+  cashbackUsed: z.coerce
+    .number()
+    .min(0, "Cashback usado não pode ser negativo")
+    .optional()
+    .default(0),
   notes: z.string().max(500, "Observações muito longas (máx 500 caracteres)").optional(),
 });
 
@@ -166,25 +171,28 @@ export function calculateItemTotal(item: SaleItemDTO): number {
 /**
  * Helper para calcular total da venda
  */
-export function calculateSaleTotal(items: SaleItemDTO[], discount = 0): {
+export function calculateSaleTotal(items: SaleItemDTO[], discount = 0, cashbackUsed = 0): {
   subtotal: number;
   discount: number;
+  cashbackUsed: number;
   total: number;
 } {
   const subtotal = items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
   return {
     subtotal,
     discount,
-    total: subtotal - discount,
+    cashbackUsed,
+    total: subtotal - discount - cashbackUsed,
   };
 }
 
 /**
  * Helper para validar se pagamentos cobrem o total
  */
-export function validatePayments(payments: PaymentDTO[], total: number): boolean {
+export function validatePayments(payments: PaymentDTO[], total: number, cashbackUsed = 0): boolean {
   const paymentTotal = payments.reduce((sum, p) => sum + p.amount, 0);
-  return Math.abs(paymentTotal - total) < 0.01; // Tolerância de 1 centavo
+  const totalAfterCashback = total - cashbackUsed;
+  return Math.abs(paymentTotal - totalAfterCashback) < 0.01; // Tolerância de 1 centavo
 }
 
 /**

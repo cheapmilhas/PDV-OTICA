@@ -249,6 +249,7 @@ export default function DetalhesVendaPage() {
       // Pegar mensagem de agradecimento
       const messageTemplate = settings?.messageThankYou;
       if (!messageTemplate) {
+        setSendingWhatsApp(false);
         toast.error("Mensagem de agradecimento não configurada. Acesse Configurações.");
         return;
       }
@@ -262,15 +263,13 @@ export default function DetalhesVendaPage() {
         vendedor: sale?.sellerUser?.name || "Vendedor",
       });
 
-      // Abrir página de impressão com autodownload para baixar PDF
+      // 1. Baixar PDF em background (não bloqueia a UI)
       window.open(`/dashboard/vendas/${id}/imprimir?autoprint=true`, "_blank");
 
-      // Aguardar PDF baixar e abrir WhatsApp
-      setTimeout(() => {
-        openWhatsAppWithMessage(customerPhone, message);
-        toast.success("PDF baixado! Anexe no WhatsApp e envie para o cliente.");
-      }, 2000);
+      // 2. Abrir WhatsApp imediatamente (não aguarda PDF)
+      openWhatsAppWithMessage(customerPhone, message);
 
+      toast.success("WhatsApp aberto! Anexe o PDF quando terminar de baixar.");
     } catch (error: any) {
       console.error("Erro ao enviar WhatsApp:", error);
       toast.error(error.message || "Erro ao processar");

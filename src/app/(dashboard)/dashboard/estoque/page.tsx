@@ -3,6 +3,7 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -53,6 +54,7 @@ function EstoquePage() {
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
+  const [showAlertModal, setShowAlertModal] = useState(false);
 
   // Buscar produtos da API
   useEffect(() => {
@@ -222,37 +224,77 @@ function EstoquePage() {
           </Card>
         </div>
 
-        {/* Alertas de Estoque Baixo */}
+        {/* Banner Compacto de Alertas de Estoque Baixo */}
         {produtosBaixoEstoque.length > 0 && (
-          <Card className="border-orange-200 bg-orange-50">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-orange-900">
+          <div
+            className="flex items-center justify-between p-3 bg-orange-50 border border-orange-200 rounded-lg cursor-pointer hover:bg-orange-100 transition-colors"
+            onClick={() => setShowAlertModal(true)}
+          >
+            <div className="flex items-center gap-3">
+              <div className="rounded-full p-2 bg-orange-500 text-white">
                 <AlertTriangle className="h-5 w-5" />
-                Alertas de Estoque
-              </CardTitle>
-              <CardDescription className="text-orange-700">
-                {produtosBaixoEstoque.length} produtos com estoque baixo ou zerado
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
+              </div>
+              <div>
+                <p className="font-semibold text-orange-900">
+                  {produtosBaixoEstoque.length} produto(s) com estoque baixo ou zerado
+                </p>
+                <p className="text-sm text-orange-700">
+                  Clique para ver detalhes e repor estoque
+                </p>
+              </div>
+            </div>
+            <div className="text-orange-600">
+              <svg className="h-6 w-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+              </svg>
+            </div>
+          </div>
+        )}
+
+        {/* Modal de Detalhes dos Alertas */}
+        <Dialog open={showAlertModal} onOpenChange={setShowAlertModal}>
+          <DialogContent className="max-w-3xl max-h-[80vh] flex flex-col">
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-orange-900">
+                <AlertTriangle className="h-5 w-5" />
+                Produtos com Estoque Baixo
+              </DialogTitle>
+              <DialogDescription>
+                {produtosBaixoEstoque.length} produtos precisam de reposição
+              </DialogDescription>
+            </DialogHeader>
+
+            <div className="flex-1 overflow-y-auto">
               <div className="space-y-2">
                 {produtosBaixoEstoque.map((produto) => (
-                  <div key={produto.id} className="flex items-center justify-between rounded-lg border border-orange-200 bg-white p-3">
+                  <div key={produto.id} className="flex items-center justify-between rounded-lg border border-orange-200 bg-orange-50/30 p-3">
                     <div className="flex-1">
                       <p className="font-medium">{produto.name}</p>
                       <p className="text-sm text-muted-foreground">
-                        Código: {produto.sku} • Estoque: {produto.stockQty} / Mínimo: {produto.stockMin}
+                        SKU: {produto.sku} • Atual: {produto.stockQty} / Mínimo: {produto.stockMin}
                       </p>
+                      {produto.category && (
+                        <p className="text-xs text-muted-foreground">
+                          Categoria: {produto.category.name}
+                        </p>
+                      )}
                     </div>
-                    <Button size="sm" onClick={() => abrirModalEntrada(produto)}>
-                      Repor Estoque
+                    <Button
+                      size="sm"
+                      onClick={() => {
+                        setShowAlertModal(false);
+                        abrirModalEntrada(produto);
+                      }}
+                    >
+                      <Plus className="h-4 w-4 mr-1" />
+                      Repor
                     </Button>
                   </div>
                 ))}
               </div>
-            </CardContent>
-          </Card>
-        )}
+            </div>
+          </DialogContent>
+        </Dialog>
 
         {/* Tabs */}
         <Tabs defaultValue="estoque" className="space-y-4">

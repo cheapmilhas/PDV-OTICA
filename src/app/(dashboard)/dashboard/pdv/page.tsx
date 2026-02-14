@@ -236,7 +236,7 @@ function PDVPage() {
   const total = subtotal - desconto;
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
-  const handleConfirmarVenda = async (payments: any[]) => {
+  const handleConfirmarVenda = async (payments: any[], cashbackUsed?: number) => {
     if (carrinho.length === 0) {
       toast.error("Carrinho vazio");
       return;
@@ -269,6 +269,7 @@ function PDVPage() {
           installmentConfig: payment.installmentConfig,
         })),
         discount: desconto,
+        cashbackUsed: cashbackUsed || 0,
         notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
       };
 
@@ -353,10 +354,8 @@ function PDVPage() {
         toast.success("✅ Venda finalizada com sucesso!");
       }
 
-      // Redirecionar para detalhes da venda
-      setTimeout(() => {
-        router.push(`/dashboard/vendas/${vendaId}/detalhes`);
-      }, 1500);
+      // Redirecionar para lista de vendas
+      router.push("/dashboard/vendas");
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
 
@@ -374,6 +373,7 @@ function PDVPage() {
         open={modalVendaOpen}
         onOpenChange={setModalVendaOpen}
         total={total}
+        customerId={clienteSelecionado?.id}
         onConfirm={handleConfirmarVenda}
         loading={finalizingVenda}
       />

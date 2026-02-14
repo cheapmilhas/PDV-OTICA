@@ -46,6 +46,7 @@ const updateAccountReceivableSchema = z.object({
   status: z.nativeEnum(AccountReceivableStatus),
   receivedAmount: z.number().positive().optional(),
   receivedDate: z.string().datetime().optional(),
+  paymentMethod: z.enum(["CASH", "PIX", "DEBIT_CARD", "CREDIT_CARD", "BANK_TRANSFER", "BANK_SLIP"]).optional(),
 });
 
 /**
@@ -355,49 +356,80 @@ export async function PATCH(request: Request) {
         ? new Date(data.receivedDate)
         : new Date();
       updateData.receivedByUserId = userId;
+      updateData.paymentMethod = data.paymentMethod;
     }
 
-    // Atualizar conta a receber
-    const accountReceivable = await prisma.accountReceivable.update({
-      where: { id: data.id },
-      data: updateData,
-      include: {
-        customer: {
-          select: {
-            id: true,
-            name: true,
-            cpf: true,
-            phone: true,
-            email: true,
+    // Usar transação para atualizar conta e criar movimento no caixa
+    const accountReceivable = await prisma.$transaction(async (tx) => {
+      // Atualizar conta a receber
+      const updated = await tx.accountReceivable.update({
+        where: { id: data.id },
+        data: updateData,
+        include: {
+          customer: {
+            select: {
+              id: true,
+              name: true,
+              cpf: true,
+              phone: true,
+              email: true,
+            },
+          },
+          sale: {
+            select: {
+              id: true,
+              total: true,
+              createdAt: true,
+            },
+          },
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          receivedBy: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        sale: {
-          select: {
-            id: true,
-            total: true,
-            createdAt: true,
+      });
+
+      // Se foi marcado como RECEBIDA e tem forma de pagamento, criar movimento no caixa
+      if (data.status === AccountReceivableStatus.RECEIVED && data.paymentMethod) {
+        // Buscar caixa aberto do usuário
+        const openCashRegister = await tx.cashRegister.findFirst({
+          where: {
+            userId,
+            status: "OPEN",
           },
-        },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        receivedBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+        });
+
+        if (openCashRegister) {
+          // Criar movimento de entrada no caixa
+          await tx.cashMovement.create({
+            data: {
+              cashRegisterId: openCashRegister.id,
+              type: "INCOME",
+              amount: updateData.receivedAmount || Number(existing.amount),
+              description: `Recebimento: ${existing.description}`,
+              paymentMethod: data.paymentMethod,
+              accountReceivableId: data.id,
+            },
+          });
+        }
+      }
+
+      return updated;
     });
 
     // Serializar Decimals para number

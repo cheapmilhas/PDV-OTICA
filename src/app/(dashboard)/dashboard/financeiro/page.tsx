@@ -37,20 +37,24 @@ import { formatCurrency, formatDate } from "@/lib/utils";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
+import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
+import { Textarea } from "@/components/ui/textarea";
+import { format } from "date-fns";
 
 // Tipos
 type AccountPayableStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELED";
 type AccountReceivableStatus = "PENDING" | "RECEIVED" | "OVERDUE" | "CANCELED";
 type AccountCategory =
-  | "FORNECEDORES"
-  | "SALARIOS"
-  | "ALUGUEL"
-  | "ENERGIA"
-  | "INTERNET"
-  | "TELEFONE"
-  | "IMPOSTOS"
-  | "SERVICOS"
-  | "OUTROS";
+  | "SUPPLIERS"
+  | "RENT"
+  | "UTILITIES"
+  | "PERSONNEL"
+  | "TAXES"
+  | "MARKETING"
+  | "MAINTENANCE"
+  | "EQUIPMENT"
+  | "OTHER";
 
 interface AccountPayable {
   id: string;
@@ -117,6 +121,32 @@ function FinanceiroPage() {
     search: "",
     startDate: "",
     endDate: "",
+  });
+
+  // Estados para modal de nova conta a pagar
+  const [showNewPayableModal, setShowNewPayableModal] = useState(false);
+  const [creatingPayable, setCreatingPayable] = useState(false);
+  const [suppliers, setSuppliers] = useState<any[]>([]);
+  const [branches, setBranches] = useState<any[]>([]);
+  const [newPayableForm, setNewPayableForm] = useState({
+    description: "",
+    category: "OTHER" as AccountCategory,
+    amount: "",
+    dueDate: format(new Date(), "yyyy-MM-dd"),
+    supplierId: "",
+    branchId: "",
+    invoiceNumber: "",
+    notes: "",
+  });
+
+  // Estados para modal de recebimento
+  const [showReceiveModal, setShowReceiveModal] = useState(false);
+  const [receivingAccount, setReceivingAccount] = useState<AccountReceivable | null>(null);
+  const [receivingLoading, setReceivingLoading] = useState(false);
+  const [receiveForm, setReceiveForm] = useState({
+    amount: "",
+    paymentMethod: "",
+    receivedDate: format(new Date(), "yyyy-MM-dd"),
   });
 
   // Buscar Contas a Pagar
@@ -187,6 +217,84 @@ function FinanceiroPage() {
     }
   };
 
+  // Carregar fornecedores e branches ao abrir modal
+  useEffect(() => {
+    if (showNewPayableModal) {
+      const loadData = async () => {
+        try {
+          const [suppliersRes, branchesRes] = await Promise.all([
+            fetch("/api/suppliers?status=ativos&pageSize=1000"),
+            fetch("/api/branches?status=ativos&pageSize=100"),
+          ]);
+
+          if (suppliersRes.ok) {
+            const data = await suppliersRes.json();
+            setSuppliers(data.data || []);
+          }
+
+          if (branchesRes.ok) {
+            const data = await branchesRes.json();
+            setBranches(data.data || []);
+          }
+        } catch (error) {
+          console.error("Erro ao carregar dados:", error);
+        }
+      };
+
+      loadData();
+    }
+  }, [showNewPayableModal]);
+
+  // Criar nova conta a pagar
+  const handleCreatePayable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setCreatingPayable(true);
+
+    try {
+      if (!newPayableForm.description || !newPayableForm.amount) {
+        throw new Error("Preencha todos os campos obrigatórios");
+      }
+
+      const res = await fetch("/api/accounts-payable", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          description: newPayableForm.description,
+          category: newPayableForm.category,
+          amount: parseFloat(newPayableForm.amount),
+          dueDate: new Date(newPayableForm.dueDate).toISOString(),
+          supplierId: newPayableForm.supplierId || undefined,
+          branchId: newPayableForm.branchId || undefined,
+          invoiceNumber: newPayableForm.invoiceNumber || undefined,
+          notes: newPayableForm.notes || undefined,
+        }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error?.message || "Erro ao criar conta");
+      }
+
+      toast.success("Conta a pagar criada com sucesso!");
+      setShowNewPayableModal(false);
+      setNewPayableForm({
+        description: "",
+        category: "OTHER",
+        amount: "",
+        dueDate: format(new Date(), "yyyy-MM-dd"),
+        supplierId: "",
+        branchId: "",
+        invoiceNumber: "",
+        notes: "",
+      });
+      fetchAccountsPayable();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setCreatingPayable(false);
+    }
+  };
+
   // Marcar como pago
   const handleMarkAsPaid = async (id: string) => {
     if (!confirm("Deseja marcar esta conta como paga?")) return;
@@ -211,27 +319,53 @@ function FinanceiroPage() {
     }
   };
 
-  // Marcar como recebido
-  const handleMarkAsReceived = async (id: string) => {
-    if (!confirm("Deseja marcar esta conta como recebida?")) return;
+  // Abrir modal de recebimento
+  const handleOpenReceiveModal = (account: AccountReceivable) => {
+    setReceivingAccount(account);
+    setReceiveForm({
+      amount: account.amount.toString(),
+      paymentMethod: "",
+      receivedDate: format(new Date(), "yyyy-MM-dd"),
+    });
+    setShowReceiveModal(true);
+  };
 
+  // Confirmar recebimento
+  const handleConfirmReceive = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!receivingAccount) return;
+
+    setReceivingLoading(true);
     try {
+      if (!receiveForm.paymentMethod) {
+        throw new Error("Selecione a forma de pagamento");
+      }
+
       const res = await fetch("/api/accounts-receivable", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id,
+          id: receivingAccount.id,
           status: "RECEIVED",
-          receivedDate: new Date().toISOString(),
+          receivedDate: new Date(receiveForm.receivedDate).toISOString(),
+          receivedAmount: parseFloat(receiveForm.amount),
+          paymentMethod: receiveForm.paymentMethod,
         }),
       });
 
-      if (!res.ok) throw new Error("Erro ao marcar como recebida");
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error?.message || "Erro ao receber conta");
+      }
 
-      toast.success("Conta marcada como recebida!");
+      toast.success("Conta recebida com sucesso!");
+      setShowReceiveModal(false);
+      setReceivingAccount(null);
       fetchAccountsReceivable();
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setReceivingLoading(false);
     }
   };
 
@@ -344,15 +478,15 @@ function FinanceiroPage() {
   // Traduzir categoria
   const translateCategory = (category: AccountCategory) => {
     const translations = {
-      FORNECEDORES: "Fornecedores",
-      SALARIOS: "Salários",
-      ALUGUEL: "Aluguel",
-      ENERGIA: "Energia",
-      INTERNET: "Internet",
-      TELEFONE: "Telefone",
-      IMPOSTOS: "Impostos",
-      SERVICOS: "Serviços",
-      OUTROS: "Outros",
+      SUPPLIERS: "Fornecedores",
+      RENT: "Aluguel",
+      UTILITIES: "Utilidades (água, luz, etc)",
+      PERSONNEL: "Folha de Pagamento",
+      TAXES: "Impostos",
+      MARKETING: "Marketing",
+      MAINTENANCE: "Manutenção",
+      EQUIPMENT: "Equipamentos",
+      OTHER: "Outros",
     };
     return translations[category] || category;
   };
@@ -547,7 +681,7 @@ function FinanceiroPage() {
                   <X className="h-4 w-4 mr-2" />
                   Limpar Filtros
                 </Button>
-                <Button size="sm">
+                <Button size="sm" onClick={() => setShowNewPayableModal(true)}>
                   <Plus className="h-4 w-4 mr-2" />
                   Nova Conta a Pagar
                 </Button>
@@ -575,7 +709,7 @@ function FinanceiroPage() {
               action={
                 !payableFilters.search &&
                 payableFilters.status === "ALL" && (
-                  <Button>
+                  <Button onClick={() => setShowNewPayableModal(true)}>
                     <Plus className="mr-2 h-4 w-4" />
                     Nova Conta a Pagar
                   </Button>
@@ -915,7 +1049,7 @@ function FinanceiroPage() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() =>
-                                    handleMarkAsReceived(account.id)
+                                    handleOpenReceiveModal(account)
                                   }
                                 >
                                   <CheckCircle className="h-4 w-4 mr-1" />
@@ -938,7 +1072,7 @@ function FinanceiroPage() {
                                   size="sm"
                                   variant="outline"
                                   onClick={() =>
-                                    handleMarkAsReceived(account.id)
+                                    handleOpenReceiveModal(account)
                                   }
                                 >
                                   <CheckCircle className="h-4 w-4 mr-1" />
@@ -976,6 +1110,306 @@ function FinanceiroPage() {
           )}
         </TabsContent>
       </Tabs>
+
+      {/* Modal Nova Conta a Pagar */}
+      <Dialog open={showNewPayableModal} onOpenChange={setShowNewPayableModal}>
+        <DialogContent className="max-w-2xl">
+          <DialogHeader>
+            <DialogTitle>Nova Conta a Pagar</DialogTitle>
+            <DialogDescription>
+              Preencha os dados para cadastrar uma nova conta a pagar
+            </DialogDescription>
+          </DialogHeader>
+
+          <form onSubmit={handleCreatePayable} className="space-y-4">
+            <div className="grid gap-4 md:grid-cols-2">
+              {/* Descrição */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="description">
+                  Descrição <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="description"
+                  placeholder="Ex: Aluguel Janeiro/2024"
+                  value={newPayableForm.description}
+                  onChange={(e) =>
+                    setNewPayableForm({ ...newPayableForm, description: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              {/* Categoria */}
+              <div className="space-y-2">
+                <Label htmlFor="category">
+                  Categoria <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={newPayableForm.category}
+                  onValueChange={(value) =>
+                    setNewPayableForm({ ...newPayableForm, category: value as AccountCategory })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="SUPPLIERS">Fornecedores</SelectItem>
+                    <SelectItem value="RENT">Aluguel</SelectItem>
+                    <SelectItem value="UTILITIES">Utilidades (água, luz, etc)</SelectItem>
+                    <SelectItem value="PERSONNEL">Folha de Pagamento</SelectItem>
+                    <SelectItem value="TAXES">Impostos</SelectItem>
+                    <SelectItem value="MARKETING">Marketing</SelectItem>
+                    <SelectItem value="MAINTENANCE">Manutenção</SelectItem>
+                    <SelectItem value="EQUIPMENT">Equipamentos</SelectItem>
+                    <SelectItem value="OTHER">Outros</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Valor */}
+              <div className="space-y-2">
+                <Label htmlFor="amount">
+                  Valor <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="amount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0.00"
+                  value={newPayableForm.amount}
+                  onChange={(e) =>
+                    setNewPayableForm({ ...newPayableForm, amount: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              {/* Data de Vencimento */}
+              <div className="space-y-2">
+                <Label htmlFor="dueDate">
+                  Vencimento <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="dueDate"
+                  type="date"
+                  value={newPayableForm.dueDate}
+                  onChange={(e) =>
+                    setNewPayableForm({ ...newPayableForm, dueDate: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              {/* Fornecedor */}
+              <div className="space-y-2">
+                <Label htmlFor="supplier">Fornecedor (opcional)</Label>
+                <Select
+                  value={newPayableForm.supplierId}
+                  onValueChange={(value) =>
+                    setNewPayableForm({ ...newPayableForm, supplierId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhum</SelectItem>
+                    {suppliers.map((supplier) => (
+                      <SelectItem key={supplier.id} value={supplier.id}>
+                        {supplier.tradeName || supplier.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Filial */}
+              <div className="space-y-2">
+                <Label htmlFor="branch">Filial (opcional)</Label>
+                <Select
+                  value={newPayableForm.branchId}
+                  onValueChange={(value) =>
+                    setNewPayableForm({ ...newPayableForm, branchId: value })
+                  }
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="">Nenhuma</SelectItem>
+                    {branches.map((branch) => (
+                      <SelectItem key={branch.id} value={branch.id}>
+                        {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Número da Nota */}
+              <div className="space-y-2">
+                <Label htmlFor="invoiceNumber">Nº Nota Fiscal (opcional)</Label>
+                <Input
+                  id="invoiceNumber"
+                  placeholder="123456"
+                  value={newPayableForm.invoiceNumber}
+                  onChange={(e) =>
+                    setNewPayableForm({ ...newPayableForm, invoiceNumber: e.target.value })
+                  }
+                />
+              </div>
+
+              {/* Observações */}
+              <div className="space-y-2 md:col-span-2">
+                <Label htmlFor="notes">Observações (opcional)</Label>
+                <Textarea
+                  id="notes"
+                  placeholder="Informações adicionais..."
+                  value={newPayableForm.notes}
+                  onChange={(e) =>
+                    setNewPayableForm({ ...newPayableForm, notes: e.target.value })
+                  }
+                  rows={3}
+                />
+              </div>
+            </div>
+
+            {/* Botões */}
+            <div className="flex gap-3 justify-end pt-4 border-t">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => setShowNewPayableModal(false)}
+                disabled={creatingPayable}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={creatingPayable}>
+                {creatingPayable ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Criando...
+                  </>
+                ) : (
+                  "Criar Conta"
+                )}
+              </Button>
+            </div>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Modal Receber Conta */}
+      <Dialog open={showReceiveModal} onOpenChange={setShowReceiveModal}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Receber Conta</DialogTitle>
+            <DialogDescription>
+              {receivingAccount && (
+                <>
+                  <p className="font-medium text-foreground mt-2">
+                    {receivingAccount.description}
+                  </p>
+                  {receivingAccount.customer && (
+                    <p className="text-sm">Cliente: {receivingAccount.customer.name}</p>
+                  )}
+                </>
+              )}
+            </DialogDescription>
+          </DialogHeader>
+
+          {receivingAccount && (
+            <form onSubmit={handleConfirmReceive} className="space-y-4">
+              {/* Valor Recebido */}
+              <div className="space-y-2">
+                <Label htmlFor="receiveAmount">
+                  Valor a Receber <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="receiveAmount"
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={receiveForm.amount}
+                  onChange={(e) =>
+                    setReceiveForm({ ...receiveForm, amount: e.target.value })
+                  }
+                  required
+                />
+                <p className="text-xs text-muted-foreground">
+                  Valor original: {formatCurrency(receivingAccount.amount)}
+                </p>
+              </div>
+
+              {/* Forma de Pagamento */}
+              <div className="space-y-2">
+                <Label htmlFor="paymentMethod">
+                  Forma de Recebimento <span className="text-red-500">*</span>
+                </Label>
+                <Select
+                  value={receiveForm.paymentMethod}
+                  onValueChange={(value) =>
+                    setReceiveForm({ ...receiveForm, paymentMethod: value })
+                  }
+                  required
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione..." />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="CASH">Dinheiro</SelectItem>
+                    <SelectItem value="PIX">PIX</SelectItem>
+                    <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
+                    <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
+                    <SelectItem value="BANK_TRANSFER">Transferência Bancária</SelectItem>
+                    <SelectItem value="BANK_SLIP">Boleto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Data do Recebimento */}
+              <div className="space-y-2">
+                <Label htmlFor="receivedDate">
+                  Data do Recebimento <span className="text-red-500">*</span>
+                </Label>
+                <Input
+                  id="receivedDate"
+                  type="date"
+                  value={receiveForm.receivedDate}
+                  onChange={(e) =>
+                    setReceiveForm({ ...receiveForm, receivedDate: e.target.value })
+                  }
+                  required
+                />
+              </div>
+
+              {/* Botões */}
+              <div className="flex gap-3 justify-end pt-4 border-t">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setShowReceiveModal(false)}
+                  disabled={receivingLoading}
+                >
+                  Cancelar
+                </Button>
+                <Button type="submit" disabled={receivingLoading}>
+                  {receivingLoading ? (
+                    <>
+                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      Processando...
+                    </>
+                  ) : (
+                    "Confirmar Recebimento"
+                  )}
+                </Button>
+              </div>
+            </form>
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
