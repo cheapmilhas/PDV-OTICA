@@ -356,7 +356,7 @@ export async function PATCH(request: Request) {
         ? new Date(data.receivedDate)
         : new Date();
       updateData.receivedByUserId = userId;
-      updateData.paymentMethod = data.paymentMethod;
+      // paymentMethod não é salvo no AccountReceivable, apenas usado para criar CashMovement
     }
 
     // Usar transação para atualizar conta e criar movimento no caixa

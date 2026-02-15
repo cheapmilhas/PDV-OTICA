@@ -41,6 +41,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
+import { ModalReceberConta } from "@/components/financeiro/modal-receber-conta";
 
 // Tipos
 type AccountPayableStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELED";
@@ -143,11 +144,6 @@ function FinanceiroPage() {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [receivingAccount, setReceivingAccount] = useState<AccountReceivable | null>(null);
   const [receivingLoading, setReceivingLoading] = useState(false);
-  const [receiveForm, setReceiveForm] = useState({
-    amount: "",
-    paymentMethod: "",
-    receivedDate: format(new Date(), "yyyy-MM-dd"),
-  });
 
   // Buscar Contas a Pagar
   useEffect(() => {
@@ -322,34 +318,22 @@ function FinanceiroPage() {
   // Abrir modal de recebimento
   const handleOpenReceiveModal = (account: AccountReceivable) => {
     setReceivingAccount(account);
-    setReceiveForm({
-      amount: account.amount.toString(),
-      paymentMethod: "",
-      receivedDate: format(new Date(), "yyyy-MM-dd"),
-    });
     setShowReceiveModal(true);
   };
 
-  // Confirmar recebimento
-  const handleConfirmReceive = async (e: React.FormEvent) => {
-    e.preventDefault();
+  // Confirmar recebimento com múltiplos pagamentos
+  const handleConfirmReceive = async (payments: any[]) => {
     if (!receivingAccount) return;
 
     setReceivingLoading(true);
     try {
-      if (!receiveForm.paymentMethod) {
-        throw new Error("Selecione a forma de pagamento");
-      }
-
-      const res = await fetch("/api/accounts-receivable", {
-        method: "PATCH",
+      const res = await fetch("/api/accounts-receivable/receive-multiple", {
+        method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id: receivingAccount.id,
-          status: "RECEIVED",
-          receivedDate: new Date(receiveForm.receivedDate).toISOString(),
-          receivedAmount: parseFloat(receiveForm.amount),
-          paymentMethod: receiveForm.paymentMethod,
+          accountId: receivingAccount.id,
+          payments: payments,
+          receivedDate: new Date().toISOString(),
         }),
       });
 
@@ -358,7 +342,8 @@ function FinanceiroPage() {
         throw new Error(error.error?.message || "Erro ao receber conta");
       }
 
-      toast.success("Conta recebida com sucesso!");
+      const data = await res.json();
+      toast.success(data.message || "Conta recebida com sucesso!");
       setShowReceiveModal(false);
       setReceivingAccount(null);
       fetchAccountsReceivable();
@@ -1301,115 +1286,14 @@ function FinanceiroPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Modal Receber Conta */}
-      <Dialog open={showReceiveModal} onOpenChange={setShowReceiveModal}>
-        <DialogContent className="max-w-md">
-          <DialogHeader>
-            <DialogTitle>Receber Conta</DialogTitle>
-            <DialogDescription>
-              {receivingAccount && (
-                <>
-                  <p className="font-medium text-foreground mt-2">
-                    {receivingAccount.description}
-                  </p>
-                  {receivingAccount.customer && (
-                    <p className="text-sm">Cliente: {receivingAccount.customer.name}</p>
-                  )}
-                </>
-              )}
-            </DialogDescription>
-          </DialogHeader>
-
-          {receivingAccount && (
-            <form onSubmit={handleConfirmReceive} className="space-y-4">
-              {/* Valor Recebido */}
-              <div className="space-y-2">
-                <Label htmlFor="receiveAmount">
-                  Valor a Receber <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="receiveAmount"
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  value={receiveForm.amount}
-                  onChange={(e) =>
-                    setReceiveForm({ ...receiveForm, amount: e.target.value })
-                  }
-                  required
-                />
-                <p className="text-xs text-muted-foreground">
-                  Valor original: {formatCurrency(receivingAccount.amount)}
-                </p>
-              </div>
-
-              {/* Forma de Pagamento */}
-              <div className="space-y-2">
-                <Label htmlFor="paymentMethod">
-                  Forma de Recebimento <span className="text-red-500">*</span>
-                </Label>
-                <Select
-                  value={receiveForm.paymentMethod}
-                  onValueChange={(value) =>
-                    setReceiveForm({ ...receiveForm, paymentMethod: value })
-                  }
-                  required
-                >
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione..." />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="CASH">Dinheiro</SelectItem>
-                    <SelectItem value="PIX">PIX</SelectItem>
-                    <SelectItem value="DEBIT_CARD">Cartão de Débito</SelectItem>
-                    <SelectItem value="CREDIT_CARD">Cartão de Crédito</SelectItem>
-                    <SelectItem value="BANK_TRANSFER">Transferência Bancária</SelectItem>
-                    <SelectItem value="BANK_SLIP">Boleto</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-
-              {/* Data do Recebimento */}
-              <div className="space-y-2">
-                <Label htmlFor="receivedDate">
-                  Data do Recebimento <span className="text-red-500">*</span>
-                </Label>
-                <Input
-                  id="receivedDate"
-                  type="date"
-                  value={receiveForm.receivedDate}
-                  onChange={(e) =>
-                    setReceiveForm({ ...receiveForm, receivedDate: e.target.value })
-                  }
-                  required
-                />
-              </div>
-
-              {/* Botões */}
-              <div className="flex gap-3 justify-end pt-4 border-t">
-                <Button
-                  type="button"
-                  variant="outline"
-                  onClick={() => setShowReceiveModal(false)}
-                  disabled={receivingLoading}
-                >
-                  Cancelar
-                </Button>
-                <Button type="submit" disabled={receivingLoading}>
-                  {receivingLoading ? (
-                    <>
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                      Processando...
-                    </>
-                  ) : (
-                    "Confirmar Recebimento"
-                  )}
-                </Button>
-              </div>
-            </form>
-          )}
-        </DialogContent>
-      </Dialog>
+      {/* Modal Receber Conta - Múltiplos Pagamentos */}
+      <ModalReceberConta
+        open={showReceiveModal}
+        onOpenChange={setShowReceiveModal}
+        account={receivingAccount}
+        onConfirm={handleConfirmReceive}
+        loading={receivingLoading}
+      />
     </div>
   );
 }
