@@ -64,6 +64,9 @@ export default function CashbackPage() {
       ]);
 
       if (!summaryRes.ok || !customersRes.ok) {
+        const summaryError = !summaryRes.ok ? await summaryRes.text() : null;
+        const customersError = !customersRes.ok ? await customersRes.text() : null;
+        console.error("Erro ao carregar cashback:", { summaryError, customersError });
         throw new Error("Erro ao carregar dados");
       }
 
@@ -72,21 +75,25 @@ export default function CashbackPage() {
         customersRes.json(),
       ]);
 
+      console.log("Dados recebidos:", { summaryData, customersData });
+
       setSummary(summaryData.data);
 
       // Mapear dados da API para o formato esperado
       const mappedCustomers = (customersData.data || []).map((item: any) => ({
-        customerId: item.customer.id,
-        customerName: item.customer.name,
-        balance: Number(item.balance),
-        totalEarned: Number(item.totalEarned),
-        totalUsed: Number(item.totalUsed),
-        totalExpired: Number(item.totalExpired),
+        customerId: item.customer?.id || item.customerId,
+        customerName: item.customer?.name || "Nome não disponível",
+        balance: Number(item.balance || 0),
+        totalEarned: Number(item.totalEarned || 0),
+        totalUsed: Number(item.totalUsed || 0),
+        totalExpired: Number(item.totalExpired || 0),
         lastMovement: item.updatedAt || null,
       }));
 
+      console.log("Clientes mapeados:", mappedCustomers);
       setCustomers(mappedCustomers);
     } catch (error) {
+      console.error("Erro completo:", error);
       toast({
         title: "Erro",
         description: "Não foi possível carregar os dados de cashback.",
@@ -241,8 +248,20 @@ export default function CashbackPage() {
             {loading ? (
               <div className="text-center py-8 text-muted-foreground">Carregando...</div>
             ) : filteredCustomers.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                {searchTerm ? "Nenhum cliente encontrado" : "Nenhum cliente com cashback"}
+              <div className="text-center py-8">
+                <div className="text-muted-foreground mb-2">
+                  {searchTerm ? "Nenhum cliente encontrado com o termo buscado" : "Nenhum cliente com cashback disponível"}
+                </div>
+                {!searchTerm && customers.length === 0 && (
+                  <div className="text-sm text-muted-foreground mt-4 p-4 bg-muted/50 rounded-lg">
+                    <p className="mb-2">💡 <strong>Como gerar cashback:</strong></p>
+                    <ol className="text-left inline-block space-y-1">
+                      <li>1. Ative o cashback em <Link href="/dashboard/configuracoes/cashback" className="text-primary hover:underline">Configurações</Link></li>
+                      <li>2. Realize uma venda para um cliente</li>
+                      <li>3. O cashback será creditado automaticamente</li>
+                    </ol>
+                  </div>
+                )}
               </div>
             ) : (
               <Table>
