@@ -9,12 +9,12 @@ import { handleApiError } from "@/lib/error-handler";
  */
 export async function GET(
   request: Request,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    const shiftId = params.id;
+    const { id: shiftId } = await params;
 
     const shift = await cashService.getShiftById(shiftId, companyId);
 

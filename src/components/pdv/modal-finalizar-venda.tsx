@@ -5,7 +5,6 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Badge } from "@/components/ui/badge";
 import { Checkbox } from "@/components/ui/checkbox";
 import {
   CreditCard,
@@ -169,8 +168,9 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   };
 
   const useMaxCashback = () => {
-    // Usar o menor valor entre: saldo de cashback, total da venda, valor restante
-    const maxUsable = Math.min(cashbackBalance, total, totalAfterCashback);
+    // Usar o menor valor entre: saldo de cashback e total da venda
+    // Não podemos usar mais cashback do que o total da venda
+    const maxUsable = Math.min(cashbackBalance, total);
     setCashbackAmount(maxUsable.toFixed(2));
   };
 
@@ -192,21 +192,47 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
         <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
           {/* Resumo - Full Width */}
           <div className="rounded-lg border p-4 bg-muted/50">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-4 gap-4">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-1">Total da Venda</p>
                 <p className="text-2xl font-bold">{formatCurrency(total)}</p>
               </div>
-              <div className="text-center border-x">
-                <p className="text-sm text-muted-foreground mb-1">Total Pago</p>
-                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
-              </div>
-              <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Restante</p>
-                <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  {formatCurrency(remaining)}
+              {cashbackUsed > 0 && (
+                <div className="text-center border-x">
+                  <p className="text-sm text-muted-foreground mb-1">Cashback Usado</p>
+                  <p className="text-2xl font-bold text-orange-600">-{formatCurrency(cashbackUsed)}</p>
+                </div>
+              )}
+              <div className={`text-center ${cashbackUsed > 0 ? 'border-r' : 'border-x'}`}>
+                <p className="text-sm text-muted-foreground mb-1">
+                  {cashbackUsed > 0 ? 'Total a Pagar' : 'Total Pago'}
+                </p>
+                <p className="text-2xl font-bold text-blue-600">
+                  {cashbackUsed > 0 ? formatCurrency(totalAfterCashback) : formatCurrency(totalPaid)}
                 </p>
               </div>
+              {cashbackUsed === 0 && (
+                <div className="text-center">
+                  <p className="text-sm text-muted-foreground mb-1">Restante</p>
+                  <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    {formatCurrency(remaining)}
+                  </p>
+                </div>
+              )}
+              {cashbackUsed > 0 && (
+                <>
+                  <div className="text-center border-r">
+                    <p className="text-sm text-muted-foreground mb-1">Já Pago</p>
+                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+                  </div>
+                  <div className="text-center">
+                    <p className="text-sm text-muted-foreground mb-1">Falta Pagar</p>
+                    <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                      {formatCurrency(Math.max(0, remaining))}
+                    </p>
+                  </div>
+                </>
+              )}
             </div>
           </div>
 
