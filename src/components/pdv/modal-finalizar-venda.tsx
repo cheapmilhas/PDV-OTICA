@@ -141,7 +141,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
     setPayments(payments.filter((p) => p.id !== id));
   };
 
-  const handleConfirm = async () => {
+  const handleConfirm = () => {
     // Validar cashback
     if (cashbackUsed > cashbackBalance) {
       toast.error("Valor de cashback maior que o saldo disponível!");
@@ -155,7 +155,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
     // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
     if (Math.abs(remaining) < 0.01) {
-      await onConfirm(payments, cashbackUsed);
+      onConfirm(payments, cashbackUsed);
       setPayments([]);
       setAmount("");
       setInstallments("1");
