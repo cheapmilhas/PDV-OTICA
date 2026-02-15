@@ -180,33 +180,33 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1100px] max-h-[85vh] flex flex-col p-0 overflow-hidden">
-        <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
-          <DialogTitle className="text-lg">Finalizar Venda</DialogTitle>
-          <DialogDescription className="text-sm">
+      <DialogContent className="sm:max-w-[1100px] max-h-[90vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-3 pb-2 flex-shrink-0">
+          <DialogTitle className="text-base">Finalizar Venda</DialogTitle>
+          <DialogDescription className="text-xs">
             Adicione as formas de pagamento para concluir a venda
           </DialogDescription>
         </DialogHeader>
 
         {/* Conteúdo Compacto SEM Scroll */}
-        <div className="flex-1 px-6 py-3 space-y-3 overflow-hidden">
+        <div className="flex-1 px-6 py-2 space-y-2 overflow-hidden">
           {/* Resumo Compacto - Uma Linha */}
-          <div className="rounded-lg border p-2 bg-muted/50">
+          <div className="rounded border p-1.5 bg-muted/50">
             <div className="flex items-center justify-around gap-2 text-sm">
               <div className="text-center">
-                <p className="text-xs text-muted-foreground">Total</p>
-                <p className="text-lg font-bold">{formatCurrency(total)}</p>
+                <p className="text-[10px] text-muted-foreground">Total</p>
+                <p className="text-base font-bold">{formatCurrency(total)}</p>
                 {cashbackUsed > 0 && (
-                  <p className="text-[10px] text-orange-600">-{formatCurrency(cashbackUsed)}</p>
+                  <p className="text-[9px] text-orange-600">-{formatCurrency(cashbackUsed)}</p>
                 )}
               </div>
               <div className="text-center border-x px-3">
-                <p className="text-xs text-muted-foreground">Pago</p>
-                <p className="text-lg font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+                <p className="text-[10px] text-muted-foreground">Pago</p>
+                <p className="text-base font-bold text-green-600">{formatCurrency(totalPaid)}</p>
               </div>
               <div className="text-center">
-                <p className="text-xs text-muted-foreground">Falta</p>
-                <p className={`text-lg font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                <p className="text-[10px] text-muted-foreground">Falta</p>
+                <p className={`text-base font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
                   {formatCurrency(remaining)}
                 </p>
               </div>
@@ -215,11 +215,11 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
           {/* Cashback Ultra Compacto */}
           {customerId && cashbackBalance > 0 && (
-            <div className="rounded border border-orange-300 bg-orange-50/50 dark:bg-orange-950/20 p-2">
+            <div className="rounded border border-orange-300 bg-orange-50/50 dark:bg-orange-950/20 p-1.5">
               <div className="flex items-center gap-2">
-                <Gift className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                <Gift className="h-3.5 w-3.5 text-orange-600 flex-shrink-0" />
                 <div className="flex-1 flex items-center gap-2 flex-wrap text-xs">
-                  <span className="font-semibold text-orange-900 dark:text-orange-100">
+                  <span className="font-semibold text-orange-900 dark:text-orange-100 text-[11px]">
                     Cashback: {formatCurrency(cashbackBalance)}
                   </span>
                   <div className="flex items-center gap-1">
@@ -232,7 +232,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                       }}
                       className="h-3 w-3"
                     />
-                    <Label htmlFor="use-cashback" className="cursor-pointer text-xs">Usar</Label>
+                    <Label htmlFor="use-cashback" className="cursor-pointer text-[11px]">Usar</Label>
                   </div>
                   {useCashback && (
                     <>
@@ -242,14 +242,14 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                         placeholder="Valor"
                         value={cashbackAmount}
                         onChange={(e) => setCashbackAmount(e.target.value)}
-                        className="w-24 h-7 text-xs"
+                        className="w-20 h-6 text-[11px]"
                         max={cashbackBalance}
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={useMaxCashback}
-                        className="h-7 text-xs px-2"
+                        className="h-6 text-[11px] px-2"
                       >
                         Máx
                       </Button>
@@ -260,35 +260,29 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
             </div>
           )}
 
-          {customerId && cashbackBalance === 0 && !loadingCashback && (
-            <div className="rounded-lg border border-gray-200 bg-gray-50 dark:bg-gray-900/20 p-2 text-xs text-gray-600 dark:text-gray-400">
-              ℹ️ Cliente sem cashback disponível no momento.
-            </div>
-          )}
-
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-2 gap-3">
             {/* Coluna Esquerda - Adicionar Pagamento */}
-            <div className="space-y-2">
+            <div className="space-y-1.5">
               {/* Formas de Pagamento */}
-              <div className="space-y-1">
-                <Label className="text-xs">Forma de Pagamento</Label>
-                <div className="grid grid-cols-5 gap-1">
+              <div className="space-y-0.5">
+                <Label className="text-[11px]">Forma de Pagamento</Label>
+                <div className="grid grid-cols-3 gap-1">
                   {paymentMethods.map((method) => {
                     const Icon = method.icon;
                     return (
                       <button
                         key={method.id}
                         onClick={() => setSelectedMethod(method.id)}
-                        className={`flex flex-col items-center gap-1 rounded border-2 p-1.5 transition-all hover:bg-accent ${
+                        className={`flex flex-col items-center gap-0.5 rounded border-2 p-1 transition-all hover:bg-accent ${
                           selectedMethod === method.id
                             ? "border-primary bg-accent"
                             : "border-border"
                         }`}
                       >
-                        <div className={`rounded-full p-1 ${method.color} text-white`}>
+                        <div className={`rounded-full p-0.5 ${method.color} text-white`}>
                           <Icon className="h-3 w-3" />
                         </div>
-                        <span className="text-[10px] text-center leading-tight">{method.label}</span>
+                        <span className="text-[9px] text-center leading-tight">{method.label}</span>
                       </button>
                     );
                   })}
@@ -296,9 +290,9 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
               </div>
 
               {/* Valor e Parcelas em linha */}
-              <div className="grid grid-cols-2 gap-2">
-                <div className="space-y-1">
-                  <Label htmlFor="amount" className="text-xs">Valor</Label>
+              <div className="grid grid-cols-2 gap-1.5">
+                <div className="space-y-0.5">
+                  <Label htmlFor="amount" className="text-[11px]">Valor</Label>
                   <div className="flex gap-1">
                     <Input
                       id="amount"
@@ -308,17 +302,17 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                       value={amount}
                       onChange={(e) => setAmount(e.target.value)}
                       disabled={!selectedMethod}
-                      className="h-8 text-sm"
+                      className="h-7 text-xs"
                     />
-                    <Button variant="outline" size="sm" onClick={quickFill} disabled={!selectedMethod || remaining <= 0} className="h-8 text-xs px-2">
+                    <Button variant="outline" size="sm" onClick={quickFill} disabled={!selectedMethod || remaining <= 0} className="h-7 text-[10px] px-1.5">
                       Total
                     </Button>
                   </div>
                 </div>
 
                 {selectedMethod === "CREDIT_CARD" && (
-                  <div className="space-y-1">
-                    <Label htmlFor="installments" className="text-xs">Parcelas</Label>
+                  <div className="space-y-0.5">
+                    <Label htmlFor="installments" className="text-[11px]">Parcelas</Label>
                     <Input
                       id="installments"
                       type="number"
@@ -326,63 +320,63 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                       max="12"
                       value={installments}
                       onChange={(e) => setInstallments(e.target.value)}
-                      className="h-8 text-sm"
+                      className="h-7 text-xs"
                     />
                   </div>
                 )}
               </div>
 
-              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-8 text-sm">
+              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-7 text-xs">
                 Adicionar Pagamento
               </Button>
             </div>
 
             {/* Coluna Direita - Lista de Pagamentos */}
-            <div className="space-y-1">
-              <Label className="text-xs">Pagamentos ({payments.length})</Label>
+            <div className="space-y-0.5">
+              <Label className="text-[11px]">Pagamentos ({payments.length})</Label>
               {payments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground border border-dashed rounded">
-                  <Wallet className="h-8 w-8 opacity-20 mb-1" />
-                  <p className="text-xs">Nenhum pagamento</p>
+                <div className="flex flex-col items-center justify-center h-28 text-center text-muted-foreground border border-dashed rounded">
+                  <Wallet className="h-6 w-6 opacity-20 mb-0.5" />
+                  <p className="text-[10px]">Nenhum pagamento</p>
                 </div>
               ) : (
-                <div className="space-y-1 h-32 overflow-y-auto pr-1">
+                <div className="space-y-0.5 h-28 overflow-y-auto pr-1">
                   {payments.map((payment) => {
                     const method = paymentMethods.find((m) => m.id === payment.method);
                     const Icon = method?.icon;
                     return (
                       <div
                         key={payment.id}
-                        className="flex items-center justify-between rounded border p-1.5 bg-muted/30"
+                        className="flex items-center justify-between rounded border p-1 bg-muted/30"
                       >
-                        <div className="flex items-center gap-2">
+                        <div className="flex items-center gap-1.5">
                           {Icon && (
-                            <div className={`rounded-full p-1 ${method.color} text-white`}>
+                            <div className={`rounded-full p-0.5 ${method.color} text-white`}>
                               <Icon className="h-3 w-3" />
                             </div>
                           )}
                           <div>
-                            <p className="text-xs font-medium">{method?.label}</p>
+                            <p className="text-[11px] font-medium">{method?.label}</p>
                             {payment.installments && payment.installments > 1 && (
-                              <p className="text-[10px] text-muted-foreground">
+                              <p className="text-[9px] text-muted-foreground">
                                 {payment.installments}x de {formatCurrency(payment.amount / payment.installments)}
                               </p>
                             )}
                             {payment.installmentConfig && (
-                              <p className="text-[10px] text-muted-foreground">
+                              <p className="text-[9px] text-muted-foreground">
                                 {payment.installmentConfig.count}x de{" "}
                                 {formatCurrency(payment.amount / payment.installmentConfig.count)}
                               </p>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-1">
-                          <span className="text-xs font-semibold">{formatCurrency(payment.amount)}</span>
+                        <div className="flex items-center gap-0.5">
+                          <span className="text-[11px] font-semibold">{formatCurrency(payment.amount)}</span>
                           <Button
                             variant="ghost"
                             size="sm"
                             onClick={() => removePayment(payment.id)}
-                            className="h-6 w-6 p-0"
+                            className="h-5 w-5 p-0"
                           >
                             <Trash2 className="h-3 w-3 text-destructive" />
                           </Button>
@@ -397,19 +391,19 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
         </div>
 
         {/* Rodapé FIXO Compacto */}
-        <div className="border-t bg-background p-3 flex-shrink-0 shadow-lg">
+        <div className="border-t bg-background p-2 flex-shrink-0 shadow-lg">
           {/* Botões com resumo inline */}
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 h-9"
+              className="flex-1 h-8"
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancelar
             </Button>
             <Button
-              className="flex-1 h-9"
+              className="flex-1 h-8"
               onClick={handleConfirm}
               disabled={Math.abs(remaining) >= 0.01 || loading}
             >
