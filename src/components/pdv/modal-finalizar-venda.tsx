@@ -141,7 +141,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
     setPayments(payments.filter((p) => p.id !== id));
   };
 
-  const handleConfirm = () => {
+  const handleConfirm = async () => {
     // Validar cashback
     if (cashbackUsed > cashbackBalance) {
       toast.error("Valor de cashback maior que o saldo disponível!");
@@ -155,13 +155,16 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
     // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
     if (Math.abs(remaining) < 0.01) {
-      onConfirm(payments, cashbackUsed);
+      await onConfirm(payments, cashbackUsed);
       setPayments([]);
       setAmount("");
       setInstallments("1");
       setSelectedMethod("");
       setUseCashback(false);
       setCashbackAmount("");
+
+      // Redirecionar para página de vendas com reload
+      window.location.href = "/dashboard/vendas";
     } else {
       toast.error(`Ainda falta pagar ${formatCurrency(Math.abs(remaining))}`);
     }
