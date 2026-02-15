@@ -189,51 +189,38 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
         </DialogHeader>
 
         {/* Área Scrollável */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
-          {/* Resumo - Full Width */}
+        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
+          {/* Resumo - Full Width - Layout Fixo */}
           <div className="rounded-lg border p-4 bg-muted/50">
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-3 gap-4">
               <div className="text-center">
                 <p className="text-sm text-muted-foreground mb-1">Total da Venda</p>
                 <p className="text-2xl font-bold">{formatCurrency(total)}</p>
-              </div>
-              {cashbackUsed > 0 && (
-                <div className="text-center border-x">
-                  <p className="text-sm text-muted-foreground mb-1">Cashback Usado</p>
-                  <p className="text-2xl font-bold text-orange-600">-{formatCurrency(cashbackUsed)}</p>
-                </div>
-              )}
-              <div className={`text-center ${cashbackUsed > 0 ? 'border-r' : 'border-x'}`}>
-                <p className="text-sm text-muted-foreground mb-1">
-                  {cashbackUsed > 0 ? 'Total a Pagar' : 'Total Pago'}
-                </p>
-                <p className="text-2xl font-bold text-blue-600">
-                  {cashbackUsed > 0 ? formatCurrency(totalAfterCashback) : formatCurrency(totalPaid)}
-                </p>
-              </div>
-              {cashbackUsed === 0 && (
-                <div className="text-center">
-                  <p className="text-sm text-muted-foreground mb-1">Restante</p>
-                  <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                    {formatCurrency(remaining)}
+                {cashbackUsed > 0 && (
+                  <p className="text-xs text-orange-600 mt-1">
+                    Cashback: -{formatCurrency(cashbackUsed)}
                   </p>
-                </div>
-              )}
-              {cashbackUsed > 0 && (
-                <>
-                  <div className="text-center border-r">
-                    <p className="text-sm text-muted-foreground mb-1">Já Pago</p>
-                    <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
-                  </div>
-                  <div className="text-center">
-                    <p className="text-sm text-muted-foreground mb-1">Falta Pagar</p>
-                    <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                      {formatCurrency(Math.max(0, remaining))}
-                    </p>
-                  </div>
-                </>
-              )}
+                )}
+              </div>
+              <div className="text-center border-x">
+                <p className="text-sm text-muted-foreground mb-1">Total Pago</p>
+                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-sm text-muted-foreground mb-1">Restante</p>
+                <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  {formatCurrency(remaining)}
+                </p>
+              </div>
             </div>
+            {cashbackUsed > 0 && (
+              <div className="mt-3 pt-3 border-t">
+                <div className="flex justify-between items-center text-sm">
+                  <span className="text-muted-foreground">Valor após cashback:</span>
+                  <span className="font-semibold text-blue-600">{formatCurrency(totalAfterCashback)}</span>
+                </div>
+              </div>
+            )}
           </div>
 
           {/* Seção de Cashback COMPACTA (se cliente selecionado) */}
@@ -437,13 +424,35 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
         </div>
 
         {/* Rodapé FIXO com Botões de Ação */}
-        <div className="border-t bg-background p-6 flex gap-3 flex-shrink-0 shadow-lg">
-          <div className="flex-1 flex gap-3">
+        <div className="border-t bg-background p-4 flex-shrink-0 shadow-lg">
+          {/* Resumo Compacto do Rodapé */}
+          <div className="flex items-center justify-between mb-3 pb-3 border-b">
+            <div className="flex gap-4 text-sm">
+              <div>
+                <span className="text-muted-foreground">Total: </span>
+                <span className="font-semibold">{formatCurrency(cashbackUsed > 0 ? totalAfterCashback : total)}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Pago: </span>
+                <span className="font-semibold text-green-600">{formatCurrency(totalPaid)}</span>
+              </div>
+              <div>
+                <span className="text-muted-foreground">Falta: </span>
+                <span className={`font-semibold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                  {formatCurrency(Math.max(0, remaining))}
+                </span>
+              </div>
+            </div>
+          </div>
+
+          {/* Botões */}
+          <div className="flex gap-3">
             <Button
               variant="outline"
               className="flex-1"
               size="lg"
               onClick={() => onOpenChange(false)}
+              disabled={loading}
             >
               Cancelar
             </Button>
