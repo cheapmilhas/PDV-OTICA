@@ -339,23 +339,21 @@ function PDVPage() {
         }
       }
 
-      // Limpar carrinho e fechar modal
-      setCarrinho([]);
-      setClienteSelecionado(null);
-      setModalVendaOpen(false);
-
       // Toast de sucesso com cashback
       if (cashbackGerado > 0) {
         toast.success(
           `✅ Venda finalizada!\n💰 Cliente ganhou R$ ${cashbackGerado.toFixed(2)} de cashback`,
-          { duration: 5000 }
+          { duration: 3000 }
         );
       } else {
-        toast.success("✅ Venda finalizada com sucesso!");
+        toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
       }
 
-      // Redirecionar para lista de vendas
-      router.push("/dashboard/vendas");
+      // Redirecionar e RECARREGAR página de vendas
+      // Usar window.location para forçar reload completo
+      setTimeout(() => {
+        window.location.href = "/dashboard/vendas";
+      }, 1500);
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
 
