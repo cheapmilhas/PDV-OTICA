@@ -180,104 +180,80 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-[1000px] max-h-[90vh] flex flex-col p-0">
-        <DialogHeader className="px-6 pt-6 flex-shrink-0">
-          <DialogTitle>Finalizar Venda</DialogTitle>
-          <DialogDescription>
+      <DialogContent className="sm:max-w-[1100px] max-h-[85vh] flex flex-col p-0 overflow-hidden">
+        <DialogHeader className="px-6 pt-4 pb-3 flex-shrink-0">
+          <DialogTitle className="text-lg">Finalizar Venda</DialogTitle>
+          <DialogDescription className="text-sm">
             Adicione as formas de pagamento para concluir a venda
           </DialogDescription>
         </DialogHeader>
 
-        {/* Área Scrollável */}
-        <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4 min-h-0">
-          {/* Resumo - Full Width - Layout Fixo */}
-          <div className="rounded-lg border p-4 bg-muted/50">
-            <div className="grid grid-cols-3 gap-4">
+        {/* Conteúdo Compacto SEM Scroll */}
+        <div className="flex-1 px-6 py-3 space-y-3 overflow-hidden">
+          {/* Resumo Compacto - Uma Linha */}
+          <div className="rounded-lg border p-2 bg-muted/50">
+            <div className="flex items-center justify-around gap-2 text-sm">
               <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Total da Venda</p>
-                <p className="text-2xl font-bold">{formatCurrency(total)}</p>
+                <p className="text-xs text-muted-foreground">Total</p>
+                <p className="text-lg font-bold">{formatCurrency(total)}</p>
                 {cashbackUsed > 0 && (
-                  <p className="text-xs text-orange-600 mt-1">
-                    Cashback: -{formatCurrency(cashbackUsed)}
-                  </p>
+                  <p className="text-[10px] text-orange-600">-{formatCurrency(cashbackUsed)}</p>
                 )}
               </div>
-              <div className="text-center border-x">
-                <p className="text-sm text-muted-foreground mb-1">Total Pago</p>
-                <p className="text-2xl font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+              <div className="text-center border-x px-3">
+                <p className="text-xs text-muted-foreground">Pago</p>
+                <p className="text-lg font-bold text-green-600">{formatCurrency(totalPaid)}</p>
               </div>
               <div className="text-center">
-                <p className="text-sm text-muted-foreground mb-1">Restante</p>
-                <p className={`text-2xl font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                <p className="text-xs text-muted-foreground">Falta</p>
+                <p className={`text-lg font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
                   {formatCurrency(remaining)}
                 </p>
               </div>
             </div>
-            {cashbackUsed > 0 && (
-              <div className="mt-3 pt-3 border-t">
-                <div className="flex justify-between items-center text-sm">
-                  <span className="text-muted-foreground">Valor após cashback:</span>
-                  <span className="font-semibold text-blue-600">{formatCurrency(totalAfterCashback)}</span>
-                </div>
-              </div>
-            )}
           </div>
 
-          {/* Seção de Cashback COMPACTA (se cliente selecionado) */}
+          {/* Cashback Ultra Compacto */}
           {customerId && cashbackBalance > 0 && (
-            <div className="rounded-lg border-2 border-orange-200 bg-orange-50 dark:bg-orange-950/20 p-3">
-              <div className="flex items-center gap-3">
-                <div className="rounded-full p-2 bg-orange-500 text-white flex-shrink-0">
-                  <Gift className="h-4 w-4" />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <p className="font-semibold text-orange-900 dark:text-orange-100 text-sm">
-                      Cashback: {formatCurrency(cashbackBalance)}
-                    </p>
-                    <div className="flex items-center gap-2">
-                      <Checkbox
-                        id="use-cashback"
-                        checked={useCashback}
-                        onCheckedChange={(checked) => {
-                          setUseCashback(checked as boolean);
-                          if (!checked) {
-                            setCashbackAmount("");
-                          }
-                        }}
-                      />
-                      <Label htmlFor="use-cashback" className="cursor-pointer text-sm font-medium">
-                        Usar
-                      </Label>
-                    </div>
+            <div className="rounded border border-orange-300 bg-orange-50/50 dark:bg-orange-950/20 p-2">
+              <div className="flex items-center gap-2">
+                <Gift className="h-4 w-4 text-orange-600 flex-shrink-0" />
+                <div className="flex-1 flex items-center gap-2 flex-wrap text-xs">
+                  <span className="font-semibold text-orange-900 dark:text-orange-100">
+                    Cashback: {formatCurrency(cashbackBalance)}
+                  </span>
+                  <div className="flex items-center gap-1">
+                    <Checkbox
+                      id="use-cashback"
+                      checked={useCashback}
+                      onCheckedChange={(checked) => {
+                        setUseCashback(checked as boolean);
+                        if (!checked) setCashbackAmount("");
+                      }}
+                      className="h-3 w-3"
+                    />
+                    <Label htmlFor="use-cashback" className="cursor-pointer text-xs">Usar</Label>
                   </div>
-
                   {useCashback && (
-                    <div className="flex gap-2 mt-2">
+                    <>
                       <Input
                         type="number"
                         step="0.01"
-                        placeholder="Valor a usar"
+                        placeholder="Valor"
                         value={cashbackAmount}
                         onChange={(e) => setCashbackAmount(e.target.value)}
-                        className="flex-1 h-8"
+                        className="w-24 h-7 text-xs"
                         max={cashbackBalance}
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={useMaxCashback}
-                        className="whitespace-nowrap h-8"
+                        className="h-7 text-xs px-2"
                       >
-                        Máximo
+                        Máx
                       </Button>
-                    </div>
-                  )}
-
-                  {useCashback && cashbackUsed > 0 && (
-                    <p className="text-xs text-orange-700 dark:text-orange-300 mt-1">
-                      Desconto de {formatCurrency(cashbackUsed)} será aplicado
-                    </p>
+                    </>
                   )}
                 </div>
               </div>
@@ -290,121 +266,125 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-6">
+          <div className="grid grid-cols-2 gap-4">
             {/* Coluna Esquerda - Adicionar Pagamento */}
-            <div className="space-y-4">
+            <div className="space-y-2">
               {/* Formas de Pagamento */}
-              <div className="space-y-2">
-                <Label>Forma de Pagamento</Label>
-                <div className="grid grid-cols-5 gap-2">
+              <div className="space-y-1">
+                <Label className="text-xs">Forma de Pagamento</Label>
+                <div className="grid grid-cols-5 gap-1">
                   {paymentMethods.map((method) => {
                     const Icon = method.icon;
                     return (
                       <button
                         key={method.id}
                         onClick={() => setSelectedMethod(method.id)}
-                        className={`flex flex-col items-center gap-2 rounded-lg border-2 p-3 transition-all hover:bg-accent ${
+                        className={`flex flex-col items-center gap-1 rounded border-2 p-1.5 transition-all hover:bg-accent ${
                           selectedMethod === method.id
                             ? "border-primary bg-accent"
                             : "border-border"
                         }`}
                       >
-                        <div className={`rounded-full p-2 ${method.color} text-white`}>
-                          <Icon className="h-4 w-4" />
+                        <div className={`rounded-full p-1 ${method.color} text-white`}>
+                          <Icon className="h-3 w-3" />
                         </div>
-                        <span className="text-xs text-center leading-tight">{method.label}</span>
+                        <span className="text-[10px] text-center leading-tight">{method.label}</span>
                       </button>
                     );
                   })}
                 </div>
               </div>
 
-              {/* Valor */}
-              <div className="space-y-2">
-                <Label htmlFor="amount">Valor</Label>
-                <div className="flex gap-2">
-                  <Input
-                    id="amount"
-                    type="number"
-                    step="0.01"
-                    placeholder="0,00"
-                    value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
-                    disabled={!selectedMethod}
-                  />
-                  <Button variant="outline" onClick={quickFill} disabled={!selectedMethod || remaining <= 0}>
-                    Total
-                  </Button>
+              {/* Valor e Parcelas em linha */}
+              <div className="grid grid-cols-2 gap-2">
+                <div className="space-y-1">
+                  <Label htmlFor="amount" className="text-xs">Valor</Label>
+                  <div className="flex gap-1">
+                    <Input
+                      id="amount"
+                      type="number"
+                      step="0.01"
+                      placeholder="0,00"
+                      value={amount}
+                      onChange={(e) => setAmount(e.target.value)}
+                      disabled={!selectedMethod}
+                      className="h-8 text-sm"
+                    />
+                    <Button variant="outline" size="sm" onClick={quickFill} disabled={!selectedMethod || remaining <= 0} className="h-8 text-xs px-2">
+                      Total
+                    </Button>
+                  </div>
                 </div>
+
+                {selectedMethod === "CREDIT_CARD" && (
+                  <div className="space-y-1">
+                    <Label htmlFor="installments" className="text-xs">Parcelas</Label>
+                    <Input
+                      id="installments"
+                      type="number"
+                      min="1"
+                      max="12"
+                      value={installments}
+                      onChange={(e) => setInstallments(e.target.value)}
+                      className="h-8 text-sm"
+                    />
+                  </div>
+                )}
               </div>
 
-              {selectedMethod === "CREDIT_CARD" && (
-                <div className="space-y-2">
-                  <Label htmlFor="installments">Parcelas</Label>
-                  <Input
-                    id="installments"
-                    type="number"
-                    min="1"
-                    max="12"
-                    value={installments}
-                    onChange={(e) => setInstallments(e.target.value)}
-                  />
-                </div>
-              )}
-
-              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full" size="lg">
+              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-8 text-sm">
                 Adicionar Pagamento
               </Button>
             </div>
 
             {/* Coluna Direita - Lista de Pagamentos */}
-            <div className="space-y-2">
-              <Label>Pagamentos Adicionados ({payments.length})</Label>
+            <div className="space-y-1">
+              <Label className="text-xs">Pagamentos ({payments.length})</Label>
               {payments.length === 0 ? (
-                <div className="flex flex-col items-center justify-center h-[280px] text-center text-muted-foreground border-2 border-dashed rounded-lg">
-                  <Wallet className="h-12 w-12 opacity-20 mb-2" />
-                  <p className="text-sm">Nenhum pagamento adicionado</p>
-                  <p className="text-xs mt-1">Selecione uma forma de pagamento e adicione o valor</p>
+                <div className="flex flex-col items-center justify-center h-32 text-center text-muted-foreground border border-dashed rounded">
+                  <Wallet className="h-8 w-8 opacity-20 mb-1" />
+                  <p className="text-xs">Nenhum pagamento</p>
                 </div>
               ) : (
-                <div className="space-y-2 h-[280px] overflow-y-auto pr-2">
+                <div className="space-y-1 h-32 overflow-y-auto pr-1">
                   {payments.map((payment) => {
                     const method = paymentMethods.find((m) => m.id === payment.method);
                     const Icon = method?.icon;
                     return (
                       <div
                         key={payment.id}
-                        className="flex items-center justify-between rounded-lg border p-3 bg-muted/30"
+                        className="flex items-center justify-between rounded border p-1.5 bg-muted/30"
                       >
-                        <div className="flex items-center gap-3">
+                        <div className="flex items-center gap-2">
                           {Icon && (
-                            <div className={`rounded-full p-2 ${method.color} text-white`}>
-                              <Icon className="h-4 w-4" />
+                            <div className={`rounded-full p-1 ${method.color} text-white`}>
+                              <Icon className="h-3 w-3" />
                             </div>
                           )}
                           <div>
-                            <p className="font-medium">{method?.label}</p>
+                            <p className="text-xs font-medium">{method?.label}</p>
                             {payment.installments && payment.installments > 1 && (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-[10px] text-muted-foreground">
                                 {payment.installments}x de {formatCurrency(payment.amount / payment.installments)}
                               </p>
                             )}
                             {payment.installmentConfig && (
-                              <p className="text-xs text-muted-foreground">
+                              <p className="text-[10px] text-muted-foreground">
                                 {payment.installmentConfig.count}x de{" "}
                                 {formatCurrency(payment.amount / payment.installmentConfig.count)}
                               </p>
                             )}
                           </div>
                         </div>
-                        <div className="flex items-center gap-2">
-                          <span className="font-semibold">{formatCurrency(payment.amount)}</span>
+                        <div className="flex items-center gap-1">
+                          <span className="text-xs font-semibold">{formatCurrency(payment.amount)}</span>
                           <Button
                             variant="ghost"
-                            size="icon"
+                            size="sm"
                             onClick={() => removePayment(payment.id)}
+                            className="h-6 w-6 p-0"
                           >
-                            <Trash2 className="h-4 w-4 text-destructive" />
+                            <Trash2 className="h-3 w-3 text-destructive" />
                           </Button>
                         </div>
                       </div>
@@ -414,57 +394,28 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
               )}
             </div>
           </div>
-
-          {/* Mensagem de ajuda */}
-          {payments.length === 0 && (
-            <div className="rounded-lg bg-blue-50 dark:bg-blue-950 border border-blue-200 dark:border-blue-800 p-3 text-sm text-blue-800 dark:text-blue-200">
-              💡 <strong>Como finalizar:</strong> Selecione uma forma de pagamento, digite o valor e clique em &quot;Adicionar Pagamento&quot;
-            </div>
-          )}
         </div>
 
-        {/* Rodapé FIXO com Botões de Ação */}
-        <div className="border-t bg-background p-4 flex-shrink-0 shadow-lg">
-          {/* Resumo Compacto do Rodapé */}
-          <div className="flex items-center justify-between mb-3 pb-3 border-b">
-            <div className="flex gap-4 text-sm">
-              <div>
-                <span className="text-muted-foreground">Total: </span>
-                <span className="font-semibold">{formatCurrency(cashbackUsed > 0 ? totalAfterCashback : total)}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Pago: </span>
-                <span className="font-semibold text-green-600">{formatCurrency(totalPaid)}</span>
-              </div>
-              <div>
-                <span className="text-muted-foreground">Falta: </span>
-                <span className={`font-semibold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  {formatCurrency(Math.max(0, remaining))}
-                </span>
-              </div>
-            </div>
-          </div>
-
-          {/* Botões */}
-          <div className="flex gap-3">
+        {/* Rodapé FIXO Compacto */}
+        <div className="border-t bg-background p-3 flex-shrink-0 shadow-lg">
+          {/* Botões com resumo inline */}
+          <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1"
-              size="lg"
+              className="flex-1 h-9"
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancelar
             </Button>
             <Button
-              className="flex-1"
-              size="lg"
+              className="flex-1 h-9"
               onClick={handleConfirm}
               disabled={Math.abs(remaining) >= 0.01 || loading}
             >
               {loading ? (
                 <>
-                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                  <Loader2 className="mr-1 h-3 w-3 animate-spin" />
                   Finalizando...
                 </>
               ) : Math.abs(remaining) >= 0.01 ? (
@@ -473,8 +424,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                 </>
               ) : (
                 <>
-                  <Check className="mr-2 h-4 w-4" />
-                  Confirmar Venda
+                  <Check className="mr-1 h-3 w-3" />
+                  Confirmar ({formatCurrency(total)})
                 </>
               )}
             </Button>
