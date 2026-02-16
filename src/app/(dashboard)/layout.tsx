@@ -1,5 +1,6 @@
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
+import { ThemeProvider } from "@/components/theme-provider";
 
 export default function DashboardLayout({
   children,
@@ -7,7 +8,8 @@ export default function DashboardLayout({
   children: React.ReactNode;
 }) {
   return (
-    <div className="flex h-screen overflow-hidden">
+    <ThemeProvider>
+      <div className="flex h-screen overflow-hidden">
       {/* Sidebar - esconde em mobile */}
       <div className="hidden md:block">
         <Sidebar />
@@ -21,5 +23,6 @@ export default function DashboardLayout({
         </main>
       </div>
     </div>
+    </ThemeProvider>
   );
 }

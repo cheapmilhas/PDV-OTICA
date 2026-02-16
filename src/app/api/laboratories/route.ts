@@ -20,13 +20,13 @@ const laboratoriesQuerySchema = z.object({
  */
 const createLaboratorySchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
-  code: z.string().optional(),
-  cnpj: z.string().optional(),
-  phone: z.string().optional(),
-  email: z.string().email("Email inválido").optional().or(z.literal("")),
-  orderEmail: z.string().email("Email inválido").optional().or(z.literal("")),
-  website: z.string().url("URL inválida").optional().or(z.literal("")),
-  contactPerson: z.string().optional(),
+  code: z.string().optional().nullable(),
+  cnpj: z.string().optional().nullable(),
+  phone: z.string().optional().nullable(),
+  email: z.string().email("Email inválido").optional().nullable().or(z.literal("")),
+  orderEmail: z.string().email("Email inválido").optional().nullable().or(z.literal("")),
+  website: z.string().optional().nullable().or(z.literal("")), // Removido .url() pois pode ser apenas domínio
+  contactPerson: z.string().optional().nullable(),
   defaultLeadTimeDays: z.coerce.number().int().min(1).default(7),
   urgentLeadTimeDays: z.coerce.number().int().min(1).default(3),
   paymentTermDays: z.coerce.number().int().min(0).default(30),
