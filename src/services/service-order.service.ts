@@ -143,7 +143,6 @@ export class ServiceOrderService {
         },
       });
 
-      let total = 0;
       for (const item of items) {
         // Buscar preço do produto se productId for fornecido
         let unitPrice = 0;
@@ -157,7 +156,6 @@ export class ServiceOrderService {
 
         const qty = item.qty || 1;
         const lineTotal = unitPrice * qty;
-        total += lineTotal;
 
         await tx.serviceOrderItem.create({
           data: {
@@ -171,12 +169,6 @@ export class ServiceOrderService {
           },
         });
       }
-
-      // Atualizar total da ordem
-      await tx.serviceOrder.update({
-        where: { id: newOrder.id },
-        data: { total },
-      });
 
       return newOrder;
     });
@@ -214,7 +206,6 @@ export class ServiceOrderService {
           where: { serviceOrderId: id },
         });
 
-        let total = 0;
         for (const item of items) {
           // Buscar preço do produto se productId for fornecido
           let unitPrice = 0;
@@ -228,7 +219,6 @@ export class ServiceOrderService {
 
           const qty = item.qty || 1;
           const lineTotal = unitPrice * qty;
-          total += lineTotal;
 
           await tx.serviceOrderItem.create({
             data: {
@@ -242,8 +232,6 @@ export class ServiceOrderService {
             },
           });
         }
-
-        updateData.total = total;
       }
 
       return tx.serviceOrder.update({
