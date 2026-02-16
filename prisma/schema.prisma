@@ -604,6 +604,7 @@ model Lab {
   priceRanges       LabPriceRange[]
   lensServices      LensServiceDetail[]
   serviceOrderItems ServiceOrderItem[]
+  serviceOrders     ServiceOrder[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -955,6 +956,8 @@ model ServiceOrder {
   customer       Customer      @relation(fields: [customerId], references: [id])
   prescriptionId String?
   prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
+  laboratoryId   String?
+  laboratory     Lab?          @relation(fields: [laboratoryId], references: [id])
 
   createdByUserId String
   createdByUser   User   @relation("SOCreator", fields: [createdByUserId], references: [id])
