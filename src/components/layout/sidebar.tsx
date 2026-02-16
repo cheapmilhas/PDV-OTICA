@@ -20,6 +20,7 @@ import {
   Bell,
   Wallet,
   Target,
+  FlaskConical,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 
@@ -81,6 +82,12 @@ const menuItems = [
         name: "Fornecedores",
         href: "/dashboard/fornecedores",
         icon: Truck,
+        permission: "suppliers.access"
+      },
+      {
+        name: "Laboratórios",
+        href: "/dashboard/laboratorios",
+        icon: FlaskConical,
         permission: "suppliers.access"
       },
       {
