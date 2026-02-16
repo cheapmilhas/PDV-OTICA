@@ -21,6 +21,7 @@ import {
   Wallet,
   Target,
   FlaskConical,
+  Sparkles,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -91,6 +92,12 @@ const menuItems = [
         href: "/dashboard/laboratorios",
         icon: FlaskConical,
         permission: "laboratories.access"
+      },
+      {
+        name: "Tratamentos",
+        href: "/dashboard/tratamentos",
+        icon: Sparkles,
+        permission: "products.access"
       },
       {
         name: "Funcionários",

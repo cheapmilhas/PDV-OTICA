@@ -321,6 +321,7 @@ model Company {
   stockAdjustments   StockAdjustment[]
   systemRules        SystemRule[]
   companySettings    CompanySettings? @relation("CompanySettings")
+  lensTreatments     LensTreatment[]  @relation("CompanyLensTreatments")
 }
 
 model Branch {
@@ -608,6 +609,28 @@ model Lab {
 
   @@unique([companyId, code])
   @@index([companyId, name])
+}
+
+// ==============================
+// TRATAMENTOS DE LENTES
+// ==============================
+
+model LensTreatment {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("CompanyLensTreatments", fields: [companyId], references: [id])
+
+  name        String // Ex: "Anti-reflexo", "Transitions", "Blue Light"
+  description String? @db.Text
+  price       Decimal @db.Decimal(10, 2) // Preço adicional do tratamento
+
+  // Metadata
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, active])
 }
 
 model LabPriceRange {
