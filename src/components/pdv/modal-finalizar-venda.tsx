@@ -15,6 +15,8 @@ import {
   Check,
   Loader2,
   Gift,
+  Download,
+  CheckCircle2,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalConfigurarCrediario } from "./modal-configurar-crediario";
@@ -39,7 +41,7 @@ interface ModalFinalizarVendaProps {
   onOpenChange: (open: boolean) => void;
   total: number;
   customerId?: string | null;
-  onConfirm: (payments: Payment[], cashbackUsed?: number) => void;
+  onConfirm: (payments: Payment[], cashbackUsed?: number) => Promise<string | void> | void;
   loading?: boolean;
 }
 
@@ -60,6 +62,11 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   // Estados para modal de crediário
   const [modalCrediarioOpen, setModalCrediarioOpen] = useState(false);
   const [pendingCrediarioAmount, setPendingCrediarioAmount] = useState(0);
+
+  // Estados para modal de sucesso do carnê
+  const [showCarneSuccess, setShowCarneSuccess] = useState(false);
+  const [carneLoading, setCarneLoading] = useState(false);
+  const [completedSaleId, setCompletedSaleId] = useState<string | null>(null);
 
   // Estados para cashback
   const [cashbackBalance, setCashbackBalance] = useState(0);
@@ -141,7 +148,29 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
     setPayments(payments.filter((p) => p.id !== id));
   };
 
-  const handleConfirm = () => {
+  const handleDownloadCarne = async (saleId: string) => {
+    setCarneLoading(true);
+    try {
+      const res = await fetch(`/api/sales/${saleId}/carne`);
+      if (!res.ok) throw new Error("Erro ao gerar carnê");
+      const blob = await res.blob();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `carne_venda_${saleId.substring(0, 8)}.pdf`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success("Carnê baixado com sucesso!");
+    } catch (error) {
+      toast.error("Erro ao baixar carnê");
+    } finally {
+      setCarneLoading(false);
+    }
+  };
+
+  const handleConfirm = async () => {
     // Validar cashback
     if (cashbackUsed > cashbackBalance) {
       toast.error("Valor de cashback maior que o saldo disponível!");
@@ -155,19 +184,39 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
     // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
     if (Math.abs(remaining) < 0.01) {
-      onConfirm(payments, cashbackUsed);
-      setPayments([]);
-      setAmount("");
-      setInstallments("1");
-      setSelectedMethod("");
-      setUseCashback(false);
-      setCashbackAmount("");
+      const hasCrediario = payments.some(p => p.method === "STORE_CREDIT");
+      const result = await onConfirm(payments, cashbackUsed);
 
-      // Redirecionar para página de vendas com reload
-      window.location.href = "/dashboard/vendas";
+      // Se tem crediário e retornou o ID da venda, mostrar modal de sucesso com download
+      if (hasCrediario && result) {
+        setCompletedSaleId(result);
+        setShowCarneSuccess(true);
+        // Não redireciona ainda - espera o usuário decidir
+      } else {
+        setPayments([]);
+        setAmount("");
+        setInstallments("1");
+        setSelectedMethod("");
+        setUseCashback(false);
+        setCashbackAmount("");
+        // Redirecionar para página de vendas com reload
+        window.location.href = "/dashboard/vendas";
+      }
     } else {
       toast.error(`Ainda falta pagar ${formatCurrency(Math.abs(remaining))}`);
     }
+  };
+
+  const handleCloseCarneSuccess = () => {
+    setShowCarneSuccess(false);
+    setCompletedSaleId(null);
+    setPayments([]);
+    setAmount("");
+    setInstallments("1");
+    setSelectedMethod("");
+    setUseCashback(false);
+    setCashbackAmount("");
+    window.location.href = "/dashboard/vendas";
   };
 
   const useMaxCashback = () => {
@@ -437,6 +486,53 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
         amount={pendingCrediarioAmount}
         onConfirm={handleConfirmarCrediario}
       />
+
+      {/* Modal de Sucesso - Download do Carnê */}
+      <Dialog open={showCarneSuccess} onOpenChange={() => {}}>
+        <DialogContent className="sm:max-w-[450px]">
+          <DialogHeader className="text-center">
+            <div className="flex justify-center mb-3">
+              <div className="rounded-full bg-green-100 p-4">
+                <CheckCircle2 className="h-10 w-10 text-green-600" />
+              </div>
+            </div>
+            <DialogTitle className="text-xl text-center">Venda Finalizada com Sucesso!</DialogTitle>
+            <DialogDescription className="text-center text-base mt-2">
+              Esta venda possui pagamento no <strong>Crediário</strong>.
+              <br />
+              Deseja baixar o carnê de pagamento?
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex flex-col gap-3 mt-4">
+            <Button
+              size="lg"
+              className="w-full bg-green-600 hover:bg-green-700"
+              onClick={() => completedSaleId && handleDownloadCarne(completedSaleId)}
+              disabled={carneLoading}
+            >
+              {carneLoading ? (
+                <>
+                  <Loader2 className="mr-2 h-5 w-5 animate-spin" />
+                  Gerando Carnê...
+                </>
+              ) : (
+                <>
+                  <Download className="mr-2 h-5 w-5" />
+                  Baixar Carnê (PDF)
+                </>
+              )}
+            </Button>
+            <Button
+              variant="outline"
+              size="lg"
+              className="w-full"
+              onClick={handleCloseCarneSuccess}
+            >
+              Pular - Ir para Vendas
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
     </Dialog>
   );
 }

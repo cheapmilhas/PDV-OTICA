@@ -311,46 +311,23 @@ function PDVPage() {
         }
       }
 
-      // Verificar se tem crediário e oferecer download do carnê
-      const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
-      if (hasCrediario) {
-        const downloadCarne = confirm("Venda parcelada! Deseja baixar o carnê de pagamento?");
-        if (downloadCarne) {
-          try {
-            const carneRes = await fetch(`/api/sales/${vendaId}/carne`);
-            if (carneRes.ok) {
-              const carneBlob = await carneRes.blob();
-              const url = window.URL.createObjectURL(carneBlob);
-              const link = document.createElement("a");
-              link.href = url;
-              link.download = `carne_venda_${vendaId.substring(0, 8)}.pdf`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              window.URL.revokeObjectURL(url);
-              toast.success("Carnê baixado com sucesso!");
-            } else {
-              toast.error("Erro ao gerar carnê. Você pode baixá-lo depois na tela de vendas.");
-            }
-          } catch (err) {
-            console.error("Erro ao baixar carnê:", err);
-            toast.error("Erro ao baixar carnê. Você pode baixá-lo depois na tela de vendas.");
-          }
-        }
-      }
-
       // Toast de sucesso com cashback
       if (cashbackGerado > 0) {
         toast.success(
-          `✅ Venda finalizada!\n💰 Cliente ganhou R$ ${cashbackGerado.toFixed(2)} de cashback`,
+          `Venda finalizada! Cliente ganhou R$ ${cashbackGerado.toFixed(2)} de cashback`,
           { duration: 3000 }
         );
       } else {
-        toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
+        toast.success("Venda finalizada com sucesso!", { duration: 2000 });
       }
 
-      // Redirecionar e RECARREGAR página de vendas
-      // Usar window.location para forçar reload completo
+      // Retornar o ID da venda para o modal poder baixar o carnê
+      const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
+      if (hasCrediario) {
+        return vendaId;
+      }
+
+      // Se não tem crediário, redirecionar
       setTimeout(() => {
         window.location.href = "/dashboard/vendas";
       }, 1500);
