@@ -131,8 +131,6 @@ export class ServiceOrderService {
       );
     }
 
-    const total = items.reduce((sum, item) => sum + item.price, 0);
-
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.serviceOrder.create({
         data: {
@@ -145,18 +143,40 @@ export class ServiceOrderService {
         },
       });
 
+      let total = 0;
       for (const item of items) {
+        // Buscar preço do produto se productId for fornecido
+        let unitPrice = 0;
+        if (item.productId) {
+          const product = await tx.product.findUnique({
+            where: { id: item.productId },
+            select: { salePrice: true },
+          });
+          unitPrice = product ? Number(product.salePrice) : 0;
+        }
+
+        const qty = item.qty || 1;
+        const lineTotal = unitPrice * qty;
+        total += lineTotal;
+
         await tx.serviceOrderItem.create({
           data: {
             serviceOrderId: newOrder.id,
+            productId: item.productId || undefined,
             description: item.description,
-            qty: 1,
-            unitPrice: item.price || 0,
+            qty,
+            unitPrice,
             discount: 0,
-            lineTotal: item.price || 0,
+            lineTotal,
           },
         });
       }
+
+      // Atualizar total da ordem
+      await tx.serviceOrder.update({
+        where: { id: newOrder.id },
+        data: { total },
+      });
 
       return newOrder;
     });
@@ -190,25 +210,40 @@ export class ServiceOrderService {
       };
 
       if (items && items.length > 0) {
-        const total = items.reduce((sum, item) => sum + item.price, 0);
-        updateData.total = total;
-
         await tx.serviceOrderItem.deleteMany({
           where: { serviceOrderId: id },
         });
 
+        let total = 0;
         for (const item of items) {
+          // Buscar preço do produto se productId for fornecido
+          let unitPrice = 0;
+          if (item.productId) {
+            const product = await tx.product.findUnique({
+              where: { id: item.productId },
+              select: { salePrice: true },
+            });
+            unitPrice = product ? Number(product.salePrice) : 0;
+          }
+
+          const qty = item.qty || 1;
+          const lineTotal = unitPrice * qty;
+          total += lineTotal;
+
           await tx.serviceOrderItem.create({
             data: {
               serviceOrderId: id,
+              productId: item.productId || undefined,
               description: item.description,
-              qty: 1,
-              unitPrice: item.price || 0,
+              qty,
+              unitPrice,
               discount: 0,
-              lineTotal: item.price || 0,
+              lineTotal,
             },
           });
         }
+
+        updateData.total = total;
       }
 
       return tx.serviceOrder.update({

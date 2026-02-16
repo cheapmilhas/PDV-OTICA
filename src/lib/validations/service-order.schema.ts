@@ -9,9 +9,9 @@ import { ServiceOrderStatus } from "@prisma/client";
  * Schema para item/serviço da OS
  */
 export const serviceOrderItemSchema = z.object({
-  type: z.string().min(3, "Tipo de serviço muito curto").max(100, "Tipo muito longo"),
-  description: z.string().min(3, "Descrição muito curta").max(500, "Descrição muito longa"),
-  price: z.coerce.number().positive("Preço deve ser positivo"),
+  productId: z.string().optional(),
+  description: z.string().min(1, "Descrição é obrigatória").max(500, "Descrição muito longa"),
+  qty: z.coerce.number().int().min(1).default(1),
   observations: z.string().max(500, "Observações muito longas").optional(),
 });
 
@@ -107,9 +107,13 @@ export function sanitizeServiceOrderDTO(
 
 /**
  * Helper para calcular total da OS
+ * Nota: Como o schema não tem mais o campo price, este helper não pode calcular o total
+ * O total deve ser calculado no backend após buscar os preços dos produtos
  */
 export function calculateOrderTotal(items: ServiceOrderItemDTO[]): number {
-  return items.reduce((sum, item) => sum + item.price, 0);
+  // Não podemos calcular sem os preços dos produtos
+  // Este helper está deprecated e será removido
+  return 0;
 }
 
 /**

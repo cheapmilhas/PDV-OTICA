@@ -27,6 +27,7 @@ import {
 } from "@/components/ui/dialog";
 import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface Customer {
   id: string;
@@ -85,7 +86,7 @@ const typeConfig = {
   },
 };
 
-export default function RemindersPage() {
+function RemindersPageContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
@@ -601,5 +602,13 @@ export default function RemindersPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function RemindersPage() {
+  return (
+    <ProtectedRoute permission="reminders.access">
+      <RemindersPageContent />
+    </ProtectedRoute>
   );
 }

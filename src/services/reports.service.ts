@@ -17,6 +17,10 @@ import {
   startOfYear,
   endOfYear,
   subDays,
+  subWeeks,
+  subMonths,
+  subQuarters,
+  subYears,
   differenceInYears,
   getDay,
   getHours,
@@ -690,80 +694,128 @@ export const reportsService = {
   // DASHBOARD GERAL
   // =====================
 
-  async getDashboardSummary(branchId: string, companyId: string) {
+  async getDashboardSummary(
+    branchId: string,
+    companyId: string,
+    period: "today" | "week" | "month" | "quarter" | "year" | "custom" = "month"
+  ) {
     const now = new Date();
-    const startMonth = startOfMonth(now);
-    const endMonth = endOfMonth(now);
-    const startLastMonth = startOfMonth(subDays(startMonth, 1));
-    const endLastMonth = endOfMonth(subDays(startMonth, 1));
 
-    // Vendas do mês atual
-    const currentMonthSales = await prisma.sale.aggregate({
+    // Determinar o período atual e anterior com base no parâmetro
+    let startCurrent: Date, endCurrent: Date, startPrevious: Date, endPrevious: Date;
+
+    switch (period) {
+      case "today":
+        startCurrent = startOfDay(now);
+        endCurrent = endOfDay(now);
+        startPrevious = startOfDay(subDays(now, 1));
+        endPrevious = endOfDay(subDays(now, 1));
+        break;
+      case "week":
+        startCurrent = startOfWeek(now);
+        endCurrent = endOfWeek(now);
+        startPrevious = startOfWeek(subWeeks(now, 1));
+        endPrevious = endOfWeek(subWeeks(now, 1));
+        break;
+      case "quarter":
+        startCurrent = startOfQuarter(now);
+        endCurrent = endOfQuarter(now);
+        startPrevious = startOfQuarter(subQuarters(now, 1));
+        endPrevious = endOfQuarter(subQuarters(now, 1));
+        break;
+      case "year":
+        startCurrent = startOfYear(now);
+        endCurrent = endOfYear(now);
+        startPrevious = startOfYear(subYears(now, 1));
+        endPrevious = endOfYear(subYears(now, 1));
+        break;
+      case "month":
+      default:
+        startCurrent = startOfMonth(now);
+        endCurrent = endOfMonth(now);
+        startPrevious = startOfMonth(subMonths(now, 1));
+        endPrevious = endOfMonth(subMonths(now, 1));
+        break;
+    }
+
+    // Vendas do período atual
+    const currentSales = await prisma.sale.aggregate({
       where: {
         branchId,
-        createdAt: { gte: startMonth, lte: endMonth },
+        createdAt: { gte: startCurrent, lte: endCurrent },
         status: { in: ["COMPLETED"] },
       },
       _sum: { total: true },
       _count: { id: true },
     });
 
-    // Vendas do mês passado
-    const lastMonthSales = await prisma.sale.aggregate({
+    // Vendas do período anterior
+    const previousSales = await prisma.sale.aggregate({
       where: {
         branchId,
-        createdAt: { gte: startLastMonth, lte: endLastMonth },
+        createdAt: { gte: startPrevious, lte: endPrevious },
         status: { in: ["COMPLETED"] },
       },
       _sum: { total: true },
       _count: { id: true },
     });
 
-    // Clientes novos no mês
+    // Clientes novos no período
     const newCustomers = await prisma.customer.count({
       where: {
         companyId,
-        createdAt: { gte: startMonth, lte: endMonth },
+        createdAt: { gte: startCurrent, lte: endCurrent },
       },
     });
 
-    // Top 5 produtos do mês
+    // Top 5 produtos do período
     const topProducts = await this.getProductsReport(branchId, {
-      period: "month",
+      period: period as any,
       limit: 5,
     });
 
     // Horários de pico
     const peakHours = await this.getTemporalReport(branchId, {
-      period: "month",
+      period: period as any,
       groupBy: "hour",
     });
 
     // Calcular variação
-    const currentRevenue = Number(currentMonthSales._sum.total) || 0;
-    const lastRevenue = Number(lastMonthSales._sum.total) || 0;
-    const revenueChange = lastRevenue > 0
-      ? ((currentRevenue - lastRevenue) / lastRevenue) * 100
+    const currentRevenue = Number(currentSales._sum.total) || 0;
+    const previousRevenue = Number(previousSales._sum.total) || 0;
+    const revenueChange = previousRevenue > 0
+      ? ((currentRevenue - previousRevenue) / previousRevenue) * 100
+      : 0;
+
+    const currentSalesCount = currentSales._count.id || 0;
+    const previousSalesCount = previousSales._count.id || 0;
+    const salesCountChange = previousSalesCount > 0
+      ? ((currentSalesCount - previousSalesCount) / previousSalesCount) * 100
       : 0;
 
     return {
-      currentMonth: {
-        revenue: currentRevenue,
-        salesCount: currentMonthSales._count.id,
-        averageTicket: currentMonthSales._count.id > 0
-          ? currentRevenue / currentMonthSales._count.id
-          : 0,
+      revenue: {
+        current: currentRevenue,
+        previous: previousRevenue,
+        growth: revenueChange,
       },
-      comparison: {
-        revenueChange,
-        isPositive: revenueChange >= 0,
+      sales: {
+        current: currentSalesCount,
+        previous: previousSalesCount,
+        growth: salesCountChange,
       },
-      newCustomers,
-      topProducts: topProducts.ranking.slice(0, 5),
-      peakHours: peakHours.data
-        .filter((h: any) => h.salesCount > 0)
-        .sort((a: any, b: any) => b.salesCount - a.salesCount)
-        .slice(0, 3),
+      customers: {
+        current: newCustomers,
+        previous: 0, // TODO: calcular clientes do período anterior se necessário
+        growth: 0,
+      },
+      peakHour: peakHours.data && peakHours.data.length > 0
+        ? {
+            hour: peakHours.data[0].hour || 0,
+            count: peakHours.data[0].salesCount || 0,
+            revenue: peakHours.data[0].revenue || 0,
+          }
+        : { hour: 0, count: 0, revenue: 0 },
     };
   },
 };

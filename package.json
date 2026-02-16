@@ -11,6 +11,7 @@
     "format": "prettier --write \"src/**/*.{ts,tsx}\"",
     "postinstall": "prisma generate",
     "seed:mock": "npx tsx prisma/seed-mock.ts",
+    "seed:permissions": "npx tsx prisma/seeds/index.ts",
     "test:evidencias": "npx tsx scripts/test-evidencias.ts",
     "validate:imports": "npx tsx scripts/validate-lucide-imports.ts",
     "fix:imports": "npx tsx scripts/fix-lucide-imports.ts"
