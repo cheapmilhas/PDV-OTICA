@@ -30,15 +30,16 @@ const updateLaboratorySchema = z.object({
  */
 export async function GET(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const { id } = await params;
 
     const laboratory = await prisma.lab.findFirst({
       where: {
-        id: params.id,
+        id,
         companyId,
       },
     });
@@ -69,16 +70,17 @@ export async function GET(
  */
 export async function PUT(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const { id } = await params;
 
     // Verificar se existe
     const existing = await prisma.lab.findFirst({
       where: {
-        id: params.id,
+        id,
         companyId,
       },
     });
@@ -94,7 +96,7 @@ export async function PUT(
     const data = updateLaboratorySchema.parse(body);
 
     const laboratory = await prisma.lab.update({
-      where: { id: params.id },
+      where: { id },
       data: {
         ...data,
         email: data.email || undefined,
@@ -122,16 +124,17 @@ export async function PUT(
  */
 export async function DELETE(
   request: NextRequest,
-  { params }: { params: { id: string } }
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const { id } = await params;
 
     // Verificar se existe
     const existing = await prisma.lab.findFirst({
       where: {
-        id: params.id,
+        id,
         companyId,
       },
     });
@@ -145,7 +148,7 @@ export async function DELETE(
 
     // Soft delete - apenas desativa
     await prisma.lab.update({
-      where: { id: params.id },
+      where: { id },
       data: { active: false },
     });
 
