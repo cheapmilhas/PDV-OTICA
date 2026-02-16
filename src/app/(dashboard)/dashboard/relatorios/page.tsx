@@ -14,12 +14,25 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
-import { useToast } from "@/hooks/use-toast";
+import toast from "react-hot-toast";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { TrendingUp, Users, ShoppingCart, Clock } from "lucide-react";
+import {
+  TrendingUp,
+  TrendingDown,
+  Users,
+  ShoppingCart,
+  Clock,
+  Loader2,
+  DollarSign,
+  BarChart3,
+  Receipt,
+  Eye,
+  ArrowUpRight,
+  ArrowDownRight,
+} from "lucide-react";
 
 type PeriodType = "today" | "week" | "month" | "quarter" | "year";
 
@@ -128,7 +141,6 @@ export default function ReportsPage() {
   const [customers, setCustomers] = useState<CustomerReport | null>(null);
   const [temporal, setTemporal] = useState<TemporalReport | null>(null);
   const [optical, setOptical] = useState<OpticalReport | null>(null);
-  const { toast } = useToast();
 
   useEffect(() => {
     loadData();
@@ -139,7 +151,7 @@ export default function ReportsPage() {
     try {
       const params = new URLSearchParams({ period });
 
-      const [dashRes, prodRes, custRes, tempRes, optRes] = await Promise.all([
+      const results = await Promise.allSettled([
         fetch(`/api/reports/dashboard?${params}`),
         fetch(`/api/reports/products?${params}&limit=10`),
         fetch(`/api/reports/customers?${params}`),
@@ -147,43 +159,77 @@ export default function ReportsPage() {
         fetch(`/api/reports/optical?${params}`),
       ]);
 
-      if (!dashRes.ok || !prodRes.ok || !custRes.ok || !tempRes.ok || !optRes.ok) {
-        throw new Error("Erro ao carregar relatórios");
+      // Process each result individually so partial data can still show
+      if (results[0].status === "fulfilled" && results[0].value.ok) {
+        const data = await results[0].value.json();
+        setDashboard(data.data);
       }
-
-      const [dashData, prodData, custData, tempData, optData] = await Promise.all([
-        dashRes.json(),
-        prodRes.json(),
-        custRes.json(),
-        tempRes.json(),
-        optRes.json(),
-      ]);
-
-      setDashboard(dashData.data);
-      setProducts(prodData.data);
-      setCustomers(custData.data);
-      setTemporal(tempData.data);
-      setOptical(optData.data);
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: "Não foi possível carregar os relatórios.",
-        variant: "destructive",
-      });
+      if (results[1].status === "fulfilled" && results[1].value.ok) {
+        const data = await results[1].value.json();
+        setProducts(data.data);
+      }
+      if (results[2].status === "fulfilled" && results[2].value.ok) {
+        const data = await results[2].value.json();
+        setCustomers(data.data);
+      }
+      if (results[3].status === "fulfilled" && results[3].value.ok) {
+        const data = await results[3].value.json();
+        setTemporal(data.data);
+      }
+      if (results[4].status === "fulfilled" && results[4].value.ok) {
+        const data = await results[4].value.json();
+        setOptical(data.data);
+      }
+    } catch {
+      toast.error("Não foi possível carregar os relatórios.");
     } finally {
       setLoading(false);
     }
   }
 
-  function getGrowthColor(growth: number) {
-    if (growth > 0) return "text-green-600";
-    if (growth < 0) return "text-red-600";
-    return "text-gray-600";
-  }
+  const GrowthBadge = ({ growth }: { growth: number }) => {
+    const isPositive = growth > 0;
+    const isZero = growth === 0;
+    return (
+      <span
+        className={`inline-flex items-center gap-0.5 text-xs font-medium ${
+          isPositive
+            ? "text-green-600"
+            : isZero
+            ? "text-gray-500"
+            : "text-red-600"
+        }`}
+      >
+        {isPositive ? (
+          <ArrowUpRight className="h-3 w-3" />
+        ) : !isZero ? (
+          <ArrowDownRight className="h-3 w-3" />
+        ) : null}
+        {isPositive ? "+" : ""}
+        {growth.toFixed(1)}%
+      </span>
+    );
+  };
 
-  function getGrowthSign(growth: number) {
-    if (growth > 0) return "+";
-    return "";
+  const ticketMedio =
+    dashboard && dashboard.sales.current > 0
+      ? dashboard.revenue.current / dashboard.sales.current
+      : 0;
+
+  if (loading && !dashboard) {
+    return (
+      <ProtectedRoute
+        permission={["reports.sales", "reports.financial", "reports.inventory", "reports.customers"]}
+        requireAny
+      >
+        <div className="flex items-center justify-center h-96">
+          <div className="text-center space-y-3">
+            <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
+            <p className="text-sm text-muted-foreground">Carregando relatórios...</p>
+          </div>
+        </div>
+      </ProtectedRoute>
+    );
   }
 
   return (
@@ -194,18 +240,19 @@ export default function ReportsPage() {
     >
       <div className="space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex items-center justify-between flex-wrap gap-4">
           <div>
             <h1 className="text-3xl font-bold">Relatórios e Tendências</h1>
             <p className="text-muted-foreground">Análise de vendas, clientes e produtos</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex gap-1.5 flex-wrap">
             {(["today", "week", "month", "quarter", "year"] as PeriodType[]).map((p) => (
               <Button
                 key={p}
                 variant={period === p ? "default" : "outline"}
                 onClick={() => setPeriod(p)}
                 size="sm"
+                disabled={loading}
               >
                 {periodLabels[p]}
               </Button>
@@ -215,18 +262,18 @@ export default function ReportsPage() {
 
         {/* Summary Cards */}
         {dashboard && (
-          <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+          <div className="grid gap-4 grid-cols-2 lg:grid-cols-5">
             <Card>
               <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
                 <CardTitle className="text-sm font-medium">Faturamento</CardTitle>
-                <TrendingUp className="h-4 w-4 text-muted-foreground" />
+                <DollarSign className="h-4 w-4 text-muted-foreground" />
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{formatCurrency(dashboard.revenue.current)}</div>
-                <p className={`text-xs ${getGrowthColor(dashboard.revenue.growth)}`}>
-                  {getGrowthSign(dashboard.revenue.growth)}
-                  {dashboard.revenue.growth.toFixed(1)}% vs período anterior
-                </p>
+                <div className="flex items-center gap-1 mt-1">
+                  <GrowthBadge growth={dashboard.revenue.growth} />
+                  <span className="text-xs text-muted-foreground">vs anterior</span>
+                </div>
               </CardContent>
             </Card>
 
@@ -237,10 +284,21 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{dashboard.sales.current}</div>
-                <p className={`text-xs ${getGrowthColor(dashboard.sales.growth)}`}>
-                  {getGrowthSign(dashboard.sales.growth)}
-                  {dashboard.sales.growth.toFixed(1)}% vs período anterior
-                </p>
+                <div className="flex items-center gap-1 mt-1">
+                  <GrowthBadge growth={dashboard.sales.growth} />
+                  <span className="text-xs text-muted-foreground">vs anterior</span>
+                </div>
+              </CardContent>
+            </Card>
+
+            <Card>
+              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                <CardTitle className="text-sm font-medium">Ticket Médio</CardTitle>
+                <Receipt className="h-4 w-4 text-muted-foreground" />
+              </CardHeader>
+              <CardContent>
+                <div className="text-2xl font-bold">{formatCurrency(ticketMedio)}</div>
+                <p className="text-xs text-muted-foreground mt-1">por venda</p>
               </CardContent>
             </Card>
 
@@ -251,10 +309,10 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{dashboard.customers.current}</div>
-                <p className={`text-xs ${getGrowthColor(dashboard.customers.growth)}`}>
-                  {getGrowthSign(dashboard.customers.growth)}
-                  {dashboard.customers.growth.toFixed(1)}% vs período anterior
-                </p>
+                <div className="flex items-center gap-1 mt-1">
+                  <GrowthBadge growth={dashboard.customers.growth} />
+                  <span className="text-xs text-muted-foreground">vs anterior</span>
+                </div>
               </CardContent>
             </Card>
 
@@ -265,8 +323,8 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 <div className="text-2xl font-bold">{dashboard.peakHour.hour}h</div>
-                <p className="text-xs text-muted-foreground">
-                  {dashboard.peakHour.count} vendas - {formatCurrency(dashboard.peakHour.revenue)}
+                <p className="text-xs text-muted-foreground mt-1">
+                  {dashboard.peakHour.count} vendas ({formatCurrency(dashboard.peakHour.revenue)})
                 </p>
               </CardContent>
             </Card>
@@ -467,38 +525,68 @@ export default function ReportsPage() {
           <TabsContent value="temporal" className="space-y-4">
             <Card>
               <CardHeader>
-                <CardTitle>Vendas por Dia da Semana</CardTitle>
+                <CardTitle className="flex items-center gap-2">
+                  <BarChart3 className="h-5 w-5" />
+                  Vendas por Dia da Semana
+                </CardTitle>
                 <CardDescription>Padrão de vendas ao longo da semana</CardDescription>
               </CardHeader>
-              <CardContent className="space-y-4">
+              <CardContent>
                 {temporal && temporal.data.length > 0 ? (
-                  temporal.data.map((item) => {
-                    const maxRevenue = Math.max(...temporal.data.map((d) => d.revenue));
-                    const percentage = (item.revenue / maxRevenue) * 100;
-                    const dayLabels: Record<string, string> = {
-                      "1": "Segunda-feira",
-                      "2": "Terça-feira",
-                      "3": "Quarta-feira",
-                      "4": "Quinta-feira",
-                      "5": "Sexta-feira",
-                      "6": "Sábado",
-                      "0": "Domingo",
-                    };
-                    return (
-                      <div key={item.group} className="space-y-2">
-                        <div className="flex items-center justify-between text-sm">
-                          <span className="font-medium">{dayLabels[item.group] || item.group}</span>
-                          <span className="text-muted-foreground">{item.count} vendas</span>
-                        </div>
-                        <div className="flex items-center gap-3">
-                          <Progress value={percentage} className="flex-1" />
-                          <span className="font-medium min-w-[100px] text-right">
+                  <div className="space-y-1">
+                    {/* Bar chart visual */}
+                    <div className="flex items-end gap-2 h-48 mb-4 pt-4">
+                      {temporal.data.map((item) => {
+                        const maxRevenue = Math.max(...temporal.data.map((d) => d.revenue));
+                        const heightPct = maxRevenue > 0 ? (item.revenue / maxRevenue) * 100 : 0;
+                        const dayShort: Record<string, string> = {
+                          "1": "Seg", "2": "Ter", "3": "Qua", "4": "Qui",
+                          "5": "Sex", "6": "Sáb", "0": "Dom",
+                        };
+                        const isBest = item.revenue === maxRevenue;
+                        return (
+                          <div key={item.group} className="flex-1 flex flex-col items-center gap-1 h-full justify-end">
+                            <span className="text-[10px] text-muted-foreground font-medium">
+                              {item.count}
+                            </span>
+                            <div
+                              className={`w-full rounded-t-md transition-all ${
+                                isBest ? "bg-primary" : "bg-primary/40"
+                              }`}
+                              style={{ height: `${Math.max(heightPct, 4)}%` }}
+                            />
+                            <span className="text-xs font-medium mt-1">
+                              {dayShort[item.group] || item.group}
+                            </span>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Detail list */}
+                    {temporal.data.map((item) => {
+                      const maxRevenue = Math.max(...temporal.data.map((d) => d.revenue));
+                      const percentage = maxRevenue > 0 ? (item.revenue / maxRevenue) * 100 : 0;
+                      const dayLabels: Record<string, string> = {
+                        "1": "Segunda-feira", "2": "Terça-feira", "3": "Quarta-feira",
+                        "4": "Quinta-feira", "5": "Sexta-feira", "6": "Sábado", "0": "Domingo",
+                      };
+                      return (
+                        <div key={item.group} className="flex items-center gap-3 py-1.5">
+                          <span className="text-sm font-medium min-w-[120px]">{dayLabels[item.group] || item.group}</span>
+                          <div className="flex-1 bg-muted rounded-full h-2.5 overflow-hidden">
+                            <div
+                              className="bg-primary h-full rounded-full transition-all"
+                              style={{ width: `${percentage}%` }}
+                            />
+                          </div>
+                          <span className="text-xs text-muted-foreground min-w-[40px] text-center">{item.count}</span>
+                          <span className="text-sm font-medium min-w-[100px] text-right">
                             {formatCurrency(item.revenue)}
                           </span>
                         </div>
-                      </div>
-                    );
-                  })
+                      );
+                    })}
+                  </div>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
                 )}
