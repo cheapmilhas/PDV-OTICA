@@ -20,7 +20,10 @@ import {
   MessageSquare,
   RotateCcw,
   Info,
+  Palette,
+  ExternalLink,
 } from "lucide-react";
+import Link from "next/link";
 
 // Mensagens padrão
 const MENSAGENS_PADRAO = {
@@ -148,6 +151,13 @@ function ConfiguracoesPage() {
       {/* Tabs */}
       <Tabs defaultValue="empresa" className="space-y-4">
         <TabsList>
+          <TabsTrigger value="aparencia" asChild>
+            <Link href="/dashboard/configuracoes/aparencia" className="flex items-center gap-2">
+              <Palette className="h-4 w-4" />
+              Aparência
+              <ExternalLink className="h-3 w-3" />
+            </Link>
+          </TabsTrigger>
           <TabsTrigger value="empresa">
             <Building2 className="mr-2 h-4 w-4" />
             Dados da Empresa

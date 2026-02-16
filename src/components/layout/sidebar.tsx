@@ -23,6 +23,8 @@ import {
   FlaskConical,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
+import Image from "next/image";
 
 const menuItems = [
   {
@@ -164,16 +166,34 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const pathname = usePathname();
+  const { logoUrl, displayName } = useCompanySettings();
 
   return (
     <aside className="flex h-screen w-64 flex-col border-r bg-card">
       {/* Logo */}
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/dashboard" className="flex items-center gap-2 font-bold text-lg">
-          <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
-            <ShoppingCart className="h-5 w-5" />
-          </div>
-          <span>PDV Ótica</span>
+          {logoUrl ? (
+            <>
+              <div className="relative h-8 w-8 flex-shrink-0">
+                <Image
+                  src={logoUrl}
+                  alt="Logo"
+                  fill
+                  className="object-contain"
+                  priority
+                />
+              </div>
+              <span className="truncate">{displayName || "PDV Ótica"}</span>
+            </>
+          ) : (
+            <>
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+                <ShoppingCart className="h-5 w-5" />
+              </div>
+              <span>{displayName || "PDV Ótica"}</span>
+            </>
+          )}
         </Link>
       </div>
 

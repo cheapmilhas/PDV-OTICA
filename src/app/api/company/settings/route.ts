@@ -14,6 +14,7 @@ const companySettingsSchema = z.object({
   city: z.string().optional().nullable(),
   state: z.string().optional().nullable(),
   zipCode: z.string().optional().nullable(),
+  primaryColor: z.string().regex(/^#[0-9A-Fa-f]{6}$/, "Cor inválida (use formato #RRGGBB)").optional().nullable(),
   messageThankYou: z.string().optional().nullable(),
   messageQuote: z.string().optional().nullable(),
   messageReminder: z.string().optional().nullable(),

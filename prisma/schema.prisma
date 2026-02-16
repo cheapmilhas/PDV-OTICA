@@ -2074,7 +2074,10 @@ model CompanySettings {
   
   // Logo (URL)
   logoUrl String?
-  
+
+  // Personalização Visual
+  primaryColor String? // Cor primária do sistema (hex)
+
   // Mensagens Personalizáveis
   messageThankYou  String? @db.Text
   messageQuote     String? @db.Text
