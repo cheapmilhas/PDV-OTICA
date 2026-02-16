@@ -224,8 +224,16 @@ function AparenciaPage() {
               <Upload className="h-4 w-4 mr-2" />
               {uploading ? "Enviando..." : logoUrl ? "Alterar Logo" : "Fazer Upload"}
             </Button>
+            {logoUrl && (
+              <Button
+                variant="outline"
+                onClick={() => window.location.reload()}
+              >
+                Recarregar Página
+              </Button>
+            )}
             <p className="text-sm text-muted-foreground">
-              PNG, JPG ou SVG até 2MB
+              PNG, JPG ou SVG até 2MB (salva automaticamente)
             </p>
           </div>
         </CardContent>
