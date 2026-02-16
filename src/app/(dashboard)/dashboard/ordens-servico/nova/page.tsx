@@ -301,23 +301,19 @@ export default function NovaOrdemServicoPage() {
       const payload: any = {
         customerId: formData.customerId,
         branchId: formData.branchId,
-        orderDate: new Date(formData.orderDate).toISOString(),
-        promisedDate: formData.expectedDate ? new Date(formData.expectedDate).toISOString() : undefined,
+        expectedDate: formData.expectedDate ? new Date(formData.expectedDate).toISOString() : undefined,
         items: items.map((item) => ({
           productId: item.productId || undefined,
           description: item.description,
           qty: item.qty,
           observations: item.observations || undefined,
         })),
+        notes: formData.notes || undefined,
       };
 
-      // Adicionar dados da prescrição estruturados se preenchidos
-      if (prescriptionData.od.esf || prescriptionData.oe.esf) {
-        payload.prescriptionData = prescriptionData;
-      }
-
-      if (formData.notes) {
-        payload.notes = formData.notes;
+      // Adicionar dados da prescrição como string JSON se preenchidos
+      if (prescriptionData.od.esf || prescriptionData.oe.esf || prescriptionData.tratamentos.length > 0) {
+        payload.prescription = JSON.stringify(prescriptionData);
       }
 
       console.log("📤 Enviando ordem de serviço:", payload);

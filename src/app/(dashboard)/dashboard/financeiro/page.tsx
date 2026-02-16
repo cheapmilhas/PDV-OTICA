@@ -251,6 +251,8 @@ function FinanceiroPage() {
         throw new Error("Preencha todos os campos obrigatórios");
       }
 
+      console.log("📤 Enviando conta a pagar:", newPayableForm);
+
       const res = await fetch("/api/accounts-payable", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
