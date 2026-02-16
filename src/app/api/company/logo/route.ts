@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
-import { writeFile, unlink } from "fs/promises";
-import path from "path";
 
 /**
  * POST /api/company/logo
@@ -11,7 +9,7 @@ import path from "path";
  *
  * Aceita: PNG, JPG, SVG
  * Tamanho máximo: 2MB
- * Salva em: /public/uploads/logos/
+ * Salva como base64 (Data URL) no banco
  */
 export async function POST(request: NextRequest) {
   try {
@@ -46,42 +44,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    // Deletar logo anterior se existir
-    const existingSettings = await prisma.companySettings.findUnique({
-      where: { companyId },
-    });
-
-    if (existingSettings?.logoUrl) {
-      try {
-        const oldFilePath = path.join(process.cwd(), "public", existingSettings.logoUrl);
-        await unlink(oldFilePath);
-      } catch (error) {
-        console.log("⚠️ Logo anterior não encontrada ou não pôde ser deletada");
-      }
-    }
-
-    // Gerar nome único
-    const ext = file.name.split(".").pop();
-    const filename = `logo-${companyId}-${Date.now()}.${ext}`;
-    const filepath = path.join(process.cwd(), "public/uploads/logos", filename);
-
-    // Salvar arquivo
+    // Converter para base64
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
-    await writeFile(filepath, buffer);
-
-    // URL relativa
-    const logoUrl = `/uploads/logos/${filename}`;
+    const base64 = buffer.toString("base64");
+    const dataUrl = `data:${file.type};base64,${base64}`;
 
     // Atualizar banco
     const settings = await prisma.companySettings.upsert({
       where: { companyId },
       create: {
         companyId,
-        logoUrl,
+        logoUrl: dataUrl,
       },
       update: {
-        logoUrl,
+        logoUrl: dataUrl,
       },
     });
 
@@ -113,14 +90,6 @@ export async function DELETE(request: NextRequest) {
         { success: false, message: "Nenhuma logo cadastrada" },
         { status: 404 }
       );
-    }
-
-    // Deletar arquivo
-    try {
-      const filepath = path.join(process.cwd(), "public", settings.logoUrl);
-      await unlink(filepath);
-    } catch (error) {
-      console.log("⚠️ Arquivo não encontrado ou não pôde ser deletado");
     }
 
     // Remover do banco
