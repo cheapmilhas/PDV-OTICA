@@ -181,17 +181,25 @@ export default function DetalhesOrcamentoPage() {
             Imprimir
           </Button>
 
+          {quote.status === "PENDING" && (
+            <Button variant="outline" onClick={() => handleStatusChange("SENT")}>
+              <Send className="h-4 w-4 mr-2" />
+              Marcar como Enviado
+            </Button>
+          )}
+
+          {quote.status === "SENT" && (
+            <Button variant="outline" onClick={() => handleStatusChange("PENDING")}>
+              <ArrowLeft className="h-4 w-4 mr-2" />
+              Desmarcar Enviado
+            </Button>
+          )}
+
           {canApprove && (
-            <>
-              <Button variant="outline" onClick={() => handleStatusChange("SENT")}>
-                <Send className="h-4 w-4 mr-2" />
-                Marcar como Enviado
-              </Button>
-              <Button variant="default" onClick={() => handleStatusChange("APPROVED")}>
-                <CheckCircle2 className="h-4 w-4 mr-2" />
-                Aprovar
-              </Button>
-            </>
+            <Button variant="default" onClick={() => handleStatusChange("APPROVED")}>
+              <CheckCircle2 className="h-4 w-4 mr-2" />
+              Aprovar
+            </Button>
           )}
 
           {canConvert && (

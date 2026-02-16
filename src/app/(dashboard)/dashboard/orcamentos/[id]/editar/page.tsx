@@ -1,7 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,9 +15,9 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Package } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, ChevronDown, Package, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
-import { useRouter } from "next/navigation";
+import { useRouter, useParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { ProductSearch } from "@/components/quotes/product-search";
 
@@ -43,9 +43,13 @@ interface QuoteItem {
   stockQty?: number;
 }
 
-function NovoOrcamentoPage() {
+function EditarOrcamentoPage() {
   const router = useRouter();
+  const params = useParams();
+  const quoteId = params.id as string;
+
   const [loading, setLoading] = useState(false);
+  const [loadingQuote, setLoadingQuote] = useState(true);
 
   // Cliente
   const [customerId, setCustomerId] = useState("");
@@ -61,7 +65,7 @@ function NovoOrcamentoPage() {
   const [newItemPrice, setNewItemPrice] = useState(0);
   const [newItemType, setNewItemType] = useState<"PRODUCT" | "SERVICE" | "CUSTOM">("PRODUCT");
 
-  // Receita (Prescrição)
+  // Receita (Prescricao)
   const [prescriptionData, setPrescriptionData] = useState({
     od: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
     oe: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
@@ -79,6 +83,101 @@ function NovoOrcamentoPage() {
   const [paymentConditions, setPaymentConditions] = useState("");
   const [validDays, setValidDays] = useState(15);
   const [showPrescription, setShowPrescription] = useState(false);
+
+  // Carregar dados do orcamento existente
+  useEffect(() => {
+    const fetchQuote = async () => {
+      try {
+        setLoadingQuote(true);
+        const res = await fetch(`/api/quotes/${quoteId}`);
+        const data = await res.json();
+
+        if (!res.ok) {
+          throw new Error(data.error || "Erro ao carregar orcamento");
+        }
+
+        const quote = data.data || data;
+
+        // Preencher cliente
+        if (quote.customer) {
+          setCustomerId(quote.customer.id || "");
+          setCustomerName(quote.customer.name || quote.customerName || "");
+          setCustomerPhone(quote.customer.phone || "");
+          setCustomerEmail(quote.customer.email || "");
+        } else {
+          setCustomerName(quote.customerName || "");
+        }
+
+        // Preencher itens
+        if (quote.items && quote.items.length > 0) {
+          const mappedItems: QuoteItem[] = quote.items.map((item: any) => ({
+            id: item.id || Math.random().toString(36).substr(2, 9),
+            productId: item.productId || undefined,
+            description: item.description || "",
+            quantity: item.qty ?? item.quantity ?? 1,
+            unitPrice: item.unitPrice ?? 0,
+            discount: item.discount ?? 0,
+            itemType: item.itemType || "PRODUCT",
+            prescriptionData: item.prescriptionData || undefined,
+            notes: item.notes || undefined,
+            sku: item.product?.sku || item.sku || undefined,
+            stockQty: item.stockQty,
+          }));
+          setItems(mappedItems);
+
+          // Se algum item tem prescriptionData, usar o primeiro encontrado para preencher o formulario
+          const itemWithPrescription = quote.items.find(
+            (item: any) => item.prescriptionData
+          );
+          if (itemWithPrescription?.prescriptionData) {
+            const pd = itemWithPrescription.prescriptionData;
+            setPrescriptionData({
+              od: {
+                esf: pd.od?.esf || "",
+                cil: pd.od?.cil || "",
+                eixo: pd.od?.eixo || "",
+                dnp: pd.od?.dnp || "",
+                altura: pd.od?.altura || "",
+              },
+              oe: {
+                esf: pd.oe?.esf || "",
+                cil: pd.oe?.cil || "",
+                eixo: pd.oe?.eixo || "",
+                dnp: pd.oe?.dnp || "",
+                altura: pd.oe?.altura || "",
+              },
+              adicao: pd.adicao || "",
+              tipoLente: pd.tipoLente || "",
+              material: pd.material || "",
+              tratamentos: pd.tratamentos || [],
+            });
+            // Abrir secao de prescricao se ja tem dados
+            if (pd.od?.esf || pd.oe?.esf || pd.adicao || pd.tipoLente || pd.material || (pd.tratamentos && pd.tratamentos.length > 0)) {
+              setShowPrescription(true);
+            }
+          }
+        }
+
+        // Preencher valores
+        setDiscountPercent(quote.discountPercent ?? 0);
+        setDiscountTotal(quote.discountTotal ?? 0);
+        setNotes(quote.notes || "");
+        setInternalNotes(quote.internalNotes || "");
+        setPaymentConditions(quote.paymentConditions || "");
+        setValidDays(quote.validDays ?? 15);
+      } catch (error: any) {
+        console.error("Erro ao carregar orcamento:", error);
+        toast.error(error.message || "Erro ao carregar orcamento");
+        router.push("/dashboard/orcamentos");
+      } finally {
+        setLoadingQuote(false);
+      }
+    };
+
+    if (quoteId) {
+      fetchQuote();
+    }
+  }, [quoteId, router]);
 
   const addProductFromSearch = (product: Product) => {
     const newItem: QuoteItem = {
@@ -99,7 +198,7 @@ function NovoOrcamentoPage() {
 
   const addManualItem = () => {
     if (!newItemDescription || newItemPrice <= 0) {
-      toast.error("Preencha descrição e preço do item");
+      toast.error("Preencha descricao e preco do item");
       return;
     }
 
@@ -164,12 +263,7 @@ function NovoOrcamentoPage() {
     setLoading(true);
 
     try {
-      // Montar payload
       const payload = {
-        customerId: customerId || undefined,
-        customerName: !customerId ? customerName : undefined,
-        customerPhone: !customerId ? customerPhone : undefined,
-        customerEmail: !customerId ? customerEmail : undefined,
         items: items.map((item) => ({
           description: item.description,
           quantity: item.quantity,
@@ -191,8 +285,8 @@ function NovoOrcamentoPage() {
         validDays,
       };
 
-      const res = await fetch("/api/quotes", {
-        method: "POST",
+      const res = await fetch(`/api/quotes/${quoteId}`, {
+        method: "PUT",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
@@ -200,14 +294,14 @@ function NovoOrcamentoPage() {
       const data = await res.json();
 
       if (!res.ok) {
-        throw new Error(data.error || "Erro ao criar orçamento");
+        throw new Error(data.error || "Erro ao atualizar orcamento");
       }
 
-      toast.success("Orçamento criado com sucesso!");
-      router.push(`/dashboard/orcamentos/${data.data.id}`);
+      toast.success("Orcamento atualizado com sucesso!");
+      router.push(`/dashboard/orcamentos/${quoteId}`);
     } catch (error: any) {
       console.error("Erro:", error);
-      toast.error(error.message || "Erro ao salvar orçamento");
+      toast.error(error.message || "Erro ao salvar orcamento");
       setLoading(false);
     }
   };
@@ -216,7 +310,7 @@ function NovoOrcamentoPage() {
   const tratamentosPorMarca = {
     "Essilor": [
       "Crizal Easy", "Crizal Rock", "Crizal Sapphire", "Crizal Prevencia",
-      "Crizal Forte", "Crizal Alizé", "Transitions", "Eyezen", "Xperio",
+      "Crizal Forte", "Crizal Alize", "Transitions", "Eyezen", "Xperio",
     ],
     "Hoya": [
       "Hi-Vision LongLife", "Hi-Vision Aqua", "BlueControl",
@@ -230,8 +324,8 @@ function NovoOrcamentoPage() {
       "Solitaire Protect Plus 2", "Solitaire Balance 2",
       "Colormatic IQ", "Solitaire Protect Plus",
     ],
-    "Genéricos": [
-      "Antirreflexo", "Fotossensível", "Blue Light",
+    "Genericos": [
+      "Antirreflexo", "Fotossensivel", "Blue Light",
       "Anti-risco", "Polarizado", "UV Protection",
     ],
   };
@@ -255,7 +349,7 @@ function NovoOrcamentoPage() {
   const handleAddTratamentoManual = () => {
     const trat = tratamentoManual.trim();
     if (!trat) { toast.error("Digite o nome do tratamento"); return; }
-    if (prescriptionData.tratamentos.includes(trat)) { toast.error("Já adicionado"); return; }
+    if (prescriptionData.tratamentos.includes(trat)) { toast.error("Ja adicionado"); return; }
     setPrescriptionData({
       ...prescriptionData,
       tratamentos: [...prescriptionData.tratamentos, trat],
@@ -263,6 +357,18 @@ function NovoOrcamentoPage() {
     setTratamentoManual("");
     toast.success("Tratamento adicionado");
   };
+
+  // Tela de loading
+  if (loadingQuote) {
+    return (
+      <div className="flex items-center justify-center min-h-[400px]">
+        <div className="flex flex-col items-center gap-4">
+          <Loader2 className="h-8 w-8 animate-spin text-primary" />
+          <p className="text-muted-foreground">Carregando orcamento...</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
@@ -273,8 +379,8 @@ function NovoOrcamentoPage() {
             <ArrowLeft className="h-4 w-4" />
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Novo Orçamento</h1>
-            <p className="text-muted-foreground">Preencha os dados do orçamento</p>
+            <h1 className="text-3xl font-bold">Editar Orcamento</h1>
+            <p className="text-muted-foreground">Altere os dados do orcamento</p>
           </div>
         </div>
       </div>
@@ -283,7 +389,7 @@ function NovoOrcamentoPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            👤 Cliente
+            Cliente
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -294,7 +400,13 @@ function NovoOrcamentoPage() {
                 value={customerName}
                 onChange={(e) => setCustomerName(e.target.value)}
                 placeholder="Digite o nome do cliente"
+                disabled={!!customerId}
               />
+              {customerId && (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Cliente vinculado ao cadastro. Para alterar, edite o cadastro do cliente.
+                </p>
+              )}
             </div>
             <div>
               <Label>Telefone</Label>
@@ -302,6 +414,7 @@ function NovoOrcamentoPage() {
                 value={customerPhone}
                 onChange={(e) => setCustomerPhone(e.target.value)}
                 placeholder="(00) 00000-0000"
+                disabled={!!customerId}
               />
             </div>
             <div className="md:col-span-2">
@@ -311,6 +424,7 @@ function NovoOrcamentoPage() {
                 value={customerEmail}
                 onChange={(e) => setCustomerEmail(e.target.value)}
                 placeholder="cliente@email.com"
+                disabled={!!customerId}
               />
             </div>
           </div>
@@ -321,7 +435,7 @@ function NovoOrcamentoPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            📦 Itens do Orçamento
+            Itens do Orcamento
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -347,15 +461,15 @@ function NovoOrcamentoPage() {
           {showManualItem && (
             <div className="border rounded-lg p-4 space-y-3 bg-muted/30">
               <h3 className="font-semibold text-sm text-muted-foreground">
-                Adicionar Item Manual (Serviço/Customizado)
+                Adicionar Item Manual (Servico/Customizado)
               </h3>
               <div className="grid grid-cols-1 md:grid-cols-5 gap-3">
                 <div className="md:col-span-2">
-                  <Label>Descrição *</Label>
+                  <Label>Descricao *</Label>
                   <Input
                     value={newItemDescription}
                     onChange={(e) => setNewItemDescription(e.target.value)}
-                    placeholder="Ex: Manutenção de Armação"
+                    placeholder="Ex: Manutencao de Armacao"
                   />
                 </div>
                 <div>
@@ -368,7 +482,7 @@ function NovoOrcamentoPage() {
                   />
                 </div>
                 <div>
-                  <Label>Preço Unit. *</Label>
+                  <Label>Preco Unit. *</Label>
                   <Input
                     type="number"
                     step="0.01"
@@ -388,7 +502,7 @@ function NovoOrcamentoPage() {
                       <SelectValue />
                     </SelectTrigger>
                     <SelectContent>
-                      <SelectItem value="SERVICE">Serviço</SelectItem>
+                      <SelectItem value="SERVICE">Servico</SelectItem>
                       <SelectItem value="CUSTOM">Customizado</SelectItem>
                     </SelectContent>
                   </Select>
@@ -407,11 +521,11 @@ function NovoOrcamentoPage() {
               <table className="w-full">
                 <thead className="bg-muted">
                   <tr>
-                    <th className="text-left p-2">Descrição</th>
+                    <th className="text-left p-2">Descricao</th>
                     <th className="text-left p-2 w-28">SKU</th>
                     <th className="text-center p-2 w-24">Estoque</th>
                     <th className="text-center p-2 w-20">Qtd</th>
-                    <th className="text-right p-2 w-32">Preço Unit.</th>
+                    <th className="text-right p-2 w-32">Preco Unit.</th>
                     <th className="text-right p-2 w-32">Total</th>
                     <th className="w-12"></th>
                   </tr>
@@ -424,7 +538,7 @@ function NovoOrcamentoPage() {
                           <p className="font-medium">{item.description}</p>
                           {item.itemType !== "PRODUCT" && (
                             <span className="text-xs text-muted-foreground">
-                              {item.itemType === "SERVICE" ? "Serviço" : "Customizado"}
+                              {item.itemType === "SERVICE" ? "Servico" : "Customizado"}
                             </span>
                           )}
                         </div>
@@ -491,7 +605,7 @@ function NovoOrcamentoPage() {
         </CardContent>
       </Card>
 
-      {/* Receita (Colapsável) */}
+      {/* Receita (Colapsavel) */}
       <Card>
         <CardHeader
           className="cursor-pointer hover:bg-muted/50 transition-colors"
@@ -499,7 +613,7 @@ function NovoOrcamentoPage() {
         >
           <CardTitle className="flex items-center justify-between">
             <span className="flex items-center gap-2">
-              👓 Dados da Receita (Opcional)
+              Dados da Receita (Opcional)
             </span>
             <ChevronDown
               className={`h-5 w-5 transition-transform ${showPrescription ? "rotate-180" : ""}`}
@@ -513,7 +627,7 @@ function NovoOrcamentoPage() {
                   <h3 className="font-semibold">Olho Direito (OD)</h3>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div>
-                      <Label>Esférico</Label>
+                      <Label>Esferico</Label>
                       <Input
                         value={prescriptionData.od.esf}
                         onChange={(e) =>
@@ -526,7 +640,7 @@ function NovoOrcamentoPage() {
                       />
                     </div>
                     <div>
-                      <Label>Cilíndrico</Label>
+                      <Label>Cilindrico</Label>
                       <Input
                         value={prescriptionData.od.cil}
                         onChange={(e) =>
@@ -548,7 +662,7 @@ function NovoOrcamentoPage() {
                             od: { ...prescriptionData.od, eixo: e.target.value },
                           })
                         }
-                        placeholder="90°"
+                        placeholder="90"
                       />
                     </div>
                     <div>
@@ -585,7 +699,7 @@ function NovoOrcamentoPage() {
                   <h3 className="font-semibold">Olho Esquerdo (OE)</h3>
                   <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
                     <div>
-                      <Label>Esférico</Label>
+                      <Label>Esferico</Label>
                       <Input
                         value={prescriptionData.oe.esf}
                         onChange={(e) =>
@@ -598,7 +712,7 @@ function NovoOrcamentoPage() {
                       />
                     </div>
                     <div>
-                      <Label>Cilíndrico</Label>
+                      <Label>Cilindrico</Label>
                       <Input
                         value={prescriptionData.oe.cil}
                         onChange={(e) =>
@@ -620,7 +734,7 @@ function NovoOrcamentoPage() {
                             oe: { ...prescriptionData.oe, eixo: e.target.value },
                           })
                         }
-                        placeholder="85°"
+                        placeholder="85"
                       />
                     </div>
                     <div>
@@ -655,7 +769,7 @@ function NovoOrcamentoPage() {
                 {/* Dados Adicionais */}
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                   <div>
-                    <Label>Adição</Label>
+                    <Label>Adicao</Label>
                     <Input
                       value={prescriptionData.adicao}
                       onChange={(e) =>
@@ -679,7 +793,7 @@ function NovoOrcamentoPage() {
                         <SelectValue placeholder="Selecione" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="Visão Simples">Visão Simples</SelectItem>
+                        <SelectItem value="Visao Simples">Visao Simples</SelectItem>
                         <SelectItem value="Bifocal">Bifocal</SelectItem>
                         <SelectItem value="Multifocal">Multifocal</SelectItem>
                         <SelectItem value="Ocupacional">Ocupacional</SelectItem>
@@ -743,12 +857,12 @@ function NovoOrcamentoPage() {
                           {tratamentos.map((trat) => (
                             <div key={trat} className="flex items-center space-x-2">
                               <Checkbox
-                                id={`q-trat-${trat}`}
+                                id={`e-trat-${trat}`}
                                 checked={prescriptionData.tratamentos.includes(trat)}
                                 onCheckedChange={() => handleAddTratamento(trat)}
                               />
                               <label
-                                htmlFor={`q-trat-${trat}`}
+                                htmlFor={`e-trat-${trat}`}
                                 className="text-sm font-medium leading-none cursor-pointer"
                               >
                                 {trat}
@@ -786,11 +900,11 @@ function NovoOrcamentoPage() {
             )}
       </Card>
 
-      {/* Valores e Configurações */}
+      {/* Valores e Configuracoes */}
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            💰 Valores e Condições
+            Valores e Condicoes
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
@@ -823,7 +937,7 @@ function NovoOrcamentoPage() {
               />
             </div>
             <div>
-              <Label>Válido por (dias)</Label>
+              <Label>Valido por (dias)</Label>
               <Input
                 type="number"
                 min="1"
@@ -834,31 +948,31 @@ function NovoOrcamentoPage() {
           </div>
 
           <div>
-            <Label>Condições de Pagamento</Label>
+            <Label>Condicoes de Pagamento</Label>
             <Textarea
               value={paymentConditions}
               onChange={(e) => setPaymentConditions(e.target.value)}
-              placeholder="Ex: 3x sem juros no cartão, 10% desconto à vista"
+              placeholder="Ex: 3x sem juros no cartao, 10% desconto a vista"
               rows={2}
             />
           </div>
 
           <div>
-            <Label>Observações (visível no orçamento)</Label>
+            <Label>Observacoes (visivel no orcamento)</Label>
             <Textarea
               value={notes}
               onChange={(e) => setNotes(e.target.value)}
-              placeholder="Observações que aparecerão no PDF do orçamento"
+              placeholder="Observacoes que aparecerao no PDF do orcamento"
               rows={3}
             />
           </div>
 
           <div>
-            <Label>Notas Internas (não visível no orçamento)</Label>
+            <Label>Notas Internas (nao visivel no orcamento)</Label>
             <Textarea
               value={internalNotes}
               onChange={(e) => setInternalNotes(e.target.value)}
-              placeholder="Anotações internas, não aparecem no PDF"
+              placeholder="Anotacoes internas, nao aparecem no PDF"
               rows={2}
             />
           </div>
@@ -890,18 +1004,21 @@ function NovoOrcamentoPage() {
         </CardContent>
       </Card>
 
-      {/* Botões de Ação */}
+      {/* Botoes de Acao */}
       <div className="flex gap-4 sticky bottom-0 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60 py-4 border-t">
         <Button variant="outline" onClick={() => router.back()} className="flex-1">
           Cancelar
         </Button>
         <Button onClick={handleSave} disabled={loading} className="flex-1">
           {loading ? (
-            "Salvando..."
+            <>
+              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+              Salvando...
+            </>
           ) : (
             <>
               <Save className="mr-2 h-4 w-4" />
-              Salvar Orçamento
+              Salvar Alteracoes
             </>
           )}
         </Button>
@@ -912,8 +1029,8 @@ function NovoOrcamentoPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="quotes.create">
-      <NovoOrcamentoPage />
+    <ProtectedRoute permission="quotes.edit">
+      <EditarOrcamentoPage />
     </ProtectedRoute>
   );
 }
