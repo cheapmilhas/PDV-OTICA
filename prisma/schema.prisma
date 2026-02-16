@@ -1162,9 +1162,17 @@ model Quote {
   // Motivo de não conversão (IMPORTANTE para relatórios)
   lostReason String? // Ex: "Preço alto", "Comprou concorrente", "Desistiu"
 
-  // Follow-up
-  lastFollowUpAt DateTime?
-  followUpCount  Int       @default(0)
+  // CRM - Controle de Envio
+  sentAt  DateTime? // Data/hora que foi enviado ao cliente
+  sentVia String?   // "whatsapp", "email", "presencial", "sms"
+
+  // CRM - Follow-up
+  followUpDate   DateTime? // Data agendada para retornar contato
+  followUpNotes  String?   @db.Text // Observações de acompanhamento
+  contactCount   Int       @default(0) // Quantas vezes contactou o cliente
+  lastContactAt  DateTime? // Data do último contato
+  lastFollowUpAt DateTime? // (mantido por compatibilidade)
+  followUpCount  Int       @default(0) // (mantido por compatibilidade)
 
   // Legacy (manter por compatibilidade)
   conversionReason String?

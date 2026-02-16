@@ -477,7 +477,7 @@ export class QuoteService {
     };
 
     // Query paralela para métricas
-    const [byStatus, totals, lostReasons, conversionMetrics] = await Promise.all([
+    const [byStatus, totals, lostReasons, conversionMetrics, sentCount, pendingFollowUpCount] = await Promise.all([
       // Contar por status
       prisma.quote.groupBy({
         by: ["status"],
@@ -511,6 +511,23 @@ export class QuoteService {
           ...where,
           status: "CONVERTED",
           convertedAt: { not: null },
+        },
+      }),
+
+      // CRM: Orçamentos enviados
+      prisma.quote.count({
+        where: {
+          ...where,
+          sentAt: { not: null },
+        },
+      }),
+
+      // CRM: Orçamentos com follow-up pendente
+      prisma.quote.count({
+        where: {
+          ...where,
+          followUpDate: { lte: new Date() },
+          status: { notIn: ["CONVERTED", "CANCELLED", "EXPIRED"] },
         },
       }),
     ]);
@@ -565,6 +582,10 @@ export class QuoteService {
       totalConvertedValue: 0, // TODO: Calcular somando Sale.total de vendas convertidas
       avgTimeToConversion: parseFloat(avgTimeToConversion.toFixed(1)),
       lostReasons: lostReasonsMap,
+      // CRM
+      sent: sentCount,
+      notSent: total - sentCount,
+      pendingFollowUp: pendingFollowUpCount,
     };
   }
 
