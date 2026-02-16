@@ -9,9 +9,9 @@ import { ServiceOrderStatus } from "@prisma/client";
  * Schema para item/serviço da OS
  */
 export const serviceOrderItemSchema = z.object({
-  type: z.string().min(3, "Tipo de serviço muito curto").max(100, "Tipo muito longo"),
-  description: z.string().min(3, "Descrição muito curta").max(500, "Descrição muito longa"),
-  price: z.coerce.number().positive("Preço deve ser positivo"),
+  productId: z.string().optional(),
+  description: z.string().min(1, "Descrição é obrigatória").max(500, "Descrição muito longa"),
+  qty: z.coerce.number().int().min(1).default(1),
   observations: z.string().max(500, "Observações muito longas").optional(),
 });
 
@@ -24,8 +24,12 @@ export const createServiceOrderSchema = z.object({
   customerId: z.string().min(1, "ID do cliente é obrigatório"),
   branchId: z.string().min(1, "ID da filial é obrigatório"),
   items: z.array(serviceOrderItemSchema).min(1, "OS deve ter pelo menos 1 serviço"),
-  expectedDate: z.string().datetime().optional(),
+  orderDate: z.string().optional(),
+  promisedDate: z.string().optional(),
+  expectedDate: z.string().optional(),
   prescription: z.string().max(1000, "Prescrição muito longa").optional(),
+  prescriptionData: z.any().optional(),
+  labId: z.string().optional(),
   notes: z.string().max(500, "Observações muito longas").optional(),
 });
 
@@ -109,7 +113,7 @@ export function sanitizeServiceOrderDTO(
  * Helper para calcular total da OS
  */
 export function calculateOrderTotal(items: ServiceOrderItemDTO[]): number {
-  return items.reduce((sum, item) => sum + item.price, 0);
+  return 0; // OS não tem valor - valor está na venda
 }
 
 /**

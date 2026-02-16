@@ -121,7 +121,7 @@ export class ServiceOrderService {
    * Cria nova ordem de serviço
    */
   async create(data: CreateServiceOrderDTO, companyId: string, userId: string) {
-    const { customerId, branchId, items, expectedDate, prescription, notes } = data;
+    const { customerId, branchId, items, promisedDate, expectedDate, prescriptionData, labId, notes } = data;
 
     if (!items || items.length === 0) {
       throw new AppError(
@@ -131,8 +131,6 @@ export class ServiceOrderService {
       );
     }
 
-    const total = items.reduce((sum, item) => sum + item.price, 0);
-
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.serviceOrder.create({
         data: {
@@ -140,7 +138,8 @@ export class ServiceOrderService {
           customerId,
           branchId,
           status: "DRAFT",
-          promisedDate: expectedDate ? new Date(expectedDate) : undefined,
+          promisedDate: promisedDate ? new Date(promisedDate) : expectedDate ? new Date(expectedDate) : undefined,
+          notes: notes || undefined,
           createdByUserId: userId,
         },
       });
@@ -149,11 +148,14 @@ export class ServiceOrderService {
         await tx.serviceOrderItem.create({
           data: {
             serviceOrderId: newOrder.id,
+            productId: item.productId || undefined,
             description: item.description,
-            qty: 1,
-            unitPrice: item.price || 0,
+            qty: item.qty || 1,
+            unitPrice: 0,
             discount: 0,
-            lineTotal: item.price || 0,
+            lineTotal: 0,
+            labId: labId || undefined,
+            measurementsSnapshot: prescriptionData || undefined,
           },
         });
       }
