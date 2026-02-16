@@ -10,6 +10,7 @@ import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
+import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import {
   Search,
   Barcode,
@@ -38,6 +39,7 @@ interface Product {
 
 interface CartItem extends Product {
   quantity: number;
+  customPrice?: number;  // Preço editado pelo vendedor (opcional)
 }
 
 interface Customer {
@@ -63,6 +65,10 @@ function PDVPage() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [finalizingVenda, setFinalizingVenda] = useState(false);
+
+  // Estados para dialog de carnê
+  const [showCarneDialog, setShowCarneDialog] = useState(false);
+  const [lastSaleId, setLastSaleId] = useState<string | null>(null);
 
   // Carregar cliente do orçamento se houver quoteId
   useEffect(() => {
@@ -227,8 +233,44 @@ function PDVPage() {
     );
   };
 
+  const editarPreco = (produtoId: string) => {
+    const item = carrinho.find((i) => i.id === produtoId);
+    if (!item) return;
+
+    const precoAtual = item.customPrice || item.salePrice;
+    const novoPreco = prompt(`Editar preço unitário de "${item.name}":\n\nPreço original: R$ ${item.salePrice.toFixed(2)}\nPreço atual: R$ ${precoAtual.toFixed(2)}`, precoAtual.toString());
+
+    if (novoPreco === null) return; // Cancelou
+
+    const preco = parseFloat(novoPreco);
+    if (isNaN(preco) || preco <= 0) {
+      toast.error("Preço inválido");
+      return;
+    }
+
+    setCarrinho(
+      carrinho.map((i) =>
+        i.id === produtoId ? { ...i, customPrice: preco } : i
+      )
+    );
+
+    toast.success(`Preço alterado para R$ ${preco.toFixed(2)}`);
+  };
+
+  const resetarPreco = (produtoId: string) => {
+    setCarrinho(
+      carrinho.map((i) =>
+        i.id === produtoId ? { ...i, customPrice: undefined } : i
+      )
+    );
+    toast.success("Preço restaurado");
+  };
+
   const calcularSubtotal = () => {
-    return carrinho.reduce((acc, item) => acc + item.salePrice * item.quantity, 0);
+    return carrinho.reduce((acc, item) => {
+      const preco = item.customPrice || item.salePrice;
+      return acc + preco * item.quantity;
+    }, 0);
   };
 
   const subtotal = calcularSubtotal();
@@ -259,7 +301,7 @@ function PDVPage() {
         items: carrinho.map((item) => ({
           productId: item.id,
           qty: item.quantity,
-          unitPrice: item.salePrice,
+          unitPrice: item.customPrice || item.salePrice,  // Usa preço customizado se existir
           discount: 0,
         })),
         payments: payments.map((payment) => ({
@@ -311,32 +353,13 @@ function PDVPage() {
         }
       }
 
-      // Verificar se tem crediário e oferecer download do carnê
+      // Verificar se tem crediário e mostrar dialog para imprimir carnê
       const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
       if (hasCrediario) {
-        const downloadCarne = confirm("Venda parcelada! Deseja baixar o carnê de pagamento?");
-        if (downloadCarne) {
-          try {
-            const carneRes = await fetch(`/api/sales/${vendaId}/carne`);
-            if (carneRes.ok) {
-              const carneBlob = await carneRes.blob();
-              const url = window.URL.createObjectURL(carneBlob);
-              const link = document.createElement("a");
-              link.href = url;
-              link.download = `carne_venda_${vendaId.substring(0, 8)}.pdf`;
-              document.body.appendChild(link);
-              link.click();
-              document.body.removeChild(link);
-              window.URL.revokeObjectURL(url);
-              toast.success("Carnê baixado com sucesso!");
-            } else {
-              toast.error("Erro ao gerar carnê. Você pode baixá-lo depois na tela de vendas.");
-            }
-          } catch (err) {
-            console.error("Erro ao baixar carnê:", err);
-            toast.error("Erro ao baixar carnê. Você pode baixá-lo depois na tela de vendas.");
-          }
-        }
+        setShowCarneDialog(true);
+        setLastSaleId(vendaId);
+        // Não redireciona ainda, espera o usuário decidir sobre o carnê
+        return;
       }
 
       // Toast de sucesso com cashback
@@ -635,9 +658,37 @@ function PDVPage() {
                           <p className="text-sm font-medium line-clamp-2">
                             {item.name}
                           </p>
-                          <p className="text-xs text-muted-foreground">
-                            {formatCurrency(item.salePrice)} cada
-                          </p>
+                          <div className="flex items-center gap-2">
+                            <p className="text-xs text-muted-foreground">
+                              {item.customPrice ? (
+                                <>
+                                  <span className="line-through">{formatCurrency(item.salePrice)}</span>
+                                  {" → "}
+                                  <span className="font-semibold text-blue-600">{formatCurrency(item.customPrice)}</span>
+                                </>
+                              ) : (
+                                formatCurrency(item.salePrice)
+                              )} cada
+                            </p>
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-1 text-xs"
+                              onClick={() => editarPreco(item.id)}
+                            >
+                              Editar
+                            </Button>
+                            {item.customPrice && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 px-1 text-xs text-orange-600"
+                                onClick={() => resetarPreco(item.id)}
+                              >
+                                Resetar
+                              </Button>
+                            )}
+                          </div>
                           <p className="text-xs text-muted-foreground">
                             Estoque: {item.stockQty}
                           </p>
@@ -727,6 +778,47 @@ function PDVPage() {
         </div>
       </div>
     </div>
+
+    {/* Dialog para imprimir carnê */}
+    <Dialog open={showCarneDialog} onOpenChange={setShowCarneDialog}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Venda no Crediário Realizada!</DialogTitle>
+          <DialogDescription>
+            A venda foi finalizada com sucesso. Deseja imprimir o carnê de pagamento?
+          </DialogDescription>
+        </DialogHeader>
+        <DialogFooter className="gap-2 sm:gap-0">
+          <Button
+            variant="outline"
+            onClick={() => {
+              setShowCarneDialog(false);
+              // Redirecionar após fechar
+              setTimeout(() => {
+                window.location.href = "/dashboard/vendas";
+              }, 300);
+            }}
+          >
+            Não
+          </Button>
+          <Button
+            onClick={() => {
+              if (lastSaleId) {
+                // Abrir carnê em nova aba
+                window.open(`/dashboard/vendas/${lastSaleId}/carne`, "_blank");
+              }
+              setShowCarneDialog(false);
+              // Redirecionar após abrir carnê
+              setTimeout(() => {
+                window.location.href = "/dashboard/vendas";
+              }, 500);
+            }}
+          >
+            Imprimir Carnê
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
     </>
   );
 }
