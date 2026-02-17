@@ -15,6 +15,7 @@ import {
   Search,
   XCircle,
   AlertCircle,
+  Printer,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
@@ -272,9 +273,6 @@ function OrdensServicoPage() {
                           </p>
                         </div>
                         <div className="text-right">
-                          <p className="text-2xl font-bold text-primary">
-                            {formatCurrency(Number(order.total))}
-                          </p>
                           <Badge variant={getStatusVariant(order.status)} className="mt-1">
                             {getStatusLabel(order.status)}
                           </Badge>
@@ -326,7 +324,15 @@ function OrdensServicoPage() {
                       >
                         <Eye className="h-4 w-4 mr-1" />
                         Detalhes
-                        </Button>
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => window.open(`/dashboard/ordens-servico/${order.id}/imprimir`, "_blank")}
+                      >
+                        <Printer className="h-4 w-4 mr-1" />
+                        Imprimir OS
+                      </Button>
                     </div>
                   </div>
                 </CardContent>
