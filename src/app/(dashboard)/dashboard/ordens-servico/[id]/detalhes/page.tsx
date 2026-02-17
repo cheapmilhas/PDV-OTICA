@@ -40,6 +40,10 @@ interface ServiceOrderDetails {
     id: string;
     name: string;
   };
+  laboratory?: {
+    id: string;
+    name: string;
+  };
   items: Array<{
     id: string;
     type: string;
@@ -300,6 +304,12 @@ export default function DetalhesOrdemServicoPage() {
               <div>
                 <p className="text-sm text-muted-foreground">Filial</p>
                 <p className="font-semibold">{order.branch.name}</p>
+              </div>
+            )}
+            {order.laboratory && (
+              <div>
+                <p className="text-sm text-muted-foreground">Laboratório</p>
+                <p className="font-semibold">{order.laboratory.name}</p>
               </div>
             )}
             <div>

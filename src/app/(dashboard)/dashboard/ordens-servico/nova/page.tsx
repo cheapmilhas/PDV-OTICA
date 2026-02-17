@@ -11,7 +11,6 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import { ArrowLeft, Plus, Trash2, ChevronDown, Search } from "lucide-react";
-import { Checkbox } from "@/components/ui/checkbox";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ModalNovoClienteSimples } from "@/components/ordens-servico/modal-novo-cliente-simples";
@@ -52,6 +51,7 @@ export default function NovaOrdemServicoPage() {
   const [formData, setFormData] = useState({
     customerId: "",
     branchId: "",
+    laboratoryId: "",
     orderDate: today,
     expectedDate: defaultDelivery,
     notes: "",
@@ -64,58 +64,9 @@ export default function NovaOrdemServicoPage() {
     adicao: "",
     tipoLente: "",
     material: "",
-    tratamentos: [] as string[],
-    tratamentoManual: "", // Campo para preencher tratamento customizado
   });
 
-  // Lista completa de tratamentos das principais marcas
-  const tratamentosEssilor = [
-    "Crizal Easy",
-    "Crizal Rock",
-    "Crizal Sapphire",
-    "Crizal Prevencia",
-    "Crizal Forte",
-    "Crizal Alizé",
-    "Crizal Transitions",
-    "Eyezen",
-    "Xperio",
-  ];
-
-  const tratamentosHoya = [
-    "Hi-Vision LongLife",
-    "Hi-Vision Aqua",
-    "Hi-Vision BlueControl",
-    "Super Hi-Vision",
-    "Recharge",
-    "SunSync",
-    "Sensity",
-  ];
-
-  const tratamentosZeiss = [
-    "DuraVision Platinum",
-    "DuraVision BlueProtect",
-    "DuraVision Silver",
-    "PhotoFusion",
-    "AdaptSun",
-  ];
-
-  const tratamentosRodenstock = [
-    "Solitaire Protect Plus 2",
-    "Solitaire Protect Balance 2",
-    "Colormatic IQ",
-    "Solitaire Protect Plus",
-  ];
-
-  const allTratamentos: Array<{ label: string; value: string; disabled?: boolean }> = [
-    { label: "--- Essilor ---", value: "", disabled: true },
-    ...tratamentosEssilor.map(t => ({ label: t, value: t, disabled: false })),
-    { label: "--- Hoya ---", value: "", disabled: true },
-    ...tratamentosHoya.map(t => ({ label: t, value: t, disabled: false })),
-    { label: "--- Zeiss ---", value: "", disabled: true },
-    ...tratamentosZeiss.map(t => ({ label: t, value: t, disabled: false })),
-    { label: "--- Rodenstock ---", value: "", disabled: true },
-    ...tratamentosRodenstock.map(t => ({ label: t, value: t, disabled: false })),
-  ];
+  const [laboratories, setLaboratories] = useState<any[]>([]);
 
   const [items, setItems] = useState<ServiceItem[]>([
     {
@@ -130,9 +81,10 @@ export default function NovaOrdemServicoPage() {
   useEffect(() => {
     const loadData = async () => {
       try {
-        const [branchesRes, productsRes] = await Promise.all([
+        const [branchesRes, productsRes, laboratoriesRes] = await Promise.all([
           fetch("/api/branches?status=ativos&pageSize=100"),
           fetch("/api/products?status=ativos&pageSize=100&inStock=true"),
+          fetch("/api/laboratories?status=ativos&pageSize=100"),
         ]);
 
         if (branchesRes.ok) {
@@ -143,6 +95,11 @@ export default function NovaOrdemServicoPage() {
         if (productsRes.ok) {
           const productsData = await productsRes.json();
           setProducts(productsData.data || []);
+        }
+
+        if (laboratoriesRes.ok) {
+          const laboratoriesData = await laboratoriesRes.json();
+          setLaboratories(laboratoriesData.data || []);
         }
       } catch (error) {
         console.error("Erro ao carregar dados:", error);
@@ -236,49 +193,6 @@ export default function NovaOrdemServicoPage() {
     setItems(newItems);
   };
 
-  const handleAddTratamento = (tratamento: string) => {
-    if (!tratamento) return;
-    if (prescriptionData.tratamentos.includes(tratamento)) {
-      // Remove se já está selecionado
-      setPrescriptionData({
-        ...prescriptionData,
-        tratamentos: prescriptionData.tratamentos.filter(t => t !== tratamento),
-      });
-    } else {
-      // Adiciona
-      setPrescriptionData({
-        ...prescriptionData,
-        tratamentos: [...prescriptionData.tratamentos, tratamento],
-      });
-    }
-  };
-
-  const handleAddTratamentoManual = () => {
-    if (!prescriptionData.tratamentoManual.trim()) {
-      toast.error("Digite o nome do tratamento");
-      return;
-    }
-
-    if (prescriptionData.tratamentos.includes(prescriptionData.tratamentoManual.trim())) {
-      toast.error("Tratamento já adicionado");
-      return;
-    }
-
-    setPrescriptionData({
-      ...prescriptionData,
-      tratamentos: [...prescriptionData.tratamentos, prescriptionData.tratamentoManual.trim()],
-      tratamentoManual: "",
-    });
-    toast.success("Tratamento adicionado");
-  };
-
-  const handleRemoveTratamento = (tratamento: string) => {
-    setPrescriptionData({
-      ...prescriptionData,
-      tratamentos: prescriptionData.tratamentos.filter(t => t !== tratamento),
-    });
-  };
-
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -301,6 +215,7 @@ export default function NovaOrdemServicoPage() {
       const payload: any = {
         customerId: formData.customerId,
         branchId: formData.branchId,
+        laboratoryId: formData.laboratoryId || undefined,
         expectedDate: formData.expectedDate ? new Date(formData.expectedDate).toISOString() : undefined,
         items: items.map((item) => ({
           productId: item.productId || undefined,
@@ -312,7 +227,7 @@ export default function NovaOrdemServicoPage() {
       };
 
       // Adicionar dados da prescrição como string JSON se preenchidos
-      if (prescriptionData.od.esf || prescriptionData.oe.esf || prescriptionData.tratamentos.length > 0) {
+      if (prescriptionData.od.esf || prescriptionData.oe.esf) {
         payload.prescription = JSON.stringify(prescriptionData);
       }
 
@@ -471,6 +386,26 @@ export default function NovaOrdemServicoPage() {
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="laboratoryId">Laboratório</Label>
+                <Select
+                  value={formData.laboratoryId}
+                  onValueChange={(value) => setFormData({ ...formData, laboratoryId: value })}
+                  disabled={loadingData}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder={loadingData ? "Carregando..." : "Selecione o laboratório"} />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {laboratories.map((lab) => (
+                      <SelectItem key={lab.id} value={lab.id}>
+                        {lab.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
@@ -736,90 +671,6 @@ export default function NovaOrdemServicoPage() {
                 </div>
               </div>
 
-              {/* Tratamentos */}
-              <div className="space-y-3">
-                <Label>Tratamentos</Label>
-
-                {/* Tratamentos Selecionados */}
-                {prescriptionData.tratamentos.length > 0 && (
-                  <div className="flex flex-wrap gap-2 p-3 bg-muted rounded-lg">
-                    {prescriptionData.tratamentos.map((trat) => (
-                      <div
-                        key={trat}
-                        className="flex items-center gap-2 bg-primary text-primary-foreground px-3 py-1 rounded-full text-sm"
-                      >
-                        <span>{trat}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleRemoveTratamento(trat)}
-                          className="hover:bg-primary-foreground/20 rounded-full p-0.5"
-                        >
-                          ✕
-                        </button>
-                      </div>
-                    ))}
-                  </div>
-                )}
-
-                {/* Grid de Tratamentos por Marca */}
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4 p-4 border rounded-lg">
-                  {allTratamentos.map((trat, idx) => {
-                    if (trat.disabled) {
-                      return (
-                        <div key={idx} className="col-span-full">
-                          <h4 className="font-semibold text-sm text-muted-foreground mt-2">{trat.label}</h4>
-                        </div>
-                      );
-                    }
-                    return (
-                      <div key={trat.value} className="flex items-center space-x-2">
-                        <Checkbox
-                          id={`trat-${idx}`}
-                          checked={prescriptionData.tratamentos.includes(trat.value)}
-                          onCheckedChange={() => handleAddTratamento(trat.value)}
-                        />
-                        <label
-                          htmlFor={`trat-${idx}`}
-                          className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
-                        >
-                          {trat.label}
-                        </label>
-                      </div>
-                    );
-                  })}
-                </div>
-
-                {/* Campo para adicionar tratamento manual */}
-                <div className="space-y-2">
-                  <Label>Adicionar Tratamento Customizado</Label>
-                  <div className="flex gap-2">
-                    <Input
-                      value={prescriptionData.tratamentoManual}
-                      onChange={(e) =>
-                        setPrescriptionData({
-                          ...prescriptionData,
-                          tratamentoManual: e.target.value,
-                        })
-                      }
-                      placeholder="Digite o nome do tratamento..."
-                      onKeyPress={(e) => {
-                        if (e.key === "Enter") {
-                          e.preventDefault();
-                          handleAddTratamentoManual();
-                        }
-                      }}
-                    />
-                    <Button
-                      type="button"
-                      onClick={handleAddTratamentoManual}
-                      size="sm"
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Adicionar
-                    </Button>
-                  </div>
-                </div>
-              </div>
             </CardContent>
           )}
         </Card>

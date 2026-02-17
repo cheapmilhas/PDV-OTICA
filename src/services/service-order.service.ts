@@ -107,6 +107,9 @@ export class ServiceOrderService {
         branch: {
           select: { id: true, name: true },
         },
+        laboratory: {
+          select: { id: true, name: true },
+        },
       },
     });
 
@@ -121,7 +124,7 @@ export class ServiceOrderService {
    * Cria nova ordem de serviço
    */
   async create(data: CreateServiceOrderDTO, companyId: string, userId: string) {
-    const { customerId, branchId, items, expectedDate, prescription, notes } = data;
+    const { customerId, branchId, laboratoryId, items, expectedDate, prescription, notes } = data;
 
     if (!items || items.length === 0) {
       throw new AppError(
@@ -137,6 +140,7 @@ export class ServiceOrderService {
           companyId,
           customerId,
           branchId,
+          laboratoryId: laboratoryId || undefined,
           status: "DRAFT",
           promisedDate: expectedDate ? new Date(expectedDate) : undefined,
           createdByUserId: userId,
@@ -192,11 +196,12 @@ export class ServiceOrderService {
       );
     }
 
-    const { items, expectedDate, prescription, notes } = data;
+    const { laboratoryId, items, expectedDate, prescription, notes } = data;
 
     const order = await prisma.$transaction(async (tx) => {
       let updateData: any = {
-        ...(expectedDate && { expectedDate: new Date(expectedDate) }),
+        ...(laboratoryId !== undefined && { laboratoryId: laboratoryId || null }),
+        ...(expectedDate && { promisedDate: new Date(expectedDate) }),
         ...(prescription !== undefined && { prescription }),
         ...(notes !== undefined && { notes }),
       };

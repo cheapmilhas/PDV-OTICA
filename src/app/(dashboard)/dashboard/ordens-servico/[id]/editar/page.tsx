@@ -30,9 +30,11 @@ export default function EditarOrdemServicoPage() {
   const [fetching, setFetching] = useState(true);
   const [canceling, setCanceling] = useState(false);
   const [order, setOrder] = useState<any>(null);
+  const [laboratories, setLaboratories] = useState<any[]>([]);
 
   const [formData, setFormData] = useState({
     expectedDate: "",
+    laboratoryId: "",
     prescription: "",
     notes: "",
   });
@@ -51,21 +53,31 @@ export default function EditarOrdemServicoPage() {
     statusNotes: "",
   });
 
-  // Buscar dados da ordem
+  // Buscar dados da ordem e laboratórios
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const res = await fetch(`/api/service-orders/${id}`);
-        if (!res.ok) throw new Error("Erro ao carregar ordem de serviço");
+        const [orderRes, laboratoriesRes] = await Promise.all([
+          fetch(`/api/service-orders/${id}`),
+          fetch("/api/laboratories?status=ativos&pageSize=100"),
+        ]);
 
-        const { data } = await res.json();
+        if (!orderRes.ok) throw new Error("Erro ao carregar ordem de serviço");
+
+        const { data } = await orderRes.json();
         setOrder(data);
+
+        if (laboratoriesRes.ok) {
+          const labData = await laboratoriesRes.json();
+          setLaboratories(labData.data || []);
+        }
 
         // Preencher formulário
         setFormData({
           expectedDate: data.expectedDate
             ? new Date(data.expectedDate).toISOString().split("T")[0]
             : "",
+          laboratoryId: data.laboratory?.id || "",
           prescription: data.prescription || "",
           notes: data.notes || "",
         });
@@ -151,6 +163,8 @@ export default function EditarOrdemServicoPage() {
       if (formData.expectedDate) {
         payload.expectedDate = new Date(formData.expectedDate).toISOString();
       }
+
+      payload.laboratoryId = formData.laboratoryId || undefined;
 
       if (formData.prescription !== undefined) {
         payload.prescription = formData.prescription || undefined;
@@ -359,14 +373,35 @@ export default function EditarOrdemServicoPage() {
             <CardTitle>Dados da Ordem de Serviço</CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="space-y-2">
-              <Label htmlFor="expectedDate">Data de Entrega Prevista</Label>
-              <Input
-                id="expectedDate"
-                type="date"
-                value={formData.expectedDate}
-                onChange={(e) => setFormData({ ...formData, expectedDate: e.target.value })}
-              />
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="expectedDate">Data de Entrega Prevista</Label>
+                <Input
+                  id="expectedDate"
+                  type="date"
+                  value={formData.expectedDate}
+                  onChange={(e) => setFormData({ ...formData, expectedDate: e.target.value })}
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="laboratoryId">Laboratório</Label>
+                <Select
+                  value={formData.laboratoryId}
+                  onValueChange={(value) => setFormData({ ...formData, laboratoryId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione o laboratório" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {laboratories.map((lab) => (
+                      <SelectItem key={lab.id} value={lab.id}>
+                        {lab.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
             </div>
 
             <div className="space-y-2">

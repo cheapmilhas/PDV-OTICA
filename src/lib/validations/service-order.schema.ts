@@ -23,6 +23,7 @@ export type ServiceOrderItemDTO = z.infer<typeof serviceOrderItemSchema>;
 export const createServiceOrderSchema = z.object({
   customerId: z.string().min(1, "ID do cliente é obrigatório"),
   branchId: z.string().min(1, "ID da filial é obrigatório"),
+  laboratoryId: z.string().optional(),
   items: z.array(serviceOrderItemSchema).min(1, "OS deve ter pelo menos 1 serviço"),
   expectedDate: z.string().datetime().optional(),
   prescription: z.string().max(1000, "Prescrição muito longa").optional(),
@@ -35,6 +36,7 @@ export type CreateServiceOrderDTO = z.infer<typeof createServiceOrderSchema>;
  * Schema para atualizar ordem de serviço
  */
 export const updateServiceOrderSchema = z.object({
+  laboratoryId: z.string().optional(),
   items: z.array(serviceOrderItemSchema).min(1).optional(),
   expectedDate: z.string().datetime().optional(),
   prescription: z.string().max(1000).optional(),
