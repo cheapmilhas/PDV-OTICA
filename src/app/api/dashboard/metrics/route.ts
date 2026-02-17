@@ -1,11 +1,12 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { addDays } from "date-fns";
 
 export async function GET() {
   try {
     const companyId = await getCompanyId();
+    const branchId = await getBranchId().catch(() => null);
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -108,17 +109,27 @@ export async function GET() {
         ? Number(salesMonth._sum.total || 0) / salesMonth._count
         : 0;
 
-    // Buscar meta do mês (de SystemRule ou valor padrão)
-    const goalRule = await prisma.systemRule.findFirst({
-      where: {
-        key: "sales.monthly_goal",
-        active: true,
-      },
-    });
+    // Buscar meta do mês: primeiro tenta SalesGoal da filial (igual à página de Metas),
+    // depois SystemRule, depois valor padrão
+    const currentYear = today.getFullYear();
+    const currentMonth = today.getMonth() + 1;
 
-    const goalMonth = goalRule?.value
-      ? (typeof goalRule.value === 'number' ? goalRule.value : Number(goalRule.value))
-      : 75400.20; // Valor padrão caso não exista regra
+    const [salesGoal, goalRule] = await Promise.all([
+      branchId
+        ? prisma.salesGoal.findFirst({
+            where: { branchId, year: currentYear, month: currentMonth },
+          })
+        : Promise.resolve(null),
+      prisma.systemRule.findFirst({
+        where: { key: "sales.monthly_goal", active: true },
+      }),
+    ]);
+
+    const goalMonth = salesGoal?.branchGoal
+      ? Number(salesGoal.branchGoal)
+      : goalRule?.value
+        ? (typeof goalRule.value === 'number' ? goalRule.value : Number(goalRule.value))
+        : 0;
 
     // Contar Ordens de Serviço
     const osOpen = await prisma.serviceOrder.count({

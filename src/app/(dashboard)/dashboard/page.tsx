@@ -59,7 +59,7 @@ export default function DashboardPage() {
     productsTotal: 0,
     salesCount: 0,
     avgTicket: 0,
-    goalMonth: 75400.20,
+    goalMonth: 0,
     osOpen: 0,
     osPending: 0,
     osDelayed: 0,

@@ -80,12 +80,14 @@ function getDelayDays(promisedDate: string): number {
   return Math.ceil(diff / (1000 * 60 * 60 * 24));
 }
 
-// Formata número da OS: se 0 ou inexistente, mostra ID curto
+// Formata número da OS: se 0 ou inexistente, mostra ID curto. Sufixo -G para garantia, -R para retrabalho
 function osNum(order: ServiceOrder): string {
-  if (order.number && order.number > 0) {
-    return `#${String(order.number).padStart(6, "0")}`;
-  }
-  return `#${order.id.slice(-6).toUpperCase()}`;
+  const base = order.number && order.number > 0
+    ? `#${String(order.number).padStart(6, "0")}`
+    : `#${order.id.slice(-6).toUpperCase()}`;
+  if (order.isWarranty) return `${base}-G`;
+  if (order.isRework) return `${base}-R`;
+  return base;
 }
 
 function StatusBadge({ status, delayed }: { status: string; delayed: boolean }) {
@@ -482,8 +484,6 @@ function OrdensServicoPage() {
     }
   };
 
-  const osNum = (n: number) => `#${String(n).padStart(6, "0")}`;
-
   const summaryCards = [
     { label: "Total OS", value: pagination?.total || 0, color: "text-gray-800" },
     { label: "No Lab", value: counts.SENT_TO_LAB || 0, color: "text-purple-600" },
@@ -625,7 +625,7 @@ function OrdensServicoPage() {
                     {/* Info principal */}
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="text-lg font-black text-blue-700">{osNum(order.number)}</span>
+                        <span className="text-lg font-black text-blue-700">{osNum(order)}</span>
                         <span className="font-semibold text-gray-900 truncate">{order.customer.name}</span>
                         <StatusBadge status={order.status} delayed={isOrderDelayed(order)} />
                         {order.isWarranty && (

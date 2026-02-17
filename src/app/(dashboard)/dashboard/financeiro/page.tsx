@@ -270,8 +270,12 @@ function FinanceiroPage() {
 
       if (!res.ok) {
         const errData = await res.json();
-        const errMsg = errData?.error?.message || errData?.message || errData?.error || "Erro ao criar conta";
         console.error("❌ Erro ao criar conta a pagar:", errData);
+        const details = errData?.error?.details;
+        const detailMsg = Array.isArray(details) && details.length > 0
+          ? details.map((d: any) => `${d.field ? d.field + ": " : ""}${d.message}`).join("; ")
+          : null;
+        const errMsg = detailMsg || errData?.error?.message || errData?.message || "Erro ao criar conta a pagar";
         throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
       }
 
