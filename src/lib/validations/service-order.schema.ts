@@ -82,6 +82,7 @@ export const serviceOrderQuerySchema = z.object({
   endDate: z.string().datetime().optional(),
   sortBy: z.enum(["createdAt", "promisedDate", "status", "customer", "number"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
+  filter: z.enum(["atrasadas", "vencendo"]).optional(),
 });
 
 export type ServiceOrderQuery = z.infer<typeof serviceOrderQuerySchema>;

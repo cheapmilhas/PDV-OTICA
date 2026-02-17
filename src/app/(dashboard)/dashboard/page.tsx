@@ -24,6 +24,8 @@ import {
   CheckCircle2,
   Loader2,
   CreditCard,
+  Wrench,
+  FlaskConical,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -53,12 +55,16 @@ export default function DashboardPage() {
     customersTotal: 0,
     customersNew: 0,
     productsLowStock: 0,
+    productsLowStockList: [] as Array<{ id: string; name: string; stockQty: number; stockMin: number }>,
     productsTotal: 0,
     salesCount: 0,
     avgTicket: 0,
     goalMonth: 75400.20,
     osOpen: 0,
     osPending: 0,
+    osDelayed: 0,
+    osNearDeadline: 0,
+    osDelayedList: [] as Array<{ id: string; number: number; promisedDate: string; customer: { name: string } }>,
   });
   const [loading, setLoading] = useState(true);
 
@@ -299,6 +305,53 @@ export default function DashboardPage() {
         </CardContent>
       </Card>
 
+      {/* Alertas Críticos: OS Atrasadas */}
+      {(metrics.osDelayed > 0 || metrics.osNearDeadline > 0) && (
+        <div className="grid gap-4 md:grid-cols-2">
+          {metrics.osDelayed > 0 && (
+            <Link href="/dashboard/ordens-servico?filter=atrasadas">
+              <Card className="border-red-300 bg-red-50 cursor-pointer hover:bg-red-100 transition-colors">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-red-700">
+                    <AlertTriangle className="h-5 w-5" />
+                    OS Atrasadas
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-red-700 mb-2">{metrics.osDelayed}</div>
+                  {metrics.osDelayedList.length > 0 && (
+                    <div className="space-y-1">
+                      {metrics.osDelayedList.slice(0, 3).map((os) => (
+                        <p key={os.id} className="text-xs text-red-600">
+                          OS #{String(os.number).padStart(5, "0")} — {os.customer?.name}
+                        </p>
+                      ))}
+                    </div>
+                  )}
+                  <p className="text-xs text-red-500 mt-2 font-medium">Clique para ver todas →</p>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+          {metrics.osNearDeadline > 0 && (
+            <Link href="/dashboard/ordens-servico?filter=vencendo">
+              <Card className="border-yellow-300 bg-yellow-50 cursor-pointer hover:bg-yellow-100 transition-colors">
+                <CardHeader className="pb-2">
+                  <CardTitle className="flex items-center gap-2 text-yellow-700">
+                    <Clock className="h-5 w-5" />
+                    Vencem em 3 Dias
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="text-3xl font-bold text-yellow-700 mb-2">{metrics.osNearDeadline}</div>
+                  <p className="text-xs text-yellow-600 font-medium">Clique para ver todas →</p>
+                </CardContent>
+              </Card>
+            </Link>
+          )}
+        </div>
+      )}
+
       {/* Alertas e OS Urgentes */}
       <div className="grid gap-4 md:grid-cols-2">
         {/* Produtos em Estoque Baixo */}
@@ -346,13 +399,13 @@ export default function DashboardPage() {
           </CardContent>
         </Card>
 
-        {/* Ordens de Serviço Urgentes */}
+        {/* Ordens de Serviço */}
         <Card className="border-blue-200 bg-blue-50/50">
           <CardHeader>
             <CardTitle className="flex items-center justify-between">
               <div className="flex items-center gap-2">
-                <Clock className="h-5 w-5 text-blue-600" />
-                <span>Ordens de Serviço Urgentes</span>
+                <Wrench className="h-5 w-5 text-blue-600" />
+                <span>Ordens de Serviço</span>
               </div>
               <Link href="/dashboard/ordens-servico">
                 <Button variant="outline" size="sm">
@@ -370,19 +423,19 @@ export default function DashboardPage() {
                 </div>
               ) : osUrgentes.length === 0 ? (
                 <p className="text-sm text-muted-foreground text-center py-8">
-                  Nenhuma OS urgente no momento
+                  Nenhuma OS com prazo próximo
                 </p>
               ) : (
                 osUrgentes.map((os: any) => {
                   const prazo = os.promisedDate ? new Date(os.promisedDate) : null;
                   const hoje = new Date();
-                  const dias = prazo ? Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : 0;
+                  const dias = prazo ? Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : null;
 
                   return (
                     <div key={os.id} className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
-                          <p className="text-sm font-mono font-medium">OS-{os.id.slice(-4)}</p>
+                          <p className="text-sm font-mono font-medium">OS #{String(os.number).padStart(5, "0")}</p>
                           <Badge variant="outline">{os.status}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
@@ -390,9 +443,11 @@ export default function DashboardPage() {
                         </p>
                       </div>
                       <div className="text-right">
-                        <Badge variant={dias <= 0 ? "destructive" : "secondary"}>
-                          {dias <= 0 ? "Hoje" : `${dias}d`}
-                        </Badge>
+                        {dias !== null && (
+                          <Badge variant={dias <= 0 ? "destructive" : dias <= 3 ? "secondary" : "outline"}>
+                            {dias <= 0 ? "Atrasada" : `${dias}d`}
+                          </Badge>
+                        )}
                       </div>
                     </div>
                   );
@@ -400,11 +455,16 @@ export default function DashboardPage() {
               )}
               <div className="flex items-center justify-between pt-2 border-t">
                 <span className="text-sm text-muted-foreground">
-                  {metrics.osOpen} OS em andamento
+                  {metrics.osOpen} em andamento
                 </span>
                 <span className="text-sm text-muted-foreground">
-                  {metrics.osPending} aguardando material
+                  {metrics.osPending} no laboratório
                 </span>
+                {metrics.osDelayed > 0 && (
+                  <span className="text-sm text-red-600 font-medium">
+                    {metrics.osDelayed} atrasadas
+                  </span>
+                )}
               </div>
             </div>
           </CardContent>

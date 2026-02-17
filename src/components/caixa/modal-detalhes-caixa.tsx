@@ -104,11 +104,40 @@ export function ModalDetalhesCaixa({
     }).format(value);
   }
 
-  function handleDownloadReport() {
+  function handlePrint() {
     if (!caixa) return;
+    const printContent = document.getElementById(`print-caixa-${caixa.id}`);
+    if (!printContent) return;
 
-    // TODO: Implementar geração de PDF
-    toast.info("Gerando relatório...");
+    const win = window.open("", "_blank");
+    if (!win) return;
+    win.document.write(`
+      <html>
+        <head>
+          <title>Relatório de Caixa</title>
+          <style>
+            body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
+            h1 { font-size: 16px; margin-bottom: 4px; }
+            h2 { font-size: 14px; margin: 12px 0 4px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
+            th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 11px; }
+            th { background: #f5f5f5; font-weight: bold; }
+            .text-right { text-align: right; }
+            .green { color: #16a34a; } .red { color: #dc2626; } .orange { color: #d97706; }
+            .summary { display: flex; gap: 24px; margin: 8px 0; flex-wrap: wrap; }
+            .summary-item { background: #f9f9f9; border: 1px solid #e5e5e5; padding: 8px 12px; border-radius: 4px; }
+            .summary-label { font-size: 10px; color: #666; }
+            .summary-value { font-size: 14px; font-weight: bold; }
+            @media print { button { display: none !important; } }
+          </style>
+        </head>
+        <body>
+          ${printContent.innerHTML}
+          <script>window.onload = function() { window.print(); }</script>
+        </body>
+      </html>
+    `);
+    win.document.close();
   }
 
   if (!caixa) return null;
@@ -137,7 +166,7 @@ export function ModalDetalhesCaixa({
           </DialogDescription>
         </DialogHeader>
 
-        <div className="space-y-6">
+        <div id={`print-caixa-${caixa.id}`} className="space-y-6">
           {/* Informações Gerais */}
           <div className="grid grid-cols-2 gap-4">
             <div className="space-y-1">
@@ -309,9 +338,9 @@ export function ModalDetalhesCaixa({
               Fechar
             </Button>
             {caixa.status === "CLOSED" && (
-              <Button onClick={handleDownloadReport}>
+              <Button onClick={handlePrint}>
                 <Download className="mr-2 h-4 w-4" />
-                Baixar Relatório
+                Imprimir Relatório
               </Button>
             )}
           </div>

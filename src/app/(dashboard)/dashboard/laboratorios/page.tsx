@@ -65,6 +65,8 @@ function LaboratoriosPage() {
   const [loadingDetails, setLoadingDetails] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
   const [editForm, setEditForm] = useState<Partial<Laboratory>>({});
+  const [labOrders, setLabOrders] = useState<any[]>([]);
+  const [loadingLabOrders, setLoadingLabOrders] = useState(false);
   const [createForm, setCreateForm] = useState<Partial<Laboratory>>({
     defaultLeadTimeDays: 7,
     urgentLeadTimeDays: 3,
@@ -105,14 +107,24 @@ function LaboratoriosPage() {
     setLoadingDetails(true);
     setDetailsDialogOpen(true);
     setIsEditing(false);
+    setLabOrders([]);
 
     try {
-      const res = await fetch(`/api/laboratories/${id}`);
-      if (!res.ok) throw new Error("Erro ao buscar detalhes");
+      const [labRes, ordersRes] = await Promise.all([
+        fetch(`/api/laboratories/${id}`),
+        fetch(`/api/laboratories/${id}/service-orders`),
+      ]);
 
-      const { data } = await res.json();
+      if (!labRes.ok) throw new Error("Erro ao buscar detalhes");
+
+      const { data } = await labRes.json();
       setSelectedLab(data);
       setEditForm(data);
+
+      if (ordersRes.ok) {
+        const ordersData = await ordersRes.json();
+        setLabOrders(ordersData.data || []);
+      }
     } catch (error: any) {
       console.error("Erro ao carregar detalhes:", error);
       toast.error("Erro ao carregar detalhes do laboratório");
@@ -760,6 +772,42 @@ function LaboratoriosPage() {
                         </CardContent>
                       </Card>
                     </div>
+                  </div>
+
+                  {/* Ordens de Serviço Vinculadas */}
+                  <div>
+                    <p className="text-sm font-medium text-muted-foreground mb-2">
+                      Ordens de Serviço Vinculadas ({labOrders.length})
+                    </p>
+                    {labOrders.length === 0 ? (
+                      <p className="text-sm text-muted-foreground italic">Nenhuma OS vinculada a este laboratório</p>
+                    ) : (
+                      <div className="space-y-2 max-h-48 overflow-y-auto">
+                        {labOrders.map((os: any) => {
+                          const isDelayed = os.promisedDate && new Date(os.promisedDate) < new Date() && !["DELIVERED", "CANCELED"].includes(os.status);
+                          return (
+                            <div key={os.id} className={`flex items-center justify-between rounded-lg border p-2 text-sm ${isDelayed ? "border-red-200 bg-red-50" : "border-gray-100 bg-gray-50"}`}>
+                              <div>
+                                <span className="font-mono font-medium">OS #{String(os.number).padStart(5, "0")}</span>
+                                <span className="text-muted-foreground ml-2">{os.customer?.name}</span>
+                              </div>
+                              <div className="flex items-center gap-2">
+                                {isDelayed && <span className="text-xs text-red-600 font-medium">Atrasada</span>}
+                                <span className={`px-2 py-0.5 rounded-full text-xs font-medium ${
+                                  os.status === "DELIVERED" ? "bg-green-100 text-green-700" :
+                                  os.status === "SENT_TO_LAB" ? "bg-purple-100 text-purple-700" :
+                                  os.status === "IN_PROGRESS" ? "bg-yellow-100 text-yellow-700" :
+                                  os.status === "READY" ? "bg-blue-100 text-blue-700" :
+                                  "bg-gray-100 text-gray-700"
+                                }`}>
+                                  {os.status === "SENT_TO_LAB" ? "No Lab" : os.status === "IN_PROGRESS" ? "Em Produção" : os.status === "READY" ? "Pronta" : os.status === "DELIVERED" ? "Entregue" : os.status}
+                                </span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
 
                   {/* Datas */}

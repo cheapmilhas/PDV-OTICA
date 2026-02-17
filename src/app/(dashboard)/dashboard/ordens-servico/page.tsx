@@ -17,7 +17,7 @@ import {
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -68,8 +68,28 @@ const NEXT_STATUS: Record<string, { value: string; label: string; icon: React.Re
   READY: [], // Entrega via modal especial
 };
 
-function StatusBadge({ status, isDelayed }: { status: string; isDelayed: boolean }) {
-  if (isDelayed && !["DELIVERED", "CANCELED"].includes(status)) {
+// Calcula atraso em tempo real (não depende do campo isDelayed do banco)
+function isOrderDelayed(order: ServiceOrder): boolean {
+  if (!order.promisedDate) return false;
+  if (["DELIVERED", "CANCELED"].includes(order.status)) return false;
+  return new Date(order.promisedDate) < new Date();
+}
+
+function getDelayDays(promisedDate: string): number {
+  const diff = new Date().getTime() - new Date(promisedDate).getTime();
+  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+}
+
+// Formata número da OS: se 0 ou inexistente, mostra ID curto
+function osNum(order: ServiceOrder): string {
+  if (order.number && order.number > 0) {
+    return `#${String(order.number).padStart(6, "0")}`;
+  }
+  return `#${order.id.slice(-6).toUpperCase()}`;
+}
+
+function StatusBadge({ status, delayed }: { status: string; delayed: boolean }) {
+  if (delayed) {
     return (
       <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border bg-red-100 text-red-700 border-red-300">
         <AlertTriangle className="h-3 w-3" />
@@ -386,6 +406,8 @@ function ModalGarantia({ order, onClose, onSuccess }: {
 // ===== PÁGINA PRINCIPAL =====
 function OrdensServicoPage() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const filterParam = searchParams.get("filter") || "";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("ativos");
@@ -408,6 +430,9 @@ function OrdensServicoPage() {
       pageSize: "20",
       status: statusFilter,
     });
+    if (filterParam) {
+      params.set("filter", filterParam);
+    }
 
     Promise.all([
       fetch(`/api/service-orders?${params}`).then((r) => r.json()),
@@ -418,7 +443,7 @@ function OrdensServicoPage() {
       })
       .catch(() => toast.error("Erro ao carregar ordens de serviço"))
       .finally(() => setLoading(false));
-  }, [search, page, statusFilter]);
+  }, [search, page, statusFilter, filterParam]);
 
   useEffect(() => {
     fetchOrders();
@@ -533,12 +558,30 @@ function OrdensServicoPage() {
             <Button
               key={f.value}
               size="sm"
-              variant={statusFilter === f.value ? "default" : "outline"}
-              onClick={() => { setStatusFilter(f.value); setPage(1); }}
+              variant={statusFilter === f.value && !filterParam ? "default" : "outline"}
+              onClick={() => { setStatusFilter(f.value); setPage(1); router.push("/dashboard/ordens-servico"); }}
             >
               {f.label}
             </Button>
           ))}
+          <Button
+            size="sm"
+            variant={filterParam === "atrasadas" ? "destructive" : "outline"}
+            className={filterParam !== "atrasadas" ? "border-red-300 text-red-700 hover:bg-red-50" : ""}
+            onClick={() => { setPage(1); router.push("/dashboard/ordens-servico?filter=atrasadas"); }}
+          >
+            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+            Atrasadas
+          </Button>
+          <Button
+            size="sm"
+            variant={filterParam === "vencendo" ? "default" : "outline"}
+            className={filterParam === "vencendo" ? "bg-yellow-600 hover:bg-yellow-700" : "border-yellow-400 text-yellow-700 hover:bg-yellow-50"}
+            onClick={() => { setPage(1); router.push("/dashboard/ordens-servico?filter=vencendo"); }}
+          >
+            <Clock className="h-3.5 w-3.5 mr-1" />
+            Vencendo (3 dias)
+          </Button>
         </div>
       </div>
 
@@ -584,7 +627,7 @@ function OrdensServicoPage() {
                       <div className="flex items-center gap-2 flex-wrap mb-1">
                         <span className="text-lg font-black text-blue-700">{osNum(order.number)}</span>
                         <span className="font-semibold text-gray-900 truncate">{order.customer.name}</span>
-                        <StatusBadge status={order.status} isDelayed={order.isDelayed} />
+                        <StatusBadge status={order.status} delayed={isOrderDelayed(order)} />
                         {order.isWarranty && (
                           <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 border border-blue-300">
                             <Shield className="h-3 w-3" /> Garantia

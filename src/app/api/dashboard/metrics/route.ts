@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCompanyId } from "@/lib/auth-helpers";
+import { addDays } from "date-fns";
 
 export async function GET() {
   try {
+    const companyId = await getCompanyId();
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -16,6 +19,7 @@ export async function GET() {
     // Vendas de hoje
     const salesToday = await prisma.sale.aggregate({
       where: {
+        companyId,
         createdAt: { gte: today },
         status: "COMPLETED",
       },
@@ -26,6 +30,7 @@ export async function GET() {
     // Vendas de ontem
     const salesYesterday = await prisma.sale.aggregate({
       where: {
+        companyId,
         createdAt: { gte: yesterday, lt: today },
         status: "COMPLETED",
       },
@@ -35,6 +40,7 @@ export async function GET() {
     // Vendas do mês atual
     const salesMonth = await prisma.sale.aggregate({
       where: {
+        companyId,
         createdAt: { gte: startOfMonth },
         status: "COMPLETED",
       },
@@ -45,6 +51,7 @@ export async function GET() {
     // Vendas do mês anterior
     const salesLastMonth = await prisma.sale.aggregate({
       where: {
+        companyId,
         createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         status: "COMPLETED",
       },
@@ -53,12 +60,13 @@ export async function GET() {
 
     // Total de clientes
     const customersTotal = await prisma.customer.count({
-      where: { active: true },
+      where: { companyId, active: true },
     });
 
     // Clientes novos este mês
     const customersNew = await prisma.customer.count({
       where: {
+        companyId,
         active: true,
         createdAt: { gte: startOfMonth },
       },
@@ -66,17 +74,33 @@ export async function GET() {
 
     // Total de produtos
     const productsTotal = await prisma.product.count({
-      where: { active: true },
+      where: { companyId, active: true },
     });
 
-    // Produtos com estoque baixo
-    const productsLowStock = await prisma.product.count({
-      where: {
-        active: true,
-        stockControlled: true,
-        stockQty: { lte: prisma.product.fields.stockMin },
-      },
-    });
+    // Produtos com estoque baixo (usando $queryRaw pois Prisma não suporta comparar campos entre si)
+    const lowStockResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
+      SELECT COUNT(*) as count
+      FROM "Product"
+      WHERE "companyId" = ${companyId}
+        AND "stockControlled" = true
+        AND "active" = true
+        AND "stockMin" > 0
+        AND "stockQty" <= "stockMin"
+    `;
+    const productsLowStock = Number(lowStockResult[0]?.count || 0);
+
+    // Lista dos produtos com estoque baixo para exibir no card
+    const productsLowStockList = await prisma.$queryRaw<Array<{ id: string; name: string; stockQty: number; stockMin: number }>>`
+      SELECT id, name, "stockQty", "stockMin"
+      FROM "Product"
+      WHERE "companyId" = ${companyId}
+        AND "stockControlled" = true
+        AND "active" = true
+        AND "stockMin" > 0
+        AND "stockQty" <= "stockMin"
+      ORDER BY ("stockQty" - "stockMin") ASC
+      LIMIT 5
+    `;
 
     // Ticket médio
     const avgTicket =
@@ -99,6 +123,7 @@ export async function GET() {
     // Contar Ordens de Serviço
     const osOpen = await prisma.serviceOrder.count({
       where: {
+        companyId,
         status: {
           in: ["APPROVED", "IN_PROGRESS", "READY"],
         },
@@ -107,8 +132,47 @@ export async function GET() {
 
     const osPending = await prisma.serviceOrder.count({
       where: {
+        companyId,
         status: "SENT_TO_LAB",
       },
+    });
+
+    const now = new Date();
+    const in3Days = addDays(now, 3);
+
+    // OS atrasadas: prazo vencido e não entregue/cancelada
+    const osDelayed = await prisma.serviceOrder.count({
+      where: {
+        companyId,
+        promisedDate: { lt: now },
+        status: { notIn: ["DELIVERED", "CANCELED"] },
+      },
+    });
+
+    // OS com prazo próximo: vence nos próximos 3 dias
+    const osNearDeadline = await prisma.serviceOrder.count({
+      where: {
+        companyId,
+        promisedDate: { gte: now, lte: in3Days },
+        status: { notIn: ["DELIVERED", "CANCELED"] },
+      },
+    });
+
+    // Lista das OS atrasadas para exibir no card
+    const osDelayedList = await prisma.serviceOrder.findMany({
+      where: {
+        companyId,
+        promisedDate: { lt: now },
+        status: { notIn: ["DELIVERED", "CANCELED"] },
+      },
+      select: {
+        id: true,
+        number: true,
+        promisedDate: true,
+        customer: { select: { name: true } },
+      },
+      orderBy: { promisedDate: "asc" },
+      take: 5,
     });
 
     const metrics = {
@@ -121,11 +185,15 @@ export async function GET() {
       customersNew,
       productsTotal,
       productsLowStock,
+      productsLowStockList,
       salesCount: salesToday._count,
       avgTicket: Number(avgTicket),
       goalMonth,
       osOpen,
       osPending,
+      osDelayed,
+      osNearDeadline,
+      osDelayedList,
     };
 
     return NextResponse.json({ metrics });

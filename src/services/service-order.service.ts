@@ -40,16 +40,28 @@ export class ServiceOrderService {
       endDate,
       sortBy = "createdAt",
       sortOrder = "desc",
+      filter,
     } = query;
+
+    const now = new Date();
 
     const where: Prisma.ServiceOrderWhereInput = {
       companyId,
-      ...(status === "ativos" && { status: { not: "CANCELED" } }),
-      ...(status === "inativos" && { status: "CANCELED" }),
+      ...(status === "ativos" && !filter && { status: { not: "CANCELED" } }),
+      ...(status === "inativos" && !filter && { status: "CANCELED" }),
       ...(customerId && { customerId }),
       ...(orderStatus && { status: orderStatus }),
       ...(startDate && { createdAt: { gte: new Date(startDate) } }),
       ...(endDate && { createdAt: { lte: new Date(endDate) } }),
+      // Filtros especiais de prazo
+      ...(filter === "atrasadas" && {
+        promisedDate: { lt: now },
+        status: { notIn: ["DELIVERED", "CANCELED"] },
+      }),
+      ...(filter === "vencendo" && {
+        promisedDate: { gte: now, lte: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000) },
+        status: { notIn: ["DELIVERED", "CANCELED"] },
+      }),
     };
 
     if (search) {

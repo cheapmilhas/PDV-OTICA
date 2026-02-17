@@ -269,8 +269,10 @@ function FinanceiroPage() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        throw new Error(error.error?.message || "Erro ao criar conta");
+        const errData = await res.json();
+        const errMsg = errData?.error?.message || errData?.message || errData?.error || "Erro ao criar conta";
+        console.error("❌ Erro ao criar conta a pagar:", errData);
+        throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
       }
 
       toast.success("Conta a pagar criada com sucesso!");
