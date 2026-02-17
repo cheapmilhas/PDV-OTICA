@@ -181,21 +181,20 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       <div className="flex h-16 items-center border-b px-6">
         <Link href="/dashboard" className="flex items-center gap-2 font-bold text-lg">
           {logoUrl ? (
-            <>
-              <div className="relative h-8 w-8 flex-shrink-0">
-                <Image
-                  src={logoUrl}
-                  alt="Logo"
-                  fill
-                  className="object-contain"
-                  priority
-                />
-              </div>
-              <span className="truncate">{displayName || "PDV Ótica"}</span>
-            </>
+            // Com logo: exibe apenas a imagem, sem texto
+            <div className="relative h-10 w-full max-w-[180px]">
+              <Image
+                src={logoUrl}
+                alt="Logo"
+                fill
+                className="object-contain object-left"
+                priority
+              />
+            </div>
           ) : (
+            // Sem logo: exibe ícone + nome
             <>
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground">
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground flex-shrink-0">
                 <ShoppingCart className="h-5 w-5" />
               </div>
               <span>{displayName || "PDV Ótica"}</span>
