@@ -25,7 +25,6 @@ import {
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
-import Image from "next/image";
 
 const menuItems = [
   {
@@ -173,31 +172,54 @@ interface SidebarProps {
 
 export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const pathname = usePathname();
-  const { logoUrl, displayName } = useCompanySettings();
+  const { logoUrl, displayName, primaryColor } = useCompanySettings();
+
+  // Cor do sidebar: usa a cor primária escolhida ou cinza escuro padrão
+  const sidebarBg = primaryColor || null;
+
+  // Determina se o fundo é escuro para ajustar cor do texto
+  const isDark = (() => {
+    if (!sidebarBg) return false;
+    const hex = sidebarBg.replace("#", "");
+    const r = parseInt(hex.substring(0, 2), 16);
+    const g = parseInt(hex.substring(2, 4), 16);
+    const b = parseInt(hex.substring(4, 6), 16);
+    // Luminância relativa
+    return (r * 0.299 + g * 0.587 + b * 0.114) < 128;
+  })();
+
+  const textColor = isDark ? "text-white" : "text-foreground";
+  const mutedTextColor = isDark ? "text-white/70" : "text-muted-foreground";
+  const activeClass = isDark
+    ? "bg-white/20 text-white font-medium"
+    : "bg-primary text-primary-foreground font-medium";
+  const hoverClass = isDark
+    ? "text-white/80 hover:bg-white/10 hover:text-white"
+    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
 
   return (
-    <aside className="flex h-screen w-64 flex-col border-r bg-card">
+    <aside
+      className="flex h-screen w-64 flex-col border-r"
+      style={sidebarBg ? { backgroundColor: sidebarBg } : {}}
+    >
       {/* Logo */}
-      <div className="flex h-16 items-center border-b px-6">
+      <div className={cn("flex h-16 items-center border-b px-6", isDark ? "border-white/20" : "border-border")}>
         <Link href="/dashboard" className="flex items-center gap-2 font-bold text-lg">
           {logoUrl ? (
             // Com logo: exibe apenas a imagem, sem texto
-            <div className="relative h-10 w-full max-w-[180px]">
-              <Image
-                src={logoUrl}
-                alt="Logo"
-                fill
-                className="object-contain object-left"
-                priority
-              />
-            </div>
+            // eslint-disable-next-line @next/next/no-img-element
+            <img
+              src={logoUrl}
+              alt="Logo"
+              className="h-10 w-auto max-w-[180px] object-contain"
+            />
           ) : (
             // Sem logo: exibe ícone + nome
             <>
-              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-primary text-primary-foreground flex-shrink-0">
-                <ShoppingCart className="h-5 w-5" />
+              <div className="flex h-8 w-8 items-center justify-center rounded-md bg-white/20 flex-shrink-0">
+                <ShoppingCart className={cn("h-5 w-5", isDark ? "text-white" : "text-primary")} />
               </div>
-              <span>{displayName || "PDV Ótica"}</span>
+              <span className={textColor}>{displayName || "PDV Ótica"}</span>
             </>
           )}
         </Link>
@@ -207,7 +229,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       <nav className="flex-1 overflow-y-auto p-4">
         {menuItems.map((section) => (
           <div key={section.title} className="mb-6">
-            <h3 className="mb-2 px-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+            <h3 className={cn("mb-2 px-2 text-xs font-semibold uppercase tracking-wider", mutedTextColor)}>
               {section.title}
             </h3>
             <ul className="space-y-1">
@@ -222,15 +244,13 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                     onClick={onNavigate}
                     className={cn(
                       "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
-                      isActive
-                        ? "bg-primary text-primary-foreground font-medium"
-                        : "text-muted-foreground hover:bg-accent hover:text-accent-foreground"
+                      isActive ? activeClass : hoverClass
                     )}
                   >
                     <Icon className="h-4 w-4" />
                     <span className="flex-1">{item.name}</span>
                     {item.hotkey && (
-                      <kbd className="hidden lg:inline-block px-1.5 py-0.5 text-xs font-mono border rounded bg-background">
+                      <kbd className={cn("hidden lg:inline-block px-1.5 py-0.5 text-xs font-mono border rounded", isDark ? "border-white/30 bg-white/10 text-white/80" : "border bg-background")}>
                         {item.hotkey}
                       </kbd>
                     )}
@@ -255,8 +275,8 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       </nav>
 
       {/* Footer */}
-      <div className="border-t p-4">
-        <div className="text-xs text-muted-foreground text-center">
+      <div className={cn("border-t p-4", isDark ? "border-white/20" : "border-border")}>
+        <div className={cn("text-xs text-center", mutedTextColor)}>
           <p>Versão 1.0.0</p>
           <p className="mt-1">© 2026 PDV Ótica</p>
         </div>
