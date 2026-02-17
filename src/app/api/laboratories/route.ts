@@ -97,16 +97,20 @@ export async function GET(request: NextRequest) {
           active: true,
           createdAt: true,
           updatedAt: true,
+          _count: {
+            select: { serviceOrders: true },
+          },
         },
       }),
       prisma.lab.count({ where }),
     ]);
 
-    // Serializar Decimals
-    const serializedData = data.map((lab) => ({
+    // Serializar Decimals e usar contagem real de OS
+    const serializedData = data.map(({ _count, ...lab }) => ({
       ...lab,
       defaultDiscount: Number(lab.defaultDiscount),
       qualityRating: lab.qualityRating ? Number(lab.qualityRating) : null,
+      totalOrders: _count.serviceOrders,
     }));
 
     const totalPages = Math.ceil(total / query.pageSize);

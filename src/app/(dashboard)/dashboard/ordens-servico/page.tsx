@@ -454,7 +454,7 @@ function OrdensServicoPage() {
     const statusCounts: Record<string, number> = {};
     orders.forEach((o) => {
       statusCounts[o.status] = (statusCounts[o.status] || 0) + 1;
-      if (o.isDelayed && !["DELIVERED", "CANCELED"].includes(o.status)) {
+      if (isOrderDelayed(o)) {
         statusCounts.DELAYED = (statusCounts.DELAYED || 0) + 1;
       }
     });
