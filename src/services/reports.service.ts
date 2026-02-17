@@ -625,7 +625,7 @@ export const reportsService = {
       },
       select: {
         id: true,
-        prescription: {
+        prescriptionRel: {
           select: {
             values: {
               select: { odAdd: true, oeAdd: true },
@@ -638,7 +638,7 @@ export const reportsService = {
     // Map service orders to determine lens type
     const soLensTypeMap = new Map<string, string>();
     for (const so of serviceOrders) {
-      const values = so.prescription?.values;
+      const values = (so as any).prescriptionRel?.values;
       if (!values) continue;
       const maxAdd = Math.max(Number(values.odAdd) || 0, Number(values.oeAdd) || 0);
       const lensType = maxAdd > 0 ? "PROGRESSIVE" : "SINGLE_VISION";

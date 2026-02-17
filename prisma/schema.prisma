@@ -135,6 +135,7 @@ model User {
   sellerCommissions          SellerCommission[]    @relation("SellerCommissions")
   sellerGoals                SellerGoal[]
   serviceOrdersCreated       ServiceOrder[]        @relation("SOCreator")
+  serviceOrdersDelivered     ServiceOrder[]        @relation("SODeliverer")
   soHistoryChanges           ServiceOrderHistory[] @relation("SOHistoryChanger")
   stockAdjustmentsApproved   StockAdjustment[]     @relation("AdjustmentApprover")
   stockAdjustmentsCreated    StockAdjustment[]     @relation("AdjustmentCreator")
@@ -551,7 +552,7 @@ model Prescription {
   customer         Customer            @relation(fields: [customerId], references: [id])
   doctor           Doctor?             @relation(fields: [doctorId], references: [id])
   values           PrescriptionValues?
-  serviceOrders    ServiceOrder[]
+  serviceOrders    ServiceOrder[]      @relation("SOPrescription")
 
   @@index([companyId, customerId])
   @@index([customerId, expiresAt])
@@ -584,36 +585,80 @@ model PrescriptionValues {
 
 model ServiceOrder {
   id               String                @id @default(cuid())
+  number           Int                   @default(0) // Número sequencial por empresa (gerado no service)
   companyId        String
   branchId         String
   customerId       String
   prescriptionId   String?
   createdByUserId  String
+
+  // === STATUS E PRIORIDADE ===
   status           ServiceOrderStatus    @default(DRAFT)
   priority         ServiceOrderPriority  @default(NORMAL)
-  promisedDate      DateTime?
-  deliveredDate     DateTime?
-  notes             String?
-  prescriptionData  Json?
-  createdAt         DateTime             @default(now())
-  updatedAt        DateTime              @updatedAt
+
+  // === DATAS DO FLUXO ===
+  promisedDate     DateTime?             // Prazo prometido ao cliente
+  labExpectedDate  DateTime?             // Prazo interno do laboratório
+  sentToLabAt      DateTime?             // Quando foi enviada ao lab
+  readyAt          DateTime?             // Quando ficou pronta
+  deliveredAt      DateTime?             // Quando foi entregue ao cliente
+  canceledAt       DateTime?             // Quando foi cancelada
+
+  // === LABORATÓRIO ===
   laboratoryId     String?
+  labOrderNumber   String?               // Número do pedido no laboratório
+  labNotes         String?               // Observações para o lab
+
+  // === ATRASO ===
+  isDelayed        Boolean               @default(false)
+  delayDays        Int?
+  delayReason      String?
+
+  // === GARANTIA / RETRABALHO ===
+  isWarranty       Boolean               @default(false)
+  isRework         Boolean               @default(false)
+  warrantyReason   String?
+  reworkReason     String?
+  originalOrderId  String?
+  originalOrder    ServiceOrder?         @relation("OrderRework", fields: [originalOrderId], references: [id])
+  reworkOrders     ServiceOrder[]        @relation("OrderRework")
+
+  // === ENTREGA ===
+  deliveredByUserId String?
+  deliveryNotes     String?
+
+  // === QUALIDADE ===
+  qualityRating    Int?                  // 1-5 estrelas
+  qualityNotes     String?
+
+  // === DADOS ===
+  prescriptionData Json?
+  notes            String?
+
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+
+  // === RELAÇÕES ===
+  company          Company               @relation(fields: [companyId], references: [id])
+  branch           Branch                @relation(fields: [branchId], references: [id])
+  customer         Customer              @relation(fields: [customerId], references: [id])
+  prescriptionRel  Prescription?         @relation("SOPrescription", fields: [prescriptionId], references: [id])
+  laboratory       Lab?                  @relation(fields: [laboratoryId], references: [id])
+  createdByUser    User                  @relation("SOCreator", fields: [createdByUserId], references: [id])
+  deliveredByUser  User?                 @relation("SODeliverer", fields: [deliveredByUserId], references: [id])
   qualityChecklist QualityChecklist?
   sale             Sale?
-  branch           Branch                @relation(fields: [branchId], references: [id])
-  company          Company               @relation(fields: [companyId], references: [id])
-  createdByUser    User                  @relation("SOCreator", fields: [createdByUserId], references: [id])
-  customer         Customer              @relation(fields: [customerId], references: [id])
-  laboratory       Lab?                  @relation(fields: [laboratoryId], references: [id])
-  prescription     Prescription?         @relation(fields: [prescriptionId], references: [id])
-  history          ServiceOrderHistory[]
   items            ServiceOrderItem[]
+  history          ServiceOrderHistory[]
   reservations     StockReservation[]
   warranties       Warranty[]
 
-  @@index([branchId, status, promisedDate])
+  @@unique([companyId, number])
+  @@index([companyId, status])
   @@index([companyId, customerId])
-  @@index([status, promisedDate])
+  @@index([companyId, isDelayed])
+  @@index([companyId, promisedDate])
+  @@index([laboratoryId])
 }
 
 model ServiceOrderItem {
@@ -638,13 +683,15 @@ model ServiceOrderItem {
 model ServiceOrderHistory {
   id              String              @id @default(cuid())
   serviceOrderId  String
+  action          String              // STATUS_CHANGED, REVERTED, EDITED, DELIVERED, CREATED, CANCELED
   fromStatus      ServiceOrderStatus?
-  toStatus        ServiceOrderStatus
+  toStatus        ServiceOrderStatus?
   note            String?
+  metadata        Json?               // Dados extras para auditoria
   changedByUserId String?
   createdAt       DateTime            @default(now())
   changedByUser   User?               @relation("SOHistoryChanger", fields: [changedByUserId], references: [id])
-  serviceOrder    ServiceOrder        @relation(fields: [serviceOrderId], references: [id])
+  serviceOrder    ServiceOrder        @relation(fields: [serviceOrderId], references: [id], onDelete: Cascade)
 
   @@index([serviceOrderId, createdAt])
 }

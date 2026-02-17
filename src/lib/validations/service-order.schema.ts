@@ -41,6 +41,8 @@ export const updateServiceOrderSchema = z.object({
   expectedDate: z.string().datetime().optional(),
   prescription: z.string().max(5000).optional(),
   notes: z.string().max(1000).optional(),
+  labNotes: z.string().max(500).optional(),
+  labOrderNumber: z.string().max(100).optional(),
 });
 
 export type UpdateServiceOrderDTO = z.infer<typeof updateServiceOrderSchema>;
@@ -78,7 +80,7 @@ export const serviceOrderQuerySchema = z.object({
   orderStatus: z.nativeEnum(ServiceOrderStatus).optional(),
   startDate: z.string().datetime().optional(),
   endDate: z.string().datetime().optional(),
-  sortBy: z.enum(["createdAt", "expectedDate", "status", "customer", "total"]).default("createdAt"),
+  sortBy: z.enum(["createdAt", "promisedDate", "status", "customer", "number"]).default("createdAt"),
   sortOrder: z.enum(["asc", "desc"]).default("desc"),
 });
 

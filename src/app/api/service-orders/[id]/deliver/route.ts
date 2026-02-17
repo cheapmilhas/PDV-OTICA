@@ -1,10 +1,17 @@
+import { NextResponse } from "next/server";
+import { z } from "zod";
 import { serviceOrderService } from "@/services/service-order.service";
-import { updateStatusSchema } from "@/lib/validations/service-order.schema";
 import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
-export async function PATCH(
+const deliverSchema = z.object({
+  deliveryNotes: z.string().max(500).optional(),
+  qualityRating: z.number().int().min(1).max(5).optional(),
+  qualityNotes: z.string().max(500).optional(),
+});
+
+export async function POST(
   request: Request,
   { params }: { params: Promise<{ id: string }> }
 ) {
@@ -14,10 +21,15 @@ export async function PATCH(
     const userId = await getUserId();
     const { id } = await params;
 
-    const body = await request.json();
-    const { status, notes } = updateStatusSchema.parse(body);
+    let options = {};
+    try {
+      const body = await request.json();
+      options = deliverSchema.parse(body);
+    } catch {
+      // Body opcional
+    }
 
-    const order = await serviceOrderService.updateStatus(id, status, companyId, userId, notes);
+    const order = await serviceOrderService.deliver(id, companyId, userId, options);
 
     return successResponse(order);
   } catch (error) {

@@ -20,13 +20,28 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
+const STATUS_LABELS: Record<string, string> = {
+  DRAFT: "Rascunho",
+  APPROVED: "Aprovado",
+  SENT_TO_LAB: "No Laboratório",
+  IN_PROGRESS: "Em Produção",
+  READY: "Pronta",
+  DELIVERED: "Entregue",
+  CANCELED: "Cancelado",
+};
+
 interface ServiceOrderDetails {
   id: string;
+  number?: number;
   createdAt: string;
   notes?: string;
-  prescription?: string;
+  prescriptionData?: any;
   promisedDate?: string;
   deliveredAt?: string;
+  isDelayed?: boolean;
+  delayDays?: number;
+  isWarranty?: boolean;
+  isRework?: boolean;
   status: string;
   customer: {
     id: string;
@@ -34,17 +49,22 @@ interface ServiceOrderDetails {
     cpf?: string;
     phone?: string;
   };
-  branch?: {
+  branch?: { id: string; name: string };
+  laboratory?: { id: string; name: string };
+  originalOrder?: { id: string; number: number; status: string };
+  reworkOrders?: Array<{ id: string; number: number; status: string; isWarranty: boolean; isRework: boolean }>;
+  history?: Array<{
     id: string;
-    name: string;
-  };
-  laboratory?: {
-    id: string;
-    name: string;
-  };
+    action: string;
+    fromStatus?: string;
+    toStatus?: string;
+    note?: string;
+    createdAt: string;
+    changedByUser?: { id: string; name: string };
+  }>;
   items: Array<{
     id: string;
-    description: string;
+    description?: string;
     qty: number;
     observations?: string;
   }>;
@@ -142,7 +162,14 @@ export default function DetalhesOrdemServicoPage() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold">Detalhes da Ordem de Serviço</h1>
+            <div className="flex items-center gap-2">
+              <h1 className="text-3xl font-bold">Detalhes da OS</h1>
+              {order.number && (
+                <span className="text-2xl font-black text-blue-600">
+                  #{String(order.number).padStart(6, "0")}
+                </span>
+              )}
+            </div>
             <p className="text-muted-foreground">
               {format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", {
                 locale: ptBR,
@@ -334,9 +361,13 @@ export default function DetalhesOrdemServicoPage() {
       </div>
 
       {/* Prescrição */}
-      {order.prescription && (() => {
+      {order.prescriptionData && (() => {
         let rx: any = null;
-        try { rx = JSON.parse(order.prescription!); } catch { rx = null; }
+        try {
+          rx = typeof order.prescriptionData === "string"
+            ? JSON.parse(order.prescriptionData)
+            : order.prescriptionData;
+        } catch { rx = null; }
 
         if (!rx) return (
           <Card>
@@ -347,7 +378,7 @@ export default function DetalhesOrdemServicoPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="whitespace-pre-wrap text-sm">{order.prescription}</p>
+              <p className="whitespace-pre-wrap text-sm text-muted-foreground">Formato de receita não reconhecido.</p>
             </CardContent>
           </Card>
         );
@@ -508,6 +539,43 @@ export default function DetalhesOrdemServicoPage() {
           </CardHeader>
           <CardContent>
             <p className="text-muted-foreground whitespace-pre-wrap">{order.notes}</p>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Histórico */}
+      {order.history && order.history.length > 0 && (
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-sm font-semibold">Histórico de Alterações</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div className="space-y-2">
+              {order.history.map((h: any) => (
+                <div key={h.id} className="flex items-start gap-3 text-sm">
+                  <div className="w-2 h-2 rounded-full bg-gray-400 mt-1.5 flex-shrink-0" />
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-medium">
+                        {h.action === "STATUS_CHANGED" && h.toStatus && `→ ${STATUS_LABELS[h.toStatus] || h.toStatus}`}
+                        {h.action === "REVERTED" && `↩ Revertido para ${STATUS_LABELS[h.toStatus] || h.toStatus}`}
+                        {h.action === "CREATED" && "✅ OS Criada"}
+                        {h.action === "EDITED" && "✏️ OS Editada"}
+                        {h.action === "DELIVERED" && "🎉 Entregue ao cliente"}
+                        {h.action === "CANCELED" && "❌ Cancelada"}
+                      </span>
+                      {h.changedByUser && (
+                        <span className="text-muted-foreground text-xs">por {h.changedByUser.name}</span>
+                      )}
+                      <span className="text-muted-foreground text-xs ml-auto">
+                        {format(new Date(h.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                      </span>
+                    </div>
+                    {h.note && <p className="text-muted-foreground text-xs mt-0.5">{h.note}</p>}
+                  </div>
+                </div>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}

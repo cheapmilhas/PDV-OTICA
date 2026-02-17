@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { ServiceOrder, ServiceOrderStatus, Prisma } from "@prisma/client";
+import { ServiceOrderStatus, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } from "@/lib/validations/service-order.schema";
@@ -7,15 +7,26 @@ import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } 
 /**
  * Service para operações de Ordens de Serviço
  *
- * Características:
- * - Multi-tenancy (companyId filter)
- * - Status-based filtering (CANCELED represents inactive)
- * - Status flow: DRAFT -> APPROVED -> SENT_TO_LAB -> IN_PROGRESS -> READY -> DELIVERED
- * - Não permite editar/deletar OS entregue
+ * Fluxo de status:
+ * DRAFT → APPROVED → SENT_TO_LAB → IN_PROGRESS → READY → DELIVERED
+ * Qualquer status → CANCELED
  */
 export class ServiceOrderService {
+
   /**
-   * Lista ordens de serviço com paginação, busca e filtros
+   * Gera número sequencial por empresa (dentro da transaction)
+   */
+  private async getNextNumber(companyId: string, tx: any): Promise<number> {
+    const last = await tx.serviceOrder.findFirst({
+      where: { companyId },
+      orderBy: { number: "desc" },
+      select: { number: true },
+    });
+    return (last?.number || 0) + 1;
+  }
+
+  /**
+   * Lista OS com paginação, busca e filtros
    */
   async list(query: ServiceOrderQuery, companyId: string) {
     const {
@@ -54,8 +65,6 @@ export class ServiceOrderService {
     let orderBy: Prisma.ServiceOrderOrderByWithRelationInput = {};
     if (sortBy === "customer") {
       orderBy = { customer: { name: sortOrder } };
-    } else if (sortBy === "status") {
-      orderBy = { status: sortOrder };
     } else {
       orderBy = { [sortBy]: sortOrder };
     }
@@ -70,11 +79,8 @@ export class ServiceOrderService {
           customer: {
             select: { id: true, name: true, cpf: true, phone: true },
           },
-          items: {
-            select: {
-              id: true,
-              description: true,
-            },
+          laboratory: {
+            select: { id: true, name: true },
           },
           _count: {
             select: { items: true },
@@ -90,14 +96,14 @@ export class ServiceOrderService {
   }
 
   /**
-   * Busca ordem de serviço por ID
+   * Busca OS por ID
    */
   async getById(id: string, companyId: string, includeInactive = false) {
     const order = await prisma.serviceOrder.findFirst({
       where: {
         id,
         companyId,
-        ...(includeInactive ? {} : { status: { not: "CANCELED" } }),
+        ...(includeInactive ? {} : {}), // Sempre retorna, inclusive canceladas
       },
       include: {
         customer: true,
@@ -110,6 +116,26 @@ export class ServiceOrderService {
         laboratory: {
           select: { id: true, name: true },
         },
+        createdByUser: {
+          select: { id: true, name: true },
+        },
+        deliveredByUser: {
+          select: { id: true, name: true },
+        },
+        history: {
+          orderBy: { createdAt: "desc" },
+          include: {
+            changedByUser: {
+              select: { id: true, name: true },
+            },
+          },
+        },
+        originalOrder: {
+          select: { id: true, number: true, status: true },
+        },
+        reworkOrders: {
+          select: { id: true, number: true, status: true, isWarranty: true, isRework: true, createdAt: true },
+        },
       },
     });
 
@@ -121,7 +147,7 @@ export class ServiceOrderService {
   }
 
   /**
-   * Cria nova ordem de serviço
+   * Cria nova OS
    */
   async create(data: CreateServiceOrderDTO, companyId: string, userId: string) {
     const { customerId, branchId, laboratoryId, items, expectedDate, prescription, notes } = data;
@@ -134,15 +160,17 @@ export class ServiceOrderService {
       );
     }
 
-    // Parse prescription JSON if provided
     let prescriptionData: any = undefined;
     if (prescription) {
       try { prescriptionData = JSON.parse(prescription); } catch { /* string plain */ }
     }
 
     const order = await prisma.$transaction(async (tx) => {
+      const number = await this.getNextNumber(companyId, tx);
+
       const newOrder = await tx.serviceOrder.create({
         data: {
+          number,
           companyId,
           customerId,
           branchId,
@@ -156,7 +184,6 @@ export class ServiceOrderService {
       });
 
       for (const item of items) {
-        // Buscar preço do produto se productId for fornecido
         let unitPrice = 0;
         if (item.productId) {
           const product = await tx.product.findUnique({
@@ -165,10 +192,7 @@ export class ServiceOrderService {
           });
           unitPrice = product ? Number(product.salePrice) : 0;
         }
-
         const qty = item.qty || 1;
-        const lineTotal = unitPrice * qty;
-
         await tx.serviceOrderItem.create({
           data: {
             serviceOrderId: newOrder.id,
@@ -177,36 +201,44 @@ export class ServiceOrderService {
             qty,
             unitPrice,
             discount: 0,
-            lineTotal,
+            lineTotal: unitPrice * qty,
           },
         });
       }
 
+      // Registrar histórico
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: newOrder.id,
+          action: "CREATED",
+          toStatus: "DRAFT",
+          note: "OS criada",
+          changedByUserId: userId,
+        },
+      });
+
       return newOrder;
     });
 
-    return this.getById(order.id, companyId);
+    return this.getById(order.id, companyId, true);
   }
 
   /**
-   * Atualiza ordem de serviço
-   *
-   * Não permite atualizar OS entregue
+   * Atualiza OS (dados, itens, receita, laboratório)
    */
-  async update(id: string, data: UpdateServiceOrderDTO, companyId: string) {
-    const existing = await this.getById(id, companyId);
+  async update(id: string, data: UpdateServiceOrderDTO, companyId: string, userId?: string) {
+    const existing = await this.getById(id, companyId, true);
 
     if (existing.status === "DELIVERED") {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
-        "Não é possível atualizar ordem de serviço já entregue",
+        "Não é possível atualizar OS já entregue",
         400
       );
     }
 
-    const { laboratoryId, items, expectedDate, prescription, notes } = data;
+    const { laboratoryId, items, expectedDate, prescription, notes, labNotes, labOrderNumber } = data;
 
-    // Parse prescription JSON if provided
     let prescriptionData: any = undefined;
     let hasPrescription = false;
     if (prescription !== undefined) {
@@ -216,21 +248,19 @@ export class ServiceOrderService {
       }
     }
 
-    const order = await prisma.$transaction(async (tx) => {
-      let updateData: any = {
+    await prisma.$transaction(async (tx) => {
+      const updateData: any = {
         ...(laboratoryId !== undefined && { laboratoryId: laboratoryId || null }),
         ...(expectedDate && { promisedDate: new Date(expectedDate) }),
         ...(hasPrescription && { prescriptionData: prescriptionData || null }),
         ...(notes !== undefined && { notes }),
+        ...(labNotes !== undefined && { labNotes }),
+        ...(labOrderNumber !== undefined && { labOrderNumber }),
       };
 
       if (items && items.length > 0) {
-        await tx.serviceOrderItem.deleteMany({
-          where: { serviceOrderId: id },
-        });
-
+        await tx.serviceOrderItem.deleteMany({ where: { serviceOrderId: id } });
         for (const item of items) {
-          // Buscar preço do produto se productId for fornecido
           let unitPrice = 0;
           if (item.productId) {
             const product = await tx.product.findUnique({
@@ -239,10 +269,7 @@ export class ServiceOrderService {
             });
             unitPrice = product ? Number(product.salePrice) : 0;
           }
-
           const qty = item.qty || 1;
-          const lineTotal = unitPrice * qty;
-
           await tx.serviceOrderItem.create({
             data: {
               serviceOrderId: id,
@@ -251,138 +278,373 @@ export class ServiceOrderService {
               qty,
               unitPrice,
               discount: 0,
-              lineTotal,
+              lineTotal: unitPrice * qty,
             },
           });
         }
       }
 
-      return tx.serviceOrder.update({
-        where: { id },
-        data: updateData,
+      await tx.serviceOrder.update({ where: { id }, data: updateData });
+
+      // Histórico
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: id,
+          action: "EDITED",
+          toStatus: existing.status,
+          note: "OS atualizada",
+          changedByUserId: userId,
+        },
       });
-    });
-
-    return this.getById(id, companyId);
-  }
-
-  /**
-   * Atualiza status da ordem de serviço
-   *
-   * Flow: DRAFT -> APPROVED -> SENT_TO_LAB -> IN_PROGRESS -> READY -> DELIVERED
-   */
-  async updateStatus(
-    id: string,
-    status: ServiceOrderStatus,
-    companyId: string,
-    statusNotes?: string
-  ) {
-    const existing = await this.getById(id, companyId);
-
-    if (existing.status === "DELIVERED") {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        "Ordem de serviço já foi entregue",
-        400
-      );
-    }
-
-    const updateData: any = { status };
-
-    if (status === "DELIVERED") {
-      updateData.deliveredAt = new Date();
-    }
-
-    if (statusNotes) {
-      updateData.notes = statusNotes;
-    }
-
-    await prisma.serviceOrder.update({
-      where: { id },
-      data: updateData,
-    });
-
-    return this.getById(id, companyId);
-  }
-
-  /**
-   * Cancela ordem de serviço (soft delete)
-   *
-   * Não permite cancelar OS entregue
-   */
-  async cancel(id: string, companyId: string, reason?: string) {
-    const existing = await this.getById(id, companyId);
-
-    if (existing.status === "CANCELED") {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        "Ordem de serviço já está cancelada",
-        400
-      );
-    }
-
-    if (existing.status === "DELIVERED") {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        "Não é possível cancelar ordem de serviço já entregue",
-        400
-      );
-    }
-
-    await prisma.serviceOrder.update({
-      where: { id },
-      data: {
-        status: "CANCELED",
-        notes: reason ? `CANCELADA: ${reason}` : "CANCELADA",
-      },
     });
 
     return this.getById(id, companyId, true);
   }
 
   /**
-   * Busca ordens de serviço de um cliente
+   * Muda status da OS com registros de data por etapa
+   */
+  async updateStatus(
+    id: string,
+    status: ServiceOrderStatus,
+    companyId: string,
+    userId: string,
+    statusNotes?: string
+  ) {
+    const existing = await this.getById(id, companyId, true);
+
+    if (existing.status === "DELIVERED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "OS já foi entregue. Use 'reverter' se necessário.",
+        400
+      );
+    }
+    if (existing.status === "CANCELED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "OS cancelada não pode mudar de status",
+        400
+      );
+    }
+
+    const updateData: any = { status };
+
+    // Registrar timestamps por etapa
+    if (status === "SENT_TO_LAB") updateData.sentToLabAt = new Date();
+    if (status === "READY") updateData.readyAt = new Date();
+    if (status === "DELIVERED") {
+      updateData.deliveredAt = new Date();
+      // Marcar como não atrasada se entregue
+      updateData.isDelayed = false;
+    }
+
+    if (statusNotes) updateData.notes = statusNotes;
+
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceOrder.update({ where: { id }, data: updateData });
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: id,
+          action: "STATUS_CHANGED",
+          fromStatus: existing.status,
+          toStatus: status,
+          note: statusNotes,
+          changedByUserId: userId,
+        },
+      });
+    });
+
+    return this.getById(id, companyId, true);
+  }
+
+  /**
+   * Entrega com dados completos (rating, notas, quem entregou)
+   */
+  async deliver(
+    id: string,
+    companyId: string,
+    userId: string,
+    options?: {
+      deliveryNotes?: string;
+      qualityRating?: number;
+      qualityNotes?: string;
+    }
+  ) {
+    const existing = await this.getById(id, companyId, true);
+
+    if (existing.status === "DELIVERED") {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, "OS já foi entregue", 400);
+    }
+    if (existing.status !== "READY") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "OS precisa estar 'Pronta' para ser entregue",
+        400
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceOrder.update({
+        where: { id },
+        data: {
+          status: "DELIVERED",
+          deliveredAt: new Date(),
+          deliveredByUserId: userId,
+          isDelayed: false,
+          deliveryNotes: options?.deliveryNotes,
+          qualityRating: options?.qualityRating,
+          qualityNotes: options?.qualityNotes,
+        },
+      });
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: id,
+          action: "DELIVERED",
+          fromStatus: existing.status,
+          toStatus: "DELIVERED",
+          note: options?.deliveryNotes,
+          changedByUserId: userId,
+          metadata: options?.qualityRating ? { qualityRating: options.qualityRating } : undefined,
+        },
+      });
+    });
+
+    return this.getById(id, companyId, true);
+  }
+
+  /**
+   * Reverte status (requer permissão especial)
+   */
+  async revert(
+    id: string,
+    companyId: string,
+    userId: string,
+    targetStatus: ServiceOrderStatus,
+    reason: string
+  ) {
+    const existing = await this.getById(id, companyId, true);
+
+    if (!reason || reason.trim().length < 5) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Motivo da reversão é obrigatório (mínimo 5 caracteres)",
+        400
+      );
+    }
+
+    const revertibleFrom: Partial<Record<ServiceOrderStatus, ServiceOrderStatus[]>> = {
+      DELIVERED: ["READY"],
+      READY: ["IN_PROGRESS", "SENT_TO_LAB"],
+      IN_PROGRESS: ["SENT_TO_LAB", "APPROVED", "DRAFT"],
+      SENT_TO_LAB: ["APPROVED", "DRAFT"],
+      APPROVED: ["DRAFT"],
+    };
+
+    const allowed = revertibleFrom[existing.status] || [];
+    if (!allowed.includes(targetStatus)) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Não é possível reverter de '${existing.status}' para '${targetStatus}'`,
+        400
+      );
+    }
+
+    const clearData: any = {};
+    if (existing.status === "DELIVERED") {
+      clearData.deliveredAt = null;
+      clearData.deliveredByUserId = null;
+    }
+    if (["DELIVERED", "READY"].includes(existing.status)) {
+      clearData.readyAt = null;
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceOrder.update({
+        where: { id },
+        data: {
+          status: targetStatus,
+          ...clearData,
+        },
+      });
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: id,
+          action: "REVERTED",
+          fromStatus: existing.status,
+          toStatus: targetStatus,
+          note: reason,
+          changedByUserId: userId,
+        },
+      });
+    });
+
+    return this.getById(id, companyId, true);
+  }
+
+  /**
+   * Cancela OS
+   */
+  async cancel(id: string, companyId: string, userId: string, reason?: string) {
+    const existing = await this.getById(id, companyId, true);
+
+    if (existing.status === "CANCELED") {
+      throw new AppError(ERROR_CODES.VALIDATION_ERROR, "OS já está cancelada", 400);
+    }
+    if (existing.status === "DELIVERED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Não é possível cancelar OS já entregue",
+        400
+      );
+    }
+
+    await prisma.$transaction(async (tx) => {
+      await tx.serviceOrder.update({
+        where: { id },
+        data: {
+          status: "CANCELED",
+          canceledAt: new Date(),
+          notes: reason ? `CANCELADA: ${reason}` : existing.notes,
+        },
+      });
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: id,
+          action: "CANCELED",
+          fromStatus: existing.status,
+          toStatus: "CANCELED",
+          note: reason || "OS cancelada",
+          changedByUserId: userId,
+        },
+      });
+    });
+
+    return this.getById(id, companyId, true);
+  }
+
+  /**
+   * Cria OS de garantia ou retrabalho a partir de uma OS existente
+   */
+  async createWarranty(
+    originalId: string,
+    companyId: string,
+    userId: string,
+    branchId: string,
+    options: {
+      isWarranty: boolean;
+      isRework: boolean;
+      reason: string;
+      copyData: boolean;
+    }
+  ) {
+    const original = await this.getById(originalId, companyId, true);
+
+    if (!["DELIVERED", "READY"].includes(original.status)) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Só é possível criar garantia de OS já entregue ou pronta",
+        400
+      );
+    }
+
+    const order = await prisma.$transaction(async (tx) => {
+      const number = await this.getNextNumber(companyId, tx);
+
+      const newOrder = await tx.serviceOrder.create({
+        data: {
+          number,
+          companyId,
+          customerId: original.customerId,
+          branchId,
+          laboratoryId: options.copyData ? original.laboratoryId : undefined,
+          status: "DRAFT",
+          promisedDate: undefined,
+          createdByUserId: userId,
+          notes: `${options.isWarranty ? "GARANTIA" : "RETRABALHO"}: ${options.reason}`,
+          prescriptionData: options.copyData ? (original.prescriptionData as any) : undefined,
+          isWarranty: options.isWarranty,
+          isRework: options.isRework,
+          warrantyReason: options.isWarranty ? options.reason : undefined,
+          reworkReason: options.isRework ? options.reason : undefined,
+          originalOrderId: originalId,
+        },
+      });
+
+      // Copiar itens se solicitado
+      if (options.copyData && original.items.length > 0) {
+        for (const item of original.items) {
+          await tx.serviceOrderItem.create({
+            data: {
+              serviceOrderId: newOrder.id,
+              productId: item.productId || undefined,
+              description: item.description,
+              qty: item.qty,
+              unitPrice: item.unitPrice,
+              discount: 0,
+              lineTotal: item.lineTotal,
+            },
+          });
+        }
+      }
+
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: newOrder.id,
+          action: "CREATED",
+          toStatus: "DRAFT",
+          note: `${options.isWarranty ? "Garantia" : "Retrabalho"} da OS #${original.number}: ${options.reason}`,
+          changedByUserId: userId,
+          metadata: { originalOrderId: originalId, originalNumber: original.number },
+        },
+      });
+
+      return newOrder;
+    });
+
+    return this.getById(order.id, companyId, true);
+  }
+
+  /**
+   * Marca OS atrasadas automaticamente (chamado por job)
+   */
+  async checkAndMarkDelayed(companyId: string) {
+    const today = new Date();
+    today.setHours(0, 0, 0, 0);
+
+    const delayed = await prisma.serviceOrder.findMany({
+      where: {
+        companyId,
+        promisedDate: { lt: today },
+        status: { notIn: ["DELIVERED", "CANCELED"] },
+        isDelayed: false,
+      },
+      select: { id: true, promisedDate: true },
+    });
+
+    for (const order of delayed) {
+      const diffMs = today.getTime() - order.promisedDate!.getTime();
+      const delayDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      await prisma.serviceOrder.update({
+        where: { id: order.id },
+        data: { isDelayed: true, delayDays },
+      });
+    }
+
+    return delayed.length;
+  }
+
+  /**
+   * Lista OS de um cliente
    */
   async getByCustomer(customerId: string, companyId: string) {
     return prisma.serviceOrder.findMany({
-      where: {
-        customerId,
-        companyId,
-        status: { not: "CANCELED" },
-      },
+      where: { customerId, companyId },
       include: {
-        items: true,
+        items: { select: { id: true, description: true, qty: true } },
+        laboratory: { select: { id: true, name: true } },
       },
       orderBy: { createdAt: "desc" },
-    });
-  }
-
-  /**
-   * Busca ordens de serviço pendentes
-   */
-  async getPending(companyId: string, branchId?: string) {
-    return prisma.serviceOrder.findMany({
-      where: {
-        companyId,
-        status: { in: ["DRAFT", "APPROVED", "SENT_TO_LAB", "IN_PROGRESS"] },
-        ...(branchId && { branchId }),
-      },
-      include: {
-        customer: {
-          select: { name: true, phone: true },
-        },
-        items: true,
-      },
-      orderBy: { promisedDate: "asc" },
-    });
-  }
-
-  /**
-   * Conta OS ativas
-   */
-  async countActive(companyId: string): Promise<number> {
-    return prisma.serviceOrder.count({
-      where: { companyId, status: { not: "CANCELED" } },
     });
   }
 
@@ -392,14 +654,26 @@ export class ServiceOrderService {
   async countByStatus(companyId: string) {
     const result = await prisma.serviceOrder.groupBy({
       by: ["status"],
-      where: { companyId, status: { not: "CANCELED" } },
+      where: { companyId },
       _count: true,
     });
 
-    return result.reduce((acc, item) => {
+    const delayed = await prisma.serviceOrder.count({
+      where: { companyId, isDelayed: true, status: { notIn: ["DELIVERED", "CANCELED"] } },
+    });
+
+    const counts = result.reduce((acc, item) => {
       acc[item.status] = item._count;
       return acc;
-    }, {} as Record<ServiceOrderStatus, number>);
+    }, {} as Record<string, number>);
+
+    return { ...counts, DELAYED: delayed };
+  }
+
+  async countActive(companyId: string): Promise<number> {
+    return prisma.serviceOrder.count({
+      where: { companyId, status: { not: "CANCELED" } },
+    });
   }
 }
 

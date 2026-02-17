@@ -1,4 +1,3 @@
-import { NextResponse } from "next/server";
 import { serviceOrderService } from "@/services/service-order.service";
 import {
   updateServiceOrderSchema,
@@ -6,7 +5,7 @@ import {
   sanitizeServiceOrderDTO,
   type UpdateServiceOrderDTO,
 } from "@/lib/validations/service-order.schema";
-import { requireAuth, requireRole, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, requireRole, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -19,7 +18,7 @@ export async function GET(
     const companyId = await getCompanyId();
     const { id } = await params;
 
-    const order = await serviceOrderService.getById(id, companyId);
+    const order = await serviceOrderService.getById(id, companyId, true);
 
     return successResponse(order);
   } catch (error) {
@@ -34,13 +33,14 @@ export async function PUT(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    const userId = await getUserId();
     const { id } = await params;
 
     const body = await request.json();
     const data = updateServiceOrderSchema.parse(body);
     const sanitized = sanitizeServiceOrderDTO(data) as UpdateServiceOrderDTO;
 
-    const order = await serviceOrderService.update(id, sanitized, companyId);
+    const order = await serviceOrderService.update(id, sanitized, companyId, userId);
 
     return successResponse(order);
   } catch (error) {
@@ -56,6 +56,7 @@ export async function DELETE(
     await requireAuth();
     await requireRole(["ADMIN", "GERENTE"]);
     const companyId = await getCompanyId();
+    const userId = await getUserId();
     const { id } = await params;
 
     let reason: string | undefined;
@@ -67,7 +68,7 @@ export async function DELETE(
       // Body opcional
     }
 
-    const order = await serviceOrderService.cancel(id, companyId, reason);
+    const order = await serviceOrderService.cancel(id, companyId, userId, reason);
 
     return successResponse(order);
   } catch (error) {
