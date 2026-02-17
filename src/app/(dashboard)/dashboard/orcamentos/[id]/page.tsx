@@ -15,6 +15,9 @@ import {
 } from "@/components/ui/dialog";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
+import { Input } from "@/components/ui/input";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Separator } from "@/components/ui/separator";
 import toast from "react-hot-toast";
 import {
   ArrowLeft,
@@ -25,6 +28,12 @@ import {
   XCircle,
   Send,
   ShoppingCart,
+  MessageCircle,
+  Phone,
+  Mail,
+  MapPin,
+  FileText,
+  Plus,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -42,9 +51,109 @@ export default function DetalhesOrcamentoPage() {
   const [otherReason, setOtherReason] = useState("");
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Follow-ups
+  const [followUps, setFollowUps] = useState<any[]>([]);
+  const [followUpModalOpen, setFollowUpModalOpen] = useState(false);
+  const [newFollowUp, setNewFollowUp] = useState({
+    type: "CALL",
+    notes: "",
+    outcome: "",
+    nextFollowUpAt: "",
+  });
+  const [savingFollowUp, setSavingFollowUp] = useState(false);
+
   useEffect(() => {
     fetchQuote();
+    fetchFollowUps();
   }, [id]);
+
+  const fetchFollowUps = async () => {
+    try {
+      const res = await fetch(`/api/quotes/${id}/follow-ups`);
+      if (res.ok) {
+        const data = await res.json();
+        setFollowUps(data.data || []);
+      }
+    } catch (error) {
+      // silencioso
+    }
+  };
+
+  const handleWhatsApp = async () => {
+    if (!quote) return;
+
+    const phone = (quote.customer?.phone || quote.customerPhone || "").replace(/\D/g, "");
+    if (!phone) {
+      toast.error("Cliente não tem telefone cadastrado");
+      return;
+    }
+
+    const customerFirstName = (quote.customer?.name || quote.customerName || "Cliente").split(" ")[0];
+    const total = formatCurrency(Number(quote.total || 0));
+    const validUntil = quote.validUntil
+      ? format(new Date(quote.validUntil), "dd/MM/yyyy", { locale: ptBR })
+      : "consulte-nos";
+
+    const items = (quote.items || [])
+      .map((item: any) => `• ${item.description || item.product?.name}`)
+      .join("\n");
+
+    const message = encodeURIComponent(
+      `Olá ${customerFirstName}! 👋\n\nSegue seu orçamento:\n\n${items}\n\n*Total: ${total}*\nVálido até: ${validUntil}\n\nFicou alguma dúvida? Estou à disposição! 😊`
+    );
+
+    window.open(`https://wa.me/55${phone}?text=${message}`, "_blank");
+
+    // Registrar follow-up automaticamente
+    try {
+      await fetch(`/api/quotes/${id}/follow-ups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          type: "WHATSAPP",
+          direction: "outbound",
+          notes: "Orçamento enviado via WhatsApp",
+        }),
+      });
+      fetchFollowUps();
+      fetchQuote();
+    } catch (error) {
+      // não bloquear — WhatsApp já foi aberto
+    }
+  };
+
+  const handleSaveFollowUp = async () => {
+    if (!newFollowUp.type) return;
+    setSavingFollowUp(true);
+    try {
+      const payload: any = {
+        type: newFollowUp.type,
+        notes: newFollowUp.notes || undefined,
+        outcome: newFollowUp.outcome || undefined,
+        nextFollowUpAt: newFollowUp.nextFollowUpAt
+          ? new Date(newFollowUp.nextFollowUpAt).toISOString()
+          : undefined,
+      };
+
+      const res = await fetch(`/api/quotes/${id}/follow-ups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+
+      if (!res.ok) throw new Error("Erro ao registrar contato");
+
+      toast.success("Contato registrado!");
+      setFollowUpModalOpen(false);
+      setNewFollowUp({ type: "CALL", notes: "", outcome: "", nextFollowUpAt: "" });
+      fetchFollowUps();
+      fetchQuote();
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setSavingFollowUp(false);
+    }
+  };
 
   const fetchQuote = async () => {
     try {
@@ -179,6 +288,15 @@ export default function DetalhesOrcamentoPage() {
           <Button variant="outline" onClick={() => router.push(`/dashboard/orcamentos/${id}/imprimir`)}>
             <Printer className="h-4 w-4 mr-2" />
             Imprimir
+          </Button>
+
+          <Button
+            variant="outline"
+            className="border-green-500 text-green-600 hover:bg-green-50"
+            onClick={handleWhatsApp}
+          >
+            <MessageCircle className="h-4 w-4 mr-2" />
+            WhatsApp
           </Button>
 
           {canApprove && (
@@ -422,6 +540,165 @@ export default function DetalhesOrcamentoPage() {
           </CardContent>
         </Card>
       )}
+
+      {/* CRM - Histórico de Contatos */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-center justify-between">
+            <CardTitle className="flex items-center gap-2">
+              <MessageCircle className="h-5 w-5" />
+              Histórico de Contatos
+              {quote.contactCount > 0 && (
+                <Badge variant="secondary">{quote.contactCount} contato(s)</Badge>
+              )}
+            </CardTitle>
+            <Button size="sm" onClick={() => setFollowUpModalOpen(true)}>
+              <Plus className="h-4 w-4 mr-1" />
+              Registrar Contato
+            </Button>
+          </div>
+        </CardHeader>
+        <CardContent>
+          {/* Próximo follow-up agendado */}
+          {quote.followUpDate && (
+            <div className="mb-4 p-3 rounded-lg border border-blue-200 bg-blue-50 text-sm">
+              📅 <strong>Próximo contato agendado:</strong>{" "}
+              {format(new Date(quote.followUpDate), "dd/MM/yyyy", { locale: ptBR })}
+              {quote.followUpNotes && (
+                <p className="mt-1 text-muted-foreground">{quote.followUpNotes}</p>
+              )}
+            </div>
+          )}
+
+          {followUps.length === 0 ? (
+            <div className="text-center py-8 text-muted-foreground">
+              <MessageCircle className="h-12 w-12 mx-auto mb-3 opacity-20" />
+              <p>Nenhum contato registrado ainda</p>
+              <p className="text-xs mt-1">Clique em "Registrar Contato" para iniciar o histórico</p>
+            </div>
+          ) : (
+            <div className="space-y-3">
+              {followUps.map((fu: any, i: number) => {
+                const typeIcons: Record<string, string> = {
+                  WHATSAPP_SENT: "📲", CALLED: "📞", EMAILED: "📧",
+                  VISITED: "🏪", FOLLOW_UP: "📝",
+                };
+                const outcomeLabels: Record<string, string> = {
+                  INTERESTED: "Interessado", ASKED_DISCOUNT: "Pediu desconto",
+                  WILL_THINK: "Vai pensar", NO_ANSWER: "Não atendeu",
+                  NOT_INTERESTED: "Sem interesse", SCHEDULED_RETURN: "Agendou retorno",
+                  CONVERTED: "Converteu!",
+                };
+                const meta = fu.metadata || {};
+                return (
+                  <div key={fu.id || i} className="flex gap-3 p-3 rounded-lg border bg-gray-50">
+                    <div className="text-2xl">{typeIcons[fu.action] || "📋"}</div>
+                    <div className="flex-1">
+                      <div className="flex items-center gap-2 text-sm flex-wrap">
+                        <span className="font-medium">{fu.user?.name || "Usuário"}</span>
+                        <span className="text-muted-foreground">•</span>
+                        <span className="text-muted-foreground">
+                          {format(new Date(fu.createdAt), "dd/MM/yyyy HH:mm", { locale: ptBR })}
+                        </span>
+                        {meta.outcome && (
+                          <Badge variant={meta.outcome === "CONVERTED" ? "default" : "secondary"} className="text-xs">
+                            {outcomeLabels[meta.outcome] || meta.outcome}
+                          </Badge>
+                        )}
+                      </div>
+                      {meta.notes && (
+                        <p className="text-sm text-gray-700 mt-1">{meta.notes}</p>
+                      )}
+                      {meta.nextFollowUpAt && (
+                        <p className="text-xs text-blue-600 mt-1">
+                          📅 Próximo: {format(new Date(meta.nextFollowUpAt), "dd/MM/yyyy", { locale: ptBR })}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </CardContent>
+      </Card>
+
+      {/* Modal Registrar Contato */}
+      <Dialog open={followUpModalOpen} onOpenChange={setFollowUpModalOpen}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Registrar Contato</DialogTitle>
+            <DialogDescription>
+              Registre um contato com o cliente sobre este orçamento
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Tipo de Contato *</Label>
+              <Select
+                value={newFollowUp.type}
+                onValueChange={(v) => setNewFollowUp({ ...newFollowUp, type: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="WHATSAPP">📲 WhatsApp</SelectItem>
+                  <SelectItem value="CALL">📞 Ligação</SelectItem>
+                  <SelectItem value="EMAIL">📧 Email</SelectItem>
+                  <SelectItem value="VISIT">🏪 Visita à loja</SelectItem>
+                  <SelectItem value="NOTE">📝 Anotação interna</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Resultado do Contato</Label>
+              <Select
+                value={newFollowUp.outcome}
+                onValueChange={(v) => setNewFollowUp({ ...newFollowUp, outcome: v })}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione..." />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="">Sem resultado específico</SelectItem>
+                  <SelectItem value="INTERESTED">Interessado</SelectItem>
+                  <SelectItem value="ASKED_DISCOUNT">Pediu desconto</SelectItem>
+                  <SelectItem value="WILL_THINK">Vai pensar</SelectItem>
+                  <SelectItem value="NO_ANSWER">Não atendeu</SelectItem>
+                  <SelectItem value="NOT_INTERESTED">Sem interesse</SelectItem>
+                  <SelectItem value="SCHEDULED_RETURN">Agendou retorno</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Observações</Label>
+              <Textarea
+                value={newFollowUp.notes}
+                onChange={(e) => setNewFollowUp({ ...newFollowUp, notes: e.target.value })}
+                placeholder="O que foi conversado..."
+                rows={3}
+              />
+            </div>
+            <div>
+              <Label>Agendar Próximo Contato (opcional)</Label>
+              <Input
+                type="date"
+                value={newFollowUp.nextFollowUpAt}
+                onChange={(e) => setNewFollowUp({ ...newFollowUp, nextFollowUpAt: e.target.value })}
+              />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFollowUpModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleSaveFollowUp} disabled={savingFollowUp}>
+              {savingFollowUp ? "Salvando..." : "Registrar"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
 
       {/* Modal de Cancelamento */}
       <Dialog open={cancelModalOpen} onOpenChange={setCancelModalOpen}>

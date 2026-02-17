@@ -692,7 +692,6 @@ function ClienteDetalhesPage() {
                         )}
                       </div>
                       <div className="text-right">
-                        <p className="text-lg font-bold text-purple-600">{formatCurrency(order.totalValue || 0)}</p>
                         <Button variant="ghost" size="sm" asChild>
                           <Link href={`/dashboard/ordens-servico/${order.id || ""}/detalhes`}>
                             Ver detalhes

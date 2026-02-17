@@ -230,6 +230,39 @@ function OrcamentosPage() {
     setFollowUpNotes(quote.followUpNotes || "");
   };
 
+  const handleWhatsApp = async (quote: Quote) => {
+    const phone = quote.customer?.phone || "";
+    const cleanPhone = phone.replace(/\D/g, "");
+    const customerDisplayName = quote.customer?.name || quote.customerName || "Cliente";
+    const total = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(quote.total);
+    const validUntil = format(new Date(quote.validUntil), "dd/MM/yyyy", { locale: ptBR });
+    const message = `Olá ${customerDisplayName}! Segue seu orçamento no valor de ${total}, válido até ${validUntil}. Em caso de dúvidas, estamos à disposição.`;
+
+    const url = cleanPhone
+      ? `https://wa.me/55${cleanPhone}?text=${encodeURIComponent(message)}`
+      : `https://wa.me/?text=${encodeURIComponent(message)}`;
+
+    window.open(url, "_blank");
+
+    // Registrar como follow-up via novo endpoint
+    try {
+      await fetch(`/api/quotes/${quote.id}/follow-ups`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "WHATSAPP", direction: "outbound", notes: "Enviado via WhatsApp" }),
+      });
+      setQuotes((prev) =>
+        prev.map((q) =>
+          q.id === quote.id
+            ? { ...q, sentAt: q.sentAt || new Date().toISOString(), sentVia: q.sentVia || "whatsapp", contactCount: (q.contactCount || 0) + 1 }
+            : q
+        )
+      );
+    } catch {
+      // Silencioso — link já abriu
+    }
+  };
+
   const getStatusBadge = (status: string) => {
     const configs: Record<string, { label: string; className: string }> = {
       PENDING: { label: "Pendente", className: "bg-blue-100 text-blue-800" },
@@ -547,18 +580,18 @@ function OrcamentosPage() {
                   </div>
 
                   <div className="ml-4 flex flex-col gap-2">
-                    {/* Botão Marcar como Enviado */}
+                    {/* Botão WhatsApp */}
                     <Button
                       size="sm"
-                      variant={quote.sentAt ? "outline" : "default"}
+                      variant="outline"
                       onClick={(e) => {
                         e.stopPropagation();
-                        handleMarkAsSent(quote.id, !!quote.sentAt);
+                        handleWhatsApp(quote);
                       }}
-                      className="min-w-[140px]"
+                      className="min-w-[140px] border-green-500 text-green-600 hover:bg-green-50"
                     >
-                      <Send className="h-4 w-4 mr-1" />
-                      {quote.sentAt ? "Enviado ✓" : "Marcar Enviado"}
+                      <MessageCircle className="h-4 w-4 mr-1" />
+                      WhatsApp
                     </Button>
 
                     {/* Botão Follow-up */}

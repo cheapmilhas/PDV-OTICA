@@ -1,7 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { useState } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -15,7 +15,7 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Package } from "lucide-react";
+import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Package, Search, X, User } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -43,9 +43,24 @@ interface QuoteItem {
   stockQty?: number;
 }
 
+interface CustomerResult {
+  id: string;
+  name: string;
+  phone?: string;
+  email?: string;
+  cpf?: string;
+}
+
 function NovoOrcamentoPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+
+  // Busca de cliente cadastrado
+  const [customerSearch, setCustomerSearch] = useState("");
+  const [customerResults, setCustomerResults] = useState<CustomerResult[]>([]);
+  const [searchingCustomer, setSearchingCustomer] = useState(false);
+  const [showCustomerResults, setShowCustomerResults] = useState(false);
+  const customerSearchRef = useRef<HTMLDivElement>(null);
 
   // Cliente
   const [customerId, setCustomerId] = useState("");
@@ -79,6 +94,57 @@ function NovoOrcamentoPage() {
   const [paymentConditions, setPaymentConditions] = useState("");
   const [validDays, setValidDays] = useState(15);
   const [showPrescription, setShowPrescription] = useState(false);
+
+  // Fechar dropdown ao clicar fora
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (customerSearchRef.current && !customerSearchRef.current.contains(e.target as Node)) {
+        setShowCustomerResults(false);
+      }
+    };
+    document.addEventListener("mousedown", handleClickOutside);
+    return () => document.removeEventListener("mousedown", handleClickOutside);
+  }, []);
+
+  // Buscar clientes cadastrados
+  useEffect(() => {
+    if (customerSearch.length < 2) {
+      setCustomerResults([]);
+      setShowCustomerResults(false);
+      return;
+    }
+    setSearchingCustomer(true);
+    const timer = setTimeout(async () => {
+      try {
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(customerSearch)}&pageSize=5`);
+        const data = await res.json();
+        setCustomerResults(data.data || []);
+        setShowCustomerResults(true);
+      } catch {
+        setCustomerResults([]);
+      } finally {
+        setSearchingCustomer(false);
+      }
+    }, 400);
+    return () => clearTimeout(timer);
+  }, [customerSearch]);
+
+  const selectCustomer = (customer: CustomerResult) => {
+    setCustomerId(customer.id);
+    setCustomerName(customer.name);
+    setCustomerPhone(customer.phone || "");
+    setCustomerEmail(customer.email || "");
+    setCustomerSearch(customer.name);
+    setShowCustomerResults(false);
+  };
+
+  const clearCustomer = () => {
+    setCustomerId("");
+    setCustomerName("");
+    setCustomerPhone("");
+    setCustomerEmail("");
+    setCustomerSearch("");
+  };
 
   const addProductFromSearch = (product: Product) => {
     const newItem: QuoteItem = {
@@ -234,37 +300,109 @@ function NovoOrcamentoPage() {
       <Card>
         <CardHeader>
           <CardTitle className="flex items-center gap-2">
-            👤 Cliente
+            👤 Cliente *
           </CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-            <div>
-              <Label>Nome do Cliente *</Label>
+          {/* Busca de cliente cadastrado */}
+          <div ref={customerSearchRef} className="relative">
+            <Label>Buscar Cliente Cadastrado</Label>
+            <div className="relative mt-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
-                value={customerName}
-                onChange={(e) => setCustomerName(e.target.value)}
-                placeholder="Digite o nome do cliente"
+                value={customerSearch}
+                onChange={(e) => {
+                  setCustomerSearch(e.target.value);
+                  if (customerId) clearCustomer();
+                }}
+                placeholder="Digite nome, CPF ou telefone..."
+                className="pl-9 pr-9"
               />
+              {(customerId || customerSearch) && (
+                <button
+                  type="button"
+                  onClick={clearCustomer}
+                  className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                >
+                  <X className="h-4 w-4" />
+                </button>
+              )}
             </div>
-            <div>
-              <Label>Telefone</Label>
-              <Input
-                value={customerPhone}
-                onChange={(e) => setCustomerPhone(e.target.value)}
-                placeholder="(00) 00000-0000"
-              />
-            </div>
-            <div className="md:col-span-2">
-              <Label>Email</Label>
-              <Input
-                type="email"
-                value={customerEmail}
-                onChange={(e) => setCustomerEmail(e.target.value)}
-                placeholder="cliente@email.com"
-              />
-            </div>
+            {/* Dropdown de resultados */}
+            {showCustomerResults && customerResults.length > 0 && (
+              <div className="absolute z-50 w-full mt-1 bg-background border rounded-md shadow-lg max-h-60 overflow-auto">
+                {customerResults.map((c) => (
+                  <button
+                    key={c.id}
+                    type="button"
+                    className="w-full text-left px-4 py-3 hover:bg-muted flex items-center gap-3"
+                    onClick={() => selectCustomer(c)}
+                  >
+                    <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                    <div>
+                      <p className="font-medium text-sm">{c.name}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {[c.phone, c.cpf].filter(Boolean).join(" · ")}
+                      </p>
+                    </div>
+                  </button>
+                ))}
+              </div>
+            )}
+            {searchingCustomer && (
+              <p className="text-xs text-muted-foreground mt-1">Buscando...</p>
+            )}
+            {customerId && (
+              <p className="text-xs text-green-600 mt-1 flex items-center gap-1">
+                <User className="h-3 w-3" /> Cliente cadastrado vinculado ao orçamento
+              </p>
+            )}
           </div>
+
+          {/* Campos manuais (para cliente não cadastrado) */}
+          {!customerId && (
+            <div className="space-y-3">
+              <p className="text-xs text-muted-foreground">
+                Ou preencha manualmente para cliente não cadastrado:
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <Label>Nome do Cliente *</Label>
+                  <Input
+                    value={customerName}
+                    onChange={(e) => setCustomerName(e.target.value)}
+                    placeholder="Digite o nome do cliente"
+                  />
+                </div>
+                <div>
+                  <Label>Telefone</Label>
+                  <Input
+                    value={customerPhone}
+                    onChange={(e) => setCustomerPhone(e.target.value)}
+                    placeholder="(00) 00000-0000"
+                  />
+                </div>
+                <div className="md:col-span-2">
+                  <Label>Email</Label>
+                  <Input
+                    type="email"
+                    value={customerEmail}
+                    onChange={(e) => setCustomerEmail(e.target.value)}
+                    placeholder="cliente@email.com"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
+
+          {/* Exibir dados do cliente vinculado */}
+          {customerId && (
+            <div className="rounded-md border bg-muted/30 px-4 py-3 text-sm space-y-1">
+              <p className="font-medium">{customerName}</p>
+              {customerPhone && <p className="text-muted-foreground">{customerPhone}</p>}
+              {customerEmail && <p className="text-muted-foreground">{customerEmail}</p>}
+            </div>
+          )}
         </CardContent>
       </Card>
 
