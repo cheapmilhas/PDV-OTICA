@@ -11,6 +11,7 @@ interface CarneData {
   };
   company: Company;
   installments: AccountReceivable[];
+  logoUrl?: string;
 }
 
 /**
@@ -20,7 +21,7 @@ interface CarneData {
  * @returns Buffer do PDF gerado
  */
 export function generateCarnePDF(data: CarneData): Buffer {
-  const { sale, company, installments } = data;
+  const { sale, company, installments, logoUrl } = data;
   const doc = new jsPDF();
 
   // Configurações
@@ -30,10 +31,16 @@ export function generateCarnePDF(data: CarneData): Buffer {
 
   // ========== CABEÇALHO ==========
   // Logo (se existir)
-  if (company.logoPath) {
-    // TODO: Carregar logo e adicionar com doc.addImage()
-    // const imgData = fs.readFileSync(company.logoPath);
-    // doc.addImage(imgData, 'PNG', margin, yPosition, 30, 30);
+  if (logoUrl && logoUrl.startsWith("data:image")) {
+    try {
+      const logoWidth = 40;
+      const logoHeight = 20;
+      const logoX = (pageWidth - logoWidth) / 2;
+      doc.addImage(logoUrl, "PNG", logoX, yPosition, logoWidth, logoHeight);
+      yPosition += logoHeight + 5;
+    } catch {
+      // Se falhar ao adicionar logo, continua sem ela
+    }
   }
 
   // Nome da empresa

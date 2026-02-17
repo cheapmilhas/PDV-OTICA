@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, Clock } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, Clock, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -408,6 +408,16 @@ export default function DetalhesVendaPage() {
                 <Printer className="h-4 w-4 mr-2" />
                 Imprimir
               </Button>
+              {sale.payments.some((p) => p.method === "STORE_CREDIT") && (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => window.open(`/api/sales/${id}/carne`, "_blank")}
+                >
+                  <FileText className="h-4 w-4 mr-2" />
+                  Imprimir Carnê
+                </Button>
+              )}
               {canCancelSale && (
                 <Button
                   variant="destructive"

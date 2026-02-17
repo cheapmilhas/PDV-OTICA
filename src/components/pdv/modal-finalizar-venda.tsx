@@ -343,7 +343,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                   <p className="text-[10px]">Nenhum pagamento</p>
                 </div>
               ) : (
-                <div className="space-y-0.5 h-28 overflow-y-auto pr-1">
+                <div className="space-y-0.5">
                   {payments.map((payment) => {
                     const method = paymentMethods.find((m) => m.id === payment.method);
                     const Icon = method?.icon;

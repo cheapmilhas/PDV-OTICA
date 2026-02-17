@@ -81,15 +81,22 @@ export default function ImprimirOrcamentoPage() {
   const [quote, setQuote] = useState<QuoteDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
+  const [companySettings, setCompanySettings] = useState<{ logoUrl?: string; displayName?: string } | null>(null);
 
   useEffect(() => {
-    const fetchQuote = async () => {
+    const fetchAll = async () => {
       try {
-        const res = await fetch(`/api/quotes/${id}`);
-        if (!res.ok) throw new Error("Erro ao carregar orçamento");
-
-        const data = await res.json();
+        const [quoteRes, settingsRes] = await Promise.all([
+          fetch(`/api/quotes/${id}`),
+          fetch("/api/company/settings"),
+        ]);
+        if (!quoteRes.ok) throw new Error("Erro ao carregar orçamento");
+        const data = await quoteRes.json();
         setQuote(data);
+        if (settingsRes.ok) {
+          const settingsData = await settingsRes.json();
+          setCompanySettings(settingsData.data || settingsData);
+        }
       } catch (error: any) {
         toast.error(error.message);
         router.push("/dashboard/orcamentos");
@@ -98,7 +105,7 @@ export default function ImprimirOrcamentoPage() {
       }
     };
 
-    fetchQuote();
+    fetchAll();
   }, [id, router]);
 
   const handlePrint = () => {
@@ -205,9 +212,22 @@ export default function ImprimirOrcamentoPage() {
       {/* Conteúdo para Impressão */}
       <div className="print-container max-w-[210mm] mx-auto bg-white p-8">
         {/* Cabeçalho */}
-        <div className="border-b-2 border-gray-800 pb-4 mb-6">
-          <h1 className="text-3xl font-bold text-center mb-2">PDV Ótica</h1>
-          <p className="text-center text-gray-600 text-xl">Orçamento</p>
+        <div className="border-b-2 border-gray-800 pb-4 mb-6 text-center">
+          {companySettings?.logoUrl ? (
+            <div className="flex justify-center mb-2">
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img
+                src={companySettings.logoUrl}
+                alt="Logo"
+                className="h-16 w-auto max-w-[200px] object-contain"
+              />
+            </div>
+          ) : (
+            <h1 className="text-3xl font-bold mb-2">
+              {companySettings?.displayName || "PDV Ótica"}
+            </h1>
+          )}
+          <p className="text-gray-600 text-xl">Orçamento</p>
         </div>
 
         {/* Informações do Orçamento */}

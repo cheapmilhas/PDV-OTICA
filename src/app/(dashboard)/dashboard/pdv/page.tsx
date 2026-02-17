@@ -805,7 +805,7 @@ function PDVPage() {
             onClick={() => {
               if (lastSaleId) {
                 // Abrir carnê em nova aba
-                window.open(`/dashboard/vendas/${lastSaleId}/carne`, "_blank");
+                window.open(`/api/sales/${lastSaleId}/carne`, "_blank");
               }
               setShowCarneDialog(false);
               // Redirecionar após abrir carnê

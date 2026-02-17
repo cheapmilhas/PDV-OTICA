@@ -76,10 +76,11 @@ export async function GET(
       );
     }
 
-    // Buscar dados da empresa
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-    });
+    // Buscar dados da empresa e configurações
+    const [company, companySettings] = await Promise.all([
+      prisma.company.findUnique({ where: { id: companyId } }),
+      prisma.companySettings.findUnique({ where: { companyId } }),
+    ]);
 
     if (!company) {
       return NextResponse.json(
@@ -93,6 +94,7 @@ export async function GET(
       sale: sale as any,
       company,
       installments,
+      logoUrl: companySettings?.logoUrl || undefined,
     });
 
     // Retornar PDF
