@@ -408,6 +408,14 @@ export default function DetalhesVendaPage() {
                 <Printer className="h-4 w-4 mr-2" />
                 Imprimir
               </Button>
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => window.open(`/api/sales/${id}/pdf`, "_blank")}
+              >
+                <FileText className="h-4 w-4 mr-2" />
+                PDF Venda
+              </Button>
               {sale.payments.some((p) => p.method === "STORE_CREDIT") && (
                 <Button
                   variant="outline"

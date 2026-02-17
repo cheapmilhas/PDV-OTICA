@@ -347,10 +347,17 @@ function FinanceiroPage() {
       }
 
       const data = await res.json();
+      const accountId = receivingAccount.id;
       toast.success(data.message || "Conta recebida com sucesso!");
       setShowReceiveModal(false);
       setReceivingAccount(null);
       fetchAccountsReceivable();
+      // Oferecer impressão do recibo
+      setTimeout(() => {
+        if (window.confirm("Deseja imprimir o recibo de pagamento?")) {
+          window.open(`/api/accounts-receivable/${accountId}/receipt`, "_blank");
+        }
+      }, 300);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -877,6 +884,50 @@ function FinanceiroPage() {
                 </p>
               </CardContent>
             </Card>
+          </div>
+
+          {/* Filtros Rápidos */}
+          <div className="flex flex-wrap gap-2">
+            {[
+              { key: "today", label: "Hoje" },
+              { key: "3days", label: "3 dias" },
+              { key: "7days", label: "7 dias" },
+              { key: "30days", label: "30 dias" },
+              { key: "overdue", label: "🔴 Vencidos" },
+            ].map((f) => {
+              const isActive = receivableFilters.startDate !== "" || receivableFilters.endDate !== "" || receivableFilters.status === "OVERDUE";
+              return (
+                <Button
+                  key={f.key}
+                  size="sm"
+                  variant="outline"
+                  className={f.key === "overdue" ? "border-red-300 text-red-600 hover:bg-red-50" : ""}
+                  onClick={() => {
+                    const today = new Date();
+                    today.setHours(0, 0, 0, 0);
+                    const toDateStr = (d: Date) => d.toISOString().slice(0, 10);
+
+                    if (f.key === "today") {
+                      setReceivableFilters({ ...receivableFilters, startDate: toDateStr(today), endDate: toDateStr(today), status: "ALL" });
+                    } else if (f.key === "3days") {
+                      const end = new Date(today); end.setDate(end.getDate() + 3);
+                      setReceivableFilters({ ...receivableFilters, startDate: toDateStr(today), endDate: toDateStr(end), status: "ALL" });
+                    } else if (f.key === "7days") {
+                      const end = new Date(today); end.setDate(end.getDate() + 7);
+                      setReceivableFilters({ ...receivableFilters, startDate: toDateStr(today), endDate: toDateStr(end), status: "ALL" });
+                    } else if (f.key === "30days") {
+                      const end = new Date(today); end.setDate(end.getDate() + 30);
+                      setReceivableFilters({ ...receivableFilters, startDate: toDateStr(today), endDate: toDateStr(end), status: "ALL" });
+                    } else if (f.key === "overdue") {
+                      setReceivableFilters({ ...receivableFilters, startDate: "", endDate: "", status: "OVERDUE" });
+                    }
+                    setReceivablePage(1);
+                  }}
+                >
+                  {f.label}
+                </Button>
+              );
+            })}
           </div>
 
           {/* Filtros */}

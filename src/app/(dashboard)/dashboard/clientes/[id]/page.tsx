@@ -122,6 +122,8 @@ function ClienteDetalhesPage() {
   const [serviceOrders, setServiceOrders] = useState<ServiceOrder[]>([]);
   const [stats, setStats] = useState<CustomerStats | null>(null);
   const [cashbackMovements, setCashbackMovements] = useState<CashbackMovement[]>([]);
+  const [receivables, setReceivables] = useState<any[]>([]);
+  const [receivablesSummary, setReceivablesSummary] = useState<{ totalPending: number; totalReceived: number; count: number } | null>(null);
 
   useEffect(() => {
     const fetchCustomerData = async () => {
@@ -182,6 +184,18 @@ function ClienteDetalhesPage() {
         } catch (err) {
           console.error("Erro ao buscar ordens de serviço:", err);
           setServiceOrders([]);
+        }
+
+        // Buscar parcelas do cliente
+        try {
+          const receivablesRes = await fetch(`/api/customers/${customerId}/receivables`);
+          if (receivablesRes.ok) {
+            const receivablesData = await receivablesRes.json();
+            setReceivables(receivablesData.data || []);
+            setReceivablesSummary(receivablesData.summary || null);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar parcelas:", err);
         }
 
         // Buscar cashback do cliente
@@ -451,7 +465,7 @@ function ClienteDetalhesPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="dados" className="w-full">
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-6">
           <TabsTrigger value="dados">Dados Cadastrais</TabsTrigger>
           <TabsTrigger value="vendas">
             Vendas ({sales.length})
@@ -461,6 +475,9 @@ function ClienteDetalhesPage() {
           </TabsTrigger>
           <TabsTrigger value="ordens">
             Ordens de Serviço ({serviceOrders.length})
+          </TabsTrigger>
+          <TabsTrigger value="parcelas">
+            Parcelas ({receivables.length})
           </TabsTrigger>
           <TabsTrigger value="cashback" className="flex items-center gap-2">
             Cashback
@@ -834,6 +851,99 @@ function ClienteDetalhesPage() {
                 )}
               </CardContent>
             </Card>
+          </div>
+        </TabsContent>
+
+        {/* Tab: Parcelas */}
+        <TabsContent value="parcelas">
+          <div className="space-y-4">
+            {/* Resumo */}
+            {receivablesSummary && (
+              <div className="grid grid-cols-3 gap-4">
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Pendente / Vencido</p>
+                    <p className="text-xl font-bold text-red-600">{formatCurrency(receivablesSummary.totalPending)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Total Recebido</p>
+                    <p className="text-xl font-bold text-green-600">{formatCurrency(receivablesSummary.totalReceived)}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="pt-4">
+                    <p className="text-xs text-muted-foreground">Total de Parcelas</p>
+                    <p className="text-xl font-bold">{receivablesSummary.count}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            )}
+
+            {receivables.length === 0 ? (
+              <Card>
+                <CardContent className="pt-6 text-center text-muted-foreground">
+                  <DollarSign className="h-10 w-10 mx-auto mb-2 opacity-30" />
+                  <p>Nenhuma parcela encontrada</p>
+                </CardContent>
+              </Card>
+            ) : (
+              <Card>
+                <CardContent className="p-0">
+                  <div className="divide-y">
+                    {receivables.map((r: any) => {
+                      const isOverdue = r.status === "OVERDUE" || (r.status === "PENDING" && new Date(r.dueDate) < new Date());
+                      const statusColors: Record<string, string> = {
+                        RECEIVED: "bg-green-100 text-green-800",
+                        PENDING: isOverdue ? "bg-red-100 text-red-800" : "bg-yellow-100 text-yellow-800",
+                        OVERDUE: "bg-red-100 text-red-800",
+                        CANCELED: "bg-gray-100 text-gray-600",
+                      };
+                      const statusLabels: Record<string, string> = {
+                        RECEIVED: "Recebido",
+                        PENDING: isOverdue ? "Vencido" : "Pendente",
+                        OVERDUE: "Vencido",
+                        CANCELED: "Cancelado",
+                      };
+                      return (
+                        <div key={r.id} className="flex items-center justify-between p-4">
+                          <div>
+                            <p className="font-medium text-sm">{r.description}</p>
+                            <div className="flex items-center gap-2 mt-1 text-xs text-muted-foreground">
+                              <span>Parcela {r.installmentNumber}/{r.totalInstallments}</span>
+                              {r.sale?.id && <span>· Venda {r.sale.id.substring(0, 8).toUpperCase()}</span>}
+                              <span>· Venc: {format(new Date(r.dueDate), "dd/MM/yyyy", { locale: ptBR })}</span>
+                            </div>
+                          </div>
+                          <div className="flex items-center gap-3">
+                            <Badge className={`text-xs ${statusColors[r.status] || ""}`}>
+                              {statusLabels[r.status] || r.status}
+                            </Badge>
+                            <div className="text-right">
+                              <p className="font-bold text-sm">{formatCurrency(r.amount)}</p>
+                              {r.receivedAmount && r.receivedAmount !== r.amount && (
+                                <p className="text-xs text-green-600">Pago: {formatCurrency(r.receivedAmount)}</p>
+                              )}
+                            </div>
+                            {r.status === "RECEIVED" && (
+                              <Button
+                                size="sm"
+                                variant="ghost"
+                                onClick={() => window.open(`/api/accounts-receivable/${r.id}/receipt`, "_blank")}
+                                title="Imprimir recibo"
+                              >
+                                <FileText className="h-3 w-3" />
+                              </Button>
+                            )}
+                          </div>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
         </TabsContent>
       </Tabs>
