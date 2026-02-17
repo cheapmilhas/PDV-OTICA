@@ -14,21 +14,19 @@ import {
   AlertTriangle,
   FileText,
   Edit,
+  Printer,
 } from "lucide-react";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 interface ServiceOrderDetails {
   id: string;
   createdAt: string;
-  total: number;
   notes?: string;
   prescription?: string;
-  expectedDate?: string;
+  promisedDate?: string;
   deliveredAt?: string;
-  active: boolean;
   status: string;
   customer: {
     id: string;
@@ -46,9 +44,8 @@ interface ServiceOrderDetails {
   };
   items: Array<{
     id: string;
-    type: string;
     description: string;
-    price: number;
+    qty: number;
     observations?: string;
   }>;
 }
@@ -126,7 +123,7 @@ export default function DetalhesOrdemServicoPage() {
     return null;
   }
 
-  const diasRestantes = calcularDiasRestantes(order.expectedDate);
+  const diasRestantes = calcularDiasRestantes(order.promisedDate);
   const prazoVencido =
     diasRestantes !== null &&
     diasRestantes < 0 &&
@@ -157,7 +154,15 @@ export default function DetalhesOrdemServicoPage() {
           <Badge variant={getStatusVariant(order.status)}>
             {getStatusLabel(order.status)}
           </Badge>
-          {order.active && order.status !== "DELIVERED" && (
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => window.open(`/dashboard/ordens-servico/${id}/imprimir`, "_blank")}
+          >
+            <Printer className="h-4 w-4 mr-2" />
+            Imprimir OS
+          </Button>
+          {order.status !== "DELIVERED" && order.status !== "CANCELED" && (
             <Button
               size="sm"
               onClick={() => router.push(`/dashboard/ordens-servico/${id}/editar`)}
@@ -170,7 +175,7 @@ export default function DetalhesOrdemServicoPage() {
       </div>
 
       {/* Ordem Cancelada Alert */}
-      {!order.active && (
+      {order.status === "CANCELED" && (
         <Card className="border-destructive bg-destructive/10">
           <CardContent className="flex items-center gap-2 p-4">
             <AlertTriangle className="h-5 w-5 text-destructive" />
@@ -198,13 +203,11 @@ export default function DetalhesOrdemServicoPage() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total
+              Itens / Serviços
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold text-primary">
-              {formatCurrency(Number(order.total))}
-            </p>
+            <p className="text-2xl font-bold text-primary">{order.items.length}</p>
           </CardContent>
         </Card>
         <Card>
@@ -214,10 +217,10 @@ export default function DetalhesOrdemServicoPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            {order.expectedDate ? (
+            {order.promisedDate ? (
               <div>
                 <p className="text-lg font-bold">
-                  {format(new Date(order.expectedDate), "dd/MM/yyyy", {
+                  {format(new Date(order.promisedDate), "dd/MM/yyyy", {
                     locale: ptBR,
                   })}
                 </p>
@@ -331,19 +334,143 @@ export default function DetalhesOrdemServicoPage() {
       </div>
 
       {/* Prescrição */}
-      {order.prescription && (
-        <Card>
-          <CardHeader>
-            <CardTitle className="flex items-center gap-2">
-              <FileText className="h-5 w-5" />
-              Receita/Prescrição
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="whitespace-pre-wrap">{order.prescription}</p>
-          </CardContent>
-        </Card>
-      )}
+      {order.prescription && (() => {
+        let rx: any = null;
+        try { rx = JSON.parse(order.prescription!); } catch { rx = null; }
+
+        if (!rx) return (
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <FileText className="h-5 w-5" />
+                Receita/Prescrição
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="whitespace-pre-wrap text-sm">{order.prescription}</p>
+            </CardContent>
+          </Card>
+        );
+
+        return (
+          <Card className="border-2 border-gray-800">
+            <CardHeader className="bg-gray-800 text-white rounded-t-lg">
+              <CardTitle className="flex items-center gap-2 text-white">
+                <FileText className="h-5 w-5" />
+                Receita / Prescrição
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="pt-4 space-y-4">
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* OD */}
+                <div>
+                  <p className="font-bold text-sm text-center bg-gray-800 text-white py-1 px-2 rounded mb-3">
+                    OLHO DIREITO (OD)
+                  </p>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {rx.od?.esf && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">Esférico</td>
+                          <td className="py-1.5 text-right font-bold">{rx.od.esf}</td>
+                        </tr>
+                      )}
+                      {rx.od?.cil && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">Cilíndrico</td>
+                          <td className="py-1.5 text-right font-bold">{rx.od.cil}</td>
+                        </tr>
+                      )}
+                      {rx.od?.eixo && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">Eixo</td>
+                          <td className="py-1.5 text-right font-bold">{rx.od.eixo}°</td>
+                        </tr>
+                      )}
+                      {rx.od?.dnp && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">DNP</td>
+                          <td className="py-1.5 text-right font-bold">{rx.od.dnp}</td>
+                        </tr>
+                      )}
+                      {rx.od?.altura && (
+                        <tr>
+                          <td className="py-1.5 text-muted-foreground font-medium">Altura</td>
+                          <td className="py-1.5 text-right font-bold">{rx.od.altura}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+
+                {/* OE */}
+                <div>
+                  <p className="font-bold text-sm text-center bg-gray-800 text-white py-1 px-2 rounded mb-3">
+                    OLHO ESQUERDO (OE)
+                  </p>
+                  <table className="w-full text-sm">
+                    <tbody>
+                      {rx.oe?.esf && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">Esférico</td>
+                          <td className="py-1.5 text-right font-bold">{rx.oe.esf}</td>
+                        </tr>
+                      )}
+                      {rx.oe?.cil && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">Cilíndrico</td>
+                          <td className="py-1.5 text-right font-bold">{rx.oe.cil}</td>
+                        </tr>
+                      )}
+                      {rx.oe?.eixo && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">Eixo</td>
+                          <td className="py-1.5 text-right font-bold">{rx.oe.eixo}°</td>
+                        </tr>
+                      )}
+                      {rx.oe?.dnp && (
+                        <tr className="border-b">
+                          <td className="py-1.5 text-muted-foreground font-medium">DNP</td>
+                          <td className="py-1.5 text-right font-bold">{rx.oe.dnp}</td>
+                        </tr>
+                      )}
+                      {rx.oe?.altura && (
+                        <tr>
+                          <td className="py-1.5 text-muted-foreground font-medium">Altura</td>
+                          <td className="py-1.5 text-right font-bold">{rx.oe.altura}</td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {(rx.adicao || rx.tipoLente || rx.material) && (
+                <div className="grid grid-cols-3 gap-4 pt-3 border-t text-sm">
+                  {rx.adicao && (
+                    <div className="text-center">
+                      <p className="text-muted-foreground text-xs uppercase font-medium">Adição</p>
+                      <p className="font-bold text-lg">{rx.adicao}</p>
+                    </div>
+                  )}
+                  {rx.tipoLente && (
+                    <div className="text-center">
+                      <p className="text-muted-foreground text-xs uppercase font-medium">Tipo de Lente</p>
+                      <p className="font-bold">{rx.tipoLente}</p>
+                    </div>
+                  )}
+                  {rx.material && (
+                    <div className="text-center">
+                      <p className="text-muted-foreground text-xs uppercase font-medium">Material</p>
+                      <p className="font-bold">{rx.material}</p>
+                    </div>
+                  )}
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        );
+      })()}
 
       {/* Itens/Serviços */}
       <Card>
@@ -351,22 +478,15 @@ export default function DetalhesOrdemServicoPage() {
           <CardTitle>Itens/Serviços ({order.items.length})</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="space-y-4">
+          <div className="space-y-3">
             {order.items.map((item, index) => (
-              <div
-                key={item.id}
-                className="border-b pb-4 last:border-0"
-              >
-                <div className="flex items-start justify-between mb-2">
+              <div key={item.id} className="border rounded p-3">
+                <div className="flex items-start justify-between">
                   <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-1">
-                      <Badge variant="outline">{item.type}</Badge>
-                      <p className="font-bold text-lg">
-                        {formatCurrency(Number(item.price))}
-                      </p>
-                    </div>
-                    <p className="font-semibold">Item {index + 1}</p>
-                    <p className="text-muted-foreground">{item.description}</p>
+                    <p className="font-semibold">{item.description || `Item ${index + 1}`}</p>
+                    {item.qty > 1 && (
+                      <p className="text-sm text-muted-foreground">Quantidade: {item.qty}</p>
+                    )}
                     {item.observations && (
                       <p className="text-sm text-muted-foreground mt-1">
                         Obs: {item.observations}
@@ -376,13 +496,6 @@ export default function DetalhesOrdemServicoPage() {
                 </div>
               </div>
             ))}
-
-            <div className="flex items-center justify-between pt-4 border-t-2">
-              <p className="font-bold">Total</p>
-              <p className="font-bold text-xl text-primary">
-                {formatCurrency(Number(order.total))}
-              </p>
-            </div>
           </div>
         </CardContent>
       </Card>

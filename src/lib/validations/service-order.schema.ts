@@ -26,8 +26,8 @@ export const createServiceOrderSchema = z.object({
   laboratoryId: z.string().optional(),
   items: z.array(serviceOrderItemSchema).min(1, "OS deve ter pelo menos 1 serviço"),
   expectedDate: z.string().datetime().optional(),
-  prescription: z.string().max(1000, "Prescrição muito longa").optional(),
-  notes: z.string().max(500, "Observações muito longas").optional(),
+  prescription: z.string().max(5000, "Prescrição muito longa").optional(),
+  notes: z.string().max(1000, "Observações muito longas").optional(),
 });
 
 export type CreateServiceOrderDTO = z.infer<typeof createServiceOrderSchema>;
@@ -39,8 +39,8 @@ export const updateServiceOrderSchema = z.object({
   laboratoryId: z.string().optional(),
   items: z.array(serviceOrderItemSchema).min(1).optional(),
   expectedDate: z.string().datetime().optional(),
-  prescription: z.string().max(1000).optional(),
-  notes: z.string().max(500).optional(),
+  prescription: z.string().max(5000).optional(),
+  notes: z.string().max(1000).optional(),
 });
 
 export type UpdateServiceOrderDTO = z.infer<typeof updateServiceOrderSchema>;

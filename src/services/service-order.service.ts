@@ -134,6 +134,12 @@ export class ServiceOrderService {
       );
     }
 
+    // Parse prescription JSON if provided
+    let prescriptionData: any = undefined;
+    if (prescription) {
+      try { prescriptionData = JSON.parse(prescription); } catch { /* string plain */ }
+    }
+
     const order = await prisma.$transaction(async (tx) => {
       const newOrder = await tx.serviceOrder.create({
         data: {
@@ -144,6 +150,8 @@ export class ServiceOrderService {
           status: "DRAFT",
           promisedDate: expectedDate ? new Date(expectedDate) : undefined,
           createdByUserId: userId,
+          notes: notes || undefined,
+          prescriptionData: prescriptionData || undefined,
         },
       });
 
@@ -198,11 +206,21 @@ export class ServiceOrderService {
 
     const { laboratoryId, items, expectedDate, prescription, notes } = data;
 
+    // Parse prescription JSON if provided
+    let prescriptionData: any = undefined;
+    let hasPrescription = false;
+    if (prescription !== undefined) {
+      hasPrescription = true;
+      if (prescription) {
+        try { prescriptionData = JSON.parse(prescription); } catch { /* string plain */ }
+      }
+    }
+
     const order = await prisma.$transaction(async (tx) => {
       let updateData: any = {
         ...(laboratoryId !== undefined && { laboratoryId: laboratoryId || null }),
         ...(expectedDate && { promisedDate: new Date(expectedDate) }),
-        ...(prescription !== undefined && { prescription }),
+        ...(hasPrescription && { prescriptionData: prescriptionData || null }),
         ...(notes !== undefined && { notes }),
       };
 

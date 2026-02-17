@@ -9,15 +9,13 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
-import { ArrowLeft, Trash2, Info, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Trash2, Loader2, Plus } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
 
 interface ServiceItem {
-  type: string;
   description: string;
-  price: string;
+  qty: number;
   observations: string;
 }
 
@@ -35,17 +33,20 @@ export default function EditarOrdemServicoPage() {
   const [formData, setFormData] = useState({
     expectedDate: "",
     laboratoryId: "",
-    prescription: "",
     notes: "",
   });
 
+  const [showPrescription, setShowPrescription] = useState(false);
+  const [prescriptionData, setPrescriptionData] = useState({
+    od: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+    oe: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+    adicao: "",
+    tipoLente: "",
+    material: "",
+  });
+
   const [items, setItems] = useState<ServiceItem[]>([
-    {
-      type: "",
-      description: "",
-      price: "",
-      observations: "",
-    },
+    { description: "", qty: 1, observations: "" },
   ]);
 
   const [statusUpdate, setStatusUpdate] = useState({
@@ -74,21 +75,36 @@ export default function EditarOrdemServicoPage() {
 
         // Preencher formulário
         setFormData({
-          expectedDate: data.expectedDate
-            ? new Date(data.expectedDate).toISOString().split("T")[0]
+          expectedDate: data.promisedDate
+            ? new Date(data.promisedDate).toISOString().split("T")[0]
             : "",
           laboratoryId: data.laboratory?.id || "",
-          prescription: data.prescription || "",
           notes: data.notes || "",
         });
+
+        // Preencher receita
+        if (data.prescription) {
+          try {
+            const rx = JSON.parse(data.prescription);
+            setPrescriptionData({
+              od: rx.od || { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+              oe: rx.oe || { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+              adicao: rx.adicao || "",
+              tipoLente: rx.tipoLente || "",
+              material: rx.material || "",
+            });
+            setShowPrescription(true);
+          } catch {
+            // prescription is plain text, ignore
+          }
+        }
 
         // Preencher itens
         if (data.items && data.items.length > 0) {
           setItems(
             data.items.map((item: any) => ({
-              type: item.type,
-              description: item.description,
-              price: item.price.toString(),
+              description: item.description || "",
+              qty: item.qty || 1,
               observations: item.observations || "",
             }))
           );
@@ -110,15 +126,7 @@ export default function EditarOrdemServicoPage() {
   }, [id, router]);
 
   const addItem = () => {
-    setItems([
-      ...items,
-      {
-        type: "",
-        description: "",
-        price: "",
-        observations: "",
-      },
-    ]);
+    setItems([...items, { description: "", qty: 1, observations: "" }]);
   };
 
   const removeItem = (index: number) => {
@@ -129,17 +137,17 @@ export default function EditarOrdemServicoPage() {
     setItems(items.filter((_, i) => i !== index));
   };
 
-  const updateItem = (index: number, field: keyof ServiceItem, value: string) => {
+  const updateItem = (index: number, field: keyof ServiceItem, value: string | number) => {
     const newItems = [...items];
-    newItems[index][field] = value;
+    newItems[index] = { ...newItems[index], [field]: value };
     setItems(newItems);
   };
 
-  const calculateTotal = () => {
-    return items.reduce((sum, item) => {
-      const price = parseFloat(item.price) || 0;
-      return sum + price;
-    }, 0);
+  const updatePrescription = (eye: "od" | "oe", field: string, value: string) => {
+    setPrescriptionData((prev) => ({
+      ...prev,
+      [eye]: { ...prev[eye], [field]: value },
+    }));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -147,15 +155,14 @@ export default function EditarOrdemServicoPage() {
     setLoading(true);
 
     try {
-      if (items.some((item) => !item.type || !item.description || !item.price)) {
-        throw new Error("Preencha todos os campos obrigatórios dos itens");
+      if (items.some((item) => !item.description)) {
+        throw new Error("Preencha a descrição de todos os itens");
       }
 
       const payload: any = {
         items: items.map((item) => ({
-          type: item.type,
           description: item.description,
-          price: parseFloat(item.price),
+          qty: item.qty || 1,
           observations: item.observations || undefined,
         })),
       };
@@ -165,13 +172,13 @@ export default function EditarOrdemServicoPage() {
       }
 
       payload.laboratoryId = formData.laboratoryId || undefined;
+      payload.notes = formData.notes || undefined;
 
-      if (formData.prescription !== undefined) {
-        payload.prescription = formData.prescription || undefined;
-      }
-
-      if (formData.notes !== undefined) {
-        payload.notes = formData.notes || undefined;
+      // Montar receita se preenchida
+      if (showPrescription && (prescriptionData.od.esf || prescriptionData.oe.esf)) {
+        payload.prescription = JSON.stringify(prescriptionData);
+      } else if (!showPrescription) {
+        payload.prescription = undefined;
       }
 
       const res = await fetch(`/api/service-orders/${id}`, {
@@ -186,7 +193,7 @@ export default function EditarOrdemServicoPage() {
       }
 
       toast.success("Ordem de serviço atualizada com sucesso!");
-      router.push("/dashboard/ordens-servico");
+      router.push(`/dashboard/ordens-servico/${id}/detalhes`);
     } catch (error: any) {
       toast.error(error.message);
     } finally {
@@ -201,10 +208,7 @@ export default function EditarOrdemServicoPage() {
     }
 
     try {
-      const payload: any = {
-        status: statusUpdate.newStatus,
-      };
-
+      const payload: any = { status: statusUpdate.newStatus };
       if (statusUpdate.statusNotes) {
         payload.notes = statusUpdate.statusNotes;
       }
@@ -221,17 +225,14 @@ export default function EditarOrdemServicoPage() {
       }
 
       toast.success("Status atualizado com sucesso!");
-      router.push("/dashboard/ordens-servico");
+      router.push(`/dashboard/ordens-servico/${id}/detalhes`);
     } catch (error: any) {
       toast.error(error.message);
     }
   };
 
   const handleCancel = async () => {
-    if (!confirm("Tem certeza que deseja cancelar esta ordem de serviço?")) {
-      return;
-    }
-
+    if (!confirm("Tem certeza que deseja cancelar esta ordem de serviço?")) return;
     const reason = prompt("Motivo do cancelamento (opcional):");
 
     setCanceling(true);
@@ -277,17 +278,13 @@ export default function EditarOrdemServicoPage() {
     );
   }
 
-  if (!order) {
-    return null;
-  }
-
-  const total = calculateTotal();
+  if (!order) return null;
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
-          <Link href="/dashboard/ordens-servico">
+          <Link href={`/dashboard/ordens-servico/${id}/detalhes`}>
             <Button variant="ghost" size="sm">
               <ArrowLeft className="h-4 w-4 mr-2" />
               Voltar
@@ -298,9 +295,7 @@ export default function EditarOrdemServicoPage() {
             <p className="text-muted-foreground">Atualize os dados da ordem de serviço</p>
           </div>
         </div>
-        <Badge variant={order.active ? "default" : "destructive"}>
-          {order.active ? getStatusLabel(order.status) : "Cancelada"}
-        </Badge>
+        <Badge variant="secondary">{getStatusLabel(order.status)}</Badge>
       </div>
 
       {/* Cliente Info (Read-only) */}
@@ -317,7 +312,7 @@ export default function EditarOrdemServicoPage() {
       </Card>
 
       {/* Atualizar Status */}
-      {order.active && order.status !== "DELIVERED" && (
+      {order.status !== "DELIVERED" && order.status !== "CANCELED" && (
         <Card>
           <CardHeader>
             <CardTitle>Atualizar Status</CardTitle>
@@ -338,9 +333,9 @@ export default function EditarOrdemServicoPage() {
                   <SelectContent>
                     <SelectItem value="DRAFT">Rascunho</SelectItem>
                     <SelectItem value="APPROVED">Aprovado</SelectItem>
-                    <SelectItem value="SENT_TO_LAB">Enviado Lab</SelectItem>
-                    <SelectItem value="IN_PROGRESS">Em Progresso</SelectItem>
-                    <SelectItem value="READY">Pronto</SelectItem>
+                    <SelectItem value="SENT_TO_LAB">Enviado ao Laboratório</SelectItem>
+                    <SelectItem value="IN_PROGRESS">Em Produção</SelectItem>
+                    <SelectItem value="READY">Pronto para Retirada</SelectItem>
                     <SelectItem value="DELIVERED">Entregue</SelectItem>
                   </SelectContent>
                 </Select>
@@ -405,17 +400,6 @@ export default function EditarOrdemServicoPage() {
             </div>
 
             <div className="space-y-2">
-              <Label htmlFor="prescription">Receita/Prescrição</Label>
-              <Textarea
-                id="prescription"
-                value={formData.prescription}
-                onChange={(e) => setFormData({ ...formData, prescription: e.target.value })}
-                rows={3}
-                placeholder="Digite a prescrição médica se aplicável..."
-              />
-            </div>
-
-            <div className="space-y-2">
               <Label htmlFor="notes">Observações</Label>
               <Textarea
                 id="notes"
@@ -426,6 +410,99 @@ export default function EditarOrdemServicoPage() {
               />
             </div>
           </CardContent>
+        </Card>
+
+        {/* Receita / Prescrição */}
+        <Card className="mb-6">
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Receita / Prescrição</CardTitle>
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setShowPrescription(!showPrescription)}
+              >
+                {showPrescription ? "Remover Receita" : "Adicionar Receita"}
+              </Button>
+            </div>
+          </CardHeader>
+          {showPrescription && (
+            <CardContent className="space-y-4">
+              <div className="grid gap-6 md:grid-cols-2">
+                {/* OD */}
+                <div>
+                  <p className="font-semibold mb-3 text-center bg-gray-800 text-white py-1 rounded">
+                    Olho Direito (OD)
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["esf", "cil", "eixo", "dnp", "altura"].map((field) => (
+                      <div key={field} className="space-y-1">
+                        <Label className="text-xs capitalize">{field}</Label>
+                        <Input
+                          placeholder={field === "eixo" ? "0-180°" : "0.00"}
+                          value={(prescriptionData.od as any)[field]}
+                          onChange={(e) => updatePrescription("od", field, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+
+                {/* OE */}
+                <div>
+                  <p className="font-semibold mb-3 text-center bg-gray-800 text-white py-1 rounded">
+                    Olho Esquerdo (OE)
+                  </p>
+                  <div className="grid grid-cols-2 gap-2">
+                    {["esf", "cil", "eixo", "dnp", "altura"].map((field) => (
+                      <div key={field} className="space-y-1">
+                        <Label className="text-xs capitalize">{field}</Label>
+                        <Input
+                          placeholder={field === "eixo" ? "0-180°" : "0.00"}
+                          value={(prescriptionData.oe as any)[field]}
+                          onChange={(e) => updatePrescription("oe", field, e.target.value)}
+                        />
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+
+              <div className="grid grid-cols-3 gap-4 pt-2 border-t">
+                <div className="space-y-1">
+                  <Label className="text-xs">Adição</Label>
+                  <Input
+                    placeholder="0.00"
+                    value={prescriptionData.adicao}
+                    onChange={(e) =>
+                      setPrescriptionData({ ...prescriptionData, adicao: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Tipo de Lente</Label>
+                  <Input
+                    placeholder="Ex: Multifocal"
+                    value={prescriptionData.tipoLente}
+                    onChange={(e) =>
+                      setPrescriptionData({ ...prescriptionData, tipoLente: e.target.value })
+                    }
+                  />
+                </div>
+                <div className="space-y-1">
+                  <Label className="text-xs">Material</Label>
+                  <Input
+                    placeholder="Ex: Policarbonato"
+                    value={prescriptionData.material}
+                    onChange={(e) =>
+                      setPrescriptionData({ ...prescriptionData, material: e.target.value })
+                    }
+                  />
+                </div>
+              </div>
+            </CardContent>
+          )}
         </Card>
 
         {/* Itens/Serviços */}
@@ -442,7 +519,7 @@ export default function EditarOrdemServicoPage() {
           <CardContent className="space-y-4">
             {items.map((item, index) => (
               <Card key={index} className="p-4">
-                <div className="space-y-4">
+                <div className="space-y-3">
                   <div className="flex items-center justify-between">
                     <h4 className="font-semibold">Item {index + 1}</h4>
                     {items.length > 1 && (
@@ -457,48 +534,30 @@ export default function EditarOrdemServicoPage() {
                     )}
                   </div>
 
-                  <div className="grid gap-4 md:grid-cols-2">
-                    <div className="space-y-2">
+                  <div className="grid gap-3 md:grid-cols-4">
+                    <div className="md:col-span-3 space-y-1">
                       <Label>
-                        Tipo de Serviço <span className="text-red-500">*</span>
+                        Descrição <span className="text-red-500">*</span>
                       </Label>
                       <Input
-                        value={item.type}
-                        onChange={(e) => updateItem(index, "type", e.target.value)}
-                        placeholder="Ex: Montagem, Ajuste, Reparo..."
+                        value={item.description}
+                        onChange={(e) => updateItem(index, "description", e.target.value)}
+                        placeholder="Ex: Lente multifocal, Montagem, Ajuste..."
                         required
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label>
-                        Valor (R$) <span className="text-red-500">*</span>
-                      </Label>
+                    <div className="space-y-1">
+                      <Label>Quantidade</Label>
                       <Input
                         type="number"
-                        step="0.01"
-                        min="0"
-                        value={item.price}
-                        onChange={(e) => updateItem(index, "price", e.target.value)}
-                        required
+                        min="1"
+                        value={item.qty}
+                        onChange={(e) => updateItem(index, "qty", parseInt(e.target.value) || 1)}
                       />
                     </div>
                   </div>
 
-                  <div className="space-y-2">
-                    <Label>
-                      Descrição <span className="text-red-500">*</span>
-                    </Label>
-                    <Textarea
-                      value={item.description}
-                      onChange={(e) => updateItem(index, "description", e.target.value)}
-                      placeholder="Descreva o serviço a ser realizado..."
-                      rows={2}
-                      required
-                    />
-                  </div>
-
-                  <div className="space-y-2">
+                  <div className="space-y-1">
                     <Label>Observações</Label>
                     <Textarea
                       value={item.observations}
@@ -510,30 +569,29 @@ export default function EditarOrdemServicoPage() {
                 </div>
               </Card>
             ))}
-
-            {/* Total */}
-            <div className="flex justify-end pt-4 border-t">
-              <div className="text-right">
-                <p className="text-sm text-muted-foreground">Total</p>
-                <p className="text-2xl font-bold text-primary">{formatCurrency(total)}</p>
-              </div>
-            </div>
           </CardContent>
         </Card>
 
         {/* Botões */}
         <div className="flex gap-4">
           <Button type="submit" disabled={loading}>
-            {loading ? "Salvando..." : "Salvar Alterações"}
+            {loading ? (
+              <>
+                <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                Salvando...
+              </>
+            ) : (
+              "Salvar Alterações"
+            )}
           </Button>
           <Button
             type="button"
             variant="outline"
-            onClick={() => router.push("/dashboard/ordens-servico")}
+            onClick={() => router.push(`/dashboard/ordens-servico/${id}/detalhes`)}
           >
             Cancelar
           </Button>
-          {order.active && order.status !== "DELIVERED" && (
+          {order.status !== "DELIVERED" && order.status !== "CANCELED" && (
             <Button
               type="button"
               variant="destructive"

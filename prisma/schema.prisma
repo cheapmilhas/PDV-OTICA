@@ -1,18 +1,3 @@
-// =========================================================
-// PDV ÓTICA — SCHEMA FINAL CONSOLIDADO (v3.1)
-// Merge: Schema v2.1 + v3.0 + Correções de Relação Prisma
-// =========================================================
-//
-// CORREÇÕES v3.1:
-// - Todas as relações reversas declaradas (Prisma exige)
-// - @relation nomeadas onde há múltiplas refs ao mesmo model
-// - QuoteStatus como enum (não String)
-// - Índices adicionais em tabelas de alto tráfego
-// - Company com relações reversas completas
-// - Branch com relações reversas completas
-// - User com relações reversas nomeadas (evita ambiguidade)
-// =========================================================
-
 generator client {
   provider = "prisma-client-js"
 }
@@ -23,9 +8,1568 @@ datasource db {
   directUrl = env("DIRECT_URL")
 }
 
-// ==============================
-// ENUMS
-// ==============================
+model Company {
+  id                 String              @id @default(cuid())
+  name               String
+  tradeName          String?
+  cnpj               String?             @unique
+  address            String?
+  city               String?
+  state              String?
+  zipCode            String?
+  phone              String?
+  email              String?
+  website            String?
+  logoPath           String?
+  settings           Json?
+  createdAt          DateTime            @default(now())
+  updatedAt          DateTime            @updatedAt
+  accountsPayable    AccountPayable[]
+  accountsReceivable AccountReceivable[]
+  agreements         Agreement[]
+  appointments       Appointment[]
+  auditLogs          AuditLog[]
+  branches           Branch[]
+  brands             Brand[]
+  cashShifts         CashShift[]
+  categories         Category[]
+  colors             Color[]
+  commissions        Commission[]
+  commissionRules    CommissionRule[]
+  companySettings    CompanySettings?    @relation("CompanySettings")
+  customers          Customer[]
+  dreReports         DREReport[]
+  doctors            Doctor[]
+  labs               Lab[]
+  lensTreatments     LensTreatment[]     @relation("CompanyLensTreatments")
+  loyaltyPoints      LoyaltyPoints[]
+  loyaltyProgram     LoyaltyProgram?
+  prescriptions      Prescription[]
+  products           Product[]
+  quotes             Quote[]
+  sales              Sale[]
+  serviceOrders      ServiceOrder[]
+  shapes             Shape[]
+  stockAdjustments   StockAdjustment[]
+  stockMovements     StockMovement[]
+  stockReservations  StockReservation[]
+  suppliers          Supplier[]
+  systemRules        SystemRule[]
+  users              User[]
+  warranties         Warranty[]
+}
+
+model Branch {
+  id                   String              @id @default(cuid())
+  companyId            String
+  name                 String
+  code                 String?
+  address              String?
+  city                 String?
+  state                String?
+  zipCode              String?
+  phone                String?
+  stateRegistration    String?
+  nfeSeries            Int?
+  lastNfeNumber        Int?
+  active               Boolean             @default(true)
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  accountsPayable      AccountPayable[]
+  accountsReceivable   AccountReceivable[]
+  appointments         Appointment[]
+  auditLogs            AuditLog[]
+  company              Company             @relation(fields: [companyId], references: [id])
+  cashMovements        CashMovement[]
+  shifts               CashShift[]
+  cashbackConfig       CashbackConfig?
+  commissionConfig     CommissionConfig?
+  customerCashbacks    CustomerCashback[]
+  customerContacts     CustomerContact[]
+  dreReports           DREReport[]
+  quotes               Quote[]
+  reminders            Reminder[]
+  reminderConfig       ReminderConfig?
+  sales                Sale[]
+  salesGoals           SalesGoal[]
+  sellerCommissions    SellerCommission[]
+  serviceOrders        ServiceOrder[]
+  stockMovementsSource StockMovement[]     @relation("StockMovementSource")
+  stockMovementsTarget StockMovement[]     @relation("StockMovementTarget")
+  stockReservations    StockReservation[]
+  userBranches         UserBranch[]
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+}
+
+model User {
+  id                         String                @id @default(cuid())
+  companyId                  String
+  name                       String
+  email                      String                @unique
+  passwordHash               String
+  role                       UserRole
+  active                     Boolean               @default(true)
+  defaultCommissionPercent   Decimal?              @db.Decimal(5, 2)
+  createdAt                  DateTime              @default(now())
+  updatedAt                  DateTime              @updatedAt
+  accountsPayableCreated     AccountPayable[]      @relation("AccountPayableCreator")
+  accountsPayablePaid        AccountPayable[]      @relation("AccountPayablePayer")
+  accountsReceivableCreated  AccountReceivable[]   @relation("AccountReceivableCreator")
+  accountsReceivableReceived AccountReceivable[]   @relation("AccountReceivableReceiver")
+  logs                       AuditLog[]
+  cashMovementsCreated       CashMovement[]        @relation("CashMovementCreator")
+  shiftsClosed               CashShift[]           @relation("ShiftCloser")
+  shiftsOpened               CashShift[]           @relation("ShiftOpener")
+  cashbackMovementsCreated   CashbackMovement[]    @relation("CashbackMovementCreatedBy")
+  commissions                Commission[]
+  contactsExecuted           CustomerContact[]     @relation("ContactExecutedBy")
+  barcodesCreated            ProductBarcode[]      @relation("BarcodeCreator")
+  qualityChecks              QualityChecklist[]    @relation("QualityChecker")
+  quotesConverted            Quote[]               @relation("QuoteConverter")
+  quotesAsSeller             Quote[]               @relation("QuoteSeller")
+  remindersDismissed         Reminder[]            @relation("ReminderDismissedBy")
+  salesAsSeller              Sale[]                @relation("SaleSeller")
+  paymentsReceived           SalePayment[]         @relation("PaymentReceiver")
+  sellerCommissions          SellerCommission[]    @relation("SellerCommissions")
+  sellerGoals                SellerGoal[]
+  serviceOrdersCreated       ServiceOrder[]        @relation("SOCreator")
+  soHistoryChanges           ServiceOrderHistory[] @relation("SOHistoryChanger")
+  stockAdjustmentsApproved   StockAdjustment[]     @relation("AdjustmentApprover")
+  stockAdjustmentsCreated    StockAdjustment[]     @relation("AdjustmentCreator")
+  stockMovements             StockMovement[]
+  company                    Company               @relation(fields: [companyId], references: [id])
+  branches                   UserBranch[]
+  customPermissions          UserPermission[]      @relation("UserCustomPermissions")
+
+  @@index([companyId, role])
+  @@index([companyId, name])
+}
+
+model UserBranch {
+  userId   String
+  branchId String
+  branch   Branch @relation(fields: [branchId], references: [id])
+  user     User   @relation(fields: [userId], references: [id])
+
+  @@id([userId, branchId])
+}
+
+model AuditLog {
+  id         String   @id @default(cuid())
+  companyId  String
+  branchId   String?
+  userId     String?
+  action     String
+  entityType String
+  entityId   String
+  oldData    Json?
+  newData    Json?
+  ip         String?
+  createdAt  DateTime @default(now())
+  branch     Branch?  @relation(fields: [branchId], references: [id])
+  company    Company  @relation(fields: [companyId], references: [id])
+  user       User?    @relation(fields: [userId], references: [id])
+
+  @@index([companyId, createdAt])
+  @@index([entityType, entityId])
+  @@index([userId, createdAt])
+  @@index([branchId, createdAt])
+}
+
+model Customer {
+  id                 String                 @id @default(cuid())
+  companyId          String
+  name               String
+  cpf                String?
+  rg                 String?
+  phone              String?
+  phone2             String?
+  email              String?
+  birthDate          DateTime?
+  gender             String?
+  address            String?
+  number             String?
+  complement         String?
+  neighborhood       String?
+  city               String?
+  state              String?
+  zipCode            String?
+  acceptsMarketing   Boolean                @default(true)
+  referralSource     String?
+  notes              String?
+  active             Boolean                @default(true)
+  createdAt          DateTime               @default(now())
+  updatedAt          DateTime               @updatedAt
+  accountsReceivable AccountReceivable[]
+  agreementBenefits  AgreementBeneficiary[]
+  appointments       Appointment[]
+  company            Company                @relation(fields: [companyId], references: [id])
+  cashback           CustomerCashback[]
+  contacts           CustomerContact[]
+  dependents         CustomerDependent[]
+  loyaltyPoints      LoyaltyPoints[]
+  prescriptions      Prescription[]
+  quotes             Quote[]
+  reminders          Reminder[]
+  sales              Sale[]
+  serviceOrders      ServiceOrder[]
+
+  @@unique([companyId, cpf])
+  @@index([companyId, name])
+  @@index([companyId, phone])
+  @@index([companyId, email])
+}
+
+model CustomerDependent {
+  id           String    @id @default(cuid())
+  customerId   String
+  name         String
+  relationship String
+  birthDate    DateTime?
+  cpf          String?
+  createdAt    DateTime  @default(now())
+  customer     Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId])
+}
+
+model Doctor {
+  id                       String         @id @default(cuid())
+  companyId                String
+  name                     String
+  crm                      String?
+  uf                       String?
+  specialty                String?
+  isPartner                Boolean        @default(false)
+  partnerCommissionPercent Decimal?       @db.Decimal(5, 2)
+  phone                    String?
+  email                    String?
+  clinicName               String?
+  clinicAddress            String?
+  active                   Boolean        @default(true)
+  createdAt                DateTime       @default(now())
+  updatedAt                DateTime       @updatedAt
+  company                  Company        @relation(fields: [companyId], references: [id])
+  prescriptions            Prescription[]
+
+  @@unique([companyId, crm, uf])
+  @@index([companyId, name])
+}
+
+model Lab {
+  id                  String              @id @default(cuid())
+  companyId           String
+  name                String
+  code                String?
+  cnpj                String?
+  phone               String?
+  email               String?
+  orderEmail          String?
+  website             String?
+  contactPerson       String?
+  integrationType     String?
+  apiUrl              String?
+  apiKey              String?
+  clientCode          String?
+  defaultLeadTimeDays Int                 @default(7)
+  urgentLeadTimeDays  Int                 @default(3)
+  paymentTermDays     Int                 @default(30)
+  defaultDiscount     Decimal             @default(0) @db.Decimal(5, 2)
+  qualityRating       Decimal?            @db.Decimal(3, 2)
+  totalOrders         Int                 @default(0)
+  totalReworks        Int                 @default(0)
+  active              Boolean             @default(true)
+  createdAt           DateTime            @default(now())
+  updatedAt           DateTime            @updatedAt
+  company             Company             @relation(fields: [companyId], references: [id])
+  priceRanges         LabPriceRange[]
+  lensServices        LensServiceDetail[]
+  serviceOrders       ServiceOrder[]
+  serviceOrderItems   ServiceOrderItem[]
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+}
+
+model LensTreatment {
+  id          String   @id @default(cuid())
+  companyId   String
+  name        String
+  description String?
+  price       Decimal  @db.Decimal(10, 2)
+  active      Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+  company     Company  @relation("CompanyLensTreatments", fields: [companyId], references: [id])
+
+  @@unique([companyId, name])
+  @@index([companyId, active])
+}
+
+model LabPriceRange {
+  id                String   @id @default(cuid())
+  labId             String
+  lensType          String
+  material          String
+  sphMin            Decimal? @db.Decimal(5, 2)
+  sphMax            Decimal? @db.Decimal(5, 2)
+  cylMin            Decimal? @db.Decimal(5, 2)
+  cylMax            Decimal? @db.Decimal(5, 2)
+  labPrice          Decimal  @db.Decimal(12, 2)
+  suggestedPrice    Decimal? @db.Decimal(12, 2)
+  arPrice           Decimal? @db.Decimal(12, 2)
+  blueLightPrice    Decimal? @db.Decimal(12, 2)
+  photochromicPrice Decimal? @db.Decimal(12, 2)
+  leadTimeDays      Int?
+  active            Boolean  @default(true)
+  lab               Lab      @relation(fields: [labId], references: [id])
+
+  @@index([labId, lensType, material])
+}
+
+model Supplier {
+  id              String           @id @default(cuid())
+  companyId       String
+  name            String
+  tradeName       String?
+  cnpj            String?
+  phone           String?
+  email           String?
+  website         String?
+  contactPerson   String?
+  address         String?
+  city            String?
+  state           String?
+  zipCode         String?
+  notes           String?
+  active          Boolean          @default(true)
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  accountsPayable AccountPayable[]
+  products        Product[]
+  stockMovements  StockMovement[]
+  company         Company          @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, cnpj])
+  @@index([companyId, name])
+}
+
+model Category {
+  id                       String     @id @default(cuid())
+  companyId                String
+  name                     String
+  parentId                 String?
+  defaultCommissionPercent Decimal?   @db.Decimal(5, 2)
+  minMarginPercent         Decimal?   @db.Decimal(5, 2)
+  active                   Boolean    @default(true)
+  company                  Company    @relation(fields: [companyId], references: [id])
+  parent                   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
+  children                 Category[] @relation("CategoryHierarchy")
+  products                 Product[]
+
+  @@unique([companyId, name])
+}
+
+model Brand {
+  id           String    @id @default(cuid())
+  companyId    String
+  code         String
+  name         String
+  manufacturer String?
+  minMargin    Decimal?  @db.Decimal(5, 2)
+  maxDiscount  Decimal?  @db.Decimal(5, 2)
+  segment      String?
+  origin       String?
+  logoPath     String?
+  website      String?
+  active       Boolean   @default(true)
+  createdAt    DateTime  @default(now())
+  updatedAt    DateTime  @updatedAt
+  company      Company   @relation(fields: [companyId], references: [id])
+  products     Product[]
+
+  @@unique([companyId, code])
+  @@index([companyId, name])
+}
+
+model Shape {
+  id          String    @id @default(cuid())
+  companyId   String
+  code        String
+  name        String
+  description String?
+  imageUrl    String?
+  faceTypes   String[]
+  active      Boolean   @default(true)
+  products    Product[]
+  company     Company   @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, code])
+}
+
+model Color {
+  id        String    @id @default(cuid())
+  companyId String
+  code      String
+  name      String
+  hex       String?
+  active    Boolean   @default(true)
+  company   Company   @relation(fields: [companyId], references: [id])
+  products  Product[]
+
+  @@unique([companyId, code])
+}
+
+model Product {
+  id                String             @id @default(cuid())
+  companyId         String
+  type              ProductType
+  sku               String
+  barcode           String?
+  manufacturerCode  String?
+  name              String
+  description       String?
+  categoryId        String?
+  brandId           String?
+  shapeId           String?
+  colorId           String?
+  costPrice         Decimal            @default(0) @db.Decimal(12, 2)
+  salePrice         Decimal            @db.Decimal(12, 2)
+  promoPrice        Decimal?           @db.Decimal(12, 2)
+  marginPercent     Decimal?           @db.Decimal(5, 2)
+  stockControlled   Boolean            @default(true)
+  stockQty          Int                @default(0)
+  stockMin          Int                @default(0)
+  stockMax          Int?
+  reorderPoint      Int?
+  abcClass          String?
+  turnoverDays      Int?
+  ncm               String?
+  cest              String?
+  mainImage         String?
+  images            String[]
+  active            Boolean            @default(true)
+  featured          Boolean            @default(false)
+  launch            Boolean            @default(false)
+  createdAt         DateTime           @default(now())
+  updatedAt         DateTime           @updatedAt
+  supplierId        String?
+  accessoryDetail   AccessoryDetail?
+  contactLensDetail ContactLensDetail?
+  frameDetail       FrameDetail?
+  lensServiceDetail LensServiceDetail?
+  brand             Brand?             @relation(fields: [brandId], references: [id])
+  category          Category?          @relation(fields: [categoryId], references: [id])
+  color             Color?             @relation(fields: [colorId], references: [id])
+  company           Company            @relation(fields: [companyId], references: [id])
+  shape             Shape?             @relation(fields: [shapeId], references: [id])
+  supplier          Supplier?          @relation(fields: [supplierId], references: [id])
+  barcodes          ProductBarcode[]
+  quoteItems        QuoteItem[]
+  saleItems         SaleItem[]
+  serviceDetail     ServiceDetail?
+  serviceOrderItems ServiceOrderItem[]
+  stockAdjustments  StockAdjustment[]
+  stockMovements    StockMovement[]
+  stockReservations StockReservation[]
+
+  @@unique([companyId, sku])
+  @@index([companyId, name])
+  @@index([companyId, barcode])
+  @@index([companyId, type])
+  @@index([companyId, abcClass])
+}
+
+model FrameDetail {
+  productId   String  @id
+  lensWidthMm Int?
+  bridgeMm    Int?
+  templeMm    Int?
+  sizeText    String?
+  material    String?
+  gender      String?
+  collection  String?
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model ContactLensDetail {
+  productId  String  @id
+  brandModel String?
+  type       String?
+  material   String?
+  baseCurve  String?
+  diameter   String?
+  packQty    Int?
+  sphRange   String?
+  cylRange   String?
+  axisRange  String?
+  addRange   String?
+  color      String?
+  product    Product @relation(fields: [productId], references: [id])
+}
+
+model AccessoryDetail {
+  productId String  @id
+  subtype   String?
+  product   Product @relation(fields: [productId], references: [id])
+}
+
+model ServiceDetail {
+  productId   String  @id
+  serviceType String?
+  durationMin Int?
+  product     Product @relation(fields: [productId], references: [id])
+}
+
+model LensServiceDetail {
+  productId       String   @id
+  labId           String?
+  lensType        String?
+  material        String?
+  refractionIndex Decimal? @db.Decimal(5, 2)
+  treatments      Json?
+  leadTimeDays    Int?
+  lab             Lab?     @relation(fields: [labId], references: [id])
+  product         Product  @relation(fields: [productId], references: [id])
+}
+
+model Prescription {
+  id               String              @id @default(cuid())
+  companyId        String
+  customerId       String
+  doctorId         String?
+  issuedAt         DateTime
+  expiresAt        DateTime
+  prescriptionType String?
+  notes            String?
+  imageUrl         String?
+  createdAt        DateTime            @default(now())
+  updatedAt        DateTime            @updatedAt
+  company          Company             @relation(fields: [companyId], references: [id])
+  customer         Customer            @relation(fields: [customerId], references: [id])
+  doctor           Doctor?             @relation(fields: [doctorId], references: [id])
+  values           PrescriptionValues?
+  serviceOrders    ServiceOrder[]
+
+  @@index([companyId, customerId])
+  @@index([customerId, expiresAt])
+}
+
+model PrescriptionValues {
+  id               String       @id @default(cuid())
+  prescriptionId   String       @unique
+  odSph            Decimal?     @db.Decimal(6, 2)
+  odCyl            Decimal?     @db.Decimal(6, 2)
+  odAxis           Int?
+  odAdd            Decimal?     @db.Decimal(6, 2)
+  odPrism          Decimal?     @db.Decimal(6, 2)
+  odBase           String?
+  oeSph            Decimal?     @db.Decimal(6, 2)
+  oeCyl            Decimal?     @db.Decimal(6, 2)
+  oeAxis           Int?
+  oeAdd            Decimal?     @db.Decimal(6, 2)
+  oePrism          Decimal?     @db.Decimal(6, 2)
+  oeBase           String?
+  pdFar            Decimal?     @db.Decimal(5, 2)
+  pdNear           Decimal?     @db.Decimal(5, 2)
+  fittingHeightOd  Decimal?     @db.Decimal(5, 2)
+  fittingHeightOe  Decimal?     @db.Decimal(5, 2)
+  pantoscopicAngle Decimal?     @db.Decimal(5, 2)
+  vertexDistance   Decimal?     @db.Decimal(5, 2)
+  frameCurvature   Decimal?     @db.Decimal(5, 2)
+  prescription     Prescription @relation(fields: [prescriptionId], references: [id])
+}
+
+model ServiceOrder {
+  id               String                @id @default(cuid())
+  companyId        String
+  branchId         String
+  customerId       String
+  prescriptionId   String?
+  createdByUserId  String
+  status           ServiceOrderStatus    @default(DRAFT)
+  priority         ServiceOrderPriority  @default(NORMAL)
+  promisedDate      DateTime?
+  deliveredDate     DateTime?
+  notes             String?
+  prescriptionData  Json?
+  createdAt         DateTime             @default(now())
+  updatedAt        DateTime              @updatedAt
+  laboratoryId     String?
+  qualityChecklist QualityChecklist?
+  sale             Sale?
+  branch           Branch                @relation(fields: [branchId], references: [id])
+  company          Company               @relation(fields: [companyId], references: [id])
+  createdByUser    User                  @relation("SOCreator", fields: [createdByUserId], references: [id])
+  customer         Customer              @relation(fields: [customerId], references: [id])
+  laboratory       Lab?                  @relation(fields: [laboratoryId], references: [id])
+  prescription     Prescription?         @relation(fields: [prescriptionId], references: [id])
+  history          ServiceOrderHistory[]
+  items            ServiceOrderItem[]
+  reservations     StockReservation[]
+  warranties       Warranty[]
+
+  @@index([branchId, status, promisedDate])
+  @@index([companyId, customerId])
+  @@index([status, promisedDate])
+}
+
+model ServiceOrderItem {
+  id                   String       @id @default(cuid())
+  serviceOrderId       String
+  productId            String?
+  labId                String?
+  description          String?
+  qty                  Int          @default(1)
+  unitPrice            Decimal      @db.Decimal(12, 2)
+  discount             Decimal      @default(0) @db.Decimal(12, 2)
+  lineTotal            Decimal      @db.Decimal(12, 2)
+  costEstimated        Decimal?     @db.Decimal(12, 2)
+  measurementsSnapshot Json?
+  createdAt            DateTime     @default(now())
+  lab                  Lab?         @relation(fields: [labId], references: [id])
+  product              Product?     @relation(fields: [productId], references: [id])
+  serviceOrder         ServiceOrder @relation(fields: [serviceOrderId], references: [id])
+  warranties           Warranty[]
+}
+
+model ServiceOrderHistory {
+  id              String              @id @default(cuid())
+  serviceOrderId  String
+  fromStatus      ServiceOrderStatus?
+  toStatus        ServiceOrderStatus
+  note            String?
+  changedByUserId String?
+  createdAt       DateTime            @default(now())
+  changedByUser   User?               @relation("SOHistoryChanger", fields: [changedByUserId], references: [id])
+  serviceOrder    ServiceOrder        @relation(fields: [serviceOrderId], references: [id])
+
+  @@index([serviceOrderId, createdAt])
+}
+
+model QualityChecklist {
+  id                String       @id @default(cuid())
+  serviceOrderId    String       @unique
+  lensGradeOk       Boolean      @default(false)
+  lensCenteringOk   Boolean      @default(false)
+  lensHeightOk      Boolean      @default(false)
+  treatmentsOk      Boolean      @default(false)
+  frameAdjustmentOk Boolean      @default(false)
+  cleaningOk        Boolean      @default(false)
+  notes             String?
+  checkedByUserId   String?
+  checkedAt         DateTime?
+  customerApproved  Boolean      @default(false)
+  checkedByUser     User?        @relation("QualityChecker", fields: [checkedByUserId], references: [id])
+  serviceOrder      ServiceOrder @relation(fields: [serviceOrderId], references: [id])
+}
+
+model StockReservation {
+  id             String                 @id @default(cuid())
+  companyId      String
+  branchId       String
+  productId      String
+  serviceOrderId String?
+  saleId         String?
+  qty            Int
+  status         StockReservationStatus @default(RESERVED)
+  createdAt      DateTime               @default(now())
+  releasedAt     DateTime?
+  consumedAt     DateTime?
+  branch         Branch                 @relation(fields: [branchId], references: [id])
+  company        Company                @relation(fields: [companyId], references: [id])
+  product        Product                @relation(fields: [productId], references: [id])
+  sale           Sale?                  @relation(fields: [saleId], references: [id])
+  serviceOrder   ServiceOrder?          @relation(fields: [serviceOrderId], references: [id])
+
+  @@index([branchId, productId, status])
+  @@index([serviceOrderId])
+  @@index([saleId])
+}
+
+model StockMovement {
+  id              String            @id @default(cuid())
+  companyId       String
+  productId       String
+  type            StockMovementType
+  quantity        Int
+  supplierId      String?
+  invoiceNumber   String?
+  sourceBranchId  String?
+  targetBranchId  String?
+  reason          String?
+  notes           String?
+  createdByUserId String?
+  createdAt       DateTime          @default(now())
+  company         Company           @relation(fields: [companyId], references: [id])
+  createdBy       User?             @relation(fields: [createdByUserId], references: [id])
+  product         Product           @relation(fields: [productId], references: [id])
+  sourceBranch    Branch?           @relation("StockMovementSource", fields: [sourceBranchId], references: [id])
+  supplier        Supplier?         @relation(fields: [supplierId], references: [id])
+  targetBranch    Branch?           @relation("StockMovementTarget", fields: [targetBranchId], references: [id])
+
+  @@index([companyId, productId, createdAt])
+  @@index([companyId, type, createdAt])
+  @@index([productId, createdAt])
+  @@index([supplierId, createdAt])
+}
+
+model Quote {
+  id                String      @id @default(cuid())
+  companyId         String
+  branchId          String
+  customerId        String?
+  sellerUserId      String
+  status            QuoteStatus @default(PENDING)
+  validUntil        DateTime?
+  notes             String?
+  subtotal          Decimal     @default(0) @db.Decimal(12, 2)
+  discountTotal     Decimal     @default(0) @db.Decimal(12, 2)
+  total             Decimal     @default(0) @db.Decimal(12, 2)
+  lastFollowUpAt    DateTime?
+  followUpCount     Int         @default(0)
+  conversionReason  String?
+  convertedToSaleId String?     @unique
+  convertedToOsId   String?
+  createdAt         DateTime    @default(now())
+  updatedAt         DateTime    @updatedAt
+  convertedAt       DateTime?
+  convertedByUserId String?
+  customerEmail     String?
+  customerName      String?
+  customerPhone     String?
+  discountPercent   Decimal     @default(0) @db.Decimal(5, 2)
+  internalNotes     String?
+  lostReason        String?
+  paymentConditions String?
+  contactCount      Int         @default(0)
+  followUpDate      DateTime?
+  followUpNotes     String?
+  lastContactAt     DateTime?
+  sentAt            DateTime?
+  sentVia           String?
+  branch            Branch      @relation(fields: [branchId], references: [id])
+  company           Company     @relation(fields: [companyId], references: [id])
+  convertedBy       User?       @relation("QuoteConverter", fields: [convertedByUserId], references: [id])
+  customer          Customer?   @relation(fields: [customerId], references: [id])
+  sellerUser        User        @relation("QuoteSeller", fields: [sellerUserId], references: [id])
+  items             QuoteItem[]
+  convertedToSale   Sale?       @relation("QuoteToSale")
+
+  @@index([companyId, status])
+  @@index([companyId, createdAt])
+  @@index([customerId])
+  @@index([validUntil])
+  @@index([sellerUserId])
+  @@index([branchId, status, createdAt])
+  @@index([status, validUntil])
+}
+
+model QuoteItem {
+  id               String        @id @default(cuid())
+  quoteId          String
+  productId        String?
+  description      String
+  qty              Int           @default(1)
+  unitPrice        Decimal       @db.Decimal(12, 2)
+  discount         Decimal       @default(0) @db.Decimal(12, 2)
+  createdAt        DateTime      @default(now())
+  itemType         QuoteItemType @default(PRODUCT)
+  notes            String?
+  prescriptionData Json?
+  total            Decimal       @db.Decimal(12, 2)
+  product          Product?      @relation(fields: [productId], references: [id])
+  quote            Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
+
+  @@index([quoteId])
+}
+
+model Sale {
+  id                   String              @id @default(cuid())
+  companyId            String
+  branchId             String
+  customerId           String?
+  serviceOrderId       String?             @unique
+  sellerUserId         String
+  status               SaleStatus          @default(OPEN)
+  subtotal             Decimal             @default(0) @db.Decimal(12, 2)
+  discountTotal        Decimal             @default(0) @db.Decimal(12, 2)
+  total                Decimal             @default(0) @db.Decimal(12, 2)
+  agreementId          String?
+  agreementDiscount    Decimal?            @db.Decimal(12, 2)
+  authorizationCode    String?
+  fiscalStatus         FiscalStatus        @default(NOT_REQUESTED)
+  fiscalModel          String?
+  fiscalKey            String?
+  fiscalXmlUrl         String?
+  fiscalPdfUrl         String?
+  completedAt          DateTime?
+  createdAt            DateTime            @default(now())
+  updatedAt            DateTime            @updatedAt
+  convertedFromQuoteId String?             @unique
+  cashbackUsed         Decimal             @default(0) @db.Decimal(10, 2)
+  accountsReceivable   AccountReceivable[]
+  cashbackMovements    CashbackMovement[]
+  commissions          Commission[]
+  agreement            Agreement?          @relation(fields: [agreementId], references: [id])
+  branch               Branch              @relation(fields: [branchId], references: [id])
+  company              Company             @relation(fields: [companyId], references: [id])
+  convertedFromQuote   Quote?              @relation("QuoteToSale", fields: [convertedFromQuoteId], references: [id])
+  customer             Customer?           @relation(fields: [customerId], references: [id])
+  sellerUser           User                @relation("SaleSeller", fields: [sellerUserId], references: [id])
+  serviceOrder         ServiceOrder?       @relation(fields: [serviceOrderId], references: [id])
+  items                SaleItem[]
+  payments             SalePayment[]
+  reservations         StockReservation[]
+  warranties           Warranty[]
+
+  @@index([companyId, branchId, createdAt])
+  @@index([customerId, createdAt])
+  @@index([sellerUserId, createdAt])
+  @@index([agreementId])
+}
+
+model SaleItem {
+  id               String     @id @default(cuid())
+  saleId           String
+  productId        String?
+  description      String?
+  qty              Int        @default(1)
+  unitPrice        Decimal    @db.Decimal(12, 2)
+  discount         Decimal    @default(0) @db.Decimal(12, 2)
+  lineTotal        Decimal    @db.Decimal(12, 2)
+  costPrice        Decimal    @default(0) @db.Decimal(12, 2)
+  stockControlled  Boolean    @default(true)
+  stockQtyConsumed Int        @default(0)
+  createdAt        DateTime   @default(now())
+  product          Product?   @relation(fields: [productId], references: [id])
+  sale             Sale       @relation(fields: [saleId], references: [id])
+  warranties       Warranty[]
+
+  @@index([saleId])
+  @@index([productId])
+}
+
+model SalePayment {
+  id               String         @id @default(cuid())
+  saleId           String
+  method           PaymentMethod
+  status           PaymentStatus  @default(PENDING)
+  amount           Decimal        @db.Decimal(12, 2)
+  installments     Int?
+  cardBrand        String?
+  reference        String?
+  details          Json?
+  receivedAt       DateTime?
+  receivedByUserId String?
+  createdAt        DateTime       @default(now())
+  cashMovements    CashMovement[]
+  receivedByUser   User?          @relation("PaymentReceiver", fields: [receivedByUserId], references: [id])
+  sale             Sale           @relation(fields: [saleId], references: [id])
+
+  @@index([saleId, status])
+  @@index([method, status])
+}
+
+model CommissionRule {
+  id               String   @id @default(cuid())
+  companyId        String
+  name             String
+  userId           String?
+  categoryId       String?
+  brandId          String?
+  percentage       Decimal  @db.Decimal(5, 2)
+  minMarginPercent Decimal? @db.Decimal(5, 2)
+  priority         Int      @default(0)
+  active           Boolean  @default(true)
+  company          Company  @relation(fields: [companyId], references: [id])
+
+  @@index([companyId, active])
+}
+
+model Commission {
+  id               String           @id @default(cuid())
+  companyId        String
+  saleId           String
+  userId           String
+  baseAmount       Decimal          @db.Decimal(12, 2)
+  percentage       Decimal          @db.Decimal(5, 2)
+  commissionAmount Decimal          @db.Decimal(12, 2)
+  status           CommissionStatus @default(PENDING)
+  periodMonth      Int
+  periodYear       Int
+  approvedAt       DateTime?
+  approvedByUserId String?
+  paidAt           DateTime?
+  paidByUserId     String?
+  paymentMethod    String?
+  paymentReference String?
+  notes            String?
+  createdAt        DateTime         @default(now())
+  company          Company          @relation(fields: [companyId], references: [id])
+  sale             Sale             @relation(fields: [saleId], references: [id])
+  user             User             @relation(fields: [userId], references: [id])
+
+  @@index([companyId, periodYear, periodMonth])
+  @@index([userId, status])
+  @@index([saleId])
+}
+
+model CashShift {
+  id                      String          @id @default(cuid())
+  companyId               String
+  branchId                String
+  status                  CashShiftStatus @default(OPEN)
+  openedByUserId          String
+  openedAt                DateTime        @default(now())
+  openingFloatAmount      Decimal         @default(0) @db.Decimal(12, 2)
+  closedByUserId          String?
+  closedAt                DateTime?
+  closingDeclaredCash     Decimal?        @db.Decimal(12, 2)
+  closingExpectedCash     Decimal?        @db.Decimal(12, 2)
+  differenceCash          Decimal?        @db.Decimal(12, 2)
+  differenceJustification String?
+  notes                   String?
+  movements               CashMovement[]
+  branch                  Branch          @relation(fields: [branchId], references: [id])
+  closedByUser            User?           @relation("ShiftCloser", fields: [closedByUserId], references: [id])
+  company                 Company         @relation(fields: [companyId], references: [id])
+  openedByUser            User            @relation("ShiftOpener", fields: [openedByUserId], references: [id])
+
+  @@index([branchId, status])
+  @@index([companyId, openedAt])
+}
+
+model CashMovement {
+  id              String           @id @default(cuid())
+  cashShiftId     String
+  branchId        String
+  type            CashMovementType
+  direction       CashDirection
+  method          PaymentMethod
+  amount          Decimal          @db.Decimal(12, 2)
+  originType      String
+  originId        String
+  salePaymentId   String?
+  createdByUserId String?
+  note            String?
+  createdAt       DateTime         @default(now())
+  migrated        Boolean          @default(false)
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  cashShift       CashShift        @relation(fields: [cashShiftId], references: [id])
+  createdByUser   User?            @relation("CashMovementCreator", fields: [createdByUserId], references: [id])
+  salePayment     SalePayment?     @relation(fields: [salePaymentId], references: [id])
+
+  @@index([cashShiftId, createdAt])
+  @@index([originType, originId])
+  @@index([method, type])
+}
+
+model Warranty {
+  id                 String            @id @default(cuid())
+  companyId          String
+  saleId             String?
+  saleItemId         String?
+  serviceOrderId     String?
+  serviceOrderItemId String?
+  warrantyType       WarrantyType
+  status             WarrantyStatus    @default(ACTIVE)
+  startAt            DateTime
+  expiresAt          DateTime
+  termsDescription   String?
+  notes              String?
+  company            Company           @relation(fields: [companyId], references: [id])
+  sale               Sale?             @relation(fields: [saleId], references: [id])
+  saleItem           SaleItem?         @relation(fields: [saleItemId], references: [id])
+  serviceOrder       ServiceOrder?     @relation(fields: [serviceOrderId], references: [id])
+  serviceOrderItem   ServiceOrderItem? @relation(fields: [serviceOrderItemId], references: [id])
+  claims             WarrantyClaim[]
+
+  @@index([companyId, status, expiresAt])
+  @@index([saleId])
+  @@index([serviceOrderId])
+}
+
+model WarrantyClaim {
+  id                 String    @id @default(cuid())
+  warrantyId         String
+  openedAt           DateTime  @default(now())
+  reason             String
+  problemDescription String?
+  resolution         String?
+  resolutionType     String?
+  filesUrl           String[]
+  analyzedByUserId   String?
+  analyzedAt         DateTime?
+  closedAt           DateTime?
+  closedByUserId     String?
+  notes              String?
+  warranty           Warranty  @relation(fields: [warrantyId], references: [id])
+
+  @@index([warrantyId])
+}
+
+model Appointment {
+  id                 String            @id @default(cuid())
+  companyId          String
+  branchId           String
+  customerId         String?
+  contactName        String?
+  contactPhone       String?
+  type               AppointmentType
+  status             AppointmentStatus @default(SCHEDULED)
+  scheduledAt        DateTime
+  scheduledEndAt     DateTime?
+  durationMinutes    Int               @default(30)
+  serviceOrderId     String?
+  assignedUserId     String?
+  confirmed          Boolean           @default(false)
+  confirmedAt        DateTime?
+  confirmationMethod String?
+  reminderSent       Boolean           @default(false)
+  reminderSentAt     DateTime?
+  checkinAt          DateTime?
+  checkoutAt         DateTime?
+  attendedByUserId   String?
+  notes              String?
+  internalNotes      String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
+  branch             Branch            @relation(fields: [branchId], references: [id])
+  company            Company           @relation(fields: [companyId], references: [id])
+  customer           Customer?         @relation(fields: [customerId], references: [id])
+
+  @@index([branchId, scheduledAt])
+  @@index([customerId, scheduledAt])
+  @@index([status, scheduledAt])
+}
+
+model Agreement {
+  id                String                 @id @default(cuid())
+  companyId         String
+  code              String
+  name              String
+  type              AgreementType
+  cnpj              String?
+  phone             String?
+  email             String?
+  contactPerson     String?
+  discountPercent   Decimal                @default(0) @db.Decimal(5, 2)
+  paymentTermDays   Int                    @default(30)
+  billingDay        Int?
+  minPurchase       Decimal?               @db.Decimal(12, 2)
+  maxPurchase       Decimal?               @db.Decimal(12, 2)
+  monthlyLimit      Decimal?               @db.Decimal(12, 2)
+  contractPath      String?
+  contractStartDate DateTime?
+  contractEndDate   DateTime?
+  notes             String?
+  active            Boolean                @default(true)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  company           Company                @relation(fields: [companyId], references: [id])
+  beneficiaries     AgreementBeneficiary[]
+  sales             Sale[]
+
+  @@unique([companyId, code])
+  @@index([companyId, active])
+}
+
+model AgreementBeneficiary {
+  id               String    @id @default(cuid())
+  agreementId      String
+  customerId       String
+  enrollmentNumber String?
+  isHolder         Boolean   @default(true)
+  holderId         String?
+  enrolledAt       DateTime  @default(now())
+  validUntil       DateTime?
+  active           Boolean   @default(true)
+  agreement        Agreement @relation(fields: [agreementId], references: [id])
+  customer         Customer  @relation(fields: [customerId], references: [id])
+
+  @@unique([agreementId, customerId])
+  @@index([customerId])
+}
+
+model LoyaltyProgram {
+  id                 String        @id @default(cuid())
+  companyId          String        @unique
+  name               String
+  description        String?
+  pointsPerReal      Decimal       @default(1) @db.Decimal(5, 2)
+  reaisPerPoint      Decimal       @default(10) @db.Decimal(5, 2)
+  pointsExpire       Boolean       @default(true)
+  expirationDays     Int           @default(365)
+  minRedemption      Int           @default(100)
+  birthdayMultiplier Decimal       @default(2) @db.Decimal(3, 2)
+  active             Boolean       @default(true)
+  createdAt          DateTime      @default(now())
+  updatedAt          DateTime      @updatedAt
+  company            Company       @relation(fields: [companyId], references: [id])
+  tiers              LoyaltyTier[]
+}
+
+model LoyaltyTier {
+  id               String         @id @default(cuid())
+  programId        String
+  name             String
+  minPoints        Int
+  discountPercent  Decimal        @default(0) @db.Decimal(5, 2)
+  pointsMultiplier Decimal        @default(1) @db.Decimal(3, 2)
+  priorityService  Boolean        @default(false)
+  exclusiveGifts   Boolean        @default(false)
+  badgeColor       String?
+  icon             String?
+  sortOrder        Int
+  active           Boolean        @default(true)
+  program          LoyaltyProgram @relation(fields: [programId], references: [id])
+}
+
+model LoyaltyPoints {
+  id          String    @id @default(cuid())
+  companyId   String
+  customerId  String
+  points      Int
+  type        String
+  saleId      String?
+  description String?
+  expiresAt   DateTime?
+  createdAt   DateTime  @default(now())
+  company     Company   @relation(fields: [companyId], references: [id])
+  customer    Customer  @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([companyId, expiresAt])
+}
+
+model DREReport {
+  id                     String   @id @default(cuid())
+  companyId              String
+  branchId               String?
+  periodMonth            Int
+  periodYear             Int
+  generatedAt            DateTime @default(now())
+  generatedByUserId      String?
+  grossRevenue           Decimal  @default(0) @db.Decimal(14, 2)
+  returns                Decimal  @default(0) @db.Decimal(14, 2)
+  discounts              Decimal  @default(0) @db.Decimal(14, 2)
+  netRevenue             Decimal  @default(0) @db.Decimal(14, 2)
+  costOfGoodsSold        Decimal  @default(0) @db.Decimal(14, 2)
+  labCosts               Decimal  @default(0) @db.Decimal(14, 2)
+  grossProfit            Decimal  @default(0) @db.Decimal(14, 2)
+  personnelExpenses      Decimal  @default(0) @db.Decimal(14, 2)
+  rentExpenses           Decimal  @default(0) @db.Decimal(14, 2)
+  adminExpenses          Decimal  @default(0) @db.Decimal(14, 2)
+  marketingExpenses      Decimal  @default(0) @db.Decimal(14, 2)
+  financialExpenses      Decimal  @default(0) @db.Decimal(14, 2)
+  commissionExpenses     Decimal  @default(0) @db.Decimal(14, 2)
+  otherExpenses          Decimal  @default(0) @db.Decimal(14, 2)
+  totalExpenses          Decimal  @default(0) @db.Decimal(14, 2)
+  operatingProfit        Decimal  @default(0) @db.Decimal(14, 2)
+  taxes                  Decimal  @default(0) @db.Decimal(14, 2)
+  netProfit              Decimal  @default(0) @db.Decimal(14, 2)
+  grossMarginPercent     Decimal? @db.Decimal(5, 2)
+  operatingMarginPercent Decimal? @db.Decimal(5, 2)
+  netMarginPercent       Decimal? @db.Decimal(5, 2)
+  branch                 Branch?  @relation(fields: [branchId], references: [id])
+  company                Company  @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, branchId, periodYear, periodMonth])
+  @@index([companyId, periodYear, periodMonth])
+}
+
+model AccountPayable {
+  id              String               @id @default(cuid())
+  companyId       String
+  branchId        String?
+  supplierId      String?
+  description     String
+  category        AccountCategory
+  amount          Decimal              @db.Decimal(12, 2)
+  dueDate         DateTime
+  paidDate        DateTime?
+  paidAmount      Decimal?             @db.Decimal(12, 2)
+  status          AccountPayableStatus @default(PENDING)
+  invoiceNumber   String?
+  notes           String?
+  createdByUserId String?
+  paidByUserId    String?
+  createdAt       DateTime             @default(now())
+  updatedAt       DateTime             @updatedAt
+  branch          Branch?              @relation(fields: [branchId], references: [id])
+  company         Company              @relation(fields: [companyId], references: [id])
+  createdBy       User?                @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
+  paidBy          User?                @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
+  supplier        Supplier?            @relation(fields: [supplierId], references: [id])
+
+  @@index([companyId, status, dueDate])
+  @@index([supplierId, status])
+  @@index([dueDate, status])
+}
+
+model AccountReceivable {
+  id                String                  @id @default(cuid())
+  companyId         String
+  branchId          String?
+  customerId        String?
+  saleId            String?
+  description       String
+  installmentNumber Int                     @default(1)
+  totalInstallments Int                     @default(1)
+  amount            Decimal                 @db.Decimal(12, 2)
+  dueDate           DateTime
+  receivedDate      DateTime?
+  receivedAmount    Decimal?                @db.Decimal(12, 2)
+  status            AccountReceivableStatus @default(PENDING)
+  notes             String?
+  createdByUserId   String?
+  receivedByUserId  String?
+  createdAt         DateTime                @default(now())
+  updatedAt         DateTime                @updatedAt
+  branch            Branch?                 @relation(fields: [branchId], references: [id])
+  company           Company                 @relation(fields: [companyId], references: [id])
+  createdBy         User?                   @relation("AccountReceivableCreator", fields: [createdByUserId], references: [id])
+  customer          Customer?               @relation(fields: [customerId], references: [id])
+  receivedBy        User?                   @relation("AccountReceivableReceiver", fields: [receivedByUserId], references: [id])
+  sale              Sale?                   @relation(fields: [saleId], references: [id])
+
+  @@index([companyId, status, dueDate])
+  @@index([customerId, status])
+  @@index([saleId])
+  @@index([dueDate, status])
+}
+
+model StockAdjustment {
+  id               String                @id @default(cuid())
+  companyId        String
+  productId        String
+  type             StockAdjustmentType
+  status           StockAdjustmentStatus @default(PENDING)
+  quantityBefore   Int
+  quantityChange   Int
+  quantityAfter    Int
+  unitCost         Decimal               @db.Decimal(12, 2)
+  totalValue       Decimal               @db.Decimal(12, 2)
+  reason           String
+  attachments      String[]
+  createdByUserId  String
+  approvedByUserId String?
+  approvedAt       DateTime?
+  rejectionReason  String?
+  createdAt        DateTime              @default(now())
+  updatedAt        DateTime              @updatedAt
+  approvedBy       User?                 @relation("AdjustmentApprover", fields: [approvedByUserId], references: [id])
+  company          Company               @relation(fields: [companyId], references: [id])
+  createdBy        User                  @relation("AdjustmentCreator", fields: [createdByUserId], references: [id])
+  product          Product               @relation(fields: [productId], references: [id])
+
+  @@index([companyId, status, createdAt])
+  @@index([productId, createdAt])
+  @@index([createdByUserId])
+  @@index([status, totalValue])
+}
+
+model SystemRule {
+  id          String       @id @default(cuid())
+  companyId   String
+  category    RuleCategory
+  key         String
+  value       Json
+  description String?
+  active      Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  company     Company      @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, key])
+  @@index([companyId, category])
+}
+
+model ProductBarcode {
+  id              String      @id @default(cuid())
+  productId       String
+  type            BarcodeType
+  code            String
+  isPrimary       Boolean     @default(false)
+  createdByUserId String?
+  createdAt       DateTime    @default(now())
+  createdBy       User?       @relation("BarcodeCreator", fields: [createdByUserId], references: [id])
+  product         Product     @relation(fields: [productId], references: [id], onDelete: Cascade)
+
+  @@unique([productId, code])
+  @@index([code])
+  @@index([productId, isPrimary])
+}
+
+model Permission {
+  id           String           @id @default(cuid())
+  code         String           @unique
+  name         String
+  description  String?
+  module       String
+  category     String
+  sortOrder    Int              @default(0)
+  isActive     Boolean          @default(true)
+  createdAt    DateTime         @default(now())
+  updatedAt    DateTime         @updatedAt
+  roleDefaults RolePermission[]
+  userCustoms  UserPermission[]
+
+  @@index([module])
+  @@index([category])
+  @@index([isActive])
+}
+
+model RolePermission {
+  id           String     @id @default(cuid())
+  role         String
+  permissionId String
+  granted      Boolean    @default(true)
+  createdAt    DateTime   @default(now())
+  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+
+  @@unique([role, permissionId])
+  @@index([role])
+}
+
+model UserPermission {
+  id              String     @id @default(cuid())
+  userId          String
+  permissionId    String
+  granted         Boolean
+  grantedByUserId String?
+  grantedAt       DateTime   @default(now())
+  createdAt       DateTime   @default(now())
+  updatedAt       DateTime   @updatedAt
+  permission      Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
+  user            User       @relation("UserCustomPermissions", fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, permissionId])
+  @@index([userId])
+  @@index([permissionId])
+}
+
+model CompanySettings {
+  id                    String   @id @default(cuid())
+  companyId             String   @unique
+  displayName           String?
+  cnpj                  String?
+  phone                 String?
+  whatsapp              String?
+  email                 String?
+  address               String?
+  city                  String?
+  state                 String?
+  zipCode               String?
+  logoUrl               String?
+  messageThankYou       String?
+  messageQuote          String?
+  messageReminder       String?
+  messageBirthday       String?
+  pdfHeaderText         String?
+  pdfFooterText         String?
+  defaultQuoteValidDays Int      @default(15)
+  defaultPaymentTerms   String?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  primaryColor          String?
+  company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
+
+  @@index([companyId])
+}
+
+model CashbackConfig {
+  id                    String   @id @default(cuid())
+  branchId              String   @unique
+  enabled               Boolean  @default(false)
+  earnPercent           Decimal  @default(3) @db.Decimal(5, 2)
+  minPurchaseToEarn     Decimal  @default(100) @db.Decimal(10, 2)
+  maxCashbackPerSale    Decimal? @db.Decimal(10, 2)
+  expirationDays        Int      @default(90)
+  minPurchaseMultiplier Decimal  @default(3) @db.Decimal(3, 1)
+  maxUsagePercent       Decimal  @default(50) @db.Decimal(5, 2)
+  birthdayMultiplier    Decimal  @default(2) @db.Decimal(3, 1)
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  branch                Branch   @relation(fields: [branchId], references: [id])
+}
+
+model CustomerCashback {
+  id           String             @id @default(cuid())
+  customerId   String
+  branchId     String
+  balance      Decimal            @default(0) @db.Decimal(10, 2)
+  totalEarned  Decimal            @default(0) @db.Decimal(10, 2)
+  totalUsed    Decimal            @default(0) @db.Decimal(10, 2)
+  totalExpired Decimal            @default(0) @db.Decimal(10, 2)
+  createdAt    DateTime           @default(now())
+  updatedAt    DateTime           @updatedAt
+  movements    CashbackMovement[]
+  branch       Branch             @relation(fields: [branchId], references: [id])
+  customer     Customer           @relation(fields: [customerId], references: [id])
+
+  @@unique([customerId, branchId])
+  @@index([customerId])
+  @@index([branchId])
+}
+
+model CashbackMovement {
+  id                 String               @id @default(cuid())
+  customerCashbackId String
+  type               CashbackMovementType
+  amount             Decimal              @db.Decimal(10, 2)
+  saleId             String?
+  expiresAt          DateTime?
+  expired            Boolean              @default(false)
+  description        String?
+  createdAt          DateTime             @default(now())
+  createdByUserId    String?
+  createdByUser      User?                @relation("CashbackMovementCreatedBy", fields: [createdByUserId], references: [id])
+  customerCashback   CustomerCashback     @relation(fields: [customerCashbackId], references: [id])
+  sale               Sale?                @relation(fields: [saleId], references: [id])
+
+  @@index([customerCashbackId])
+  @@index([saleId])
+  @@index([expiresAt])
+}
+
+model ReminderConfig {
+  id                              String   @id @default(cuid())
+  branchId                        String   @unique
+  prescriptionReminderEnabled     Boolean  @default(true)
+  prescriptionReminderDays        Int      @default(30)
+  prescriptionValidityMonths      Int      @default(12)
+  inactiveReminderEnabled         Boolean  @default(true)
+  inactiveAfterDays               Int      @default(180)
+  birthdayReminderEnabled         Boolean  @default(true)
+  birthdayReminderDaysBefore      Int      @default(0)
+  cashbackExpiringReminderEnabled Boolean  @default(true)
+  cashbackExpiringDaysBefore      Int      @default(7)
+  enabledReminderTypes            String[]
+  createdAt                       DateTime @default(now())
+  updatedAt                       DateTime @updatedAt
+  branch                          Branch   @relation(fields: [branchId], references: [id])
+}
+
+model CustomerContact {
+  id               String         @id @default(cuid())
+  customerId       String
+  branchId         String
+  type             ContactType
+  channel          ContactChannel @default(WHATSAPP)
+  status           ContactStatus  @default(PENDING)
+  reminderId       String?
+  message          String?
+  notes            String?
+  executedByUserId String?
+  executedAt       DateTime?
+  createdAt        DateTime       @default(now())
+  branch           Branch         @relation(fields: [branchId], references: [id])
+  customer         Customer       @relation(fields: [customerId], references: [id])
+  executedByUser   User?          @relation("ContactExecutedBy", fields: [executedByUserId], references: [id])
+  reminder         Reminder?      @relation(fields: [reminderId], references: [id])
+
+  @@index([customerId])
+  @@index([branchId])
+  @@index([type])
+  @@index([status])
+  @@index([createdAt])
+}
+
+model Reminder {
+  id                String            @id @default(cuid())
+  branchId          String
+  customerId        String
+  type              ContactType
+  status            ReminderStatus    @default(PENDING)
+  scheduledFor      DateTime
+  metadata          Json?
+  dismissedAt       DateTime?
+  dismissedByUserId String?
+  dismissReason     String?
+  createdAt         DateTime          @default(now())
+  updatedAt         DateTime          @updatedAt
+  contacts          CustomerContact[]
+  branch            Branch            @relation(fields: [branchId], references: [id])
+  customer          Customer          @relation(fields: [customerId], references: [id])
+  dismissedByUser   User?             @relation("ReminderDismissedBy", fields: [dismissedByUserId], references: [id])
+
+  @@index([branchId])
+  @@index([customerId])
+  @@index([type])
+  @@index([status])
+  @@index([scheduledFor])
+}
+
+model SalesGoal {
+  id          String       @id @default(cuid())
+  branchId    String
+  year        Int
+  month       Int
+  branchGoal  Decimal      @db.Decimal(12, 2)
+  status      GoalStatus   @default(ACTIVE)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+  branch      Branch       @relation(fields: [branchId], references: [id])
+  sellerGoals SellerGoal[]
+
+  @@unique([branchId, year, month])
+  @@index([branchId])
+  @@index([year, month])
+}
+
+model SellerGoal {
+  id          String    @id @default(cuid())
+  salesGoalId String
+  userId      String
+  goalAmount  Decimal   @db.Decimal(12, 2)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+  salesGoal   SalesGoal @relation(fields: [salesGoalId], references: [id], onDelete: Cascade)
+  user        User      @relation(fields: [userId], references: [id])
+
+  @@unique([salesGoalId, userId])
+  @@index([userId])
+}
+
+model CommissionConfig {
+  id                    String   @id @default(cuid())
+  branchId              String   @unique
+  baseCommissionPercent Decimal  @default(5) @db.Decimal(5, 2)
+  goalBonusPercent      Decimal  @default(2) @db.Decimal(5, 2)
+  categoryCommissions   Json?
+  createdAt             DateTime @default(now())
+  updatedAt             DateTime @updatedAt
+  branch                Branch   @relation(fields: [branchId], references: [id])
+}
+
+model SellerCommission {
+  id              String           @id @default(cuid())
+  userId          String
+  branchId        String
+  year            Int
+  month           Int
+  totalSales      Decimal          @db.Decimal(12, 2)
+  goalAmount      Decimal?         @db.Decimal(12, 2)
+  goalAchieved    Boolean          @default(false)
+  baseCommission  Decimal          @db.Decimal(10, 2)
+  bonusCommission Decimal          @default(0) @db.Decimal(10, 2)
+  totalCommission Decimal          @db.Decimal(10, 2)
+  status          CommissionStatus @default(PENDING)
+  paidAt          DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+  branch          Branch           @relation(fields: [branchId], references: [id])
+  user            User             @relation("SellerCommissions", fields: [userId], references: [id])
+
+  @@unique([userId, branchId, year, month])
+  @@index([userId])
+  @@index([branchId])
+  @@index([year, month])
+}
 
 enum UserRole {
   ADMIN
@@ -82,18 +1626,18 @@ enum CashDirection {
 }
 
 enum ProductType {
-  FRAME // Armação
-  CONTACT_LENS // Lente de Contato
-  OPHTHALMIC_LENS // Lente Oftálmica
-  SUNGLASSES // Óculos Solar
-  LENS_SERVICE // Serviço de Lente
-  SERVICE // Serviço
-  ACCESSORY // Acessório (mantido para compatibilidade)
-  OPTICAL_ACCESSORY // Acessório Óptico (limpa lentes, lenço mágico, cordinha, etc)
-  LENS_SOLUTION // Solução para Lentes
-  CASE // Estojo
-  CLEANING_KIT // Kit de Limpeza
-  OTHER // Outros
+  FRAME
+  CONTACT_LENS
+  ACCESSORY
+  SUNGLASSES
+  LENS_SERVICE
+  SERVICE
+  OPHTHALMIC_LENS
+  OPTICAL_ACCESSORY
+  LENS_SOLUTION
+  CASE
+  CLEANING_KIT
+  OTHER
 }
 
 enum StockReservationStatus {
@@ -144,20 +1688,20 @@ enum FiscalStatus {
 }
 
 enum QuoteStatus {
-  PENDING   // Aguardando resposta do cliente
-  SENT      // Enviado para o cliente (WhatsApp/Email)
-  APPROVED  // Cliente aprovou, aguardando conversão
-  CONVERTED // Convertido em venda
-  EXPIRED   // Passou da validade
-  CANCELLED // Cancelado manualmente
-  OPEN      // Manter por compatibilidade
-  CANCELED  // Manter por compatibilidade
+  OPEN
+  SENT
+  APPROVED
+  CONVERTED
+  EXPIRED
+  CANCELED
+  PENDING
+  CANCELLED
 }
 
 enum QuoteItemType {
-  PRODUCT // Produto do estoque (armação, lente, acessório)
-  SERVICE // Serviço (montagem, ajuste, consulta)
-  CUSTOM  // Item customizado (lente especial não cadastrada)
+  PRODUCT
+  SERVICE
+  CUSTOM
 }
 
 enum CommissionStatus {
@@ -205,27 +1749,23 @@ enum StockMovementType {
   OTHER
 }
 
-// ==============================
-// NOVOS ENUMS - MÓDULOS AVANÇADOS
-// ==============================
-
 enum CashbackMovementType {
-  CREDIT          // Ganhou cashback
-  DEBIT           // Usou cashback
-  EXPIRED         // Expirou
-  ADJUSTMENT      // Ajuste manual
-  BONUS           // Bônus especial
+  CREDIT
+  DEBIT
+  EXPIRED
+  ADJUSTMENT
+  BONUS
 }
 
 enum ContactType {
-  PRESCRIPTION_REMINDER   // Lembrete de receita vencendo
-  BIRTHDAY_GREETING       // Feliz aniversário
-  INACTIVE_REACTIVATION   // Reativação de cliente inativo
-  CASHBACK_EXPIRING       // Cashback expirando
-  CASHBACK_AVAILABLE      // Lembrete que tem cashback disponível
-  SALE_THANK_YOU          // Agradecimento pós-venda
-  ORDER_READY             // Óculos pronto (futuro)
-  CUSTOM                  // Contato personalizado
+  PRESCRIPTION_REMINDER
+  BIRTHDAY_GREETING
+  INACTIVE_REACTIVATION
+  CASHBACK_EXPIRING
+  CASHBACK_AVAILABLE
+  SALE_THANK_YOU
+  ORDER_READY
+  CUSTOM
 }
 
 enum ContactChannel {
@@ -236,19 +1776,19 @@ enum ContactChannel {
 }
 
 enum ContactStatus {
-  PENDING     // Aguardando envio
-  SENT        // Enviado (clicou no WhatsApp)
-  CONFIRMED   // Confirmado como enviado pelo usuário
-  SKIPPED     // Pulado
-  FAILED      // Falhou
+  PENDING
+  SENT
+  CONFIRMED
+  SKIPPED
+  FAILED
 }
 
 enum ReminderStatus {
-  PENDING     // Aguardando ação
-  IN_PROGRESS // Em andamento (abriu para contatar)
-  COMPLETED   // Concluído (cliente contatado)
-  DISMISSED   // Dispensado (não vai contatar)
-  EXPIRED     // Expirou sem ação
+  PENDING
+  IN_PROGRESS
+  COMPLETED
+  DISMISSED
+  EXPIRED
 }
 
 enum GoalStatus {
@@ -258,1518 +1798,11 @@ enum GoalStatus {
 }
 
 enum LensType {
-  SINGLE_VISION     // Visão simples
-  BIFOCAL           // Bifocal
-  MULTIFOCAL        // Multifocal
-  OCCUPATIONAL      // Ocupacional
+  SINGLE_VISION
+  BIFOCAL
+  MULTIFOCAL
+  OCCUPATIONAL
 }
-
-// ==============================
-// ESTRUTURA ORGANIZACIONAL
-// ==============================
-
-model Company {
-  id        String  @id @default(cuid())
-  name      String
-  tradeName String?
-  cnpj      String? @unique
-
-  address String?
-  city    String?
-  state   String?
-  zipCode String?
-
-  phone   String?
-  email   String?
-  website String?
-
-  logoPath String?
-  settings Json?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  branches           Branch[]
-  users              User[]
-  customers          Customer[]
-  products           Product[]
-  categories         Category[]
-  brands             Brand[]
-  colors             Color[]
-  shapes             Shape[]
-  doctors            Doctor[]
-  labs               Lab[]
-  suppliers          Supplier[]
-  agreements         Agreement[]
-  loyaltyProgram     LoyaltyProgram?
-  commissionRules    CommissionRule[]
-  prescriptions      Prescription[]
-  auditLogs          AuditLog[]
-  serviceOrders      ServiceOrder[]
-  stockReservations  StockReservation[]
-  sales              Sale[]
-  quotes             Quote[]
-  cashShifts         CashShift[]
-  warranties         Warranty[]
-  commissions        Commission[]
-  loyaltyPoints      LoyaltyPoints[]
-  dreReports         DREReport[]
-  appointments       Appointment[]
-  stockMovements     StockMovement[]
-  accountsPayable    AccountPayable[]
-  accountsReceivable AccountReceivable[]
-  stockAdjustments   StockAdjustment[]
-  systemRules        SystemRule[]
-  companySettings    CompanySettings? @relation("CompanySettings")
-  lensTreatments     LensTreatment[]  @relation("CompanyLensTreatments")
-}
-
-model Branch {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name String
-  code String?
-
-  address String?
-  city    String?
-  state   String?
-  zipCode String?
-  phone   String?
-
-  stateRegistration String?
-  nfeSeries         Int?
-  lastNfeNumber     Int?
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  userBranches         UserBranch[]
-  sales                Sale[]
-  quotes               Quote[]
-  shifts               CashShift[]
-  serviceOrders        ServiceOrder[]
-  appointments         Appointment[]
-  stockReservations    StockReservation[]
-  dreReports           DREReport[]
-  auditLogs            AuditLog[]
-  cashMovements        CashMovement[]
-  stockMovementsSource StockMovement[]     @relation("StockMovementSource")
-  stockMovementsTarget StockMovement[]     @relation("StockMovementTarget")
-  accountsPayable      AccountPayable[]
-  accountsReceivable   AccountReceivable[]
-
-  // Novos módulos
-  cashbackConfig       CashbackConfig?
-  reminderConfig       ReminderConfig?
-  commissionConfig     CommissionConfig?
-  salesGoals           SalesGoal[]
-  sellerCommissions    SellerCommission[]
-  customerCashbacks    CustomerCashback[]
-  customerContacts     CustomerContact[]
-  reminders            Reminder[]
-
-  @@unique([companyId, code])
-  @@index([companyId, name])
-}
-
-model User {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name         String
-  email        String   @unique
-  passwordHash String
-  role         UserRole
-  active       Boolean  @default(true)
-
-  defaultCommissionPercent Decimal? @db.Decimal(5, 2)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  branches    UserBranch[]
-  commissions Commission[]
-  logs        AuditLog[]
-
-  // Relações nomeadas (múltiplas refs de User)
-  salesAsSeller              Sale[]                @relation("SaleSeller")
-  quotesAsSeller             Quote[]               @relation("QuoteSeller")
-  quotesConverted            Quote[]               @relation("QuoteConverter")
-  serviceOrdersCreated       ServiceOrder[]        @relation("SOCreator")
-  soHistoryChanges           ServiceOrderHistory[] @relation("SOHistoryChanger")
-  qualityChecks              QualityChecklist[]    @relation("QualityChecker")
-  paymentsReceived           SalePayment[]         @relation("PaymentReceiver")
-  cashMovementsCreated       CashMovement[]        @relation("CashMovementCreator")
-  shiftsOpened               CashShift[]           @relation("ShiftOpener")
-  shiftsClosed               CashShift[]           @relation("ShiftCloser")
-  stockMovements             StockMovement[]
-  accountsPayableCreated     AccountPayable[]      @relation("AccountPayableCreator")
-  accountsPayablePaid        AccountPayable[]      @relation("AccountPayablePayer")
-  accountsReceivableCreated  AccountReceivable[]   @relation("AccountReceivableCreator")
-  accountsReceivableReceived AccountReceivable[]   @relation("AccountReceivableReceiver")
-  stockAdjustmentsCreated    StockAdjustment[]     @relation("AdjustmentCreator")
-  stockAdjustmentsApproved   StockAdjustment[]     @relation("AdjustmentApprover")
-  barcodesCreated            ProductBarcode[]      @relation("BarcodeCreator")
-  customPermissions          UserPermission[]      @relation("UserCustomPermissions")
-
-  // Novos módulos
-  sellerGoals                SellerGoal[]
-  sellerCommissions          SellerCommission[]    @relation("SellerCommissions")
-  contactsExecuted           CustomerContact[]     @relation("ContactExecutedBy")
-  remindersDismissed         Reminder[]            @relation("ReminderDismissedBy")
-  cashbackMovementsCreated   CashbackMovement[]    @relation("CashbackMovementCreatedBy")
-
-  @@index([companyId, role])
-  @@index([companyId, name])
-}
-
-model UserBranch {
-  userId   String
-  branchId String
-  user     User   @relation(fields: [userId], references: [id])
-  branch   Branch @relation(fields: [branchId], references: [id])
-
-  @@id([userId, branchId])
-}
-
-// ==============================
-// AUDITORIA
-// ==============================
-
-model AuditLog {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId String?
-  branch   Branch? @relation(fields: [branchId], references: [id])
-
-  userId String?
-  user   User?   @relation(fields: [userId], references: [id])
-
-  action     String
-  entityType String
-  entityId   String
-  oldData    Json?
-  newData    Json?
-  ip         String?
-
-  createdAt DateTime @default(now())
-
-  @@index([companyId, createdAt])
-  @@index([entityType, entityId])
-  @@index([userId, createdAt])
-  @@index([branchId, createdAt])
-}
-
-// ==============================
-// CLIENTES + DEPENDENTES
-// ==============================
-
-model Customer {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name      String
-  cpf       String?
-  rg        String?
-  phone     String?
-  phone2    String?
-  email     String?
-  birthDate DateTime?
-  gender    String?
-
-  address      String?
-  number       String?
-  complement   String?
-  neighborhood String?
-  city         String?
-  state        String?
-  zipCode      String?
-
-  acceptsMarketing Boolean @default(true)
-  referralSource   String?
-  notes            String?
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  dependents         CustomerDependent[]
-  sales              Sale[]
-  quotes             Quote[]
-  prescriptions      Prescription[]
-  serviceOrders      ServiceOrder[]
-  appointments       Appointment[]
-  loyaltyPoints      LoyaltyPoints[]
-  agreementBenefits  AgreementBeneficiary[]
-  accountsReceivable AccountReceivable[]
-
-  // Novos módulos
-  cashback           CustomerCashback[]
-  contacts           CustomerContact[]
-  reminders          Reminder[]
-
-  @@unique([companyId, cpf])
-  @@index([companyId, name])
-  @@index([companyId, phone])
-  @@index([companyId, email])
-}
-
-model CustomerDependent {
-  id         String   @id @default(cuid())
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  name         String
-  relationship String
-  birthDate    DateTime?
-  cpf          String?
-
-  createdAt DateTime @default(now())
-
-  @@index([customerId])
-}
-
-// ==============================
-// MÉDICOS E LABORATÓRIOS
-// ==============================
-
-model Doctor {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name      String
-  crm       String?
-  uf        String?
-  specialty String?
-
-  isPartner                Boolean  @default(false)
-  partnerCommissionPercent Decimal? @db.Decimal(5, 2)
-
-  phone         String?
-  email         String?
-  clinicName    String?
-  clinicAddress String?
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  prescriptions Prescription[]
-
-  @@unique([companyId, crm, uf])
-  @@index([companyId, name])
-}
-
-model Lab {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name String
-  code String?
-  cnpj String?
-
-  phone         String?
-  email         String?
-  orderEmail    String?
-  website       String?
-  contactPerson String?
-
-  integrationType String?
-  apiUrl          String?
-  apiKey          String?
-  clientCode      String?
-
-  defaultLeadTimeDays Int @default(7)
-  urgentLeadTimeDays  Int @default(3)
-
-  paymentTermDays Int     @default(30)
-  defaultDiscount Decimal @default(0) @db.Decimal(5, 2)
-
-  qualityRating Decimal? @db.Decimal(3, 2)
-  totalOrders   Int      @default(0)
-  totalReworks  Int      @default(0)
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  priceRanges       LabPriceRange[]
-  lensServices      LensServiceDetail[]
-  serviceOrderItems ServiceOrderItem[]
-  serviceOrders     ServiceOrder[]
-
-  @@unique([companyId, code])
-  @@index([companyId, name])
-}
-
-// ==============================
-// TRATAMENTOS DE LENTES
-// ==============================
-
-model LensTreatment {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation("CompanyLensTreatments", fields: [companyId], references: [id])
-
-  name        String // Ex: "Anti-reflexo", "Transitions", "Blue Light"
-  description String? @db.Text
-  price       Decimal @db.Decimal(10, 2) // Preço adicional do tratamento
-
-  // Metadata
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, name])
-  @@index([companyId, active])
-}
-
-model LabPriceRange {
-  id    String @id @default(cuid())
-  labId String
-  lab   Lab    @relation(fields: [labId], references: [id])
-
-  lensType String
-  material String
-
-  sphMin Decimal? @db.Decimal(5, 2)
-  sphMax Decimal? @db.Decimal(5, 2)
-  cylMin Decimal? @db.Decimal(5, 2)
-  cylMax Decimal? @db.Decimal(5, 2)
-
-  labPrice       Decimal  @db.Decimal(12, 2)
-  suggestedPrice Decimal? @db.Decimal(12, 2)
-
-  arPrice           Decimal? @db.Decimal(12, 2)
-  blueLightPrice    Decimal? @db.Decimal(12, 2)
-  photochromicPrice Decimal? @db.Decimal(12, 2)
-
-  leadTimeDays Int?
-  active       Boolean @default(true)
-
-  @@index([labId, lensType, material])
-}
-
-model Supplier {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name      String
-  tradeName String?
-  cnpj      String?
-
-  phone         String?
-  email         String?
-  website       String?
-  contactPerson String?
-
-  address String?
-  city    String?
-  state   String?
-  zipCode String?
-
-  notes  String?
-  active Boolean @default(true)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  products        Product[]
-  stockMovements  StockMovement[]
-  accountsPayable AccountPayable[]
-
-  @@unique([companyId, cnpj])
-  @@index([companyId, name])
-}
-
-// ==============================
-// CATÁLOGO
-// ==============================
-
-model Category {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name     String
-  parentId String?
-  parent   Category?  @relation("CategoryHierarchy", fields: [parentId], references: [id])
-  children Category[] @relation("CategoryHierarchy")
-
-  defaultCommissionPercent Decimal? @db.Decimal(5, 2)
-  minMarginPercent         Decimal? @db.Decimal(5, 2)
-
-  active   Boolean   @default(true)
-  products Product[]
-
-  @@unique([companyId, name])
-}
-
-model Brand {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  code         String
-  name         String
-  manufacturer String?
-
-  minMargin   Decimal? @db.Decimal(5, 2)
-  maxDiscount Decimal? @db.Decimal(5, 2)
-  segment     String?
-  origin      String?
-  logoPath    String?
-  website     String?
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  products Product[]
-
-  @@unique([companyId, code])
-  @@index([companyId, name])
-}
-
-model Shape {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  code        String
-  name        String
-  description String?
-  imageUrl    String?
-  faceTypes   String[]
-  active      Boolean  @default(true)
-
-  products Product[]
-
-  @@unique([companyId, code])
-}
-
-model Color {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  code   String
-  name   String
-  hex    String?
-  active Boolean @default(true)
-
-  products Product[]
-
-  @@unique([companyId, code])
-}
-
-// ==============================
-// PRODUTOS
-// ==============================
-
-model Product {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  type             ProductType
-  sku              String
-  barcode          String?
-  manufacturerCode String?
-
-  name        String
-  description String?
-
-  categoryId String?
-  category   Category? @relation(fields: [categoryId], references: [id])
-  brandId    String?
-  brand      Brand?    @relation(fields: [brandId], references: [id])
-  shapeId    String?
-  shape      Shape?    @relation(fields: [shapeId], references: [id])
-  colorId    String?
-  color      Color?    @relation(fields: [colorId], references: [id])
-  supplierId String?
-  supplier   Supplier? @relation(fields: [supplierId], references: [id])
-
-  costPrice     Decimal  @default(0) @db.Decimal(12, 2)
-  salePrice     Decimal  @db.Decimal(12, 2)
-  promoPrice    Decimal? @db.Decimal(12, 2)
-  marginPercent Decimal? @db.Decimal(5, 2)
-
-  stockControlled Boolean @default(true)
-  stockQty        Int     @default(0)
-  stockMin        Int     @default(0)
-  stockMax        Int?
-  reorderPoint    Int?
-
-  abcClass     String?
-  turnoverDays Int?
-
-  ncm  String?
-  cest String?
-
-  mainImage String?
-  images    String[]
-
-  active   Boolean @default(true)
-  featured Boolean @default(false)
-  launch   Boolean @default(false)
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  frameDetail       FrameDetail?
-  contactLensDetail ContactLensDetail?
-  accessoryDetail   AccessoryDetail?
-  lensServiceDetail LensServiceDetail?
-  serviceDetail     ServiceDetail?
-
-  saleItems         SaleItem[]
-  quoteItems        QuoteItem[]
-  serviceOrderItems ServiceOrderItem[]
-  stockReservations StockReservation[]
-  stockMovements    StockMovement[]
-  stockAdjustments  StockAdjustment[]
-  barcodes          ProductBarcode[]
-
-  @@unique([companyId, sku])
-  @@index([companyId, name])
-  @@index([companyId, barcode])
-  @@index([companyId, type])
-  @@index([companyId, abcClass])
-}
-
-model FrameDetail {
-  productId String  @id
-  product   Product @relation(fields: [productId], references: [id])
-
-  lensWidthMm Int?
-  bridgeMm    Int?
-  templeMm    Int?
-  sizeText    String?
-  material    String?
-  gender      String?
-  collection  String?
-}
-
-model ContactLensDetail {
-  productId String  @id
-  product   Product @relation(fields: [productId], references: [id])
-
-  brandModel String?
-  type       String?
-  material   String?
-  baseCurve  String?
-  diameter   String?
-  packQty    Int?
-  sphRange   String?
-  cylRange   String?
-  axisRange  String?
-  addRange   String?
-  color      String?
-}
-
-model AccessoryDetail {
-  productId String  @id
-  product   Product @relation(fields: [productId], references: [id])
-  subtype   String?
-}
-
-model ServiceDetail {
-  productId   String  @id
-  product     Product @relation(fields: [productId], references: [id])
-  serviceType String?
-  durationMin Int?
-}
-
-model LensServiceDetail {
-  productId String  @id
-  product   Product @relation(fields: [productId], references: [id])
-
-  labId String?
-  lab   Lab?    @relation(fields: [labId], references: [id])
-
-  lensType        String?
-  material        String?
-  refractionIndex Decimal? @db.Decimal(5, 2)
-  treatments      Json?
-  leadTimeDays    Int?
-}
-
-// ==============================
-// RECEITAS
-// ==============================
-
-model Prescription {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-  doctorId   String?
-  doctor     Doctor?  @relation(fields: [doctorId], references: [id])
-
-  issuedAt         DateTime
-  expiresAt        DateTime
-  prescriptionType String?
-  notes            String?
-  imageUrl         String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  values        PrescriptionValues?
-  serviceOrders ServiceOrder[]
-
-  @@index([companyId, customerId])
-  @@index([customerId, expiresAt])
-}
-
-model PrescriptionValues {
-  id             String       @id @default(cuid())
-  prescriptionId String       @unique
-  prescription   Prescription @relation(fields: [prescriptionId], references: [id])
-
-  odSph   Decimal? @db.Decimal(6, 2)
-  odCyl   Decimal? @db.Decimal(6, 2)
-  odAxis  Int?
-  odAdd   Decimal? @db.Decimal(6, 2)
-  odPrism Decimal? @db.Decimal(6, 2)
-  odBase  String?
-
-  oeSph   Decimal? @db.Decimal(6, 2)
-  oeCyl   Decimal? @db.Decimal(6, 2)
-  oeAxis  Int?
-  oeAdd   Decimal? @db.Decimal(6, 2)
-  oePrism Decimal? @db.Decimal(6, 2)
-  oeBase  String?
-
-  pdFar            Decimal? @db.Decimal(5, 2)
-  pdNear           Decimal? @db.Decimal(5, 2)
-  fittingHeightOd  Decimal? @db.Decimal(5, 2)
-  fittingHeightOe  Decimal? @db.Decimal(5, 2)
-  pantoscopicAngle Decimal? @db.Decimal(5, 2)
-  vertexDistance   Decimal? @db.Decimal(5, 2)
-  frameCurvature   Decimal? @db.Decimal(5, 2)
-}
-
-// ==============================
-// ORDEM DE SERVIÇO
-// ==============================
-
-model ServiceOrder {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId       String
-  branch         Branch        @relation(fields: [branchId], references: [id])
-  customerId     String
-  customer       Customer      @relation(fields: [customerId], references: [id])
-  prescriptionId String?
-  prescription   Prescription? @relation(fields: [prescriptionId], references: [id])
-  laboratoryId   String?
-  laboratory     Lab?          @relation(fields: [laboratoryId], references: [id])
-
-  createdByUserId String
-  createdByUser   User   @relation("SOCreator", fields: [createdByUserId], references: [id])
-
-  status        ServiceOrderStatus   @default(DRAFT)
-  priority      ServiceOrderPriority @default(NORMAL)
-  promisedDate  DateTime?
-  deliveredDate DateTime?
-  notes         String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  items            ServiceOrderItem[]
-  history          ServiceOrderHistory[]
-  qualityChecklist QualityChecklist?
-  sale             Sale?
-  reservations     StockReservation[]
-  warranties       Warranty[]
-
-  @@index([branchId, status, promisedDate])
-  @@index([companyId, customerId])
-  @@index([status, promisedDate])
-}
-
-model ServiceOrderItem {
-  id             String       @id @default(cuid())
-  serviceOrderId String
-  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id])
-
-  productId String?
-  product   Product? @relation(fields: [productId], references: [id])
-  labId     String?
-  lab       Lab?     @relation(fields: [labId], references: [id])
-
-  description   String?
-  qty           Int      @default(1)
-  unitPrice     Decimal  @db.Decimal(12, 2)
-  discount      Decimal  @default(0) @db.Decimal(12, 2)
-  lineTotal     Decimal  @db.Decimal(12, 2)
-  costEstimated Decimal? @db.Decimal(12, 2)
-
-  measurementsSnapshot Json?
-  createdAt            DateTime @default(now())
-
-  warranties Warranty[]
-}
-
-model ServiceOrderHistory {
-  id             String       @id @default(cuid())
-  serviceOrderId String
-  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id])
-
-  fromStatus ServiceOrderStatus?
-  toStatus   ServiceOrderStatus
-  note       String?
-
-  changedByUserId String?
-  changedByUser   User?   @relation("SOHistoryChanger", fields: [changedByUserId], references: [id])
-
-  createdAt DateTime @default(now())
-
-  @@index([serviceOrderId, createdAt])
-}
-
-model QualityChecklist {
-  id             String       @id @default(cuid())
-  serviceOrderId String       @unique
-  serviceOrder   ServiceOrder @relation(fields: [serviceOrderId], references: [id])
-
-  lensGradeOk       Boolean @default(false)
-  lensCenteringOk   Boolean @default(false)
-  lensHeightOk      Boolean @default(false)
-  treatmentsOk      Boolean @default(false)
-  frameAdjustmentOk Boolean @default(false)
-  cleaningOk        Boolean @default(false)
-
-  notes String?
-
-  checkedByUserId  String?
-  checkedByUser    User?     @relation("QualityChecker", fields: [checkedByUserId], references: [id])
-  checkedAt        DateTime?
-  customerApproved Boolean   @default(false)
-}
-
-// ==============================
-// RESERVA DE ESTOQUE
-// ==============================
-
-model StockReservation {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId  String
-  branch    Branch  @relation(fields: [branchId], references: [id])
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  serviceOrderId String?
-  serviceOrder   ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
-  saleId         String?
-  sale           Sale?         @relation(fields: [saleId], references: [id])
-
-  qty        Int
-  status     StockReservationStatus @default(RESERVED)
-  createdAt  DateTime               @default(now())
-  releasedAt DateTime?
-  consumedAt DateTime?
-
-  @@index([branchId, productId, status])
-  @@index([serviceOrderId])
-  @@index([saleId])
-}
-
-// ==============================
-// MOVIMENTAÇÃO DE ESTOQUE
-// ==============================
-
-model StockMovement {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  type     StockMovementType
-  quantity Int
-
-  supplierId String?
-  supplier   Supplier? @relation(fields: [supplierId], references: [id])
-
-  invoiceNumber String?
-
-  sourceBranchId String?
-  sourceBranch   Branch? @relation("StockMovementSource", fields: [sourceBranchId], references: [id])
-
-  targetBranchId String?
-  targetBranch   Branch? @relation("StockMovementTarget", fields: [targetBranchId], references: [id])
-
-  reason String?
-  notes  String?
-
-  createdByUserId String?
-  createdBy       User?   @relation(fields: [createdByUserId], references: [id])
-
-  createdAt DateTime @default(now())
-
-  @@index([companyId, productId, createdAt])
-  @@index([companyId, type, createdAt])
-  @@index([productId, createdAt])
-  @@index([supplierId, createdAt])
-}
-
-// ==============================
-// ORÇAMENTOS
-// ==============================
-
-model Quote {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId   String
-  branch     Branch    @relation(fields: [branchId], references: [id])
-
-  // Cliente (opcional - pode ser orçamento para cliente não cadastrado)
-  customerId    String?
-  customer      Customer? @relation(fields: [customerId], references: [id])
-  customerName  String?   // Nome do cliente se não cadastrado
-  customerPhone String?   // Telefone para contato
-  customerEmail String?   // Email para envio
-
-  sellerUserId String
-  sellerUser   User   @relation("QuoteSeller", fields: [sellerUserId], references: [id])
-
-  // Valores
-  subtotal        Decimal @default(0) @db.Decimal(12, 2)
-  discountTotal   Decimal @default(0) @db.Decimal(12, 2)
-  discountPercent Decimal @default(0) @db.Decimal(5, 2)
-  total           Decimal @default(0) @db.Decimal(12, 2)
-
-  // Status e Validade
-  status     QuoteStatus @default(PENDING)
-  validUntil DateTime?
-
-  // Observações
-  notes         String? @db.Text // Observações que aparecem no PDF
-  internalNotes String? @db.Text // Notas internas (não aparecem no PDF)
-
-  // Condições de pagamento sugeridas
-  paymentConditions String? @db.Text // Ex: "3x sem juros no cartão, 10% desconto à vista"
-
-  // Conversão em venda
-  convertedToSaleId String?   @unique
-  convertedToSale   Sale?     @relation("QuoteToSale")
-  convertedAt       DateTime?
-  convertedByUserId String?
-  convertedBy       User?     @relation("QuoteConverter", fields: [convertedByUserId], references: [id])
-
-  // Motivo de não conversão (IMPORTANTE para relatórios)
-  lostReason String? // Ex: "Preço alto", "Comprou concorrente", "Desistiu"
-
-  // CRM - Controle de Envio
-  sentAt  DateTime? // Data/hora que foi enviado ao cliente
-  sentVia String?   // "whatsapp", "email", "presencial", "sms"
-
-  // CRM - Follow-up
-  followUpDate   DateTime? // Data agendada para retornar contato
-  followUpNotes  String?   @db.Text // Observações de acompanhamento
-  contactCount   Int       @default(0) // Quantas vezes contactou o cliente
-  lastContactAt  DateTime? // Data do último contato
-  lastFollowUpAt DateTime? // (mantido por compatibilidade)
-  followUpCount  Int       @default(0) // (mantido por compatibilidade)
-
-  // Legacy (manter por compatibilidade)
-  conversionReason String?
-  convertedToOsId  String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  items QuoteItem[]
-
-  @@index([companyId, status])
-  @@index([companyId, createdAt])
-  @@index([customerId])
-  @@index([validUntil])
-  @@index([sellerUserId])
-  @@index([branchId, status, createdAt])
-  @@index([status, validUntil])
-}
-
-model QuoteItem {
-  id      String @id @default(cuid())
-  quoteId String
-  quote   Quote  @relation(fields: [quoteId], references: [id], onDelete: Cascade)
-
-  // Produto (opcional - pode ser item customizado)
-  productId String?
-  product   Product? @relation(fields: [productId], references: [id])
-
-  // Descrição (obrigatória se não tiver productId)
-  description String // Nome/descrição do item
-
-  // Valores
-  qty       Int     @default(1)
-  unitPrice Decimal @db.Decimal(12, 2)
-  discount  Decimal @default(0) @db.Decimal(12, 2)
-  total     Decimal @db.Decimal(12, 2)
-
-  // Tipo do item
-  itemType QuoteItemType @default(PRODUCT)
-
-  // DADOS DA RECEITA DO ÓCULOS (ESSENCIAL PARA ÓTICA!)
-  prescriptionData Json?
-
-  // Observações do item
-  notes String? @db.Text
-
-  createdAt DateTime @default(now())
-
-  @@index([quoteId])
-}
-
-// ==============================
-// VENDAS + SPLIT PAYMENT
-// ==============================
-
-model Sale {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId   String
-  branch     Branch    @relation(fields: [branchId], references: [id])
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  serviceOrderId String?       @unique
-  serviceOrder   ServiceOrder? @relation(fields: [serviceOrderId], references: [id])
-
-  convertedFromQuoteId String? @unique
-  convertedFromQuote   Quote?  @relation("QuoteToSale", fields: [convertedFromQuoteId], references: [id])
-
-  sellerUserId String
-  sellerUser   User   @relation("SaleSeller", fields: [sellerUserId], references: [id])
-
-  status SaleStatus @default(OPEN)
-
-  subtotal      Decimal @default(0) @db.Decimal(12, 2)
-  discountTotal Decimal @default(0) @db.Decimal(12, 2)
-  cashbackUsed  Decimal @default(0) @db.Decimal(10, 2)
-  total         Decimal @default(0) @db.Decimal(12, 2)
-
-  agreementId       String?
-  agreement         Agreement? @relation(fields: [agreementId], references: [id])
-  agreementDiscount Decimal?   @db.Decimal(12, 2)
-  authorizationCode String?
-
-  fiscalStatus FiscalStatus @default(NOT_REQUESTED)
-  fiscalModel  String?
-  fiscalKey    String?
-  fiscalXmlUrl String?
-  fiscalPdfUrl String?
-
-  completedAt DateTime?
-  createdAt   DateTime  @default(now())
-  updatedAt   DateTime  @updatedAt
-
-  items              SaleItem[]
-  payments           SalePayment[]
-  commissions        Commission[]
-  reservations       StockReservation[]
-  warranties         Warranty[]
-  accountsReceivable AccountReceivable[]
-
-  // Novos módulos
-  cashbackMovements  CashbackMovement[]
-
-  @@index([companyId, branchId, createdAt])
-  @@index([customerId, createdAt])
-  @@index([sellerUserId, createdAt])
-  @@index([agreementId])
-}
-
-model SaleItem {
-  id     String @id @default(cuid())
-  saleId String
-  sale   Sale   @relation(fields: [saleId], references: [id])
-
-  productId String?
-  product   Product? @relation(fields: [productId], references: [id])
-
-  description String?
-  qty         Int     @default(1)
-  unitPrice   Decimal @db.Decimal(12, 2)
-  discount    Decimal @default(0) @db.Decimal(12, 2)
-  lineTotal   Decimal @db.Decimal(12, 2)
-  costPrice   Decimal @default(0) @db.Decimal(12, 2)
-
-  stockControlled  Boolean @default(true)
-  stockQtyConsumed Int     @default(0)
-
-  createdAt DateTime @default(now())
-
-  warranties Warranty[]
-
-  @@index([saleId])
-  @@index([productId])
-}
-
-model SalePayment {
-  id     String @id @default(cuid())
-  saleId String
-  sale   Sale   @relation(fields: [saleId], references: [id])
-
-  method PaymentMethod
-  status PaymentStatus @default(PENDING)
-  amount Decimal       @db.Decimal(12, 2)
-
-  installments Int?
-  cardBrand    String?
-  reference    String?
-  details      Json?
-
-  receivedAt       DateTime?
-  receivedByUserId String?
-  receivedByUser   User?     @relation("PaymentReceiver", fields: [receivedByUserId], references: [id])
-
-  cashMovements CashMovement[]
-  createdAt     DateTime       @default(now())
-
-  @@index([saleId, status])
-  @@index([method, status])
-}
-
-// ==============================
-// COMISSÕES
-// ==============================
-
-model CommissionRule {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name       String
-  userId     String?
-  categoryId String?
-  brandId    String?
-
-  percentage       Decimal  @db.Decimal(5, 2)
-  minMarginPercent Decimal? @db.Decimal(5, 2)
-
-  priority Int     @default(0)
-  active   Boolean @default(true)
-
-  @@index([companyId, active])
-}
-
-model Commission {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  saleId String
-  sale   Sale   @relation(fields: [saleId], references: [id])
-
-  userId String
-  user   User   @relation(fields: [userId], references: [id])
-
-  baseAmount       Decimal @db.Decimal(12, 2)
-  percentage       Decimal @db.Decimal(5, 2)
-  commissionAmount Decimal @db.Decimal(12, 2)
-
-  status CommissionStatus @default(PENDING)
-
-  periodMonth Int
-  periodYear  Int
-
-  approvedAt       DateTime?
-  approvedByUserId String?
-  paidAt           DateTime?
-  paidByUserId     String?
-  paymentMethod    String?
-  paymentReference String?
-
-  notes     String?
-  createdAt DateTime @default(now())
-
-  @@index([companyId, periodYear, periodMonth])
-  @@index([userId, status])
-  @@index([saleId])
-}
-
-// ==============================
-// CAIXA
-// ==============================
-
-model CashShift {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId String
-  branch   Branch @relation(fields: [branchId], references: [id])
-
-  status CashShiftStatus @default(OPEN)
-
-  openedByUserId     String
-  openedByUser       User     @relation("ShiftOpener", fields: [openedByUserId], references: [id])
-  openedAt           DateTime @default(now())
-  openingFloatAmount Decimal  @default(0) @db.Decimal(12, 2)
-
-  closedByUserId          String?
-  closedByUser            User?     @relation("ShiftCloser", fields: [closedByUserId], references: [id])
-  closedAt                DateTime?
-  closingDeclaredCash     Decimal?  @db.Decimal(12, 2)
-  closingExpectedCash     Decimal?  @db.Decimal(12, 2)
-  differenceCash          Decimal?  @db.Decimal(12, 2)
-  differenceJustification String?
-
-  notes     String?
-  movements CashMovement[]
-
-  @@index([branchId, status])
-  @@index([companyId, openedAt])
-}
-
-model CashMovement {
-  id          String    @id @default(cuid())
-  cashShiftId String
-  cashShift   CashShift @relation(fields: [cashShiftId], references: [id])
-
-  branchId String
-  branch   Branch @relation(fields: [branchId], references: [id])
-
-  type      CashMovementType
-  direction CashDirection
-  method    PaymentMethod
-  amount    Decimal          @db.Decimal(12, 2)
-
-  originType String
-  originId   String
-
-  salePaymentId String?
-  salePayment   SalePayment? @relation(fields: [salePaymentId], references: [id])
-
-  createdByUserId String?
-  createdByUser   User?   @relation("CashMovementCreator", fields: [createdByUserId], references: [id])
-
-  note      String?
-  migrated  Boolean  @default(false) // Identifica registros criados por migração
-  createdAt DateTime @default(now())
-
-  @@index([cashShiftId, createdAt])
-  @@index([originType, originId])
-  @@index([method, type])
-}
-
-// ==============================
-// GARANTIAS
-// ==============================
-
-model Warranty {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  saleId     String?
-  sale       Sale?     @relation(fields: [saleId], references: [id])
-  saleItemId String?
-  saleItem   SaleItem? @relation(fields: [saleItemId], references: [id])
-
-  serviceOrderId     String?
-  serviceOrder       ServiceOrder?     @relation(fields: [serviceOrderId], references: [id])
-  serviceOrderItemId String?
-  serviceOrderItem   ServiceOrderItem? @relation(fields: [serviceOrderItemId], references: [id])
-
-  warrantyType WarrantyType
-  status       WarrantyStatus @default(ACTIVE)
-
-  startAt          DateTime
-  expiresAt        DateTime
-  termsDescription String?
-  notes            String?
-
-  claims WarrantyClaim[]
-
-  @@index([companyId, status, expiresAt])
-  @@index([saleId])
-  @@index([serviceOrderId])
-}
-
-model WarrantyClaim {
-  id         String   @id @default(cuid())
-  warrantyId String
-  warranty   Warranty @relation(fields: [warrantyId], references: [id])
-
-  openedAt           DateTime @default(now())
-  reason             String
-  problemDescription String?
-
-  resolution     String?
-  resolutionType String?
-
-  filesUrl String[]
-
-  analyzedByUserId String?
-  analyzedAt       DateTime?
-
-  closedAt       DateTime?
-  closedByUserId String?
-
-  notes String?
-
-  @@index([warrantyId])
-}
-
-// ==============================
-// AGENDAMENTOS
-// ==============================
-
-model Appointment {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId   String
-  branch     Branch    @relation(fields: [branchId], references: [id])
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  contactName  String?
-  contactPhone String?
-
-  type   AppointmentType
-  status AppointmentStatus @default(SCHEDULED)
-
-  scheduledAt     DateTime
-  scheduledEndAt  DateTime?
-  durationMinutes Int       @default(30)
-
-  serviceOrderId String?
-
-  assignedUserId String?
-
-  confirmed          Boolean   @default(false)
-  confirmedAt        DateTime?
-  confirmationMethod String?
-
-  reminderSent   Boolean   @default(false)
-  reminderSentAt DateTime?
-
-  checkinAt        DateTime?
-  checkoutAt       DateTime?
-  attendedByUserId String?
-
-  notes         String?
-  internalNotes String?
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([branchId, scheduledAt])
-  @@index([customerId, scheduledAt])
-  @@index([status, scheduledAt])
-}
-
-// ==============================
-// CONVÊNIOS
-// ==============================
-
-model Agreement {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  code String
-  name String
-  type AgreementType
-  cnpj String?
-
-  phone         String?
-  email         String?
-  contactPerson String?
-
-  discountPercent Decimal @default(0) @db.Decimal(5, 2)
-  paymentTermDays Int     @default(30)
-  billingDay      Int?
-
-  minPurchase  Decimal? @db.Decimal(12, 2)
-  maxPurchase  Decimal? @db.Decimal(12, 2)
-  monthlyLimit Decimal? @db.Decimal(12, 2)
-
-  contractPath      String?
-  contractStartDate DateTime?
-  contractEndDate   DateTime?
-
-  notes     String?
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  beneficiaries AgreementBeneficiary[]
-  sales         Sale[]
-
-  @@unique([companyId, code])
-  @@index([companyId, active])
-}
-
-model AgreementBeneficiary {
-  id          String    @id @default(cuid())
-  agreementId String
-  agreement   Agreement @relation(fields: [agreementId], references: [id])
-  customerId  String
-  customer    Customer  @relation(fields: [customerId], references: [id])
-
-  enrollmentNumber String?
-  isHolder         Boolean @default(true)
-  holderId         String?
-
-  enrolledAt DateTime  @default(now())
-  validUntil DateTime?
-  active     Boolean   @default(true)
-
-  @@unique([agreementId, customerId])
-  @@index([customerId])
-}
-
-// ==============================
-// FIDELIDADE
-// ==============================
-
-model LoyaltyProgram {
-  id        String  @id @default(cuid())
-  companyId String  @unique
-  company   Company @relation(fields: [companyId], references: [id])
-
-  name        String
-  description String?
-
-  pointsPerReal Decimal @default(1) @db.Decimal(5, 2)
-  reaisPerPoint Decimal @default(10) @db.Decimal(5, 2)
-
-  pointsExpire   Boolean @default(true)
-  expirationDays Int     @default(365)
-  minRedemption  Int     @default(100)
-
-  birthdayMultiplier Decimal @default(2) @db.Decimal(3, 2)
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  tiers LoyaltyTier[]
-}
-
-model LoyaltyTier {
-  id        String         @id @default(cuid())
-  programId String
-  program   LoyaltyProgram @relation(fields: [programId], references: [id])
-
-  name      String
-  minPoints Int
-
-  discountPercent  Decimal @default(0) @db.Decimal(5, 2)
-  pointsMultiplier Decimal @default(1) @db.Decimal(3, 2)
-  priorityService  Boolean @default(false)
-  exclusiveGifts   Boolean @default(false)
-
-  badgeColor String?
-  icon       String?
-  sortOrder  Int
-  active     Boolean @default(true)
-}
-
-model LoyaltyPoints {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  customerId String
-  customer   Customer @relation(fields: [customerId], references: [id])
-
-  points Int
-  type   String
-
-  saleId      String?
-  description String?
-
-  expiresAt DateTime?
-  createdAt DateTime  @default(now())
-
-  @@index([customerId, createdAt])
-  @@index([companyId, expiresAt])
-}
-
-// ==============================
-// DRE SIMPLIFICADO
-// ==============================
-
-model DREReport {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId String?
-  branch   Branch? @relation(fields: [branchId], references: [id])
-
-  periodMonth       Int
-  periodYear        Int
-  generatedAt       DateTime @default(now())
-  generatedByUserId String?
-
-  grossRevenue Decimal @default(0) @db.Decimal(14, 2)
-  returns      Decimal @default(0) @db.Decimal(14, 2)
-  discounts    Decimal @default(0) @db.Decimal(14, 2)
-  netRevenue   Decimal @default(0) @db.Decimal(14, 2)
-
-  costOfGoodsSold Decimal @default(0) @db.Decimal(14, 2)
-  labCosts        Decimal @default(0) @db.Decimal(14, 2)
-  grossProfit     Decimal @default(0) @db.Decimal(14, 2)
-
-  personnelExpenses  Decimal @default(0) @db.Decimal(14, 2)
-  rentExpenses       Decimal @default(0) @db.Decimal(14, 2)
-  adminExpenses      Decimal @default(0) @db.Decimal(14, 2)
-  marketingExpenses  Decimal @default(0) @db.Decimal(14, 2)
-  financialExpenses  Decimal @default(0) @db.Decimal(14, 2)
-  commissionExpenses Decimal @default(0) @db.Decimal(14, 2)
-  otherExpenses      Decimal @default(0) @db.Decimal(14, 2)
-  totalExpenses      Decimal @default(0) @db.Decimal(14, 2)
-
-  operatingProfit Decimal @default(0) @db.Decimal(14, 2)
-  taxes           Decimal @default(0) @db.Decimal(14, 2)
-  netProfit       Decimal @default(0) @db.Decimal(14, 2)
-
-  grossMarginPercent     Decimal? @db.Decimal(5, 2)
-  operatingMarginPercent Decimal? @db.Decimal(5, 2)
-  netMarginPercent       Decimal? @db.Decimal(5, 2)
-
-  @@unique([companyId, branchId, periodYear, periodMonth])
-  @@index([companyId, periodYear, periodMonth])
-}
-
-// ==============================
-// MÓDULO FINANCEIRO
-// ==============================
 
 enum AccountPayableStatus {
   PENDING
@@ -1786,641 +1819,46 @@ enum AccountReceivableStatus {
 }
 
 enum AccountCategory {
-  SUPPLIERS // Fornecedores
-  RENT // Aluguel
-  UTILITIES // Utilidades (água, luz, etc)
-  PERSONNEL // Folha de pagamento
-  TAXES // Impostos
-  MARKETING // Marketing
-  MAINTENANCE // Manutenção
-  EQUIPMENT // Equipamentos
-  OTHER // Outros
+  SUPPLIERS
+  RENT
+  UTILITIES
+  PERSONNEL
+  TAXES
+  MARKETING
+  MAINTENANCE
+  EQUIPMENT
+  OTHER
 }
-
-// Contas a Pagar
-model AccountPayable {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId String?
-  branch   Branch? @relation(fields: [branchId], references: [id])
-
-  supplierId String?
-  supplier   Supplier? @relation(fields: [supplierId], references: [id])
-
-  description String
-  category    AccountCategory
-
-  amount     Decimal   @db.Decimal(12, 2)
-  dueDate    DateTime
-  paidDate   DateTime?
-  paidAmount Decimal?  @db.Decimal(12, 2)
-
-  status AccountPayableStatus @default(PENDING)
-
-  invoiceNumber String?
-  notes         String?
-
-  createdByUserId String?
-  createdBy       User?   @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
-
-  paidByUserId String?
-  paidBy       User?   @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId, status, dueDate])
-  @@index([supplierId, status])
-  @@index([dueDate, status])
-}
-
-// Contas a Receber
-model AccountReceivable {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  branchId String?
-  branch   Branch? @relation(fields: [branchId], references: [id])
-
-  customerId String?
-  customer   Customer? @relation(fields: [customerId], references: [id])
-
-  saleId String?
-  sale   Sale?   @relation(fields: [saleId], references: [id])
-
-  description       String
-  installmentNumber Int    @default(1)
-  totalInstallments Int    @default(1)
-
-  amount         Decimal   @db.Decimal(12, 2)
-  dueDate        DateTime
-  receivedDate   DateTime?
-  receivedAmount Decimal?  @db.Decimal(12, 2)
-
-  status AccountReceivableStatus @default(PENDING)
-
-  notes String?
-
-  createdByUserId String?
-  createdBy       User?   @relation("AccountReceivableCreator", fields: [createdByUserId], references: [id])
-
-  receivedByUserId String?
-  receivedBy       User?   @relation("AccountReceivableReceiver", fields: [receivedByUserId], references: [id])
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId, status, dueDate])
-  @@index([customerId, status])
-  @@index([saleId])
-  @@index([dueDate, status])
-}
-
-// =========================================================
-// MÓDULO DE AJUSTES DE ESTOQUE
-// =========================================================
 
 enum StockAdjustmentType {
-  DAMAGE // Quebra/Avaria
-  THEFT // Perda/Roubo
-  SUPPLIER_RETURN // Devolução ao Fornecedor
-  COUNT_ERROR // Erro de Contagem
-  FREE_SAMPLE // Amostra Grátis
-  EXPIRATION // Vencimento/Validade
-  INTERNAL_USE // Uso Interno
-  OTHER // Outros
+  DAMAGE
+  THEFT
+  SUPPLIER_RETURN
+  COUNT_ERROR
+  FREE_SAMPLE
+  EXPIRATION
+  INTERNAL_USE
+  OTHER
 }
 
 enum StockAdjustmentStatus {
-  PENDING // Pendente de aprovação
-  APPROVED // Aprovado
-  REJECTED // Rejeitado
-  AUTO_APPROVED // Auto-aprovado (valor baixo)
+  PENDING
+  APPROVED
+  REJECTED
+  AUTO_APPROVED
 }
-
-model StockAdjustment {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  productId String
-  product   Product @relation(fields: [productId], references: [id])
-
-  type   StockAdjustmentType
-  status StockAdjustmentStatus @default(PENDING)
-
-  quantityBefore Int // Estoque antes do ajuste
-  quantityChange Int // +5 ou -5 (positivo ou negativo)
-  quantityAfter  Int // Estoque depois do ajuste
-
-  unitCost   Decimal @db.Decimal(12, 2) // Custo unitário no momento
-  totalValue Decimal @db.Decimal(12, 2) // Valor total do ajuste
-
-  reason      String // Motivo detalhado (obrigatório)
-  attachments String[] // URLs de fotos/documentos
-
-  createdByUserId String
-  createdBy       User   @relation("AdjustmentCreator", fields: [createdByUserId], references: [id])
-
-  approvedByUserId String?
-  approvedBy       User?     @relation("AdjustmentApprover", fields: [approvedByUserId], references: [id])
-  approvedAt       DateTime?
-
-  rejectionReason String? // Motivo da rejeição
-
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@index([companyId, status, createdAt])
-  @@index([productId, createdAt])
-  @@index([createdByUserId])
-  @@index([status, totalValue])
-}
-
-// =========================================================
-// MÓDULO DE REGRAS E CONFIGURAÇÕES DO SISTEMA
-// =========================================================
 
 enum RuleCategory {
-  STOCK // Regras de Estoque
-  SALES // Regras de Vendas
-  FINANCIAL // Regras Financeiras
-  PRODUCTS // Regras de Produtos
-  CUSTOMERS // Regras de Clientes
-  REPORTS // Regras de Relatórios
+  STOCK
+  SALES
+  FINANCIAL
+  PRODUCTS
+  CUSTOMERS
+  REPORTS
 }
-
-model SystemRule {
-  id        String  @id @default(cuid())
-  companyId String
-  company   Company @relation(fields: [companyId], references: [id])
-
-  category    RuleCategory
-  key         String // Identificador único da regra (ex: "stock.adjustment.approval_amount")
-  value       Json // Valor da regra (pode ser number, boolean, string, array, object)
-  description String? // Descrição legível da regra
-
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-
-  @@unique([companyId, key])
-  @@index([companyId, category])
-}
-
-// =========================================================
-// MÓDULO DE CÓDIGOS DE BARRAS E QR CODES
-// =========================================================
 
 enum BarcodeType {
-  EAN13 // Código de barras padrão (13 dígitos)
-  CODE128 // Código de barras alfanumérico
-  QRCODE // QR Code
-}
-
-model ProductBarcode {
-  id        String  @id @default(cuid())
-  productId String
-  product   Product @relation(fields: [productId], references: [id], onDelete: Cascade)
-
-  type BarcodeType
-  code String // O código em si (numérico ou alfanumérico)
-
-  isPrimary Boolean @default(false) // Código principal do produto
-
-  createdByUserId String?
-  createdBy       User?   @relation("BarcodeCreator", fields: [createdByUserId], references: [id])
-
-  createdAt DateTime @default(now())
-
-  @@unique([productId, code])
-  @@index([code])
-  @@index([productId, isPrimary])
-}
-
-// =========================================================
-// SISTEMA DE PERMISSÕES GRANULARES
-// =========================================================
-
-// Catálogo de todas as permissões disponíveis no sistema
-model Permission {
-  id          String   @id @default(cuid())
-
-  // Identificação única da permissão (ex: "sales.cancel", "cash.open")
-  code        String   @unique
-
-  // Nome amigável (ex: "Cancelar vendas")
-  name        String
-
-  // Descrição detalhada (opcional)
-  description String?
-
-  // Organização
-  module      String   // Ex: "sales", "cash", "products"
-  category    String   // Ex: "Vendas", "Gestão de Caixa"
-  sortOrder   Int      @default(0)
-
-  // Controle
-  isActive    Boolean  @default(true)
-
-  // Relações
-  roleDefaults RolePermission[]
-  userCustoms  UserPermission[]
-
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
-
-  @@index([module])
-  @@index([category])
-  @@index([isActive])
-}
-
-// Permissões padrão por Role (perfil)
-model RolePermission {
-  id           String     @id @default(cuid())
-
-  role         String     // ADMIN, GERENTE, VENDEDOR, CAIXA, ATENDENTE
-  permissionId String
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  granted      Boolean    @default(true)
-
-  createdAt    DateTime   @default(now())
-
-  @@unique([role, permissionId])
-  @@index([role])
-}
-
-// Permissões customizadas por Usuário (sobrescreve padrão do role)
-model UserPermission {
-  id           String     @id @default(cuid())
-
-  userId       String
-  user         User       @relation("UserCustomPermissions", fields: [userId], references: [id], onDelete: Cascade)
-
-  permissionId String
-  permission   Permission @relation(fields: [permissionId], references: [id], onDelete: Cascade)
-
-  // true = adiciona permissão, false = remove permissão
-  granted      Boolean
-
-  // Auditoria
-  grantedByUserId String?
-  grantedAt       DateTime @default(now())
-
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
-
-  @@unique([userId, permissionId])
-  @@index([userId])
-  @@index([permissionId])
-}
-
-// =========================================================
-// FIM DO SCHEMA CONSOLIDADO v3.3
-// =========================================================
-
-// =========================================================
-// CONFIGURAÇÕES DA EMPRESA
-// =========================================================
-
-model CompanySettings {
-  id        String  @id @default(cuid())
-  companyId String  @unique
-  company   Company @relation("CompanySettings", fields: [companyId], references: [id])
-  
-  // Dados da Empresa
-  displayName String?
-  cnpj        String?
-  phone       String?
-  whatsapp    String?
-  email       String?
-  address     String?
-  city        String?
-  state       String?
-  zipCode     String?
-  
-  // Logo (URL)
-  logoUrl String?
-
-  // Personalização Visual
-  primaryColor String? // Cor primária do sistema (hex)
-
-  // Mensagens Personalizáveis
-  messageThankYou  String? @db.Text
-  messageQuote     String? @db.Text
-  messageReminder  String? @db.Text
-  messageBirthday  String? @db.Text
-  
-  // Configurações do PDF
-  pdfHeaderText String?
-  pdfFooterText String?
-  
-  // Configurações de Orçamento
-  defaultQuoteValidDays Int     @default(15)
-  defaultPaymentTerms   String?
-  
-  // Timestamps
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  
-  @@index([companyId])
-}
-
-// ╔═══════════════════════════════════════════════════════════════╗
-// ║                    MÓDULO: CASHBACK                           ║
-// ╚═══════════════════════════════════════════════════════════════╝
-
-// Configuração de Cashback (por filial)
-model CashbackConfig {
-  id                    String   @id @default(cuid())
-  branchId              String   @unique
-  branch                Branch   @relation(fields: [branchId], references: [id])
-
-  // Ativar/Desativar
-  enabled               Boolean  @default(false)
-
-  // Regras de GERAÇÃO
-  earnPercent           Decimal  @default(3) @db.Decimal(5,2)  // 3% de cashback
-  minPurchaseToEarn     Decimal  @default(100) @db.Decimal(10,2) // Mínimo R$100 para gerar
-  maxCashbackPerSale    Decimal? @db.Decimal(10,2) // Máximo por venda (null = sem limite)
-  expirationDays        Int      @default(90) // Dias para expirar
-
-  // Regras de USO
-  minPurchaseMultiplier Decimal  @default(3) @db.Decimal(3,1) // Compra mínima = 3x o cashback usado
-  maxUsagePercent       Decimal  @default(50) @db.Decimal(5,2) // Máximo 50% da compra pode ser cashback
-
-  // Regras especiais
-  birthdayMultiplier    Decimal  @default(2) @db.Decimal(3,1) // Dobro no aniversário
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-}
-
-// Saldo de Cashback do Cliente
-model CustomerCashback {
-  id                    String   @id @default(cuid())
-  customerId            String
-  customer              Customer @relation(fields: [customerId], references: [id])
-  branchId              String
-  branch                Branch   @relation(fields: [branchId], references: [id])
-
-  // Saldo atual
-  balance               Decimal  @default(0) @db.Decimal(10,2)
-
-  // Totais históricos
-  totalEarned           Decimal  @default(0) @db.Decimal(10,2)
-  totalUsed             Decimal  @default(0) @db.Decimal(10,2)
-  totalExpired          Decimal  @default(0) @db.Decimal(10,2)
-
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-
-  movements             CashbackMovement[]
-
-  @@unique([customerId, branchId])
-  @@index([customerId])
-  @@index([branchId])
-}
-
-// Movimentações de Cashback
-model CashbackMovement {
-  id                    String   @id @default(cuid())
-  customerCashbackId    String
-  customerCashback      CustomerCashback @relation(fields: [customerCashbackId], references: [id])
-
-  type                  CashbackMovementType
-  amount                Decimal  @db.Decimal(10,2)
-
-  // Referências
-  saleId                String?
-  sale                  Sale?    @relation(fields: [saleId], references: [id])
-
-  // Validade (para créditos)
-  expiresAt             DateTime?
-  expired               Boolean  @default(false)
-
-  description           String?
-
-  createdAt             DateTime @default(now())
-  createdByUserId       String?
-  createdByUser         User?    @relation("CashbackMovementCreatedBy", fields: [createdByUserId], references: [id])
-
-  @@index([customerCashbackId])
-  @@index([saleId])
-  @@index([expiresAt])
-}
-
-// ╔═══════════════════════════════════════════════════════════════╗
-// ║                 MÓDULO: LEMBRETES                             ║
-// ╚═══════════════════════════════════════════════════════════════╝
-
-// Configuração de Lembretes (por filial)
-model ReminderConfig {
-  id                              String   @id @default(cuid())
-  branchId                        String   @unique
-  branch                          Branch   @relation(fields: [branchId], references: [id])
-
-  // Receita vencendo
-  prescriptionReminderEnabled     Boolean  @default(true)
-  prescriptionReminderDays        Int      @default(30) // Dias antes para alertar
-  prescriptionValidityMonths      Int      @default(12) // Validade da receita
-
-  // Clientes inativos
-  inactiveReminderEnabled         Boolean  @default(true)
-  inactiveAfterDays               Int      @default(180) // 6 meses
-
-  // Aniversário
-  birthdayReminderEnabled         Boolean  @default(true)
-  birthdayReminderDaysBefore      Int      @default(0) // 0 = no dia, 1 = dia antes
-
-  // Cashback expirando
-  cashbackExpiringReminderEnabled Boolean  @default(true)
-  cashbackExpiringDaysBefore      Int      @default(7)
-
-  // Tipos habilitados
-  enabledReminderTypes            String[] // Ex: { prescriptionReminder, birthday, inactive, cashbackExpiring }
-
-  createdAt                       DateTime @default(now())
-  updatedAt                       DateTime @updatedAt
-}
-
-// Registro de Contatos com Clientes
-model CustomerContact {
-  id                    String        @id @default(cuid())
-  customerId            String
-  customer              Customer      @relation(fields: [customerId], references: [id])
-  branchId              String
-  branch                Branch        @relation(fields: [branchId], references: [id])
-
-  // Tipo e canal
-  type                  ContactType
-  channel               ContactChannel @default(WHATSAPP)
-
-  // Status
-  status                ContactStatus  @default(PENDING)
-
-  // Referência (ex: lembrete que gerou este contato)
-  reminderId            String?
-  reminder              Reminder?      @relation(fields: [reminderId], references: [id])
-
-  // Conteúdo
-  message               String?        @db.Text
-  notes                 String?        // Observações do atendente
-
-  // Quem executou
-  executedByUserId      String?
-  executedByUser        User?          @relation("ContactExecutedBy", fields: [executedByUserId], references: [id])
-  executedAt            DateTime?
-
-  createdAt             DateTime       @default(now())
-
-  @@index([customerId])
-  @@index([branchId])
-  @@index([type])
-  @@index([status])
-  @@index([createdAt])
-}
-
-// Lembretes Gerados (fila de lembretes)
-model Reminder {
-  id                    String         @id @default(cuid())
-  branchId              String
-  branch                Branch         @relation(fields: [branchId], references: [id])
-  customerId            String
-  customer              Customer       @relation(fields: [customerId], references: [id])
-
-  // Tipo
-  type                  ContactType
-
-  // Status
-  status                ReminderStatus @default(PENDING)
-
-  // Agendamento
-  scheduledFor          DateTime       // Data para aparecer no dashboard
-
-  // Dados extras (JSON) - ex: valor do cashback, data da receita, etc
-  metadata              Json?
-
-  // Ações
-  dismissedAt           DateTime?
-  dismissedByUserId     String?
-  dismissedByUser       User?          @relation("ReminderDismissedBy", fields: [dismissedByUserId], references: [id])
-  dismissReason         String?
-
-  // Contatos gerados
-  contacts              CustomerContact[]
-
-  createdAt             DateTime       @default(now())
-  updatedAt             DateTime       @updatedAt
-
-  @@index([branchId])
-  @@index([customerId])
-  @@index([type])
-  @@index([status])
-  @@index([scheduledFor])
-}
-
-// ╔═══════════════════════════════════════════════════════════════╗
-// ║              MÓDULO: METAS E COMISSÕES                        ║
-// ╚═══════════════════════════════════════════════════════════════╝
-
-// Meta de Vendas (por filial/mês)
-model SalesGoal {
-  id                    String       @id @default(cuid())
-  branchId              String
-  branch                Branch       @relation(fields: [branchId], references: [id])
-
-  // Período
-  year                  Int
-  month                 Int          // 1-12
-
-  // Meta da loja
-  branchGoal            Decimal      @db.Decimal(12,2)
-
-  // Status
-  status                GoalStatus   @default(ACTIVE)
-
-  createdAt             DateTime     @default(now())
-  updatedAt             DateTime     @updatedAt
-
-  sellerGoals           SellerGoal[]
-
-  @@unique([branchId, year, month])
-  @@index([branchId])
-  @@index([year, month])
-}
-
-// Meta Individual do Vendedor
-model SellerGoal {
-  id                    String     @id @default(cuid())
-  salesGoalId           String
-  salesGoal             SalesGoal  @relation(fields: [salesGoalId], references: [id], onDelete: Cascade)
-  userId                String
-  user                  User       @relation(fields: [userId], references: [id])
-
-  goalAmount            Decimal    @db.Decimal(12,2)
-
-  createdAt             DateTime   @default(now())
-  updatedAt             DateTime   @updatedAt
-
-  @@unique([salesGoalId, userId])
-  @@index([userId])
-}
-
-// Configuração de Comissões (por filial)
-model CommissionConfig {
-  id                      String   @id @default(cuid())
-  branchId                String   @unique
-  branch                  Branch   @relation(fields: [branchId], references: [id])
-
-  // Comissão base
-  baseCommissionPercent   Decimal  @default(5) @db.Decimal(5,2) // 5%
-
-  // Bônus por bater meta
-  goalBonusPercent        Decimal  @default(2) @db.Decimal(5,2) // +2%
-
-  // Comissão por categoria (opcional)
-  categoryCommissions     Json?    // { "armacoes": 5, "lentes": 4 }
-
-  createdAt               DateTime @default(now())
-  updatedAt               DateTime @updatedAt
-}
-
-// Registro de Comissão (calculado mensalmente) - NOME ALTERADO PARA EVITAR CONFLITO
-model SellerCommission {
-  id                    String           @id @default(cuid())
-  userId                String
-  user                  User             @relation("SellerCommissions", fields: [userId], references: [id])
-  branchId              String
-  branch                Branch           @relation(fields: [branchId], references: [id])
-
-  // Período
-  year                  Int
-  month                 Int
-
-  // Valores
-  totalSales            Decimal          @db.Decimal(12,2)
-  goalAmount            Decimal?         @db.Decimal(12,2)
-  goalAchieved          Boolean          @default(false)
-
-  // Comissão
-  baseCommission        Decimal          @db.Decimal(10,2)
-  bonusCommission       Decimal          @default(0) @db.Decimal(10,2)
-  totalCommission       Decimal          @db.Decimal(10,2)
-
-  // Status
-  status                CommissionStatus @default(PENDING)
-  paidAt                DateTime?
-
-  createdAt             DateTime         @default(now())
-  updatedAt             DateTime         @updatedAt
-
-  @@unique([userId, branchId, year, month])
-  @@index([userId])
-  @@index([branchId])
-  @@index([year, month])
+  EAN13
+  CODE128
+  QRCODE
 }
