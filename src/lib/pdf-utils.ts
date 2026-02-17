@@ -36,7 +36,8 @@ export function generateCarnePDF(data: CarneData): Buffer {
       const logoWidth = 40;
       const logoHeight = 20;
       const logoX = (pageWidth - logoWidth) / 2;
-      doc.addImage(logoUrl, "PNG", logoX, yPosition, logoWidth, logoHeight);
+      const imgType = logoUrl.includes("image/jpeg") || logoUrl.includes("image/jpg") ? "JPEG" : "PNG";
+      doc.addImage(logoUrl, imgType, logoX, yPosition, logoWidth, logoHeight);
       yPosition += logoHeight + 5;
     } catch {
       // Se falhar ao adicionar logo, continua sem ela
