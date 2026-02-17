@@ -747,7 +747,7 @@ function LaboratoriosPage() {
                       <Card>
                         <CardContent className="pt-6">
                           <div className="text-center">
-                            <p className="text-2xl font-bold">{selectedLab.totalOrders}</p>
+                            <p className="text-2xl font-bold">{loadingLabOrders ? "..." : labOrders.length || selectedLab.totalOrders}</p>
                             <p className="text-xs text-muted-foreground">Total de Pedidos</p>
                           </div>
                         </CardContent>

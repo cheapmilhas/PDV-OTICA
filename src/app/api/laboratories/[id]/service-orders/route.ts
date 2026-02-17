@@ -1,15 +1,15 @@
-import { NextResponse } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 
 export async function GET(
-  _req: Request,
-  { params }: { params: { id: string } }
+  _req: NextRequest,
+  { params }: { params: Promise<{ id: string }> }
 ) {
   try {
     const companyId = await getCompanyId();
-    const { id: laboratoryId } = params;
+    const { id: laboratoryId } = await params;
 
     // Verificar se o laboratório pertence à empresa
     const lab = await prisma.lab.findFirst({
