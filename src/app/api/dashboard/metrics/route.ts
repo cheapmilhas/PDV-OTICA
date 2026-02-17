@@ -140,12 +140,15 @@ export async function GET() {
     const now = new Date();
     const in3Days = addDays(now, 3);
 
-    // OS atrasadas: prazo vencido e não entregue/cancelada
+    // OS atrasadas: prazo vencido OU marcada como atrasada, não entregue/cancelada
     const osDelayed = await prisma.serviceOrder.count({
       where: {
         companyId,
-        promisedDate: { lt: now },
         status: { notIn: ["DELIVERED", "CANCELED"] },
+        OR: [
+          { promisedDate: { lt: now } },
+          { isDelayed: true },
+        ],
       },
     });
 
@@ -162,8 +165,11 @@ export async function GET() {
     const osDelayedList = await prisma.serviceOrder.findMany({
       where: {
         companyId,
-        promisedDate: { lt: now },
         status: { notIn: ["DELIVERED", "CANCELED"] },
+        OR: [
+          { promisedDate: { lt: now } },
+          { isDelayed: true },
+        ],
       },
       select: {
         id: true,

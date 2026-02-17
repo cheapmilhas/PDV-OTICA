@@ -55,8 +55,11 @@ export class ServiceOrderService {
       ...(endDate && { createdAt: { lte: new Date(endDate) } }),
       // Filtros especiais de prazo
       ...(filter === "atrasadas" && {
-        promisedDate: { lt: now },
         status: { notIn: ["DELIVERED", "CANCELED"] },
+        OR: [
+          { promisedDate: { lt: now } },
+          { isDelayed: true },
+        ],
       }),
       ...(filter === "vencendo" && {
         promisedDate: { gte: now, lte: new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000) },
@@ -65,11 +68,18 @@ export class ServiceOrderService {
     };
 
     if (search) {
-      where.OR = [
-        { customer: { name: { contains: search, mode: "insensitive" } } },
-        { customer: { cpf: { contains: search, mode: "insensitive" } } },
-        { customer: { phone: { contains: search, mode: "insensitive" } } },
+      const searchConditions = [
+        { customer: { name: { contains: search, mode: "insensitive" as const } } },
+        { customer: { cpf: { contains: search, mode: "insensitive" as const } } },
+        { customer: { phone: { contains: search, mode: "insensitive" as const } } },
       ];
+      // Se já tem OR (filtro de atrasadas), combina com AND
+      if (where.OR) {
+        where.AND = [{ OR: where.OR as any }, { OR: searchConditions }];
+        delete where.OR;
+      } else {
+        where.OR = searchConditions;
+      }
     }
 
     const { skip, take } = getPaginationParams(page, pageSize);
