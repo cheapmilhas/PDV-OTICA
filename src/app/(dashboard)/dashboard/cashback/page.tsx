@@ -278,7 +278,14 @@ export default function CashbackPage() {
                 <TableBody>
                   {filteredCustomers.map((customer) => (
                     <TableRow key={customer.customerId}>
-                      <TableCell className="font-medium">{customer.customerName}</TableCell>
+                      <TableCell className="font-medium">
+                        <Link
+                          href={`/dashboard/clientes/${customer.customerId}`}
+                          className="hover:underline text-primary"
+                        >
+                          {customer.customerName}
+                        </Link>
+                      </TableCell>
                       <TableCell className="text-right">
                         <span className="font-semibold text-green-600">
                           {formatCurrency(customer.balance)}

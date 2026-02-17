@@ -33,8 +33,9 @@ import {
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { Button } from "@/components/ui/button";
-import { Loader2 } from "lucide-react";
+import { Loader2, ArrowDownCircle, ArrowUpCircle } from "lucide-react";
 import { toast } from "sonner";
+import { cn } from "@/lib/utils";
 
 type FormData = z.infer<typeof createStockAdjustmentSchema>;
 
@@ -67,22 +68,44 @@ export function ModalAjusteEstoque({
   onSuccess,
 }: ModalAjusteEstoqueProps) {
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [direction, setDirection] = useState<"ENTRY" | "EXIT">("EXIT");
+  const [qty, setQty] = useState<number>(1);
 
   const form = useForm<FormData>({
     resolver: zodResolver(createStockAdjustmentSchema) as any,
     defaultValues: {
       productId,
       type: "DAMAGE",
-      quantityChange: 0,
+      quantityChange: -1,
       reason: "",
       attachments: [],
     },
   });
 
-  const quantityChange = form.watch("quantityChange");
-  const newStock = currentStock + (quantityChange || 0);
+  const newStock = currentStock + (direction === "ENTRY" ? qty : -qty);
+
+  function handleDirectionChange(dir: "ENTRY" | "EXIT") {
+    setDirection(dir);
+    form.setValue("quantityChange", dir === "ENTRY" ? qty : -qty);
+    // Reset type to sensible default when switching direction
+    if (dir === "ENTRY") {
+      form.setValue("type", "COUNT_ERROR");
+    } else {
+      form.setValue("type", "DAMAGE");
+    }
+  }
+
+  function handleQtyChange(value: number) {
+    const safeQty = Math.max(1, Math.abs(value) || 1);
+    setQty(safeQty);
+    form.setValue("quantityChange", direction === "ENTRY" ? safeQty : -safeQty);
+  }
 
   async function onSubmit(data: FormData) {
+    if (!data.reason || data.reason.trim().length < 10) {
+      form.setError("reason", { message: "Justificativa obrigatória (mínimo 10 caracteres)" });
+      return;
+    }
     setIsSubmitting(true);
     try {
       const response = await fetch("/api/stock-adjustments", {
@@ -104,6 +127,8 @@ export function ModalAjusteEstoque({
       );
 
       form.reset();
+      setDirection("EXIT");
+      setQty(1);
       onOpenChange(false);
       onSuccess?.();
     } catch (error) {
@@ -117,7 +142,7 @@ export function ModalAjusteEstoque({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="sm:max-w-[600px]">
         <DialogHeader>
-          <DialogTitle>Criar Ajuste de Estoque</DialogTitle>
+          <DialogTitle>Ajuste de Estoque</DialogTitle>
           <DialogDescription>
             Produto: <strong>{productName}</strong> | Estoque Atual: <strong>{currentStock}</strong>
           </DialogDescription>
@@ -125,16 +150,72 @@ export function ModalAjusteEstoque({
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
+            {/* Direção do ajuste */}
+            <div>
+              <p className="text-sm font-medium mb-2">Tipo de Movimentação</p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => handleDirectionChange("ENTRY")}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-4 transition-all",
+                    direction === "ENTRY"
+                      ? "border-green-500 bg-green-50 text-green-700"
+                      : "border-muted bg-background text-muted-foreground hover:border-green-300 hover:bg-green-50/50"
+                  )}
+                >
+                  <ArrowDownCircle className="h-8 w-8" />
+                  <span className="font-semibold text-sm">ENTRADA</span>
+                  <span className="text-xs">Adicionar ao estoque</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => handleDirectionChange("EXIT")}
+                  className={cn(
+                    "flex flex-col items-center justify-center gap-1 rounded-lg border-2 p-4 transition-all",
+                    direction === "EXIT"
+                      ? "border-red-500 bg-red-50 text-red-700"
+                      : "border-muted bg-background text-muted-foreground hover:border-red-300 hover:bg-red-50/50"
+                  )}
+                >
+                  <ArrowUpCircle className="h-8 w-8" />
+                  <span className="font-semibold text-sm">SAIDA</span>
+                  <span className="text-xs">Remover do estoque</span>
+                </button>
+              </div>
+            </div>
+
+            {/* Quantidade */}
+            <div>
+              <p className="text-sm font-medium mb-1">Quantidade</p>
+              <Input
+                type="number"
+                min={1}
+                value={qty}
+                onChange={(e) => handleQtyChange(Number(e.target.value))}
+                placeholder="Quantidade"
+              />
+              <p className="text-xs text-muted-foreground mt-1">
+                Estoque após ajuste:{" "}
+                <strong className={newStock < 0 ? "text-red-600" : "text-foreground"}>
+                  {newStock}
+                </strong>
+                {newStock < 0 && (
+                  <span className="text-red-600 ml-2">(Estoque ficará negativo!)</span>
+                )}
+              </p>
+            </div>
+
             <FormField
               control={form.control}
               name="type"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Tipo de Ajuste</FormLabel>
-                  <Select onValueChange={field.onChange} defaultValue={field.value}>
+                  <FormLabel>Motivo do Ajuste</FormLabel>
+                  <Select onValueChange={field.onChange} value={field.value}>
                     <FormControl>
                       <SelectTrigger>
-                        <SelectValue placeholder="Selecione o tipo" />
+                        <SelectValue placeholder="Selecione o motivo" />
                       </SelectTrigger>
                     </FormControl>
                     <SelectContent>
@@ -152,35 +233,12 @@ export function ModalAjusteEstoque({
 
             <FormField
               control={form.control}
-              name="quantityChange"
-              render={({ field }) => (
-                <FormItem>
-                  <FormLabel>Quantidade (positivo = entrada, negativo = saída)</FormLabel>
-                  <FormControl>
-                    <Input
-                      type="number"
-                      placeholder="Ex: -5 ou +10"
-                      {...field}
-                      onChange={(e) => field.onChange(Number(e.target.value))}
-                    />
-                  </FormControl>
-                  <FormDescription>
-                    Novo estoque após ajuste: <strong>{newStock}</strong>
-                    {newStock < 0 && (
-                      <span className="text-red-600 ml-2">(Estoque ficará negativo!)</span>
-                    )}
-                  </FormDescription>
-                  <FormMessage />
-                </FormItem>
-              )}
-            />
-
-            <FormField
-              control={form.control}
               name="reason"
               render={({ field }) => (
                 <FormItem>
-                  <FormLabel>Justificativa</FormLabel>
+                  <FormLabel>
+                    Justificativa <span className="text-red-500">*</span>
+                  </FormLabel>
                   <FormControl>
                     <Textarea
                       placeholder="Descreva o motivo do ajuste em detalhes..."
@@ -188,7 +246,7 @@ export function ModalAjusteEstoque({
                       {...field}
                     />
                   </FormControl>
-                  <FormDescription>Mínimo 10 caracteres, máximo 500</FormDescription>
+                  <FormDescription>Obrigatória — mínimo 10 caracteres</FormDescription>
                   <FormMessage />
                 </FormItem>
               )}
@@ -203,9 +261,13 @@ export function ModalAjusteEstoque({
               >
                 Cancelar
               </Button>
-              <Button type="submit" disabled={isSubmitting}>
+              <Button
+                type="submit"
+                disabled={isSubmitting}
+                className={direction === "ENTRY" ? "bg-green-600 hover:bg-green-700" : "bg-red-600 hover:bg-red-700"}
+              >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-                Criar Ajuste
+                {direction === "ENTRY" ? "Confirmar Entrada" : "Confirmar Saida"}
               </Button>
             </DialogFooter>
           </form>

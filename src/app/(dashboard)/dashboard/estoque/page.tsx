@@ -151,6 +151,10 @@ function EstoquePage() {
             </p>
           </div>
           <div className="flex gap-2">
+            <Button variant="outline" onClick={() => window.open("/api/products/print", "_blank")}>
+              <Printer className="mr-2 h-4 w-4" />
+              Imprimir Estoque
+            </Button>
             <Button variant="outline" onClick={() => abrirModalSaida()}>
               <Minus className="mr-2 h-4 w-4" />
               Saída de Estoque
