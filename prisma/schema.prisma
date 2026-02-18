@@ -19,6 +19,32 @@ model Counter {
   @@index([companyId])
 }
 
+model CashRegister {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+  branchId       String
+  branch         Branch   @relation(fields: [branchId], references: [id])
+
+  name           String   // "Caixa 1", "PDV Principal"
+  code           String   // "CX01" - código curto
+  description    String?
+
+  allowNegative  Boolean  @default(false)
+  requireBlind   Boolean  @default(false)
+  printerType    String?  // THERMAL, LASER, NONE
+  printerAddress String?
+
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  cashShifts     CashShift[]
+
+  @@unique([companyId, code])
+  @@index([branchId, active])
+}
+
 model CardFeeRule {
   id             String   @id @default(cuid())
   companyId      String
@@ -91,6 +117,7 @@ model Company {
   warranties         Warranty[]
   counters           Counter[]
   cardFeeRules       CardFeeRule[]
+  cashRegisters      CashRegister[]
 }
 
 model Branch {
@@ -128,6 +155,7 @@ model Branch {
   salesGoals           SalesGoal[]
   sellerCommissions    SellerCommission[]
   serviceOrders        ServiceOrder[]
+  cashRegisters        CashRegister[]
   stockMovements       StockMovement[]     @relation("StockMovementBranch")
   stockMovementsSource StockMovement[]     @relation("StockMovementSource")
   stockMovementsTarget StockMovement[]     @relation("StockMovementTarget")
@@ -1036,14 +1064,17 @@ model CashShift {
   differenceCash          Decimal?        @db.Decimal(12, 2)
   differenceJustification String?
   notes                   String?
+  cashRegisterId          String?
   movements               CashMovement[]
   branch                  Branch          @relation(fields: [branchId], references: [id])
+  cashRegister            CashRegister?   @relation(fields: [cashRegisterId], references: [id])
   closedByUser            User?           @relation("ShiftCloser", fields: [closedByUserId], references: [id])
   company                 Company         @relation(fields: [companyId], references: [id])
   openedByUser            User            @relation("ShiftOpener", fields: [openedByUserId], references: [id])
 
   @@index([branchId, status])
   @@index([companyId, openedAt])
+  @@index([cashRegisterId, status])
 }
 
 model CashMovement {
