@@ -245,6 +245,7 @@ model User {
   customPermissions          UserPermission[]      @relation("UserCustomPermissions")
   prescriptionsCreated       Prescription[]        @relation("PrescriptionCreator")
   frameMeasurementsTaken     FrameMeasurement[]    @relation("FrameMeasurer")
+  quoteFollowUps             QuoteFollowUp[]       @relation("QuoteFollowUpCreator")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -875,6 +876,24 @@ model StockMovement {
   @@index([supplierId, createdAt])
 }
 
+model QuoteFollowUp {
+  id              String   @id @default(cuid())
+  quoteId         String
+  quote           Quote    @relation(fields: [quoteId], references: [id])
+
+  channel         String   // WHATSAPP, PHONE, EMAIL, SMS, IN_PERSON
+  notes           String?
+  outcome         String?  // INTERESTED, NOT_INTERESTED, CALLBACK, NO_ANSWER, CONVERTED
+
+  scheduledAt     DateTime?  // Se agendou retorno
+  contactedAt     DateTime   @default(now())
+
+  createdByUserId String
+  createdBy       User     @relation("QuoteFollowUpCreator", fields: [createdByUserId], references: [id])
+
+  @@index([quoteId, contactedAt])
+}
+
 model Quote {
   id                String      @id @default(cuid())
   companyId         String
@@ -917,6 +936,7 @@ model Quote {
   sellerUser        User        @relation("QuoteSeller", fields: [sellerUserId], references: [id])
   items             QuoteItem[]
   convertedToSale   Sale?       @relation("QuoteToSale")
+  followUps         QuoteFollowUp[]
 
   @@index([companyId, status])
   @@index([companyId, createdAt])
