@@ -910,7 +910,7 @@ function EditarOrcamentoPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="quotes.update">
+    <ProtectedRoute permission="quotes.edit">
       <EditarOrcamentoPage />
     </ProtectedRoute>
   );

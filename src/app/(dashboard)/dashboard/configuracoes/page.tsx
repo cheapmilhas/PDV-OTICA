@@ -546,7 +546,7 @@ function ConfiguracoesPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="settings.access">
+    <ProtectedRoute permission="settings.view">
       <ConfiguracoesPage />
     </ProtectedRoute>
   );

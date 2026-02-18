@@ -772,7 +772,7 @@ function OrdensServicoPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="service_orders.access">
+    <ProtectedRoute permission="service_orders.view">
       <OrdensServicoPage />
     </ProtectedRoute>
   );

@@ -700,7 +700,7 @@ function EstoquePage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="stock.access">
+    <ProtectedRoute permission="stock.view">
       <EstoquePage />
     </ProtectedRoute>
   );

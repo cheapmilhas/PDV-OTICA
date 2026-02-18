@@ -511,7 +511,7 @@ function ProdutosPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="products.access">
+    <ProtectedRoute permission="products.view">
       <ProdutosPage />
     </ProtectedRoute>
   );

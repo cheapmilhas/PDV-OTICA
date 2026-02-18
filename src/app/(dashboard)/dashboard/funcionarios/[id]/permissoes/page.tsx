@@ -459,7 +459,7 @@ function UserPermissionsPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="users.permissions">
+    <ProtectedRoute permission="permissions.manage">
       <UserPermissionsPage />
     </ProtectedRoute>
   );

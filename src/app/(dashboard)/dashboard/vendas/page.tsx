@@ -29,7 +29,7 @@ import { VendasFilters, VendasFilterValues } from "@/components/vendas/vendas-fi
 
 export default function VendasPage() {
   return (
-    <ProtectedRoute permission="sales.access">
+    <ProtectedRoute permission="sales.view">
       <VendasContent />
     </ProtectedRoute>
   );

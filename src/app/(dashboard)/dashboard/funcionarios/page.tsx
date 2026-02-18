@@ -871,7 +871,7 @@ function FuncionariosPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="users.access">
+    <ProtectedRoute permission="users.view">
       <FuncionariosPage />
     </ProtectedRoute>
   );

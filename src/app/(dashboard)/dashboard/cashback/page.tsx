@@ -110,7 +110,7 @@ export default function CashbackPage() {
 
   return (
     <ProtectedRoute
-      permission="cashback.access"
+      permission="cashback.view"
       message="Você não tem permissão para acessar cashback. Entre em contato com o administrador do sistema."
     >
       <div className="space-y-6">

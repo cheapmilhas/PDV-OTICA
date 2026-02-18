@@ -1359,7 +1359,7 @@ function FinanceiroPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="financial.access">
+    <ProtectedRoute permission="financial.view">
       <FinanceiroPage />
     </ProtectedRoute>
   );

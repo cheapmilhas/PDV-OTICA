@@ -1043,7 +1043,7 @@ function LaboratoriosPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="laboratories.access">
+    <ProtectedRoute permission="laboratories.view">
       <LaboratoriosPage />
     </ProtectedRoute>
   );

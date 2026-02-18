@@ -562,7 +562,7 @@ function CaixaPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="cash.access">
+    <ProtectedRoute permission="cash_shift.view">
       <CaixaPage />
     </ProtectedRoute>
   );

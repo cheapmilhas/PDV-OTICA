@@ -953,7 +953,7 @@ function ClienteDetalhesPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="customers.access">
+    <ProtectedRoute permission="customers.view">
       <ClienteDetalhesPage />
     </ProtectedRoute>
   );

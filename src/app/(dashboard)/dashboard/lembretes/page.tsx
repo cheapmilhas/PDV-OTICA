@@ -607,7 +607,7 @@ function RemindersPageContent() {
 
 export default function RemindersPage() {
   return (
-    <ProtectedRoute permission="reminders.access">
+    <ProtectedRoute permission="reminders.view">
       <RemindersPageContent />
     </ProtectedRoute>
   );

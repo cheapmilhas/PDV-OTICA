@@ -867,7 +867,7 @@ function FornecedoresPage() {
 
 export default function Page() {
   return (
-    <ProtectedRoute permission="suppliers.access">
+    <ProtectedRoute permission="suppliers.view">
       <FornecedoresPage />
     </ProtectedRoute>
   );
