@@ -19,6 +19,42 @@ model Counter {
   @@index([companyId])
 }
 
+model FrameMeasurement {
+  id               String       @id @default(cuid())
+  companyId        String
+  company          Company      @relation(fields: [companyId], references: [id])
+  serviceOrderId   String
+  serviceOrder     ServiceOrder @relation(fields: [serviceOrderId], references: [id])
+
+  // Medidas da armação
+  frameWidth       Decimal? @db.Decimal(5, 1)  // Largura total (mm)
+  bridgeSize       Decimal? @db.Decimal(4, 1)  // Ponte (mm)
+  lensWidth        Decimal? @db.Decimal(4, 1)  // Largura da lente (mm)
+  lensHeight       Decimal? @db.Decimal(4, 1)  // Altura da lente (mm)
+  templeLength     Decimal? @db.Decimal(4, 1)  // Comprimento da haste (mm)
+
+  // Medidas do cliente na armação
+  pdRight          Decimal? @db.Decimal(4, 1)  // DP OD (mm)
+  pdLeft           Decimal? @db.Decimal(4, 1)  // DP OE (mm)
+  heightRight      Decimal? @db.Decimal(4, 1)  // Altura OD (mm)
+  heightLeft       Decimal? @db.Decimal(4, 1)  // Altura OE (mm)
+
+  // Dados adicionais
+  frameModel       String?
+  frameColor       String?
+  frameMaterial    String?  // ACETATO, METAL, TITANIO, etc.
+
+  // Quem mediu
+  measuredByUserId String?
+  measuredBy       User?    @relation("FrameMeasurer", fields: [measuredByUserId], references: [id])
+  measuredAt       DateTime @default(now())
+
+  observations     String?
+
+  @@index([serviceOrderId])
+  @@index([companyId])
+}
+
 model CashRegister {
   id             String   @id @default(cuid())
   companyId      String
@@ -118,6 +154,7 @@ model Company {
   counters           Counter[]
   cardFeeRules       CardFeeRule[]
   cashRegisters      CashRegister[]
+  frameMeasurements  FrameMeasurement[]
 }
 
 model Branch {
@@ -207,6 +244,7 @@ model User {
   branches                   UserBranch[]
   customPermissions          UserPermission[]      @relation("UserCustomPermissions")
   prescriptionsCreated       Prescription[]        @relation("PrescriptionCreator")
+  frameMeasurementsTaken     FrameMeasurement[]    @relation("FrameMeasurer")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -715,12 +753,13 @@ model ServiceOrder {
   laboratory       Lab?                  @relation(fields: [laboratoryId], references: [id])
   createdByUser    User                  @relation("SOCreator", fields: [createdByUserId], references: [id])
   deliveredByUser  User?                 @relation("SODeliverer", fields: [deliveredByUserId], references: [id])
-  qualityChecklist QualityChecklist?
-  sale             Sale?
-  items            ServiceOrderItem[]
-  history          ServiceOrderHistory[]
-  reservations     StockReservation[]
-  warranties       Warranty[]
+  qualityChecklist  QualityChecklist?
+  sale              Sale?
+  items             ServiceOrderItem[]
+  history           ServiceOrderHistory[]
+  reservations      StockReservation[]
+  warranties        Warranty[]
+  frameMeasurements FrameMeasurement[]
 
   @@unique([companyId, number])
   @@index([companyId, status])
