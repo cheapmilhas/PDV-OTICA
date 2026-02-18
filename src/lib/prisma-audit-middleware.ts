@@ -47,7 +47,8 @@ export function registerAuditMiddleware(client: PrismaClient): void {
     const result = await next(params);
 
     // Gravar log em background (não bloqueia a resposta)
-    setImmediate(async () => {
+    // Usa Promise.resolve().then() para compatibilidade com Edge Runtime
+    Promise.resolve().then(async () => {
       try {
         const entityId =
           result?.id ||
