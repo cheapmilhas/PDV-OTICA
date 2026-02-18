@@ -213,6 +213,7 @@ model Customer {
   referralSource     String?
   notes              String?
   active             Boolean                @default(true)
+  deletedAt          DateTime?
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   accountsReceivable AccountReceivable[]
@@ -466,6 +467,7 @@ model Product {
   active            Boolean            @default(true)
   featured          Boolean            @default(false)
   launch            Boolean            @default(false)
+  deletedAt         DateTime?
   createdAt         DateTime           @default(now())
   updatedAt         DateTime           @updatedAt
   supplierId        String?
@@ -646,6 +648,7 @@ model ServiceOrder {
   // === DADOS ===
   prescriptionData Json?
   notes            String?
+  deletedAt        DateTime?
 
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
@@ -792,6 +795,7 @@ model Quote {
   conversionReason  String?
   convertedToSaleId String?     @unique
   convertedToOsId   String?
+  deletedAt         DateTime?
   createdAt         DateTime    @default(now())
   updatedAt         DateTime    @updatedAt
   convertedAt       DateTime?
@@ -865,6 +869,7 @@ model Sale {
   fiscalXmlUrl         String?
   fiscalPdfUrl         String?
   completedAt          DateTime?
+  deletedAt            DateTime?
   createdAt            DateTime            @default(now())
   updatedAt            DateTime            @updatedAt
   convertedFromQuoteId String?             @unique
