@@ -93,7 +93,7 @@ export default function DashboardPage() {
         setLowStockProducts(productsData.data || []);
 
         // Ordens de serviço urgentes (buscar apenas APPROVED por enquanto)
-        const osRes = await fetch('/api/service-orders?status=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3');
+        const osRes = await fetch('/api/service-orders?orderStatus=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3');
         const osData = await osRes.json();
         setOsUrgentes(osData.data || []);
 
