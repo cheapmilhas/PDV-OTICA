@@ -25,6 +25,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/shared/can";
+import { Can as CanPermission } from "@/components/permissions/can";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
@@ -251,10 +252,12 @@ function ClientesPage() {
               />
             </label>
           </Button>
-          <Button onClick={() => router.push("/dashboard/clientes/novo")}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Cliente
-          </Button>
+          <CanPermission permission="customers.create">
+            <Button onClick={() => router.push("/dashboard/clientes/novo")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Cliente
+            </Button>
+          </CanPermission>
         </div>
       </div>
 

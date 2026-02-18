@@ -21,6 +21,7 @@ import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Can } from "@/components/permissions/can";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { format, subDays } from "date-fns";
@@ -292,10 +293,12 @@ function OrcamentosPage() {
           <h1 className="text-3xl font-bold">Orçamentos</h1>
           <p className="text-muted-foreground">Gerenciamento de orçamentos</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/orcamentos/novo")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Orçamento
-        </Button>
+        <Can permission="quotes.create">
+          <Button onClick={() => router.push("/dashboard/orcamentos/novo")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Orçamento
+          </Button>
+        </Can>
       </div>
 
       {/* KPIs */}

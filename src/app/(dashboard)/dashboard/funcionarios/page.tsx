@@ -35,6 +35,7 @@ import { Search, Plus, Eye, Mail, Shield, Loader2, Edit, Trash2, Package, AlertT
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Can } from "@/components/permissions/can";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface UserType {
@@ -339,10 +340,12 @@ function FuncionariosPage() {
             Gerencie a equipe da ótica
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Funcionário
-        </Button>
+        <Can permission="users.create">
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Funcionário
+          </Button>
+        </Can>
       </div>
 
       {/* Summary Cards */}

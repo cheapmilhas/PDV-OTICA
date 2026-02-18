@@ -30,6 +30,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/shared/can";
+import { Can as CanPermission } from "@/components/permissions/can";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { ModalAjusteEstoque } from "@/components/estoque/modal-ajuste-estoque";
@@ -260,10 +261,12 @@ function ProdutosPage() {
               />
             </label>
           </Button>
-          <Button onClick={() => router.push("/dashboard/produtos/novo")}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Produto
-          </Button>
+          <CanPermission permission="products.create">
+            <Button onClick={() => router.push("/dashboard/produtos/novo")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Produto
+            </Button>
+          </CanPermission>
         </div>
       </div>
 
@@ -362,10 +365,12 @@ function ProdutosPage() {
           }
           action={
             !search && (
-              <Button onClick={() => router.push("/dashboard/produtos/novo")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Novo Produto
-              </Button>
+              <CanPermission permission="products.create">
+                <Button onClick={() => router.push("/dashboard/produtos/novo")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Novo Produto
+                </Button>
+              </CanPermission>
             )
           }
         />

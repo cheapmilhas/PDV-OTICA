@@ -17,6 +17,7 @@ import {
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
+import { Can } from "@/components/permissions/can";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
@@ -523,10 +524,12 @@ function OrdensServicoPage() {
           <h1 className="text-3xl font-bold">Ordens de Serviço</h1>
           <p className="text-muted-foreground">Controle completo do fluxo de OS</p>
         </div>
-        <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova OS
-        </Button>
+        <Can permission="service_orders.create">
+          <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
+            <Plus className="mr-2 h-4 w-4" />
+            Nova OS
+          </Button>
+        </Can>
       </div>
 
       {/* Resumo */}

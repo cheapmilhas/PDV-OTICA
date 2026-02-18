@@ -25,6 +25,7 @@ import { HistoricoMovimentacoes } from "@/components/estoque/historico-movimenta
 import { LeitorCodigoBarras } from "@/components/estoque/leitor-codigo-barras";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
+import { Can } from "@/components/permissions/can";
 
 interface Product {
   id: string;
@@ -155,14 +156,16 @@ function EstoquePage() {
               <Printer className="mr-2 h-4 w-4" />
               Imprimir Estoque
             </Button>
-            <Button variant="outline" onClick={() => abrirModalSaida()}>
-              <Minus className="mr-2 h-4 w-4" />
-              Saída de Estoque
-            </Button>
-            <Button onClick={() => abrirModalEntrada()}>
-              <Plus className="mr-2 h-4 w-4" />
-              Entrada de Estoque
-            </Button>
+            <Can permission="stock.adjust">
+              <Button variant="outline" onClick={() => abrirModalSaida()}>
+                <Minus className="mr-2 h-4 w-4" />
+                Saída de Estoque
+              </Button>
+              <Button onClick={() => abrirModalEntrada()}>
+                <Plus className="mr-2 h-4 w-4" />
+                Entrada de Estoque
+              </Button>
+            </Can>
           </div>
         </div>
 
