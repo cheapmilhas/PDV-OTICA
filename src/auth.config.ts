@@ -27,22 +27,40 @@ export const authConfig: NextAuthConfig = {
   },
   providers: [],
   callbacks: {
+    // Propaga campos customizados do token para auth.user no middleware
+    async jwt({ token, user }) {
+      if (user) {
+        token.role = (user as any).role;
+        token.branchId = (user as any).branchId;
+        token.companyId = (user as any).companyId;
+      }
+      return token;
+    },
+    async session({ session, token }) {
+      if (token && session.user) {
+        (session.user as any).role = token.role;
+        (session.user as any).branchId = token.branchId;
+        (session.user as any).companyId = token.companyId;
+      }
+      return session;
+    },
     authorized({ auth, request: { nextUrl } }) {
       const isLoggedIn = !!auth?.user;
       const isOnDashboard = nextUrl.pathname.startsWith("/dashboard");
       const isOnLogin = nextUrl.pathname === "/login";
-      const userRole = auth?.user?.role as string | undefined;
+      const userRole = (auth?.user as any)?.role as string | undefined;
       const isOnPermissionsPage = nextUrl.pathname.includes("/permissoes");
 
       if (isOnDashboard && !isLoggedIn) {
-        return Response.redirect(new URL("/login", nextUrl));
+        return false; // NextAuth redireciona para pages.signIn automaticamente
       }
 
       if (isOnLogin && isLoggedIn) {
         return Response.redirect(new URL("/dashboard", nextUrl));
       }
 
-      if (isOnPermissionsPage && userRole !== "ADMIN") {
+      // Só bloqueia se está logado e NÃO é ADMIN
+      if (isOnPermissionsPage && isLoggedIn && userRole !== "ADMIN") {
         return Response.redirect(new URL("/dashboard", nextUrl));
       }
 
