@@ -319,7 +319,7 @@ export default function DetalhesOrcamentoPage() {
             </Button>
           )}
 
-          {!["CONVERTED", "CANCELLED", "CANCELED"].includes(quote.status) && (
+          {!["CONVERTED", "CANCELED", "CANCELED"].includes(quote.status) && (
             <Button variant="destructive" onClick={() => setCancelModalOpen(true)}>
               <XCircle className="h-4 w-4 mr-2" />
               Cancelar

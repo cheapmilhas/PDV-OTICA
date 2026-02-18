@@ -45,8 +45,8 @@ export class QuoteService {
     // Build where clause
     const where: Prisma.QuoteWhereInput = {
       companyId,
-      ...(status === "ativos" && { status: { notIn: ["CANCELED", "EXPIRED", "CANCELLED"] } }),
-      ...(status === "inativos" && { status: { in: ["CANCELED", "EXPIRED", "CANCELLED"] } }),
+      ...(status === "ativos" && { status: { notIn: ["CANCELED", "EXPIRED", "LOST"] } }),
+      ...(status === "inativos" && { status: { in: ["CANCELED", "EXPIRED", "LOST"] } }),
       ...(quoteStatus && { status: quoteStatus }),
       ...(customerId && { customerId }),
       ...(sellerUserId && { sellerUserId }),
@@ -393,14 +393,14 @@ export class QuoteService {
 
     // Validar transições permitidas
     const allowedTransitions: Record<QuoteStatus, QuoteStatus[]> = {
-      PENDING: ["SENT", "APPROVED", "CANCELLED", "EXPIRED"],
-      SENT: ["APPROVED", "CANCELLED", "EXPIRED", "PENDING"],
-      APPROVED: ["CONVERTED", "CANCELLED", "EXPIRED"],
+      DRAFT: ["PENDING", "SENT", "CANCELED"],
+      PENDING: ["SENT", "APPROVED", "CANCELED", "EXPIRED"],
+      SENT: ["APPROVED", "CANCELED", "EXPIRED", "PENDING"],
+      APPROVED: ["CONVERTED", "CANCELED", "EXPIRED"],
       CONVERTED: [], // Não pode mudar status de convertido
       EXPIRED: ["PENDING", "SENT"], // Pode reativar
-      CANCELLED: ["PENDING"], // Pode reativar
-      OPEN: ["PENDING", "SENT", "APPROVED", "CANCELLED"], // Legacy
-      CANCELED: ["PENDING"], // Legacy
+      CANCELED: ["PENDING"], // Pode reativar
+      LOST: ["PENDING"], // Pode reativar
     };
 
     if (!allowedTransitions[existing.status as QuoteStatus]?.includes(status)) {
@@ -451,7 +451,7 @@ export class QuoteService {
       );
     }
 
-    return this.updateStatus(id, QuoteStatus.CANCELLED, companyId, data.lostReason);
+    return this.updateStatus(id, QuoteStatus.CANCELED, companyId, data.lostReason);
   }
 
   /**
@@ -499,7 +499,7 @@ export class QuoteService {
         by: ["lostReason"],
         where: {
           ...where,
-          status: { in: ["CANCELLED", "EXPIRED"] },
+          status: { in: ["CANCELED", "EXPIRED", "LOST"] },
           lostReason: { not: null },
         },
         _count: { _all: true },
@@ -527,7 +527,7 @@ export class QuoteService {
         where: {
           ...where,
           followUpDate: { lte: new Date() },
-          status: { notIn: ["CONVERTED", "CANCELLED", "EXPIRED"] },
+          status: { notIn: ["CONVERTED", "CANCELED", "EXPIRED", "LOST"] },
         },
       }),
     ]);
@@ -601,7 +601,7 @@ export class QuoteService {
     const result = await prisma.quote.updateMany({
       where: {
         companyId,
-        status: { in: ["PENDING", "SENT", "OPEN"] },
+        status: { in: ["PENDING", "SENT", "DRAFT"] },
         validUntil: { lt: today },
       },
       data: {

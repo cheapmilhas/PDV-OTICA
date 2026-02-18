@@ -1752,14 +1752,14 @@ enum FiscalStatus {
 }
 
 enum QuoteStatus {
-  OPEN
+  DRAFT
+  PENDING
   SENT
   APPROVED
   CONVERTED
   EXPIRED
   CANCELED
-  PENDING
-  CANCELLED
+  LOST
 }
 
 enum QuoteItemType {

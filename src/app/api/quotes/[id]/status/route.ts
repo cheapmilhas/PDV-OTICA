@@ -10,7 +10,7 @@ import { handleApiError } from "@/lib/error-handler";
  *
  * Body:
  * - status: QuoteStatus
- * - lostReason?: string (obrigatório se status = CANCELLED)
+ * - lostReason?: string (obrigatório se status = CANCELED)
  */
 export async function PATCH(
   request: NextRequest,

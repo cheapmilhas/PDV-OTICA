@@ -42,7 +42,7 @@ export type CloseMonthDTO = z.infer<typeof closeMonthSchema>;
 export const goalsQuerySchema = z.object({
   year: z.coerce.number().int().optional(),
   month: z.coerce.number().int().optional(),
-  status: z.enum(["ACTIVE", "CLOSED", "CANCELLED"]).optional(),
+  status: z.enum(["ACTIVE", "CLOSED", "CANCELLED", "CANCELED"]).optional(),
 });
 
 export type GoalsQueryDTO = z.infer<typeof goalsQuerySchema>;
