@@ -1,25 +1,8 @@
-import { auth } from "@/auth";
+import NextAuth from "next-auth";
+import { authConfig } from "@/auth.config";
 
-export default auth((req) => {
-  const isLoggedIn = !!req.auth;
-  const isOnDashboard = req.nextUrl.pathname.startsWith("/dashboard");
-  const isOnLogin = req.nextUrl.pathname === "/login";
-  const isOnPermissionsPage = req.nextUrl.pathname.includes("/permissoes");
-  const userRole = req.auth?.user?.role;
-
-  if (isOnDashboard && !isLoggedIn) {
-    return Response.redirect(new URL("/login", req.nextUrl));
-  }
-
-  if (isOnLogin && isLoggedIn) {
-    return Response.redirect(new URL("/dashboard", req.nextUrl));
-  }
-
-  // Proteger página de permissões - apenas ADMIN
-  if (isOnPermissionsPage && userRole !== "ADMIN") {
-    return Response.redirect(new URL("/dashboard", req.nextUrl));
-  }
-});
+// Usa authConfig sem Prisma/bcrypt — compatível com Edge Runtime
+export default NextAuth(authConfig).auth;
 
 export const config = {
   matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
