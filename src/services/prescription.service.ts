@@ -282,6 +282,42 @@ export const prescriptionService = {
   },
 
   /**
+   * Verificar validade da receita do cliente
+   */
+  async checkExpiry(customerId: string, companyId: string) {
+    const latest = await this.getLatestByCustomer(customerId, companyId);
+
+    if (!latest) {
+      return { hasValid: false, message: "Cliente não possui receita válida" };
+    }
+
+    const now = Date.now();
+    const daysUntilExpiry = Math.ceil(
+      (latest.expiresAt.getTime() - now) / (1000 * 60 * 60 * 24)
+    );
+
+    if (daysUntilExpiry < 0) {
+      return {
+        hasValid: false,
+        message: `Receita vencida há ${Math.abs(daysUntilExpiry)} dias`,
+        prescription: latest,
+      };
+    }
+
+    if (daysUntilExpiry <= 30) {
+      return {
+        hasValid: true,
+        expiringSoon: true,
+        daysUntilExpiry,
+        message: `Receita expira em ${daysUntilExpiry} dias`,
+        prescription: latest,
+      };
+    }
+
+    return { hasValid: true, expiringSoon: false, prescription: latest };
+  },
+
+  /**
    * Comparar evolução do grau
    */
   async getGradeEvolution(customerId: string, companyId: string) {
