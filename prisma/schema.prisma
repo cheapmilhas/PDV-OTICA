@@ -106,6 +106,7 @@ model Branch {
   salesGoals           SalesGoal[]
   sellerCommissions    SellerCommission[]
   serviceOrders        ServiceOrder[]
+  stockMovements       StockMovement[]     @relation("StockMovementBranch")
   stockMovementsSource StockMovement[]     @relation("StockMovementSource")
   stockMovementsTarget StockMovement[]     @relation("StockMovementTarget")
   stockReservations    StockReservation[]
@@ -754,6 +755,7 @@ model StockReservation {
 model StockMovement {
   id              String            @id @default(cuid())
   companyId       String
+  branchId        String?           // Filial onde a movimentação ocorreu
   productId       String
   type            StockMovementType
   quantity        Int
@@ -765,6 +767,7 @@ model StockMovement {
   notes           String?
   createdByUserId String?
   createdAt       DateTime          @default(now())
+  branch          Branch?           @relation("StockMovementBranch", fields: [branchId], references: [id])
   company         Company           @relation(fields: [companyId], references: [id])
   createdBy       User?             @relation(fields: [createdByUserId], references: [id])
   product         Product           @relation(fields: [productId], references: [id])
@@ -774,6 +777,7 @@ model StockMovement {
 
   @@index([companyId, productId, createdAt])
   @@index([companyId, type, createdAt])
+  @@index([branchId, createdAt])
   @@index([productId, createdAt])
   @@index([supplierId, createdAt])
 }
