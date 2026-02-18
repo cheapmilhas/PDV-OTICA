@@ -6,6 +6,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { cashbackService } from "@/services/cashback.service";
+import { atomicStockDebit } from "@/services/stock.service";
 
 /**
  * Service para operações de Vendas (PDV)
@@ -371,15 +372,15 @@ export class SaleService {
           },
         });
 
-        // 3. Atualizar estoque
-        await tx.product.update({
-          where: { id: item.productId },
-          data: {
-            stockQty: {
-              decrement: item.qty,
-            },
-          },
-        });
+        // 3. Atualizar estoque de forma atômica (race condition safe)
+        const stockResult = await atomicStockDebit(item.productId, item.qty, companyId, tx);
+        if (!stockResult.success) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            stockResult.error || "Estoque insuficiente",
+            400
+          );
+        }
       }
 
       // 4. Criar pagamentos
@@ -705,12 +706,14 @@ export class SaleService {
           });
 
           if (product?.stockControlled) {
-            await tx.product.update({
-              where: { id: item.product.id },
-              data: {
-                stockQty: { decrement: item.qty },
-              },
-            });
+            const reactivateResult = await atomicStockDebit(item.product.id, item.qty, sale.companyId, tx);
+            if (!reactivateResult.success) {
+              throw new AppError(
+                ERROR_CODES.VALIDATION_ERROR,
+                reactivateResult.error || "Estoque insuficiente para reativar venda",
+                400
+              );
+            }
 
             // Registrar movimentação de estoque
             await tx.stockMovement.create({

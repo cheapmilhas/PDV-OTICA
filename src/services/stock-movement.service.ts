@@ -8,6 +8,7 @@ import {
   isStockIncrease,
   isStockDecrease,
 } from "@/lib/validations/stock-movement.schema";
+import { atomicStockDebit } from "@/services/stock.service";
 import {
   notFoundError,
   businessRuleError,
@@ -353,12 +354,12 @@ export class StockMovementService {
         },
       });
 
-      // Atualizar estoque do produto (deduzir da origem)
+      // Atualizar estoque do produto de forma atômica (deduzir da origem)
       if (product.stockControlled) {
-        await tx.product.update({
-          where: { id: data.productId },
-          data: { stockQty: product.stockQty - data.quantity },
-        });
+        const transferResult = await atomicStockDebit(data.productId, data.quantity, companyId, tx);
+        if (!transferResult.success) {
+          throw new Error(transferResult.error || "Estoque insuficiente para transferência");
+        }
       }
 
       return { transferOut, transferIn };
