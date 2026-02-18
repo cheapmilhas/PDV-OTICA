@@ -72,6 +72,16 @@ export enum Permission {
   SETTINGS_EDIT = "settings.edit",
   COMPANY_SETTINGS = "company.settings",
   BRANCH_MANAGE = "branch.manage",
+
+  // Módulos adicionais
+  SERVICE_ORDERS_VIEW = "service_orders.view",
+  SERVICE_ORDERS_CREATE = "service_orders.create",
+  SERVICE_ORDERS_EDIT = "service_orders.edit",
+  SUPPLIERS_VIEW = "suppliers.view",
+  LABORATORIES_VIEW = "laboratories.view",
+  CASHBACK_VIEW = "cashback.view",
+  GOALS_VIEW = "goals.view",
+  REMINDERS_VIEW = "reminders.view",
 }
 
 export type UserRole = "ADMIN" | "MANAGER" | "SELLER" | "CASHIER" | "STOCK_MANAGER";
@@ -147,6 +157,16 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     // Configurações básicas
     Permission.SETTINGS_VIEW,
     Permission.SETTINGS_EDIT,
+
+    // Módulos adicionais
+    Permission.SERVICE_ORDERS_VIEW,
+    Permission.SERVICE_ORDERS_CREATE,
+    Permission.SERVICE_ORDERS_EDIT,
+    Permission.SUPPLIERS_VIEW,
+    Permission.LABORATORIES_VIEW,
+    Permission.CASHBACK_VIEW,
+    Permission.GOALS_VIEW,
+    Permission.REMINDERS_VIEW,
   ],
 
   // Vendedor - Foco em vendas e clientes
@@ -161,6 +181,10 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.QUOTES_EDIT,
     Permission.QUOTES_CONVERT,
 
+    // OS
+    Permission.SERVICE_ORDERS_VIEW,
+    Permission.SERVICE_ORDERS_CREATE,
+
     // Clientes
     Permission.CUSTOMERS_CREATE,
     Permission.CUSTOMERS_VIEW,
@@ -171,6 +195,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 
     // Caixa (básico)
     Permission.CASH_SHIFT_VIEW,
+
+    // Lembretes
+    Permission.REMINDERS_VIEW,
 
     // Configurações básicas
     Permission.SETTINGS_VIEW,
@@ -221,6 +248,9 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     // Vendas (apenas visualizar para controle de estoque)
     Permission.SALES_VIEW,
     Permission.SALES_VIEW_ALL,
+
+    // Fornecedores (para controle de estoque)
+    Permission.SUPPLIERS_VIEW,
 
     // Configurações básicas
     Permission.SETTINGS_VIEW,
@@ -331,6 +361,16 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.SETTINGS_EDIT]: "Editar configurações",
   [Permission.COMPANY_SETTINGS]: "Configurações da empresa",
   [Permission.BRANCH_MANAGE]: "Gerenciar filiais",
+
+  // Módulos adicionais
+  [Permission.SERVICE_ORDERS_VIEW]: "Visualizar ordens de serviço",
+  [Permission.SERVICE_ORDERS_CREATE]: "Criar ordens de serviço",
+  [Permission.SERVICE_ORDERS_EDIT]: "Editar ordens de serviço",
+  [Permission.SUPPLIERS_VIEW]: "Visualizar fornecedores",
+  [Permission.LABORATORIES_VIEW]: "Visualizar laboratórios",
+  [Permission.CASHBACK_VIEW]: "Visualizar cashback",
+  [Permission.GOALS_VIEW]: "Visualizar metas",
+  [Permission.REMINDERS_VIEW]: "Visualizar lembretes",
 };
 
 /**

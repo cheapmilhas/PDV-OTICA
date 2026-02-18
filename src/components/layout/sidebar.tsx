@@ -47,19 +47,19 @@ const menuItems = [
         name: "Vendas",
         href: "/dashboard/vendas",
         icon: CreditCard,
-        permission: "sales.access"
+        permission: "sales.view"
       },
       {
         name: "Orçamentos",
         href: "/dashboard/orcamentos",
         icon: FileText,
-        permission: "quotes.access"
+        permission: "quotes.view"
       },
       {
         name: "Ordens de Serviço",
         href: "/dashboard/ordens-servico",
         icon: ClipboardList,
-        permission: "service_orders.access"
+        permission: "service_orders.view"
       },
     ],
   },
@@ -71,38 +71,38 @@ const menuItems = [
         href: "/dashboard/clientes",
         icon: Users,
         hotkey: "F3",
-        permission: "customers.access"
+        permission: "customers.view"
       },
       {
         name: "Produtos",
         href: "/dashboard/produtos",
         icon: Package,
         hotkey: "F4",
-        permission: "products.access"
+        permission: "products.view"
       },
       {
         name: "Fornecedores",
         href: "/dashboard/fornecedores",
         icon: Truck,
-        permission: "suppliers.access"
+        permission: "suppliers.view"
       },
       {
         name: "Laboratórios",
         href: "/dashboard/laboratorios",
         icon: FlaskConical,
-        permission: "laboratories.access"
+        permission: "laboratories.view"
       },
       {
         name: "Tratamentos",
         href: "/dashboard/tratamentos",
         icon: Sparkles,
-        permission: "products.access"
+        permission: "products.view"
       },
       {
         name: "Funcionários",
         href: "/dashboard/funcionarios",
         icon: UserCog,
-        permission: "users.access"
+        permission: "users.view"
       },
     ],
   },
@@ -113,43 +113,43 @@ const menuItems = [
         name: "Estoque",
         href: "/dashboard/estoque",
         icon: Warehouse,
-        permission: "stock.access"
+        permission: "stock.view"
       },
       {
         name: "Caixa",
         href: "/dashboard/caixa",
         icon: CreditCard,
-        permission: "cash.access"
+        permission: "cash_shift.view"
       },
       {
         name: "Financeiro",
         href: "/dashboard/financeiro",
         icon: FileText,
-        permission: "financial.access"
+        permission: "financial.view"
       },
       {
         name: "Cashback",
         href: "/dashboard/cashback",
         icon: Wallet,
-        permission: "cashback.access"
+        permission: "cashback.view"
       },
       {
         name: "Metas",
         href: "/dashboard/metas",
         icon: Target,
-        permission: "goals.access"
+        permission: "goals.view"
       },
       {
         name: "Lembretes",
         href: "/dashboard/lembretes",
         icon: Bell,
-        permission: "reminders.access"
+        permission: "reminders.view"
       },
       {
         name: "Relatórios",
         href: "/dashboard/relatorios",
         icon: BarChart3,
-        permission: "reports.access"
+        permission: "reports.sales"
       },
     ],
   },
@@ -160,7 +160,7 @@ const menuItems = [
         name: "Configurações",
         href: "/dashboard/configuracoes",
         icon: Settings,
-        permission: "settings.access"
+        permission: "settings.view"
       }
     ],
   },
