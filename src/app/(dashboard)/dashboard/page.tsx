@@ -26,6 +26,11 @@ import {
   CreditCard,
   Wrench,
   FlaskConical,
+  FileText,
+  ClipboardList,
+  FileEdit,
+  Wallet,
+  Warehouse,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import {
@@ -159,29 +164,87 @@ export default function DashboardPage() {
       {/* Header com Hora */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Dashboard</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">Dashboard</h1>
+          <p className="text-muted-foreground text-sm hidden md:block">
             Visão geral das operações da ótica
           </p>
         </div>
         <div className="text-right">
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="flex items-center gap-1.5 text-muted-foreground justify-end">
             <Clock className="h-4 w-4" />
-            <span className="text-sm">
+            <span className="text-sm font-medium">
               {currentTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
             </span>
           </div>
-          <div className="flex items-center gap-2 text-muted-foreground">
+          <div className="hidden md:flex items-center gap-2 text-muted-foreground justify-end">
             <Calendar className="h-4 w-4" />
             <span className="text-sm">
               {currentTime.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
             </span>
           </div>
+          <p className="text-xs text-muted-foreground md:hidden">
+            {currentTime.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+          </p>
+        </div>
+      </div>
+
+      {/* ===== MOBILE ONLY: Alertas ===== */}
+      {(metrics.productsLowStock > 0 || metrics.osDelayed > 0) && (
+        <div className="md:hidden space-y-2">
+          {metrics.productsLowStock > 0 && (
+            <Link href="/dashboard/estoque">
+              <div className="flex items-center justify-between rounded-xl border border-orange-200 bg-orange-50 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <Package className="h-4 w-4 text-orange-600" />
+                  <span className="text-sm font-medium text-orange-800">Estoque mínimo</span>
+                </div>
+                <span className="text-sm font-bold text-orange-700">{metrics.productsLowStock} produtos</span>
+              </div>
+            </Link>
+          )}
+          {metrics.osDelayed > 0 && (
+            <Link href="/dashboard/ordens-servico?filter=atrasadas">
+              <div className="flex items-center justify-between rounded-xl border border-red-200 bg-red-50 px-4 py-3">
+                <div className="flex items-center gap-2">
+                  <AlertTriangle className="h-4 w-4 text-red-600" />
+                  <span className="text-sm font-medium text-red-800">OS Atrasadas</span>
+                </div>
+                <span className="text-sm font-bold text-red-700">{metrics.osDelayed} OS</span>
+              </div>
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* ===== MOBILE ONLY: Grid de Ações Rápidas ===== */}
+      <div className="md:hidden">
+        <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Acesso Rápido</p>
+        <div className="grid grid-cols-4 gap-3">
+          {[
+            { icon: ShoppingCart, label: "PDV", href: "/dashboard/pdv", color: "bg-green-500" },
+            { icon: FileText, label: "Vendas", href: "/dashboard/vendas", color: "bg-blue-500" },
+            { icon: Users, label: "Clientes", href: "/dashboard/clientes", color: "bg-purple-500" },
+            { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque", color: "bg-orange-500" },
+            { icon: ClipboardList, label: "OS", href: "/dashboard/ordens-servico", color: "bg-indigo-500" },
+            { icon: FileEdit, label: "Orçamentos", href: "/dashboard/orcamentos", color: "bg-cyan-500" },
+            { icon: DollarSign, label: "Financeiro", href: "/dashboard/financeiro", color: "bg-emerald-500" },
+            { icon: Wallet, label: "Caixa", href: "/dashboard/caixa", color: "bg-amber-500" },
+          ].map((item) => {
+            const Icon = item.icon;
+            return (
+              <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1.5">
+                <div className={`flex h-14 w-14 items-center justify-center rounded-2xl ${item.color} shadow-sm`}>
+                  <Icon className="h-6 w-6 text-white" />
+                </div>
+                <span className="text-[10px] font-medium text-muted-foreground text-center leading-tight">{item.label}</span>
+              </Link>
+            );
+          })}
         </div>
       </div>
 
       {/* Metrics Cards */}
-      <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
+      <div className="metrics-grid grid grid-cols-2 gap-3 md:gap-4 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
             <CardTitle className="text-sm font-medium">Vendas Hoje</CardTitle>

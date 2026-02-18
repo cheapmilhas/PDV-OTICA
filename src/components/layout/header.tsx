@@ -65,7 +65,7 @@ export function Header() {
   }, [session]);
 
   return (
-    <header className="flex h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+    <header className="flex h-14 md:h-16 items-center justify-between border-b bg-background px-4 md:px-6">
       {/* Mobile menu button */}
       <MobileSidebar />
 
