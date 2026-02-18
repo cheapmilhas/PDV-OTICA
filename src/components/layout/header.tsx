@@ -48,7 +48,14 @@ export function Header() {
   const [confirmPassword, setConfirmPassword] = useState("");
   const [showCurrentPassword, setShowCurrentPassword] = useState(false);
   const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [savingProfile, setSavingProfile] = useState(false);
+  const [errors, setErrors] = useState<{
+    name?: string;
+    currentPassword?: string;
+    newPassword?: string;
+    confirmPassword?: string;
+  }>({});
 
   const user = {
     name: session?.user?.name || "Usuário",
@@ -63,20 +70,56 @@ export function Header() {
     }
   }, [session?.user?.name]);
 
+  const resetProfileModal = () => {
+    setCurrentPassword("");
+    setNewPassword("");
+    setConfirmPassword("");
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
+    setErrors({});
+  };
+
+  const handleProfileOpenChange = (open: boolean) => {
+    if (!open) resetProfileModal();
+    setProfileOpen(open);
+  };
+
   const handleSaveProfile = async () => {
-    if (newPassword && newPassword !== confirmPassword) {
-      toast.error("As senhas não coincidem");
-      return;
+    const newErrors: typeof errors = {};
+
+    if (!profileName.trim()) {
+      newErrors.name = "Nome é obrigatório";
     }
-    if (newPassword && newPassword.length < 6) {
-      toast.error("A nova senha deve ter pelo menos 6 caracteres");
+
+    // Se qualquer campo de senha foi preenchido, valida todos
+    const changingPassword = currentPassword || newPassword || confirmPassword;
+    if (changingPassword) {
+      if (!currentPassword) {
+        newErrors.currentPassword = "Informe a senha atual";
+      }
+      if (!newPassword) {
+        newErrors.newPassword = "Informe a nova senha";
+      } else if (newPassword.length < 6) {
+        newErrors.newPassword = "A senha deve ter pelo menos 6 caracteres";
+      }
+      if (!confirmPassword) {
+        newErrors.confirmPassword = "Confirme a nova senha";
+      } else if (newPassword && newPassword !== confirmPassword) {
+        newErrors.confirmPassword = "As senhas não coincidem";
+      }
+    }
+
+    if (Object.keys(newErrors).length > 0) {
+      setErrors(newErrors);
       return;
     }
 
+    setErrors({});
     setSavingProfile(true);
     try {
       const body: Record<string, string> = { name: profileName };
-      if (newPassword) {
+      if (changingPassword) {
         body.currentPassword = currentPassword;
         body.newPassword = newPassword;
       }
@@ -87,16 +130,21 @@ export function Header() {
         body: JSON.stringify(body),
       });
 
+      const data = await res.json();
+
       if (!res.ok) {
-        const data = await res.json();
-        toast.error(data.error?.message || "Erro ao salvar perfil");
+        const msg = data.error?.message || "Erro ao salvar perfil";
+        // Erros específicos de senha voltam para o campo correto
+        if (data.error?.code === "INVALID_PASSWORD") {
+          setErrors({ currentPassword: "Senha atual incorreta" });
+        } else {
+          toast.error(msg);
+        }
         return;
       }
 
-      toast.success("Perfil atualizado com sucesso");
-      setCurrentPassword("");
-      setNewPassword("");
-      setConfirmPassword("");
+      toast.success("Perfil atualizado com sucesso!");
+      resetProfileModal();
       setProfileOpen(false);
     } catch {
       toast.error("Erro ao salvar perfil");
@@ -234,7 +282,7 @@ export function Header() {
     </header>
 
     {/* Modal Meu Perfil */}
-    <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+    <Dialog open={profileOpen} onOpenChange={handleProfileOpenChange}>
       <DialogContent className="sm:max-w-md">
         <DialogHeader>
           <DialogTitle>Meu Perfil</DialogTitle>
@@ -262,9 +310,11 @@ export function Header() {
             <Input
               id="profile-name"
               value={profileName}
-              onChange={(e) => setProfileName(e.target.value)}
+              onChange={(e) => { setProfileName(e.target.value); setErrors(p => ({ ...p, name: undefined })); }}
               placeholder="Seu nome"
+              className={errors.name ? "border-destructive focus-visible:ring-destructive" : ""}
             />
+            {errors.name && <p className="text-xs text-destructive">{errors.name}</p>}
           </div>
 
           {/* Separador senha */}
@@ -279,8 +329,9 @@ export function Header() {
                     id="current-password"
                     type={showCurrentPassword ? "text" : "password"}
                     value={currentPassword}
-                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    onChange={(e) => { setCurrentPassword(e.target.value); setErrors(p => ({ ...p, currentPassword: undefined })); }}
                     placeholder="Digite a senha atual"
+                    className={errors.currentPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
                   />
                   <Button
                     type="button"
@@ -292,6 +343,7 @@ export function Header() {
                     {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                {errors.currentPassword && <p className="text-xs text-destructive">{errors.currentPassword}</p>}
               </div>
 
               <div className="space-y-1.5">
@@ -301,8 +353,9 @@ export function Header() {
                     id="new-password"
                     type={showNewPassword ? "text" : "password"}
                     value={newPassword}
-                    onChange={(e) => setNewPassword(e.target.value)}
+                    onChange={(e) => { setNewPassword(e.target.value); setErrors(p => ({ ...p, newPassword: undefined })); }}
                     placeholder="Mínimo 6 caracteres"
+                    className={errors.newPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
                   />
                   <Button
                     type="button"
@@ -314,24 +367,38 @@ export function Header() {
                     {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                   </Button>
                 </div>
+                {errors.newPassword && <p className="text-xs text-destructive">{errors.newPassword}</p>}
               </div>
 
               <div className="space-y-1.5">
                 <Label htmlFor="confirm-password">Confirmar nova senha</Label>
-                <Input
-                  id="confirm-password"
-                  type="password"
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                  placeholder="Repita a nova senha"
-                />
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? "text" : "password"}
+                    value={confirmPassword}
+                    onChange={(e) => { setConfirmPassword(e.target.value); setErrors(p => ({ ...p, confirmPassword: undefined })); }}
+                    placeholder="Repita a nova senha"
+                    className={errors.confirmPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setShowConfirmPassword(!showConfirmPassword)}
+                  >
+                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+                {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
               </div>
             </div>
           </div>
         </div>
 
         <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => setProfileOpen(false)} disabled={savingProfile}>
+          <Button variant="outline" onClick={() => handleProfileOpenChange(false)} disabled={savingProfile}>
             Cancelar
           </Button>
           <Button onClick={handleSaveProfile} disabled={savingProfile}>
