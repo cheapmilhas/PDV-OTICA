@@ -19,6 +19,27 @@ model Counter {
   @@index([companyId])
 }
 
+model CardFeeRule {
+  id             String   @id @default(cuid())
+  companyId      String
+  company        Company  @relation(fields: [companyId], references: [id])
+
+  brand          String   // VISA, MASTERCARD, ELO, AMEX, HIPERCARD, PIX
+  paymentType    String   // CREDIT, DEBIT, PIX
+  installments   Int      @default(1)
+
+  feePercent     Decimal  @db.Decimal(5, 4)
+  feeFixed       Decimal  @default(0) @db.Decimal(10, 2)
+  settlementDays Int
+
+  active         Boolean  @default(true)
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+
+  @@unique([companyId, brand, paymentType, installments])
+  @@index([companyId, active])
+}
+
 model Company {
   id                 String              @id @default(cuid())
   name               String
@@ -69,6 +90,7 @@ model Company {
   users              User[]
   warranties         Warranty[]
   counters           Counter[]
+  cardFeeRules       CardFeeRule[]
 }
 
 model Branch {
@@ -933,12 +955,26 @@ model SalePayment {
   receivedAt       DateTime?
   receivedByUserId String?
   createdAt        DateTime       @default(now())
+
+  // Campos de conciliação de cartão
+  cardLastDigits    String?        // Últimos 4 dígitos
+  authorizationCode String?        // Código de autorização
+  nsu               String?        // NSU da transação
+  feePercent        Decimal?       @db.Decimal(5, 4)
+  feeAmount         Decimal?       @db.Decimal(10, 2)
+  netAmount         Decimal?       @db.Decimal(10, 2)
+  settlementDate    DateTime?      // Data prevista de recebimento
+  settledAt         DateTime?      // Data real do recebimento
+  settlementStatus  String?        @default("PENDING") // PENDING, SETTLED, FAILED
+  acquirer          String?        // CIELO, REDE, STONE, PAGSEGURO, etc.
+
   cashMovements    CashMovement[]
   receivedByUser   User?          @relation("PaymentReceiver", fields: [receivedByUserId], references: [id])
   sale             Sale           @relation(fields: [saleId], references: [id])
 
   @@index([saleId, status])
   @@index([method, status])
+  @@index([settlementDate, settlementStatus])
 }
 
 model CommissionRule {
