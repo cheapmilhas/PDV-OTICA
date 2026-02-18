@@ -760,6 +760,7 @@ model ServiceOrder {
   reservations      StockReservation[]
   warranties        Warranty[]
   frameMeasurements FrameMeasurement[]
+  warrantyClaims    WarrantyClaim[]       @relation("WarrantyClaimOrder")
 
   @@unique([companyId, number])
   @@index([companyId, status])
@@ -1170,22 +1171,26 @@ model Warranty {
 }
 
 model WarrantyClaim {
-  id                 String    @id @default(cuid())
+  id                 String               @id @default(cuid())
   warrantyId         String
-  openedAt           DateTime  @default(now())
+  openedAt           DateTime             @default(now())
   reason             String
   problemDescription String?
   resolution         String?
   resolutionType     String?
   filesUrl           String[]
+  status             WarrantyClaimStatus  @default(PENDING)
+  warrantyOrderId    String?              // OS criada para executar a garantia
   analyzedByUserId   String?
   analyzedAt         DateTime?
   closedAt           DateTime?
   closedByUserId     String?
   notes              String?
-  warranty           Warranty  @relation(fields: [warrantyId], references: [id])
+  warranty           Warranty             @relation(fields: [warrantyId], references: [id])
+  warrantyOrder      ServiceOrder?        @relation("WarrantyClaimOrder", fields: [warrantyOrderId], references: [id])
 
   @@index([warrantyId])
+  @@index([status])
 }
 
 model Appointment {
@@ -1854,6 +1859,16 @@ enum WarrantyType {
   LENS
   MOUNTING
   ADJUSTMENT
+}
+
+enum WarrantyClaimStatus {
+  PENDING
+  ANALYZING
+  APPROVED
+  REJECTED
+  IN_PROGRESS
+  COMPLETED
+  CANCELED
 }
 
 enum FiscalStatus {
