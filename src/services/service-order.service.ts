@@ -3,6 +3,7 @@ import { ServiceOrderStatus, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } from "@/lib/validations/service-order.schema";
+import { getNextSequence } from "@/lib/counter";
 
 /**
  * Service para operações de Ordens de Serviço
@@ -14,15 +15,10 @@ import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } 
 export class ServiceOrderService {
 
   /**
-   * Gera número sequencial por empresa (dentro da transaction)
+   * Gera número sequencial atômico via tabela Counter (race condition safe)
    */
   private async getNextNumber(companyId: string, tx: any): Promise<number> {
-    const last = await tx.serviceOrder.findFirst({
-      where: { companyId },
-      orderBy: { number: "desc" },
-      select: { number: true },
-    });
-    return (last?.number || 0) + 1;
+    return getNextSequence(companyId, "service_order", tx);
   }
 
   /**
