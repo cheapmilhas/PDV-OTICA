@@ -1,9 +1,10 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Search, User, Building2, ChevronDown, LogOut } from "lucide-react";
+import { Bell, Search, User, Building2, ChevronDown, LogOut, Loader2, Eye, EyeOff } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { Label } from "@/components/ui/label";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -12,10 +13,19 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { signOut, useSession } from "next-auth/react";
+import { useRouter } from "next/navigation";
 import { MobileSidebar } from "./mobile-sidebar";
+import toast from "react-hot-toast";
 
 interface Branch {
   id: string;
@@ -27,14 +37,72 @@ interface Branch {
 
 export function Header() {
   const { data: session } = useSession();
+  const router = useRouter();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
   const [notifications] = useState(0);
+  const [profileOpen, setProfileOpen] = useState(false);
+  const [profileName, setProfileName] = useState("");
+  const [currentPassword, setCurrentPassword] = useState("");
+  const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [savingProfile, setSavingProfile] = useState(false);
 
   const user = {
     name: session?.user?.name || "Usuário",
     email: session?.user?.email || "",
     role: session?.user?.role || "USER",
+  };
+
+  // Inicializar nome do perfil quando a sessão carregar
+  useEffect(() => {
+    if (session?.user?.name) {
+      setProfileName(session.user.name);
+    }
+  }, [session?.user?.name]);
+
+  const handleSaveProfile = async () => {
+    if (newPassword && newPassword !== confirmPassword) {
+      toast.error("As senhas não coincidem");
+      return;
+    }
+    if (newPassword && newPassword.length < 6) {
+      toast.error("A nova senha deve ter pelo menos 6 caracteres");
+      return;
+    }
+
+    setSavingProfile(true);
+    try {
+      const body: Record<string, string> = { name: profileName };
+      if (newPassword) {
+        body.currentPassword = currentPassword;
+        body.newPassword = newPassword;
+      }
+
+      const res = await fetch(`/api/users/${session?.user?.id}/profile`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      if (!res.ok) {
+        const data = await res.json();
+        toast.error(data.error?.message || "Erro ao salvar perfil");
+        return;
+      }
+
+      toast.success("Perfil atualizado com sucesso");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+      setProfileOpen(false);
+    } catch {
+      toast.error("Erro ao salvar perfil");
+    } finally {
+      setSavingProfile(false);
+    }
   };
 
   // Carregar filiais da empresa
@@ -65,6 +133,7 @@ export function Header() {
   }, [session]);
 
   return (
+    <>
     <header className="flex h-14 md:h-16 items-center justify-between border-b bg-background px-4 md:px-6">
       {/* Mobile menu button */}
       <MobileSidebar />
@@ -111,7 +180,7 @@ export function Header() {
         )}
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative">
+        <Button variant="ghost" size="icon" className="relative" onClick={() => router.push("/dashboard/lembretes")}>
           <Bell className="h-5 w-5" />
           {notifications > 0 && (
             <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
@@ -143,11 +212,11 @@ export function Header() {
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => setProfileOpen(true)}>
               <User className="mr-2 h-4 w-4" />
               Meu Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem>
+            <DropdownMenuItem onClick={() => router.push("/dashboard/lembretes")}>
               <Bell className="mr-2 h-4 w-4" />
               Notificações
             </DropdownMenuItem>
@@ -163,5 +232,115 @@ export function Header() {
         </DropdownMenu>
       </div>
     </header>
+
+    {/* Modal Meu Perfil */}
+    <Dialog open={profileOpen} onOpenChange={setProfileOpen}>
+      <DialogContent className="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Meu Perfil</DialogTitle>
+          <DialogDescription>Atualize seus dados e senha de acesso</DialogDescription>
+        </DialogHeader>
+
+        <div className="space-y-4 py-2">
+          {/* Info do usuário */}
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">
+            <Avatar className="h-12 w-12">
+              <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+                {user.name.charAt(0)}
+              </AvatarFallback>
+            </Avatar>
+            <div>
+              <p className="font-medium">{user.name}</p>
+              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <Badge variant="secondary" className="text-xs mt-1">{user.role}</Badge>
+            </div>
+          </div>
+
+          {/* Nome */}
+          <div className="space-y-1.5">
+            <Label htmlFor="profile-name">Nome</Label>
+            <Input
+              id="profile-name"
+              value={profileName}
+              onChange={(e) => setProfileName(e.target.value)}
+              placeholder="Seu nome"
+            />
+          </div>
+
+          {/* Separador senha */}
+          <div className="pt-2">
+            <p className="text-sm font-medium text-muted-foreground mb-3">Alterar Senha <span className="font-normal">(opcional)</span></p>
+
+            <div className="space-y-3">
+              <div className="space-y-1.5">
+                <Label htmlFor="current-password">Senha atual</Label>
+                <div className="relative">
+                  <Input
+                    id="current-password"
+                    type={showCurrentPassword ? "text" : "password"}
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    placeholder="Digite a senha atual"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setShowCurrentPassword(!showCurrentPassword)}
+                  >
+                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="new-password">Nova senha</Label>
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? "text" : "password"}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    placeholder="Mínimo 6 caracteres"
+                  />
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="icon"
+                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    onClick={() => setShowNewPassword(!showNewPassword)}
+                  >
+                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </Button>
+                </div>
+              </div>
+
+              <div className="space-y-1.5">
+                <Label htmlFor="confirm-password">Confirmar nova senha</Label>
+                <Input
+                  id="confirm-password"
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => setConfirmPassword(e.target.value)}
+                  placeholder="Repita a nova senha"
+                />
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex justify-end gap-2 pt-2">
+          <Button variant="outline" onClick={() => setProfileOpen(false)} disabled={savingProfile}>
+            Cancelar
+          </Button>
+          <Button onClick={handleSaveProfile} disabled={savingProfile}>
+            {savingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+            Salvar
+          </Button>
+        </div>
+      </DialogContent>
+    </Dialog>
+    </>
   );
 }
