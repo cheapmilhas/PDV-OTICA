@@ -24,11 +24,20 @@ export async function middleware(request: NextRequest) {
 
   // Rotas /admin/**
   if (pathname.startsWith("/admin")) {
-    // Sempre permitir: página de login e API de auth
-    if (
-      pathname === "/admin/login" ||
-      pathname.startsWith("/api/admin/auth")
-    ) {
+    // Sempre permitir API de auth
+    if (pathname.startsWith("/api/admin/auth")) {
+      return NextResponse.next();
+    }
+
+    // Página de login: se já tem token válido, redirecionar para /admin
+    if (pathname === "/admin/login") {
+      const tokenLogin = request.cookies.get("admin.session-token")?.value;
+      if (tokenLogin) {
+        const payloadLogin = await verifyAdminToken(tokenLogin);
+        if (payloadLogin?.isAdmin) {
+          return NextResponse.redirect(new URL("/admin", request.url));
+        }
+      }
       return NextResponse.next();
     }
 

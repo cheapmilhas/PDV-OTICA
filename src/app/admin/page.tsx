@@ -1,16 +1,35 @@
-import { authAdmin } from "@/auth-admin";
+import { cookies } from "next/headers";
 import { redirect } from "next/navigation";
+import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import AdminDashboard from "./dashboard/AdminDashboard";
 
-export default async function AdminPage() {
-  const session = await authAdmin();
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-change-me"
+);
 
-  if (!session || !(session.user as any)?.isAdmin) {
+async function getAdminFromToken() {
+  const cookieStore = await cookies();
+  const token = cookieStore.get("admin.session-token")?.value;
+
+  if (!token) return null;
+
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    if (!payload.isAdmin) return null;
+    return payload as { id: string; email: string; name: string; role: string; isAdmin: boolean };
+  } catch {
+    return null;
+  }
+}
+
+export default async function AdminPage() {
+  const admin = await getAdminFromToken();
+
+  if (!admin) {
     redirect("/admin/login");
   }
 
-  // Métricas gerais do sistema
   const [
     totalCompanies,
     activeSubscriptions,
@@ -42,7 +61,7 @@ export default async function AdminPage() {
 
   return (
     <AdminDashboard
-      admin={{ name: session.user?.name ?? "Admin", email: session.user?.email ?? "", role: (session.user as any)?.role }}
+      admin={{ name: admin.name, email: admin.email, role: admin.role }}
       metrics={{ totalCompanies, activeSubscriptions, trialSubscriptions, totalRevenue }}
       recentCompanies={recentCompanies.map((c) => ({
         id: c.id,
