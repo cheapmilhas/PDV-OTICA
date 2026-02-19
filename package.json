@@ -14,7 +14,8 @@
     "seed:permissions": "npx tsx prisma/seeds/index.ts",
     "test:evidencias": "npx tsx scripts/test-evidencias.ts",
     "validate:imports": "npx tsx scripts/validate-lucide-imports.ts",
-    "fix:imports": "npx tsx scripts/fix-lucide-imports.ts"
+    "fix:imports": "npx tsx scripts/fix-lucide-imports.ts",
+    "db:seed:plans": "npx tsx prisma/seed-plans.ts"
   },
   "prisma": {
     "seed": "node --require esbuild-register prisma/seed.ts"
