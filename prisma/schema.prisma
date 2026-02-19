@@ -183,6 +183,7 @@ model Company {
   supportTickets    SupportTicket[]
   impersonations    ImpersonationSession[]
   globalAudits      GlobalAudit[]
+  companyNotes      CompanyNote[]
 }
 
 model Branch {
@@ -2243,6 +2244,7 @@ model Subscription {
   updatedAt     DateTime @updatedAt
 
   invoices      Invoice[]
+  history       SubscriptionHistory[]
 
   @@index([companyId, status])
   @@index([status])
@@ -2267,7 +2269,7 @@ model Invoice {
   status          InvoiceStatus @default(PENDING)
 
   issuedAt        DateTime @default(now())
-  dueDate         DateTime
+  dueDate         DateTime?
   paidAt          DateTime?
 
   periodStart     DateTime
@@ -2290,6 +2292,44 @@ model Invoice {
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
+
+  // ========================================
+  // COBRANÇA MANUAL - Campos de workflow
+  // ========================================
+
+  billingType           String?   // "PIX", "BOLETO", "CARTAO", "TRANSFERENCIA"
+
+  // Checkboxes de controle
+  invoiceGenerated      Boolean   @default(false)  // Cobrança gerada
+  invoiceGeneratedAt    DateTime?
+  invoiceGeneratedBy    String?   // adminId
+
+  invoiceSent           Boolean   @default(false)  // Boleto enviado ao cliente
+  invoiceSentAt         DateTime?
+  invoiceSentBy         String?
+  invoiceSentMethod     String?   // "email", "whatsapp", "manual"
+
+  paymentConfirmed      Boolean   @default(false)  // Pagamento confirmado
+  paymentConfirmedAt    DateTime?
+  paymentConfirmedBy    String?
+  paymentProofUrl       String?   // Comprovante anexado
+
+  nfGenerated           Boolean   @default(false)  // Nota fiscal gerada
+  nfGeneratedAt         DateTime?
+  nfGeneratedBy         String?
+  nfNumber              String?   // Número da NF
+  nfUrl                 String?   // Link/PDF da NF
+
+  nfSent                Boolean   @default(false)  // NF enviada ao cliente
+  nfSentAt              DateTime?
+  nfSentBy              String?
+
+  // Observações
+  adminNotes            String?   @db.Text  // Notas internas sobre esta cobrança
+
+  // Lembretes
+  reminderSentAt        DateTime? // Último lembrete enviado
+  reminderCount         Int       @default(0) // Quantos lembretes já enviou
 
   @@index([subscriptionId, status])
   @@index([dueDate, status])
@@ -2505,4 +2545,49 @@ model SupportMessage {
   createdAt   DateTime @default(now())
 
   @@index([ticketId, createdAt])
+}
+
+// ============================================
+// SAAS MULTI-TENANT - NOTAS DA EMPRESA (CRM)
+// ============================================
+
+model CompanyNote {
+  id        String   @id @default(cuid())
+  companyId String
+  adminId   String
+  adminName String   // Desnormalizado para facilitar
+  content   String   @db.Text
+  type      String   @default("general") // general, commercial, support, billing
+  createdAt DateTime @default(now())
+
+  company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([type])
+  @@map("company_notes")
+}
+
+// ============================================
+// SAAS MULTI-TENANT - HISTÓRICO DE ASSINATURA
+// ============================================
+
+model SubscriptionHistory {
+  id             String   @id @default(cuid())
+  subscriptionId String
+  action         String   // created, upgraded, downgraded, canceled, reactivated, extended_trial
+  fromPlanId     String?
+  toPlanId       String?
+  fromStatus     String?
+  toStatus       String?
+  reason         String?
+  adminId        String
+  adminName      String
+  metadata       Json?    // Dados extras
+  createdAt      DateTime @default(now())
+
+  subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, createdAt])
+  @@index([action])
+  @@map("subscription_history")
 }
