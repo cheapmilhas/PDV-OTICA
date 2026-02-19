@@ -177,7 +177,6 @@ export async function activateCampaign(id: string, companyId: string) {
     where: { id },
     data: {
       status: "ACTIVE",
-      activatedAt: new Date(),
     },
   });
 }
@@ -414,7 +413,7 @@ export async function processaSaleForCampaigns(
           product: true,
         },
       },
-      seller: true,
+      sellerUser: true,
       branch: true,
     },
   });
