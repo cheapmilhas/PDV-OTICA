@@ -53,7 +53,7 @@ export default async function InvoiceDetailPage({
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Link
-          href="/admin/faturas"
+          href="/admin/financeiro/faturas"
           className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
@@ -204,7 +204,7 @@ export default async function InvoiceDetailPage({
               <p className="text-gray-400">{company.phone}</p>
             </div>
             <Link
-              href={`/admin/empresas/${company.id}`}
+              href={`/admin/clientes/${company.id}`}
               className="mt-3 block text-center text-sm text-indigo-400 hover:text-indigo-300"
             >
               Ver empresa →

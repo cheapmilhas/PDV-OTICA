@@ -91,7 +91,7 @@ export default async function FaturasPage({
           <p className="text-sm text-gray-400">Gestão de cobranças manuais</p>
         </div>
         <Link
-          href="/admin/faturas/nova"
+          href="/admin/financeiro/faturas/nova"
           className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
         >
           <FileText className="w-4 h-4" />
@@ -128,7 +128,7 @@ export default async function FaturasPage({
         <p className="text-xs text-gray-500 mb-2">FILTRAR POR ETAPA DO WORKFLOW:</p>
         <div className="flex flex-wrap gap-2">
           <Link
-            href="/admin/faturas"
+            href="/admin/financeiro/faturas"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
               !etapaFilter && !statusFilter ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
@@ -136,7 +136,7 @@ export default async function FaturasPage({
             Todas
           </Link>
           <Link
-            href="/admin/faturas?etapa=aguardando_envio"
+            href="/admin/financeiro/faturas?etapa=aguardando_envio"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
               etapaFilter === "aguardando_envio" ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
@@ -145,7 +145,7 @@ export default async function FaturasPage({
             Aguardando Envio ({aguardandoEnvio})
           </Link>
           <Link
-            href="/admin/faturas?etapa=aguardando_pagamento"
+            href="/admin/financeiro/faturas?etapa=aguardando_pagamento"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
               etapaFilter === "aguardando_pagamento" ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
@@ -154,7 +154,7 @@ export default async function FaturasPage({
             Aguardando Pagamento ({aguardandoPagamento})
           </Link>
           <Link
-            href="/admin/faturas?etapa=aguardando_nf"
+            href="/admin/financeiro/faturas?etapa=aguardando_nf"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
               etapaFilter === "aguardando_nf" ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
@@ -163,7 +163,7 @@ export default async function FaturasPage({
             Aguardando NF ({aguardandoNf})
           </Link>
           <Link
-            href="/admin/faturas?status=OVERDUE"
+            href="/admin/financeiro/faturas?status=OVERDUE"
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
               statusFilter === "OVERDUE" ? "bg-red-600 text-white" : "bg-red-900/30 text-red-400 hover:bg-red-900/50"
             }`}
@@ -180,7 +180,7 @@ export default async function FaturasPage({
         {Object.entries(STATUS_LABELS).map(([status, label]) => (
           <Link
             key={status}
-            href={`/admin/faturas?status=${status}`}
+            href={`/admin/financeiro/faturas?status=${status}`}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
               statusFilter === status ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
@@ -219,7 +219,7 @@ export default async function FaturasPage({
                   <tr key={inv.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/empresas/${inv.subscription.company.id}`}
+                        href={`/admin/clientes/${inv.subscription.company.id}`}
                         className="font-medium text-white hover:text-indigo-300"
                       >
                         {inv.subscription.company.name}
@@ -268,7 +268,7 @@ export default async function FaturasPage({
                     </td>
                     <td className="px-4 py-3">
                       <Link
-                        href={`/admin/faturas/${inv.id}`}
+                        href={`/admin/financeiro/faturas/${inv.id}`}
                         className="px-3 py-1.5 text-sm bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
                       >
                         Gerenciar

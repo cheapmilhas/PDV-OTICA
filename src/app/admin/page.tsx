@@ -118,7 +118,7 @@ export default async function AdminDashboardPage() {
       <div className="rounded-xl border border-gray-800 bg-gray-900">
         <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
           <h2 className="text-sm font-semibold text-white">Empresas Recentes</h2>
-          <Link href="/admin/empresas" className="text-xs text-indigo-400 hover:text-indigo-300">Ver todas →</Link>
+          <Link href="/admin/clientes" className="text-xs text-indigo-400 hover:text-indigo-300">Ver todas →</Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
@@ -138,7 +138,7 @@ export default async function AdminDashboardPage() {
                 return (
                   <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-3">
-                      <Link href={`/admin/empresas/${c.id}`} className="font-medium text-white hover:text-indigo-300">{c.name}</Link>
+                      <Link href={`/admin/clientes/${c.id}`} className="font-medium text-white hover:text-indigo-300">{c.name}</Link>
                     </td>
                     <td className="px-5 py-3 text-gray-400">{sub?.plan?.name ?? "—"}</td>
                     <td className="px-5 py-3">

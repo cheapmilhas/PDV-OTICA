@@ -90,7 +90,7 @@ export default async function EmpresasPage({
           Filtrar
         </button>
         {(search || statusFilter) && (
-          <Link href="/admin/empresas" className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors">
+          <Link href="/admin/clientes" className="px-4 py-2 bg-gray-700 hover:bg-gray-600 text-white text-sm font-medium rounded-lg transition-colors">
             Limpar
           </Link>
         )}
@@ -121,7 +121,7 @@ export default async function EmpresasPage({
                 return (
                   <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                     <td className="px-5 py-3">
-                      <Link href={`/admin/empresas/${c.id}`} className="font-medium text-white hover:text-indigo-300">{c.name}</Link>
+                      <Link href={`/admin/clientes/${c.id}`} className="font-medium text-white hover:text-indigo-300">{c.name}</Link>
                       {c.email && <p className="text-xs text-gray-500 truncate max-w-[180px]">{c.email}</p>}
                     </td>
                     <td className="px-5 py-3 text-gray-400 font-mono text-xs">{c.cnpj ?? "—"}</td>
@@ -135,7 +135,7 @@ export default async function EmpresasPage({
                     <td className="px-5 py-3 text-gray-400 text-center">{c._count.sales}</td>
                     <td className="px-5 py-3 text-gray-500 text-xs">{new Date(c.createdAt).toLocaleDateString("pt-BR")}</td>
                     <td className="px-5 py-3">
-                      <Link href={`/admin/empresas/${c.id}`} className="p-1.5 text-gray-500 hover:text-white rounded transition-colors inline-flex">
+                      <Link href={`/admin/clientes/${c.id}`} className="p-1.5 text-gray-500 hover:text-white rounded transition-colors inline-flex">
                         <ExternalLink className="h-4 w-4" />
                       </Link>
                     </td>

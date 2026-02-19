@@ -89,7 +89,7 @@ export default async function AssinaturasPage({
               ) : subscriptions.map((sub) => (
                 <tr key={sub.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
                   <td className="px-5 py-3">
-                    <Link href={`/admin/empresas/${sub.company.id}`} className="font-medium text-white hover:text-indigo-300">{sub.company.name}</Link>
+                    <Link href={`/admin/clientes/${sub.company.id}`} className="font-medium text-white hover:text-indigo-300">{sub.company.name}</Link>
                     {sub.company.email && <p className="text-xs text-gray-500 truncate max-w-[160px]">{sub.company.email}</p>}
                   </td>
                   <td className="px-5 py-3 text-gray-300">{sub.plan.name}</td>
@@ -107,7 +107,7 @@ export default async function AssinaturasPage({
                   </td>
                   <td className="px-5 py-3 text-gray-500 text-xs">{new Date(sub.createdAt).toLocaleDateString("pt-BR")}</td>
                   <td className="px-5 py-3">
-                    <Link href={`/admin/empresas/${sub.company.id}`} className="p-1.5 text-gray-500 hover:text-white rounded transition-colors inline-flex">
+                    <Link href={`/admin/clientes/${sub.company.id}`} className="p-1.5 text-gray-500 hover:text-white rounded transition-colors inline-flex">
                       <ExternalLink className="h-4 w-4" />
                     </Link>
                   </td>

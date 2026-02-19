@@ -21,7 +21,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
     setLoading(true);
     setOpen(false);
     try {
-      const res = await fetch(`/api/admin/empresas/${companyId}/actions`, {
+      const res = await fetch(`/api/admin/clientes/${companyId}/actions`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action }),

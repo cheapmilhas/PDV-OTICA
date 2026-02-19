@@ -35,7 +35,7 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/faturas/create", {
+      const res = await fetch("/api/admin/financeiro/faturas/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -50,7 +50,7 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
       const data = await res.json();
 
       if (data.success) {
-        router.push(`/admin/faturas/${data.invoice.id}`);
+        router.push(`/admin/financeiro/faturas/${data.invoice.id}`);
       } else {
         alert(data.error || "Erro ao criar cobrança");
       }

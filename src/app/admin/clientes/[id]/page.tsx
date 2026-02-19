@@ -50,7 +50,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/admin/empresas" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-gray-400 hover:text-white">
+          <Link href="/admin/clientes" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-gray-400 hover:text-white">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
