@@ -16,31 +16,21 @@ export default function AdminLoginPage() {
     setLoading(true);
 
     try {
-      // Usar o endpoint do NextAuth admin com basePath /api/admin/auth
-      const res = await fetch("/api/admin/auth/callback/credentials", {
+      const res = await fetch("/api/admin/auth/login", {
         method: "POST",
-        headers: { "Content-Type": "application/x-www-form-urlencoded" },
-        body: new URLSearchParams({
-          email,
-          password,
-          csrfToken: await getCsrfToken(),
-          callbackUrl: "/admin",
-          json: "true",
-        }),
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ email, password }),
       });
 
-      if (res.ok) {
-        const data = await res.json();
-        if (data.url) {
-          router.push(data.url);
-          router.refresh();
-        } else {
-          router.push("/admin");
-          router.refresh();
-        }
-      } else {
-        setError("Email ou senha inválidos");
+      const data = await res.json();
+
+      if (!res.ok) {
+        setError(data.error || "Email ou senha inválidos");
+        return;
       }
+
+      router.push("/admin");
+      router.refresh();
     } catch {
       setError("Erro ao fazer login. Tente novamente.");
     } finally {
@@ -49,57 +39,55 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-gray-950 px-4">
+    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
       <div className="w-full max-w-md">
-        {/* Logo / Header */}
-        <div className="mb-8 text-center">
-          <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-600">
-            <svg className="h-8 w-8 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+        {/* Ícone */}
+        <div className="flex justify-center mb-6">
+          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center">
+            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
               <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
                 d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
               />
             </svg>
           </div>
-          <h1 className="text-2xl font-bold text-white">PDV Ótica Admin</h1>
-          <p className="mt-1 text-sm text-gray-400">Portal de administração do sistema</p>
         </div>
 
-        {/* Card */}
-        <div className="rounded-2xl border border-gray-800 bg-gray-900 p-8 shadow-xl">
-          <form onSubmit={handleSubmit} className="space-y-5">
+        {/* Título */}
+        <h1 className="text-2xl font-bold text-white text-center mb-2">PDV Ótica Admin</h1>
+        <p className="text-gray-400 text-center mb-8">Portal de administração do sistema</p>
+
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+          <div className="space-y-4">
             <div>
-              <label htmlFor="email" className="mb-1.5 block text-sm font-medium text-gray-300">
-                Email
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
               <input
-                id="email"
                 type="email"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="admin@pdvotica.com.br"
                 required
                 autoFocus
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                disabled={loading}
               />
             </div>
 
             <div>
-              <label htmlFor="password" className="mb-1.5 block text-sm font-medium text-gray-300">
-                Senha
-              </label>
+              <label className="block text-sm font-medium text-gray-300 mb-1">Senha</label>
               <input
-                id="password"
                 type="password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
+                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
                 placeholder="••••••••"
                 required
-                className="w-full rounded-lg border border-gray-700 bg-gray-800 px-4 py-2.5 text-white placeholder-gray-500 outline-none transition focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20"
+                disabled={loading}
               />
             </div>
 
             {error && (
-              <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-4 py-2.5 text-sm text-red-400">
+              <div className="p-3 bg-red-900/50 border border-red-800 rounded-lg text-red-400 text-sm">
                 {error}
               </div>
             )}
@@ -107,35 +95,17 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full rounded-lg bg-indigo-600 px-4 py-2.5 text-sm font-semibold text-white transition hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 focus:ring-offset-gray-900 disabled:cursor-not-allowed disabled:opacity-60"
+              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
-              {loading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="h-4 w-4 animate-spin" fill="none" viewBox="0 0 24 24">
-                    <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4" />
-                    <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4z" />
-                  </svg>
-                  Entrando...
-                </span>
-              ) : "Entrar"}
+              {loading ? "Entrando..." : "Entrar"}
             </button>
-          </form>
-        </div>
+          </div>
+        </form>
 
-        <p className="mt-4 text-center text-xs text-gray-600">
+        <p className="text-gray-500 text-center text-sm mt-6">
           Acesso restrito a administradores do sistema
         </p>
       </div>
     </div>
   );
-}
-
-async function getCsrfToken(): Promise<string> {
-  try {
-    const res = await fetch("/api/admin/auth/csrf");
-    const data = await res.json();
-    return data.csrfToken ?? "";
-  } catch {
-    return "";
-  }
 }

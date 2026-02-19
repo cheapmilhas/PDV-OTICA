@@ -1,25 +1,60 @@
 import { NextRequest, NextResponse } from "next/server";
 import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
-import { authAdminConfig } from "@/auth-admin.config";
+import { jwtVerify } from "jose";
 
-// Auth para rotas do PDV
+// Auth para rotas do PDV (Edge-safe)
 const pdvAuth = NextAuth(authConfig).auth;
-// Auth para rotas do Admin
-const adminAuth = NextAuth(authAdminConfig).auth;
+
+const JWT_SECRET = new TextEncoder().encode(
+  process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-change-me"
+);
+
+async function verifyAdminToken(token: string) {
+  try {
+    const { payload } = await jwtVerify(token, JWT_SECRET);
+    return payload;
+  } catch {
+    return null;
+  }
+}
 
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Rotas /admin/** → proteger com authAdminConfig
+  // Rotas /admin/**
   if (pathname.startsWith("/admin")) {
-    return (adminAuth as any)(request);
+    // Sempre permitir: página de login e API de auth
+    if (
+      pathname === "/admin/login" ||
+      pathname.startsWith("/api/admin/auth")
+    ) {
+      return NextResponse.next();
+    }
+
+    // Verificar token admin
+    const token = request.cookies.get("admin.session-token")?.value;
+
+    if (!token) {
+      return NextResponse.redirect(new URL("/admin/login", request.url));
+    }
+
+    const payload = await verifyAdminToken(token);
+
+    if (!payload || !payload.isAdmin) {
+      // Token inválido ou expirado
+      const response = NextResponse.redirect(new URL("/admin/login", request.url));
+      response.cookies.delete("admin.session-token");
+      return response;
+    }
+
+    return NextResponse.next();
   }
 
-  // Demais rotas → proteger com authConfig (PDV)
+  // Demais rotas → PDV auth
   return (pdvAuth as any)(request);
 }
 
 export const config = {
-  matcher: ["/((?!api|_next/static|_next/image|favicon.ico).*)"],
+  matcher: ["/((?!_next/static|_next/image|favicon.ico).*)"],
 };

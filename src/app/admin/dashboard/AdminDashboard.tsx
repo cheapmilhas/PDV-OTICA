@@ -1,6 +1,6 @@
 "use client";
 
-import { signOut } from "next-auth/react";
+import { useRouter } from "next/navigation";
 
 interface Props {
   admin: { name: string; email: string; role: string };
@@ -31,6 +31,14 @@ const statusColors: Record<string, string> = {
 };
 
 export default function AdminDashboard({ admin, metrics, recentCompanies }: Props) {
+  const router = useRouter();
+
+  async function handleLogout() {
+    await fetch("/api/admin/auth/logout", { method: "POST" });
+    router.push("/admin/login");
+    router.refresh();
+  }
+
   const metricCards = [
     {
       label: "Total de Empresas",
@@ -83,7 +91,7 @@ export default function AdminDashboard({ admin, metrics, recentCompanies }: Prop
               <p className="text-xs text-gray-500">{admin.role}</p>
             </div>
             <button
-              onClick={() => signOut({ callbackUrl: "/admin/login" })}
+              onClick={handleLogout}
               className="rounded-lg border border-gray-700 bg-gray-800 px-3 py-1.5 text-xs font-medium text-gray-300 transition hover:border-gray-600 hover:text-white"
             >
               Sair
