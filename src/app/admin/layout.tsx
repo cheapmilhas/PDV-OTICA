@@ -9,7 +9,10 @@ import {
   Settings,
   Package,
   UserCog,
-  ScrollText
+  ScrollText,
+  UserPlus,
+  Ticket,
+  FileBarChart
 } from "lucide-react";
 import { AdminLogoutButton } from "./AdminLogoutButton";
 
@@ -23,7 +26,14 @@ const menuItems = [
     section: "Principal",
     items: [
       { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/admin/clientes", icon: Users, label: "Clientes" },
+      { href: "/admin/clientes", icon: Users, label: "Todos os Clientes" },
+      { href: "/admin/clientes/novo", icon: UserPlus, label: "Novo Cliente" },
+    ]
+  },
+  {
+    section: "Suporte",
+    items: [
+      { href: "/admin/suporte/tickets", icon: Ticket, label: "Tickets" },
     ]
   },
   {
@@ -32,6 +42,12 @@ const menuItems = [
       { href: "/admin/financeiro", icon: Wallet, label: "Visão Geral" },
       { href: "/admin/financeiro/faturas", icon: FileText, label: "Faturas" },
       { href: "/admin/financeiro/inadimplencia", icon: AlertTriangle, label: "Inadimplência" },
+    ]
+  },
+  {
+    section: "Relatórios",
+    items: [
+      { href: "/admin/relatorios", icon: FileBarChart, label: "Relatórios" },
     ]
   },
   {

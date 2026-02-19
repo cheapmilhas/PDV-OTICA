@@ -60,6 +60,62 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Rotas /dashboard/** (PDV multi-tenant)
+  if (pathname.startsWith("/dashboard") || pathname.startsWith("/api/")) {
+    // Permitir rotas públicas de auth
+    if (pathname.startsWith("/api/auth")) {
+      return NextResponse.next();
+    }
+
+    // Obter token de sessão (NextAuth)
+    const sessionToken =
+      request.cookies.get("next-auth.session-token")?.value ||
+      request.cookies.get("__Secure-next-auth.session-token")?.value;
+
+    if (!sessionToken) {
+      // Sem autenticação: redirecionar para login (se não for API)
+      if (pathname.startsWith("/dashboard")) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      // Se for API, retornar 401
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
+
+    try {
+      // Decodificar token NextAuth para obter companyId
+      const { payload } = await jwtVerify(sessionToken, JWT_SECRET);
+      const companyId = payload.companyId as string | undefined;
+      const networkId = payload.networkId as string | undefined | null;
+
+      if (!companyId) {
+        console.error("❌ Token sem companyId:", payload);
+        if (pathname.startsWith("/dashboard")) {
+          return NextResponse.redirect(new URL("/login", request.url));
+        }
+        return NextResponse.json({ error: "CompanyId não encontrado" }, { status: 401 });
+      }
+
+      // Injetar headers de tenant
+      const requestHeaders = new Headers(request.headers);
+      requestHeaders.set("x-company-id", companyId);
+      if (networkId) {
+        requestHeaders.set("x-network-id", networkId);
+      }
+
+      return NextResponse.next({
+        request: {
+          headers: requestHeaders,
+        },
+      });
+    } catch (error) {
+      console.error("❌ Erro ao verificar token:", error);
+      if (pathname.startsWith("/dashboard")) {
+        return NextResponse.redirect(new URL("/login", request.url));
+      }
+      return NextResponse.json({ error: "Token inválido" }, { status: 401 });
+    }
+  }
+
   // Demais rotas → PDV auth
   return (pdvAuth as any)(request);
 }

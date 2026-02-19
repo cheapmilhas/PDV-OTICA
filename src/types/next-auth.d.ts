@@ -10,6 +10,7 @@ declare module "next-auth" {
     role: UserRole;
     companyId: string;
     branchId: string;
+    networkId: string | null;
   }
 
   /**
@@ -29,5 +30,6 @@ declare module "next-auth/jwt" {
     role: UserRole;
     companyId: string;
     branchId: string;
+    networkId: string | null;
   }
 }

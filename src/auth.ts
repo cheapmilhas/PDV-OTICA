@@ -87,12 +87,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             role: user.role,
             branchId: firstBranch.id,
             companyId: user.companyId,
+            networkId: user.company?.networkId || null,
           };
 
           console.log(`✅ Login bem-sucedido:`, {
             name: authData.name,
             email: authData.email,
             role: authData.role,
+            companyId: authData.companyId,
+            networkId: authData.networkId,
           });
 
           return authData;
@@ -126,6 +129,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.role = user.role;
         token.branchId = user.branchId;
         token.companyId = user.companyId;
+        token.networkId = user.networkId;
       }
 
       // Se for um update da sessão (ex: após signOut), resetar o token
@@ -149,6 +153,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         session.user.role = token.role as any;
         session.user.branchId = token.branchId as string;
         session.user.companyId = token.companyId as string;
+        session.user.networkId = token.networkId as string | null;
       }
       return session;
     },
