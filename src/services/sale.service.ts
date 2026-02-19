@@ -7,6 +7,7 @@ import { calculateInstallments, validateCreditLimit } from "@/lib/installment-ut
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { cashbackService } from "@/services/cashback.service";
 import { atomicStockDebit } from "@/services/stock.service";
+import { processaSaleForCampaigns, reverseBonusForSale } from "@/services/product-campaign.service";
 
 /**
  * Service para operações de Vendas (PDV)
@@ -546,6 +547,16 @@ export class SaleService {
       }
     }
 
+    // 9. Processar campanhas de bonificação (se aplicável - fora da transação principal)
+    try {
+      console.log(`🎯 Processando campanhas para venda ${sale.id}`);
+      const campaignResult = await processaSaleForCampaigns(sale.id, companyId);
+      console.log(`✅ Campanhas processadas: ${campaignResult.processed} bônus gerados (R$ ${campaignResult.bonusTotal.toFixed(2)})`);
+    } catch (campaignError) {
+      // Log mas não falha a venda se campanhas derem erro
+      console.error(`❌ Erro ao processar campanhas (venda criada com sucesso):`, campaignError);
+    }
+
     // Retornar venda completa
     return this.getById(sale.id, companyId);
   }
@@ -636,6 +647,16 @@ export class SaleService {
         },
       });
     });
+
+    // 5. Reverter bônus de campanhas (se aplicável - fora da transação principal)
+    try {
+      console.log(`🎯 Revertendo bônus de campanhas para venda ${id}`);
+      const reversalResult = await reverseBonusForSale(id, companyId);
+      console.log(`✅ Bônus revertidos: ${reversalResult.reversed} entradas`);
+    } catch (campaignError) {
+      // Log mas não falha o cancelamento se reversão der erro
+      console.error(`❌ Erro ao reverter bônus de campanhas (venda cancelada com sucesso):`, campaignError);
+    }
 
     return this.getById(id, companyId, true);
   }
@@ -769,6 +790,16 @@ export class SaleService {
         },
       });
     });
+
+    // 5. Reprocessar campanhas de bonificação (se aplicável - fora da transação principal)
+    try {
+      console.log(`🎯 Reprocessando campanhas para venda reativada ${id}`);
+      const campaignResult = await processaSaleForCampaigns(id, companyId);
+      console.log(`✅ Campanhas reprocessadas: ${campaignResult.processed} bônus gerados (R$ ${campaignResult.bonusTotal.toFixed(2)})`);
+    } catch (campaignError) {
+      // Log mas não falha a reativação se campanhas derem erro
+      console.error(`❌ Erro ao reprocessar campanhas (venda reativada com sucesso):`, campaignError);
+    }
 
     return this.getById(id, companyId, true);
   }
