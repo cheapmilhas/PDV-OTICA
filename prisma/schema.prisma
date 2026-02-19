@@ -2816,3 +2816,27 @@ model EmailQueue {
   @@index([status])
   @@map("email_queue")
 }
+
+// ============================================
+// SPRINT 8: CONFIGURAÇÃO DE SLA
+// ============================================
+
+model SlaConfig {
+  id          String         @id @default(cuid())
+  
+  priority    TicketPriority @unique
+  
+  // Tempo em HORAS
+  firstResponseHours Int     // Prazo para primeira resposta
+  resolutionHours    Int     // Prazo para resolução
+  
+  // Notificações (% do prazo)
+  notifyAtPercent    Int[]   @default([50, 75, 90])
+  
+  isActive    Boolean        @default(true)
+  
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@map("sla_configs")
+}
