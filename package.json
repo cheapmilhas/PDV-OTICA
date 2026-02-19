@@ -15,7 +15,8 @@
     "test:evidencias": "npx tsx scripts/test-evidencias.ts",
     "validate:imports": "npx tsx scripts/validate-lucide-imports.ts",
     "fix:imports": "npx tsx scripts/fix-lucide-imports.ts",
-    "db:seed:plans": "npx tsx prisma/seed-plans.ts"
+    "db:seed:plans": "npx tsx prisma/seed-plans.ts",
+    "create:subscription": "npx tsx scripts/create-test-subscription.ts"
   },
   "prisma": {
     "seed": "node --require esbuild-register prisma/seed.ts"
