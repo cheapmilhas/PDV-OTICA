@@ -20,10 +20,11 @@ export interface CreateCampaignDTO {
 
   // Campos específicos por tipo
   bonusPerUnit?: number;
-  minimumCount?: number;
+  minimumUnits?: number;
   minimumCountMode?: "AFTER_MINIMUM" | "FROM_MINIMUM";
-  fixedBonusAmount?: number;
-  packageSize?: number;
+  bonusFixedOnMin?: number;
+  bonusPerUnitAfter?: number;
+  packageUnits?: number;
   bonusPerPackage?: number;
   tiers?: Prisma.InputJsonValue;
 
@@ -73,14 +74,14 @@ export async function createCampaign(data: CreateCampaignDTO) {
         allowStacking: data.allowStacking ?? false,
         priority: data.priority ?? 0,
         bonusPerUnit: data.bonusPerUnit,
-        minimumCount: data.minimumCount,
+        minimumUnits: data.minimumUnits,
         minimumCountMode: data.minimumCountMode,
-        fixedBonusAmount: data.fixedBonusAmount,
-        packageSize: data.packageSize,
+        bonusFixedOnMin: data.bonusFixedOnMin,
+        bonusPerUnitAfter: data.bonusPerUnitAfter,
+        packageUnits: data.packageUnits,
         bonusPerPackage: data.bonusPerPackage,
-        tiers: data.tiers,
         status: "DRAFT",
-        createdById: data.createdById,
+        createdByUserId: data.createdById,
       },
     });
 
@@ -119,7 +120,7 @@ export async function getCampaigns(filter: CampaignFilter) {
   return await prisma.productCampaign.findMany({
     where,
     include: {
-      items: {
+      products: {
         include: {
           product: true,
           category: true,
@@ -139,7 +140,7 @@ export async function getCampaignById(id: string, companyId: string) {
   return await prisma.productCampaign.findFirst({
     where: { id, companyId },
     include: {
-      items: {
+      products: {
         include: {
           product: true,
           category: true,
@@ -233,12 +234,12 @@ export async function updateCampaign(
         allowStacking: data.allowStacking,
         priority: data.priority,
         bonusPerUnit: data.bonusPerUnit,
-        minimumCount: data.minimumCount,
+        minimumUnits: data.minimumUnits,
         minimumCountMode: data.minimumCountMode,
-        fixedBonusAmount: data.fixedBonusAmount,
-        packageSize: data.packageSize,
+        bonusFixedOnMin: data.bonusFixedOnMin,
+        bonusPerUnitAfter: data.bonusPerUnitAfter,
+        packageUnits: data.packageUnits,
         bonusPerPackage: data.bonusPerPackage,
-        tiers: data.tiers,
       },
     });
 
@@ -302,13 +303,13 @@ export function calculateBonus(
   campaign: {
     bonusType: string;
     countMode: string;
-    bonusPerUnit?: number | null;
-    minimumCount?: number | null;
+    bonusPerUnit?: number | null | Prisma.Decimal;
+    minimumUnits?: number | null;
     minimumCountMode?: string | null;
-    fixedBonusAmount?: number | null;
-    packageSize?: number | null;
-    bonusPerPackage?: number | null;
-    tiers?: Prisma.JsonValue;
+    bonusFixedOnMin?: number | null | Prisma.Decimal;
+    bonusPerUnitAfter?: number | null | Prisma.Decimal;
+    packageUnits?: number | null;
+    bonusPerPackage?: number | null | Prisma.Decimal;
   },
   quantity: number
 ): BonusCalculationResult {
@@ -316,7 +317,7 @@ export function calculateBonus(
 
   // TIPO A: PER_UNIT
   if (bonusType === "PER_UNIT") {
-    const bonusPerUnit = campaign.bonusPerUnit ?? 0;
+    const bonusPerUnit = Number(campaign.bonusPerUnit ?? 0);
     const bonusAmount = quantity * bonusPerUnit;
     return {
       bonusAmount,
@@ -327,8 +328,8 @@ export function calculateBonus(
 
   // TIPO B1: MINIMUM_FIXED
   if (bonusType === "MINIMUM_FIXED") {
-    const min = campaign.minimumCount ?? 0;
-    const fixedBonus = campaign.fixedBonusAmount ?? 0;
+    const min = campaign.minimumUnits ?? 0;
+    const fixedBonus = Number(campaign.bonusFixedOnMin ?? 0);
 
     if (quantity >= min) {
       return {
@@ -347,8 +348,8 @@ export function calculateBonus(
 
   // TIPO B2: MINIMUM_PER_UNIT
   if (bonusType === "MINIMUM_PER_UNIT") {
-    const min = campaign.minimumCount ?? 0;
-    const bonusPerUnit = campaign.bonusPerUnit ?? 0;
+    const min = campaign.minimumUnits ?? 0;
+    const bonusPerUnit = Number(campaign.bonusPerUnitAfter ?? 0);
     const minimumCountMode = campaign.minimumCountMode ?? "AFTER_MINIMUM";
 
     if (quantity < min) {
@@ -378,8 +379,8 @@ export function calculateBonus(
 
   // TIPO C: PER_PACKAGE
   if (bonusType === "PER_PACKAGE") {
-    const packageSize = campaign.packageSize ?? 1;
-    const bonusPerPackage = campaign.bonusPerPackage ?? 0;
+    const packageSize = campaign.packageUnits ?? 1;
+    const bonusPerPackage = Number(campaign.bonusPerPackage ?? 0);
     const packages = Math.floor(quantity / packageSize);
     const bonusAmount = packages * bonusPerPackage;
 
@@ -387,41 +388,6 @@ export function calculateBonus(
       bonusAmount,
       eligibleQuantity: packages * packageSize,
       details: `${packages} pacotes (${packageSize} por pacote) × R$ ${bonusPerPackage.toFixed(2)} = R$ ${bonusAmount.toFixed(2)}`,
-    };
-  }
-
-  // TIPO D: TIERED
-  if (bonusType === "TIERED") {
-    const tiers = campaign.tiers as Array<{ from: number; to?: number; bonus: number }> | null;
-    if (!tiers || tiers.length === 0) {
-      return {
-        bonusAmount: 0,
-        eligibleQuantity: 0,
-        details: "Nenhuma faixa configurada",
-      };
-    }
-
-    // Ordenar tiers por 'from' decrescente para pegar a maior faixa aplicável
-    const sortedTiers = [...tiers].sort((a, b) => b.from - a.from);
-
-    for (const tier of sortedTiers) {
-      const matchesFrom = quantity >= tier.from;
-      const matchesTo = tier.to === undefined || quantity <= tier.to;
-
-      if (matchesFrom && matchesTo) {
-        return {
-          bonusAmount: tier.bonus,
-          eligibleQuantity: quantity,
-          appliedTier: tier.from,
-          details: `Faixa ${tier.from}${tier.to ? `-${tier.to}` : "+"} aplicada → Bônus de R$ ${tier.bonus.toFixed(2)}`,
-        };
-      }
-    }
-
-    return {
-      bonusAmount: 0,
-      eligibleQuantity: 0,
-      details: `Quantidade ${quantity} não se enquadra em nenhuma faixa`,
     };
   }
 
@@ -472,7 +438,7 @@ export async function processaSaleForCampaigns(
       ],
     },
     include: {
-      items: true,
+      products: true,
     },
     orderBy: [{ priority: "desc" }, { createdAt: "asc" }],
   });
@@ -490,10 +456,10 @@ export async function processaSaleForCampaigns(
       const product = saleItem.product;
 
       // Se não há filtros, todos produtos são elegíveis
-      if (campaign.items.length === 0) return true;
+      if (campaign.products.length === 0) return true;
 
       // Verificar se algum item da campanha corresponde
-      return campaign.items.some((campaignItem) => {
+      return campaign.products.some((campaignItem) => {
         if (campaignItem.productId && campaignItem.productId === product.id) return true;
         if (campaignItem.categoryId && campaignItem.categoryId === product.categoryId) return true;
         if (campaignItem.brandId && campaignItem.brandId === product.brandId) return true;
@@ -737,7 +703,7 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
   const campaign = await prisma.productCampaign.findFirst({
     where: { id: campaignId, companyId },
     include: {
-      items: {
+      products: {
         include: {
           product: true,
           category: true,

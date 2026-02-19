@@ -59,7 +59,7 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
   const { toast } = useToast();
 
   const form = useForm<CampaignFormData>({
-    resolver: zodResolver(campaignSchema),
+    resolver: zodResolver(campaignSchema) as any,
     defaultValues: campaign
       ? {
           name: campaign.name,
