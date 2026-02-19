@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
-import { AlertTriangle, Building2, Clock, CreditCard, TrendingUp } from "lucide-react";
+import { AlertTriangle, Building2, Clock, CreditCard, TrendingUp, DollarSign, Activity, CheckCircle2, Bell } from "lucide-react";
 import Link from "next/link";
+import { HealthBadge } from "@/components/health-badge";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -29,6 +30,9 @@ export default async function AdminDashboardPage() {
     recentCompanies,
     expiringTrials,
     activeSubs,
+    criticalHealthCount,
+    atRiskHealthCount,
+    pendingInvoices,
   ] = await Promise.all([
     prisma.company.count(),
     prisma.subscription.count({ where: { status: "ACTIVE" } }),
@@ -52,6 +56,23 @@ export default async function AdminDashboardPage() {
       include: { company: { select: { id: true, name: true } }, plan: { select: { name: true } } },
     }),
     prisma.subscription.findMany({ where: { status: "ACTIVE" }, include: { plan: true } }),
+    prisma.company.count({ where: { healthCategory: "CRITICAL" } }),
+    prisma.company.count({ where: { healthCategory: "AT_RISK" } }),
+    prisma.invoice.findMany({
+      where: {
+        status: "PENDING",
+        dueDate: { lte: new Date(Date.now() + 7 * 86400000) } // Vence em 7 dias
+      },
+      include: {
+        subscription: {
+          include: {
+            company: { select: { id: true, name: true } }
+          }
+        }
+      },
+      orderBy: { dueDate: "asc" },
+      take: 5,
+    }),
   ]);
 
   const totalRevenueValue = ((totalRevenue._sum?.total) ?? 0) / 100;
@@ -69,50 +90,86 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
         <KpiCard title="Total de Empresas" value={totalCompanies} icon={Building2} color="blue" />
         <KpiCard title="Assinaturas Ativas" value={activeCount} icon={CreditCard} color="green" />
+        <KpiCard
+          title="MRR"
+          value={`R$ ${mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+          icon={DollarSign}
+          color="purple"
+        />
         <KpiCard title="Em Trial" value={trialCount} icon={Clock} color="yellow" />
         <KpiCard
           title="Receita Total"
           value={`R$ ${totalRevenueValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           icon={TrendingUp}
-          color="purple"
+          color="teal"
         />
       </div>
 
-      {/* Alertas */}
-      {(pastDueCount > 0 || suspendedCount > 0 || expiringTrials.length > 0) && (
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-3 mb-6">
-          {pastDueCount > 0 && (
-            <Link href="/admin/assinaturas?status=PAST_DUE" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
-              <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0" />
+      {/* Health Score Resumo */}
+      {(criticalHealthCount > 0 || atRiskHealthCount > 0) && (
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
+          {criticalHealthCount > 0 && (
+            <Link href="/admin/clientes?health=CRITICAL" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
+              <Activity className="h-5 w-5 text-red-400 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-red-300">{pastDueCount} inadimplente{pastDueCount > 1 ? "s" : ""}</p>
-                <p className="text-xs text-red-500">Ver detalhes →</p>
+                <p className="text-sm font-medium text-red-300">{criticalHealthCount} cliente{criticalHealthCount > 1 ? "s" : ""} em estado crítico</p>
+                <p className="text-xs text-red-500">Requer ação imediata →</p>
               </div>
             </Link>
           )}
-          {suspendedCount > 0 && (
-            <Link href="/admin/assinaturas?status=SUSPENDED" className="flex items-center gap-3 p-4 rounded-xl border border-orange-800 bg-orange-900/20 hover:bg-orange-900/30 transition-colors">
-              <AlertTriangle className="h-5 w-5 text-orange-400 flex-shrink-0" />
+          {atRiskHealthCount > 0 && (
+            <Link href="/admin/clientes?health=AT_RISK" className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20 hover:bg-yellow-900/30 transition-colors">
+              <Activity className="h-5 w-5 text-yellow-400 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-orange-300">{suspendedCount} suspensa{suspendedCount > 1 ? "s" : ""}</p>
-                <p className="text-xs text-orange-500">Ver detalhes →</p>
+                <p className="text-sm font-medium text-yellow-300">{atRiskHealthCount} cliente{atRiskHealthCount > 1 ? "s" : ""} em risco</p>
+                <p className="text-xs text-yellow-600">Precisa atenção →</p>
+              </div>
+            </Link>
+          )}
+        </div>
+      )}
+
+      {/* Ações Pendentes */}
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-3">
+          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Bell className="w-4 h-4 text-indigo-400" />
+            Ações Pendentes
+          </h2>
+        </div>
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {pastDueCount > 0 && (
+            <Link href="/admin/financeiro/inadimplencia" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
+              <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-red-300">{pastDueCount} fatura{pastDueCount > 1 ? "s" : ""} vencida{pastDueCount > 1 ? "s" : ""}</p>
+                <p className="text-xs text-red-500">Cobrar agora →</p>
               </div>
             </Link>
           )}
           {expiringTrials.length > 0 && (
-            <div className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20">
+            <Link href="/admin/clientes?status=TRIAL" className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20 hover:bg-yellow-900/30 transition-colors">
               <Clock className="h-5 w-5 text-yellow-400 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-yellow-300">{expiringTrials.length} trial{expiringTrials.length > 1 ? "s" : ""} expirando</p>
-                <p className="text-xs text-yellow-600">Nos próximos 3 dias</p>
+                <p className="text-xs text-yellow-600">Próximos 3 dias →</p>
               </div>
-            </div>
+            </Link>
+          )}
+          {pendingInvoices.length > 0 && (
+            <Link href="/admin/financeiro/faturas?status=PENDING" className="flex items-center gap-3 p-4 rounded-xl border border-blue-800 bg-blue-900/20 hover:bg-blue-900/30 transition-colors">
+              <CheckCircle2 className="h-5 w-5 text-blue-400 flex-shrink-0" />
+              <div>
+                <p className="text-sm font-medium text-blue-300">{pendingInvoices.length} fatura{pendingInvoices.length > 1 ? "s" : ""} a vencer</p>
+                <p className="text-xs text-blue-600">Próximos 7 dias →</p>
+              </div>
+            </Link>
           )}
         </div>
-      )}
+      </div>
 
       {/* Empresas recentes */}
       <div className="rounded-xl border border-gray-800 bg-gray-900">
@@ -165,6 +222,7 @@ function KpiCard({ title, value, icon: Icon, color }: { title: string; value: st
     green: "text-green-400 bg-green-900/20",
     yellow: "text-yellow-400 bg-yellow-900/20",
     purple: "text-purple-400 bg-purple-900/20",
+    teal: "text-teal-400 bg-teal-900/20",
   };
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">

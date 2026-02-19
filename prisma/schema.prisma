@@ -184,6 +184,13 @@ model Company {
   impersonations    ImpersonationSession[]
   globalAudits      GlobalAudit[]
   companyNotes      CompanyNote[]
+  healthScores      HealthScore[]
+  usageSnapshots    UsageSnapshot[]
+
+  // Health Score cache (desnormalizado para performance)
+  healthScore       Int?
+  healthCategory    HealthCategory?
+  healthUpdatedAt   DateTime?
 }
 
 model Branch {
@@ -2558,7 +2565,9 @@ model CompanyNote {
   adminName String   // Desnormalizado para facilitar
   content   String   @db.Text
   type      String   @default("general") // general, commercial, support, billing
+  isPinned  Boolean  @default(false)
   createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   company   Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
@@ -2590,4 +2599,68 @@ model SubscriptionHistory {
   @@index([subscriptionId, createdAt])
   @@index([action])
   @@map("subscription_history")
+}
+
+// ============================================
+// SAAS MULTI-TENANT - HEALTH SCORE
+// ============================================
+
+enum HealthCategory {
+  CRITICAL  // 0-40: Em risco crítico
+  AT_RISK   // 41-60: Precisa atenção
+  HEALTHY   // 61-80: Saudável
+  THRIVING  // 81-100: Excelente
+}
+
+model HealthScore {
+  id              String         @id @default(cuid())
+  companyId       String
+  score           Int            // 0-100
+  category        HealthCategory @default(HEALTHY)
+
+  // Scores individuais (0-100 cada)
+  usageScore      Int            @default(50)
+  billingScore    Int            @default(50)
+  engagementScore Int            @default(50)
+  supportScore    Int            @default(50)
+
+  // Análise e insights
+  riskFactors     Json?          // Array de strings: ["Sem login há 30 dias", "3 faturas atrasadas"]
+  opportunities   Json?          // Array de strings: ["Upgrade para plano superior", "Ativar módulo X"]
+
+  calculatedAt    DateTime       @default(now())
+
+  company         Company        @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, calculatedAt])
+  @@index([category])
+  @@index([score])
+  @@map("health_scores")
+}
+
+// ============================================
+// SAAS MULTI-TENANT - SNAPSHOT DE USO
+// ============================================
+
+model UsageSnapshot {
+  id              String   @id @default(cuid())
+  companyId       String
+  date            DateTime @default(now())
+
+  // Métricas de uso
+  activeUsers     Int      @default(0)
+  totalSales      Int      @default(0)
+  totalRevenue    Decimal  @default(0) @db.Decimal(10, 2)
+  totalProducts   Int      @default(0)
+  totalCustomers  Int      @default(0)
+  totalOrders     Int      @default(0)
+
+  // Login activity
+  lastLoginAt     DateTime?
+  loginCount      Int      @default(0)
+
+  company         Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, date])
+  @@map("usage_snapshots")
 }

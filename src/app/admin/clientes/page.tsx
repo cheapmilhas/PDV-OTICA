@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Building2, ExternalLink } from "lucide-react";
+import { HealthBadge } from "@/components/health-badge";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -21,12 +22,13 @@ const STATUS_STYLES: Record<string, string> = {
 export default async function EmpresasPage({
   searchParams,
 }: {
-  searchParams: Promise<{ search?: string; status?: string }>;
+  searchParams: Promise<{ search?: string; status?: string; health?: string }>;
 }) {
   await requireAdmin();
   const params = await searchParams;
   const search = params.search ?? "";
   const statusFilter = params.status ?? "";
+  const healthFilter = params.health ?? "";
 
   const companies = await prisma.company.findMany({
     where: {
@@ -36,6 +38,9 @@ export default async function EmpresasPage({
           : {},
         statusFilter
           ? { subscriptions: { some: { status: statusFilter as any } } }
+          : {},
+        healthFilter
+          ? { healthCategory: healthFilter as any }
           : {},
       ],
     },
@@ -102,7 +107,7 @@ export default async function EmpresasPage({
           <table className="w-full text-sm">
             <thead>
               <tr className="border-b border-gray-800">
-                {["Empresa", "CNPJ", "Plano", "Status", "Usuários", "Vendas", "Cadastro", ""].map((h) => (
+                {["Empresa", "CNPJ", "Plano", "Status", "Health", "Usuários", "Vendas", "Cadastro", ""].map((h) => (
                   <th key={h} className="px-5 py-3 text-left text-xs font-medium text-gray-500">{h}</th>
                 ))}
               </tr>
@@ -110,7 +115,7 @@ export default async function EmpresasPage({
             <tbody>
               {companies.length === 0 ? (
                 <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center">
+                  <td colSpan={9} className="px-5 py-12 text-center">
                     <Building2 className="h-8 w-8 text-gray-700 mx-auto mb-2" />
                     <p className="text-gray-600">Nenhuma empresa encontrada</p>
                   </td>
@@ -130,6 +135,13 @@ export default async function EmpresasPage({
                       <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status]}`}>
                         {STATUS_LABELS[status] ?? status}
                       </span>
+                    </td>
+                    <td className="px-5 py-3">
+                      {c.healthScore && c.healthCategory ? (
+                        <HealthBadge score={c.healthScore} category={c.healthCategory} size="sm" showLabel={false} />
+                      ) : (
+                        <span className="text-xs text-gray-600">—</span>
+                      )}
                     </td>
                     <td className="px-5 py-3 text-gray-400 text-center">{c._count.users}</td>
                     <td className="px-5 py-3 text-gray-400 text-center">{c._count.sales}</td>
