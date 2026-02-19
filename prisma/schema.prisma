@@ -191,6 +191,44 @@ model Company {
   healthScore       Int?
   healthCategory    HealthCategory?
   healthUpdatedAt   DateTime?
+
+  // ========================================
+  // SPRINT 8: REDE DE LOJAS
+  // ========================================
+  networkId       String?
+  network         Network?  @relation("NetworkCompanies", fields: [networkId], references: [id])
+  isHeadquarters  Boolean   @default(false)
+  headquartersOf  Network?  @relation("NetworkHeadquarters")
+
+  // ========================================
+  // SPRINT 8: ACESSO & ONBOARDING
+  // ========================================
+  accessEnabled     Boolean  @default(false)
+  accessEnabledAt   DateTime?
+  accessEnabledBy   String?
+  onboardingStatus  OnboardingStatus @default(PENDING_INVITE)
+  onboardingCompletedAt DateTime?
+
+  // ========================================
+  // SPRINT 8: LIMITES DO PLANO
+  // ========================================
+  maxUsers        Int       @default(3)
+  maxProducts     Int       @default(500)
+  maxBranches     Int       @default(1)
+
+  // ========================================
+  // SPRINT 8: AQUISIÇÃO
+  // ========================================
+  acquisitionChannel String?
+
+  // ========================================
+  // SPRINT 8: NOVAS RELAÇÕES
+  // ========================================
+  invites         Invite[]
+
+  // Índices
+  @@index([networkId])
+  @@index([onboardingStatus])
 }
 
 model Branch {
@@ -2663,4 +2701,118 @@ model UsageSnapshot {
 
   @@index([companyId, date])
   @@map("usage_snapshots")
+}
+
+// ============================================
+// SPRINT 8: REDE DE LOJAS (MULTI-FILIAL)
+// ============================================
+
+model Network {
+  id              String    @id @default(cuid())
+  
+  name            String    // "Rede Visão Total"
+  slug            String    @unique
+  
+  // Configurações de compartilhamento
+  sharedCatalog   Boolean   @default(true)   // Produtos
+  sharedPricing   Boolean   @default(false)  // Preços
+  sharedSuppliers Boolean   @default(true)   // Fornecedores
+  sharedCustomers Boolean   @default(false)  // Clientes (cross-sell)
+  
+  // Matriz (headquarters)
+  headquartersId  String?   @unique
+  headquarters    Company?  @relation("NetworkHeadquarters", fields: [headquartersId], references: [id])
+  
+  // Todas as empresas da rede
+  companies       Company[] @relation("NetworkCompanies")
+  
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("networks")
+}
+
+// ============================================
+// SPRINT 8: SISTEMA DE CONVITES
+// ============================================
+
+enum OnboardingStatus {
+  PENDING_INVITE   // Convite não enviado
+  INVITE_SENT      // Convite enviado, aguardando ativação
+  INVITE_EXPIRED   // Convite expirou
+  ACTIVE           // Usuário ativou a conta
+}
+
+enum InviteStatus {
+  PENDING     // Aguardando ativação
+  ACTIVATED   // Usuário ativou
+  EXPIRED     // Expirou
+  REVOKED     // Cancelado pelo admin
+}
+
+model Invite {
+  id          String       @id @default(cuid())
+  
+  companyId   String
+  company     Company      @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  
+  // Destinatário
+  email       String
+  name        String
+  role        String       @default("admin") // admin, manager, operator
+  
+  // Token seguro
+  token       String       @unique @default(cuid())
+  
+  // Validade
+  expiresAt   DateTime
+  
+  // Status
+  status      InviteStatus @default(PENDING)
+  
+  // Quem criou
+  createdById   String
+  createdByName String
+  
+  // Ativação
+  activatedAt DateTime?
+  activatedUserId String?
+  
+  createdAt   DateTime     @default(now())
+
+  @@index([token])
+  @@index([companyId])
+  @@index([email])
+  @@map("invites")
+}
+
+// ============================================
+// SPRINT 8: FILA DE EMAILS
+// ============================================
+
+enum EmailStatus {
+  PENDING
+  PROCESSING
+  SENT
+  FAILED
+}
+
+model EmailQueue {
+  id          String      @id @default(cuid())
+  
+  to          String
+  subject     String
+  template    String      // "welcome", "invite", "password_reset"
+  data        Json        // Dados do template
+  
+  status      EmailStatus @default(PENDING)
+  
+  attempts    Int         @default(0)
+  lastError   String?
+  
+  sentAt      DateTime?
+  createdAt   DateTime    @default(now())
+
+  @@index([status])
+  @@map("email_queue")
 }
