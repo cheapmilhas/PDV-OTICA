@@ -125,7 +125,7 @@ async function seedAdminUser() {
     create: {
       email: "admin@pdvotica.com.br",
       name: "Administrador",
-      password: "$2b$10$K7L1OJ45/4Y2nIvhRVpCe.FSmhDdWoXehVzJptJ/op0lSsvqNu9Mu", // "admin123" - TROCAR EM PRODUÇÃO
+      password: "$2b$10$TM69qjpoU9OfsaXtMvvL9.HK.JjR6WtdaqF.cQ7exVWFab1iXd5d.", // "admin123" - TROCAR EM PRODUÇÃO
       role: "SUPER_ADMIN",
       active: true,
     },
