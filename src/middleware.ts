@@ -60,13 +60,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
+  // Permitir rotas públicas de auth (antes de qualquer verificação)
+  if (pathname.startsWith("/api/auth") || pathname === "/login" || pathname === "/force-logout") {
+    return NextResponse.next();
+  }
+
   // Rotas /dashboard/** (PDV multi-tenant)
   if (pathname.startsWith("/dashboard") || pathname.startsWith("/api/")) {
-    // Permitir rotas públicas de auth
-    if (pathname.startsWith("/api/auth")) {
-      return NextResponse.next();
-    }
-
     // Obter token de sessão (NextAuth)
     const sessionToken =
       request.cookies.get("next-auth.session-token")?.value ||
