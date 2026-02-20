@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, TrendingUp, Calendar, Award, Edit, Pause, Play, BarChart3 } from "lucide-react";
+import { Plus, TrendingUp, Calendar, Award, Edit, Pause, Play, BarChart3, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -152,6 +152,35 @@ export default function CampanhasPage() {
     } catch (error: any) {
       toast({
         title: "Erro ao pausar campanha",
+        description: error.message,
+        variant: "destructive",
+      });
+    }
+  };
+
+  const handleDelete = async (id: string, campaignName: string) => {
+    if (!confirm(`Tem certeza que deseja encerrar a campanha "${campaignName}"? Esta ação não pode ser desfeita.`)) {
+      return;
+    }
+
+    try {
+      const response = await fetch(`/api/product-campaigns/${id}`, {
+        method: "DELETE",
+      });
+      const result = await response.json();
+
+      if (result.success) {
+        toast({
+          title: "Campanha encerrada",
+          description: "A campanha foi encerrada com sucesso",
+        });
+        loadCampaigns();
+      } else {
+        throw new Error(result.error?.message || "Erro ao encerrar campanha");
+      }
+    } catch (error: any) {
+      toast({
+        title: "Erro ao encerrar campanha",
         description: error.message,
         variant: "destructive",
       });
@@ -314,6 +343,16 @@ export default function CampanhasPage() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
+                        {(campaign.status === "DRAFT" || campaign.status === "PAUSED") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => handleDelete(campaign.id, campaign.name)}
+                            className="text-destructive hover:text-destructive"
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
                       </div>
                     </TableCell>
                   </TableRow>

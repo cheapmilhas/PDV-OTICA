@@ -170,8 +170,8 @@ export async function activateCampaign(id: string, companyId: string) {
     throw new Error("Campanha não encontrada");
   }
 
-  if (campaign.status !== "DRAFT" && campaign.status !== "SCHEDULED") {
-    throw new Error("Apenas campanhas em DRAFT ou SCHEDULED podem ser ativadas");
+  if (campaign.status !== "DRAFT" && campaign.status !== "SCHEDULED" && campaign.status !== "PAUSED") {
+    throw new Error("Apenas campanhas em DRAFT, SCHEDULED ou PAUSED podem ser ativadas");
   }
 
   // Validar que há produtos elegíveis configurados
