@@ -79,9 +79,34 @@ export default function CrmPage() {
     }
   };
 
-  const handleWhatsApp = (reminder: any) => {
+  const handleWhatsApp = async (reminder: any) => {
     const phone = reminder.customer.phone?.replace(/\D/g, "");
-    if (phone) {
+    if (!phone) {
+      toast({
+        title: "Erro",
+        description: "Cliente sem telefone cadastrado",
+        variant: "destructive",
+      });
+      return;
+    }
+
+    try {
+      // Buscar template processado
+      const res = await fetch(
+        `/api/crm/templates/${reminder.segment}/message?customerId=${reminder.customerId}`
+      );
+      const data = await res.json();
+
+      let message = `Olá ${reminder.customer.name.split(" ")[0]}! 👋`;
+
+      if (data.success && data.message) {
+        message = data.message;
+      }
+
+      window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, "_blank");
+    } catch (error) {
+      console.error("Erro ao buscar template:", error);
+      // Fallback para mensagem padrão
       const message = `Olá ${reminder.customer.name.split(" ")[0]}! 👋`;
       window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, "_blank");
     }
