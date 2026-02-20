@@ -232,6 +232,15 @@ model Company {
   productCampaigns     ProductCampaign[]
   campaignBonusEntries CampaignBonusEntry[]
 
+  // ========================================
+  // CRM / LEMBRETES
+  // ========================================
+  messageTemplates  MessageTemplate[]  @relation("MessageTemplates")
+  customerReminders CustomerReminder[] @relation("CustomerReminders")
+  crmContacts       CrmContact[]       @relation("CrmContacts")
+  contactGoals      ContactGoal[]      @relation("ContactGoals")
+  crmSettings       CrmSettings?       @relation("CrmSettings")
+
   // Índices
   @@index([networkId])
   @@index([onboardingStatus])
@@ -283,6 +292,9 @@ model Branch {
   productCampaigns     ProductCampaign[]
   campaignBonusEntries CampaignBonusEntry[]
   campaignProgress     CampaignSellerProgress[]
+
+  // CRM / Lembretes
+  contactGoals ContactGoal[] @relation("BranchContactGoals")
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -337,6 +349,13 @@ model User {
   campaignsCreated     ProductCampaign[]        @relation("CampaignCreatedBy")
   campaignBonusEntries CampaignBonusEntry[]     @relation("BonusSeller")
   campaignProgress     CampaignSellerProgress[] @relation("CampaignProgress")
+
+  // CRM / Lembretes
+  templatesCreated  MessageTemplate[]  @relation("TemplateCreator")
+  assignedReminders CustomerReminder[] @relation("AssignedReminders")
+  crmContactsMade   CrmContact[]       @relation("CrmContactsMade")
+  userGoals         ContactGoal[]      @relation("UserGoals")
+  goalsCreated      ContactGoal[]      @relation("GoalCreator")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -411,6 +430,10 @@ model Customer {
   reminders          Reminder[]
   sales              Sale[]
   serviceOrders      ServiceOrder[]
+
+  // CRM / Lembretes
+  crmReminders CustomerReminder[] @relation("CustomerReminders")
+  crmContacts  CrmContact[]       @relation("CrmContacts")
 
   @@unique([companyId, cpf])
   @@index([companyId, name])
@@ -2921,6 +2944,44 @@ enum BonusEntryStatus {
   EXPIRED // Expirado
 }
 
+// ============================================
+// MÓDULO DE CRM / FOLLOW-UP / LEMBRETES
+// ============================================
+
+enum CustomerSegment {
+  BIRTHDAY // Aniversariantes do mês
+  POST_SALE_30_DAYS // Pós-venda (até 30 dias)
+  POST_SALE_90_DAYS // Pós-venda (30-90 dias)
+  INACTIVE_6_MONTHS // 6 meses sem comprar
+  INACTIVE_1_YEAR // 1 ano sem comprar
+  INACTIVE_2_YEARS // 2 anos sem comprar
+  INACTIVE_3_YEARS // 3+ anos sem comprar
+  CASHBACK_EXPIRING // Cashback expirando
+  PRESCRIPTION_EXPIRING // Receita vencendo (1 ano)
+  VIP_CUSTOMER // Cliente VIP (alto valor)
+  CONTACT_LENS_BUYER // Comprou lente de contato
+  CUSTOM // Segmento personalizado
+}
+
+enum ContactResult {
+  ANSWERED_SCHEDULED // Atendeu - Agendou visita
+  ANSWERED_INTERESTED // Atendeu - Demonstrou interesse
+  ANSWERED_NOT_INTERESTED // Atendeu - Sem interesse no momento
+  NO_ANSWER // Não atendeu
+  WRONG_NUMBER // Número errado/inválido
+  DO_NOT_CONTACT // Pediu para não ligar mais
+  CAME_BACK_PURCHASED // Voltou e comprou
+  OTHER // Outro (ver observação)
+}
+
+enum CrmReminderStatus {
+  PENDING // Aguardando contato
+  IN_PROGRESS // Em andamento
+  COMPLETED // Concluído
+  SCHEDULED // Reagendado para outra data
+  CANCELLED // Cancelado
+}
+
 model ProductCampaign {
   id        String  @id @default(cuid())
   companyId String
@@ -3104,4 +3165,220 @@ model CampaignSellerProgress {
 
   @@unique([campaignId, sellerUserId])
   @@unique([campaignId, branchId])
+}
+
+// ============================================
+// CRM: TEMPLATES DE MENSAGEM
+// ============================================
+
+model MessageTemplate {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("MessageTemplates", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Identificação
+  name    String // Nome do template (ex: "Aniversário")
+  segment CustomerSegment // Segmento associado
+
+  // Conteúdo
+  subject String? // Assunto (para email)
+  message String  @db.Text // Mensagem (suporta variáveis)
+
+  // Configuração
+  isActive Boolean @default(true)
+  channel  String  @default("whatsapp") // whatsapp, sms, email
+
+  // Auditoria
+  createdById String
+  createdBy   User     @relation("TemplateCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([companyId, segment])
+  @@index([companyId])
+  @@map("message_templates")
+}
+
+// ============================================
+// CRM: LEMBRETES DE CONTATO
+// ============================================
+
+model CustomerReminder {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("CustomerReminders", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Cliente
+  customerId String
+  customer   Customer @relation("CustomerReminders", fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Segmento e Prioridade
+  segment  CustomerSegment
+  priority Int             @default(0)
+
+  // Dados calculados (snapshot)
+  lastPurchaseDate      DateTime?
+  lastPurchaseAmount    Decimal?  @db.Decimal(10, 2)
+  lastPurchaseProduct   String?
+  daysSinceLastPurchase Int?
+  totalPurchases        Int       @default(0)
+  totalSpent            Decimal   @default(0) @db.Decimal(10, 2)
+  cashbackBalance       Decimal   @default(0) @db.Decimal(10, 2)
+
+  // Status
+  status       CrmReminderStatus @default(PENDING)
+  scheduledFor DateTime?
+
+  // Atribuição
+  assignedToId String?
+  assignedTo   User?   @relation("AssignedReminders", fields: [assignedToId], references: [id])
+
+  // Auditoria
+  generatedAt DateTime  @default(now())
+  expiresAt   DateTime?
+
+  // Relações
+  contacts CrmContact[]
+
+  @@index([companyId])
+  @@index([customerId])
+  @@index([segment])
+  @@index([status])
+  @@index([assignedToId])
+  @@index([scheduledFor])
+  @@map("customer_reminders")
+}
+
+// ============================================
+// CRM: HISTÓRICO DE CONTATOS
+// ============================================
+
+model CrmContact {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("CrmContacts", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Relacionamentos
+  reminderId String?
+  reminder   CustomerReminder? @relation(fields: [reminderId], references: [id], onDelete: SetNull)
+
+  customerId String
+  customer   Customer @relation("CrmContacts", fields: [customerId], references: [id], onDelete: Cascade)
+
+  // Quem contatou
+  contactedById String
+  contactedBy   User   @relation("CrmContactsMade", fields: [contactedById], references: [id])
+
+  // Detalhes do contato
+  channel String // whatsapp, phone, sms, email, in_person
+  segment CustomerSegment
+
+  // Resultado
+  result ContactResult
+  notes  String?       @db.Text
+
+  // Follow-up
+  scheduleFollowUp Boolean   @default(false)
+  followUpDate     DateTime?
+  followUpNotes    String?
+
+  // Se voltou a comprar
+  resultedInSale Boolean  @default(false)
+  saleId         String?
+  saleAmount     Decimal? @db.Decimal(10, 2)
+
+  // Timestamps
+  contactedAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([customerId])
+  @@index([contactedById])
+  @@index([reminderId])
+  @@index([contactedAt])
+  @@index([result])
+  @@map("crm_contacts")
+}
+
+// ============================================
+// CRM: METAS DE CONTATO
+// ============================================
+
+model ContactGoal {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation("ContactGoals", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Período
+  period    String // daily, weekly, monthly
+  startDate DateTime
+  endDate   DateTime
+
+  // Meta
+  targetContacts Int
+
+  // Atribuição (null = meta geral)
+  userId String?
+  user   User?   @relation("UserGoals", fields: [userId], references: [id])
+
+  branchId String?
+  branch   Branch? @relation("BranchContactGoals", fields: [branchId], references: [id])
+
+  // Auditoria
+  createdById String
+  createdBy   User     @relation("GoalCreator", fields: [createdById], references: [id])
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([companyId])
+  @@index([userId])
+  @@index([branchId])
+  @@index([startDate, endDate])
+  @@map("contact_goals")
+}
+
+// ============================================
+// CRM: CONFIGURAÇÕES
+// ============================================
+
+model CrmSettings {
+  id        String  @id @default(cuid())
+  companyId String  @unique
+  company   Company @relation("CrmSettings", fields: [companyId], references: [id], onDelete: Cascade)
+
+  // Critérios de segmentação (dias)
+  postSaleDays1       Int @default(7)
+  postSaleDays2       Int @default(30)
+  postSaleDays3       Int @default(90)
+  inactiveDays6Months Int @default(180)
+  inactiveDays1Year   Int @default(365)
+  inactiveDays2Years  Int @default(730)
+  inactiveDays3Years  Int @default(1095)
+
+  // VIP
+  vipMinPurchases  Int     @default(5)
+  vipMinTotalSpent Decimal @default(5000) @db.Decimal(10, 2)
+
+  // Cashback
+  cashbackExpiringDays Int @default(30)
+
+  // Receita
+  prescriptionValidityDays Int @default(365)
+  prescriptionWarningDays  Int @default(30)
+
+  // Lente de contato
+  contactLensReorderDays Int @default(30)
+
+  // Metas padrão
+  defaultDailyGoal   Int @default(10)
+  defaultWeeklyGoal  Int @default(50)
+  defaultMonthlyGoal Int @default(200)
+
+  // Geração automática
+  autoGenerateReminders Boolean @default(true)
+  generateOnDayOfWeek   Int     @default(1)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@map("crm_settings")
 }
