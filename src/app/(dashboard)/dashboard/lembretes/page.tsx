@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Users, Phone, MessageSquare, TrendingUp, RefreshCw } from "lucide-react";
+import { Users, Phone, MessageSquare, TrendingUp, RefreshCw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
+import Link from "next/link";
 
 const SEGMENTS = [
   { key: "all", label: "Todos" },
@@ -100,6 +101,12 @@ export default function CrmPage() {
           <p className="text-gray-500">Central de Follow-up e Reativação de Clientes</p>
         </div>
         <div className="flex gap-2">
+          <Link href="/dashboard/lembretes/configuracoes">
+            <Button variant="outline">
+              <Settings className="mr-2 w-4 h-4" />
+              Configurações
+            </Button>
+          </Link>
           <Button onClick={handleGenerate} variant="outline">
             <RefreshCw className="mr-2 w-4 h-4" />
             Gerar Lembretes
