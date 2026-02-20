@@ -483,6 +483,149 @@ export function calculateBonus(
 }
 
 // ============================================================================
+// VERIFICAÇÃO DE LIMITES
+// ============================================================================
+
+/**
+ * Verifica se um bônus respeita os limites da campanha
+ * Retorna { allowed: true, bonusAmount } ou { allowed: false, reason, cappedAmount }
+ */
+async function checkBonusLimits(
+  campaignId: string,
+  companyId: string,
+  campaign: {
+    maxBonusPerSeller?: number | null;
+    maxBonusPerBranch?: number | null;
+    maxBonusTotal?: number | null;
+    maxBonusPerDay?: number | null;
+    branchId?: string | null;
+  },
+  proposedBonus: number,
+  sellerUserId: string,
+  branchId: string | null,
+  saleDate: Date
+): Promise<{ allowed: boolean; bonusAmount: number; reason?: string }> {
+  let cappedBonus = proposedBonus;
+
+  // 1. Limite por vendedor
+  if (campaign.maxBonusPerSeller) {
+    const sellerTotal = await prisma.campaignBonusEntry.aggregate({
+      where: {
+        campaignId,
+        companyId,
+        sellerUserId,
+        status: "APPROVED",
+      },
+      _sum: { totalBonus: true },
+    });
+
+    const currentTotal = Number(sellerTotal._sum.totalBonus ?? 0);
+    const remaining = campaign.maxBonusPerSeller - currentTotal;
+
+    if (remaining <= 0) {
+      return {
+        allowed: false,
+        bonusAmount: 0,
+        reason: `Vendedor atingiu limite de R$ ${(campaign.maxBonusPerSeller / 100).toFixed(2)}`,
+      };
+    }
+
+    cappedBonus = Math.min(cappedBonus, remaining);
+  }
+
+  // 2. Limite por filial
+  if (campaign.maxBonusPerBranch && branchId) {
+    const branchTotal = await prisma.campaignBonusEntry.aggregate({
+      where: {
+        campaignId,
+        companyId,
+        branchId,
+        status: "APPROVED",
+      },
+      _sum: { totalBonus: true },
+    });
+
+    const currentTotal = Number(branchTotal._sum.totalBonus ?? 0);
+    const remaining = campaign.maxBonusPerBranch - currentTotal;
+
+    if (remaining <= 0) {
+      return {
+        allowed: false,
+        bonusAmount: 0,
+        reason: `Filial atingiu limite de R$ ${(campaign.maxBonusPerBranch / 100).toFixed(2)}`,
+      };
+    }
+
+    cappedBonus = Math.min(cappedBonus, remaining);
+  }
+
+  // 3. Limite total da campanha
+  if (campaign.maxBonusTotal) {
+    const totalCampaign = await prisma.campaignBonusEntry.aggregate({
+      where: {
+        campaignId,
+        companyId,
+        status: "APPROVED",
+      },
+      _sum: { totalBonus: true },
+    });
+
+    const currentTotal = Number(totalCampaign._sum.totalBonus ?? 0);
+    const remaining = campaign.maxBonusTotal - currentTotal;
+
+    if (remaining <= 0) {
+      return {
+        allowed: false,
+        bonusAmount: 0,
+        reason: `Campanha atingiu limite total de R$ ${(campaign.maxBonusTotal / 100).toFixed(2)}`,
+      };
+    }
+
+    cappedBonus = Math.min(cappedBonus, remaining);
+  }
+
+  // 4. Limite por dia
+  if (campaign.maxBonusPerDay) {
+    const startOfDay = new Date(saleDate);
+    startOfDay.setHours(0, 0, 0, 0);
+
+    const endOfDay = new Date(saleDate);
+    endOfDay.setHours(23, 59, 59, 999);
+
+    const dayTotal = await prisma.campaignBonusEntry.aggregate({
+      where: {
+        campaignId,
+        companyId,
+        status: "APPROVED",
+        createdAt: {
+          gte: startOfDay,
+          lte: endOfDay,
+        },
+      },
+      _sum: { totalBonus: true },
+    });
+
+    const currentTotal = Number(dayTotal._sum.totalBonus ?? 0);
+    const remaining = campaign.maxBonusPerDay - currentTotal;
+
+    if (remaining <= 0) {
+      return {
+        allowed: false,
+        bonusAmount: 0,
+        reason: `Limite diário atingido: R$ ${(campaign.maxBonusPerDay / 100).toFixed(2)}`,
+      };
+    }
+
+    cappedBonus = Math.min(cappedBonus, remaining);
+  }
+
+  return {
+    allowed: true,
+    bonusAmount: cappedBonus,
+  };
+}
+
+// ============================================================================
 // PROCESSAMENTO DE VENDAS (IDEMPOTENTE)
 // ============================================================================
 
@@ -578,6 +721,27 @@ export async function processaSaleForCampaigns(
 
     if (result.bonusAmount <= 0) continue;
 
+    // Verificar limites da campanha
+    const limitCheck = await checkBonusLimits(
+      campaign.id,
+      companyId,
+      campaign,
+      result.bonusAmount,
+      sale.sellerUserId,
+      sale.branchId,
+      sale.createdAt
+    );
+
+    if (!limitCheck.allowed) {
+      console.log(`⚠️ Campanha ${campaign.name}: ${limitCheck.reason}`);
+      continue;
+    }
+
+    // Usar bônus possivelmente reduzido pelo limite
+    const finalBonus = limitCheck.bonusAmount;
+
+    if (finalBonus <= 0) continue;
+
     // Verificar conflitos (se não permite stacking)
     if (!campaign.allowStacking) {
       const existingBonus = await prisma.campaignBonusEntry.findFirst({
@@ -621,7 +785,7 @@ export async function processaSaleForCampaigns(
             branchId: effectiveBranchId,
             sellerUserId: sellerId,
             quantity: saleItem.qty,
-            totalBonus: result.bonusAmount / eligibleItems.length, // Dividir igualmente
+            totalBonus: finalBonus / eligibleItems.length, // Dividir igualmente (com limite aplicado)
             calculationDetails: result.details,
             status: "PENDING",
           },
@@ -631,7 +795,7 @@ export async function processaSaleForCampaigns(
         });
 
         processedCount++;
-        bonusTotal += result.bonusAmount / eligibleItems.length;
+        bonusTotal += finalBonus / eligibleItems.length;
       } catch (error) {
         // Unique constraint: já processado, ok
         console.log(`Item ${saleItem.id} já processado para campanha ${campaign.id}`);
