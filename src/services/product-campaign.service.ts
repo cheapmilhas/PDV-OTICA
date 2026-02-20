@@ -1030,7 +1030,7 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
   const bonusByStatus = await prisma.campaignBonusEntry.groupBy({
     by: ["status"],
     where: { campaignId },
-    _sum: { totalBonus: true },
+    _sum: { bonusAmount: true },
     _count: true,
   });
 
@@ -1041,9 +1041,9 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
       campaignId,
       status: { not: "REVERSED" },
     },
-    _sum: { totalBonus: true },
+    _sum: { bonusAmount: true },
     orderBy: {
-      _sum: { totalBonus: "desc" },
+      _sum: { bonusAmount: "desc" },
     },
     take: 10,
   });
@@ -1058,7 +1058,7 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
   const topSellersWithNames = topSellers.map((seller) => ({
     sellerId: seller.sellerUserId,
     sellerName: sellers.find((s) => s.id === seller.sellerUserId)?.name ?? "Desconhecido",
-    totalBonus: seller._sum.totalBonus ?? 0,
+    totalBonus: seller._sum.bonusAmount ?? 0,
   }));
 
   // Produtos mais vendidos na campanha
@@ -1102,7 +1102,7 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
       countMode: campaign.countMode,
     },
     summary: {
-      totalBonus: bonusByStatus.reduce((sum, b) => sum + Number(b._sum.totalBonus ?? 0), 0),
+      totalBonus: bonusByStatus.reduce((sum, b) => sum + Number(b._sum.bonusAmount ?? 0), 0),
       totalEntries: bonusByStatus.reduce((sum, b) => sum + b._count, 0),
       byStatus: bonusByStatus,
     },
