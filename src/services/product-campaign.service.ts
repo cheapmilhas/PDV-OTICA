@@ -410,7 +410,15 @@ export async function processaSaleForCampaigns(
     include: {
       items: {
         include: {
-          product: true,
+          product: {
+            select: {
+              id: true,
+              name: true,
+              categoryId: true,
+              brandId: true,
+              supplierId: true,
+            },
+          },
         },
       },
       sellerUser: true,
@@ -453,6 +461,7 @@ export async function processaSaleForCampaigns(
     // Filtrar itens elegíveis
     const eligibleItems = sale.items.filter((saleItem) => {
       const product = saleItem.product;
+      if (!product) return false;
 
       // Se não há filtros, todos produtos são elegíveis
       if (campaign.products.length === 0) return true;
@@ -472,7 +481,7 @@ export async function processaSaleForCampaigns(
     // Calcular quantidade total conforme countMode
     let totalCount = 0;
     if (campaign.countMode === "BY_QUANTITY") {
-      totalCount = eligibleItems.reduce((sum, item) => sum + item.quantity, 0);
+      totalCount = eligibleItems.reduce((sum, item) => sum + item.qty, 0);
     } else if (campaign.countMode === "BY_ITEM") {
       totalCount = eligibleItems.length;
     } else if (campaign.countMode === "BY_SALE") {
@@ -499,8 +508,8 @@ export async function processaSaleForCampaigns(
       }
     }
 
-    // Determinar seller (item seller > sale seller)
-    const sellerId = eligibleItems[0]?.sellerId ?? sale.sellerId;
+    // Determinar seller (usar seller da venda)
+    const sellerId = sale.sellerUserId;
 
     // Determinar branchId
     let effectiveBranchId: string | null = null;
@@ -516,7 +525,7 @@ export async function processaSaleForCampaigns(
             campaignId_saleId_saleItemId: {
               campaignId: campaign.id,
               saleId: sale.id,
-              saleItemId: saleItem.id,
+              saleItemId: saleItem.id ?? "",
             },
           },
           create: {
@@ -525,9 +534,9 @@ export async function processaSaleForCampaigns(
             saleId: sale.id,
             saleItemId: saleItem.id,
             branchId: effectiveBranchId,
-            sellerId: sellerId ?? undefined,
-            bonusAmount: result.bonusAmount / eligibleItems.length, // Dividir igualmente
-            eligibleQuantity: saleItem.quantity,
+            sellerUserId: sellerId,
+            quantity: saleItem.qty,
+            totalBonus: result.bonusAmount / eligibleItems.length, // Dividir igualmente
             calculationDetails: result.details,
             status: "PENDING",
           },
@@ -545,7 +554,7 @@ export async function processaSaleForCampaigns(
     }
 
     // Atualizar progresso incremental
-    if (sellerId && (campaign.scope === "SELLER" || campaign.scope === "BOTH")) {
+    if (campaign.scope === "SELLER" || campaign.scope === "BOTH") {
       await updateProgressIncremental(
         campaign.id,
         sellerId,
@@ -591,14 +600,14 @@ export async function reverseBonusForSale(saleId: string, companyId: string) {
 
     // Atualizar progresso (subtrair)
     for (const entry of entries) {
-      if (entry.sellerId) {
+      if (entry.sellerUserId) {
         await tx.campaignSellerProgress.updateMany({
           where: {
             campaignId: entry.campaignId,
-            sellerId: entry.sellerId,
+            sellerUserId: entry.sellerUserId,
           },
           data: {
-            totalBonus: { decrement: entry.bonusAmount },
+            totalBonus: { decrement: entry.totalBonus },
           },
         });
       }
@@ -614,31 +623,30 @@ export async function reverseBonusForSale(saleId: string, companyId: string) {
 
 async function updateProgressIncremental(
   campaignId: string,
-  sellerId: string,
+  sellerUserId: string,
   branchId: string | null,
   quantity: number,
   bonusAmount: number
 ) {
   await prisma.campaignSellerProgress.upsert({
     where: {
-      campaignId_sellerId_branchId: {
+      campaignId_sellerUserId: {
         campaignId,
-        sellerId,
-        branchId: branchId ?? "",
+        sellerUserId,
       },
     },
     create: {
       campaignId,
-      sellerId,
+      sellerUserId,
       branchId,
-      currentCount: quantity,
+      totalQuantity: quantity,
       totalBonus: bonusAmount,
-      lastUpdated: new Date(),
+      lastCalculatedAt: new Date(),
     },
     update: {
-      currentCount: { increment: quantity },
+      totalQuantity: { increment: quantity },
       totalBonus: { increment: bonusAmount },
-      lastUpdated: new Date(),
+      lastCalculatedAt: new Date(),
     },
   });
 }
@@ -657,14 +665,14 @@ export async function reconcileCampaignProgress(
 
   // Reprocessar progresso a partir dos bônus existentes
   const entries = await prisma.campaignBonusEntry.groupBy({
-    by: ["sellerId", "branchId"],
+    by: ["sellerUserId", "branchId"],
     where: {
       campaignId,
       status: { not: "REVERSED" },
     },
     _sum: {
-      bonusAmount: true,
-      eligibleQuantity: true,
+      totalBonus: true,
+      quantity: true,
     },
   });
 
@@ -676,16 +684,16 @@ export async function reconcileCampaignProgress(
 
     // Recriar progresso
     for (const entry of entries) {
-      if (!entry.sellerId) continue;
+      if (!entry.sellerUserId) continue;
 
       await tx.campaignSellerProgress.create({
         data: {
           campaignId,
-          sellerId: entry.sellerId,
+          sellerUserId: entry.sellerUserId,
           branchId: entry.branchId,
-          currentCount: entry._sum.eligibleQuantity ?? 0,
-          totalBonus: entry._sum.bonusAmount ?? 0,
-          lastUpdated: new Date(),
+          totalQuantity: entry._sum.quantity ?? 0,
+          totalBonus: entry._sum.totalBonus ?? 0,
+          lastCalculatedAt: new Date(),
         },
       });
     }
@@ -721,35 +729,35 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
   const bonusByStatus = await prisma.campaignBonusEntry.groupBy({
     by: ["status"],
     where: { campaignId },
-    _sum: { bonusAmount: true },
+    _sum: { totalBonus: true },
     _count: true,
   });
 
   // Top vendedores
   const topSellers = await prisma.campaignBonusEntry.groupBy({
-    by: ["sellerId"],
+    by: ["sellerUserId"],
     where: {
       campaignId,
       status: { not: "REVERSED" },
     },
-    _sum: { bonusAmount: true },
+    _sum: { totalBonus: true },
     orderBy: {
-      _sum: { bonusAmount: "desc" },
+      _sum: { totalBonus: "desc" },
     },
     take: 10,
   });
 
   // Buscar nomes dos vendedores
-  const sellerIds = topSellers.map((s) => s.sellerId).filter((id): id is string => id !== null);
+  const sellerIds = topSellers.map((s) => s.sellerUserId).filter((id): id is string => id !== null);
   const sellers = await prisma.user.findMany({
     where: { id: { in: sellerIds } },
     select: { id: true, name: true },
   });
 
   const topSellersWithNames = topSellers.map((seller) => ({
-    sellerId: seller.sellerId,
-    sellerName: sellers.find((s) => s.id === seller.sellerId)?.name ?? "Desconhecido",
-    totalBonus: seller._sum.bonusAmount ?? 0,
+    sellerId: seller.sellerUserId,
+    sellerName: sellers.find((s) => s.id === seller.sellerUserId)?.name ?? "Desconhecido",
+    totalBonus: seller._sum.totalBonus ?? 0,
   }));
 
   // Produtos mais vendidos na campanha
@@ -793,7 +801,7 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
       countMode: campaign.countMode,
     },
     summary: {
-      totalBonus: bonusByStatus.reduce((sum, b) => sum + (b._sum.bonusAmount ?? 0), 0),
+      totalBonus: bonusByStatus.reduce((sum, b) => sum + Number(b._sum.totalBonus ?? 0), 0),
       totalEntries: bonusByStatus.reduce((sum, b) => sum + b._count, 0),
       byStatus: bonusByStatus,
     },
