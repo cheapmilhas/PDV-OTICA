@@ -8,6 +8,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from "@/components/ui/select";
+import { Loader2 } from "lucide-react";
 
 interface Brand {
   id: string;
@@ -21,6 +22,7 @@ interface BrandSelectProps {
 export function BrandSelect({ onSelect }: BrandSelectProps) {
   const [brands, setBrands] = useState<Brand[]>([]);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     fetchBrands();
@@ -29,32 +31,69 @@ export function BrandSelect({ onSelect }: BrandSelectProps) {
   const fetchBrands = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/brands");
-      const result = await response.json();
+      setError("");
 
-      if (result.success) {
-        setBrands(result.data || []);
+      console.log("[BrandSelect] Iniciando fetch...");
+
+      const response = await fetch("/api/brands");
+      console.log("[BrandSelect] Response status:", response.status);
+
+      const result = await response.json();
+      console.log("[BrandSelect] Result:", result);
+
+      if (result.success && Array.isArray(result.data)) {
+        console.log(`[BrandSelect] ✅ ${result.data.length} marcas carregadas`);
+        setBrands(result.data);
+      } else {
+        const errorMsg = result.error?.message || result.error || "Erro ao carregar marcas";
+        console.error("[BrandSelect] ❌ Erro:", errorMsg);
+        setError(errorMsg);
       }
-    } catch (error) {
-      console.error("Erro ao buscar marcas:", error);
+    } catch (err: any) {
+      console.error("[BrandSelect] ❌ Exception:", err);
+      setError(err.message || "Erro de conexão");
     } finally {
       setLoading(false);
     }
   };
+
+  if (loading) {
+    return (
+      <div className="flex items-center gap-2 text-gray-500 py-2">
+        <Loader2 className="w-4 h-4 animate-spin" />
+        <span className="text-sm">Carregando marcas...</span>
+      </div>
+    );
+  }
+
+  if (error) {
+    return (
+      <div className="text-red-500 text-sm py-2">
+        ❌ {error}
+      </div>
+    );
+  }
+
+  if (brands.length === 0) {
+    return (
+      <div className="text-gray-500 text-sm py-2">
+        ℹ️ Nenhuma marca cadastrada no sistema
+      </div>
+    );
+  }
 
   return (
     <Select
       onValueChange={(value) => {
         const brand = brands.find((b) => b.id === value);
         if (brand) {
+          console.log("[BrandSelect] Marca selecionada:", brand);
           onSelect(brand);
         }
       }}
     >
       <SelectTrigger>
-        <SelectValue
-          placeholder={loading ? "Carregando..." : "Selecione uma marca"}
-        />
+        <SelectValue placeholder="Selecione uma marca..." />
       </SelectTrigger>
       <SelectContent>
         {brands.map((brand) => (
