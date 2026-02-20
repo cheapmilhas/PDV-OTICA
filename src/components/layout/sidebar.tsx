@@ -22,6 +22,7 @@ import {
   Target,
   FlaskConical,
   Sparkles,
+  TrendingUp,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -139,6 +140,12 @@ const menuItems = [
         href: "/dashboard/metas",
         icon: Target,
         permission: "goals.view"
+      },
+      {
+        name: "Campanhas",
+        href: "/dashboard/campanhas",
+        icon: TrendingUp,
+        permission: "sales.view"
       },
       {
         name: "Lembretes",
