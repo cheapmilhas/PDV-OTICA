@@ -1058,7 +1058,7 @@ export async function getCampaignReport(campaignId: string, companyId: string) {
   const topSellersWithNames = topSellers.map((seller) => ({
     sellerId: seller.sellerUserId,
     sellerName: sellers.find((s) => s.id === seller.sellerUserId)?.name ?? "Desconhecido",
-    totalBonus: seller._sum.totalBonus ?? 0,
+    totalBonus: Number(seller._sum.totalBonus ?? 0),
   }));
 
   // Produtos mais vendidos na campanha
