@@ -75,9 +75,12 @@ export async function GET(
       );
     }
 
+    // Converter Decimals para Number
+    const serializedCampaign = JSON.parse(JSON.stringify(campaign));
+
     return NextResponse.json({
       success: true,
-      data: campaign,
+      data: serializedCampaign,
     });
   } catch (error) {
     return handleApiError(error);
@@ -113,9 +116,12 @@ export async function PATCH(
       validatedData as any
     );
 
+    // Converter Decimals para Number
+    const serializedCampaign = JSON.parse(JSON.stringify(campaign));
+
     return NextResponse.json({
       success: true,
-      data: campaign,
+      data: serializedCampaign,
       message: "Campanha atualizada com sucesso",
     });
   } catch (error) {

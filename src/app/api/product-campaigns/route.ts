@@ -82,9 +82,12 @@ export async function GET(request: NextRequest) {
 
     const campaigns = await campaignService.getCampaigns(filter);
 
+    // Converter Decimals para Number
+    const serializedCampaigns = JSON.parse(JSON.stringify(campaigns));
+
     return NextResponse.json({
       success: true,
-      data: campaigns,
+      data: serializedCampaigns,
     });
   } catch (error) {
     return handleApiError(error);
@@ -116,10 +119,13 @@ export async function POST(request: NextRequest) {
       createdById: session.user.id,
     });
 
+    // Converter Decimals para Number
+    const serializedCampaign = JSON.parse(JSON.stringify(campaign));
+
     return NextResponse.json(
       {
         success: true,
-        data: campaign,
+        data: serializedCampaign,
         message: "Campanha criada com sucesso",
       },
       { status: 201 }

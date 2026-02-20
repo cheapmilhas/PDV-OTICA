@@ -22,9 +22,12 @@ export async function POST(
 
     const campaign = await campaignService.pauseCampaign(id, companyId);
 
+    // Converter Decimals para Number (JSON.parse/stringify converte automaticamente)
+    const serializedCampaign = JSON.parse(JSON.stringify(campaign));
+
     return NextResponse.json({
       success: true,
-      data: campaign,
+      data: serializedCampaign,
       message: "Campanha pausada com sucesso",
     });
   } catch (error) {

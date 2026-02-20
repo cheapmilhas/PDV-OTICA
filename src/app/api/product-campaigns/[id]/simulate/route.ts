@@ -34,9 +34,12 @@ export async function POST(
       quantity
     );
 
+    // Converter Decimals para Number
+    const serializedSimulation = JSON.parse(JSON.stringify(simulation));
+
     return NextResponse.json({
       success: true,
-      data: simulation,
+      data: serializedSimulation,
     });
   } catch (error) {
     if (error instanceof z.ZodError) {
