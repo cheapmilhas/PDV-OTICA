@@ -298,6 +298,85 @@ export async function endCampaign(id: string, companyId: string) {
 // CÁLCULO DE BÔNUS
 // ============================================================================
 
+/**
+ * Calcula bônus TIERED (escalonado por faixas)
+ * Exemplo: [{from: 0, to: 10, bonus: 2}, {from: 11, to: 20, bonus: 5}, {from: 21, to: null, bonus: 10}]
+ * - Se vender 15 unidades: aplica bônus de R$ 5 (faixa 11-20)
+ * - Se vender 25 unidades: aplica bônus de R$ 10 (faixa 21+)
+ */
+function calculateTieredBonus(
+  campaign: {
+    tiers?: Prisma.JsonValue | null;
+  },
+  quantity: number
+): BonusCalculationResult {
+  if (!campaign.tiers) {
+    return {
+      bonusAmount: 0,
+      eligibleQuantity: 0,
+      details: "Nenhuma faixa configurada",
+    };
+  }
+
+  // Parse tiers (esperado: array de {from, to, bonus})
+  let tiersArray: Array<{ from: number; to: number | null; bonus: number }> = [];
+
+  try {
+    tiersArray = campaign.tiers as any;
+    if (!Array.isArray(tiersArray) || tiersArray.length === 0) {
+      return {
+        bonusAmount: 0,
+        eligibleQuantity: 0,
+        details: "Faixas inválidas",
+      };
+    }
+  } catch {
+    return {
+      bonusAmount: 0,
+      eligibleQuantity: 0,
+      details: "Erro ao processar faixas",
+    };
+  }
+
+  // Ordenar por 'from' (garantir que seja crescente)
+  const sortedTiers = [...tiersArray].sort((a, b) => a.from - b.from);
+
+  // Encontrar a faixa aplicável
+  let appliedTierIndex = -1;
+  let appliedTier: typeof sortedTiers[0] | null = null;
+
+  for (let i = 0; i < sortedTiers.length; i++) {
+    const tier = sortedTiers[i];
+    const from = tier.from;
+    const to = tier.to;
+
+    // Verificar se a quantidade está dentro da faixa
+    if (quantity >= from && (to === null || quantity <= to)) {
+      appliedTierIndex = i;
+      appliedTier = tier;
+      break;
+    }
+  }
+
+  if (!appliedTier) {
+    return {
+      bonusAmount: 0,
+      eligibleQuantity: 0,
+      details: `Quantidade ${quantity} não se encaixa em nenhuma faixa`,
+    };
+  }
+
+  // Calcular bônus: quantidade × bonus da faixa
+  const bonusAmount = quantity * appliedTier.bonus;
+
+  return {
+    bonusAmount,
+    eligibleQuantity: quantity,
+    appliedTier: appliedTierIndex,
+    details: `Faixa ${appliedTier.from}-${appliedTier.to ?? '∞'}: ${quantity} unidades × R$ ${appliedTier.bonus.toFixed(2)} = R$ ${bonusAmount.toFixed(2)}`,
+  };
+}
+
 export function calculateBonus(
   campaign: {
     bonusType: string;
@@ -309,6 +388,7 @@ export function calculateBonus(
     bonusPerUnitAfter?: number | null | Prisma.Decimal;
     packageUnits?: number | null;
     bonusPerPackage?: number | null | Prisma.Decimal;
+    tiers?: Prisma.JsonValue | null;
   },
   quantity: number
 ): BonusCalculationResult {
@@ -388,6 +468,11 @@ export function calculateBonus(
       eligibleQuantity: packages * packageSize,
       details: `${packages} pacotes (${packageSize} por pacote) × R$ ${bonusPerPackage.toFixed(2)} = R$ ${bonusAmount.toFixed(2)}`,
     };
+  }
+
+  // TIPO D: TIERED (escalonado por faixas)
+  if (bonusType === "TIERED") {
+    return calculateTieredBonus(campaign as any, quantity);
   }
 
   return {
