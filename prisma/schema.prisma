@@ -2958,6 +2958,24 @@ model ProductCampaign {
   bonusPerPackage    Decimal? @db.Decimal(10, 2)
   carryOverRemainder Boolean  @default(false)
 
+  // Tipo D (TIERED): faixas escalonadas - NOVO!
+  tiers Json? // Array de faixas: [{from: 10, to: 20, bonus: 5.00}, ...]
+
+  // === LIMITES (NOVO!) ===
+  maxBonusPerSeller Int? // Máximo por vendedor (centavos)
+  maxBonusPerBranch Int? // Máximo por filial (centavos)
+  maxBonusTotal     Int? // Máximo total da campanha (centavos)
+  maxBonusPerDay    Int? // Máximo por dia (centavos)
+
+  // === CONDIÇÕES EXTRAS (NOVO!) ===
+  minSaleAmount     Int? // Venda mínima para valer (centavos)
+  excludeDiscounted Boolean @default(false) // Excluir itens com desconto?
+  onlyFullPrice     Boolean @default(false) // Apenas preço cheio?
+
+  // === NOTIFICAÇÕES (NOVO!) ===
+  notifyOnBonus   Boolean @default(false) // Notificar vendedor?
+  notifyOnMinimum Boolean @default(false) // Notificar ao atingir mínimo?
+
   // Conflito entre campanhas
   priority      Int     @default(0)
   allowStacking Boolean @default(false)
