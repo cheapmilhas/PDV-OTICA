@@ -1,122 +1,55 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Users, Phone, MessageSquare, TrendingUp, RefreshCw } from "lucide-react";
+import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
-import {
-  Loader2,
-  Bell,
-  Cake,
-  UserX,
-  Gift,
-  MessageSquare,
-  Check,
-  SkipForward,
-  X,
-  RefreshCw,
-} from "lucide-react";
-import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from "@/components/ui/dialog";
-import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
-import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-interface Customer {
-  id: string;
-  name: string;
-  phone: string | null;
-  email: string | null;
-  birthDate: Date | null;
-  cashback: Array<{ balance: number }>;
-}
+const SEGMENTS = [
+  { key: "all", label: "Todos" },
+  { key: "BIRTHDAY", label: "🎂 Aniversário" },
+  { key: "POST_SALE_30_DAYS", label: "📦 Pós-Venda 30d" },
+  { key: "INACTIVE_1_YEAR", label: "⏰ 1 Ano" },
+  { key: "INACTIVE_2_YEARS", label: "⏰ 2 Anos" },
+  { key: "VIP_CUSTOMER", label: "⭐ VIP" },
+];
 
-interface Reminder {
-  id: string;
-  type: string;
-  scheduledFor: Date;
-  status: string;
-  metadata: any;
-  customer: Customer;
-}
-
-interface RemindersData {
-  all: Reminder[];
-  grouped: Record<string, Reminder[]>;
-  counts: {
-    PRESCRIPTION_REMINDER: number;
-    BIRTHDAY_GREETING: number;
-    INACTIVE_REACTIVATION: number;
-    CASHBACK_EXPIRING: number;
-    total: number;
-  };
-}
-
-const typeConfig = {
-  PRESCRIPTION_REMINDER: {
-    label: "Receita Vencendo",
-    icon: Bell,
-    color: "bg-blue-500",
-    description: "Receita oftálmica está vencendo",
-  },
-  BIRTHDAY_GREETING: {
-    label: "Aniversário",
-    icon: Cake,
-    color: "bg-pink-500",
-    description: "Aniversário do cliente",
-  },
-  INACTIVE_REACTIVATION: {
-    label: "Cliente Inativo",
-    icon: UserX,
-    color: "bg-orange-500",
-    description: "Cliente há muito tempo sem comprar",
-  },
-  CASHBACK_EXPIRING: {
-    label: "Cashback Expirando",
-    icon: Gift,
-    color: "bg-purple-500",
-    description: "Cashback prestes a expirar",
-  },
-};
-
-function RemindersPageContent() {
-  const { toast } = useToast();
+export default function CrmPage() {
+  const [reminders, setReminders] = useState<any[]>([]);
+  const [counts, setCounts] = useState<any>({});
+  const [goals, setGoals] = useState<any>(null);
   const [loading, setLoading] = useState(true);
-  const [generating, setGenerating] = useState(false);
-  const [reminders, setReminders] = useState<RemindersData | null>(null);
-  const [selectedReminder, setSelectedReminder] = useState<Reminder | null>(null);
-  const [dismissDialogOpen, setDismissDialogOpen] = useState(false);
-  const [dismissReason, setDismissReason] = useState("");
-  const [activeTab, setActiveTab] = useState<string>("all");
-  const [sequenceMode, setSequenceMode] = useState(false);
-  const [currentSequenceIndex, setCurrentSequenceIndex] = useState(0);
+  const [selectedSegment, setSelectedSegment] = useState("all");
+  const { toast } = useToast();
 
-  useEffect(() => {
-    loadReminders();
-  }, []);
-
-  const loadReminders = async () => {
+  const loadData = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/reminders");
+      const params = new URLSearchParams();
+      if (selectedSegment !== "all") params.set("segment", selectedSegment);
 
-      if (!response.ok) {
-        throw new Error("Erro ao carregar lembretes");
-      }
+      const [remindersRes, countsRes, goalsRes] = await Promise.all([
+        fetch(`/api/crm/reminders?${params}`),
+        fetch("/api/crm/reminders/counts"),
+        fetch("/api/crm/goals"),
+      ]);
 
-      const data = await response.json();
-      setReminders(data.data);
+      const [remindersData, countsData, goalsData] = await Promise.all([
+        remindersRes.json(),
+        countsRes.json(),
+        goalsRes.json(),
+      ]);
+
+      if (remindersData.success) setReminders(remindersData.data);
+      if (countsData.success) setCounts(countsData.data);
+      if (goalsData.success) setGoals(goalsData.data);
     } catch (error) {
+      console.error("Erro ao carregar dados:", error);
       toast({
-        title: "Erro ao carregar lembretes",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        title: "Erro",
+        description: "Erro ao carregar lembretes",
         variant: "destructive",
       });
     } finally {
@@ -124,491 +57,239 @@ function RemindersPageContent() {
     }
   };
 
-  const generateReminders = async () => {
+  const handleGenerate = async () => {
     try {
-      setGenerating(true);
-      const response = await fetch("/api/reminders", {
-        method: "POST",
-      });
+      const res = await fetch("/api/crm/reminders", { method: "POST" });
+      const data = await res.json();
 
-      if (!response.ok) {
-        throw new Error("Erro ao gerar lembretes");
-      }
-
-      const data = await response.json();
-      toast({
-        title: "Lembretes gerados",
-        description: data.message,
-      });
-
-      await loadReminders();
-    } catch (error) {
-      toast({
-        title: "Erro ao gerar lembretes",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
-    } finally {
-      setGenerating(false);
-    }
-  };
-
-  const openWhatsApp = async (reminder: Reminder) => {
-    const { customer, type, metadata } = reminder;
-
-    if (!customer.phone) {
-      toast({
-        title: "Cliente sem telefone",
-        description: "Este cliente não possui WhatsApp cadastrado",
-        variant: "destructive",
-      });
-      return;
-    }
-
-    // Gerar mensagem baseada no tipo
-    let message = "";
-    switch (type) {
-      case "PRESCRIPTION_REMINDER":
-        const daysUntilExpiration = metadata?.daysUntilExpiration || 0;
-        message = `Olá ${customer.name}! Sua receita vence em ${daysUntilExpiration} dias. Que tal agendar uma nova consulta?`;
-        break;
-      case "BIRTHDAY_GREETING":
-        message = `Parabéns, ${customer.name}! Temos um presente especial de aniversário para você!`;
-        break;
-      case "INACTIVE_REACTIVATION":
-        const daysSinceLastSale = metadata?.daysSinceLastSale || 0;
-        message = `Olá ${customer.name}! Sentimos sua falta! Faz ${Math.floor(daysSinceLastSale / 30)} meses que não nos vemos. Que tal passar aqui?`;
-        break;
-      case "CASHBACK_EXPIRING":
-        const amount = metadata?.amount || 0;
-        const daysToExpire = metadata?.daysUntilExpiration || 0;
-        message = `Olá ${customer.name}! Você tem R$ ${amount.toFixed(2)} em cashback expirando em ${daysToExpire} dias!`;
-        break;
-      default:
-        message = `Olá ${customer.name}!`;
-    }
-
-    // Limpar e formatar telefone
-    const cleanPhone = customer.phone.replace(/\D/g, "");
-    const phoneWithCountry = cleanPhone.startsWith("55") ? cleanPhone : `55${cleanPhone}`;
-    const encodedMessage = encodeURIComponent(message);
-    const whatsappUrl = `https://wa.me/${phoneWithCountry}?text=${encodedMessage}`;
-
-    // Marcar como em progresso
-    await fetch(`/api/reminders/${reminder.id}`, {
-      method: "POST",
-    });
-
-    // Abrir WhatsApp
-    window.open(whatsappUrl, "_blank");
-
-    // Registrar contato
-    await fetch("/api/reminders/contacts", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        customerId: customer.id,
-        type,
-        channel: "WHATSAPP",
-        status: "SENT",
-        message,
-        reminderId: reminder.id,
-      }),
-    });
-
-    toast({
-      title: "WhatsApp aberto",
-      description: "Mensagem pronta enviada ao WhatsApp",
-    });
-
-    await loadReminders();
-
-    // Se estiver em modo sequência, avançar para o próximo
-    if (sequenceMode && reminders) {
-      handleNextInSequence();
-    }
-  };
-
-  const markAsCompleted = async (reminder: Reminder) => {
-    try {
-      const response = await fetch(`/api/reminders/${reminder.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "COMPLETED",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao marcar como concluído");
-      }
-
-      toast({
-        title: "Lembrete concluído",
-        description: "Contato realizado com sucesso",
-      });
-
-      await loadReminders();
-
-      if (sequenceMode) {
-        handleNextInSequence();
+      if (data.success) {
+        toast({
+          title: "Sucesso",
+          description: data.message,
+        });
+        loadData();
       }
     } catch (error) {
       toast({
         title: "Erro",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
+        description: "Erro ao gerar lembretes",
         variant: "destructive",
       });
     }
   };
 
-  const skip = async (reminder: Reminder) => {
-    try {
-      const response = await fetch(`/api/reminders/${reminder.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "SKIPPED",
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao pular lembrete");
-      }
-
-      toast({
-        title: "Lembrete pulado",
-        description: "Este lembrete foi pulado",
-      });
-
-      await loadReminders();
-
-      if (sequenceMode) {
-        handleNextInSequence();
-      }
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
+  const handleWhatsApp = (reminder: any) => {
+    const phone = reminder.customer.phone?.replace(/\D/g, "");
+    if (phone) {
+      const message = `Olá ${reminder.customer.name.split(" ")[0]}! 👋`;
+      window.open(`https://wa.me/55${phone}?text=${encodeURIComponent(message)}`, "_blank");
     }
   };
 
-  const dismiss = (reminder: Reminder) => {
-    setSelectedReminder(reminder);
-    setDismissDialogOpen(true);
-  };
+  useEffect(() => {
+    loadData();
+  }, [selectedSegment]);
 
-  const confirmDismiss = async () => {
-    if (!selectedReminder) return;
-
-    try {
-      const response = await fetch(`/api/reminders/${selectedReminder.id}`, {
-        method: "PUT",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          status: "DISMISSED",
-          dismissReason,
-        }),
-      });
-
-      if (!response.ok) {
-        throw new Error("Erro ao dispensar lembrete");
-      }
-
-      toast({
-        title: "Lembrete dispensado",
-        description: "Este lembrete foi dispensado",
-      });
-
-      setDismissDialogOpen(false);
-      setDismissReason("");
-      setSelectedReminder(null);
-
-      await loadReminders();
-
-      if (sequenceMode) {
-        handleNextInSequence();
-      }
-    } catch (error) {
-      toast({
-        title: "Erro",
-        description: error instanceof Error ? error.message : "Erro desconhecido",
-        variant: "destructive",
-      });
-    }
-  };
-
-  const handleNextInSequence = () => {
-    if (!reminders) return;
-    const totalReminders = reminders.all.length;
-
-    if (currentSequenceIndex < totalReminders - 1) {
-      setCurrentSequenceIndex(currentSequenceIndex + 1);
-    } else {
-      setSequenceMode(false);
-      setCurrentSequenceIndex(0);
-      toast({
-        title: "Sequência concluída",
-        description: "Todos os lembretes foram processados",
-      });
-    }
-  };
-
-  const toggleSequenceMode = () => {
-    setSequenceMode(!sequenceMode);
-    setCurrentSequenceIndex(0);
-  };
-
-  const ReminderCard = ({ reminder }: { reminder: Reminder }) => {
-    const config = typeConfig[reminder.type as keyof typeof typeConfig];
-    if (!config) return null;
-
-    const Icon = config.icon;
-
-    return (
-      <Card className="hover:shadow-md transition-shadow">
-        <CardContent className="pt-6">
-          <div className="flex items-start justify-between">
-            <div className="flex items-start gap-3 flex-1">
-              <div className={`p-2 rounded-lg ${config.color}`}>
-                <Icon className="h-5 w-5 text-white" />
-              </div>
-              <div className="flex-1">
-                <div className="flex items-center gap-2 mb-1">
-                  <h3 className="font-semibold">{reminder.customer.name}</h3>
-                  <Badge variant="outline" className="text-xs">
-                    {config.label}
-                  </Badge>
-                </div>
-                <p className="text-sm text-muted-foreground mb-2">
-                  {config.description}
-                </p>
-                {reminder.customer.phone && (
-                  <p className="text-sm text-muted-foreground">
-                    {reminder.customer.phone}
-                  </p>
-                )}
-                {reminder.metadata && (
-                  <div className="text-xs text-muted-foreground mt-2">
-                    {reminder.type === "CASHBACK_EXPIRING" && (
-                      <span>Valor: R$ {reminder.metadata.amount?.toFixed(2)}</span>
-                    )}
-                    {reminder.type === "PRESCRIPTION_REMINDER" && (
-                      <span>Expira em {reminder.metadata.daysUntilExpiration} dias</span>
-                    )}
-                    {reminder.type === "INACTIVE_REACTIVATION" && (
-                      <span>{reminder.metadata.daysSinceLastSale} dias sem comprar</span>
-                    )}
-                  </div>
-                )}
-              </div>
-            </div>
-          </div>
-
-          <div className="flex gap-2 mt-4">
-            <Button
-              size="sm"
-              variant="default"
-              className="flex-1"
-              onClick={() => openWhatsApp(reminder)}
-            >
-              <MessageSquare className="h-4 w-4 mr-2" />
-              WhatsApp
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => markAsCompleted(reminder)}
-            >
-              <Check className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => skip(reminder)}
-            >
-              <SkipForward className="h-4 w-4" />
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={() => dismiss(reminder)}
-            >
-              <X className="h-4 w-4" />
-            </Button>
-          </div>
-        </CardContent>
-      </Card>
-    );
-  };
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <Loader2 className="h-8 w-8 animate-spin" />
-      </div>
-    );
-  }
+  const totalPending = Object.values(counts).reduce((a: any, b: any) => (a as number) + (b as number), 0) as number;
 
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="p-6 space-y-6">
+      <div className="flex justify-between items-center">
         <div>
-          <h1 className="text-3xl font-bold">Lembretes de Retorno</h1>
-          <p className="text-muted-foreground mt-2">
-            Central de lembretes para contato com clientes
-          </p>
+          <h1 className="text-2xl font-bold">CRM - Lembretes de Contato</h1>
+          <p className="text-gray-500">Central de Follow-up e Reativação de Clientes</p>
         </div>
         <div className="flex gap-2">
-          {reminders && reminders.all.length > 0 && (
-            <Button
-              variant={sequenceMode ? "default" : "outline"}
-              onClick={toggleSequenceMode}
-            >
-              {sequenceMode ? "Sair do Modo Sequência" : "Modo Sequência"}
-            </Button>
-          )}
-          <Button onClick={generateReminders} disabled={generating}>
-            {generating && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            <RefreshCw className="mr-2 h-4 w-4" />
+          <Button onClick={handleGenerate} variant="outline">
+            <RefreshCw className="mr-2 w-4 h-4" />
             Gerar Lembretes
+          </Button>
+          <Button onClick={loadData} variant="outline">
+            <RefreshCw className="mr-2 w-4 h-4" />
+            Atualizar
           </Button>
         </div>
       </div>
 
-      {/* Cards de Resumo */}
-      {reminders && (
-        <div className="grid gap-4 md:grid-cols-5">
-          <Card>
-            <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Total</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="text-2xl font-bold">{reminders.counts.total}</div>
-            </CardContent>
-          </Card>
+      <div className="grid grid-cols-4 gap-4">
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm text-gray-500">Pendentes</p>
+                <p className="text-2xl font-bold">{totalPending || 0}</p>
+              </div>
+              <Users className="w-8 h-8 text-blue-500" />
+            </div>
+          </CardContent>
+        </Card>
 
-          {Object.entries(typeConfig).map(([type, config]) => {
-            const Icon = config.icon;
-            const count = reminders.counts[type as keyof typeof reminders.counts] || 0;
-
-            return (
-              <Card key={type}>
-                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                  <CardTitle className="text-sm font-medium">
-                    {config.label}
-                  </CardTitle>
-                  <Icon className="h-4 w-4 text-muted-foreground" />
-                </CardHeader>
-                <CardContent>
-                  <div className="text-2xl font-bold">{count}</div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Tabs por tipo de lembrete */}
-      <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList>
-          <TabsTrigger value="all">
-            Todos ({reminders?.counts.total || 0})
-          </TabsTrigger>
-          {Object.entries(typeConfig).map(([type, config]) => {
-            const count = reminders?.counts[type as keyof typeof reminders.counts] || 0;
-            return (
-              <TabsTrigger key={type} value={type}>
-                {config.label} ({count})
-              </TabsTrigger>
-            );
-          })}
-        </TabsList>
-
-        <TabsContent value="all" className="space-y-4 mt-6">
-          {sequenceMode && reminders && reminders.all.length > 0 ? (
-            <div>
-              <div className="mb-4 p-4 bg-muted rounded-lg">
-                <p className="text-sm font-medium">
-                  Modo Sequência: {currentSequenceIndex + 1} de {reminders.all.length}
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm text-gray-500">Meta Diária</p>
+                <p className="text-2xl font-bold">
+                  {goals?.daily?.current || 0}/{goals?.daily?.target || 10}
                 </p>
               </div>
-              <ReminderCard reminder={reminders.all[currentSequenceIndex]} />
+              <Phone className="w-8 h-8 text-green-500" />
             </div>
-          ) : (
-            <>
-              {reminders && reminders.all.length === 0 ? (
-                <Card>
-                  <CardContent className="pt-6 text-center text-muted-foreground">
-                    Nenhum lembrete pendente para hoje
-                  </CardContent>
-                </Card>
-              ) : (
-                reminders?.all.map((reminder) => (
-                  <ReminderCard key={reminder.id} reminder={reminder} />
-                ))
-              )}
-            </>
-          )}
-        </TabsContent>
+            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-green-500 h-2 rounded-full"
+                style={{
+                  width: `${Math.min(
+                    ((goals?.daily?.current || 0) / (goals?.daily?.target || 10)) * 100,
+                    100
+                  )}%`,
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-        {Object.keys(typeConfig).map((type) => (
-          <TabsContent key={type} value={type} className="space-y-4 mt-6">
-            {reminders?.grouped[type]?.length === 0 ? (
-              <Card>
-                <CardContent className="pt-6 text-center text-muted-foreground">
-                  Nenhum lembrete deste tipo
-                </CardContent>
-              </Card>
-            ) : (
-              reminders?.grouped[type]?.map((reminder) => (
-                <ReminderCard key={reminder.id} reminder={reminder} />
-              ))
-            )}
-          </TabsContent>
-        ))}
-      </Tabs>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm text-gray-500">Meta Semanal</p>
+                <p className="text-2xl font-bold">
+                  {goals?.weekly?.current || 0}/{goals?.weekly?.target || 50}
+                </p>
+              </div>
+              <TrendingUp className="w-8 h-8 text-purple-500" />
+            </div>
+            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-purple-500 h-2 rounded-full"
+                style={{
+                  width: `${Math.min(
+                    ((goals?.weekly?.current || 0) / (goals?.weekly?.target || 50)) * 100,
+                    100
+                  )}%`,
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
 
-      {/* Dialog de Dispensar */}
-      <Dialog open={dismissDialogOpen} onOpenChange={setDismissDialogOpen}>
-        <DialogContent>
-          <DialogHeader>
-            <DialogTitle>Dispensar Lembrete</DialogTitle>
-            <DialogDescription>
-              Por que você está dispensando este lembrete?
-            </DialogDescription>
-          </DialogHeader>
-          <Textarea
-            placeholder="Ex: Cliente não quer mais ser contatado, número incorreto, etc."
-            value={dismissReason}
-            onChange={(e) => setDismissReason(e.target.value)}
-            className="min-h-[100px]"
-          />
-          <DialogFooter>
-            <Button
-              variant="outline"
-              onClick={() => {
-                setDismissDialogOpen(false);
-                setDismissReason("");
-                setSelectedReminder(null);
-              }}
-            >
-              Cancelar
-            </Button>
-            <Button onClick={confirmDismiss}>Dispensar</Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
+        <Card>
+          <CardContent className="p-6">
+            <div className="flex justify-between items-start">
+              <div>
+                <p className="text-sm text-gray-500">Meta Mensal</p>
+                <p className="text-2xl font-bold">
+                  {goals?.monthly?.current || 0}/{goals?.monthly?.target || 200}
+                </p>
+              </div>
+              <MessageSquare className="w-8 h-8 text-orange-500" />
+            </div>
+            <div className="mt-2 w-full bg-gray-200 rounded-full h-2">
+              <div
+                className="bg-orange-500 h-2 rounded-full"
+                style={{
+                  width: `${Math.min(
+                    ((goals?.monthly?.current || 0) / (goals?.monthly?.target || 200)) * 100,
+                    100
+                  )}%`,
+                }}
+              />
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <Card>
+        <CardContent className="p-4">
+          <div className="flex gap-2 flex-wrap">
+            {SEGMENTS.map((segment) => (
+              <Button
+                key={segment.key}
+                onClick={() => setSelectedSegment(segment.key)}
+                variant={selectedSegment === segment.key ? "default" : "outline"}
+                size="sm"
+              >
+                {segment.label}
+                {segment.key !== "all" && counts[segment.key] > 0 && (
+                  <Badge variant="secondary" className="ml-2">
+                    {counts[segment.key]}
+                  </Badge>
+                )}
+              </Button>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
+
+      <div className="space-y-4">
+        {loading ? (
+          <Card>
+            <CardContent className="p-8 text-center text-gray-500">Carregando...</CardContent>
+          </Card>
+        ) : reminders.length === 0 ? (
+          <Card>
+            <CardContent className="p-8 text-center text-gray-500">
+              Nenhum lembrete encontrado. Clique em "Gerar Lembretes" para criar novos.
+            </CardContent>
+          </Card>
+        ) : (
+          reminders.map((reminder: any) => (
+            <Card key={reminder.id}>
+              <CardContent className="p-6">
+                <div className="flex justify-between items-start">
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2 mb-2">
+                      <h3 className="text-lg font-semibold">{reminder.customer.name}</h3>
+                      <Badge>{reminder.segment.replace(/_/g, " ")}</Badge>
+                    </div>
+                    <p className="text-sm text-gray-600 mb-2">
+                      📞 {reminder.customer.phone || "Sem telefone"}
+                    </p>
+
+                    {reminder.lastPurchaseDate && (
+                      <div className="text-sm text-gray-600 space-y-1">
+                        <p>
+                          📦 Última compra:{" "}
+                          {new Date(reminder.lastPurchaseDate).toLocaleDateString("pt-BR")} (
+                          {reminder.daysSinceLastPurchase} dias)
+                        </p>
+                        {reminder.lastPurchaseProduct && (
+                          <p>🛒 Produto: {reminder.lastPurchaseProduct}</p>
+                        )}
+                        {reminder.lastPurchaseAmount && (
+                          <p>
+                            💰 Valor: R${" "}
+                            {Number(reminder.lastPurchaseAmount).toLocaleString("pt-BR", {
+                              minimumFractionDigits: 2,
+                            })}
+                          </p>
+                        )}
+                      </div>
+                    )}
+
+                    <div className="text-sm text-gray-500 mt-2">
+                      <p>
+                        📊 Total: {reminder.totalPurchases} compras • R${" "}
+                        {Number(reminder.totalSpent).toLocaleString("pt-BR", {
+                          minimumFractionDigits: 2,
+                        })}
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-col gap-2">
+                    <Button onClick={() => handleWhatsApp(reminder)} size="sm">
+                      <MessageSquare className="mr-2 w-4 h-4" />
+                      WhatsApp
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          ))
+        )}
+      </div>
     </div>
-  );
-}
-
-export default function RemindersPage() {
-  return (
-    <ProtectedRoute permission="reminders.view">
-      <RemindersPageContent />
-    </ProtectedRoute>
   );
 }
