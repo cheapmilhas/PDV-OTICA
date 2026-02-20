@@ -35,6 +35,17 @@ interface Campaign {
   startDate: string;
   endDate: string;
   priority: number;
+  products?: Array<{
+    id: string;
+    productId?: string;
+    categoryId?: string;
+    brandId?: string;
+    supplierId?: string;
+    product?: { name: string };
+    category?: { name: string };
+    brand?: { name: string };
+    supplier?: { name: string };
+  }>;
   _count?: {
     bonusEntries: number;
   };
@@ -207,6 +218,7 @@ export default function CampanhasPage() {
                   <TableHead>Nome</TableHead>
                   <TableHead>Tipo</TableHead>
                   <TableHead>Escopo</TableHead>
+                  <TableHead>Produtos</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Período</TableHead>
                   <TableHead>Prioridade</TableHead>
@@ -223,6 +235,32 @@ export default function CampanhasPage() {
                       </Badge>
                     </TableCell>
                     <TableCell>{SCOPE_LABELS[campaign.scope]}</TableCell>
+                    <TableCell>
+                      {campaign.products && campaign.products.length > 0 ? (
+                        <div className="flex gap-1 flex-wrap">
+                          {campaign.products.slice(0, 2).map((item) => (
+                            <Badge key={item.id} variant="secondary" className="text-xs">
+                              {item.productId
+                                ? "Produto"
+                                : item.categoryId
+                                ? "Categoria"
+                                : item.brandId
+                                ? "Marca"
+                                : "Fornecedor"}
+                            </Badge>
+                          ))}
+                          {campaign.products.length > 2 && (
+                            <Badge variant="outline" className="text-xs">
+                              +{campaign.products.length - 2}
+                            </Badge>
+                          )}
+                        </div>
+                      ) : (
+                        <Badge variant="destructive" className="text-xs">
+                          Sem produtos
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell>
                       <Badge variant={STATUS_LABELS[campaign.status].variant as any}>
                         {STATUS_LABELS[campaign.status].label}

@@ -163,6 +163,7 @@ export async function getCampaignById(id: string, companyId: string) {
 export async function activateCampaign(id: string, companyId: string) {
   const campaign = await prisma.productCampaign.findFirst({
     where: { id, companyId },
+    include: { products: true },
   });
 
   if (!campaign) {
@@ -171,6 +172,13 @@ export async function activateCampaign(id: string, companyId: string) {
 
   if (campaign.status !== "DRAFT" && campaign.status !== "SCHEDULED") {
     throw new Error("Apenas campanhas em DRAFT ou SCHEDULED podem ser ativadas");
+  }
+
+  // Validar que há produtos elegíveis configurados
+  if (campaign.products.length === 0) {
+    throw new Error(
+      "Campanha sem produtos elegíveis. Adicione ao menos um produto, categoria, marca ou fornecedor antes de ativar."
+    );
   }
 
   return await prisma.productCampaign.update({
@@ -667,8 +675,11 @@ function filterEligibleItems(
     }
 
     // 5. Verificar se corresponde aos filtros de produto da campanha
-    // Se não há filtros, todos produtos são elegíveis
-    if (campaign.products.length === 0) return true;
+    // Se não há filtros configurados, nenhum produto é elegível
+    if (campaign.products.length === 0) {
+      console.warn(`Campanha ${campaign.id} sem produtos - nenhum item elegível`);
+      return false;
+    }
 
     // Verificar se algum item da campanha corresponde
     return campaign.products.some((campaignItem: any) => {

@@ -25,7 +25,12 @@ import {
 } from "@/components/ui/select";
 import { Switch } from "@/components/ui/switch";
 import { useToast } from "@/hooks/use-toast";
-import { Loader2 } from "lucide-react";
+import { Loader2, X } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
+import { ProductCombobox } from "@/components/campaigns/product-combobox";
+import { CategorySelect } from "@/components/campaigns/category-select";
+import { BrandSelect } from "@/components/campaigns/brand-select";
+import { SupplierSelect } from "@/components/campaigns/supplier-select";
 
 const campaignSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -57,6 +62,12 @@ interface CampaignFormProps {
 export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
   const [loading, setLoading] = useState(false);
   const { toast } = useToast();
+  const [filterType, setFilterType] = useState<string>("");
+  const [campaignItems, setCampaignItems] = useState<{
+    type: "product" | "category" | "brand" | "supplier";
+    id: string;
+    name: string;
+  }[]>([]);
 
   const form = useForm<CampaignFormData>({
     resolver: zodResolver(campaignSchema) as any,
@@ -89,13 +100,80 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
 
   const bonusType = form.watch("bonusType");
 
+  // Carregar itens ao editar campanha
+  useEffect(() => {
+    if (campaign?.products) {
+      const loadedItems = campaign.products.map((item: any) => {
+        if (item.productId) {
+          return {
+            type: "product" as const,
+            id: item.productId,
+            name: item.product?.name || "Produto",
+          };
+        }
+        if (item.categoryId) {
+          return {
+            type: "category" as const,
+            id: item.categoryId,
+            name: item.category?.name || "Categoria",
+          };
+        }
+        if (item.brandId) {
+          return {
+            type: "brand" as const,
+            id: item.brandId,
+            name: item.brand?.name || "Marca",
+          };
+        }
+        if (item.supplierId) {
+          return {
+            type: "supplier" as const,
+            id: item.supplierId,
+            name: item.supplier?.name || "Fornecedor",
+          };
+        }
+        return null;
+      }).filter(Boolean);
+
+      setCampaignItems(loadedItems);
+    }
+  }, [campaign]);
+
+  const addItem = (
+    type: "product" | "category" | "brand" | "supplier",
+    id: string,
+    name: string
+  ) => {
+    // Verificar se já não foi adicionado
+    const exists = campaignItems.some(
+      (item) => item.type === type && item.id === id
+    );
+
+    if (!exists) {
+      setCampaignItems([...campaignItems, { type, id, name }]);
+    }
+
+    // Resetar seleção
+    setFilterType("");
+  };
+
+  const removeItem = (index: number) => {
+    setCampaignItems(campaignItems.filter((_, i) => i !== index));
+  };
+
   const onSubmit = async (data: CampaignFormData) => {
     try {
       setLoading(true);
 
       const payload = {
         ...data,
-        items: [], // Por enquanto, sem filtros de produtos
+        items: campaignItems.map((item) => {
+          if (item.type === "product") return { productId: item.id };
+          if (item.type === "category") return { categoryId: item.id };
+          if (item.type === "brand") return { brandId: item.id };
+          if (item.type === "supplier") return { supplierId: item.id };
+          return {};
+        }),
       };
 
       const url = campaign
@@ -294,6 +372,106 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
               )}
             />
           </div>
+        </div>
+
+        {/* Produtos Elegíveis */}
+        <div className="space-y-4">
+          <div>
+            <h3 className="text-lg font-semibold">Produtos Elegíveis</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Selecione quais produtos, categorias, marcas ou fornecedores participam desta campanha.
+              {campaignItems.length === 0 && (
+                <span className="text-yellow-600 dark:text-yellow-500 font-medium">
+                  {" "}Atenção: Sem produtos configurados, a campanha não poderá ser ativada.
+                </span>
+              )}
+            </p>
+          </div>
+
+          {/* Tipo de filtro */}
+          <Select value={filterType} onValueChange={(value) => setFilterType(value)}>
+            <SelectTrigger>
+              <SelectValue placeholder="Adicionar por..." />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="product">Produto Específico</SelectItem>
+              <SelectItem value="category">Categoria</SelectItem>
+              <SelectItem value="brand">Marca</SelectItem>
+              <SelectItem value="supplier">Fornecedor</SelectItem>
+            </SelectContent>
+          </Select>
+
+          {/* Seletor de produto */}
+          {filterType === "product" && (
+            <ProductCombobox
+              companyId=""
+              onSelect={(product) => addItem("product", product.id, product.name)}
+            />
+          )}
+
+          {/* Seletor de categoria */}
+          {filterType === "category" && (
+            <CategorySelect
+              onSelect={(category) => addItem("category", category.id, category.name)}
+            />
+          )}
+
+          {/* Seletor de marca */}
+          {filterType === "brand" && (
+            <BrandSelect
+              onSelect={(brand) => addItem("brand", brand.id, brand.name)}
+            />
+          )}
+
+          {/* Seletor de fornecedor */}
+          {filterType === "supplier" && (
+            <SupplierSelect
+              onSelect={(supplier) => addItem("supplier", supplier.id, supplier.name)}
+            />
+          )}
+
+          {/* Lista de itens adicionados */}
+          {campaignItems.length > 0 && (
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  {campaignItems.length} {campaignItems.length === 1 ? "item adicionado" : "itens adicionados"}
+                </span>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => setCampaignItems([])}
+                >
+                  Limpar tudo
+                </Button>
+              </div>
+              {campaignItems.map((item, index) => (
+                <div
+                  key={`${item.type}-${item.id}`}
+                  className="flex items-center justify-between border rounded-lg p-3"
+                >
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="capitalize">
+                      {item.type === "product" && "Produto"}
+                      {item.type === "category" && "Categoria"}
+                      {item.type === "brand" && "Marca"}
+                      {item.type === "supplier" && "Fornecedor"}
+                    </Badge>
+                    <span className="text-sm">{item.name}</span>
+                  </div>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => removeItem(index)}
+                  >
+                    <X className="h-4 w-4" />
+                  </Button>
+                </div>
+              ))}
+            </div>
+          )}
         </div>
 
         {/* Tipo de Bonificação */}
