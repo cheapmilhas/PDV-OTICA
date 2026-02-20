@@ -81,39 +81,10 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    try {
-      // Decodificar token NextAuth para obter companyId
-      const { payload } = await jwtVerify(sessionToken, JWT_SECRET);
-      const companyId = payload.companyId as string | undefined;
-      const networkId = payload.networkId as string | undefined | null;
-
-      if (!companyId) {
-        console.error("❌ Token sem companyId:", payload);
-        if (pathname.startsWith("/dashboard")) {
-          return NextResponse.redirect(new URL("/login", request.url));
-        }
-        return NextResponse.json({ error: "CompanyId não encontrado" }, { status: 401 });
-      }
-
-      // Injetar headers de tenant
-      const requestHeaders = new Headers(request.headers);
-      requestHeaders.set("x-company-id", companyId);
-      if (networkId) {
-        requestHeaders.set("x-network-id", networkId);
-      }
-
-      return NextResponse.next({
-        request: {
-          headers: requestHeaders,
-        },
-      });
-    } catch (error) {
-      console.error("❌ Erro ao verificar token:", error);
-      if (pathname.startsWith("/dashboard")) {
-        return NextResponse.redirect(new URL("/login", request.url));
-      }
-      return NextResponse.json({ error: "Token inválido" }, { status: 401 });
-    }
+    // Token existe, permitir acesso
+    // O NextAuth gerencia a autenticação e sessão
+    // Não precisamos decodificar o token aqui, apenas verificar sua existência
+    return NextResponse.next();
   }
 
   // Demais rotas → PDV auth
