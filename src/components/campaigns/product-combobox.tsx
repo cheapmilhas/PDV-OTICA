@@ -11,11 +11,10 @@ interface Product {
 }
 
 interface ProductComboboxProps {
-  companyId: string;
   onSelect: (product: Product) => void;
 }
 
-export function ProductCombobox({ companyId, onSelect }: ProductComboboxProps) {
+export function ProductCombobox({ onSelect }: ProductComboboxProps) {
   const [search, setSearch] = useState("");
   const [products, setProducts] = useState<Product[]>([]);
   const [loading, setLoading] = useState(false);

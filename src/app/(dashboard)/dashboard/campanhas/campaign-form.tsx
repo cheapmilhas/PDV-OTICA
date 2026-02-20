@@ -404,7 +404,6 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
           {/* Seletor de produto */}
           {filterType === "product" && (
             <ProductCombobox
-              companyId=""
               onSelect={(product) => addItem("product", product.id, product.name)}
             />
           )}
