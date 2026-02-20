@@ -626,6 +626,62 @@ async function checkBonusLimits(
 }
 
 // ============================================================================
+// FILTRO DE ITENS ELEGÍVEIS
+// ============================================================================
+
+/**
+ * Filtra itens elegíveis da venda para uma campanha
+ * Aplica condições extras: minSaleAmount, excludeDiscounted, onlyFullPrice
+ */
+function filterEligibleItems(
+  sale: any,
+  campaign: any
+): any[] {
+  // 1. Verificar valor mínimo da venda (em centavos)
+  if (campaign.minSaleAmount) {
+    const saleTotal = Number(sale.total) * 100; // converter para centavos
+    if (saleTotal < campaign.minSaleAmount) {
+      return []; // Venda não atingiu mínimo
+    }
+  }
+
+  // 2. Filtrar itens
+  return sale.items.filter((saleItem: any) => {
+    const product = saleItem.product;
+    if (!product) return false;
+
+    // 3. Verificar se item tem desconto (excludeDiscounted)
+    if (campaign.excludeDiscounted) {
+      const itemDiscount = Number(saleItem.discount ?? 0);
+      if (itemDiscount > 0) return false;
+    }
+
+    // 4. Verificar se está em preço cheio (onlyFullPrice)
+    if (campaign.onlyFullPrice) {
+      const unitPrice = Number(saleItem.unitPrice);
+      const productPrice = Number(product.price);
+      // Tolerância de 1 centavo para comparação
+      if (Math.abs(unitPrice - productPrice) > 0.01) {
+        return false;
+      }
+    }
+
+    // 5. Verificar se corresponde aos filtros de produto da campanha
+    // Se não há filtros, todos produtos são elegíveis
+    if (campaign.products.length === 0) return true;
+
+    // Verificar se algum item da campanha corresponde
+    return campaign.products.some((campaignItem: any) => {
+      if (campaignItem.productId && campaignItem.productId === product.id) return true;
+      if (campaignItem.categoryId && campaignItem.categoryId === product.categoryId) return true;
+      if (campaignItem.brandId && campaignItem.brandId === product.brandId) return true;
+      if (campaignItem.supplierId && campaignItem.supplierId === product.supplierId) return true;
+      return false;
+    });
+  });
+}
+
+// ============================================================================
 // PROCESSAMENTO DE VENDAS (IDEMPOTENTE)
 // ============================================================================
 
@@ -686,23 +742,8 @@ export async function processaSaleForCampaigns(
   let bonusTotal = 0;
 
   for (const campaign of campaigns) {
-    // Filtrar itens elegíveis
-    const eligibleItems = sale.items.filter((saleItem) => {
-      const product = saleItem.product;
-      if (!product) return false;
-
-      // Se não há filtros, todos produtos são elegíveis
-      if (campaign.products.length === 0) return true;
-
-      // Verificar se algum item da campanha corresponde
-      return campaign.products.some((campaignItem) => {
-        if (campaignItem.productId && campaignItem.productId === product.id) return true;
-        if (campaignItem.categoryId && campaignItem.categoryId === product.categoryId) return true;
-        if (campaignItem.brandId && campaignItem.brandId === product.brandId) return true;
-        if (campaignItem.supplierId && campaignItem.supplierId === product.supplierId) return true;
-        return false;
-      });
-    });
+    // Filtrar itens elegíveis (com condições extras)
+    const eligibleItems = filterEligibleItems(sale, campaign);
 
     if (eligibleItems.length === 0) continue;
 
