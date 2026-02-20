@@ -29,7 +29,7 @@ export function SupplierSelect({ onSelect }: SupplierSelectProps) {
   const fetchSuppliers = async () => {
     try {
       setLoading(true);
-      const response = await fetch("/api/suppliers");
+      const response = await fetch("/api/suppliers?pageSize=1000&status=ativos");
       const result = await response.json();
 
       if (result.success) {
