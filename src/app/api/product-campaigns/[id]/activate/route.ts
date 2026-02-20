@@ -22,19 +22,8 @@ export async function POST(
 
     const campaign = await campaignService.activateCampaign(id, companyId);
 
-    // Converter Decimals para Number
-    const serializedCampaign = {
-      ...campaign,
-      bonusPerUnit: campaign.bonusPerUnit ? Number(campaign.bonusPerUnit) : null,
-      minimumCount: campaign.minimumCount,
-      fixedBonusAmount: campaign.fixedBonusAmount ? Number(campaign.fixedBonusAmount) : null,
-      packageSize: campaign.packageSize,
-      bonusPerPackage: campaign.bonusPerPackage ? Number(campaign.bonusPerPackage) : null,
-      maxBonusPerSale: campaign.maxBonusPerSale ? Number(campaign.maxBonusPerSale) : null,
-      maxBonusPerDay: campaign.maxBonusPerDay ? Number(campaign.maxBonusPerDay) : null,
-      maxBonusPerMonth: campaign.maxBonusPerMonth ? Number(campaign.maxBonusPerMonth) : null,
-      maxBonusTotal: campaign.maxBonusTotal ? Number(campaign.maxBonusTotal) : null,
-    };
+    // Converter Decimals para Number (JSON.parse/stringify converte automaticamente)
+    const serializedCampaign = JSON.parse(JSON.stringify(campaign));
 
     return NextResponse.json({
       success: true,
