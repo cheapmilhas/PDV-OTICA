@@ -52,12 +52,14 @@ export function ProductCombobox({ companyId, onSelect }: ProductComboboxProps) {
     try {
       setLoading(true);
       const response = await fetch(
-        `/api/products?search=${encodeURIComponent(search)}&limit=50`
+        `/api/products?search=${encodeURIComponent(search)}&pageSize=50&status=ativos`
       );
       const result = await response.json();
 
       if (result.success) {
         setProducts(result.data || []);
+      } else {
+        console.error("Erro ao buscar produtos:", result.error);
       }
     } catch (error) {
       console.error("Erro ao buscar produtos:", error);
