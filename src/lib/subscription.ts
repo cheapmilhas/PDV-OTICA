@@ -18,6 +18,22 @@ export interface SubscriptionCheckResult {
  * Retorna se o acesso é permitido e em qual modo.
  */
 export async function checkSubscription(companyId: string): Promise<SubscriptionCheckResult> {
+  // Verificar se empresa tem acesso habilitado (bypass para dev/teste)
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { accessEnabled: true },
+  });
+
+  // Se accessEnabled = true, permitir acesso sem verificar assinatura
+  if (company?.accessEnabled) {
+    return {
+      allowed: true,
+      status: "ACTIVE",
+      readOnly: false,
+      message: "Acesso habilitado.",
+    };
+  }
+
   const subscription = await prisma.subscription.findFirst({
     where: {
       companyId,
