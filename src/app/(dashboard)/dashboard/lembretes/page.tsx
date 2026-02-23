@@ -259,13 +259,18 @@ export default function CrmPage() {
 
       <div className="space-y-4">
         {loading ? (
-          <Card>
-            <CardContent className="p-8 text-center text-gray-500">Carregando...</CardContent>
-          </Card>
+          <div className="flex items-center justify-center py-12">
+            <div className="flex items-center gap-2 text-muted-foreground">
+              <RefreshCw className="h-5 w-5 animate-spin" />
+              <span>Carregando lembretes...</span>
+            </div>
+          </div>
         ) : reminders.length === 0 ? (
           <Card>
-            <CardContent className="p-8 text-center text-gray-500">
-              Nenhum lembrete encontrado. Clique em "Gerar Lembretes" para criar novos.
+            <CardContent className="p-8 text-center">
+              <Users className="h-12 w-12 mx-auto mb-4 opacity-20 text-muted-foreground" />
+              <p className="text-muted-foreground">Nenhum lembrete encontrado</p>
+              <p className="text-sm text-muted-foreground mt-1">Clique em &quot;Gerar&quot; para criar novos lembretes</p>
             </CardContent>
           </Card>
         ) : (

@@ -713,8 +713,8 @@ function ClienteDetalhesPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="dados" className="w-full">
-        <TabsList className="grid w-full grid-cols-7">
-          <TabsTrigger value="dados">Dados</TabsTrigger>
+        <TabsList className="flex w-full overflow-x-auto">
+          <TabsTrigger value="dados" className="flex-shrink-0">Dados</TabsTrigger>
           <TabsTrigger value="vendas">
             Vendas ({sales.length})
           </TabsTrigger>
