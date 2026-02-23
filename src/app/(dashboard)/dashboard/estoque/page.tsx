@@ -26,6 +26,7 @@ import { LeitorCodigoBarras } from "@/components/estoque/leitor-codigo-barras";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
 import { Can } from "@/components/permissions/can";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Product {
   id: string;
@@ -49,6 +50,7 @@ interface Product {
 }
 
 function EstoquePage() {
+  const { hasPermission } = usePermissions();
   const [modalEntradaOpen, setModalEntradaOpen] = useState(false);
   const [modalSaidaOpen, setModalSaidaOpen] = useState(false);
   const [produtoSelecionado, setProdutoSelecionado] = useState<any>(null);
@@ -286,16 +288,18 @@ function EstoquePage() {
                         </p>
                       )}
                     </div>
-                    <Button
-                      size="sm"
-                      onClick={() => {
-                        setShowAlertModal(false);
-                        abrirModalEntrada(produto);
-                      }}
-                    >
-                      <Plus className="h-4 w-4 mr-1" />
-                      Repor
-                    </Button>
+                    {hasPermission("stock.adjust") && (
+                      <Button
+                        size="sm"
+                        onClick={() => {
+                          setShowAlertModal(false);
+                          abrirModalEntrada(produto);
+                        }}
+                      >
+                        <Plus className="h-4 w-4 mr-1" />
+                        Repor
+                      </Button>
+                    )}
                   </div>
                 ))}
               </div>
@@ -353,14 +357,18 @@ function EstoquePage() {
                 </CardHeader>
                 <CardContent>
                   <div className="flex gap-2">
-                    <Button onClick={() => abrirModalEntrada(produtoSelecionado)}>
-                      <Plus className="mr-2 h-4 w-4" />
-                      Entrada de Estoque
-                    </Button>
-                    <Button variant="outline" onClick={() => abrirModalSaida(produtoSelecionado)}>
-                      <Minus className="mr-2 h-4 w-4" />
-                      Saída de Estoque
-                    </Button>
+                    {hasPermission("stock.adjust") && (
+                      <Button onClick={() => abrirModalEntrada(produtoSelecionado)}>
+                        <Plus className="mr-2 h-4 w-4" />
+                        Entrada de Estoque
+                      </Button>
+                    )}
+                    {hasPermission("stock.adjust") && (
+                      <Button variant="outline" onClick={() => abrirModalSaida(produtoSelecionado)}>
+                        <Minus className="mr-2 h-4 w-4" />
+                        Saída de Estoque
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -486,20 +494,24 @@ function EstoquePage() {
                             </TableCell>
                             <TableCell className="text-right">
                               <div className="flex justify-end gap-1">
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => abrirModalEntrada(produto)}
-                                >
-                                  <Plus className="h-4 w-4" />
-                                </Button>
-                                <Button
-                                  variant="ghost"
-                                  size="sm"
-                                  onClick={() => abrirModalSaida(produto)}
-                                >
-                                  <Minus className="h-4 w-4" />
-                                </Button>
+                                {hasPermission("stock.adjust") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => abrirModalEntrada(produto)}
+                                  >
+                                    <Plus className="h-4 w-4" />
+                                  </Button>
+                                )}
+                                {hasPermission("stock.adjust") && (
+                                  <Button
+                                    variant="ghost"
+                                    size="sm"
+                                    onClick={() => abrirModalSaida(produto)}
+                                  >
+                                    <Minus className="h-4 w-4" />
+                                  </Button>
+                                )}
                               </div>
                             </TableCell>
                           </TableRow>

@@ -6,7 +6,7 @@ import {
   sanitizeSaleDTO,
   type CreateSaleDTO,
 } from "@/lib/validations/sale.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
@@ -95,6 +95,7 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    await requirePermission("sales.create");
     const userId = session.user.id;
 
     // Parse e valida body

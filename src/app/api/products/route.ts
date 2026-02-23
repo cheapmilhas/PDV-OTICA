@@ -6,7 +6,7 @@ import {
   sanitizeProductDTO,
   type CreateProductDTO,
 } from "@/lib/validations/product.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 
@@ -70,6 +70,7 @@ export async function POST(request: Request) {
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("products.create");
 
     // Parse e valida body
     const body = await request.json();

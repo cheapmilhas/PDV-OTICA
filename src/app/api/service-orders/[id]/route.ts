@@ -5,7 +5,7 @@ import {
   sanitizeServiceOrderDTO,
   type UpdateServiceOrderDTO,
 } from "@/lib/validations/service-order.schema";
-import { requireAuth, requireRole, getCompanyId, getUserId } from "@/lib/auth-helpers";
+import { requireAuth, requireRole, getCompanyId, getUserId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -33,6 +33,7 @@ export async function PUT(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("service_orders.edit");
     const userId = await getUserId();
     const { id } = await params;
 

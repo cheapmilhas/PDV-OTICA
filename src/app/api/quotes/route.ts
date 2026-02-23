@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { quoteService } from "@/services/quote.service";
 import { quoteQuerySchema, createQuoteSchema } from "@/lib/validations/quote.schema";
-import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
@@ -81,6 +81,7 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    await requirePermission("quotes.create");
     const userId = session.user.id;
     const branchId = await getBranchId();
 

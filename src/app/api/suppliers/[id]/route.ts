@@ -5,7 +5,7 @@ import {
   sanitizeSupplierDTO,
   type UpdateSupplierDTO,
 } from "@/lib/validations/supplier.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -42,6 +42,7 @@ export async function PUT(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("suppliers.view");
     const { id } = await params;
 
     const body = await request.json();
@@ -72,6 +73,7 @@ export async function DELETE(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("suppliers.view");
     const { id } = await params;
 
     // Verifica se é delete permanente

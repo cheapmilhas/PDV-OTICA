@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { quoteService } from "@/services/quote.service";
 import { updateQuoteSchema } from "@/lib/validations/quote.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 
 /**
@@ -69,6 +69,7 @@ export async function PUT(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("quotes.edit");
 
     const { id: quoteId } = await params;
     const body = await request.json();
@@ -112,6 +113,7 @@ export async function DELETE(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("quotes.delete");
 
     const { id: quoteId } = await params;
 

@@ -42,6 +42,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { ModalReceberConta } from "@/components/financeiro/modal-receber-conta";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Tipos
 type AccountPayableStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELED";
@@ -98,6 +99,7 @@ interface Filters {
 }
 
 function FinanceiroPage() {
+  const { hasPermission } = usePermissions();
   // Estados para Contas a Pagar
   const [accountsPayable, setAccountsPayable] = useState<AccountPayable[]>([]);
   const [payableLoading, setPayableLoading] = useState(true);
@@ -681,10 +683,12 @@ function FinanceiroPage() {
                   <X className="h-4 w-4 mr-2" />
                   Limpar Filtros
                 </Button>
-                <Button size="sm" onClick={() => setShowNewPayableModal(true)}>
-                  <Plus className="h-4 w-4 mr-2" />
-                  Nova Conta a Pagar
-                </Button>
+                {hasPermission("accounts_payable.manage") && (
+                  <Button size="sm" onClick={() => setShowNewPayableModal(true)}>
+                    <Plus className="h-4 w-4 mr-2" />
+                    Nova Conta a Pagar
+                  </Button>
+                )}
               </div>
             </CardContent>
           </Card>
@@ -773,7 +777,7 @@ function FinanceiroPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {account.status === "PENDING" && (
+                            {account.status === "PENDING" && hasPermission("accounts_payable.manage") && (
                               <>
                                 <Button
                                   size="sm"
@@ -794,7 +798,7 @@ function FinanceiroPage() {
                                 </Button>
                               </>
                             )}
-                            {account.status === "OVERDUE" && (
+                            {account.status === "OVERDUE" && hasPermission("accounts_payable.manage") && (
                               <>
                                 <Button
                                   size="sm"
@@ -1087,7 +1091,7 @@ function FinanceiroPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {account.status === "PENDING" && (
+                            {account.status === "PENDING" && hasPermission("accounts_receivable.manage") && (
                               <>
                                 <Button
                                   size="sm"
@@ -1110,7 +1114,7 @@ function FinanceiroPage() {
                                 </Button>
                               </>
                             )}
-                            {account.status === "OVERDUE" && (
+                            {account.status === "OVERDUE" && hasPermission("accounts_receivable.manage") && (
                               <>
                                 <Button
                                   size="sm"

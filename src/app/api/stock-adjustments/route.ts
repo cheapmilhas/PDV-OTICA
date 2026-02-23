@@ -5,7 +5,7 @@ import {
   stockAdjustmentQuerySchema,
   sanitizeStockAdjustmentDTO,
 } from "@/lib/validations/stock-adjustment.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 
@@ -47,6 +47,7 @@ export async function POST(request: Request) {
   try {
     const session = await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("stock.adjust");
 
     const body = await request.json();
     const data = createStockAdjustmentSchema.parse(body);

@@ -26,10 +26,12 @@ import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/shared/can";
 import { Can as CanPermission } from "@/components/permissions/can";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 
 function ClientesPage() {
+  const { hasPermission } = usePermissions();
   const router = useRouter();
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
@@ -376,16 +378,18 @@ function ClientesPage() {
                         Ver Detalhes
                       </Button>
 
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => router.push(`/dashboard/clientes/${cliente.id}/editar`)}
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Editar
-                      </Button>
+                      {hasPermission("customers.edit") && (
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => router.push(`/dashboard/clientes/${cliente.id}/editar`)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                      )}
 
-                      <Can roles={["ADMIN", "GERENTE"]}>
+                      {hasPermission("customers.delete") && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -394,7 +398,7 @@ function ClientesPage() {
                           <Trash2 className="h-4 w-4 mr-1" />
                           Excluir
                         </Button>
-                      </Can>
+                      )}
                     </div>
                   </div>
                 </div>

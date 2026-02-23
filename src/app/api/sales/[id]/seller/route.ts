@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -26,6 +26,7 @@ export async function PATCH(
     }
 
     const companyId = await getCompanyId();
+    await requirePermission("sales.edit_seller");
 
     // Parse body
     const body = await request.json();

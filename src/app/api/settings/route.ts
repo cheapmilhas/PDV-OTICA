@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { settingsService } from "@/services/settings.service";
 import { companySettingsSchema } from "@/lib/validations/settings.schema";
@@ -26,6 +26,7 @@ export async function PUT(request: Request) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("settings.edit");
 
     const body = await request.json();
     const data = companySettingsSchema.parse(body);

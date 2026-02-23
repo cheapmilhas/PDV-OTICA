@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
 
@@ -15,6 +15,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("company.settings");
 
     const formData = await request.formData();
     const file = formData.get("logo") as File;
@@ -80,6 +81,7 @@ export async function DELETE(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("company.settings");
 
     const settings = await prisma.companySettings.findUnique({
       where: { companyId },

@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
 import { commissionConfigSchema } from "@/lib/validations/goals.schema";
@@ -19,6 +19,7 @@ export async function PUT(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
+    await requirePermission("settings.edit");
     const body = await request.json();
     const data = commissionConfigSchema.parse(body);
     const config = await goalsService.updateCommissionConfig(branchId, data);

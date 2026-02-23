@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
 import { salesGoalSchema, goalsQuerySchema } from "@/lib/validations/goals.schema";
@@ -27,6 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
+    await requirePermission("goals.view");
     const body = await request.json();
     const data = salesGoalSchema.parse(body);
     const goal = await goalsService.createOrUpdateGoal(branchId, data);

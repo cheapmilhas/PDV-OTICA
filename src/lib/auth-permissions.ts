@@ -1,21 +1,39 @@
 import { auth } from "@/auth";
-import { Permission, hasPermission, UserRole } from "./permissions";
+import { Permission } from "./permissions";
+import { unauthorizedError, forbiddenError } from "./error-handler";
+import { PermissionService } from "@/services/permission.service";
+
+const permissionService = new PermissionService();
 
 /**
- * Verifica se o usuário autenticado tem uma permissão específica
- * @throws Error se não estiver autenticado ou não tiver permissão
+ * Verifica se o usuário autenticado tem uma permissão específica.
+ * Consulta o BANCO (RolePermission + UserPermission overrides).
+ * ADMIN sempre passa.
+ *
+ * @throws AppError 401 se não autenticado
+ * @throws AppError 403 se não tiver permissão
  */
-export async function requirePermission(permission: Permission) {
+export async function requirePermission(permission: Permission | string) {
   const session = await auth();
 
   if (!session?.user?.id) {
-    throw new Error("Usuário não autenticado");
+    throw unauthorizedError("Usuário não autenticado");
   }
 
-  const userRole = session.user.role as UserRole;
+  // ADMIN sempre tem todas as permissões
+  if (session.user.role === "ADMIN") {
+    return session;
+  }
 
-  if (!hasPermission(userRole, permission)) {
-    throw new Error("Você não tem permissão para realizar esta ação");
+  const hasIt = await permissionService.userHasPermission(
+    session.user.id,
+    permission as string
+  );
+
+  if (!hasIt) {
+    throw forbiddenError(
+      `Sem permissão: ${permission}`
+    );
   }
 
   return session;
@@ -23,20 +41,28 @@ export async function requirePermission(permission: Permission) {
 
 /**
  * Verifica se o usuário autenticado tem todas as permissões especificadas
- * @throws Error se não estiver autenticado ou não tiver todas as permissões
+ * @throws AppError 401 se não autenticado
+ * @throws AppError 403 se não tiver todas as permissões
  */
-export async function requireAllPermissions(permissions: Permission[]) {
+export async function requireAllPermissions(permissions: (Permission | string)[]) {
   const session = await auth();
 
   if (!session?.user?.id) {
-    throw new Error("Usuário não autenticado");
+    throw unauthorizedError("Usuário não autenticado");
   }
 
-  const userRole = session.user.role as UserRole;
+  if (session.user.role === "ADMIN") {
+    return session;
+  }
+
+  const { effectivePermissions } =
+    await permissionService.getUserEffectivePermissions(session.user.id);
 
   for (const permission of permissions) {
-    if (!hasPermission(userRole, permission)) {
-      throw new Error("Você não tem permissão para realizar esta ação");
+    if (!effectivePermissions.includes(permission as string)) {
+      throw forbiddenError(
+        `Sem permissão: ${permission}`
+      );
     }
   }
 
@@ -45,39 +71,53 @@ export async function requireAllPermissions(permissions: Permission[]) {
 
 /**
  * Verifica se o usuário autenticado tem pelo menos uma das permissões especificadas
- * @throws Error se não estiver autenticado ou não tiver nenhuma das permissões
+ * @throws AppError 401 se não autenticado
+ * @throws AppError 403 se não tiver nenhuma das permissões
  */
-export async function requireAnyPermission(permissions: Permission[]) {
+export async function requireAnyPermission(permissions: (Permission | string)[]) {
   const session = await auth();
 
   if (!session?.user?.id) {
-    throw new Error("Usuário não autenticado");
+    throw unauthorizedError("Usuário não autenticado");
   }
 
-  const userRole = session.user.role as UserRole;
+  if (session.user.role === "ADMIN") {
+    return session;
+  }
 
-  const hasAnyPermission = permissions.some(permission =>
-    hasPermission(userRole, permission)
+  const { effectivePermissions } =
+    await permissionService.getUserEffectivePermissions(session.user.id);
+
+  const hasAny = permissions.some((p) =>
+    effectivePermissions.includes(p as string)
   );
 
-  if (!hasAnyPermission) {
-    throw new Error("Você não tem permissão para realizar esta ação");
+  if (!hasAny) {
+    throw forbiddenError(
+      `Sem permissão para nenhuma de: ${permissions.join(", ")}`
+    );
   }
 
   return session;
 }
 
 /**
- * Retorna a session se o usuário estiver autenticado e tiver a permissão
- * Retorna null se não tiver permissão (sem lançar erro)
+ * Retorna a session se o usuário estiver autenticado e tiver a permissão.
+ * Retorna null se não tiver (sem lançar erro).
  */
-export async function checkPermission(permission: Permission) {
+export async function checkPermissionFromDB(permission: Permission | string) {
   try {
     const session = await auth();
     if (!session?.user?.id) return null;
 
-    const userRole = session.user.role as UserRole;
-    return hasPermission(userRole, permission) ? session : null;
+    if (session.user.role === "ADMIN") return session;
+
+    const hasIt = await permissionService.userHasPermission(
+      session.user.id,
+      permission as string
+    );
+
+    return hasIt ? session : null;
   } catch {
     return null;
   }

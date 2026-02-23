@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
@@ -39,6 +39,7 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    await requirePermission("accounts_receivable.manage");
     const userId = session.user.id;
 
     const body = await request.json();

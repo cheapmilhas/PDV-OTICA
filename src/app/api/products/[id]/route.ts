@@ -4,7 +4,7 @@ import {
   updateProductSchema,
   sanitizeProductDTO,
 } from "@/lib/validations/product.schema";
-import { requireAuth, requireRole, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, requireRole, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse, deletedResponse } from "@/lib/api-response";
 
@@ -47,6 +47,7 @@ export async function PUT(
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("products.edit");
     const { id } = await params;
 
     // Parse e valida body
@@ -84,6 +85,7 @@ export async function DELETE(
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("products.delete");
     const { id } = await params;
 
     // Requer role ADMIN ou GERENTE

@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cashService } from "@/services/cash.service";
 import { openShiftSchema, type OpenShiftDTO } from "@/lib/validations/cash.schema";
-import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
@@ -56,6 +56,7 @@ export async function POST(request: Request) {
 
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
+    await requirePermission("cash_shift.open");
     const userId = session.user.id;
 
     const body = await request.json();

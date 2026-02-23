@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cashService } from "@/services/cash.service";
 import { closeShiftSchema, type CloseShiftDTO } from "@/lib/validations/cash.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { auth } from "@/auth";
 
@@ -19,6 +19,7 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    await requirePermission("cash_shift.close");
     const userId = session.user.id;
 
     const body = await request.json();

@@ -59,6 +59,7 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import toast from "react-hot-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Customer {
   id: string;
@@ -195,6 +196,7 @@ const CHANNEL_LABELS: Record<string, string> = {
 };
 
 function ClienteDetalhesPage() {
+  const { hasPermission } = usePermissions();
   const params = useParams();
   const router = useRouter();
   const customerId = params.id as string;
@@ -625,12 +627,14 @@ function ClienteDetalhesPage() {
             <PhoneCall className="mr-2 h-4 w-4" />
             Registrar Contato
           </Button>
-          <Button asChild>
-            <Link href={`/dashboard/clientes/${customerId}/editar`}>
-              <Edit className="mr-2 h-4 w-4" />
-              Editar
-            </Link>
-          </Button>
+          {hasPermission("customers.edit") && (
+            <Button asChild>
+              <Link href={`/dashboard/clientes/${customerId}/editar`}>
+                <Edit className="mr-2 h-4 w-4" />
+                Editar
+              </Link>
+            </Button>
+          )}
         </div>
       </div>
 

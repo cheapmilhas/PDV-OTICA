@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
@@ -324,6 +324,7 @@ export async function PATCH(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    await requirePermission("accounts_receivable.manage");
     const userId = session.user.id;
 
     const body = await request.json();
@@ -483,6 +484,7 @@ export async function DELETE(request: Request) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("accounts_receivable.manage");
 
     const body = await request.json();
     const data = deleteAccountReceivableSchema.parse(body);

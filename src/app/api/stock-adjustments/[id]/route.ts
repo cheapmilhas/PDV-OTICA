@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { StockAdjustmentService } from "@/services/stock-adjustment.service";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -38,6 +38,7 @@ export async function DELETE(
   try {
     const session = await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("stock.adjust");
     const { id } = await params;
 
     // Busca ajuste

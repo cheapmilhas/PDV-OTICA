@@ -14,7 +14,8 @@ import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTria
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
-import { hasPermission, Permission } from "@/lib/permissions";
+import { hasPermission as hasRolePermission, Permission } from "@/lib/permissions";
+import { usePermissions } from "@/hooks/usePermissions";
 import { replaceMessageVariables, openWhatsAppWithMessage } from "@/lib/default-messages";
 
 interface SaleDetails {
@@ -66,6 +67,7 @@ export default function DetalhesVendaPage() {
   const params = useParams();
   const id = params.id as string;
   const { data: session } = useSession();
+  const { hasPermission } = usePermissions();
 
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
@@ -78,9 +80,9 @@ export default function DetalhesVendaPage() {
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [cashbackInfo, setCashbackInfo] = useState<{ amount: number; expiresAt: string | null } | null>(null);
 
-  // Verifica permissões do usuário
-  const canCancelSale = hasPermission(session?.user?.role || "", Permission.SALES_CANCEL);
-  const canEditSeller = hasPermission(session?.user?.role || "", Permission.SALES_EDIT_SELLER);
+  // Verifica permissões do usuário (permission-based)
+  const canCancelSale = hasPermission("sales.cancel");
+  const canEditSeller = hasPermission("sales.edit_seller");
 
   useEffect(() => {
     const fetchSale = async () => {

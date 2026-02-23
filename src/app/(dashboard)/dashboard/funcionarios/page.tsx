@@ -36,6 +36,7 @@ import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/permissions/can";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useCurrentUser } from "@/hooks/useCurrentUser";
 
 interface UserType {
@@ -50,6 +51,7 @@ interface UserType {
 }
 
 function FuncionariosPage() {
+  const { hasPermission } = usePermissions();
   const { isAdmin } = useCurrentUser();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -548,7 +550,7 @@ function FuncionariosPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-1">
-                        {isAdmin && (
+                        {hasPermission("permissions.manage") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -738,7 +740,7 @@ function FuncionariosPage() {
                 </Button>
                 {selectedUser && (
                   <>
-                    {!selectedUser.active && (
+                    {!selectedUser.active && hasPermission("users.delete") && (
                       <Button
                         variant="destructive"
                         onClick={() => handlePermanentDelete(selectedUser.id)}
@@ -747,20 +749,22 @@ function FuncionariosPage() {
                         Excluir Permanentemente
                       </Button>
                     )}
-                    <Button
-                      variant={selectedUser.active ? "destructive" : "default"}
-                      onClick={() => handleToggleStatus(selectedUser.id, selectedUser.active)}
-                    >
-                      {selectedUser.active ? (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Desativar
-                        </>
-                      ) : (
-                        "Ativar"
-                      )}
-                    </Button>
-                    {isAdmin && (
+                    {hasPermission("users.delete") && (
+                      <Button
+                        variant={selectedUser.active ? "destructive" : "default"}
+                        onClick={() => handleToggleStatus(selectedUser.id, selectedUser.active)}
+                      >
+                        {selectedUser.active ? (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Desativar
+                          </>
+                        ) : (
+                          "Ativar"
+                        )}
+                      </Button>
+                    )}
+                    {hasPermission("permissions.manage") && (
                       <Button
                         variant="outline"
                         onClick={() => window.location.href = `/dashboard/funcionarios/${selectedUser.id}/permissoes`}
@@ -769,10 +773,12 @@ function FuncionariosPage() {
                         Permissões
                       </Button>
                     )}
-                    <Button onClick={handleStartEdit}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
-                    </Button>
+                    {hasPermission("users.edit") && (
+                      <Button onClick={handleStartEdit}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar
+                      </Button>
+                    )}
                   </>
                 )}
               </>

@@ -36,6 +36,7 @@ import { ModalAberturaCaixa } from "@/components/caixa/modal-abertura-caixa";
 import { ModalFechamentoCaixa } from "@/components/caixa/modal-fechamento-caixa";
 import { ModalSangria } from "@/components/caixa/modal-sangria";
 import { ModalReforco } from "@/components/caixa/modal-reforco";
+import { usePermissions } from "@/hooks/usePermissions";
 
 type CashShift = {
   id: string;
@@ -59,6 +60,7 @@ type CashMovement = {
 };
 
 function CaixaPage() {
+  const { hasPermission } = usePermissions();
   const [modalAberturaOpen, setModalAberturaOpen] = useState(false);
   const [modalFechamentoOpen, setModalFechamentoOpen] = useState(false);
   const [modalSangriaOpen, setModalSangriaOpen] = useState(false);
@@ -317,19 +319,23 @@ function CaixaPage() {
                   <ArrowUpCircle className="mr-2 h-4 w-4" />
                   Reforço
                 </Button>
-                <Button
-                  variant="destructive"
-                  onClick={() => setModalFechamentoOpen(true)}
-                >
-                  <Lock className="mr-2 h-4 w-4" />
-                  Fechar Caixa
-                </Button>
+                {hasPermission("cash_shift.close") && (
+                  <Button
+                    variant="destructive"
+                    onClick={() => setModalFechamentoOpen(true)}
+                  >
+                    <Lock className="mr-2 h-4 w-4" />
+                    Fechar Caixa
+                  </Button>
+                )}
               </>
             ) : (
-              <Button onClick={() => setModalAberturaOpen(true)}>
-                <Unlock className="mr-2 h-4 w-4" />
-                Abrir Caixa
-              </Button>
+              hasPermission("cash_shift.open") && (
+                <Button onClick={() => setModalAberturaOpen(true)}>
+                  <Unlock className="mr-2 h-4 w-4" />
+                  Abrir Caixa
+                </Button>
+              )
             )}
           </div>
         </div>

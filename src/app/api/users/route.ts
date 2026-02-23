@@ -5,7 +5,7 @@ import {
   createUserSchema,
   type CreateUserDTO,
 } from "@/lib/validations/user.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -45,6 +45,7 @@ export async function POST(request: Request) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("users.create");
 
     const body = await request.json();
     console.log("[API] Body recebido:", body);

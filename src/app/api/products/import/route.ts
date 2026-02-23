@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
 import { ProductType } from "@prisma/client";
@@ -12,6 +12,7 @@ import * as XLSX from "xlsx";
 export async function POST(request: NextRequest) {
   try {
     const companyId = await getCompanyId();
+    await requirePermission("products.create");
     const formData = await request.formData();
     const file = formData.get("file") as File;
 

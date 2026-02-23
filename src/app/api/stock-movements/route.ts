@@ -6,7 +6,7 @@ import {
   sanitizeStockMovementDTO,
   type CreateStockMovementDTO,
 } from "@/lib/validations/stock-movement.schema";
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
@@ -61,6 +61,7 @@ export async function POST(request: Request) {
     // Requer autenticação
     const session = await requireAuth();
     const companyId = await getCompanyId();
+    await requirePermission("stock.adjust");
 
     // Verificar se o usuário existe no banco antes de associá-lo
     let userId: string | undefined;
