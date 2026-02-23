@@ -557,6 +557,51 @@ export class SaleService {
       console.error(`❌ Erro ao processar campanhas (venda criada com sucesso):`, campaignError);
     }
 
+    // 10. Gerar lembrete pós-venda automaticamente (se cliente identificado)
+    if (customerId) {
+      try {
+        const saleItems = await prisma.saleItem.findMany({
+          where: { saleId: sale.id },
+          include: { product: { select: { name: true } } },
+          take: 1,
+        });
+
+        const productName = saleItems[0]?.product?.name || undefined;
+
+        // Verificar se já existe lembrete pós-venda pendente para este cliente
+        const existingReminder = await prisma.customerReminder.findFirst({
+          where: {
+            companyId,
+            customerId,
+            segment: "POST_SALE_30_DAYS",
+            status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
+          },
+        });
+
+        if (!existingReminder) {
+          await prisma.customerReminder.create({
+            data: {
+              companyId,
+              customerId,
+              segment: "POST_SALE_30_DAYS",
+              priority: 80,
+              lastPurchaseDate: new Date(),
+              lastPurchaseAmount: total,
+              lastPurchaseProduct: productName,
+              daysSinceLastPurchase: 0,
+              totalPurchases: 1,
+              totalSpent: total,
+              status: "PENDING",
+              scheduledFor: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+            },
+          });
+          console.log(`📋 Lembrete pós-venda criado para cliente ${customerId}`);
+        }
+      } catch (reminderError) {
+        console.error(`❌ Erro ao criar lembrete pós-venda (venda OK):`, reminderError);
+      }
+    }
+
     // Retornar venda completa
     return this.getById(sale.id, companyId);
   }
