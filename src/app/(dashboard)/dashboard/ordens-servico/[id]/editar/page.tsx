@@ -145,10 +145,27 @@ export default function EditarOrdemServicoPage() {
     setItems(newItems);
   };
 
+  // Permite apenas números, ponto, vírgula (campos numéricos da receita)
+  const sanitizeNumericField = (value: string) => {
+    return value.replace(/[^0-9.,\-+]/g, "");
+  };
+
+  // Permite apenas números inteiros (eixo: 0-180)
+  const sanitizeIntegerField = (value: string) => {
+    return value.replace(/[^0-9]/g, "");
+  };
+
+  const numericFields = ["eixo", "dnp", "altura"];
+
   const updatePrescription = (eye: "od" | "oe", field: string, value: string) => {
+    const sanitized = field === "eixo"
+      ? sanitizeIntegerField(value)
+      : numericFields.includes(field)
+        ? sanitizeNumericField(value)
+        : value;
     setPrescriptionData((prev) => ({
       ...prev,
-      [eye]: { ...prev[eye], [field]: value },
+      [eye]: { ...prev[eye], [field]: sanitized },
     }));
   };
 
@@ -442,9 +459,10 @@ export default function EditarOrdemServicoPage() {
                       <div key={field} className="space-y-1">
                         <Label className="text-xs capitalize">{field}</Label>
                         <Input
-                          placeholder={field === "eixo" ? "0-180°" : "0.00"}
+                          placeholder={field === "eixo" ? "0-180" : "0.00"}
                           value={(prescriptionData.od as any)[field]}
                           onChange={(e) => updatePrescription("od", field, e.target.value)}
+                          inputMode={numericFields.includes(field) ? (field === "eixo" ? "numeric" : "decimal") : undefined}
                         />
                       </div>
                     ))}
@@ -461,9 +479,10 @@ export default function EditarOrdemServicoPage() {
                       <div key={field} className="space-y-1">
                         <Label className="text-xs capitalize">{field}</Label>
                         <Input
-                          placeholder={field === "eixo" ? "0-180°" : "0.00"}
+                          placeholder={field === "eixo" ? "0-180" : "0.00"}
                           value={(prescriptionData.oe as any)[field]}
                           onChange={(e) => updatePrescription("oe", field, e.target.value)}
+                          inputMode={numericFields.includes(field) ? (field === "eixo" ? "numeric" : "decimal") : undefined}
                         />
                       </div>
                     ))}

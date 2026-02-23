@@ -68,6 +68,16 @@ export default function NovaOrdemServicoPage() {
 
   const [laboratories, setLaboratories] = useState<any[]>([]);
 
+  // Permite apenas números, ponto, vírgula (campos numéricos da receita)
+  const sanitizeNumericField = (value: string) => {
+    return value.replace(/[^0-9.,\-+]/g, "");
+  };
+
+  // Permite apenas números inteiros (eixo: 0-180)
+  const sanitizeIntegerField = (value: string) => {
+    return value.replace(/[^0-9]/g, "");
+  };
+
   const [items, setItems] = useState<ServiceItem[]>([
     {
       productId: "",
@@ -507,10 +517,11 @@ export default function NovaOrdemServicoPage() {
                       onChange={(e) =>
                         setPrescriptionData({
                           ...prescriptionData,
-                          od: { ...prescriptionData.od, eixo: e.target.value },
+                          od: { ...prescriptionData.od, eixo: sanitizeIntegerField(e.target.value) },
                         })
                       }
-                      placeholder="90°"
+                      placeholder="90"
+                      inputMode="numeric"
                     />
                   </div>
                   <div>
@@ -520,10 +531,11 @@ export default function NovaOrdemServicoPage() {
                       onChange={(e) =>
                         setPrescriptionData({
                           ...prescriptionData,
-                          od: { ...prescriptionData.od, dnp: e.target.value },
+                          od: { ...prescriptionData.od, dnp: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="32mm"
+                      placeholder="32"
+                      inputMode="decimal"
                     />
                   </div>
                   <div>
@@ -533,10 +545,11 @@ export default function NovaOrdemServicoPage() {
                       onChange={(e) =>
                         setPrescriptionData({
                           ...prescriptionData,
-                          od: { ...prescriptionData.od, altura: e.target.value },
+                          od: { ...prescriptionData.od, altura: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="20mm"
+                      placeholder="20"
+                      inputMode="decimal"
                     />
                   </div>
                 </div>
@@ -579,10 +592,11 @@ export default function NovaOrdemServicoPage() {
                       onChange={(e) =>
                         setPrescriptionData({
                           ...prescriptionData,
-                          oe: { ...prescriptionData.oe, eixo: e.target.value },
+                          oe: { ...prescriptionData.oe, eixo: sanitizeIntegerField(e.target.value) },
                         })
                       }
-                      placeholder="85°"
+                      placeholder="85"
+                      inputMode="numeric"
                     />
                   </div>
                   <div>
@@ -592,10 +606,11 @@ export default function NovaOrdemServicoPage() {
                       onChange={(e) =>
                         setPrescriptionData({
                           ...prescriptionData,
-                          oe: { ...prescriptionData.oe, dnp: e.target.value },
+                          oe: { ...prescriptionData.oe, dnp: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="31mm"
+                      placeholder="31"
+                      inputMode="decimal"
                     />
                   </div>
                   <div>
@@ -605,10 +620,11 @@ export default function NovaOrdemServicoPage() {
                       onChange={(e) =>
                         setPrescriptionData({
                           ...prescriptionData,
-                          oe: { ...prescriptionData.oe, altura: e.target.value },
+                          oe: { ...prescriptionData.oe, altura: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="20mm"
+                      placeholder="20"
+                      inputMode="decimal"
                     />
                   </div>
                 </div>
