@@ -4,6 +4,7 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Home,
   ShoppingCart,
@@ -14,7 +15,6 @@ import {
   FileText,
   DollarSign,
   Wallet,
-  Gift,
   Target,
   BarChart3,
   Settings,
@@ -24,31 +24,41 @@ import {
 
 const primaryNav = [
   { icon: Home, label: "Início", href: "/dashboard" },
-  { icon: ShoppingCart, label: "PDV", href: "/dashboard/pdv" },
-  { icon: Users, label: "Clientes", href: "/dashboard/clientes" },
-  { icon: ClipboardList, label: "OS", href: "/dashboard/ordens-servico" },
+  { icon: ShoppingCart, label: "PDV", href: "/dashboard/pdv", permission: "sales.create" },
+  { icon: Users, label: "Clientes", href: "/dashboard/clientes", permission: "customers.view" },
+  { icon: ClipboardList, label: "OS", href: "/dashboard/ordens-servico", permission: "service_orders.view" },
 ];
 
 const moreNav = [
-  { icon: FileText, label: "Vendas", href: "/dashboard/vendas" },
-  { icon: Package, label: "Produtos", href: "/dashboard/produtos" },
-  { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque" },
-  { icon: DollarSign, label: "Financeiro", href: "/dashboard/financeiro" },
-  { icon: Wallet, label: "Caixa", href: "/dashboard/caixa" },
-  { icon: Gift, label: "Cashback", href: "/dashboard/cashback" },
-  { icon: Target, label: "Metas", href: "/dashboard/metas" },
-  { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios" },
-  { icon: Settings, label: "Config", href: "/dashboard/configuracoes" },
+  { icon: FileText, label: "Vendas", href: "/dashboard/vendas", permission: "sales.view" },
+  { icon: Package, label: "Produtos", href: "/dashboard/produtos", permission: "products.view" },
+  { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque", permission: "stock.view" },
+  { icon: DollarSign, label: "Financeiro", href: "/dashboard/financeiro", permission: "financial.view" },
+  { icon: Wallet, label: "Caixa", href: "/dashboard/caixa", permission: "cash_shift.view" },
+  { icon: Wallet, label: "Cashback", href: "/dashboard/cashback", permission: "cashback.view" },
+  { icon: Target, label: "Metas", href: "/dashboard/metas", permission: "goals.view" },
+  { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", permission: "reports.sales" },
+  { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];
 
 export function MobileNav() {
   const pathname = usePathname();
   const [showMore, setShowMore] = useState(false);
+  const { hasPermission, isAdmin } = usePermissions();
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === href;
     return pathname === href || pathname.startsWith(href + "/");
   }
+
+  // Filtrar itens baseado nas permissões do usuário
+  const visiblePrimaryNav = primaryNav.filter(
+    (item) => !item.permission || isAdmin || hasPermission(item.permission)
+  );
+
+  const visibleMoreNav = moreNav.filter(
+    (item) => !item.permission || isAdmin || hasPermission(item.permission)
+  );
 
   return (
     <>
@@ -73,7 +83,7 @@ export function MobileNav() {
             </button>
           </div>
           <div className="grid grid-cols-3 gap-3 p-4">
-            {moreNav.map((item) => {
+            {visibleMoreNav.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
               return (
@@ -100,7 +110,7 @@ export function MobileNav() {
       {/* Barra de navegação inferior */}
       <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-background border-t pb-safe">
         <div className="flex items-center justify-around h-14">
-          {primaryNav.map((item) => {
+          {visiblePrimaryNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
             return (
@@ -118,17 +128,19 @@ export function MobileNav() {
             );
           })}
 
-          {/* Botão Mais */}
-          <button
-            onClick={() => setShowMore(!showMore)}
-            className={cn(
-              "flex flex-col items-center justify-center gap-0.5 w-full h-full text-[10px] font-medium transition-colors",
-              showMore ? "text-primary" : "text-muted-foreground"
-            )}
-          >
-            <MoreHorizontal className={cn("h-5 w-5", showMore && "stroke-[2.5]")} />
-            Mais
-          </button>
+          {/* Botão Mais — só aparece se há itens no moreNav visíveis */}
+          {visibleMoreNav.length > 0 && (
+            <button
+              onClick={() => setShowMore(!showMore)}
+              className={cn(
+                "flex flex-col items-center justify-center gap-0.5 w-full h-full text-[10px] font-medium transition-colors",
+                showMore ? "text-primary" : "text-muted-foreground"
+              )}
+            >
+              <MoreHorizontal className={cn("h-5 w-5", showMore && "stroke-[2.5]")} />
+              Mais
+            </button>
+          )}
         </div>
       </nav>
     </>
