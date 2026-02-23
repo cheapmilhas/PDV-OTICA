@@ -1,7 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
@@ -72,6 +72,47 @@ function PDVPage() {
   // Estados para dialog de carnê
   const [showCarneDialog, setShowCarneDialog] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+
+  // Refs para atalhos
+  const searchInputRef = useRef<HTMLInputElement>(null);
+
+  // Atalhos de teclado globais
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      // Não ativar atalhos se estiver em input/textarea (exceto F-keys)
+      const target = e.target as HTMLElement;
+      const isInInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
+
+      if (e.key === "F2") {
+        e.preventDefault();
+        searchInputRef.current?.focus();
+      } else if (e.key === "F4") {
+        e.preventDefault();
+        if (carrinho.length > 0 && !modalVendaOpen) {
+          setModalVendaOpen(true);
+        }
+      } else if (e.key === "F8") {
+        e.preventDefault();
+        if (carrinho.length > 0) {
+          setCarrinho([]);
+          setClienteSelecionado(null);
+          setBuscaCliente("");
+          toast.success("Venda limpa");
+        }
+      } else if (e.key === "F3") {
+        e.preventDefault();
+        if (!modalClienteOpen) {
+          setModalClienteOpen(true);
+        }
+      } else if (e.key === "Escape") {
+        if (modalVendaOpen) setModalVendaOpen(false);
+        if (modalClienteOpen) setModalClienteOpen(false);
+      }
+    };
+
+    window.addEventListener("keydown", handleKeyDown);
+    return () => window.removeEventListener("keydown", handleKeyDown);
+  }, [carrinho.length, modalVendaOpen, modalClienteOpen]);
 
   // Carregar cliente do orçamento se houver quoteId
   useEffect(() => {
@@ -477,19 +518,25 @@ function PDVPage() {
           toast.success(`${cliente.name} selecionado`);
         }}
       />
-    <div className="h-[calc(100vh-120px)] space-y-4">
+    <div className="pb-24 space-y-4">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-2">
         <div>
-          <h1 className="text-3xl font-bold">PDV - Ponto de Venda</h1>
-          <p className="text-muted-foreground">
+          <h1 className="text-2xl md:text-3xl font-bold">PDV</h1>
+          <p className="text-muted-foreground text-sm hidden md:block">
             Finalize vendas de forma rápida e eficiente
           </p>
         </div>
-        <div className="flex gap-2">
-          <Badge variant="outline" className="text-lg px-4 py-2">
+        <div className="flex gap-2 items-center">
+          <Badge variant="outline" className="text-xs md:text-sm px-2 md:px-4 py-1 md:py-2">
             {products.length} produtos
           </Badge>
+          <div className="hidden lg:flex gap-1 text-xs text-muted-foreground">
+            <Badge variant="secondary" className="text-xs">F2 Busca</Badge>
+            <Badge variant="secondary" className="text-xs">F3 Cliente</Badge>
+            <Badge variant="secondary" className="text-xs">F4 Finalizar</Badge>
+            <Badge variant="secondary" className="text-xs">F8 Limpar</Badge>
+          </div>
         </div>
       </div>
 
@@ -512,7 +559,8 @@ function PDVPage() {
                 <div className="relative flex-1">
                   <Barcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                   <Input
-                    placeholder="SKU ou nome do produto..."
+                    ref={searchInputRef}
+                    placeholder="SKU ou nome do produto... (F2)"
                     className="pl-9"
                     value={buscaProduto}
                     onChange={(e) => setBuscaProduto(e.target.value)}
@@ -522,6 +570,7 @@ function PDVPage() {
                         setBuscaProduto("");
                       }
                     }}
+                    autoFocus
                   />
                 </div>
                 {buscaProduto && (
@@ -822,15 +871,12 @@ function PDVPage() {
             </CardContent>
           </Card>
 
-          {/* Resumo e Finalização */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">Resumo</CardTitle>
-            </CardHeader>
-            <CardContent className="space-y-3">
+          {/* Resumo (visível apenas desktop, mobile usa barra fixa) */}
+          <Card className="hidden lg:block">
+            <CardContent className="pt-4 space-y-3">
               <div className="space-y-2">
                 <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal</span>
+                  <span className="text-muted-foreground">Subtotal ({totalItens} itens)</span>
                   <span>{formatCurrency(subtotal)}</span>
                 </div>
                 {desconto > 0 && (
@@ -842,25 +888,67 @@ function PDVPage() {
                   </div>
                 )}
                 <Separator />
-                <div className="flex justify-between text-lg font-bold">
+                <div className="flex justify-between text-xl font-bold">
                   <span>Total</span>
                   <span>{formatCurrency(total)}</span>
                 </div>
               </div>
-
-              <div className="space-y-2">
+              <Button
+                className="w-full"
+                size="lg"
+                disabled={carrinho.length === 0}
+                onClick={() => setModalVendaOpen(true)}
+              >
+                <CreditCard className="mr-2 h-4 w-4" />
+                Finalizar Venda (F4)
+              </Button>
+              {carrinho.length > 0 && (
                 <Button
+                  variant="outline"
                   className="w-full"
-                  size="lg"
-                  disabled={carrinho.length === 0}
-                  onClick={() => setModalVendaOpen(true)}
+                  onClick={() => {
+                    setCarrinho([]);
+                    setClienteSelecionado(null);
+                    setBuscaCliente("");
+                    toast.success("Venda limpa");
+                  }}
                 >
-                  <CreditCard className="mr-2 h-4 w-4" />
-                  Finalizar Venda (F12)
+                  Limpar Venda (F8)
                 </Button>
-              </div>
+              )}
             </CardContent>
           </Card>
+        </div>
+      </div>
+    </div>
+
+    {/* Barra fixa de totalização - sempre visível */}
+    <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-background border-t shadow-lg z-40 p-3 md:p-4">
+      <div className="flex items-center justify-between max-w-7xl mx-auto gap-4">
+        <div className="flex items-center gap-3">
+          <ShoppingCart className="h-5 w-5 text-muted-foreground hidden sm:block" />
+          <div>
+            <span className="text-sm text-muted-foreground">{totalItens} {totalItens === 1 ? "item" : "itens"}</span>
+            {clienteSelecionado && (
+              <p className="text-xs text-muted-foreground hidden sm:block">{clienteSelecionado.name}</p>
+            )}
+          </div>
+        </div>
+        <div className="flex items-center gap-3 md:gap-4">
+          <div className="text-right">
+            <p className="text-xs text-muted-foreground hidden sm:block">Total</p>
+            <p className="text-xl md:text-2xl font-bold">{formatCurrency(total)}</p>
+          </div>
+          <Button
+            size="lg"
+            disabled={carrinho.length === 0}
+            onClick={() => setModalVendaOpen(true)}
+            className="px-4 md:px-8"
+          >
+            <CreditCard className="mr-2 h-4 w-4" />
+            <span className="hidden sm:inline">Finalizar</span>
+            <span className="sm:hidden">F4</span>
+          </Button>
         </div>
       </div>
     </div>
