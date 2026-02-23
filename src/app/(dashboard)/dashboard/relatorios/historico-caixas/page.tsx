@@ -160,8 +160,50 @@ export default function RelatorioHistoricoCaixasPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Histórico de Caixas",
+      period: { start: startDate, end: endDate },
+      sections: [
+        {
+          title: "Resumo",
+          columns: [
+            { header: "Total de Caixas", key: "totalShifts", format: "number" },
+            { header: "Caixas Abertos", key: "openShifts", format: "number" },
+            { header: "Caixas Fechados", key: "closedShifts", format: "number" },
+            { header: "Diferença Total", key: "totalDifference", format: "currency" },
+            { header: "Diferença Média", key: "averageDifference", format: "currency" },
+            { header: "Caixas com Diferença", key: "shiftsWithDifference", format: "number" },
+          ],
+          data: [data.summary],
+        },
+        {
+          title: "Turnos",
+          columns: [
+            { header: "Filial", key: "branchName" },
+            { header: "Aberto Por", key: "openedBy" },
+            { header: "Fechado Por", key: "closedBy" },
+            { header: "Abertura", key: "openedAtFormatted" },
+            { header: "Fechamento", key: "closedAtFormatted" },
+            { header: "Declarado", key: "closingDeclared", format: "currency" },
+            { header: "Esperado", key: "closingExpected", format: "currency" },
+            { header: "Diferença", key: "difference", format: "currency" },
+            { header: "Status", key: "statusLabel" },
+          ],
+          data: data.shifts.map((shift) => ({
+            ...shift,
+            openedAtFormatted: format(new Date(shift.openedAt), "dd/MM/yyyy HH:mm"),
+            closedAtFormatted: shift.closedAt
+              ? format(new Date(shift.closedAt), "dd/MM/yyyy HH:mm")
+              : "N/A",
+            closedBy: shift.closedBy || "N/A",
+            statusLabel: STATUS_LABELS[shift.status] || shift.status,
+          })),
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {

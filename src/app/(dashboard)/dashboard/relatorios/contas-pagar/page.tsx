@@ -23,6 +23,7 @@ import {
   ArrowLeft,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { format } from "date-fns";
 import toast from "react-hot-toast";
 import Link from "next/link";
 import {
@@ -151,6 +152,151 @@ export default function RelatorioContasPagarPage() {
     }
   };
 
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Contas a Pagar",
+      subtitle: overdueOnly ? "Apenas vencidos" : undefined,
+      sections: [
+        {
+          title: "Resumo",
+          columns: [
+            { header: "Indicador", key: "label", format: "text" },
+            { header: "Valor", key: "value", format: "text" },
+          ],
+          data: [
+            { label: "Total a Pagar", value: formatCurrency(data.summary.totalPayable) },
+            { label: "Vencidos", value: formatCurrency(data.summary.overdue) },
+            { label: "A Vencer", value: formatCurrency(data.summary.toPay) },
+            { label: "Ticket Médio", value: formatCurrency(data.summary.averageTicket) },
+            { label: "Total de Fornecedores", value: String(data.summary.totalSuppliers) },
+            { label: "Fornecedores com Atraso", value: String(data.summary.overdueSuppliers) },
+            { label: "Total de Contas", value: String(data.summary.totalPayments) },
+            { label: "Contas Vencidas", value: String(data.summary.overduePayments) },
+          ],
+        },
+        {
+          title: "Breakdown por Fornecedor",
+          columns: [
+            { header: "Fornecedor", key: "supplierName", format: "text" },
+            { header: "Total", key: "totalAmount", format: "currency" },
+            { header: "Vencido", key: "overdueAmount", format: "currency" },
+            { header: "Contas", key: "paymentCount", format: "number" },
+          ],
+          data: data.supplierBreakdown,
+        },
+        {
+          title: "Análise por Aging",
+          columns: [
+            { header: "Categoria", key: "category", format: "text" },
+            { header: "Quantidade", key: "count", format: "number" },
+            { header: "Valor", key: "amount", format: "currency" },
+          ],
+          data: data.agingBreakdown,
+        },
+        {
+          title: "Projeção Mensal",
+          columns: [
+            { header: "Mês", key: "month", format: "text" },
+            { header: "Quantidade", key: "count", format: "number" },
+            { header: "Valor", key: "amount", format: "currency" },
+          ],
+          data: data.monthBreakdown,
+        },
+        {
+          title: "Contas a Pagar (Detalhado)",
+          columns: [
+            { header: "Fornecedor", key: "supplierName", format: "text" },
+            { header: "Descrição", key: "description", format: "text" },
+            { header: "Vencimento", key: "dueDateFormatted", format: "text" },
+            { header: "Valor", key: "amount", format: "currency" },
+            { header: "Status", key: "agingCategory", format: "text" },
+            { header: "Dias Atraso", key: "daysOverdue", format: "number" },
+          ],
+          data: data.payables.map((p) => ({
+            ...p,
+            supplierName: p.supplierName || "N/A",
+            description: p.description || "-",
+            dueDateFormatted: new Date(p.dueDate).toLocaleDateString("pt-BR"),
+          })),
+        },
+      ],
+    });
+  };
+
+  const handleExportExcel = async () => {
+    if (!data) return;
+    const { exportToExcel } = await import("@/lib/report-export");
+    await exportToExcel({
+      fileName: `contas-pagar-${format(new Date(), "yyyy-MM-dd")}.xlsx`,
+      sheets: [
+        {
+          name: "Resumo",
+          data: [
+            ["Indicador", "Valor"],
+            ["Total a Pagar", data.summary.totalPayable],
+            ["Vencidos", data.summary.overdue],
+            ["A Vencer", data.summary.toPay],
+            ["Ticket Médio", data.summary.averageTicket],
+            ["Total de Fornecedores", data.summary.totalSuppliers],
+            ["Fornecedores com Atraso", data.summary.overdueSuppliers],
+            ["Total de Contas", data.summary.totalPayments],
+            ["Contas Vencidas", data.summary.overduePayments],
+          ],
+        },
+        {
+          name: "Por Fornecedor",
+          data: [
+            ["Fornecedor", "Total", "Vencido", "Contas"],
+            ...data.supplierBreakdown.map((s) => [
+              s.supplierName,
+              s.totalAmount,
+              s.overdueAmount,
+              s.paymentCount,
+            ]),
+          ],
+        },
+        {
+          name: "Aging",
+          data: [
+            ["Categoria", "Quantidade", "Valor"],
+            ...data.agingBreakdown.map((a) => [
+              a.category,
+              a.count,
+              a.amount,
+            ]),
+          ],
+        },
+        {
+          name: "Projeção Mensal",
+          data: [
+            ["Mês", "Quantidade", "Valor"],
+            ...data.monthBreakdown.map((m) => [
+              m.month,
+              m.count,
+              m.amount,
+            ]),
+          ],
+        },
+        {
+          name: "Contas a Pagar",
+          data: [
+            ["Fornecedor", "Descrição", "Vencimento", "Valor", "Status", "Dias Atraso"],
+            ...data.payables.map((p) => [
+              p.supplierName || "N/A",
+              p.description || "-",
+              new Date(p.dueDate).toLocaleDateString("pt-BR"),
+              p.amount,
+              p.agingCategory,
+              p.daysOverdue,
+            ]),
+          ],
+        },
+      ],
+    });
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -224,7 +370,7 @@ export default function RelatorioContasPagarPage() {
         <>
           {/* Export */}
           <div className="flex justify-end">
-            <ExportButtons disabled={!data} />
+            <ExportButtons onExportPDF={handleExportPDF} onExportExcel={handleExportExcel} disabled={!data} />
           </div>
 
           {/* KPIs */}

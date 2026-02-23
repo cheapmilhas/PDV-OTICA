@@ -195,8 +195,46 @@ export default function RelatorioProdutosVendidosPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Produtos Vendidos (Top Sellers)",
+      subtitle: `Total: ${data.summary.totalProducts} produtos | Receita: ${formatCurrency(data.summary.totalRevenue)} | Custo: ${formatCurrency(data.summary.totalCost)} | Margem Média: ${data.summary.averageMargin.toFixed(2)}%`,
+      period: { start: startDate, end: endDate },
+      sections: [
+        {
+          title: "Classificação ABC",
+          columns: [
+            { header: "Classe", key: "class" },
+            { header: "Produtos", key: "count", format: "number" },
+            { header: "Receita", key: "revenue", format: "currency" },
+            { header: "% do Total", key: "percentage", format: "percent" },
+          ],
+          data: data.abcDistribution,
+        },
+        {
+          title: `Produtos Detalhados (${data.products.length})`,
+          columns: [
+            { header: "ABC", key: "abcClass" },
+            { header: "SKU", key: "sku" },
+            { header: "Produto", key: "productName" },
+            { header: "Categoria", key: "categoryName" },
+            { header: "Marca", key: "brandName" },
+            { header: "Qtd", key: "qtySold", format: "number" },
+            { header: "Receita", key: "revenue", format: "currency" },
+            { header: "Custo", key: "totalCost", format: "currency" },
+            { header: "Margem", key: "margin", format: "currency" },
+            { header: "Margem %", key: "marginPercent", format: "percent" },
+          ],
+          data: data.products.map((p) => ({
+            ...p,
+            categoryName: p.categoryName || "N/A",
+            brandName: p.brandName || "N/A",
+          })),
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {

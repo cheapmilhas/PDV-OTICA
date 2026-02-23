@@ -77,6 +77,90 @@ export default function RelatorioDREPage() {
   );
   const [endDate, setEndDate] = useState<Date>(new Date());
 
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "DRE Gerencial",
+      subtitle: "Demonstrativo de Resultado do Exercício",
+      period: { start: startDate, end: endDate },
+      sections: [
+        {
+          title: "DRE Consolidado",
+          columns: [
+            { header: "Item", key: "item", format: "text" },
+            { header: "Valor", key: "valor", format: "currency" },
+            { header: "% Receita", key: "perc", format: "percent" },
+          ],
+          data: [
+            { item: "(+) Receita Bruta", valor: data.consolidated.grossRevenue, perc: 100 },
+            { item: "(-) Deduções", valor: -data.consolidated.deductions, perc: data.consolidated.grossRevenue ? (data.consolidated.deductions / data.consolidated.grossRevenue * 100) : 0 },
+            { item: "(=) Receita Líquida", valor: data.consolidated.netRevenue, perc: data.consolidated.grossRevenue ? (data.consolidated.netRevenue / data.consolidated.grossRevenue * 100) : 0 },
+            { item: "(-) CMV", valor: -data.consolidated.cogs, perc: data.consolidated.grossRevenue ? (data.consolidated.cogs / data.consolidated.grossRevenue * 100) : 0 },
+            { item: "(=) Lucro Bruto", valor: data.consolidated.grossProfit, perc: data.consolidated.grossMargin },
+            { item: "(-) Despesas Operacionais", valor: -data.consolidated.operatingExpenses, perc: data.consolidated.grossRevenue ? (data.consolidated.operatingExpenses / data.consolidated.grossRevenue * 100) : 0 },
+            { item: "(=) EBITDA", valor: data.consolidated.ebitda, perc: data.consolidated.grossRevenue ? (data.consolidated.ebitda / data.consolidated.grossRevenue * 100) : 0 },
+            { item: "(+/-) Resultado Financeiro", valor: data.consolidated.financialResult, perc: 0 },
+            { item: "(=) Lucro Líquido", valor: data.consolidated.netProfit, perc: data.consolidated.netMargin },
+          ],
+        },
+        {
+          title: "Análise Mensal",
+          columns: [
+            { header: "Mês", key: "month", format: "text" },
+            { header: "Rec. Líquida", key: "netRevenue", format: "currency" },
+            { header: "CMV", key: "cogs", format: "currency" },
+            { header: "Lucro Bruto", key: "grossProfit", format: "currency" },
+            { header: "Despesas", key: "operatingExpenses", format: "currency" },
+            { header: "Lucro Líq.", key: "netProfit", format: "currency" },
+            { header: "Mg. Bruta", key: "grossMargin", format: "percent" },
+            { header: "Mg. Líq.", key: "netMargin", format: "percent" },
+          ],
+          data: data.monthly,
+        },
+      ],
+    });
+  };
+
+  const handleExportExcel = async () => {
+    if (!data) return;
+    const { exportToExcel } = await import("@/lib/report-export");
+    await exportToExcel({
+      fileName: `dre-gerencial-${format(startDate, "yyyy-MM-dd")}.xlsx`,
+      sheets: [
+        {
+          name: "DRE Consolidado",
+          data: [
+            ["Item", "Valor (R$)"],
+            ["(+) Receita Bruta", data.consolidated.grossRevenue],
+            ["(-) Deduções", data.consolidated.deductions],
+            ["(=) Receita Líquida", data.consolidated.netRevenue],
+            ["(-) CMV", data.consolidated.cogs],
+            ["(=) Lucro Bruto", data.consolidated.grossProfit],
+            ["(-) Despesas Operacionais", data.consolidated.operatingExpenses],
+            ["(=) EBITDA", data.consolidated.ebitda],
+            ["(+/-) Resultado Financeiro", data.consolidated.financialResult],
+            ["(=) Lucro Líquido", data.consolidated.netProfit],
+            [],
+            ["Margem Bruta", `${data.consolidated.grossMargin.toFixed(1)}%`],
+            ["Margem Líquida", `${data.consolidated.netMargin.toFixed(1)}%`],
+          ],
+        },
+        {
+          name: "Análise Mensal",
+          data: [
+            ["Mês", "Rec. Líquida", "CMV", "Lucro Bruto", "Despesas", "EBITDA", "Lucro Líq.", "Mg. Bruta", "Mg. Líq."],
+            ...data.monthly.map((m) => [
+              m.month, m.netRevenue, m.cogs, m.grossProfit,
+              m.operatingExpenses, m.ebitda, m.netProfit,
+              `${m.grossMargin.toFixed(1)}%`, `${m.netMargin.toFixed(1)}%`,
+            ]),
+          ],
+        },
+      ],
+    });
+  };
+
   const fetchReport = async () => {
     setLoading(true);
     try {
@@ -186,7 +270,10 @@ export default function RelatorioDREPage() {
         <>
           {/* Export */}
           <div className="flex justify-end">
-            <ExportButtons disabled={!data}
+            <ExportButtons
+              onExportPDF={handleExportPDF}
+              onExportExcel={handleExportExcel}
+              disabled={!data}
             />
           </div>
 

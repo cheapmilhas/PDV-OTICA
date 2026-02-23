@@ -184,8 +184,56 @@ export default function RelatorioProdutosSemGiroPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Produtos sem Giro",
+      subtitle: `${data.summary.totalProducts} produtos parados | Valor imobilizado: ${formatCurrency(data.summary.totalStockValue)} | Média: ${data.summary.averageDaysWithoutMovement} dias | Nunca vendidos: ${data.summary.productsNeverSold}`,
+      sections: [
+        {
+          title: "Distribuição por Período",
+          columns: [
+            { header: "Período", key: "range" },
+            { header: "Produtos", key: "count", format: "number" },
+            { header: "Valor", key: "value", format: "currency" },
+          ],
+          data: data.daysRangeBreakdown,
+        },
+        {
+          title: "Valor por Categoria",
+          columns: [
+            { header: "Categoria", key: "categoryName" },
+            { header: "Produtos", key: "productCount", format: "number" },
+            { header: "Valor Estoque", key: "stockValue", format: "currency" },
+          ],
+          data: data.categoryBreakdown,
+        },
+        {
+          title: `Produtos Detalhados (${data.products.length})`,
+          columns: [
+            { header: "SKU", key: "sku" },
+            { header: "Produto", key: "productName" },
+            { header: "Categoria", key: "categoryName" },
+            { header: "Tipo", key: "type" },
+            { header: "Estoque", key: "currentStock", format: "number" },
+            { header: "Custo", key: "costPrice", format: "currency" },
+            { header: "Valor Estoque", key: "stockValue", format: "currency" },
+            { header: "Dias Parado", key: "daysLabel" },
+            { header: "Última Venda", key: "lastSaleLabel" },
+          ],
+          data: data.products.map((p) => ({
+            ...p,
+            categoryName: p.categoryName || "N/A",
+            type: PRODUCT_TYPE_LABELS[p.type] || p.type,
+            daysLabel: p.daysWithoutMovement === 9999 ? "Nunca" : `${p.daysWithoutMovement} dias`,
+            lastSaleLabel: p.lastSaleDate
+              ? format(new Date(p.lastSaleDate), "dd/MM/yyyy")
+              : "Nunca",
+          })),
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {

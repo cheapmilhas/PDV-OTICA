@@ -173,8 +173,48 @@ export default function RelatorioComissoesPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Relatório de Comissões",
+      subtitle: `Total: ${formatCurrency(data.summary.totalCommission)} | Pendente: ${formatCurrency(data.summary.pendingCommission)} | Aprovada: ${formatCurrency(data.summary.approvedCommission)} | Paga: ${formatCurrency(data.summary.paidCommission)}`,
+      period: { start: startDate, end: endDate },
+      sections: [
+        {
+          title: `Vendedores (${data.sellers.length})`,
+          columns: [
+            { header: "Vendedor", key: "userName" },
+            { header: "Vendas", key: "salesCount", format: "number" },
+            { header: "Receita", key: "totalRevenue", format: "currency" },
+            { header: "Comissão Total", key: "totalCommission", format: "currency" },
+            { header: "% Média", key: "averageCommissionPercent", format: "percent" },
+            { header: "Pendente", key: "pendingCommission", format: "currency" },
+            { header: "Aprovada", key: "approvedCommission", format: "currency" },
+            { header: "Paga", key: "paidCommission", format: "currency" },
+          ],
+          data: data.sellers,
+        },
+        {
+          title: `Comissões Detalhadas (${data.commissions.length})`,
+          columns: [
+            { header: "Data", key: "saleDateFormatted" },
+            { header: "Vendedor", key: "userName" },
+            { header: "Cliente", key: "customerName" },
+            { header: "Valor Base", key: "baseAmount", format: "currency" },
+            { header: "%", key: "percentage", format: "percent" },
+            { header: "Comissão", key: "commissionAmount", format: "currency" },
+            { header: "Status", key: "statusLabel" },
+          ],
+          data: data.commissions.map((c) => ({
+            ...c,
+            saleDateFormatted: format(new Date(c.saleDate), "dd/MM/yyyy HH:mm"),
+            customerName: c.customerName || "N/A",
+            statusLabel: STATUS_LABELS[c.status] || c.status,
+          })),
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {

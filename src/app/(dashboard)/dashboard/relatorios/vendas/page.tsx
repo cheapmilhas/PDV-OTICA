@@ -102,8 +102,47 @@ export default function RelatorioVendasPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Relatório de Vendas",
+      subtitle: "Vendas Consolidadas",
+      period: { start: startDate, end: endDate },
+      sections: [
+        {
+          title: "Resumo",
+          columns: [
+            { header: "Métrica", key: "metric", format: "text" },
+            { header: "Valor", key: "value", format: "text" },
+          ],
+          data: [
+            { metric: "Total de Vendas", value: String(data.summary.totalSales) },
+            { metric: "Receita Total", value: formatCurrency(data.summary.totalRevenue) },
+            { metric: "Ticket Médio", value: formatCurrency(data.summary.averageTicket) },
+            { metric: "Itens Vendidos", value: String(data.summary.totalItems) },
+          ],
+        },
+        {
+          title: "Top Vendedores",
+          columns: [
+            { header: "Vendedor", key: "userName", format: "text" },
+            { header: "Vendas", key: "sales", format: "number" },
+            { header: "Total", key: "revenue", format: "currency" },
+          ],
+          data: data.topSellers,
+        },
+        {
+          title: "Formas de Pagamento",
+          columns: [
+            { header: "Método", key: "method", format: "text" },
+            { header: "Valor", key: "total", format: "currency" },
+            { header: "Quantidade", key: "count", format: "number" },
+          ],
+          data: data.paymentMethods,
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {

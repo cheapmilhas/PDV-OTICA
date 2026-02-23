@@ -154,8 +154,48 @@ export default function RelatorioContasReceberPage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Contas a Receber",
+      sections: [
+        {
+          title: "Resumo",
+          columns: [
+            { header: "Métrica", key: "metric" },
+            { header: "Valor", key: "value" },
+          ],
+          data: [
+            { metric: "Total a Receber", value: formatCurrency(data.summary.totalReceivable) },
+            { metric: "Vencidos", value: formatCurrency(data.summary.overdue) },
+            { metric: "A Vencer", value: formatCurrency(data.summary.toReceive) },
+            { metric: "Ticket Médio", value: formatCurrency(data.summary.averageTicket) },
+            { metric: "Total de Clientes", value: data.summary.totalCustomers },
+            { metric: "Clientes com Atraso", value: data.summary.overdueCustomers },
+            { metric: "Total de Pagamentos", value: data.summary.totalPayments },
+            { metric: "Pagamentos Vencidos", value: data.summary.overduePayments },
+          ],
+        },
+        {
+          title: "Contas a Receber",
+          columns: [
+            { header: "Descrição", key: "description" },
+            { header: "Cliente", key: "customerName" },
+            { header: "Parcela", key: "installment" },
+            { header: "Vencimento", key: "dueDate" },
+            { header: "Valor", key: "amount", format: "currency" },
+            { header: "Dias Atraso", key: "daysOverdue", format: "number" },
+            { header: "Categoria", key: "agingCategory" },
+          ],
+          data: data.receivables.map((r) => ({
+            ...r,
+            customerName: r.customerName || "N/A",
+            dueDate: format(new Date(r.dueDate), "dd/MM/yyyy"),
+          })),
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {

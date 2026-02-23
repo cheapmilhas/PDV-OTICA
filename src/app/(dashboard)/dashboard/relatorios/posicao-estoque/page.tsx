@@ -203,8 +203,58 @@ export default function RelatorioPosicaoEstoquePage() {
     }
   };
 
-  const handleExportPDF = () => {
-    toast("Exportação em PDF será implementada em breve", { icon: "ℹ️" });
+  const handleExportPDF = async () => {
+    if (!data) return;
+    const { exportToPDF } = await import("@/lib/report-export");
+    await exportToPDF({
+      title: "Posição de Estoque",
+      subtitle: `Total: ${data.summary.totalProducts} produtos | Valor: ${formatCurrency(data.summary.totalStockValue)} | OK: ${data.summary.productsOK} | Baixo: ${data.summary.productsLow} | Zerado: ${data.summary.productsOut}`,
+      sections: [
+        {
+          title: "Resumo por Status",
+          columns: [
+            { header: "Status", key: "status" },
+            { header: "Quantidade", key: "count", format: "number" },
+            { header: "Valor", key: "value", format: "currency" },
+          ],
+          data: data.statusDistribution.map((s) => ({
+            status: STATUS_LABELS[s.status] || s.status,
+            count: s.count,
+            value: s.value,
+          })),
+        },
+        {
+          title: "Resumo por Categoria",
+          columns: [
+            { header: "Categoria", key: "categoryName" },
+            { header: "Produtos", key: "productCount", format: "number" },
+            { header: "Qtd Estoque", key: "stockQty", format: "number" },
+            { header: "Valor Estoque", key: "stockValue", format: "currency" },
+          ],
+          data: data.categoryBreakdown,
+        },
+        {
+          title: `Produtos (${data.products.length})`,
+          columns: [
+            { header: "SKU", key: "sku" },
+            { header: "Produto", key: "productName" },
+            { header: "Categoria", key: "categoryName" },
+            { header: "Tipo", key: "type" },
+            { header: "Estoque", key: "currentStock", format: "number" },
+            { header: "Mínimo", key: "minimumStock", format: "number" },
+            { header: "Custo", key: "costPrice", format: "currency" },
+            { header: "Valor Total", key: "stockValue", format: "currency" },
+            { header: "Status", key: "statusLabel" },
+          ],
+          data: data.products.map((p) => ({
+            ...p,
+            categoryName: p.categoryName || "N/A",
+            type: PRODUCT_TYPE_LABELS[p.type] || p.type,
+            statusLabel: STATUS_LABELS[p.status],
+          })),
+        },
+      ],
+    });
   };
 
   const handleExportExcel = () => {
