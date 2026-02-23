@@ -105,10 +105,10 @@ function VendasContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Vendas</h1>
-          <p className="text-muted-foreground">Histórico de vendas realizadas</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Vendas</h1>
+          <p className="text-muted-foreground text-sm hidden sm:block">Histórico de vendas realizadas</p>
         </div>
         <ProtectedAction permission="sales.create">
           <Button onClick={() => router.push("/dashboard/pdv")}>
@@ -233,63 +233,62 @@ function VendasContent() {
         <div className="grid gap-4">
           {vendas.map((venda) => (
             <Card key={venda.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-lg">
-                          {venda.customer?.name || "Cliente não informado"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(venda.createdAt), "dd/MM/yyyy 'às' HH:mm", {
-                            locale: ptBR,
-                          })}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-primary">
-                          {formatCurrency(Number(venda.total))}
-                        </p>
-                        {Number(venda.discountTotal) > 0 && (
-                          <p className="text-sm text-muted-foreground">
-                            Desconto: {formatCurrency(Number(venda.discountTotal))}
-                          </p>
-                        )}
-                      </div>
+              <CardContent className="p-4 md:p-6">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-base md:text-lg truncate">
+                        {venda.customer?.name || "Cliente não informado"}
+                      </h3>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        {format(new Date(venda.createdAt), "dd/MM/yyyy 'às' HH:mm", {
+                          locale: ptBR,
+                        })}
+                      </p>
                     </div>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg md:text-2xl font-bold text-primary">
+                        {formatCurrency(Number(venda.total))}
+                      </p>
+                      {Number(venda.discountTotal) > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          -{formatCurrency(Number(venda.discountTotal))}
+                        </p>
+                      )}
+                    </div>
+                  </div>
 
-                    <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center justify-between gap-2 flex-wrap">
+                    <div className="flex items-center gap-2 md:gap-4 text-xs md:text-sm flex-wrap">
                       <div className="flex items-center gap-1 text-muted-foreground">
-                        <ShoppingCart className="h-4 w-4" />
+                        <ShoppingCart className="h-3 w-3 md:h-4 md:w-4" />
                         <span>{venda._count?.items || 0} itens</span>
                       </div>
                       {venda.payments && venda.payments.length > 0 && (
-                        <div className="flex gap-2">
+                        <div className="flex gap-1 flex-wrap">
                           {venda.payments.map((payment: any, idx: number) => (
-                            <Badge key={idx} variant="outline">
+                            <Badge key={idx} variant="outline" className="text-xs">
                               {getPaymentMethodLabel(payment.method)}
                             </Badge>
                           ))}
                         </div>
                       )}
                       {venda.sellerUser && (
-                        <div className="flex items-center gap-1 text-muted-foreground">
-                          <span>Vendedor: {venda.sellerUser.name}</span>
-                        </div>
+                        <span className="text-muted-foreground hidden md:inline">
+                          {venda.sellerUser.name}
+                        </span>
                       )}
                     </div>
-                  </div>
 
-                  <Button
-                    size="sm"
-                    variant="outline"
-                    onClick={() => router.push(`/dashboard/vendas/${venda.id}/detalhes`)}
-                    className="ml-4"
-                  >
-                    <Eye className="h-4 w-4 mr-1" />
-                    Detalhes
-                  </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => router.push(`/dashboard/vendas/${venda.id}/detalhes`)}
+                    >
+                      <Eye className="h-4 w-4 mr-1" />
+                      <span className="hidden sm:inline">Detalhes</span>
+                    </Button>
+                  </div>
                 </div>
               </CardContent>
             </Card>

@@ -123,30 +123,30 @@ export default function CrmPage() {
 
   return (
     <div className="p-6 space-y-6">
-      <div className="flex justify-between items-center">
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4">
         <div>
-          <h1 className="text-2xl font-bold">CRM - Lembretes de Contato</h1>
-          <p className="text-gray-500">Central de Follow-up e Reativação de Clientes</p>
+          <h1 className="text-xl md:text-2xl font-bold">CRM - Lembretes</h1>
+          <p className="text-gray-500 text-sm hidden sm:block">Central de Follow-up e Reativação de Clientes</p>
         </div>
-        <div className="flex gap-2">
+        <div className="flex gap-2 flex-wrap">
           <Link href="/dashboard/lembretes/configuracoes">
-            <Button variant="outline">
+            <Button variant="outline" size="sm">
               <Settings className="mr-2 w-4 h-4" />
-              Configurações
+              <span className="hidden sm:inline">Configurações</span>
+              <span className="sm:hidden">Config</span>
             </Button>
           </Link>
-          <Button onClick={handleGenerate} variant="outline">
+          <Button onClick={handleGenerate} variant="outline" size="sm">
             <RefreshCw className="mr-2 w-4 h-4" />
-            Gerar Lembretes
+            Gerar
           </Button>
-          <Button onClick={loadData} variant="outline">
-            <RefreshCw className="mr-2 w-4 h-4" />
-            Atualizar
+          <Button onClick={loadData} variant="outline" size="sm">
+            <RefreshCw className="w-4 h-4" />
           </Button>
         </div>
       </div>
 
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4">
         <Card>
           <CardContent className="p-6">
             <div className="flex justify-between items-start">
@@ -271,30 +271,27 @@ export default function CrmPage() {
         ) : (
           reminders.map((reminder: any) => (
             <Card key={reminder.id}>
-              <CardContent className="p-6">
-                <div className="flex justify-between items-start">
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2 mb-2">
-                      <h3 className="text-lg font-semibold">{reminder.customer.name}</h3>
-                      <Badge>{reminder.segment.replace(/_/g, " ")}</Badge>
+              <CardContent className="p-4 md:p-6">
+                <div className="flex flex-col sm:flex-row justify-between items-start gap-3">
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
+                      <h3 className="text-base md:text-lg font-semibold truncate">{reminder.customer.name}</h3>
+                      <Badge className="text-xs">{reminder.segment.replace(/_/g, " ")}</Badge>
                     </div>
                     <p className="text-sm text-gray-600 mb-2">
-                      📞 {reminder.customer.phone || "Sem telefone"}
+                      {reminder.customer.phone || "Sem telefone"}
                     </p>
 
                     {reminder.lastPurchaseDate && (
-                      <div className="text-sm text-gray-600 space-y-1">
+                      <div className="text-xs md:text-sm text-gray-600 space-y-1">
                         <p>
-                          📦 Última compra:{" "}
+                          Última compra:{" "}
                           {new Date(reminder.lastPurchaseDate).toLocaleDateString("pt-BR")} (
                           {reminder.daysSinceLastPurchase} dias)
                         </p>
-                        {reminder.lastPurchaseProduct && (
-                          <p>🛒 Produto: {reminder.lastPurchaseProduct}</p>
-                        )}
                         {reminder.lastPurchaseAmount && (
                           <p>
-                            💰 Valor: R${" "}
+                            Valor: R${" "}
                             {Number(reminder.lastPurchaseAmount).toLocaleString("pt-BR", {
                               minimumFractionDigits: 2,
                             })}
@@ -302,23 +299,12 @@ export default function CrmPage() {
                         )}
                       </div>
                     )}
-
-                    <div className="text-sm text-gray-500 mt-2">
-                      <p>
-                        📊 Total: {reminder.totalPurchases} compras • R${" "}
-                        {Number(reminder.totalSpent).toLocaleString("pt-BR", {
-                          minimumFractionDigits: 2,
-                        })}
-                      </p>
-                    </div>
                   </div>
 
-                  <div className="flex flex-col gap-2">
-                    <Button onClick={() => handleWhatsApp(reminder)} size="sm">
-                      <MessageSquare className="mr-2 w-4 h-4" />
-                      WhatsApp
-                    </Button>
-                  </div>
+                  <Button onClick={() => handleWhatsApp(reminder)} size="sm" className="w-full sm:w-auto">
+                    <MessageSquare className="mr-2 w-4 h-4" />
+                    WhatsApp
+                  </Button>
                 </div>
               </CardContent>
             </Card>

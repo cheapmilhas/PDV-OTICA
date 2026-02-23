@@ -288,10 +288,10 @@ function OrcamentosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-3xl font-bold">Orçamentos</h1>
-          <p className="text-muted-foreground">Gerenciamento de orçamentos</p>
+          <h1 className="text-2xl md:text-3xl font-bold">Orçamentos</h1>
+          <p className="text-muted-foreground text-sm hidden sm:block">Gerenciamento de orçamentos</p>
         </div>
         <Can permission="quotes.create">
           <Button onClick={() => router.push("/dashboard/orcamentos/novo")}>
@@ -302,7 +302,7 @@ function OrcamentosPage() {
       </div>
 
       {/* KPIs */}
-      <div className="grid gap-4 md:grid-cols-4 lg:grid-cols-6">
+      <div className="grid gap-3 grid-cols-2 md:grid-cols-3 lg:grid-cols-6">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground flex items-center gap-2">
@@ -517,73 +517,58 @@ function OrcamentosPage() {
         <div className="grid gap-4">
           {quotes.map((quote) => (
             <Card key={quote.id} className="hover:shadow-md transition-shadow">
-              <CardContent className="p-6">
-                <div className="flex items-start justify-between">
-                  <div className="space-y-3 flex-1">
-                    <div className="flex items-start justify-between">
-                      <div>
-                        <h3 className="font-semibold text-lg">
-                          {quote.customer?.name || quote.customerName || "Cliente não informado"}
-                        </h3>
-                        <p className="text-sm text-muted-foreground">
-                          {format(new Date(quote.createdAt), "dd/MM/yyyy 'às' HH:mm", {
-                            locale: ptBR,
-                          })}
-                        </p>
-                      </div>
-                      <div className="text-right">
-                        <p className="text-2xl font-bold text-primary">
-                          {formatCurrency(quote.total)}
-                        </p>
-                        {quote.discountTotal > 0 && (
-                          <p className="text-sm text-muted-foreground">
-                            Desconto: {formatCurrency(quote.discountTotal)}
-                          </p>
-                        )}
-                      </div>
+              <CardContent className="p-4 md:p-6">
+                <div className="space-y-3">
+                  <div className="flex items-start justify-between gap-2">
+                    <div className="min-w-0 flex-1">
+                      <h3 className="font-semibold text-base md:text-lg truncate">
+                        {quote.customer?.name || quote.customerName || "Cliente não informado"}
+                      </h3>
+                      <p className="text-xs md:text-sm text-muted-foreground">
+                        {format(new Date(quote.createdAt), "dd/MM/yyyy 'às' HH:mm", {
+                          locale: ptBR,
+                        })}
+                      </p>
                     </div>
-
-                    <div className="flex items-center gap-4 text-sm flex-wrap">
-                      {getStatusBadge(quote.status)}
-
-                      {/* Badge de Enviado */}
-                      {quote.sentAt && (
-                        <Badge className="bg-green-100 text-green-800">
-                          <Send className="h-3 w-3 mr-1" />
-                          Enviado {quote.sentVia && `via ${quote.sentVia}`}
-                        </Badge>
+                    <div className="text-right flex-shrink-0">
+                      <p className="text-lg md:text-2xl font-bold text-primary">
+                        {formatCurrency(quote.total)}
+                      </p>
+                      {quote.discountTotal > 0 && (
+                        <p className="text-xs text-muted-foreground">
+                          -{formatCurrency(quote.discountTotal)}
+                        </p>
                       )}
-
-                      {/* Badge de Follow-up Pendente */}
-                      {quote.followUpDate && new Date(quote.followUpDate) <= new Date() && (
-                        <Badge className="bg-yellow-100 text-yellow-800">
-                          <CalendarCheck className="h-3 w-3 mr-1" />
-                          Follow-up Pendente
-                        </Badge>
-                      )}
-
-                      {/* Badge de Contatos */}
-                      {quote.contactCount && quote.contactCount > 0 && (
-                        <Badge variant="outline" className="text-xs">
-                          <MessageCircle className="h-3 w-3 mr-1" />
-                          {quote.contactCount} contato{quote.contactCount !== 1 ? "s" : ""}
-                        </Badge>
-                      )}
-
-                      <span className="text-muted-foreground">
-                        {quote.items.length} {quote.items.length === 1 ? "item" : "itens"}
-                      </span>
-                      <span className="text-muted-foreground">
-                        Válido até: {format(new Date(quote.validUntil), "dd/MM/yyyy")}
-                      </span>
-                      <span className="text-muted-foreground">
-                        Vendedor: {quote.sellerUser.name}
-                      </span>
                     </div>
                   </div>
 
-                  <div className="ml-4 flex flex-col gap-2">
-                    {/* Botão WhatsApp */}
+                  <div className="flex items-center gap-2 text-xs md:text-sm flex-wrap">
+                    {getStatusBadge(quote.status)}
+                    {quote.sentAt && (
+                      <Badge className="bg-green-100 text-green-800 text-xs">
+                        <Send className="h-3 w-3 mr-1" />
+                        Enviado
+                      </Badge>
+                    )}
+                    {quote.followUpDate && new Date(quote.followUpDate) <= new Date() && (
+                      <Badge className="bg-yellow-100 text-yellow-800 text-xs">
+                        Follow-up
+                      </Badge>
+                    )}
+                    {quote.contactCount && quote.contactCount > 0 && (
+                      <Badge variant="outline" className="text-xs">
+                        {quote.contactCount} contato{quote.contactCount !== 1 ? "s" : ""}
+                      </Badge>
+                    )}
+                    <span className="text-muted-foreground hidden sm:inline">
+                      {quote.items.length} itens
+                    </span>
+                    <span className="text-muted-foreground hidden md:inline">
+                      Até: {format(new Date(quote.validUntil), "dd/MM/yyyy")}
+                    </span>
+                  </div>
+
+                  <div className="flex items-center gap-2 flex-wrap">
                     <Button
                       size="sm"
                       variant="outline"
@@ -591,13 +576,11 @@ function OrcamentosPage() {
                         e.stopPropagation();
                         handleWhatsApp(quote);
                       }}
-                      className="min-w-[140px] border-green-500 text-green-600 hover:bg-green-50"
+                      className="border-green-500 text-green-600 hover:bg-green-50"
                     >
                       <MessageCircle className="h-4 w-4 mr-1" />
-                      WhatsApp
+                      <span className="hidden sm:inline">WhatsApp</span>
                     </Button>
-
-                    {/* Botão Follow-up */}
                     <Button
                       size="sm"
                       variant="outline"
@@ -605,21 +588,17 @@ function OrcamentosPage() {
                         e.stopPropagation();
                         handleOpenFollowUpModal(quote);
                       }}
-                      className="min-w-[140px]"
                     >
                       <CalendarCheck className="h-4 w-4 mr-1" />
-                      Follow-up
+                      <span className="hidden sm:inline">Follow-up</span>
                     </Button>
-
-                    {/* Botão Ver Detalhes */}
                     <Button
                       size="sm"
                       variant="outline"
                       onClick={() => router.push(`/dashboard/orcamentos/${quote.id}`)}
-                      className="min-w-[140px]"
                     >
                       <Eye className="h-4 w-4 mr-1" />
-                      Ver Detalhes
+                      <span className="hidden sm:inline">Detalhes</span>
                     </Button>
                   </div>
                 </div>
