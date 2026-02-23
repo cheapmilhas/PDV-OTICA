@@ -1266,7 +1266,7 @@ function ClienteDetalhesPage() {
           <div className="space-y-4">
             {/* Resumo */}
             {receivablesSummary && (
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <Card>
                   <CardContent className="pt-4">
                     <p className="text-xs text-muted-foreground">Pendente / Vencido</p>
@@ -1366,7 +1366,7 @@ function ClienteDetalhesPage() {
           </DialogHeader>
 
           <div className="space-y-4 py-2">
-            <div className="grid grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <div className="space-y-2">
                 <Label>Canal</Label>
                 <Select
@@ -1445,7 +1445,7 @@ function ClienteDetalhesPage() {
             </div>
 
             {contactForm.scheduleFollowUp && (
-              <div className="grid grid-cols-2 gap-4 pl-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pl-6">
                 <div className="space-y-2">
                   <Label>Data do follow-up</Label>
                   <Input

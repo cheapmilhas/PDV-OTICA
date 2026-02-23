@@ -477,7 +477,7 @@ export default function DetalhesOrdemServicoPage() {
               </div>
 
               {(rx.adicao || rx.tipoLente || rx.material) && (
-                <div className="grid grid-cols-3 gap-4 pt-3 border-t text-sm">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-3 border-t text-sm">
                   {rx.adicao && (
                     <div className="text-center">
                       <p className="text-muted-foreground text-xs uppercase font-medium">Adição</p>

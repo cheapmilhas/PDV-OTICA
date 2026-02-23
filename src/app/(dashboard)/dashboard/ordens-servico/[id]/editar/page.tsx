@@ -490,7 +490,7 @@ export default function EditarOrdemServicoPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-3 gap-4 pt-2 border-t">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t">
                 <div className="space-y-1">
                   <Label className="text-xs">Adição</Label>
                   <Input

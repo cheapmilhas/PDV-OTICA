@@ -185,7 +185,7 @@ function ConfiguracoesPage() {
               </CardDescription>
             </CardHeader>
             <CardContent className="space-y-4">
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="nome">Nome da Empresa</Label>
                   <Input
@@ -206,7 +206,7 @@ function ConfiguracoesPage() {
 
               <Separator />
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="email" className="flex items-center gap-2">
                     <Mail className="h-4 w-4" />
@@ -232,7 +232,7 @@ function ConfiguracoesPage() {
                 </div>
               </div>
 
-              <div className="grid grid-cols-2 gap-4">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="whatsapp">WhatsApp</Label>
                   <Input
@@ -275,7 +275,7 @@ function ConfiguracoesPage() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 <div className="space-y-2">
                   <Label htmlFor="cidade">Cidade</Label>
                   <Input
@@ -317,7 +317,7 @@ function ConfiguracoesPage() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="grid grid-cols-2 gap-4 text-sm text-blue-900">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm text-blue-900">
                 <div>
                   <p className="font-semibold mb-2">Dados da Empresa:</p>
                   <ul className="space-y-1 ml-4">

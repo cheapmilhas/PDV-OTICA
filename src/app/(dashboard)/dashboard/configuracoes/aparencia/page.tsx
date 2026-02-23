@@ -252,7 +252,7 @@ function AparenciaPage() {
         </CardHeader>
         <CardContent className="space-y-6">
           {/* Grid de cores */}
-          <div className="grid grid-cols-4 gap-3">
+          <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
             {COLOR_OPTIONS.map((color) => (
               <button
                 key={color.value}
