@@ -396,6 +396,11 @@ export class SaleService {
             status: "RECEIVED",
             receivedAt: new Date(),
             receivedByUserId: userId,
+            ...(payment.cardBrand && { cardBrand: payment.cardBrand }),
+            ...(payment.cardLastDigits && { cardLastDigits: payment.cardLastDigits }),
+            ...(payment.nsu && { nsu: payment.nsu }),
+            ...(payment.authorizationCode && { authorizationCode: payment.authorizationCode }),
+            ...(payment.acquirer && { acquirer: payment.acquirer }),
           },
         });
 

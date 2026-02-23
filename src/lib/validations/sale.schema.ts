@@ -69,6 +69,12 @@ export const paymentSchema = z.object({
     .default(1),
   // Configuração de parcelamento (apenas para STORE_CREDIT)
   installmentConfig: installmentConfigSchema.optional(),
+  // Campos de cartão (opcionais, usados para CREDIT_CARD e DEBIT_CARD)
+  cardBrand: z.string().optional(),
+  cardLastDigits: z.string().max(4).optional(),
+  nsu: z.string().optional(),
+  authorizationCode: z.string().optional(),
+  acquirer: z.string().optional(),
 });
 
 export type PaymentDTO = z.infer<typeof paymentSchema>;

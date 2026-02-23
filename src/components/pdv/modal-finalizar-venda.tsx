@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
   CreditCard,
   Banknote,
@@ -32,6 +33,11 @@ interface Payment {
   amount: number;
   installments?: number;
   installmentConfig?: InstallmentConfig;
+  cardBrand?: string;
+  cardLastDigits?: string;
+  nsu?: string;
+  authorizationCode?: string;
+  acquirer?: string;
 }
 
 interface ModalFinalizarVendaProps {
@@ -56,6 +62,13 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   const [selectedMethod, setSelectedMethod] = useState("");
   const [amount, setAmount] = useState("");
   const [installments, setInstallments] = useState("1");
+
+  // Campos de cartão
+  const [cardBrand, setCardBrand] = useState("");
+  const [cardLastDigits, setCardLastDigits] = useState("");
+  const [nsu, setNsu] = useState("");
+  const [authorizationCode, setAuthorizationCode] = useState("");
+  const [acquirer, setAcquirer] = useState("");
 
   // Estados para modal de crediário
   const [modalCrediarioOpen, setModalCrediarioOpen] = useState(false);
@@ -107,16 +120,27 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
       return; // Não adiciona ainda
     }
 
+    const isCard = selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD";
     const newPayment: Payment = {
       id: Date.now().toString(),
       method: selectedMethod,
       amount: parseFloat(amount),
       ...(selectedMethod === "CREDIT_CARD" && { installments: parseInt(installments) }),
+      ...(isCard && cardBrand && { cardBrand }),
+      ...(isCard && cardLastDigits && { cardLastDigits }),
+      ...(isCard && nsu && { nsu }),
+      ...(isCard && authorizationCode && { authorizationCode }),
+      ...(isCard && acquirer && { acquirer }),
     };
 
     setPayments([...payments, newPayment]);
     setAmount("");
     setInstallments("1");
+    setCardBrand("");
+    setCardLastDigits("");
+    setNsu("");
+    setAuthorizationCode("");
+    setAcquirer("");
   };
 
   // Callback para quando confirmar crediário
@@ -329,6 +353,78 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                 )}
               </div>
 
+              {/* Campos de cartão - visíveis apenas para débito/crédito */}
+              {(selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD") && (
+                <div className="space-y-1.5 border rounded p-2 bg-muted/30">
+                  <Label className="text-[11px] font-semibold">Dados do Cartão</Label>
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <div className="space-y-0.5">
+                      <Label htmlFor="cardBrand" className="text-[10px]">Bandeira</Label>
+                      <Select value={cardBrand} onValueChange={setCardBrand}>
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Visa">Visa</SelectItem>
+                          <SelectItem value="Mastercard">Mastercard</SelectItem>
+                          <SelectItem value="Elo">Elo</SelectItem>
+                          <SelectItem value="Amex">Amex</SelectItem>
+                          <SelectItem value="Hipercard">Hipercard</SelectItem>
+                          <SelectItem value="Outro">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-0.5">
+                      <Label htmlFor="acquirer" className="text-[10px]">Operadora</Label>
+                      <Select value={acquirer} onValueChange={setAcquirer}>
+                        <SelectTrigger className="h-7 text-xs">
+                          <SelectValue placeholder="Selecione" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="Cielo">Cielo</SelectItem>
+                          <SelectItem value="Stone">Stone</SelectItem>
+                          <SelectItem value="Rede">Rede</SelectItem>
+                          <SelectItem value="PagSeguro">PagSeguro</SelectItem>
+                          <SelectItem value="Getnet">Getnet</SelectItem>
+                          <SelectItem value="Outro">Outro</SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+                    <div className="space-y-0.5">
+                      <Label htmlFor="nsu" className="text-[10px]">NSU</Label>
+                      <Input
+                        id="nsu"
+                        placeholder="N. transacao"
+                        value={nsu}
+                        onChange={(e) => setNsu(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-0.5">
+                      <Label htmlFor="authorizationCode" className="text-[10px]">Cod. Autorizacao</Label>
+                      <Input
+                        id="authorizationCode"
+                        placeholder="Codigo"
+                        value={authorizationCode}
+                        onChange={(e) => setAuthorizationCode(e.target.value)}
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div className="space-y-0.5 col-span-2">
+                      <Label htmlFor="cardLastDigits" className="text-[10px]">Ultimos 4 digitos</Label>
+                      <Input
+                        id="cardLastDigits"
+                        placeholder="0000"
+                        maxLength={4}
+                        value={cardLastDigits}
+                        onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))}
+                        className="h-7 text-xs w-24"
+                      />
+                    </div>
+                  </div>
+                </div>
+              )}
+
               <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-7 text-xs">
                 Adicionar Pagamento
               </Button>
@@ -369,6 +465,13 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                               <p className="text-[9px] text-muted-foreground">
                                 {payment.installmentConfig.count}x de{" "}
                                 {formatCurrency(payment.amount / payment.installmentConfig.count)}
+                              </p>
+                            )}
+                            {payment.cardBrand && (
+                              <p className="text-[9px] text-muted-foreground">
+                                {payment.cardBrand}
+                                {payment.cardLastDigits && ` ****${payment.cardLastDigits}`}
+                                {payment.nsu && ` NSU:${payment.nsu}`}
                               </p>
                             )}
                           </div>
