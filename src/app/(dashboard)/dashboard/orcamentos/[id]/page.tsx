@@ -38,6 +38,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ConvertQuoteButton } from "@/components/quotes/convert-quote-button";
 
 export default function DetalhesOrcamentoPage() {
   const router = useRouter();
@@ -313,10 +314,12 @@ export default function DetalhesOrcamentoPage() {
           )}
 
           {canConvert && (
-            <Button onClick={() => router.push(`/dashboard/pdv?quoteId=${id}`)}>
-              <ShoppingCart className="h-4 w-4 mr-2" />
-              Converter em Venda
-            </Button>
+            <ConvertQuoteButton
+              quoteId={id}
+              quoteTotal={Number(quote.total)}
+              quoteStatus={quote.status}
+              validUntil={new Date(quote.validUntil)}
+            />
           )}
 
           {!["CONVERTED", "CANCELED", "CANCELED"].includes(quote.status) && (
