@@ -23,6 +23,7 @@ import {
   User,
   Package,
   Loader2,
+  Tag,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
@@ -40,6 +41,8 @@ interface Product {
 interface CartItem extends Product {
   quantity: number;
   customPrice?: number;  // Preço editado pelo vendedor (opcional)
+  discountValue?: number;  // Valor do desconto no item
+  discountType?: "FIXED" | "PERCENTAGE";  // Tipo do desconto
 }
 
 interface Customer {
@@ -266,10 +269,73 @@ function PDVPage() {
     toast.success("Preço restaurado");
   };
 
+  const editarDesconto = (produtoId: string) => {
+    const item = carrinho.find((i) => i.id === produtoId);
+    if (!item) return;
+
+    const preco = item.customPrice || item.salePrice;
+    const tipoAtual = item.discountType || "FIXED";
+    const valorAtual = item.discountValue || 0;
+
+    const input = prompt(
+      `Desconto em "${item.name}":\n\nPreço unitário: R$ ${preco.toFixed(2)} × ${item.quantity} = R$ ${(preco * item.quantity).toFixed(2)}\n\nDigite o valor do desconto:\n- Número sem símbolo = R$ (ex: 10)\n- Número com % = percentual (ex: 10%)\n- 0 para remover desconto\n\nDesconto atual: ${valorAtual > 0 ? (tipoAtual === "PERCENTAGE" ? `${valorAtual}%` : `R$ ${valorAtual.toFixed(2)}`) : "Nenhum"}`,
+      valorAtual > 0 ? (tipoAtual === "PERCENTAGE" ? `${valorAtual}%` : valorAtual.toString()) : ""
+    );
+
+    if (input === null) return;
+
+    if (input === "" || input === "0") {
+      setCarrinho(carrinho.map((i) =>
+        i.id === produtoId ? { ...i, discountValue: undefined, discountType: undefined } : i
+      ));
+      toast.success("Desconto removido");
+      return;
+    }
+
+    const isPercentage = input.includes("%");
+    const valor = parseFloat(input.replace("%", "").replace(",", "."));
+
+    if (isNaN(valor) || valor < 0) {
+      toast.error("Valor inválido");
+      return;
+    }
+
+    if (isPercentage && valor > 100) {
+      toast.error("Percentual não pode ser maior que 100%");
+      return;
+    }
+
+    if (!isPercentage && valor > preco * item.quantity) {
+      toast.error("Desconto não pode ser maior que o total do item");
+      return;
+    }
+
+    setCarrinho(carrinho.map((i) =>
+      i.id === produtoId
+        ? { ...i, discountValue: valor, discountType: isPercentage ? "PERCENTAGE" : "FIXED" }
+        : i
+    ));
+
+    const descontoCalculado = isPercentage
+      ? (preco * item.quantity * valor) / 100
+      : valor;
+    toast.success(`Desconto de ${isPercentage ? `${valor}%` : `R$ ${valor.toFixed(2)}`} aplicado (R$ ${descontoCalculado.toFixed(2)})`);
+  };
+
+  const calcularDescontoItem = (item: CartItem): number => {
+    if (!item.discountValue || item.discountValue <= 0) return 0;
+    const preco = item.customPrice || item.salePrice;
+    if (item.discountType === "PERCENTAGE") {
+      return (preco * item.quantity * item.discountValue) / 100;
+    }
+    return item.discountValue; // FIXED
+  };
+
   const calcularSubtotal = () => {
     return carrinho.reduce((acc, item) => {
       const preco = item.customPrice || item.salePrice;
-      return acc + preco * item.quantity;
+      const descontoItem = calcularDescontoItem(item);
+      return acc + (preco * item.quantity) - descontoItem;
     }, 0);
   };
 
@@ -301,8 +367,8 @@ function PDVPage() {
         items: carrinho.map((item) => ({
           productId: item.id,
           qty: item.quantity,
-          unitPrice: item.customPrice || item.salePrice,  // Usa preço customizado se existir
-          discount: 0,
+          unitPrice: item.customPrice || item.salePrice,
+          discount: calcularDescontoItem(item),
         })),
         payments: payments.map((payment) => ({
           method: payment.method,
@@ -693,7 +759,22 @@ function PDVPage() {
                                 Resetar
                               </Button>
                             )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-1 text-xs text-green-600"
+                              onClick={() => editarDesconto(item.id)}
+                            >
+                              <Tag className="h-3 w-3 mr-0.5" />
+                              Desc
+                            </Button>
                           </div>
+                          {item.discountValue && item.discountValue > 0 && (
+                            <p className="text-xs text-green-600 font-medium">
+                              Desconto: {item.discountType === "PERCENTAGE" ? `${item.discountValue}%` : formatCurrency(item.discountValue)}
+                              {" "}(-{formatCurrency(calcularDescontoItem(item))})
+                            </p>
+                          )}
                           <p className="text-xs text-muted-foreground">
                             Estoque: {item.stockQty}
                           </p>
@@ -730,7 +811,7 @@ function PDVPage() {
                             </Button>
                           </div>
                           <p className="text-sm font-bold">
-                            {formatCurrency(item.salePrice * item.quantity)}
+                            {formatCurrency((item.customPrice || item.salePrice) * item.quantity - calcularDescontoItem(item))}
                           </p>
                         </div>
                       </div>
