@@ -11,7 +11,7 @@ export const cashbackConfigSchema = z.object({
   expirationDays: z.coerce.number().int().min(0).nullable().optional(),
   minPurchaseMultiplier: z.coerce.number().min(1).max(10).default(2),
   maxUsagePercent: z.coerce.number().min(0).max(100).default(50),
-  birthdayMultiplier: z.coerce.number().min(1).max(10).default(2),
+  birthdayMultiplier: z.coerce.number().min(0).max(10).default(2),
   birthdayDaysRange: z.coerce.number().int().min(0).max(30).default(7),
 });
 

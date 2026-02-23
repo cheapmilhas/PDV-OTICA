@@ -15,7 +15,7 @@ export async function GET(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: config,
+      data: JSON.parse(JSON.stringify(config)),
     });
   } catch (error) {
     return handleApiError(error);
@@ -40,7 +40,7 @@ export async function PUT(request: NextRequest) {
 
     return NextResponse.json({
       success: true,
-      data: config,
+      data: JSON.parse(JSON.stringify(config)),
       message: "Configuração de cashback atualizada com sucesso",
     });
   } catch (error) {

@@ -106,8 +106,8 @@ export default function CashbackConfigPage() {
       });
 
       if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.message || "Erro ao salvar configurações");
+        const errorData = await response.json();
+        throw new Error(errorData.error?.message || errorData.message || "Erro ao salvar configurações");
       }
 
       toast({
