@@ -1,7 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { useState, useEffect } from "react";
+import { useState, useEffect, useCallback } from "react";
 import { useParams, useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -9,6 +9,24 @@ import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogFooter,
+  DialogTitle,
+  DialogDescription,
+} from "@/components/ui/dialog";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
+import { Label } from "@/components/ui/label";
+import { Input } from "@/components/ui/input";
 import {
   ArrowLeft,
   Edit,
@@ -30,6 +48,11 @@ import {
   XCircle,
   Gift,
   Clock,
+  MessageCircle,
+  PhoneCall,
+  CheckCircle2,
+  CalendarClock,
+  UserCheck,
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
@@ -110,6 +133,67 @@ interface CustomerStats {
   cashback: CashbackInfo | null;
 }
 
+interface CrmContact {
+  id: string;
+  channel: string;
+  segment: string;
+  result: string;
+  notes: string | null;
+  followUpDate: string | null;
+  followUpNotes: string | null;
+  resultedInSale: boolean;
+  saleAmount: number | null;
+  createdAt: string;
+  contactedBy?: { name: string };
+}
+
+interface CrmReminder {
+  id: string;
+  segment: string;
+  status: string;
+  priority: number;
+  snapshotName: string;
+  snapshotPhone: string | null;
+  snapshotLastPurchase: string | null;
+  snapshotDaysSince: number | null;
+  scheduledFor: string | null;
+  createdAt: string;
+}
+
+const SEGMENT_LABELS: Record<string, string> = {
+  BIRTHDAY: "Aniversário",
+  POST_SALE_30_DAYS: "Pós-venda 30 dias",
+  POST_SALE_90_DAYS: "Pós-venda 90 dias",
+  INACTIVE_6_MONTHS: "Inativo 6 meses",
+  INACTIVE_1_YEAR: "Inativo 1 ano",
+  INACTIVE_2_YEARS: "Inativo 2 anos",
+  INACTIVE_3_YEARS: "Inativo 3+ anos",
+  CASHBACK_EXPIRING: "Cashback expirando",
+  PRESCRIPTION_EXPIRING: "Receita vencendo",
+  VIP_CUSTOMER: "Cliente VIP",
+  CONTACT_LENS_BUYER: "Compra lentes de contato",
+  CUSTOM: "Personalizado",
+};
+
+const RESULT_LABELS: Record<string, string> = {
+  ANSWERED_SCHEDULED: "Atendeu - Agendou",
+  ANSWERED_INTERESTED: "Atendeu - Interessado",
+  ANSWERED_NOT_INTERESTED: "Atendeu - Sem interesse",
+  NO_ANSWER: "Não atendeu",
+  WRONG_NUMBER: "Número errado",
+  DO_NOT_CONTACT: "Não contatar",
+  CAME_BACK_PURCHASED: "Voltou e comprou",
+  OTHER: "Outro",
+};
+
+const CHANNEL_LABELS: Record<string, string> = {
+  WHATSAPP: "WhatsApp",
+  PHONE: "Telefone",
+  SMS: "SMS",
+  EMAIL: "E-mail",
+  IN_PERSON: "Presencial",
+};
+
 function ClienteDetalhesPage() {
   const params = useParams();
   const router = useRouter();
@@ -124,6 +208,21 @@ function ClienteDetalhesPage() {
   const [cashbackMovements, setCashbackMovements] = useState<CashbackMovement[]>([]);
   const [receivables, setReceivables] = useState<any[]>([]);
   const [receivablesSummary, setReceivablesSummary] = useState<{ totalPending: number; totalReceived: number; count: number } | null>(null);
+
+  // CRM state
+  const [crmContacts, setCrmContacts] = useState<CrmContact[]>([]);
+  const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
+  const [showContactDialog, setShowContactDialog] = useState(false);
+  const [contactSaving, setContactSaving] = useState(false);
+  const [contactForm, setContactForm] = useState({
+    channel: "WHATSAPP",
+    segment: "CUSTOM",
+    result: "",
+    notes: "",
+    scheduleFollowUp: false,
+    followUpDate: "",
+    followUpNotes: "",
+  });
 
   useEffect(() => {
     const fetchCustomerData = async () => {
@@ -196,6 +295,28 @@ function ClienteDetalhesPage() {
           }
         } catch (err) {
           console.error("Erro ao buscar parcelas:", err);
+        }
+
+        // Buscar contatos CRM do cliente
+        try {
+          const crmContactsRes = await fetch(`/api/crm/contacts?customerId=${customerId}`);
+          if (crmContactsRes.ok) {
+            const crmData = await crmContactsRes.json();
+            setCrmContacts(crmData.data || []);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar contatos CRM:", err);
+        }
+
+        // Buscar lembretes CRM pendentes do cliente
+        try {
+          const crmRemindersRes = await fetch(`/api/crm/reminders?customerId=${customerId}&status=PENDING`);
+          if (crmRemindersRes.ok) {
+            const remData = await crmRemindersRes.json();
+            setCrmReminders(remData.data || []);
+          }
+        } catch (err) {
+          console.error("Erro ao buscar lembretes CRM:", err);
         }
 
         // Buscar cashback do cliente
@@ -312,6 +433,114 @@ function ClienteDetalhesPage() {
     return labels[type] || type;
   };
 
+  // CRM: Registrar contato
+  const handleRegisterContact = async () => {
+    if (!contactForm.result) {
+      toast.error("Selecione o resultado do contato");
+      return;
+    }
+    setContactSaving(true);
+    try {
+      const res = await fetch("/api/crm/contacts", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          customerId,
+          channel: contactForm.channel,
+          segment: contactForm.segment,
+          result: contactForm.result,
+          notes: contactForm.notes || undefined,
+          scheduleFollowUp: contactForm.scheduleFollowUp,
+          followUpDate: contactForm.followUpDate || undefined,
+          followUpNotes: contactForm.followUpNotes || undefined,
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json();
+        throw new Error(errData.error?.message || "Erro ao registrar contato");
+      }
+      toast.success("Contato registrado com sucesso");
+      setShowContactDialog(false);
+      setContactForm({
+        channel: "WHATSAPP",
+        segment: "CUSTOM",
+        result: "",
+        notes: "",
+        scheduleFollowUp: false,
+        followUpDate: "",
+        followUpNotes: "",
+      });
+      // Recarregar contatos
+      const contactsRes = await fetch(`/api/crm/contacts?customerId=${customerId}`);
+      if (contactsRes.ok) {
+        const data = await contactsRes.json();
+        setCrmContacts(data.data || []);
+      }
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao registrar contato");
+    } finally {
+      setContactSaving(false);
+    }
+  };
+
+  // CRM: Abrir WhatsApp com mensagem template
+  const handleOpenWhatsApp = async (segment?: string) => {
+    if (!customer?.phone) {
+      toast.error("Cliente não possui telefone cadastrado");
+      return;
+    }
+
+    let message = "";
+    if (segment) {
+      try {
+        const res = await fetch(`/api/crm/templates/${segment}/message?customerId=${customerId}`);
+        if (res.ok) {
+          const data = await res.json();
+          message = data.message || "";
+        }
+      } catch {
+        // fallback: empty message
+      }
+    }
+
+    const phone = customer.phone.replace(/\D/g, "");
+    const phoneFormatted = phone.startsWith("55") ? phone : `55${phone}`;
+    const url = `https://wa.me/${phoneFormatted}${message ? `?text=${encodeURIComponent(message)}` : ""}`;
+    window.open(url, "_blank");
+  };
+
+  // CRM: Helpers de exibição
+  const getSegmentColor = (segment: string) => {
+    const colors: Record<string, string> = {
+      BIRTHDAY: "bg-pink-100 text-pink-800",
+      POST_SALE_30_DAYS: "bg-blue-100 text-blue-800",
+      POST_SALE_90_DAYS: "bg-blue-100 text-blue-800",
+      INACTIVE_6_MONTHS: "bg-yellow-100 text-yellow-800",
+      INACTIVE_1_YEAR: "bg-orange-100 text-orange-800",
+      INACTIVE_2_YEARS: "bg-red-100 text-red-800",
+      INACTIVE_3_YEARS: "bg-red-100 text-red-800",
+      CASHBACK_EXPIRING: "bg-purple-100 text-purple-800",
+      PRESCRIPTION_EXPIRING: "bg-teal-100 text-teal-800",
+      VIP_CUSTOMER: "bg-amber-100 text-amber-800",
+      CUSTOM: "bg-gray-100 text-gray-800",
+    };
+    return colors[segment] || "bg-gray-100 text-gray-800";
+  };
+
+  const getResultColor = (result: string) => {
+    const colors: Record<string, string> = {
+      ANSWERED_SCHEDULED: "bg-green-100 text-green-800",
+      ANSWERED_INTERESTED: "bg-blue-100 text-blue-800",
+      ANSWERED_NOT_INTERESTED: "bg-gray-100 text-gray-800",
+      NO_ANSWER: "bg-yellow-100 text-yellow-800",
+      WRONG_NUMBER: "bg-red-100 text-red-800",
+      DO_NOT_CONTACT: "bg-red-100 text-red-800",
+      CAME_BACK_PURCHASED: "bg-emerald-100 text-emerald-800",
+      OTHER: "bg-gray-100 text-gray-800",
+    };
+    return colors[result] || "bg-gray-100 text-gray-800";
+  };
+
   const getInitials = (name?: string) => {
     if (!name) return "??";
     const parts = name.split(" ");
@@ -378,12 +607,31 @@ function ClienteDetalhesPage() {
           </div>
         </div>
 
-        <Button asChild>
-          <Link href={`/dashboard/clientes/${customerId}/editar`}>
-            <Edit className="mr-2 h-4 w-4" />
-            Editar Cliente
-          </Link>
-        </Button>
+        <div className="flex items-center gap-2">
+          {customer.phone && (
+            <Button
+              variant="outline"
+              className="text-green-600 border-green-300 hover:bg-green-50"
+              onClick={() => handleOpenWhatsApp()}
+            >
+              <MessageCircle className="mr-2 h-4 w-4" />
+              WhatsApp
+            </Button>
+          )}
+          <Button
+            variant="outline"
+            onClick={() => setShowContactDialog(true)}
+          >
+            <PhoneCall className="mr-2 h-4 w-4" />
+            Registrar Contato
+          </Button>
+          <Button asChild>
+            <Link href={`/dashboard/clientes/${customerId}/editar`}>
+              <Edit className="mr-2 h-4 w-4" />
+              Editar
+            </Link>
+          </Button>
+        </div>
       </div>
 
       {/* Estatísticas */}
@@ -465,8 +713,8 @@ function ClienteDetalhesPage() {
 
       {/* Tabs */}
       <Tabs defaultValue="dados" className="w-full">
-        <TabsList className="grid w-full grid-cols-6">
-          <TabsTrigger value="dados">Dados Cadastrais</TabsTrigger>
+        <TabsList className="grid w-full grid-cols-7">
+          <TabsTrigger value="dados">Dados</TabsTrigger>
           <TabsTrigger value="vendas">
             Vendas ({sales.length})
           </TabsTrigger>
@@ -474,7 +722,7 @@ function ClienteDetalhesPage() {
             Orçamentos ({quotes.length})
           </TabsTrigger>
           <TabsTrigger value="ordens">
-            Ordens de Serviço ({serviceOrders.length})
+            OS ({serviceOrders.length})
           </TabsTrigger>
           <TabsTrigger value="parcelas">
             Parcelas ({receivables.length})
@@ -484,6 +732,14 @@ function ClienteDetalhesPage() {
             {stats?.cashback && stats.cashback.balance > 0 && (
               <Badge variant="secondary" className="ml-1">
                 {formatCurrency(stats.cashback.balance)}
+              </Badge>
+            )}
+          </TabsTrigger>
+          <TabsTrigger value="crm" className="flex items-center gap-2">
+            CRM
+            {crmReminders.length > 0 && (
+              <Badge variant="destructive" className="ml-1">
+                {crmReminders.length}
               </Badge>
             )}
           </TabsTrigger>
@@ -854,6 +1110,157 @@ function ClienteDetalhesPage() {
           </div>
         </TabsContent>
 
+        {/* Tab: CRM */}
+        <TabsContent value="crm">
+          <div className="space-y-4">
+            {/* Lembretes pendentes */}
+            {crmReminders.length > 0 && (
+              <Card>
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2">
+                    <CalendarClock className="h-5 w-5" />
+                    Lembretes Pendentes ({crmReminders.length})
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-3">
+                    {crmReminders.map((reminder) => (
+                      <div key={reminder.id} className="flex items-center justify-between border-b pb-3 last:border-0">
+                        <div className="flex-1">
+                          <div className="flex items-center gap-2 mb-1">
+                            <Badge className={getSegmentColor(reminder.segment)}>
+                              {SEGMENT_LABELS[reminder.segment] || reminder.segment}
+                            </Badge>
+                            {reminder.priority >= 3 && (
+                              <Badge variant="destructive" className="text-xs">Urgente</Badge>
+                            )}
+                          </div>
+                          {reminder.snapshotDaysSince != null && (
+                            <p className="text-sm text-muted-foreground">
+                              {reminder.snapshotDaysSince} dias desde a última compra
+                            </p>
+                          )}
+                          {reminder.scheduledFor && (
+                            <p className="text-xs text-muted-foreground">
+                              Agendado para: {format(safeDate(reminder.scheduledFor), "dd/MM/yyyy", { locale: ptBR })}
+                            </p>
+                          )}
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {customer?.phone && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="text-green-600"
+                              onClick={() => handleOpenWhatsApp(reminder.segment)}
+                            >
+                              <MessageCircle className="h-4 w-4 mr-1" />
+                              WhatsApp
+                            </Button>
+                          )}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => {
+                              setContactForm((prev) => ({
+                                ...prev,
+                                segment: reminder.segment,
+                              }));
+                              setShowContactDialog(true);
+                            }}
+                          >
+                            <PhoneCall className="h-4 w-4 mr-1" />
+                            Registrar
+                          </Button>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Histórico de contatos */}
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <UserCheck className="h-5 w-5" />
+                  Histórico de Contatos ({crmContacts.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {crmContacts.length === 0 ? (
+                  <div className="text-center py-8 text-muted-foreground">
+                    <PhoneCall className="h-12 w-12 mx-auto mb-4 opacity-20" />
+                    <p>Nenhum contato CRM registrado</p>
+                    <Button
+                      variant="outline"
+                      className="mt-4"
+                      onClick={() => setShowContactDialog(true)}
+                    >
+                      <PhoneCall className="mr-2 h-4 w-4" />
+                      Registrar primeiro contato
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="space-y-4">
+                    {crmContacts.map((contact) => (
+                      <div key={contact.id} className="border-b pb-4 last:border-0">
+                        <div className="flex items-start justify-between">
+                          <div className="flex-1">
+                            <div className="flex items-center gap-2 mb-1 flex-wrap">
+                              <Badge className={getSegmentColor(contact.segment)}>
+                                {SEGMENT_LABELS[contact.segment] || contact.segment}
+                              </Badge>
+                              <Badge className={getResultColor(contact.result)}>
+                                {RESULT_LABELS[contact.result] || contact.result}
+                              </Badge>
+                              <Badge variant="outline">
+                                {CHANNEL_LABELS[contact.channel] || contact.channel}
+                              </Badge>
+                            </div>
+                            {contact.notes && (
+                              <p className="text-sm mt-2">{contact.notes}</p>
+                            )}
+                            <div className="flex items-center gap-4 mt-2 text-xs text-muted-foreground">
+                              <span>
+                                {format(safeDate(contact.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                              </span>
+                              {contact.contactedBy?.name && (
+                                <span>por {contact.contactedBy.name}</span>
+                              )}
+                            </div>
+                            {contact.followUpDate && (
+                              <p className="text-xs text-amber-600 mt-1 flex items-center gap-1">
+                                <CalendarClock className="h-3 w-3" />
+                                Follow-up: {format(safeDate(contact.followUpDate), "dd/MM/yyyy", { locale: ptBR })}
+                                {contact.followUpNotes && ` - ${contact.followUpNotes}`}
+                              </p>
+                            )}
+                          </div>
+                          {contact.resultedInSale && (
+                            <div className="text-right">
+                              <Badge className="bg-emerald-100 text-emerald-800">
+                                <CheckCircle2 className="h-3 w-3 mr-1" />
+                                Convertido
+                              </Badge>
+                              {contact.saleAmount && (
+                                <p className="text-sm font-bold text-emerald-600 mt-1">
+                                  {formatCurrency(Number(contact.saleAmount))}
+                                </p>
+                              )}
+                            </div>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </div>
+        </TabsContent>
+
         {/* Tab: Parcelas */}
         <TabsContent value="parcelas">
           <div className="space-y-4">
@@ -947,6 +1354,129 @@ function ClienteDetalhesPage() {
           </div>
         </TabsContent>
       </Tabs>
+
+      {/* Dialog: Registrar Contato */}
+      <Dialog open={showContactDialog} onOpenChange={setShowContactDialog}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Registrar Contato CRM</DialogTitle>
+            <DialogDescription>
+              Registre o resultado do contato com {customer.name}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="grid grid-cols-2 gap-4">
+              <div className="space-y-2">
+                <Label>Canal</Label>
+                <Select
+                  value={contactForm.channel}
+                  onValueChange={(v) => setContactForm((prev) => ({ ...prev, channel: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="WHATSAPP">WhatsApp</SelectItem>
+                    <SelectItem value="PHONE">Telefone</SelectItem>
+                    <SelectItem value="SMS">SMS</SelectItem>
+                    <SelectItem value="EMAIL">E-mail</SelectItem>
+                    <SelectItem value="IN_PERSON">Presencial</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label>Segmento</Label>
+                <Select
+                  value={contactForm.segment}
+                  onValueChange={(v) => setContactForm((prev) => ({ ...prev, segment: v }))}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {Object.entries(SEGMENT_LABELS).map(([key, label]) => (
+                      <SelectItem key={key} value={key}>{label}</SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Resultado *</Label>
+              <Select
+                value={contactForm.result}
+                onValueChange={(v) => setContactForm((prev) => ({ ...prev, result: v }))}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o resultado" />
+                </SelectTrigger>
+                <SelectContent>
+                  {Object.entries(RESULT_LABELS).map(([key, label]) => (
+                    <SelectItem key={key} value={key}>{label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>Observações</Label>
+              <Textarea
+                value={contactForm.notes}
+                onChange={(e) => setContactForm((prev) => ({ ...prev, notes: e.target.value }))}
+                placeholder="Notas sobre o contato..."
+                rows={3}
+              />
+            </div>
+
+            <div className="flex items-center gap-2">
+              <input
+                type="checkbox"
+                id="scheduleFollowUp"
+                checked={contactForm.scheduleFollowUp}
+                onChange={(e) => setContactForm((prev) => ({ ...prev, scheduleFollowUp: e.target.checked }))}
+                className="rounded border-gray-300"
+              />
+              <Label htmlFor="scheduleFollowUp" className="cursor-pointer">
+                Agendar follow-up
+              </Label>
+            </div>
+
+            {contactForm.scheduleFollowUp && (
+              <div className="grid grid-cols-2 gap-4 pl-6">
+                <div className="space-y-2">
+                  <Label>Data do follow-up</Label>
+                  <Input
+                    type="date"
+                    value={contactForm.followUpDate}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, followUpDate: e.target.value }))}
+                  />
+                </div>
+                <div className="space-y-2">
+                  <Label>Nota do follow-up</Label>
+                  <Input
+                    value={contactForm.followUpNotes}
+                    onChange={(e) => setContactForm((prev) => ({ ...prev, followUpNotes: e.target.value }))}
+                    placeholder="Lembrete..."
+                  />
+                </div>
+              </div>
+            )}
+          </div>
+
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setShowContactDialog(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={handleRegisterContact} disabled={contactSaving}>
+              {contactSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+              Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

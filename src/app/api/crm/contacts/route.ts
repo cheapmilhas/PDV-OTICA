@@ -1,10 +1,35 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import * as crmService from "@/services/crm.service";
 import { z } from "zod";
 import { CustomerSegment, ContactResult } from "@prisma/client";
+
+export async function GET(request: NextRequest) {
+  try {
+    await requireAuth();
+    const companyId = await getCompanyId();
+    const { searchParams } = new URL(request.url);
+    const customerId = searchParams.get("customerId");
+
+    if (!customerId) {
+      return NextResponse.json(
+        { error: { code: "BAD_REQUEST", message: "customerId é obrigatório" } },
+        { status: 400 }
+      );
+    }
+
+    const contacts = await crmService.getContactsByCustomer(companyId, customerId);
+
+    return NextResponse.json({
+      success: true,
+      data: JSON.parse(JSON.stringify(contacts)),
+    });
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
 
 const contactSchema = z.object({
   customerId: z.string(),

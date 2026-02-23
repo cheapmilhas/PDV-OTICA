@@ -193,18 +193,20 @@ export async function getReminders(
     segment?: CustomerSegment;
     status?: CrmReminderStatus;
     assignedToId?: string;
+    customerId?: string;
     search?: string;
     page?: number;
     pageSize?: number;
   }
 ) {
-  const { segment, status, assignedToId, search, page = 1, pageSize = 20 } = filters;
+  const { segment, status, assignedToId, customerId, search, page = 1, pageSize = 20 } = filters;
 
   const where: any = {
     companyId,
     ...(segment && { segment }),
     ...(status && { status }),
     ...(assignedToId && { assignedToId }),
+    ...(customerId && { customerId }),
     ...(search && {
       customer: {
         OR: [
@@ -280,6 +282,25 @@ export async function getSegmentCounts(companyId: string) {
     },
     {} as Record<string, number>
   );
+}
+
+// ============================================
+// LISTAR CONTATOS POR CLIENTE
+// ============================================
+
+export async function getContactsByCustomer(
+  companyId: string,
+  customerId: string,
+  limit = 50
+) {
+  return prisma.crmContact.findMany({
+    where: { companyId, customerId },
+    include: {
+      contactedBy: { select: { name: true } },
+    },
+    orderBy: { contactedAt: "desc" },
+    take: limit,
+  });
 }
 
 // ============================================

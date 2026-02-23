@@ -14,6 +14,7 @@ export async function GET(request: NextRequest) {
       segment: searchParams.get("segment") as CustomerSegment | undefined,
       status: searchParams.get("status") as CrmReminderStatus | undefined,
       assignedToId: searchParams.get("assignedToId") || undefined,
+      customerId: searchParams.get("customerId") || undefined,
       search: searchParams.get("search") || undefined,
       page: parseInt(searchParams.get("page") || "1"),
       pageSize: parseInt(searchParams.get("pageSize") || "20"),
