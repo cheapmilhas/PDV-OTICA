@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
+import { seedCategoriesAndBrands } from './seeds/categories-brands.seed';
 
 const prisma = new PrismaClient();
 
@@ -23,6 +24,7 @@ async function main() {
       city: 'São Paulo',
       state: 'SP',
       zipCode: '01234-567',
+      accessEnabled: true, // FIX: Habilitar acesso sem assinatura para dev/teste
     },
   });
 
@@ -123,7 +125,10 @@ async function main() {
     }),
   ]);
 
-  // 5. Criar Produtos
+  // 5. Criar Categorias e Marcas
+  await seedCategoriesAndBrands(company.id);
+
+  // 6. Criar Produtos
   console.log('📦 Criando produtos...');
   const produtos = await Promise.all([
     // Armações
@@ -300,7 +305,7 @@ async function main() {
     }),
   ]);
 
-  // 6. Criar Vendas
+  // 7. Criar Vendas
   console.log('💰 Criando vendas de exemplo...');
 
   const venda1 = await prisma.sale.create({

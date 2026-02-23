@@ -1,4 +1,6 @@
-{
+"cursor.terminal.enabled": false,
+"cursor.aiTerminal.enabled": false,
+"terminal.integrated.sendKeybindingsToShell": true{
   "$schema": "https://ui.shadcn.com/schema.json",
   "style": "new-york",
   "rsc": true,

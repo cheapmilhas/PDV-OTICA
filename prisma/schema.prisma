@@ -914,6 +914,8 @@ model ServiceOrderItem {
   product              Product?     @relation(fields: [productId], references: [id])
   serviceOrder         ServiceOrder @relation(fields: [serviceOrderId], references: [id])
   warranties           Warranty[]
+
+  @@index([serviceOrderId])
 }
 
 model ServiceOrderHistory {
@@ -1460,6 +1462,8 @@ model LoyaltyTier {
   sortOrder        Int
   active           Boolean        @default(true)
   program          LoyaltyProgram @relation(fields: [programId], references: [id])
+
+  @@index([programId])
 }
 
 model LoyaltyPoints {
