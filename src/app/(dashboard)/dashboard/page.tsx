@@ -135,7 +135,7 @@ export default function DashboardPage() {
   };
 
   const monthGrowth = calculateGrowth(metrics.salesMonth, metrics.salesLastMonth);
-  const monthProgress = (metrics.salesMonth / metrics.goalMonth) * 100;
+  const monthProgress = metrics.goalMonth > 0 ? (metrics.salesMonth / metrics.goalMonth) * 100 : 0;
 
   // Estados para dados dinâmicos
   const [recentSales, setRecentSales] = useState<any[]>([]);
@@ -147,11 +147,13 @@ export default function DashboardPage() {
   const [paymentMethodsData, setPaymentMethodsData] = useState<any[]>([]);
 
   const calcularCrescimento = (atual: number, anterior: number) => {
+    if (anterior === 0) return atual > 0 ? "100.0" : "0.0";
     const crescimento = ((atual - anterior) / anterior) * 100;
     return crescimento.toFixed(1);
   };
 
   const calcularProgressoMeta = () => {
+    if (metrics.goalMonth <= 0) return 0;
     return (metrics.salesMonth / metrics.goalMonth) * 100;
   };
 
@@ -339,8 +341,8 @@ export default function DashboardPage() {
                 Acompanhe o progresso em relação à meta estabelecida
               </CardDescription>
             </div>
-            <Badge variant={progressoMeta >= 100 ? "default" : "secondary"} className="text-lg px-3 py-1">
-              {progressoMeta.toFixed(1)}%
+            <Badge variant={progressoMeta >= 100 && metrics.goalMonth > 0 ? "default" : "secondary"} className="text-lg px-3 py-1">
+              {metrics.goalMonth > 0 ? `${progressoMeta.toFixed(1)}%` : "Sem meta"}
             </Badge>
           </div>
         </CardHeader>
@@ -356,9 +358,11 @@ export default function DashboardPage() {
           </div>
           <div className="flex justify-between text-sm">
             <span className="text-muted-foreground">
-              Faltam: {formatCurrency(metrics.goalMonth - metrics.salesMonth)}
+              {metrics.goalMonth > 0
+                ? `Faltam: ${formatCurrency(Math.max(0, metrics.goalMonth - metrics.salesMonth))}`
+                : "Nenhuma meta definida"}
             </span>
-            {progressoMeta >= 100 && (
+            {metrics.goalMonth > 0 && progressoMeta >= 100 && (
               <span className="text-green-600 font-medium flex items-center gap-1">
                 <CheckCircle2 className="h-4 w-4" />
                 Meta atingida!

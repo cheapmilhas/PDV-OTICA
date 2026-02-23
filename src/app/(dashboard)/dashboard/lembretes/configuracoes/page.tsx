@@ -14,8 +14,11 @@ import Link from "next/link";
 const SEGMENTS = [
   { key: "BIRTHDAY", label: "🎂 Aniversário", defaultMessage: "Olá {{primeiro_nome}}! 🎂\n\nHoje é seu dia especial e a {{nome_empresa}} quer te parabenizar!\n\nPreparamos um presente: 15% de desconto em qualquer compra! Válido até o final do mês.\n\nTe esperamos! 👓" },
   { key: "POST_SALE_30_DAYS", label: "📦 Pós-Venda 30 dias", defaultMessage: "Oi {{primeiro_nome}}! 👓\n\nPassando para saber se está tudo certo com seu(s) {{produto_comprado}}!\n\nSe precisar de qualquer ajuste, estamos à disposição! 😊" },
+  { key: "POST_SALE_90_DAYS", label: "📦 Pós-Venda 90 dias", defaultMessage: "Oi {{primeiro_nome}}! 👋\n\nJá faz 3 meses da sua última compra! Como está seu {{produto_comprado}}?\n\nSe precisar de algo, estamos aqui! 😊" },
+  { key: "INACTIVE_6_MONTHS", label: "⏰ Cliente Inativo - 6 Meses", defaultMessage: "Oi {{primeiro_nome}}, tudo bem? 👋\n\nFaz 6 meses que não te vemos! Sua última visita foi em {{ultima_compra}}.\n\nVem nos visitar! Temos novidades que você vai adorar! 👓" },
   { key: "INACTIVE_1_YEAR", label: "⏰ Cliente Inativo - 1 Ano", defaultMessage: "Oi {{primeiro_nome}}, tudo bem? 👋\n\nFaz tempo que você não aparece por aqui! Sua última visita foi em {{ultima_compra}}.\n\nTemos novidades incríveis e sentimos sua falta! Quando pode dar uma passada? 😊" },
   { key: "INACTIVE_2_YEARS", label: "⏰ Cliente Inativo - 2 Anos", defaultMessage: "{{nome}}, que saudade! 💙\n\nJá faz {{dias_sem_comprar}} dias que você não aparece!\n\nQue tal voltarmos a nos ver? Temos muitas novidades te esperando! ✨" },
+  { key: "INACTIVE_3_YEARS", label: "⏰ Cliente Inativo - 3+ Anos", defaultMessage: "{{nome}}, sentimos muito sua falta! 💙\n\nJá faz mais de 3 anos! Sua última visita foi em {{ultima_compra}}.\n\nQueremos te ver novamente! Preparamos condições especiais para você voltar! ✨" },
   { key: "VIP_CUSTOMER", label: "⭐ Cliente VIP", defaultMessage: "Olá {{nome}}! ⭐\n\nVocê é um cliente especial para nós!\n\nSeparamos uma condição exclusiva VIP: [descreva a oferta]\n\nVamos conversar? 😊" },
   { key: "CASHBACK_EXPIRING", label: "💰 Cashback Expirando", defaultMessage: "{{primeiro_nome}}, atenção! ⚠️\n\nVocê tem R$ {{valor_cashback}} de cashback disponível!\n\nNão deixe expirar! Venha usar seu saldo! 💰" },
 ];
@@ -381,6 +384,17 @@ export default function ConfiguracoesPage() {
                     }
                   />
                   <p className="text-xs text-gray-500 mt-1">~730 dias</p>
+                </div>
+                <div>
+                  <Label>Inativo 3 Anos</Label>
+                  <Input
+                    type="number"
+                    value={settings?.inactiveDays3Years || 1095}
+                    onChange={(e) =>
+                      setSettings({ ...settings, inactiveDays3Years: parseInt(e.target.value) })
+                    }
+                  />
+                  <p className="text-xs text-gray-500 mt-1">~1095 dias</p>
                 </div>
               </div>
 

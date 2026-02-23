@@ -12,8 +12,11 @@ const SEGMENTS = [
   { key: "all", label: "Todos" },
   { key: "BIRTHDAY", label: "🎂 Aniversário" },
   { key: "POST_SALE_30_DAYS", label: "📦 Pós-Venda 30d" },
+  { key: "POST_SALE_90_DAYS", label: "📦 Pós-Venda 90d" },
+  { key: "INACTIVE_6_MONTHS", label: "⏰ 6 Meses" },
   { key: "INACTIVE_1_YEAR", label: "⏰ 1 Ano" },
   { key: "INACTIVE_2_YEARS", label: "⏰ 2 Anos" },
+  { key: "INACTIVE_3_YEARS", label: "⏰ 3+ Anos" },
   { key: "VIP_CUSTOMER", label: "⭐ VIP" },
 ];
 
