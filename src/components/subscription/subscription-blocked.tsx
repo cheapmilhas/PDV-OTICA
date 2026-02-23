@@ -134,7 +134,7 @@ export function SubscriptionBlocked({ status, message, companyName }: Subscripti
         </div>
 
         <div className="text-center">
-          <Link href="/login" className="text-sm text-gray-500 hover:text-gray-700">
+          <Link href="/force-logout" className="text-sm text-gray-500 hover:text-gray-700">
             Sair e fazer login com outra conta
           </Link>
         </div>
