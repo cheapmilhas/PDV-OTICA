@@ -18,6 +18,7 @@ export default function NovoClientePage() {
   const [formData, setFormData] = useState({
     name: "",
     cpf: "",
+    rg: "",
     email: "",
     phone: "",
     phone2: "",
@@ -106,6 +107,16 @@ export default function NovoClientePage() {
                   onChange={(e) => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
                   maxLength={11}
                   placeholder="Apenas números"
+                />
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="rg">RG</Label>
+                <Input
+                  id="rg"
+                  value={formData.rg}
+                  onChange={(e) => setFormData({ ...formData, rg: e.target.value })}
+                  placeholder="Número do RG"
                 />
               </div>
 

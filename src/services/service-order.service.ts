@@ -211,11 +211,16 @@ export class ServiceOrderService {
           unitPrice = product ? Number(product.salePrice) : 0;
         }
         const qty = item.qty || 1;
+        // Concatenar observações na descrição (schema não tem campo observations)
+        const fullDescription = item.observations
+          ? `${item.description} | Obs: ${item.observations}`
+          : item.description;
+
         await tx.serviceOrderItem.create({
           data: {
             serviceOrderId: newOrder.id,
             productId: item.productId || undefined,
-            description: item.description,
+            description: fullDescription,
             qty,
             unitPrice,
             discount: 0,
@@ -288,11 +293,15 @@ export class ServiceOrderService {
             unitPrice = product ? Number(product.salePrice) : 0;
           }
           const qty = item.qty || 1;
+          const fullDescription = item.observations
+            ? `${item.description} | Obs: ${item.observations}`
+            : item.description;
+
           await tx.serviceOrderItem.create({
             data: {
               serviceOrderId: id,
               productId: item.productId || undefined,
-              description: item.description,
+              description: fullDescription,
               qty,
               unitPrice,
               discount: 0,

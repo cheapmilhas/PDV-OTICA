@@ -356,6 +356,7 @@ export class SaleService {
           cashbackUsed,
           total,
           status: "COMPLETED",
+          completedAt: new Date(),
         },
       });
 
