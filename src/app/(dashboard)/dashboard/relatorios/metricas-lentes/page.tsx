@@ -22,6 +22,7 @@ import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -97,7 +98,7 @@ const LENS_TYPE_LABELS: Record<string, string> = {
   OTHER: "Outras",
 };
 
-export default function MetricasLentesPage() {
+function MetricasLentesPageContent() {
   const [loading, setLoading] = useState(false);
   const [optical, setOptical] = useState<OpticalData | null>(null);
   const [labsData, setLabsData] = useState<LabsData | null>(null);
@@ -684,5 +685,13 @@ export default function MetricasLentesPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function MetricasLentesPage() {
+  return (
+    <ProtectedRoute permission="reports.sales">
+      <MetricasLentesPageContent />
+    </ProtectedRoute>
   );
 }

@@ -28,6 +28,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -93,7 +94,7 @@ const STATUS_COLORS: Record<string, string> = {
   CLOSED: "bg-green-100 text-green-800",
 };
 
-export default function RelatorioHistoricoCaixasPage() {
+function RelatorioHistoricoCaixasPageContent() {
   const [startDate, setStartDate] = useState<Date>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
@@ -542,5 +543,13 @@ export default function RelatorioHistoricoCaixasPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function RelatorioHistoricoCaixasPage() {
+  return (
+    <ProtectedRoute permission="reports.financial">
+      <RelatorioHistoricoCaixasPageContent />
+    </ProtectedRoute>
   );
 }

@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Bell, Cake, UserX, Gift } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface ReminderConfig {
   id?: string;
@@ -22,7 +23,7 @@ interface ReminderConfig {
   cashbackExpiringDaysBefore: number;
 }
 
-export default function RemindersConfigPage() {
+function RemindersConfigPageContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -400,5 +401,13 @@ export default function RemindersConfigPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function RemindersConfigPage() {
+  return (
+    <ProtectedRoute permission="settings.edit">
+      <RemindersConfigPageContent />
+    </ProtectedRoute>
   );
 }

@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useEffect, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -52,7 +53,7 @@ interface DebugData {
   }>;
 }
 
-export default function DiagnosticoCaixaPage() {
+function DiagnosticoCaixaContent() {
   const [loading, setLoading] = useState(true);
   const [data, setData] = useState<DebugData | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -334,5 +335,13 @@ export default function DiagnosticoCaixaPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function DiagnosticoCaixaPage() {
+  return (
+    <ProtectedRoute permission="cash_shift.view">
+      <DiagnosticoCaixaContent />
+    </ProtectedRoute>
   );
 }

@@ -25,6 +25,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -123,7 +124,7 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
   OTHER: "Outro",
 };
 
-export default function RelatorioPosicaoEstoquePage() {
+function RelatorioPosicaoEstoquePageContent() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -555,5 +556,13 @@ export default function RelatorioPosicaoEstoquePage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function RelatorioPosicaoEstoquePage() {
+  return (
+    <ProtectedRoute permission="reports.inventory">
+      <RelatorioPosicaoEstoquePageContent />
+    </ProtectedRoute>
   );
 }

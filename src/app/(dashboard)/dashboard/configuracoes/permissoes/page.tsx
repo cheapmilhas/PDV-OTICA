@@ -28,6 +28,7 @@ import {
   ROLE_LABELS,
   PERMISSION_LABELS,
 } from "@/lib/permissions";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 // Permissões agrupadas por categoria
 const PERMISSION_CATEGORIES: Record<string, Permission[]> = {
@@ -65,7 +66,7 @@ interface UserItem {
   active: boolean;
 }
 
-export default function PermissoesPage() {
+function PermissoesPageContent() {
   const router = useRouter();
 
   // Estado para edição de permissões por cargo
@@ -488,5 +489,13 @@ export default function PermissoesPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function PermissoesPage() {
+  return (
+    <ProtectedRoute permission="permissions.manage">
+      <PermissoesPageContent />
+    </ProtectedRoute>
   );
 }

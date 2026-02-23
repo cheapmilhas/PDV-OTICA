@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -44,7 +45,7 @@ const MONTHS = [
   "Julho", "Agosto", "Setembro", "Outubro", "Novembro", "Dezembro"
 ];
 
-export default function GoalsPage() {
+function GoalsPageContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
@@ -635,5 +636,13 @@ export default function GoalsPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function GoalsPage() {
+  return (
+    <ProtectedRoute permission="goals.view">
+      <GoalsPageContent />
+    </ProtectedRoute>
   );
 }

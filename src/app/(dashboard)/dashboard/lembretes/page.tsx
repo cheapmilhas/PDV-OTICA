@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Users, Phone, MessageSquare, TrendingUp, RefreshCw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -20,7 +21,7 @@ const SEGMENTS = [
   { key: "VIP_CUSTOMER", label: "⭐ VIP" },
 ];
 
-export default function CrmPage() {
+function CrmPageContent() {
   const [reminders, setReminders] = useState<any[]>([]);
   const [counts, setCounts] = useState<any>({});
   const [goals, setGoals] = useState<any>(null);
@@ -317,5 +318,13 @@ export default function CrmPage() {
         )}
       </div>
     </div>
+  );
+}
+
+export default function CrmPage() {
+  return (
+    <ProtectedRoute permission="reminders.view">
+      <CrmPageContent />
+    </ProtectedRoute>
   );
 }

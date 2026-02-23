@@ -26,6 +26,7 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -90,7 +91,7 @@ interface Supplier {
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
-export default function RelatorioContasPagarPage() {
+function RelatorioContasPagarPageContent() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -535,5 +536,13 @@ export default function RelatorioContasPagarPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function RelatorioContasPagarPage() {
+  return (
+    <ProtectedRoute permission="reports.financial">
+      <RelatorioContasPagarPageContent />
+    </ProtectedRoute>
   );
 }

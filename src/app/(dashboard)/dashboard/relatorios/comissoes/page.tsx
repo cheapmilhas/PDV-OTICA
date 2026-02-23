@@ -29,6 +29,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -106,7 +107,7 @@ const STATUS_COLORS: Record<string, string> = {
   CANCELED: "bg-red-100 text-red-800",
 };
 
-export default function RelatorioComissoesPage() {
+function RelatorioComissoesPageContent() {
   const [startDate, setStartDate] = useState<Date>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
@@ -581,5 +582,13 @@ export default function RelatorioComissoesPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function RelatorioComissoesPage() {
+  return (
+    <ProtectedRoute permission="reports.sales">
+      <RelatorioComissoesPageContent />
+    </ProtectedRoute>
   );
 }

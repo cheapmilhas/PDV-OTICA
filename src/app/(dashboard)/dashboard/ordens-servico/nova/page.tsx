@@ -14,6 +14,7 @@ import { ArrowLeft, Plus, Trash2, ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
 import { ModalNovoClienteSimples } from "@/components/ordens-servico/modal-novo-cliente-simples";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface ServiceItem {
   productId: string;
@@ -29,7 +30,7 @@ interface Product {
   salePrice: number;
 }
 
-export default function NovaOrdemServicoPage() {
+function NovaOrdemServicoPageContent() {
   const router = useRouter();
   const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
@@ -831,5 +832,13 @@ export default function NovaOrdemServicoPage() {
         }}
       />
     </div>
+  );
+}
+
+export default function NovaOrdemServicoPage() {
+  return (
+    <ProtectedRoute permission="service_orders.create">
+      <NovaOrdemServicoPageContent />
+    </ProtectedRoute>
   );
 }

@@ -22,6 +22,7 @@ import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   LineChart,
   Line,
@@ -67,7 +68,7 @@ interface ReportData {
   monthly: MonthlyDREData[];
 }
 
-export default function RelatorioDREPage() {
+function RelatorioDREPageContent() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -514,5 +515,13 @@ export default function RelatorioDREPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function RelatorioDREPage() {
+  return (
+    <ProtectedRoute permission="reports.financial">
+      <RelatorioDREPageContent />
+    </ProtectedRoute>
   );
 }

@@ -1,26 +1,10 @@
-import { Metadata } from "next";
-import { redirect } from "next/navigation";
-import { requireAuth } from "@/lib/auth-helpers";
-import { checkPermission } from "@/lib/auth-permissions";
-import { Permission } from "@/lib/permissions";
+"use client";
+
 import { EditorRegras } from "@/components/configuracoes/editor-regras";
 import { Settings } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export const metadata: Metadata = {
-  title: "Regras do Sistema | PDV Ótica",
-  description: "Configure regras de negócio e permissões do sistema",
-};
-
-export default async function RegrasPage() {
-  await requireAuth();
-
-  // Apenas ADMIN pode acessar esta página
-  const canManageSettings = await checkPermission(Permission.SETTINGS_EDIT);
-
-  if (!canManageSettings) {
-    redirect("/dashboard");
-  }
-
+function RegrasPageContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-3">
@@ -38,7 +22,7 @@ export default async function RegrasPage() {
       <EditorRegras />
 
       <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 space-y-2">
-        <h3 className="font-semibold text-blue-900">💡 Sobre as Regras</h3>
+        <h3 className="font-semibold text-blue-900">Sobre as Regras</h3>
         <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside">
           <li>
             <strong>Estoque:</strong> Controle limites de aprovação de ajustes, estoque mínimo, alertas de ruptura
@@ -65,5 +49,13 @@ export default async function RegrasPage() {
         </p>
       </div>
     </div>
+  );
+}
+
+export default function RegrasPage() {
+  return (
+    <ProtectedRoute permission="settings.edit">
+      <RegrasPageContent />
+    </ProtectedRoute>
   );
 }

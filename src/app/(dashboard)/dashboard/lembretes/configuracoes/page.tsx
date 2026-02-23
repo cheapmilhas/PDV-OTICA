@@ -10,6 +10,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 const SEGMENTS = [
   { key: "BIRTHDAY", label: "🎂 Aniversário", defaultMessage: "Olá {{primeiro_nome}}! 🎂\n\nHoje é seu dia especial e a {{nome_empresa}} quer te parabenizar!\n\nPreparamos um presente: 15% de desconto em qualquer compra! Válido até o final do mês.\n\nTe esperamos! 👓" },
@@ -23,7 +24,7 @@ const SEGMENTS = [
   { key: "CASHBACK_EXPIRING", label: "💰 Cashback Expirando", defaultMessage: "{{primeiro_nome}}, atenção! ⚠️\n\nVocê tem R$ {{valor_cashback}} de cashback disponível!\n\nNão deixe expirar! Venha usar seu saldo! 💰" },
 ];
 
-export default function ConfiguracoesPage() {
+function ConfiguracoesPageContent() {
   const [templates, setTemplates] = useState<any[]>([]);
   const [settings, setSettings] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -437,5 +438,13 @@ export default function ConfiguracoesPage() {
         </TabsContent>
       </Tabs>
     </div>
+  );
+}
+
+export default function ConfiguracoesPage() {
+  return (
+    <ProtectedRoute permission="settings.edit">
+      <ConfiguracoesPageContent />
+    </ProtectedRoute>
   );
 }

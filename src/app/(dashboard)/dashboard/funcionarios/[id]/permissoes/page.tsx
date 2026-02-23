@@ -205,17 +205,19 @@ function UserPermissionsPage() {
       sales: "Vendas",
       quotes: "Orçamentos",
       service_orders: "Ordens de Serviço",
-      cash: "Caixa",
-      receivables: "Contas a Receber",
-      payables: "Contas a Pagar",
+      cash_shift: "Caixa",
+      financial: "Financeiro",
       products: "Produtos",
       stock: "Estoque",
       customers: "Clientes",
       suppliers: "Fornecedores",
-      users: "Usuários",
+      laboratories: "Laboratórios",
+      users: "Funcionários",
       reports: "Relatórios",
       settings: "Configurações",
       goals: "Metas",
+      cashback: "Cashback",
+      reminders: "Lembretes",
     };
     return labels[module] || module;
   };
@@ -256,7 +258,7 @@ function UserPermissionsPage() {
   const hasCustomPermissions = permissions.customPermissions.length > 0 || hasChanges;
 
   return (
-    <PagePermissionGuard permission="users.permissions">
+    <PagePermissionGuard permission="permissions.manage">
       <div className="space-y-6 pb-8">
       {/* Header */}
       <div className="flex items-center gap-4">

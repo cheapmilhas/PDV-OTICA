@@ -7,8 +7,9 @@ import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Percent, DollarSign, Award } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function CommissionConfigPage() {
+function CommissionConfigPageContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -195,5 +196,13 @@ export default function CommissionConfigPage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function CommissionConfigPage() {
+  return (
+    <ProtectedRoute permission="settings.edit">
+      <CommissionConfigPageContent />
+    </ProtectedRoute>
   );
 }

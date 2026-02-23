@@ -9,6 +9,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Upload, Trash2, Save, ArrowLeft } from "lucide-react";
 import Image from "next/image";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface CompanySettings {
   id?: string;
@@ -32,7 +33,7 @@ interface CompanySettings {
   defaultPaymentTerms?: string | null;
 }
 
-export default function CompanySettingsPage() {
+function CompanySettingsPageContent() {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
 
@@ -432,5 +433,13 @@ export default function CompanySettingsPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function CompanySettingsPage() {
+  return (
+    <ProtectedRoute permission="company.settings">
+      <CompanySettingsPageContent />
+    </ProtectedRoute>
   );
 }

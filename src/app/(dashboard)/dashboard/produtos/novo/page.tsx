@@ -14,8 +14,9 @@ import toast from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
 import { calculateMargin } from "@/lib/validations/product.schema";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function NovoProdutoPage() {
+function NovoProdutoPageContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
@@ -569,5 +570,13 @@ export default function NovoProdutoPage() {
         </Card>
       </form>
     </div>
+  );
+}
+
+export default function NovoProdutoPage() {
+  return (
+    <ProtectedRoute permission="products.create">
+      <NovoProdutoPageContent />
+    </ProtectedRoute>
   );
 }

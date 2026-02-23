@@ -1,14 +1,11 @@
-import { Metadata } from "next";
+"use client";
+
 import { HistoricoCaixas } from "@/components/caixa/historico-caixas";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export const metadata: Metadata = {
-  title: "Histórico de Caixas | PDV Ótica",
-  description: "Visualize e gerencie o histórico de caixas",
-};
-
-export default function HistoricoCaixasPage() {
+function HistoricoCaixasPageContent() {
   return (
     <div className="space-y-6">
       <div className="flex items-center gap-4">
@@ -29,5 +26,13 @@ export default function HistoricoCaixasPage() {
 
       <HistoricoCaixas />
     </div>
+  );
+}
+
+export default function HistoricoCaixasPage() {
+  return (
+    <ProtectedRoute permission="cash_shift.view">
+      <HistoricoCaixasPageContent />
+    </ProtectedRoute>
   );
 }

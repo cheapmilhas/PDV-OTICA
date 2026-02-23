@@ -1,7 +1,5 @@
-import { Metadata } from "next";
-import { requireAuth } from "@/lib/auth-helpers";
-import { checkPermission } from "@/lib/auth-permissions";
-import { Permission } from "@/lib/permissions";
+"use client";
+
 import { ListaAjustes } from "@/components/estoque/lista-ajustes";
 import {
   Card,
@@ -11,15 +9,12 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { ClipboardList } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { usePermission } from "@/hooks/use-permission";
 
-export const metadata: Metadata = {
-  title: "Ajustes de Estoque | PDV Ótica",
-  description: "Gerencie ajustes de estoque com justificativa e aprovação",
-};
-
-export default async function AjustesEstoquePage() {
-  const session = await requireAuth();
-  const canApprove = !!(await checkPermission(Permission.STOCK_ADJUST));
+function AjustesEstoquePageContent() {
+  const { hasPermission } = usePermission();
+  const canApprove = hasPermission("stock.adjust");
 
   return (
     <div className="space-y-6">
@@ -86,5 +81,13 @@ export default async function AjustesEstoquePage() {
         </CardContent>
       </Card>
     </div>
+  );
+}
+
+export default function AjustesEstoquePage() {
+  return (
+    <ProtectedRoute permission="stock.adjust">
+      <AjustesEstoquePageContent />
+    </ProtectedRoute>
   );
 }

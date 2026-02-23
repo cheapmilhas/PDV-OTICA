@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import toast from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function NovoClientePage() {
+function NovoClientePageContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
@@ -284,5 +285,13 @@ export default function NovoClientePage() {
         </Card>
       </form>
     </div>
+  );
+}
+
+export default function NovoClientePage() {
+  return (
+    <ProtectedRoute permission="customers.create">
+      <NovoClientePageContent />
+    </ProtectedRoute>
   );
 }

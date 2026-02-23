@@ -39,8 +39,9 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ConvertQuoteButton } from "@/components/quotes/convert-quote-button";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function DetalhesOrcamentoPage() {
+function DetalhesOrcamentoPageContent() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -758,5 +759,13 @@ export default function DetalhesOrcamentoPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function DetalhesOrcamentoPage() {
+  return (
+    <ProtectedRoute permission="quotes.view">
+      <DetalhesOrcamentoPageContent />
+    </ProtectedRoute>
   );
 }

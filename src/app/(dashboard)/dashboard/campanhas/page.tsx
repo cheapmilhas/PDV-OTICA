@@ -1,5 +1,6 @@
 "use client";
 
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
 import { Plus, TrendingUp, Calendar, Award, Edit, Pause, Play, BarChart3, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -74,7 +75,7 @@ const SCOPE_LABELS: Record<string, string> = {
   BOTH: "Ambos",
 };
 
-export default function CampanhasPage() {
+function CampanhasPageContent() {
   const [campaigns, setCampaigns] = useState<Campaign[]>([]);
   const [loading, setLoading] = useState(true);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -391,5 +392,13 @@ export default function CampanhasPage() {
         </DialogContent>
       </Dialog>
     </div>
+  );
+}
+
+export default function CampanhasPage() {
+  return (
+    <ProtectedRoute permission="sales.view">
+      <CampanhasPageContent />
+    </ProtectedRoute>
   );
 }

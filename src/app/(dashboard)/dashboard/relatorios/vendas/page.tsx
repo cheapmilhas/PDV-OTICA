@@ -19,6 +19,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { LineChart, Line, BarChart, Bar, PieChart, Pie, Cell, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from 'recharts';
 
 interface ReportData {
@@ -72,7 +73,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   OTHER: "Outro",
 };
 
-export default function RelatorioVendasPage() {
+function RelatorioVendasPageContent() {
   const [startDate, setStartDate] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [data, setData] = useState<ReportData | null>(null);
@@ -408,5 +409,13 @@ export default function RelatorioVendasPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function RelatorioVendasPage() {
+  return (
+    <ProtectedRoute permission="reports.sales">
+      <RelatorioVendasPageContent />
+    </ProtectedRoute>
   );
 }

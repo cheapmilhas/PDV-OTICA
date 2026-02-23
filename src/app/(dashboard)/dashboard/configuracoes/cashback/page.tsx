@@ -8,6 +8,7 @@ import { Switch } from "@/components/ui/switch";
 import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Gift, Users, TrendingUp, TrendingDown } from "lucide-react";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface CashbackConfig {
   id: string;
@@ -30,7 +31,7 @@ interface Summary {
   usedThisMonth: number;
 }
 
-export default function CashbackConfigPage() {
+function CashbackConfigPageContent() {
   const { toast } = useToast();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -496,5 +497,13 @@ export default function CashbackConfigPage() {
         </Button>
       </div>
     </div>
+  );
+}
+
+export default function CashbackConfigPage() {
+  return (
+    <ProtectedRoute permission="settings.edit">
+      <CashbackConfigPageContent />
+    </ProtectedRoute>
   );
 }

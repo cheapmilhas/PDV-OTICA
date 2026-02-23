@@ -27,6 +27,7 @@ import {
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -93,7 +94,7 @@ interface Customer {
 
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
-export default function RelatorioContasReceberPage() {
+function RelatorioContasReceberPageContent() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -545,5 +546,13 @@ export default function RelatorioContasReceberPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function RelatorioContasReceberPage() {
+  return (
+    <ProtectedRoute permission="reports.financial">
+      <RelatorioContasReceberPageContent />
+    </ProtectedRoute>
   );
 }

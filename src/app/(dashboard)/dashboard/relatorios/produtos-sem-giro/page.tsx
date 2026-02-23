@@ -23,6 +23,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   BarChart,
   Bar,
@@ -103,7 +104,7 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
   OTHER: "Outro",
 };
 
-export default function RelatorioProdutosSemGiroPage() {
+function RelatorioProdutosSemGiroPageContent() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -524,5 +525,13 @@ export default function RelatorioProdutosSemGiroPage() {
         </>
       )}
     </div>
+  );
+}
+
+export default function RelatorioProdutosSemGiroPage() {
+  return (
+    <ProtectedRoute permission="reports.inventory">
+      <RelatorioProdutosSemGiroPageContent />
+    </ProtectedRoute>
   );
 }
