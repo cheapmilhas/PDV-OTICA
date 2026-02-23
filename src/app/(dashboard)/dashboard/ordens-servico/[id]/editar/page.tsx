@@ -82,10 +82,12 @@ export default function EditarOrdemServicoPage() {
           notes: data.notes || "",
         });
 
-        // Preencher receita
-        if (data.prescription) {
+        // Preencher receita (API returns prescriptionData as JSON object)
+        if (data.prescriptionData) {
           try {
-            const rx = JSON.parse(data.prescription);
+            const rx = typeof data.prescriptionData === "string"
+              ? JSON.parse(data.prescriptionData)
+              : data.prescriptionData;
             setPrescriptionData({
               od: rx.od || { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
               oe: rx.oe || { esf: "", cil: "", eixo: "", dnp: "", altura: "" },

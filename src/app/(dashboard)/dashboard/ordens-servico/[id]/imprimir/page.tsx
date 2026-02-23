@@ -72,7 +72,9 @@ export default function ImprimirOrdemServicoPage() {
 
   const formatGrau = (val: string | undefined | null) => {
     if (!val || val === "") return "—";
-    const n = parseFloat(val);
+    // Handle Brazilian locale comma decimal separator (e.g. "-1,50" → -1.5)
+    const normalized = String(val).replace(",", ".");
+    const n = parseFloat(normalized);
     if (isNaN(n)) return val;
     const sign = n > 0 ? "+" : "";
     return `${sign}${n.toFixed(2)}`;
