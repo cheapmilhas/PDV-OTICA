@@ -27,7 +27,7 @@ export default async function DashboardLayout({
     : null;
 
   // Se empresa não existe no banco (JWT com companyId antigo), forçar logout
-  if (subscriptionCheck && !subscriptionCheck.allowed && subscriptionCheck.message === "Empresa não encontrada. Faça logout e login novamente para atualizar sua sessão.") {
+  if (subscriptionCheck && !subscriptionCheck.allowed && subscriptionCheck.message === "EMPRESA_NAO_ENCONTRADA") {
     redirect("/force-logout");
   }
 

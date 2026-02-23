@@ -35,7 +35,7 @@ export async function checkSubscription(companyId: string): Promise<Subscription
       allowed: false,
       status: "NO_SUBSCRIPTION",
       readOnly: true,
-      message: "Empresa não encontrada. Faça logout e login novamente para atualizar sua sessão.",
+      message: "EMPRESA_NAO_ENCONTRADA",
     };
   }
 
