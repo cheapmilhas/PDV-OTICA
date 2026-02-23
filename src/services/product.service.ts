@@ -253,17 +253,31 @@ export class ProductService {
       }
     }
 
+    // Extrair campos de FrameDetail do DTO
+    const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+    const hasFrameDetail = frameModel || frameColor || frameSize || frameMaterial;
+
     // Cria produto
     const product = await prisma.product.create({
       data: {
-        ...data,
+        ...productData,
         companyId,
+        ...(hasFrameDetail && {
+          frameDetail: {
+            create: {
+              sizeText: frameSize || undefined,
+              material: frameMaterial || undefined,
+              collection: frameModel || undefined,
+            },
+          },
+        }),
       },
       include: {
         category: true,
         brand: true,
         color: true,
         shape: true,
+        frameDetail: true,
       },
     });
 
@@ -307,15 +321,38 @@ export class ProductService {
       }
     }
 
+    // Extrair campos de FrameDetail do DTO
+    const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+    const hasFrameDetail = frameModel || frameColor || frameSize || frameMaterial;
+
     // Atualiza produto
     const product = await prisma.product.update({
       where: { id },
-      data,
+      data: {
+        ...productData,
+        ...(hasFrameDetail && {
+          frameDetail: {
+            upsert: {
+              create: {
+                sizeText: frameSize || undefined,
+                material: frameMaterial || undefined,
+                collection: frameModel || undefined,
+              },
+              update: {
+                sizeText: frameSize || undefined,
+                material: frameMaterial || undefined,
+                collection: frameModel || undefined,
+              },
+            },
+          },
+        }),
+      },
       include: {
         category: true,
         brand: true,
         color: true,
         shape: true,
+        frameDetail: true,
       },
     });
 

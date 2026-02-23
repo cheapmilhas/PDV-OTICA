@@ -58,6 +58,27 @@ export const createProductSchema = z.object({
     .optional()
     .or(z.literal("")),
 
+  // Detalhes do frame (FrameDetail)
+  frameModel: z.string()
+    .max(100, "Modelo deve ter no máximo 100 caracteres")
+    .optional()
+    .or(z.literal("")),
+
+  frameColor: z.string()
+    .max(100, "Cor deve ter no máximo 100 caracteres")
+    .optional()
+    .or(z.literal("")),
+
+  frameSize: z.string()
+    .max(50, "Tamanho deve ter no máximo 50 caracteres")
+    .optional()
+    .or(z.literal("")),
+
+  frameMaterial: z.string()
+    .max(100, "Material deve ter no máximo 100 caracteres")
+    .optional()
+    .or(z.literal("")),
+
   // Preços
   costPrice: z.coerce.number()
     .min(0, "Preço de custo não pode ser negativo")

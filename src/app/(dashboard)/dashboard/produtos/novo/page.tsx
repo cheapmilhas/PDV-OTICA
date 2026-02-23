@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
@@ -13,31 +13,37 @@ import { SupplierSelect } from "@/components/supplier-select";
 import toast from "react-hot-toast";
 import { ArrowLeft } from "lucide-react";
 import Link from "next/link";
-import { calculateMargin, calculateSalePrice } from "@/lib/validations/product.schema";
+import { calculateMargin } from "@/lib/validations/product.schema";
 
 export default function NovoProdutoPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
   const [formData, setFormData] = useState({
     type: "",
     name: "",
     sku: "",
     barcode: "",
-    brand: "",
-    model: "",
-    color: "",
-    size: "",
-    material: "",
+    brandId: "",
+    categoryId: "",
+    description: "",
+    // Campos de frame detail
+    frameModel: "",
+    frameColor: "",
+    frameSize: "",
+    frameMaterial: "",
+    // Preços
     salePrice: "",
     costPrice: "",
     marginPercent: "",
+    // Estoque
     stockControlled: true,
     stockQty: "0",
     stockMin: "5",
     stockMax: "",
-    category: "",
     supplierId: "",
-    notes: "",
     // Campos específicos para lentes
     spherical: "",
     cylindrical: "",
@@ -50,12 +56,34 @@ export default function NovoProdutoPage() {
     lensDiameter: "",
   });
 
+  // Carregar marcas e categorias
+  useEffect(() => {
+    const loadData = async () => {
+      try {
+        const [brandsRes, categoriesRes] = await Promise.all([
+          fetch("/api/brands?pageSize=200"),
+          fetch("/api/categories?pageSize=200"),
+        ]);
+        if (brandsRes.ok) {
+          const data = await brandsRes.json();
+          setBrands(data.data || []);
+        }
+        if (categoriesRes.ok) {
+          const data = await categoriesRes.json();
+          setCategories(data.data || []);
+        }
+      } catch (error) {
+        console.error("Erro ao carregar dados:", error);
+      }
+    };
+    loadData();
+  }, []);
+
   // Handler para atualizar preços (calcula margem automaticamente)
   const handlePriceChange = (field: "salePrice" | "costPrice", value: string) => {
     const newSale = field === "salePrice" ? parseFloat(value) : parseFloat(formData.salePrice);
     const newCost = field === "costPrice" ? parseFloat(value) : parseFloat(formData.costPrice);
 
-    // Calcula a margem sempre que preço de venda ou custo mudar
     let newMargin = "";
     if (newSale > 0 && newCost >= 0) {
       newMargin = calculateMargin(newSale, newCost).toFixed(2);
@@ -72,10 +100,7 @@ export default function NovoProdutoPage() {
     e.preventDefault();
     setLoading(true);
 
-    console.log("🚀 [FORM] Iniciando submit com formData.type:", formData.type);
-
     try {
-      // Sanitize data - remove empty strings and convert numbers
       const sanitizedData: any = {
         type: formData.type,
         name: formData.name,
@@ -85,15 +110,24 @@ export default function NovoProdutoPage() {
         stockQty: parseInt(formData.stockQty) || 0,
       };
 
-      // Optional fields (apenas campos que existem no schema)
+      // Campos opcionais
       if (formData.barcode) sanitizedData.barcode = formData.barcode;
       if (formData.costPrice) sanitizedData.costPrice = parseFloat(formData.costPrice);
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
       if (formData.supplierId) sanitizedData.supplierId = formData.supplierId;
+      if (formData.description) sanitizedData.description = formData.description;
 
-      console.log("📤 [FORM] Enviando dados:", sanitizedData);
+      // Relações (IDs)
+      if (formData.brandId) sanitizedData.brandId = formData.brandId;
+      if (formData.categoryId) sanitizedData.categoryId = formData.categoryId;
+
+      // Frame detail
+      if (formData.frameModel) sanitizedData.frameModel = formData.frameModel;
+      if (formData.frameColor) sanitizedData.frameColor = formData.frameColor;
+      if (formData.frameSize) sanitizedData.frameSize = formData.frameSize;
+      if (formData.frameMaterial) sanitizedData.frameMaterial = formData.frameMaterial;
 
       const res = await fetch("/api/products", {
         method: "POST",
@@ -101,24 +135,17 @@ export default function NovoProdutoPage() {
         body: JSON.stringify(sanitizedData),
       });
 
-      console.log("📥 [FORM] Response status:", res.status);
-
       if (!res.ok) {
         let error;
         try {
           error = await res.json();
-          console.error("❌ [FORM] Erro da API:", error);
         } catch (e) {
-          console.error("❌ [FORM] Erro ao parsear resposta:", e);
           const text = await res.text();
-          console.error("❌ [FORM] Resposta raw:", text);
           throw new Error(`Erro HTTP ${res.status}: ${text || res.statusText}`);
         }
 
-        // Mostrar detalhes dos campos inválidos
         if (error.error?.details) {
           const fieldErrors = error.error.details.map((d: any) => `${d.field}: ${d.message}`).join("\n");
-          console.error("🔍 [FORM] Campos inválidos:", fieldErrors);
           throw new Error(`Dados inválidos:\n${fieldErrors}`);
         }
 
@@ -126,13 +153,10 @@ export default function NovoProdutoPage() {
       }
 
       const { data: createdProduct } = await res.json();
-
       toast.success(`Produto ${createdProduct.name} criado com sucesso!`);
       router.push("/dashboard/produtos");
     } catch (error: any) {
-      console.error("Erro ao criar produto:", error);
-      const errorMessage = error.message || "Erro ao criar produto. Tente novamente.";
-      toast.error(errorMessage);
+      toast.error(error.message || "Erro ao criar produto. Tente novamente.");
     } finally {
       setLoading(false);
     }
@@ -221,57 +245,77 @@ export default function NovoProdutoPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="brand">Marca</Label>
+                <Label htmlFor="brandId">Marca</Label>
+                <Select
+                  value={formData.brandId}
+                  onValueChange={(value) => setFormData({ ...formData, brandId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a marca" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map((brand) => (
+                      <SelectItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="categoryId">Categoria</Label>
+                <Select
+                  value={formData.categoryId}
+                  onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="frameModel">Modelo</Label>
                 <Input
-                  id="brand"
-                  value={formData.brand}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  id="frameModel"
+                  value={formData.frameModel}
+                  onChange={(e) => setFormData({ ...formData, frameModel: e.target.value })}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="model">Modelo</Label>
+                <Label htmlFor="frameColor">Cor</Label>
                 <Input
-                  id="model"
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                  id="frameColor"
+                  value={formData.frameColor}
+                  onChange={(e) => setFormData({ ...formData, frameColor: e.target.value })}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="color">Cor</Label>
+                <Label htmlFor="frameSize">Tamanho</Label>
                 <Input
-                  id="color"
-                  value={formData.color}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="size">Tamanho</Label>
-                <Input
-                  id="size"
-                  value={formData.size}
-                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
+                  id="frameSize"
+                  value={formData.frameSize}
+                  onChange={(e) => setFormData({ ...formData, frameSize: e.target.value })}
                   placeholder="Ex: M, 52-18-140"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="material">Material</Label>
+                <Label htmlFor="frameMaterial">Material</Label>
                 <Input
-                  id="material"
-                  value={formData.material}
-                  onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="category">Categoria</Label>
-                <Input
-                  id="category"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  id="frameMaterial"
+                  value={formData.frameMaterial}
+                  onChange={(e) => setFormData({ ...formData, frameMaterial: e.target.value })}
                 />
               </div>
             </div>
@@ -331,7 +375,6 @@ export default function NovoProdutoPage() {
             <div>
               <h3 className="font-semibold mb-4">Estoque</h3>
 
-              {/* Toggle Controla Estoque */}
               <div className="flex items-center space-x-2 mb-4">
                 <Switch
                   id="stockControlled"
@@ -425,7 +468,7 @@ export default function NovoProdutoPage() {
                       onChange={(e) => setFormData({ ...formData, axis: e.target.value })}
                       placeholder="0 a 180"
                     />
-                    <p className="text-xs text-muted-foreground">Graus (0° a 180°)</p>
+                    <p className="text-xs text-muted-foreground">Graus (0 a 180)</p>
                   </div>
 
                   <div className="space-y-2">
@@ -500,11 +543,11 @@ export default function NovoProdutoPage() {
 
             {/* Observações */}
             <div className="space-y-2">
-              <Label htmlFor="notes">Observações</Label>
+              <Label htmlFor="description">Observações</Label>
               <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
               />
             </div>

@@ -19,25 +19,31 @@ export default function EditarProdutoPage() {
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
+  const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
+  const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
   const [formData, setFormData] = useState({
     type: "",
     name: "",
     sku: "",
     barcode: "",
-    brand: "",
-    model: "",
-    color: "",
-    size: "",
-    material: "",
+    brandId: "",
+    categoryId: "",
+    description: "",
+    // Frame detail
+    frameModel: "",
+    frameColor: "",
+    frameSize: "",
+    frameMaterial: "",
+    // Preços
     salePrice: "",
     costPrice: "",
     marginPercent: "",
+    // Estoque
     stockQty: "",
     stockMin: "",
     stockMax: "",
-    category: "",
-    supplier: "",
-    notes: "",
+    supplierId: "",
     // Campos específicos para lentes
     spherical: "",
     cylindrical: "",
@@ -50,43 +56,57 @@ export default function EditarProdutoPage() {
     lensDiameter: "",
   });
 
-  // Buscar dados do produto
+  // Buscar dados do produto + marcas/categorias
   useEffect(() => {
-    const fetchProduct = async () => {
+    const fetchData = async () => {
       try {
-        const res = await fetch(`/api/products/${id}`);
-        if (!res.ok) throw new Error("Erro ao carregar produto");
+        const [productRes, brandsRes, categoriesRes] = await Promise.all([
+          fetch(`/api/products/${id}`),
+          fetch("/api/brands?pageSize=200"),
+          fetch("/api/categories?pageSize=200"),
+        ]);
 
-        const { data } = await res.json();
+        if (!productRes.ok) throw new Error("Erro ao carregar produto");
+
+        const { data } = await productRes.json();
+
+        if (brandsRes.ok) {
+          const bData = await brandsRes.json();
+          setBrands(bData.data || []);
+        }
+        if (categoriesRes.ok) {
+          const cData = await categoriesRes.json();
+          setCategories(cData.data || []);
+        }
 
         setFormData({
           type: data.type || "",
           name: data.name || "",
           sku: data.sku || "",
           barcode: data.barcode || "",
-          brand: data.brand || "",
-          model: data.model || "",
-          color: data.color || "",
-          size: data.size || "",
-          material: data.material || "",
+          brandId: data.brandId || "",
+          categoryId: data.categoryId || "",
+          description: data.description || "",
+          frameModel: data.frameDetail?.collection || "",
+          frameColor: "",
+          frameSize: data.frameDetail?.sizeText || "",
+          frameMaterial: data.frameDetail?.material || "",
           salePrice: data.salePrice ? data.salePrice.toString() : "",
           costPrice: data.costPrice ? data.costPrice.toString() : "",
           marginPercent: data.marginPercent ? data.marginPercent.toString() : "",
           stockQty: data.stockQty !== null ? data.stockQty.toString() : "",
           stockMin: data.stockMin ? data.stockMin.toString() : "",
           stockMax: data.stockMax ? data.stockMax.toString() : "",
-          category: data.category || "",
-          supplier: data.supplier || "",
-          notes: data.notes || "",
-          spherical: data.spherical !== null ? data.spherical.toString() : "",
-          cylindrical: data.cylindrical !== null ? data.cylindrical.toString() : "",
-          axis: data.axis !== null ? data.axis.toString() : "",
-          addition: data.addition !== null ? data.addition.toString() : "",
-          lensType: data.lensType || "",
-          lensMaterial: data.lensMaterial || "",
-          lensIndex: data.lensIndex || "",
-          lensTreatment: data.lensTreatment || "",
-          lensDiameter: data.lensDiameter !== null ? data.lensDiameter.toString() : "",
+          supplierId: data.supplierId || "",
+          spherical: "",
+          cylindrical: "",
+          axis: "",
+          addition: "",
+          lensType: "",
+          lensMaterial: "",
+          lensIndex: "",
+          lensTreatment: "",
+          lensDiameter: "",
         });
       } catch (error: any) {
         toast.error(error.message);
@@ -96,7 +116,7 @@ export default function EditarProdutoPage() {
       }
     };
 
-    fetchProduct();
+    fetchData();
   }, [id, router]);
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -104,38 +124,30 @@ export default function EditarProdutoPage() {
     setLoading(true);
 
     try {
-      // Sanitize data - remove empty strings and convert numbers
       const sanitizedData: any = {};
 
       if (formData.type) sanitizedData.type = formData.type;
       if (formData.name) sanitizedData.name = formData.name;
       if (formData.sku) sanitizedData.sku = formData.sku;
       if (formData.barcode) sanitizedData.barcode = formData.barcode;
-      if (formData.brand) sanitizedData.brand = formData.brand;
-      if (formData.model) sanitizedData.model = formData.model;
-      if (formData.color) sanitizedData.color = formData.color;
-      if (formData.size) sanitizedData.size = formData.size;
-      if (formData.material) sanitizedData.material = formData.material;
       if (formData.salePrice) sanitizedData.salePrice = parseFloat(formData.salePrice);
       if (formData.costPrice) sanitizedData.costPrice = parseFloat(formData.costPrice);
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
       if (formData.stockQty !== "") sanitizedData.stockQty = parseInt(formData.stockQty);
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
-      if (formData.category) sanitizedData.category = formData.category;
-      if (formData.supplier) sanitizedData.supplier = formData.supplier;
-      if (formData.notes) sanitizedData.notes = formData.notes;
+      if (formData.description) sanitizedData.description = formData.description;
 
-      // Lens-specific fields
-      if (formData.spherical) sanitizedData.spherical = parseFloat(formData.spherical);
-      if (formData.cylindrical) sanitizedData.cylindrical = parseFloat(formData.cylindrical);
-      if (formData.axis) sanitizedData.axis = parseFloat(formData.axis);
-      if (formData.addition) sanitizedData.addition = parseFloat(formData.addition);
-      if (formData.lensType) sanitizedData.lensType = formData.lensType;
-      if (formData.lensMaterial) sanitizedData.lensMaterial = formData.lensMaterial;
-      if (formData.lensIndex) sanitizedData.lensIndex = formData.lensIndex;
-      if (formData.lensTreatment) sanitizedData.lensTreatment = formData.lensTreatment;
-      if (formData.lensDiameter) sanitizedData.lensDiameter = parseFloat(formData.lensDiameter);
+      // Relações (IDs)
+      if (formData.brandId) sanitizedData.brandId = formData.brandId;
+      if (formData.categoryId) sanitizedData.categoryId = formData.categoryId;
+      if (formData.supplierId) sanitizedData.supplierId = formData.supplierId;
+
+      // Frame detail
+      if (formData.frameModel) sanitizedData.frameModel = formData.frameModel;
+      if (formData.frameColor) sanitizedData.frameColor = formData.frameColor;
+      if (formData.frameSize) sanitizedData.frameSize = formData.frameSize;
+      if (formData.frameMaterial) sanitizedData.frameMaterial = formData.frameMaterial;
 
       const res = await fetch(`/api/products/${id}`, {
         method: "PUT",
@@ -165,7 +177,7 @@ export default function EditarProdutoPage() {
     );
   }
 
-  const isLensType = formData.type === "LENTE";
+  const isLensType = formData.type === "LENS_SERVICE" || formData.type === "CONTACT_LENS";
 
   return (
     <div className="space-y-6">
@@ -203,10 +215,12 @@ export default function EditarProdutoPage() {
                     <SelectValue placeholder="Selecione" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="ARMACAO">Armação</SelectItem>
-                    <SelectItem value="LENTE">Lente</SelectItem>
-                    <SelectItem value="OCULOS_SOL">Óculos de Sol</SelectItem>
-                    <SelectItem value="ACESSORIO">Acessório</SelectItem>
+                    <SelectItem value="FRAME">Armação</SelectItem>
+                    <SelectItem value="LENS_SERVICE">Lente</SelectItem>
+                    <SelectItem value="SUNGLASSES">Óculos de Sol</SelectItem>
+                    <SelectItem value="CONTACT_LENS">Lente de Contato</SelectItem>
+                    <SelectItem value="ACCESSORY">Acessório</SelectItem>
+                    <SelectItem value="SERVICE">Serviço</SelectItem>
                   </SelectContent>
                 </Select>
               </div>
@@ -245,56 +259,77 @@ export default function EditarProdutoPage() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="brand">Marca</Label>
+                <Label htmlFor="brandId">Marca</Label>
+                <Select
+                  value={formData.brandId}
+                  onValueChange={(value) => setFormData({ ...formData, brandId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a marca" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {brands.map((brand) => (
+                      <SelectItem key={brand.id} value={brand.id}>
+                        {brand.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="categoryId">Categoria</Label>
+                <Select
+                  value={formData.categoryId}
+                  onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue placeholder="Selecione a categoria" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {categories.map((cat) => (
+                      <SelectItem key={cat.id} value={cat.id}>
+                        {cat.name}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="space-y-2">
+                <Label htmlFor="frameModel">Modelo</Label>
                 <Input
-                  id="brand"
-                  value={formData.brand}
-                  onChange={(e) => setFormData({ ...formData, brand: e.target.value })}
+                  id="frameModel"
+                  value={formData.frameModel}
+                  onChange={(e) => setFormData({ ...formData, frameModel: e.target.value })}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="model">Modelo</Label>
+                <Label htmlFor="frameColor">Cor</Label>
                 <Input
-                  id="model"
-                  value={formData.model}
-                  onChange={(e) => setFormData({ ...formData, model: e.target.value })}
+                  id="frameColor"
+                  value={formData.frameColor}
+                  onChange={(e) => setFormData({ ...formData, frameColor: e.target.value })}
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="color">Cor</Label>
+                <Label htmlFor="frameSize">Tamanho</Label>
                 <Input
-                  id="color"
-                  value={formData.color}
-                  onChange={(e) => setFormData({ ...formData, color: e.target.value })}
+                  id="frameSize"
+                  value={formData.frameSize}
+                  onChange={(e) => setFormData({ ...formData, frameSize: e.target.value })}
+                  placeholder="Ex: M, 52-18-140"
                 />
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="size">Tamanho</Label>
+                <Label htmlFor="frameMaterial">Material</Label>
                 <Input
-                  id="size"
-                  value={formData.size}
-                  onChange={(e) => setFormData({ ...formData, size: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="material">Material</Label>
-                <Input
-                  id="material"
-                  value={formData.material}
-                  onChange={(e) => setFormData({ ...formData, material: e.target.value })}
-                />
-              </div>
-
-              <div className="space-y-2">
-                <Label htmlFor="category">Categoria</Label>
-                <Input
-                  id="category"
-                  value={formData.category}
-                  onChange={(e) => setFormData({ ...formData, category: e.target.value })}
+                  id="frameMaterial"
+                  value={formData.frameMaterial}
+                  onChange={(e) => setFormData({ ...formData, frameMaterial: e.target.value })}
                 />
               </div>
             </div>
@@ -494,21 +529,26 @@ export default function EditarProdutoPage() {
 
             {/* Fornecedor */}
             <div className="space-y-2">
-              <Label htmlFor="supplier">Fornecedor</Label>
+              <Label htmlFor="supplierId">Fornecedor</Label>
               <Input
-                id="supplier"
-                value={formData.supplier}
-                onChange={(e) => setFormData({ ...formData, supplier: e.target.value })}
+                id="supplierId"
+                value={formData.supplierId}
+                onChange={(e) => setFormData({ ...formData, supplierId: e.target.value })}
+                placeholder="ID do fornecedor"
+                className="hidden"
               />
+              <p className="text-sm text-muted-foreground">
+                Fornecedor vinculado ao produto (se aplicável)
+              </p>
             </div>
 
             {/* Observações */}
             <div className="space-y-2">
-              <Label htmlFor="notes">Observações</Label>
+              <Label htmlFor="description">Observações</Label>
               <Textarea
-                id="notes"
-                value={formData.notes}
-                onChange={(e) => setFormData({ ...formData, notes: e.target.value })}
+                id="description"
+                value={formData.description}
+                onChange={(e) => setFormData({ ...formData, description: e.target.value })}
                 rows={3}
               />
             </div>
