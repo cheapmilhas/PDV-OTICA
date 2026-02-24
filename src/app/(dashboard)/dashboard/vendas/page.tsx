@@ -26,6 +26,7 @@ import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ProtectedAction } from "@/components/auth/ProtectedAction";
 import { VendasFilters, VendasFilterValues } from "@/components/vendas/vendas-filters";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function VendasPage() {
   return (
@@ -52,8 +53,9 @@ function VendasContent() {
   });
   const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
 
+  const { hasPermission } = usePermissions();
   // Verifica se o usuário tem permissão para ver vendas canceladas
-  const canViewCanceled = ["ADMIN", "MANAGER"].includes(session?.user?.role || "");
+  const canViewCanceled = hasPermission("sales.view_canceled");
 
   useEffect(() => {
     fetch("/api/users/sellers")

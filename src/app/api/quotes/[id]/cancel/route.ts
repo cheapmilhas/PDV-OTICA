@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { quoteService } from "@/services/quote.service";
 import { cancelQuoteSchema } from "@/lib/validations/quote.schema";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 
 /**
@@ -16,7 +17,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    await requirePermission("quotes.delete");
     const companyId = await getCompanyId();
 
     const { id: quoteId } = await params;

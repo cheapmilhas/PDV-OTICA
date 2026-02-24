@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { cashService } from "@/services/cash.service";
 import { cashMovementSchema, type CashMovementDTO } from "@/lib/validations/cash.schema";
 import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
@@ -44,11 +45,7 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
-    }
-
+    const session = await requirePermission("cash_shift.view");
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
     const userId = session.user.id;

@@ -30,6 +30,7 @@ import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Supplier {
   id: string;
@@ -51,6 +52,7 @@ interface Supplier {
 }
 
 function FornecedoresPage() {
+  const { hasPermission } = usePermissions();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
@@ -336,27 +338,31 @@ function FornecedoresPage() {
             )}
             Exportar
           </Button>
-          <Button variant="outline" disabled={importing} asChild>
-            <label className="cursor-pointer">
-              {importing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-2 h-4 w-4" />
-              )}
-              Importar
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImport}
-                className="hidden"
-                disabled={importing}
-              />
-            </label>
-          </Button>
-          <Button onClick={() => toast("Em desenvolvimento")}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Fornecedor
-          </Button>
+          {hasPermission("suppliers.view") && (
+            <Button variant="outline" disabled={importing} asChild>
+              <label className="cursor-pointer">
+                {importing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Importar
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImport}
+                  className="hidden"
+                  disabled={importing}
+                />
+              </label>
+            </Button>
+          )}
+          {hasPermission("suppliers.view") && (
+            <Button onClick={() => toast("Em desenvolvimento")}>
+              <Plus className="mr-2 h-4 w-4" />
+              Novo Fornecedor
+            </Button>
+          )}
         </div>
       </div>
 
@@ -828,7 +834,7 @@ function FornecedoresPage() {
                 </Button>
                 {selectedSupplier && (
                   <>
-                    {!selectedSupplier.active && (
+                    {!selectedSupplier.active && hasPermission("suppliers.view") && (
                       <Button
                         variant="destructive"
                         onClick={() => handlePermanentDelete(selectedSupplier.id)}
@@ -837,23 +843,27 @@ function FornecedoresPage() {
                         Excluir Permanentemente
                       </Button>
                     )}
-                    <Button
-                      variant={selectedSupplier.active ? "destructive" : "default"}
-                      onClick={() => handleToggleStatus(selectedSupplier.id, selectedSupplier.active)}
-                    >
-                      {selectedSupplier.active ? (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Desativar
-                        </>
-                      ) : (
-                        "Ativar"
-                      )}
-                    </Button>
-                    <Button onClick={handleStartEdit}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
-                    </Button>
+                    {hasPermission("suppliers.view") && (
+                      <Button
+                        variant={selectedSupplier.active ? "destructive" : "default"}
+                        onClick={() => handleToggleStatus(selectedSupplier.id, selectedSupplier.active)}
+                      >
+                        {selectedSupplier.active ? (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Desativar
+                          </>
+                        ) : (
+                          "Ativar"
+                        )}
+                      </Button>
+                    )}
+                    {hasPermission("suppliers.view") && (
+                      <Button onClick={handleStartEdit}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar
+                      </Button>
+                    )}
                   </>
                 )}
               </>

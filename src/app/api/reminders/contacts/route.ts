@@ -1,12 +1,13 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getBranchId, getUserId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { reminderService } from "@/services/reminder.service";
 import { createContactSchema } from "@/lib/validations/reminder.schema";
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    await requirePermission("reminders.view");
     const branchId = await getBranchId();
     const userId = await getUserId();
     const body = await request.json();

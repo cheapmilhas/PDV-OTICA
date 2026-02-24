@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import * as crmService from "@/services/crm.service";
 import { CustomerSegment, CrmReminderStatus } from "@prisma/client";
@@ -33,7 +34,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    await requirePermission("reminders.view");
     const companyId = await getCompanyId();
 
     const result = await crmService.generateReminders(companyId);

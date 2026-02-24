@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { prescriptionService } from "@/services/prescription.service";
 import { prescriptionSchema, prescriptionQuerySchema } from "@/lib/validations/prescription.schema";
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest) {
 export async function POST(request: NextRequest) {
   try {
     await requireAuth();
+    await requirePermission("service_orders.create");
     const companyId = await getCompanyId();
 
     const body = await request.json();

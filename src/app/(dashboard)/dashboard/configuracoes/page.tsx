@@ -24,6 +24,7 @@ import {
   ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Mensagens padrão
 const MENSAGENS_PADRAO = {
@@ -77,6 +78,7 @@ Como presente, preparamos uma condição especial para você. Venha nos visitar!
 
 function ConfiguracoesPage() {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(false);
 
   // Estados para configurações da empresa
@@ -142,10 +144,12 @@ function ConfiguracoesPage() {
             Gerencie as configurações do sistema
           </p>
         </div>
-        <Button onClick={handleSalvarConfiguracoes} disabled={loading}>
-          <Save className="mr-2 h-4 w-4" />
-          {loading ? "Salvando..." : "Salvar Alterações"}
-        </Button>
+        {hasPermission("settings.edit") && (
+          <Button onClick={handleSalvarConfiguracoes} disabled={loading}>
+            <Save className="mr-2 h-4 w-4" />
+            {loading ? "Salvando..." : "Salvar Alterações"}
+          </Button>
+        )}
       </div>
 
       {/* Tabs */}
@@ -351,14 +355,16 @@ function ConfiguracoesPage() {
                     Enviada após a conclusão de uma venda
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRestaurarMensagem("agradecimento")}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Restaurar Padrão
-                </Button>
+                {hasPermission("settings.edit") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRestaurarMensagem("agradecimento")}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Restaurar Padrão
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -381,14 +387,16 @@ function ConfiguracoesPage() {
                     Enviada ao compartilhar um orçamento com o cliente
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRestaurarMensagem("orcamento")}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Restaurar Padrão
-                </Button>
+                {hasPermission("settings.edit") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRestaurarMensagem("orcamento")}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Restaurar Padrão
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -411,14 +419,16 @@ function ConfiguracoesPage() {
                     Enviada para lembrar compromissos agendados
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRestaurarMensagem("lembrete")}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Restaurar Padrão
-                </Button>
+                {hasPermission("settings.edit") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRestaurarMensagem("lembrete")}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Restaurar Padrão
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>
@@ -441,14 +451,16 @@ function ConfiguracoesPage() {
                     Enviada automaticamente no aniversário do cliente
                   </CardDescription>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => handleRestaurarMensagem("aniversario")}
-                >
-                  <RotateCcw className="mr-2 h-4 w-4" />
-                  Restaurar Padrão
-                </Button>
+                {hasPermission("settings.edit") && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => handleRestaurarMensagem("aniversario")}
+                  >
+                    <RotateCcw className="mr-2 h-4 w-4" />
+                    Restaurar Padrão
+                  </Button>
+                )}
               </div>
             </CardHeader>
             <CardContent>

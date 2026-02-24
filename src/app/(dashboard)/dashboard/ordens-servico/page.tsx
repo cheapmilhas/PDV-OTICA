@@ -18,6 +18,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/permissions/can";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
@@ -410,6 +411,7 @@ function ModalGarantia({ order, onClose, onSuccess }: {
 function OrdensServicoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { hasPermission } = usePermissions();
   const filterParam = searchParams.get("filter") || "";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -603,10 +605,12 @@ function OrdensServicoPage() {
           description={search ? `Sem resultados para "${search}"` : "Crie sua primeira OS"}
           action={
             !search && (
-              <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
-                <Plus className="mr-2 h-4 w-4" />
-                Nova OS
-              </Button>
+              <Can permission="service_orders.create">
+                <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
+                  <Plus className="mr-2 h-4 w-4" />
+                  Nova OS
+                </Button>
+              </Can>
             )
           }
         />
@@ -665,7 +669,7 @@ function OrdensServicoPage() {
                     {/* Ações */}
                     <div className="flex flex-wrap gap-2 items-center">
                       {/* Ações rápidas de status */}
-                      {nextActions.map((action) => (
+                      {hasPermission("service_orders.edit") && nextActions.map((action) => (
                         <Button
                           key={action.value}
                           size="sm"
@@ -683,7 +687,7 @@ function OrdensServicoPage() {
                       ))}
 
                       {/* Entrega */}
-                      {canDeliver && (
+                      {canDeliver && hasPermission("service_orders.edit") && (
                         <Button
                           size="sm"
                           className="bg-green-600 hover:bg-green-700 text-white"
@@ -695,7 +699,7 @@ function OrdensServicoPage() {
                       )}
 
                       {/* Reverter */}
-                      {canRevert && (
+                      {canRevert && hasPermission("service_orders.edit") && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -708,7 +712,7 @@ function OrdensServicoPage() {
                       )}
 
                       {/* Garantia */}
-                      {canWarranty && (
+                      {canWarranty && hasPermission("service_orders.create") && (
                         <Button
                           size="sm"
                           variant="outline"
@@ -731,7 +735,7 @@ function OrdensServicoPage() {
                       </Button>
 
                       {/* Editar */}
-                      {!["DELIVERED", "CANCELED"].includes(order.status) && (
+                      {!["DELIVERED", "CANCELED"].includes(order.status) && hasPermission("service_orders.edit") && (
                         <Button
                           size="sm"
                           variant="outline"

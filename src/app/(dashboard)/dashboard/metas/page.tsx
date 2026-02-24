@@ -26,6 +26,7 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Target,
   Trophy,
@@ -47,6 +48,7 @@ const MONTHS = [
 
 function GoalsPageContent() {
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState<any>(null);
   const [sellers, setSellers] = useState<any[]>([]);
@@ -242,11 +244,13 @@ function GoalsPageContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" onClick={openGoalModal}>
-            <Plus className="h-4 w-4 mr-2" />
-            Definir Metas
-          </Button>
-          {dashboard?.goal && dashboard.goal.status === "ACTIVE" && (
+          {hasPermission("goals.view") && (
+            <Button variant="outline" onClick={openGoalModal}>
+              <Plus className="h-4 w-4 mr-2" />
+              Definir Metas
+            </Button>
+          )}
+          {hasPermission("goals.view") && dashboard?.goal && dashboard.goal.status === "ACTIVE" && (
             <Button variant="default" onClick={() => setShowCloseModal(true)}>
               <Calculator className="h-4 w-4 mr-2" />
               Fechar Mês
@@ -502,7 +506,7 @@ function GoalsPageContent() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          {commission.status !== "PAID" && (
+                          {commission.status !== "PAID" && hasPermission("goals.view") && (
                             <Button
                               size="sm"
                               variant="outline"

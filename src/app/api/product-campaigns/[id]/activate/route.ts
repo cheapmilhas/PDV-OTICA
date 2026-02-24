@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import * as campaignService from "@/services/product-campaign.service";
 
@@ -16,6 +17,7 @@ export async function POST(
         { status: 401 }
       );
     }
+    await requirePermission("sales.view");
 
     const companyId = await getCompanyId();
     const { id } = await context.params;

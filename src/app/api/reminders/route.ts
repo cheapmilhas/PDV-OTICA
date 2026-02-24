@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getBranchId, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { reminderService } from "@/services/reminder.service";
 
@@ -18,7 +19,7 @@ export async function GET(request: NextRequest) {
 
 export async function POST() {
   try {
-    await requireAuth();
+    await requirePermission("reminders.view");
     const branchId = await getBranchId();
     const companyId = await getCompanyId();
     const result = await reminderService.generateAllReminders(branchId, companyId);

@@ -29,6 +29,7 @@ import { Search, Plus, Eye, Mail, Phone, Globe, Loader2, Edit, Trash2, FlaskConi
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
+import { usePermissions } from "@/hooks/usePermissions";
 
 interface Laboratory {
   id: string;
@@ -53,6 +54,7 @@ interface Laboratory {
 }
 
 function LaboratoriosPage() {
+  const { hasPermission } = usePermissions();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
@@ -269,10 +271,12 @@ function LaboratoriosPage() {
             Gerencie os laboratórios parceiros
           </p>
         </div>
-        <Button onClick={() => setCreateDialogOpen(true)}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Laboratório
-        </Button>
+        {hasPermission("laboratories.view") && (
+          <Button onClick={() => setCreateDialogOpen(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Laboratório
+          </Button>
+        )}
       </div>
 
       {/* Summary Cards */}
@@ -846,23 +850,27 @@ function LaboratoriosPage() {
                 </Button>
                 {selectedLab && (
                   <>
-                    <Button
-                      variant={selectedLab.active ? "destructive" : "default"}
-                      onClick={() => handleToggleStatus(selectedLab.id, selectedLab.active)}
-                    >
-                      {selectedLab.active ? (
-                        <>
-                          <Trash2 className="h-4 w-4 mr-2" />
-                          Desativar
-                        </>
-                      ) : (
-                        "Ativar"
-                      )}
-                    </Button>
-                    <Button onClick={handleStartEdit}>
-                      <Edit className="h-4 w-4 mr-2" />
-                      Editar
-                    </Button>
+                    {hasPermission("laboratories.view") && (
+                      <Button
+                        variant={selectedLab.active ? "destructive" : "default"}
+                        onClick={() => handleToggleStatus(selectedLab.id, selectedLab.active)}
+                      >
+                        {selectedLab.active ? (
+                          <>
+                            <Trash2 className="h-4 w-4 mr-2" />
+                            Desativar
+                          </>
+                        ) : (
+                          "Ativar"
+                        )}
+                      </Button>
+                    )}
+                    {hasPermission("laboratories.view") && (
+                      <Button onClick={handleStartEdit}>
+                        <Edit className="h-4 w-4 mr-2" />
+                        Editar
+                      </Button>
+                    )}
                   </>
                 )}
               </>

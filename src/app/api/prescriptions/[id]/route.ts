@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { prescriptionService } from "@/services/prescription.service";
 import { prescriptionSchema } from "@/lib/validations/prescription.schema";
@@ -37,6 +38,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
+    await requirePermission("service_orders.edit");
     const companyId = await getCompanyId();
     const { id } = await params;
 
@@ -59,6 +61,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
 export async function DELETE(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
+    await requirePermission("service_orders.edit");
     const companyId = await getCompanyId();
     const { id } = await params;
 

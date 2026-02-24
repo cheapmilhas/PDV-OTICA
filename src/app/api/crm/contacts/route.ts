@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import * as crmService from "@/services/crm.service";
 import { z } from "zod";
@@ -47,14 +48,7 @@ const contactSchema = z.object({
 
 export async function POST(request: NextRequest) {
   try {
-    const session = await auth();
-    if (!session?.user?.id) {
-      return NextResponse.json(
-        { error: { code: "UNAUTHORIZED", message: "Não autenticado" } },
-        { status: 401 }
-      );
-    }
-
+    const session = await requirePermission("reminders.view");
     const companyId = await getCompanyId();
     const body = await request.json();
     const validatedData = contactSchema.parse(body);

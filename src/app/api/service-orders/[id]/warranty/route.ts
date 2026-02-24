@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { serviceOrderService } from "@/services/service-order.service";
 import { requireAuth, getCompanyId, getUserId, getBranchId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 
@@ -21,6 +22,7 @@ export async function POST(
 ) {
   try {
     await requireAuth();
+    await requirePermission("service_orders.create");
     const companyId = await getCompanyId();
     const userId = await getUserId();
     const branchId = await getBranchId();

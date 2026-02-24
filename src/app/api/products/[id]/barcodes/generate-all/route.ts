@@ -1,5 +1,6 @@
 import { BarcodeService } from "@/services/barcode.service";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -14,7 +15,7 @@ export async function POST(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    const session = await requireAuth();
+    const session = await requirePermission("products.edit");
     const companyId = await getCompanyId();
     const { id } = await params;
 

@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
+import { usePermissions } from "@/hooks/usePermissions";
 
 const SEGMENTS = [
   { key: "all", label: "Todos" },
@@ -28,6 +29,7 @@ function CrmPageContent() {
   const [loading, setLoading] = useState(true);
   const [selectedSegment, setSelectedSegment] = useState("all");
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
 
   const loadData = async () => {
     try {
@@ -130,17 +132,21 @@ function CrmPageContent() {
           <p className="text-gray-500 text-sm hidden sm:block">Central de Follow-up e Reativação de Clientes</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Link href="/dashboard/lembretes/configuracoes">
-            <Button variant="outline" size="sm">
-              <Settings className="mr-2 w-4 h-4" />
-              <span className="hidden sm:inline">Configurações</span>
-              <span className="sm:hidden">Config</span>
+          {hasPermission("settings.edit") && (
+            <Link href="/dashboard/lembretes/configuracoes">
+              <Button variant="outline" size="sm">
+                <Settings className="mr-2 w-4 h-4" />
+                <span className="hidden sm:inline">Configurações</span>
+                <span className="sm:hidden">Config</span>
+              </Button>
+            </Link>
+          )}
+          {hasPermission("reminders.view") && (
+            <Button onClick={handleGenerate} variant="outline" size="sm">
+              <RefreshCw className="mr-2 w-4 h-4" />
+              Gerar
             </Button>
-          </Link>
-          <Button onClick={handleGenerate} variant="outline" size="sm">
-            <RefreshCw className="mr-2 w-4 h-4" />
-            Gerar
-          </Button>
+          )}
           <Button onClick={loadData} variant="outline" size="sm">
             <RefreshCw className="w-4 h-4" />
           </Button>

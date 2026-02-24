@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { BarcodeService } from "@/services/barcode.service";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -15,7 +16,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string; barcodeId: string }> }
 ) {
   try {
-    await requireAuth();
+    await requirePermission("products.edit");
     const companyId = await getCompanyId();
     const { id, barcodeId } = await params;
 
@@ -36,7 +37,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string; barcodeId: string }> }
 ) {
   try {
-    await requireAuth();
+    await requirePermission("products.edit");
     const companyId = await getCompanyId();
     const { id, barcodeId } = await params;
 

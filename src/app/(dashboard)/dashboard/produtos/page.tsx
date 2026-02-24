@@ -29,8 +29,8 @@ import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
-import { Can } from "@/components/shared/can";
 import { Can as CanPermission } from "@/components/permissions/can";
+import { usePermissions } from "@/hooks/usePermissions";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { ModalAjusteEstoque } from "@/components/estoque/modal-ajuste-estoque";
@@ -45,6 +45,7 @@ import {
 
 function ProdutosPage() {
   const router = useRouter();
+  const { hasPermission } = usePermissions();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState("all");
@@ -244,23 +245,25 @@ function ProdutosPage() {
             )}
             Exportar
           </Button>
-          <Button variant="outline" disabled={importing} asChild>
-            <label className="cursor-pointer">
-              {importing ? (
-                <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-              ) : (
-                <Upload className="mr-2 h-4 w-4" />
-              )}
-              Importar
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImport}
-                className="hidden"
-                disabled={importing}
-              />
-            </label>
-          </Button>
+          {hasPermission("products.create") && (
+            <Button variant="outline" disabled={importing} asChild>
+              <label className="cursor-pointer">
+                {importing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Importar
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImport}
+                  className="hidden"
+                  disabled={importing}
+                />
+              </label>
+            </Button>
+          )}
           <CanPermission permission="products.create">
             <Button onClick={() => router.push("/dashboard/produtos/novo")}>
               <Plus className="mr-2 h-4 w-4" />
@@ -416,17 +419,19 @@ function ProdutosPage() {
 
                     <div className="space-y-2 pt-2">
                       <div className="flex items-center gap-2">
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => router.push(`/dashboard/produtos/${produto.id}/editar`)}
-                          className="flex-1"
-                        >
-                          <Edit className="h-4 w-4 mr-1" />
-                          Editar
-                        </Button>
+                        {hasPermission("products.edit") && (
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(`/dashboard/produtos/${produto.id}/editar`)}
+                            className="flex-1"
+                          >
+                            <Edit className="h-4 w-4 mr-1" />
+                            Editar
+                          </Button>
+                        )}
 
-                        <Can roles={["ADMIN", "GERENTE"]}>
+                        {hasPermission("products.delete") && (
                           <Button
                             size="sm"
                             variant="outline"
@@ -434,11 +439,11 @@ function ProdutosPage() {
                           >
                             <Trash2 className="h-4 w-4" />
                           </Button>
-                        </Can>
+                        )}
                       </div>
 
                       <div className="flex items-center gap-2">
-                        {produto.stockControlled && (
+                        {produto.stockControlled && hasPermission("stock.adjust") && (
                           <Button
                             size="sm"
                             variant="secondary"

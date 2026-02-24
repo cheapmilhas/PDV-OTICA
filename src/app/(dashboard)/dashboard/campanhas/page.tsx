@@ -23,6 +23,7 @@ import {
   DialogTrigger,
 } from "@/components/ui/dialog";
 import { useToast } from "@/hooks/use-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import { CampaignForm } from "./campaign-form";
 import { CampaignReport } from "./campaign-report";
 
@@ -82,6 +83,7 @@ function CampanhasPageContent() {
   const [editCampaign, setEditCampaign] = useState<Campaign | null>(null);
   const [reportCampaignId, setReportCampaignId] = useState<string | null>(null);
   const { toast } = useToast();
+  const { hasPermission } = usePermissions();
 
   const loadCampaigns = async () => {
     try {
@@ -209,12 +211,14 @@ function CampanhasPageContent() {
         </div>
 
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          <DialogTrigger asChild>
-            <Button>
-              <Plus className="mr-2 h-4 w-4" />
-              Nova Campanha
-            </Button>
-          </DialogTrigger>
+          {hasPermission("sales.view") && (
+            <DialogTrigger asChild>
+              <Button>
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Campanha
+              </Button>
+            </DialogTrigger>
+          )}
           <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
             <DialogHeader>
               <DialogTitle>Criar Campanha de Bonificação</DialogTitle>
@@ -303,7 +307,7 @@ function CampanhasPageContent() {
                     <TableCell>{campaign.priority}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {campaign.status === "DRAFT" && (
+                        {campaign.status === "DRAFT" && hasPermission("sales.view") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -312,7 +316,7 @@ function CampanhasPageContent() {
                             <Play className="h-4 w-4" />
                           </Button>
                         )}
-                        {campaign.status === "ACTIVE" && (
+                        {campaign.status === "ACTIVE" && hasPermission("sales.view") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -321,7 +325,7 @@ function CampanhasPageContent() {
                             <Pause className="h-4 w-4" />
                           </Button>
                         )}
-                        {campaign.status === "PAUSED" && (
+                        {campaign.status === "PAUSED" && hasPermission("sales.view") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -337,14 +341,16 @@ function CampanhasPageContent() {
                         >
                           <BarChart3 className="h-4 w-4" />
                         </Button>
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => setEditCampaign(campaign)}
-                        >
-                          <Edit className="h-4 w-4" />
-                        </Button>
-                        {(campaign.status === "DRAFT" || campaign.status === "PAUSED") && (
+                        {hasPermission("sales.view") && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            onClick={() => setEditCampaign(campaign)}
+                          >
+                            <Edit className="h-4 w-4" />
+                          </Button>
+                        )}
+                        {(campaign.status === "DRAFT" || campaign.status === "PAUSED") && hasPermission("sales.view") && (
                           <Button
                             variant="ghost"
                             size="sm"

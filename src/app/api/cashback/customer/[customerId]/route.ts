@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { cashbackService } from "@/services/cashback.service";
 import {
@@ -49,7 +50,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 // POST - Ajuste manual de cashback
 export async function POST(request: NextRequest, { params }: Params) {
   try {
-    await requireAuth();
+    await requirePermission("cashback.view");
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
     const { customerId } = await params;

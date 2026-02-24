@@ -1,6 +1,7 @@
 import { serviceOrderService } from "@/services/service-order.service";
 import { updateStatusSchema } from "@/lib/validations/service-order.schema";
 import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
@@ -10,6 +11,7 @@ export async function PATCH(
 ) {
   try {
     await requireAuth();
+    await requirePermission("service_orders.edit");
     const companyId = await getCompanyId();
     const userId = await getUserId();
     const { id } = await params;

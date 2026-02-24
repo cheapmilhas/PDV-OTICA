@@ -10,6 +10,7 @@ import { SearchBar } from "@/components/shared/search-bar";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
+import { usePermissions } from "@/hooks/usePermissions";
 import {
   Dialog,
   DialogContent,
@@ -40,6 +41,7 @@ function TratamentosPage() {
   const [showModal, setShowModal] = useState(false);
   const [editingTreatment, setEditingTreatment] = useState<LensTreatment | null>(null);
   const [saving, setSaving] = useState(false);
+  const { hasPermission } = usePermissions();
 
   // Form state
   const [formData, setFormData] = useState({
@@ -172,10 +174,12 @@ function TratamentosPage() {
             Gerencie os tratamentos disponíveis (anti-reflexo, transitions, etc.)
           </p>
         </div>
-        <Button onClick={handleNew}>
-          <Plus className="mr-2 h-4 w-4" />
-          Novo Tratamento
-        </Button>
+        {hasPermission("products.edit") && (
+          <Button onClick={handleNew}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Tratamento
+          </Button>
+        )}
       </div>
 
       {/* Search */}
@@ -204,7 +208,7 @@ function TratamentosPage() {
               : "Comece cadastrando seu primeiro tratamento de lentes"
           }
           action={
-            !search && (
+            !search && hasPermission("products.edit") && (
               <Button onClick={handleNew}>
                 <Plus className="mr-2 h-4 w-4" />
                 Novo Tratamento
@@ -237,24 +241,26 @@ function TratamentosPage() {
                         + {formatCurrency(treatment.price)}
                       </p>
                     </div>
-                    <div className="flex gap-2">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleEdit(treatment)}
-                      >
-                        <Edit className="h-4 w-4 mr-1" />
-                        Editar
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => handleDelete(treatment.id)}
-                      >
-                        <Trash2 className="h-4 w-4 mr-1" />
-                        Desativar
-                      </Button>
-                    </div>
+                    {hasPermission("products.edit") && (
+                      <div className="flex gap-2">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleEdit(treatment)}
+                        >
+                          <Edit className="h-4 w-4 mr-1" />
+                          Editar
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleDelete(treatment.id)}
+                        >
+                          <Trash2 className="h-4 w-4 mr-1" />
+                          Desativar
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -286,14 +292,16 @@ function TratamentosPage() {
                         + {formatCurrency(treatment.price)}
                       </p>
                     </div>
-                    <Button
-                      size="sm"
-                      variant="outline"
-                      onClick={() => handleEdit(treatment)}
-                    >
-                      <Edit className="h-4 w-4 mr-1" />
-                      Editar
-                    </Button>
+                    {hasPermission("products.edit") && (
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        onClick={() => handleEdit(treatment)}
+                      >
+                        <Edit className="h-4 w-4 mr-1" />
+                        Editar
+                      </Button>
+                    )}
                   </div>
                 </CardContent>
               </Card>

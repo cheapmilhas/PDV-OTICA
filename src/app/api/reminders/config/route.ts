@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { reminderService } from "@/services/reminder.service";
 import { reminderConfigSchema } from "@/lib/validations/reminder.schema";
@@ -17,7 +18,7 @@ export async function GET() {
 
 export async function PUT(request: NextRequest) {
   try {
-    await requireAuth();
+    await requirePermission("settings.edit");
     const branchId = await getBranchId();
     const body = await request.json();
     const data = reminderConfigSchema.parse(body);
