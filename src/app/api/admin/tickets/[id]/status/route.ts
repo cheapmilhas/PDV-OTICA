@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -11,6 +12,10 @@ export async function PATCH(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await getAdminSession();
+    if (!admin) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
     const { id } = await context.params;
     const body = await request.json();
     const { status } = statusSchema.parse(body);

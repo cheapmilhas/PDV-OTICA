@@ -1,5 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCompanyId } from "@/lib/auth-helpers";
+import { handleApiError } from "@/lib/error-handler";
 
 // Mapeamento de cores por método de pagamento
 const paymentColors: Record<string, string> = {
@@ -29,6 +31,7 @@ const paymentNames: Record<string, string> = {
 
 export async function GET() {
   try {
+    const companyId = await getCompanyId();
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -37,6 +40,7 @@ export async function GET() {
       by: ['method'],
       where: {
         sale: {
+          companyId,
           status: "COMPLETED",
           createdAt: {
             gte: startOfMonth,
@@ -69,10 +73,6 @@ export async function GET() {
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error("Erro ao buscar distribuição de pagamentos:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar distribuição de pagamentos" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

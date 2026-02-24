@@ -1,7 +1,13 @@
 import { NextResponse } from "next/server";
+import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 
 export async function GET() {
+  const admin = await getAdminSession();
+  if (!admin) {
+    return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+
   try {
     const subscriptions = await prisma.subscription.findMany({
       include: {

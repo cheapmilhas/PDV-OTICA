@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 
@@ -12,21 +13,22 @@ export async function POST(
   context: { params: Promise<{ id: string }> }
 ) {
   try {
+    const admin = await getAdminSession();
+    if (!admin) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
     const { id: ticketId } = await context.params;
     const body = await request.json();
     const { content, isInternal } = messageSchema.parse(body);
-
-    // TODO: Obter authorId do token admin
-    // Por enquanto, criar sem author (sistema)
 
     const message = await prisma.supportMessage.create({
       data: {
         ticketId,
         message: content,
         isInternal,
-        authorId: "system",
-        authorType: "SYSTEM",
-        authorName: "Sistema",
+        authorId: admin.id,
+        authorType: "ADMIN",
+        authorName: admin.name,
       },
     });
 

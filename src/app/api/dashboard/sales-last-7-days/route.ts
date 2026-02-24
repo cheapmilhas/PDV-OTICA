@@ -1,16 +1,20 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCompanyId } from "@/lib/auth-helpers";
+import { handleApiError } from "@/lib/error-handler";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 export async function GET() {
   try {
+    const companyId = await getCompanyId();
     const today = new Date();
     const sevenDaysAgo = subDays(today, 6); // Últimos 7 dias incluindo hoje
 
     // Buscar vendas dos últimos 7 dias
     const sales = await prisma.sale.findMany({
       where: {
+        companyId,
         status: "COMPLETED",
         createdAt: {
           gte: startOfDay(sevenDaysAgo),
@@ -52,10 +56,6 @@ export async function GET() {
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error("Erro ao buscar vendas dos últimos 7 dias:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar vendas dos últimos 7 dias" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

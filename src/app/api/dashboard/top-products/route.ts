@@ -1,8 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { getCompanyId } from "@/lib/auth-helpers";
+import { handleApiError } from "@/lib/error-handler";
 
 export async function GET() {
   try {
+    const companyId = await getCompanyId();
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -11,6 +14,7 @@ export async function GET() {
       by: ['productId'],
       where: {
         sale: {
+          companyId,
           status: "COMPLETED",
           createdAt: {
             gte: startOfMonth,
@@ -58,10 +62,6 @@ export async function GET() {
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error("Erro ao buscar top produtos:", error);
-    return NextResponse.json(
-      { error: "Erro ao buscar top produtos" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
