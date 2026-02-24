@@ -7,6 +7,7 @@ import {
   adjustCashbackSchema,
   cashbackHistoryQuerySchema,
 } from "@/lib/validations/cashback.schema";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 interface Params {
   params: Promise<{ customerId: string }>;
@@ -17,6 +18,7 @@ export async function GET(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "cashback");
     const { customerId } = await params;
 
     const { searchParams } = new URL(request.url);
@@ -52,6 +54,7 @@ export async function POST(request: NextRequest, { params }: Params) {
   try {
     await requirePermission("cashback.manage");
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
     const { customerId } = await params;
 

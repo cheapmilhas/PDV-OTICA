@@ -2,6 +2,7 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ScrollText, User, Building2, Calendar } from "lucide-react";
+import { LogsFilters } from "./logs-filters";
 
 const ACTION_LABELS: Record<string, string> = {
   COMPANY_CREATED: "Empresa criada",
@@ -16,24 +17,59 @@ const ACTION_LABELS: Record<string, string> = {
   NF_GENERATED: "NF gerada",
   NF_SENT: "NF enviada",
   NOTE_CREATED: "Nota criada",
+  PLAN_CREATED: "Plano criado",
+  PLAN_UPDATED: "Plano atualizado",
+  PLAN_DEACTIVATED: "Plano desativado",
+  ADMIN_USER_CREATED: "Admin criado",
+  ADMIN_USER_UPDATED: "Admin atualizado",
+  ADMIN_USER_DEACTIVATED: "Admin desativado",
+  IMPERSONATION_STARTED: "Impersonação iniciada",
+  IMPERSONATION_ENDED: "Impersonação encerrada",
 };
+
+function buildUrl(
+  base: { action?: string; companyId?: string; dateFrom?: string; dateTo?: string },
+  overrides: Record<string, string | undefined>
+) {
+  const p = { ...base, ...overrides };
+  const qs = Object.entries(p)
+    .filter(([, v]) => v)
+    .map(([k, v]) => `${k}=${encodeURIComponent(v!)}`)
+    .join("&");
+  return `/admin/configuracoes/logs${qs ? `?${qs}` : ""}`;
+}
 
 export default async function LogsPage({
   searchParams,
 }: {
-  searchParams: Promise<{ action?: string; page?: string }>;
+  searchParams: Promise<{ action?: string; page?: string; companyId?: string; dateFrom?: string; dateTo?: string }>;
 }) {
   await requireAdmin();
 
   const params = await searchParams;
   const actionFilter = params.action;
+  const companyFilter = params.companyId;
+  const dateFrom = params.dateFrom;
+  const dateTo = params.dateTo;
   const page = parseInt(params.page || "1");
   const perPage = 50;
 
-  // Buscar logs
-  const [logs, totalCount] = await Promise.all([
+  // Construir where clause
+  const where: Record<string, unknown> = {};
+  if (actionFilter) where.action = actionFilter;
+  if (companyFilter) where.companyId = companyFilter;
+  if (dateFrom || dateTo) {
+    where.createdAt = {} as Record<string, Date>;
+    if (dateFrom) (where.createdAt as Record<string, Date>).gte = new Date(dateFrom);
+    if (dateTo) (where.createdAt as Record<string, Date>).lte = new Date(dateTo + "T23:59:59Z");
+  }
+
+  const baseFilters = { action: actionFilter, companyId: companyFilter, dateFrom, dateTo };
+
+  // Buscar dados
+  const [logs, totalCount, actionCounts, companies] = await Promise.all([
     prisma.globalAudit.findMany({
-      where: actionFilter ? { action: actionFilter } : {},
+      where,
       orderBy: { createdAt: "desc" },
       include: {
         company: { select: { id: true, name: true } },
@@ -42,16 +78,18 @@ export default async function LogsPage({
       skip: (page - 1) * perPage,
       take: perPage,
     }),
-    prisma.globalAudit.count({
-      where: actionFilter ? { action: actionFilter } : {},
+    prisma.globalAudit.count({ where }),
+    prisma.globalAudit.groupBy({
+      by: ["action"],
+      _count: true,
+    }),
+    prisma.company.findMany({
+      where: { globalAudits: { some: {} } },
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+      take: 50,
     }),
   ]);
-
-  // Contadores por ação
-  const actionCounts = await prisma.globalAudit.groupBy({
-    by: ["action"],
-    _count: true,
-  });
 
   const counts = actionCounts.reduce((acc, item) => {
     acc[item.action] = item._count;
@@ -60,10 +98,9 @@ export default async function LogsPage({
 
   const totalPages = Math.ceil(totalCount / perPage);
 
-  // Ações mais comuns para filtros
   const topActions = actionCounts
     .sort((a, b) => b._count - a._count)
-    .slice(0, 8)
+    .slice(0, 10)
     .map((item) => item.action);
 
   return (
@@ -80,27 +117,39 @@ export default async function LogsPage({
       </div>
 
       {/* Filtros */}
-      <div className="flex flex-wrap gap-2 mb-6">
-        <p className="text-xs text-gray-500 w-full mb-1">FILTRAR POR AÇÃO:</p>
-        <Link
-          href="/admin/configuracoes/logs"
-          className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-            !actionFilter ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
-          }`}
-        >
-          Todas ({totalCount})
-        </Link>
-        {topActions.map((action) => (
+      <div className="space-y-4 mb-6">
+        {/* Filtros interativos (client component) */}
+        <LogsFilters
+          companies={companies}
+          companyId={companyFilter}
+          dateFrom={dateFrom}
+          dateTo={dateTo}
+          actionFilter={actionFilter}
+        />
+
+        {/* Filtros por ação (links server) */}
+        <div className="flex flex-wrap gap-2">
+          <p className="text-xs text-gray-500 w-full mb-1">FILTRAR POR AÇÃO:</p>
           <Link
-            key={action}
-            href={`/admin/configuracoes/logs?action=${action}`}
+            href={buildUrl(baseFilters, { action: undefined, page: undefined })}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              actionFilter === action ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+              !actionFilter ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
             }`}
           >
-            {ACTION_LABELS[action] || action} ({counts[action] || 0})
+            Todas ({totalCount})
           </Link>
-        ))}
+          {topActions.map((action) => (
+            <Link
+              key={action}
+              href={buildUrl(baseFilters, { action, page: undefined })}
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+                actionFilter === action ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+              }`}
+            >
+              {ACTION_LABELS[action] || action} ({counts[action] || 0})
+            </Link>
+          ))}
+        </div>
       </div>
 
       {/* Tabela */}
@@ -186,7 +235,7 @@ export default async function LogsPage({
         <div className="flex justify-center gap-2 mt-6">
           {page > 1 && (
             <Link
-              href={`/admin/configuracoes/logs?page=${page - 1}${actionFilter ? `&action=${actionFilter}` : ""}`}
+              href={buildUrl(baseFilters, { page: String(page - 1) })}
               className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 text-sm"
             >
               Anterior
@@ -197,7 +246,7 @@ export default async function LogsPage({
           </span>
           {page < totalPages && (
             <Link
-              href={`/admin/configuracoes/logs?page=${page + 1}${actionFilter ? `&action=${actionFilter}` : ""}`}
+              href={buildUrl(baseFilters, { page: String(page + 1) })}
               className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 text-sm"
             >
               Próxima

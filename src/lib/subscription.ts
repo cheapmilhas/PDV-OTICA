@@ -23,7 +23,7 @@ export async function checkSubscription(companyId: string): Promise<Subscription
   // Verificar se empresa tem acesso habilitado (bypass para dev/teste)
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { accessEnabled: true, name: true },
+    select: { accessEnabled: true, name: true, isBlocked: true },
   });
 
   console.log('[checkSubscription] Empresa encontrada:', company);
@@ -36,6 +36,16 @@ export async function checkSubscription(companyId: string): Promise<Subscription
       status: "NO_SUBSCRIPTION",
       readOnly: true,
       message: "EMPRESA_NAO_ENCONTRADA",
+    };
+  }
+
+  // Se empresa foi bloqueada pelo admin, negar acesso imediatamente
+  if (company.isBlocked) {
+    return {
+      allowed: false,
+      status: "SUSPENDED" as SubscriptionStatus,
+      readOnly: false,
+      message: "Esta empresa foi bloqueada pelo administrador. Entre em contato com o suporte.",
     };
   }
 

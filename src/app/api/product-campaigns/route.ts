@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import { z } from "zod";
 import * as campaignService from "@/services/product-campaign.service";
 
@@ -71,6 +72,7 @@ export async function GET(request: NextRequest) {
     }
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { searchParams } = new URL(request.url);
 
     const filter: campaignService.CampaignFilter = {
@@ -111,6 +113,7 @@ export async function POST(request: NextRequest) {
     await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const body = await request.json();
 
     const validatedData = createCampaignSchema.parse(body);

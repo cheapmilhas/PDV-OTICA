@@ -4,12 +4,14 @@ import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { cashbackService } from "@/services/cashback.service";
 import { cashbackConfigSchema } from "@/lib/validations/cashback.schema";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 // GET - Buscar configuração do cashback
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
 
     const config = await cashbackService.getConfig(branchId, companyId);
@@ -28,6 +30,7 @@ export async function PUT(request: NextRequest) {
   try {
     await requirePermission("cashback.manage");
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
 
     const body = await request.json();

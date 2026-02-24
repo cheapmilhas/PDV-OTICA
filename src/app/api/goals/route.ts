@@ -1,13 +1,16 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId, requirePermission } from "@/lib/auth-helpers";
+import { requireAuth, getBranchId, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
 import { salesGoalSchema, goalsQuerySchema } from "@/lib/validations/goals.schema";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
+    const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "goals");
     const { searchParams } = new URL(request.url);
 
     const query = goalsQuerySchema.parse({
@@ -27,6 +30,8 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
+    const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "goals");
     await requirePermission("goals.manage");
     const body = await request.json();
     const data = salesGoalSchema.parse(body);

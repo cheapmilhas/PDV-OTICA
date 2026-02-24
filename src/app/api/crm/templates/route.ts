@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as crmService from "@/services/crm.service";
 import { z } from "zod";
 import { CustomerSegment } from "@prisma/client";
@@ -19,6 +20,7 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
 
     const templates = await crmService.getTemplates(companyId);
 
@@ -35,6 +37,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requirePermission("settings.edit");
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
     const body = await request.json();
     const validatedData = templateSchema.parse(body);
 

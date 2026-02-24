@@ -9,6 +9,7 @@ import {
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
+import { checkPlanLimit } from "@/lib/plan-limits";
 
 /**
  * GET /api/products
@@ -71,6 +72,7 @@ export async function POST(request: Request) {
     await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("products.create");
+    await checkPlanLimit(companyId, "products");
 
     // Parse e valida body
     const body = await request.json();

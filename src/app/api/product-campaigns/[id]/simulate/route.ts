@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import { z } from "zod";
 import * as campaignService from "@/services/product-campaign.service";
 
@@ -23,6 +24,7 @@ export async function POST(
     }
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { id } = await context.params;
     const body = await request.json();
 

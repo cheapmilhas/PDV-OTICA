@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Ban, CheckCircle, CreditCard, Loader2, MoreVertical, RefreshCw, Trash2 } from "lucide-react";
+import { Ban, CheckCircle, CreditCard, Eye, Loader2, MoreVertical, RefreshCw, Trash2 } from "lucide-react";
 
 interface CompanyActionsProps {
   companyId: string;
@@ -33,6 +33,26 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
     finally { setLoading(false); }
   }
 
+  async function handleImpersonate() {
+    const reason = prompt("Motivo da impersonação (obrigatório):");
+    if (!reason) return;
+    setLoading(true);
+    setOpen(false);
+    try {
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Erro ao iniciar impersonação"); return; }
+      // Abrir PDV em nova aba com token de impersonação
+      const url = `/impersonate?token=${data.data.token}&sessionId=${data.data.sessionId}`;
+      window.open(url, "_blank");
+    } catch { alert("Erro ao iniciar impersonação"); }
+    finally { setLoading(false); }
+  }
+
   return (
     <div className="relative">
       <button
@@ -59,6 +79,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
             {subscriptionStatus === "TRIAL" && (
               <ActionBtn icon={CreditCard} label="Estender trial (+7 dias)" color="blue" onClick={() => handleAction("extend_trial")} />
             )}
+            <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={handleImpersonate} />
             <div className="my-1 border-t border-gray-700" />
             <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={() => handleAction("delete")} />
           </div>

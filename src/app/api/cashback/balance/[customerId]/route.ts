@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 /**
  * GET /api/cashback/balance/[customerId]
@@ -13,6 +14,8 @@ export async function GET(
 ) {
   try {
     await requireAuth();
+    const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
     const { customerId } = await params;
 

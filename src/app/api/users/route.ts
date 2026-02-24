@@ -8,6 +8,7 @@ import {
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { checkPlanLimit } from "@/lib/plan-limits";
 
 /**
  * GET /api/users
@@ -46,6 +47,7 @@ export async function POST(request: Request) {
     await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("users.create");
+    await checkPlanLimit(companyId, "users");
 
     const body = await request.json();
     console.log("[API] Body recebido:", body);

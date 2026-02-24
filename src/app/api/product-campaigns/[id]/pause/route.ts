@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as campaignService from "@/services/product-campaign.service";
 
 export async function POST(
@@ -20,6 +21,7 @@ export async function POST(
     await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { id } = await context.params;
 
     const campaign = await campaignService.pauseCampaign(id, companyId);

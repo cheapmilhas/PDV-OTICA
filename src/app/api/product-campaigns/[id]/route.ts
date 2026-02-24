@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import { z } from "zod";
 import * as campaignService from "@/services/product-campaign.service";
 
@@ -65,6 +66,7 @@ export async function GET(
     }
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { id } = await context.params;
 
     const campaign = await campaignService.getCampaignById(id, companyId);
@@ -107,6 +109,7 @@ export async function PATCH(
     await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { id } = await context.params;
     const body = await request.json();
 
@@ -163,6 +166,7 @@ export async function DELETE(
     await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { id } = await context.params;
 
     await campaignService.endCampaign(id, companyId);

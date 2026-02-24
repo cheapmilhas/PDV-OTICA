@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 export async function GET() {
   try {
@@ -8,6 +9,7 @@ export async function GET() {
     if (!session?.user?.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+    await requirePlanFeature(session.user.companyId, "goals");
 
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);

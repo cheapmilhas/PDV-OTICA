@@ -3,12 +3,14 @@ import { auth } from "@/auth";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as crmService from "@/services/crm.service";
 
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
 
     const settings = await crmService.getOrCreateSettings(companyId);
 
@@ -25,6 +27,7 @@ export async function PUT(request: NextRequest) {
   try {
     await requirePermission("settings.edit");
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
     const body = await request.json();
 
     const settings = await crmService.updateSettings(companyId, body);

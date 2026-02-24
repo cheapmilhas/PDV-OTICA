@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as crmService from "@/services/crm.service";
 import { CustomerSegment, CrmReminderStatus } from "@prisma/client";
 
@@ -9,6 +10,7 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
     const { searchParams } = new URL(request.url);
 
     const filters = {
@@ -36,6 +38,7 @@ export async function POST(request: NextRequest) {
   try {
     await requirePermission("reminders.view");
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
 
     const result = await crmService.generateReminders(companyId);
 

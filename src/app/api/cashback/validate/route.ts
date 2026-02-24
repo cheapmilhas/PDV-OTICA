@@ -3,12 +3,14 @@ import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { cashbackService } from "@/services/cashback.service";
 import { validateCashbackUsageSchema } from "@/lib/validations/cashback.schema";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 // POST - Validar uso de cashback
 export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
 
     const body = await request.json();

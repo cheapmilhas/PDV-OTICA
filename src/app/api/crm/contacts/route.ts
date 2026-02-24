@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as crmService from "@/services/crm.service";
 import { z } from "zod";
 import { CustomerSegment, ContactResult } from "@prisma/client";
@@ -11,6 +12,7 @@ export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customerId");
 
@@ -50,6 +52,7 @@ export async function POST(request: NextRequest) {
   try {
     const session = await requirePermission("reminders.view");
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
     const body = await request.json();
     const validatedData = contactSchema.parse(body);
 

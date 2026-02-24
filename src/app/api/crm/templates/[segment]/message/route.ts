@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as crmService from "@/services/crm.service";
 import { prisma } from "@/lib/prisma";
 import { CustomerSegment } from "@prisma/client";
@@ -12,6 +13,7 @@ export async function GET(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "crm");
     const { segment } = await context.params;
     const { searchParams } = new URL(request.url);
     const customerId = searchParams.get("customerId");

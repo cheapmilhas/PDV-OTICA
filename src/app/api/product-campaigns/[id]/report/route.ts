@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
 import * as campaignService from "@/services/product-campaign.service";
 
 export async function GET(
@@ -18,6 +19,7 @@ export async function GET(
     }
 
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "campaigns");
     const { id } = await context.params;
 
     const report = await campaignService.getCampaignReport(id, companyId);

@@ -1,12 +1,15 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getBranchId, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
+    const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "goals");
     const { searchParams } = new URL(request.url);
 
     const year = searchParams.get("year") ? parseInt(searchParams.get("year")!) : undefined;

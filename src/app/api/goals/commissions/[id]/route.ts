@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, requirePermission } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
+import { requirePlanFeature } from "@/lib/plan-features";
 
 interface Params {
   params: Promise<{ id: string }>;
@@ -11,6 +12,8 @@ interface Params {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
+    const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, "goals");
     await requirePermission("goals.manage");
     const { id } = await params;
     const commission = await goalsService.markCommissionAsPaid(id);
