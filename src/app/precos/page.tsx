@@ -1,18 +1,16 @@
 import { Header } from "@/components/landing/header";
-import { Hero } from "@/components/landing/hero";
-import { Features } from "@/components/landing/features";
 import { Pricing } from "@/components/landing/pricing";
 import { FAQ } from "@/components/landing/faq";
 import { CTASection } from "@/components/landing/cta-section";
 import { Footer } from "@/components/landing/footer";
 
-export default function LandingPage() {
+export default function PrecosPage() {
   return (
     <div className="bg-gray-950 min-h-screen">
       <Header />
-      <Hero />
-      <Features />
-      <Pricing />
+      <div className="pt-20">
+        <Pricing />
+      </div>
       <FAQ />
       <CTASection />
       <Footer />

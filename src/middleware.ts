@@ -60,8 +60,13 @@ export async function middleware(request: NextRequest) {
     return NextResponse.next();
   }
 
-  // Permitir rotas públicas de auth (antes de qualquer verificação)
-  if (pathname.startsWith("/api/auth") || pathname === "/login" || pathname === "/force-logout") {
+  // Permitir rotas públicas (landing page, auth, etc.)
+  const publicRoutes = ["/", "/precos", "/contato", "/sobre", "/login", "/force-logout", "/impersonate"];
+  if (
+    publicRoutes.includes(pathname) ||
+    pathname.startsWith("/api/auth") ||
+    pathname.startsWith("/api/public")
+  ) {
     return NextResponse.next();
   }
 
