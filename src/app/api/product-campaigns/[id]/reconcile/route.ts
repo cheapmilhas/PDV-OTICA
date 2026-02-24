@@ -23,7 +23,7 @@ export async function POST(
         { status: 401 }
       );
     }
-    await requirePermission("settings.edit");
+    await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
     const { id } = await context.params;

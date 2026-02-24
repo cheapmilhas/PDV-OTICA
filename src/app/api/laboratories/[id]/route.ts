@@ -74,7 +74,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requirePermission("settings.edit");
+    await requirePermission("laboratories.manage");
     const companyId = await getCompanyId();
     const { id } = await params;
 
@@ -128,7 +128,7 @@ export async function DELETE(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requirePermission("settings.edit");
+    await requirePermission("laboratories.manage");
     const companyId = await getCompanyId();
     const { id } = await params;
 

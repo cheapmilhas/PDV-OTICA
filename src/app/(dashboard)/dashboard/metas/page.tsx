@@ -244,13 +244,13 @@ function GoalsPageContent() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          {hasPermission("settings.edit") && (
+          {hasPermission("goals.manage") && (
             <Button variant="outline" onClick={openGoalModal}>
               <Plus className="h-4 w-4 mr-2" />
               Definir Metas
             </Button>
           )}
-          {hasPermission("settings.edit") && dashboard?.goal && dashboard.goal.status === "ACTIVE" && (
+          {hasPermission("goals.manage") && dashboard?.goal && dashboard.goal.status === "ACTIVE" && (
             <Button variant="default" onClick={() => setShowCloseModal(true)}>
               <Calculator className="h-4 w-4 mr-2" />
               Fechar Mês
@@ -506,7 +506,7 @@ function GoalsPageContent() {
                           </Badge>
                         </TableCell>
                         <TableCell className="text-center">
-                          {commission.status !== "PAID" && hasPermission("settings.edit") && (
+                          {commission.status !== "PAID" && hasPermission("goals.manage") && (
                             <Button
                               size="sm"
                               variant="outline"

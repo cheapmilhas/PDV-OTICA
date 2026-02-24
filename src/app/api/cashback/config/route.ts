@@ -26,7 +26,7 @@ export async function GET(request: NextRequest) {
 // PUT - Atualizar configuração do cashback
 export async function PUT(request: NextRequest) {
   try {
-    await requirePermission("settings.edit");
+    await requirePermission("cashback.manage");
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
 

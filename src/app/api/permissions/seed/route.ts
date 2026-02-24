@@ -89,9 +89,15 @@ const PERMISSIONS = [
   { code: Permission.SERVICE_ORDERS_CREATE, name: PERMISSION_LABELS[Permission.SERVICE_ORDERS_CREATE], description: "Permite criar novas ordens de serviço", module: "service_orders", category: "Ordens de Serviço", sortOrder: 2 },
   { code: Permission.SERVICE_ORDERS_EDIT, name: PERMISSION_LABELS[Permission.SERVICE_ORDERS_EDIT], description: "Permite editar ordens de serviço existentes", module: "service_orders", category: "Ordens de Serviço", sortOrder: 3 },
   { code: Permission.SUPPLIERS_VIEW, name: PERMISSION_LABELS[Permission.SUPPLIERS_VIEW], description: "Permite visualizar a lista de fornecedores", module: "suppliers", category: "Fornecedores", sortOrder: 1 },
+  { code: Permission.SUPPLIERS_MANAGE, name: PERMISSION_LABELS[Permission.SUPPLIERS_MANAGE], description: "Permite criar, editar e excluir fornecedores", module: "suppliers", category: "Fornecedores", sortOrder: 2 },
   { code: Permission.LABORATORIES_VIEW, name: PERMISSION_LABELS[Permission.LABORATORIES_VIEW], description: "Permite visualizar a lista de laboratórios", module: "laboratories", category: "Laboratórios", sortOrder: 1 },
+  { code: Permission.LABORATORIES_MANAGE, name: PERMISSION_LABELS[Permission.LABORATORIES_MANAGE], description: "Permite criar, editar e excluir laboratórios", module: "laboratories", category: "Laboratórios", sortOrder: 2 },
   { code: Permission.CASHBACK_VIEW, name: PERMISSION_LABELS[Permission.CASHBACK_VIEW], description: "Permite visualizar saldos e movimentações de cashback", module: "cashback", category: "Cashback", sortOrder: 1 },
+  { code: Permission.CASHBACK_MANAGE, name: PERMISSION_LABELS[Permission.CASHBACK_MANAGE], description: "Permite configurar regras e gerenciar cashback", module: "cashback", category: "Cashback", sortOrder: 2 },
   { code: Permission.GOALS_VIEW, name: PERMISSION_LABELS[Permission.GOALS_VIEW], description: "Permite visualizar metas de vendas", module: "goals", category: "Metas", sortOrder: 1 },
+  { code: Permission.GOALS_MANAGE, name: PERMISSION_LABELS[Permission.GOALS_MANAGE], description: "Permite definir metas, fechar mês e pagar comissões", module: "goals", category: "Metas", sortOrder: 2 },
+  { code: Permission.CAMPAIGNS_VIEW, name: PERMISSION_LABELS[Permission.CAMPAIGNS_VIEW], description: "Permite visualizar campanhas de bonificação", module: "campaigns", category: "Campanhas", sortOrder: 1 },
+  { code: Permission.CAMPAIGNS_MANAGE, name: PERMISSION_LABELS[Permission.CAMPAIGNS_MANAGE], description: "Permite criar, editar, ativar e encerrar campanhas", module: "campaigns", category: "Campanhas", sortOrder: 2 },
   { code: Permission.REMINDERS_VIEW, name: PERMISSION_LABELS[Permission.REMINDERS_VIEW], description: "Permite visualizar lembretes de clientes", module: "reminders", category: "Lembretes", sortOrder: 1 },
 ];
 
@@ -136,8 +142,12 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     Permission.SETTINGS_VIEW, Permission.SETTINGS_EDIT,
     // Módulos adicionais
     Permission.SERVICE_ORDERS_VIEW, Permission.SERVICE_ORDERS_CREATE, Permission.SERVICE_ORDERS_EDIT,
-    Permission.SUPPLIERS_VIEW, Permission.LABORATORIES_VIEW,
-    Permission.CASHBACK_VIEW, Permission.GOALS_VIEW, Permission.REMINDERS_VIEW,
+    Permission.SUPPLIERS_VIEW, Permission.SUPPLIERS_MANAGE,
+    Permission.LABORATORIES_VIEW, Permission.LABORATORIES_MANAGE,
+    Permission.CASHBACK_VIEW, Permission.CASHBACK_MANAGE,
+    Permission.GOALS_VIEW, Permission.GOALS_MANAGE,
+    Permission.CAMPAIGNS_VIEW, Permission.CAMPAIGNS_MANAGE,
+    Permission.REMINDERS_VIEW,
   ],
 
   // Vendedor - Foco em vendas e clientes
@@ -159,8 +169,10 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     Permission.CASHBACK_VIEW,
     // Lembretes
     Permission.REMINDERS_VIEW,
-    // Metas
+    // Metas (apenas visualizar)
     Permission.GOALS_VIEW,
+    // Campanhas (apenas visualizar)
+    Permission.CAMPAIGNS_VIEW,
     // Configurações básicas
     Permission.SETTINGS_VIEW,
   ],

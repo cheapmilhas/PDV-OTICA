@@ -27,7 +27,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
-    await requirePermission("settings.edit");
+    await requirePermission("goals.manage");
     const body = await request.json();
     const data = salesGoalSchema.parse(body);
     const goal = await goalsService.createOrUpdateGoal(branchId, data);

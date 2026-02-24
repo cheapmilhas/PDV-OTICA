@@ -78,9 +78,15 @@ export enum Permission {
   SERVICE_ORDERS_CREATE = "service_orders.create",
   SERVICE_ORDERS_EDIT = "service_orders.edit",
   SUPPLIERS_VIEW = "suppliers.view",
+  SUPPLIERS_MANAGE = "suppliers.manage",
   LABORATORIES_VIEW = "laboratories.view",
+  LABORATORIES_MANAGE = "laboratories.manage",
   CASHBACK_VIEW = "cashback.view",
+  CASHBACK_MANAGE = "cashback.manage",
   GOALS_VIEW = "goals.view",
+  GOALS_MANAGE = "goals.manage",
+  CAMPAIGNS_VIEW = "campaigns.view",
+  CAMPAIGNS_MANAGE = "campaigns.manage",
   REMINDERS_VIEW = "reminders.view",
 }
 
@@ -163,9 +169,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.SERVICE_ORDERS_CREATE,
     Permission.SERVICE_ORDERS_EDIT,
     Permission.SUPPLIERS_VIEW,
+    Permission.SUPPLIERS_MANAGE,
     Permission.LABORATORIES_VIEW,
+    Permission.LABORATORIES_MANAGE,
     Permission.CASHBACK_VIEW,
+    Permission.CASHBACK_MANAGE,
     Permission.GOALS_VIEW,
+    Permission.GOALS_MANAGE,
+    Permission.CAMPAIGNS_VIEW,
+    Permission.CAMPAIGNS_MANAGE,
     Permission.REMINDERS_VIEW,
   ],
 
@@ -198,6 +210,12 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
 
     // Lembretes
     Permission.REMINDERS_VIEW,
+
+    // Metas (apenas visualizar)
+    Permission.GOALS_VIEW,
+
+    // Campanhas (apenas visualizar)
+    Permission.CAMPAIGNS_VIEW,
 
     // Configurações básicas
     Permission.SETTINGS_VIEW,
@@ -367,9 +385,15 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.SERVICE_ORDERS_CREATE]: "Criar ordens de serviço",
   [Permission.SERVICE_ORDERS_EDIT]: "Editar ordens de serviço",
   [Permission.SUPPLIERS_VIEW]: "Visualizar fornecedores",
+  [Permission.SUPPLIERS_MANAGE]: "Gerenciar fornecedores",
   [Permission.LABORATORIES_VIEW]: "Visualizar laboratórios",
+  [Permission.LABORATORIES_MANAGE]: "Gerenciar laboratórios",
   [Permission.CASHBACK_VIEW]: "Visualizar cashback",
+  [Permission.CASHBACK_MANAGE]: "Gerenciar cashback",
   [Permission.GOALS_VIEW]: "Visualizar metas",
+  [Permission.GOALS_MANAGE]: "Gerenciar metas e comissões",
+  [Permission.CAMPAIGNS_VIEW]: "Visualizar campanhas",
+  [Permission.CAMPAIGNS_MANAGE]: "Gerenciar campanhas",
   [Permission.REMINDERS_VIEW]: "Visualizar lembretes",
 };
 

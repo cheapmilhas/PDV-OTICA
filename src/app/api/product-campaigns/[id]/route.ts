@@ -104,7 +104,7 @@ export async function PATCH(
         { status: 401 }
       );
     }
-    await requirePermission("settings.edit");
+    await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
     const { id } = await context.params;
@@ -160,7 +160,7 @@ export async function DELETE(
         { status: 401 }
       );
     }
-    await requirePermission("settings.edit");
+    await requirePermission("campaigns.manage");
 
     const companyId = await getCompanyId();
     const { id } = await context.params;

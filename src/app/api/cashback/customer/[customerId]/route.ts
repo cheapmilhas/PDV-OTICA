@@ -50,7 +50,7 @@ export async function GET(request: NextRequest, { params }: Params) {
 // POST - Ajuste manual de cashback
 export async function POST(request: NextRequest, { params }: Params) {
   try {
-    await requirePermission("cashback.view");
+    await requirePermission("cashback.manage");
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
     const { customerId } = await params;

@@ -11,7 +11,7 @@ interface Params {
 export async function PUT(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
-    await requirePermission("settings.edit");
+    await requirePermission("goals.manage");
     const { id } = await params;
     const commission = await goalsService.markCommissionAsPaid(id);
     return NextResponse.json({ success: true, data: commission, message: "Comissão marcada como paga" });

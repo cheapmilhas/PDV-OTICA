@@ -145,7 +145,7 @@ const menuItems = [
         name: "Campanhas",
         href: "/dashboard/campanhas",
         icon: TrendingUp,
-        permission: "sales.view"
+        permission: "campaigns.view"
       },
       {
         name: "Lembretes",

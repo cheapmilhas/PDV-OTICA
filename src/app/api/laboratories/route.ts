@@ -134,7 +134,7 @@ export async function GET(request: NextRequest) {
  */
 export async function POST(request: NextRequest) {
   try {
-    await requirePermission("settings.edit");
+    await requirePermission("laboratories.manage");
     const companyId = await getCompanyId();
 
     const body = await request.json();
