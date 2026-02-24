@@ -53,7 +53,7 @@ export async function POST(request: Request) {
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
-    await requirePermission("suppliers.view");
+    await requirePermission("settings.edit");
 
     // Parse e valida body
     const body = await request.json();

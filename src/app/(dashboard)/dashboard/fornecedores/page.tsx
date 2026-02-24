@@ -338,7 +338,7 @@ function FornecedoresPage() {
             )}
             Exportar
           </Button>
-          {hasPermission("suppliers.view") && (
+          {hasPermission("settings.edit") && (
             <Button variant="outline" disabled={importing} asChild>
               <label className="cursor-pointer">
                 {importing ? (
@@ -357,7 +357,7 @@ function FornecedoresPage() {
               </label>
             </Button>
           )}
-          {hasPermission("suppliers.view") && (
+          {hasPermission("settings.edit") && (
             <Button onClick={() => toast("Em desenvolvimento")}>
               <Plus className="mr-2 h-4 w-4" />
               Novo Fornecedor
@@ -834,7 +834,7 @@ function FornecedoresPage() {
                 </Button>
                 {selectedSupplier && (
                   <>
-                    {!selectedSupplier.active && hasPermission("suppliers.view") && (
+                    {!selectedSupplier.active && hasPermission("settings.edit") && (
                       <Button
                         variant="destructive"
                         onClick={() => handlePermanentDelete(selectedSupplier.id)}
@@ -843,7 +843,7 @@ function FornecedoresPage() {
                         Excluir Permanentemente
                       </Button>
                     )}
-                    {hasPermission("suppliers.view") && (
+                    {hasPermission("settings.edit") && (
                       <Button
                         variant={selectedSupplier.active ? "destructive" : "default"}
                         onClick={() => handleToggleStatus(selectedSupplier.id, selectedSupplier.active)}
@@ -858,7 +858,7 @@ function FornecedoresPage() {
                         )}
                       </Button>
                     )}
-                    {hasPermission("suppliers.view") && (
+                    {hasPermission("settings.edit") && (
                       <Button onClick={handleStartEdit}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar

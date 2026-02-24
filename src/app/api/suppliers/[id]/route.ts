@@ -42,7 +42,7 @@ export async function PUT(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    await requirePermission("suppliers.view");
+    await requirePermission("settings.edit");
     const { id } = await params;
 
     const body = await request.json();
@@ -73,7 +73,7 @@ export async function DELETE(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    await requirePermission("suppliers.view");
+    await requirePermission("settings.edit");
     const { id } = await params;
 
     // Verifica se é delete permanente

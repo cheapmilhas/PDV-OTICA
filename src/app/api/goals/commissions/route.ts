@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
 import { closeMonthSchema } from "@/lib/validations/goals.schema";
@@ -25,6 +25,7 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const branchId = await getBranchId();
+    await requirePermission("settings.edit");
     const body = await request.json();
     const data = closeMonthSchema.parse(body);
     const result = await goalsService.closeMonth(branchId, data);

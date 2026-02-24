@@ -108,7 +108,7 @@ export async function POST(request: NextRequest) {
         { status: 401 }
       );
     }
-    await requirePermission("sales.view");
+    await requirePermission("settings.edit");
 
     const companyId = await getCompanyId();
     const body = await request.json();

@@ -211,7 +211,7 @@ function CampanhasPageContent() {
         </div>
 
         <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-          {hasPermission("sales.view") && (
+          {hasPermission("settings.edit") && (
             <DialogTrigger asChild>
               <Button>
                 <Plus className="mr-2 h-4 w-4" />
@@ -307,7 +307,7 @@ function CampanhasPageContent() {
                     <TableCell>{campaign.priority}</TableCell>
                     <TableCell className="text-right">
                       <div className="flex items-center justify-end gap-2">
-                        {campaign.status === "DRAFT" && hasPermission("sales.view") && (
+                        {campaign.status === "DRAFT" && hasPermission("settings.edit") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -316,7 +316,7 @@ function CampanhasPageContent() {
                             <Play className="h-4 w-4" />
                           </Button>
                         )}
-                        {campaign.status === "ACTIVE" && hasPermission("sales.view") && (
+                        {campaign.status === "ACTIVE" && hasPermission("settings.edit") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -325,7 +325,7 @@ function CampanhasPageContent() {
                             <Pause className="h-4 w-4" />
                           </Button>
                         )}
-                        {campaign.status === "PAUSED" && hasPermission("sales.view") && (
+                        {campaign.status === "PAUSED" && hasPermission("settings.edit") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -341,7 +341,7 @@ function CampanhasPageContent() {
                         >
                           <BarChart3 className="h-4 w-4" />
                         </Button>
-                        {hasPermission("sales.view") && (
+                        {hasPermission("settings.edit") && (
                           <Button
                             variant="ghost"
                             size="sm"
@@ -350,7 +350,7 @@ function CampanhasPageContent() {
                             <Edit className="h-4 w-4" />
                           </Button>
                         )}
-                        {(campaign.status === "DRAFT" || campaign.status === "PAUSED") && hasPermission("sales.view") && (
+                        {(campaign.status === "DRAFT" || campaign.status === "PAUSED") && hasPermission("settings.edit") && (
                           <Button
                             variant="ghost"
                             size="sm"

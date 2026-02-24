@@ -271,7 +271,7 @@ function LaboratoriosPage() {
             Gerencie os laboratórios parceiros
           </p>
         </div>
-        {hasPermission("laboratories.view") && (
+        {hasPermission("settings.edit") && (
           <Button onClick={() => setCreateDialogOpen(true)}>
             <Plus className="mr-2 h-4 w-4" />
             Novo Laboratório
@@ -850,7 +850,7 @@ function LaboratoriosPage() {
                 </Button>
                 {selectedLab && (
                   <>
-                    {hasPermission("laboratories.view") && (
+                    {hasPermission("settings.edit") && (
                       <Button
                         variant={selectedLab.active ? "destructive" : "default"}
                         onClick={() => handleToggleStatus(selectedLab.id, selectedLab.active)}
@@ -865,7 +865,7 @@ function LaboratoriosPage() {
                         )}
                       </Button>
                     )}
-                    {hasPermission("laboratories.view") && (
+                    {hasPermission("settings.edit") && (
                       <Button onClick={handleStartEdit}>
                         <Edit className="h-4 w-4 mr-2" />
                         Editar
