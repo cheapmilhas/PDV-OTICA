@@ -48,8 +48,10 @@ import {
   Cell,
 } from "recharts";
 import Link from "next/link";
+import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
+  const router = useRouter();
   const [currentTime, setCurrentTime] = useState(new Date());
   const [metrics, setMetrics] = useState({
     salesToday: 0,
@@ -72,6 +74,22 @@ export default function DashboardPage() {
     osDelayedList: [] as Array<{ id: string; number: number; promisedDate: string; customer: { name: string } }>,
   });
   const [loading, setLoading] = useState(true);
+
+  // Verificar se precisa completar onboarding
+  useEffect(() => {
+    fetch("/api/onboarding")
+      .then((r) => r.json())
+      .then((data) => {
+        if (
+          data.onboarding &&
+          data.onboarding.onboardingStep < 4 &&
+          !data.onboarding.onboardingDoneAt
+        ) {
+          router.push("/dashboard/onboarding");
+        }
+      })
+      .catch(() => {});
+  }, [router]);
 
   // Buscar todos os dados da API
   useEffect(() => {

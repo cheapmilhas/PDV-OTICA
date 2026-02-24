@@ -177,7 +177,7 @@ export function Pricing() {
 
                     {/* CTA */}
                     <Link
-                      href="/contato"
+                      href="/registro"
                       className={`block w-full text-center py-3 rounded-xl text-sm font-medium transition-all ${
                         plan.isFeatured
                           ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25"

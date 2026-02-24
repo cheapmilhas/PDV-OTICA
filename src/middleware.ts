@@ -61,7 +61,7 @@ export async function middleware(request: NextRequest) {
   }
 
   // Permitir rotas públicas (landing page, auth, etc.)
-  const publicRoutes = ["/", "/precos", "/contato", "/sobre", "/login", "/force-logout", "/impersonate"];
+  const publicRoutes = ["/", "/precos", "/contato", "/sobre", "/login", "/force-logout", "/impersonate", "/registro"];
   if (
     publicRoutes.includes(pathname) ||
     pathname.startsWith("/api/auth") ||

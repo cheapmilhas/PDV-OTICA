@@ -63,7 +63,7 @@ export function Header() {
               Entrar
             </Link>
             <Link
-              href="/contato"
+              href="/registro"
               className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-500 hover:to-purple-500 transition-all shadow-lg shadow-indigo-500/25"
             >
               Teste Grátis
@@ -104,7 +104,7 @@ export function Header() {
                 Entrar
               </Link>
               <Link
-                href="/contato"
+                href="/registro"
                 onClick={() => setMenuOpen(false)}
                 className="block px-4 py-3 text-center text-white font-medium bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg"
               >
