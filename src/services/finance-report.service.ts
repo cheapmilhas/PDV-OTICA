@@ -78,13 +78,15 @@ export async function getDynamicDRE(
       ...where,
       type: "COGS",
       side: "DEBIT",
+      debitAccountId: { not: null },
     },
     _sum: { amount: true },
   });
 
+  const cmvAccountIds = cmvDetail.map((d) => d.debitAccountId).filter(Boolean) as string[];
   const cmvAccounts = await prisma.chartOfAccounts.findMany({
     where: {
-      id: { in: cmvDetail.map((d) => d.debitAccountId) },
+      id: { in: cmvAccountIds },
     },
     select: { id: true, code: true, name: true },
   });

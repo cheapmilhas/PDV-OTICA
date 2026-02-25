@@ -3541,10 +3541,10 @@ model FinanceEntry {
   side      FinanceEntrySide // DEBIT ou CREDIT
   amount    Decimal          @db.Decimal(14, 2)
 
-  debitAccountId  String
-  debitAccount    ChartOfAccounts @relation("DebitAccount", fields: [debitAccountId], references: [id])
-  creditAccountId String
-  creditAccount   ChartOfAccounts @relation("CreditAccount", fields: [creditAccountId], references: [id])
+  debitAccountId  String?
+  debitAccount    ChartOfAccounts? @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccountId String?
+  creditAccount   ChartOfAccounts? @relation("CreditAccount", fields: [creditAccountId], references: [id])
 
   financeAccountId String?
   financeAccount   FinanceAccount? @relation(fields: [financeAccountId], references: [id])
