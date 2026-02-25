@@ -189,10 +189,40 @@ export async function POST(request: Request) {
       companyId: result.company.id,
       email: result.user.email,
     });
-  } catch (error) {
+  } catch (error: any) {
     console.error("[REGISTER]", error);
+
+    // Tratar unique constraint
+    if (error?.code === "P2002") {
+      const target = error.meta?.target;
+      if (target?.includes("email")) {
+        return NextResponse.json(
+          { error: "Este email já está cadastrado. Tente fazer login." },
+          { status: 409 }
+        );
+      }
+      if (target?.includes("cnpj")) {
+        return NextResponse.json(
+          { error: "Já existe uma empresa cadastrada com este CNPJ/CPF." },
+          { status: 409 }
+        );
+      }
+      if (target?.includes("slug")) {
+        return NextResponse.json(
+          { error: "Já existe uma empresa com este nome. Tente outro nome." },
+          { status: 409 }
+        );
+      }
+      return NextResponse.json(
+        { error: "Dados duplicados. Verifique email e CNPJ." },
+        { status: 409 }
+      );
+    }
+
+    // Retornar detalhes do erro para diagnóstico
+    const message = error?.message || "Erro desconhecido";
     return NextResponse.json(
-      { error: "Erro ao criar conta. Tente novamente." },
+      { error: `Erro ao criar conta: ${message}` },
       { status: 500 }
     );
   }
