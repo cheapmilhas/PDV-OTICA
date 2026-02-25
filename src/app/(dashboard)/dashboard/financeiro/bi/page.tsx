@@ -99,6 +99,45 @@ interface StockAgingData {
   summary: StockAgingSummary;
 }
 
+// Map API aging band keys ("0-30 dias") to UI keys ("0-30")
+function mapAgeBandKey(band: string): string {
+  if (band.includes("180")) return "180+";
+  const match = band.match(/^(\d+-\d+)/);
+  return match ? match[1] : band;
+}
+
+// Transform API BI response to UI format
+function transformBIResponse(apiData: any[]): BIRow[] {
+  return apiData.map((item: any) => ({
+    dimension: item.name || item.method || "Desconhecido",
+    revenue: Number(item.revenue || item.totalAmount || 0),
+    quantity: Number(item.qty || item.salesCount || item.count || 0),
+    avgTicket: Number(item.avgTicket || (item.revenue && item.count ? item.revenue / item.count : 0)),
+    margin: Number(item.margin != null ? (item.revenue ? (item.margin / item.revenue) * 100 : 0) : 0),
+  }));
+}
+
+// Transform API stock aging response to UI format
+function transformStockAgingResponse(apiData: any): StockAgingData {
+  const items = (apiData.items || []).map((item: any) => ({
+    productName: item.product?.name || "Sem nome",
+    daysInStock: item.ageDays || 0,
+    quantity: item.qtyRemaining || 0,
+    totalCost: item.totalValue || 0,
+    ageRange: mapAgeBandKey(item.ageBand || ""),
+  }));
+
+  const summary: StockAgingSummary = {};
+  if (apiData.summary) {
+    for (const [key, val] of Object.entries(apiData.summary)) {
+      const mappedKey = mapAgeBandKey(key);
+      summary[mappedKey] = { count: (val as any).count || 0, value: (val as any).value || 0 };
+    }
+  }
+
+  return { data: items, summary };
+}
+
 interface Branch {
   id: string;
   name: string;
@@ -207,8 +246,19 @@ function BIPageContent() {
         throw new Error(error.error?.message || "Erro ao buscar dados de BI");
       }
 
-      const result: BIData = await res.json();
-      setBiData(result);
+      const json = await res.json();
+      const apiResult = json.data || json;
+      const rows = transformBIResponse(apiResult.data || []);
+      const totalRevenue = rows.reduce((s, r) => s + r.revenue, 0);
+      const totalQty = rows.reduce((s, r) => s + r.quantity, 0);
+      setBiData({
+        data: rows,
+        totals: {
+          revenue: totalRevenue,
+          quantity: totalQty,
+          avgTicket: totalQty > 0 ? totalRevenue / totalQty : 0,
+        },
+      });
     } catch (error: any) {
       toast.error(error.message);
       setBiData(null);
@@ -232,8 +282,9 @@ function BIPageContent() {
         throw new Error(error.error?.message || "Erro ao buscar dados de estoque");
       }
 
-      const result: StockAgingData = await res.json();
-      setStockData(result);
+      const json = await res.json();
+      const apiResult = json.data || json;
+      setStockData(transformStockAgingResponse(apiResult));
     } catch (error: any) {
       toast.error(error.message);
       setStockData(null);

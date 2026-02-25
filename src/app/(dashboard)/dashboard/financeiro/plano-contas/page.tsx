@@ -78,6 +78,15 @@ const kindConfig: Record<
   },
 };
 
+// Add computed `level` field to each node recursively
+function addLevels(accounts: ChartAccount[], level: number = 1): ChartAccount[] {
+  return accounts.map((acc) => ({
+    ...acc,
+    level,
+    children: acc.children ? addLevels(acc.children, level + 1) : [],
+  }));
+}
+
 // Flatten the tree to get all accounts as a flat list
 function flattenAccounts(accounts: ChartAccount[]): ChartAccount[] {
   const result: ChartAccount[] = [];
@@ -228,7 +237,7 @@ function PlanoContasPageContent() {
       const res = await fetch("/api/finance/chart");
       if (!res.ok) throw new Error("Erro ao carregar plano de contas");
       const json = await res.json();
-      setAccounts(json.data || []);
+      setAccounts(addLevels(json.data || []));
     } catch (error: any) {
       console.error("Erro ao carregar plano de contas:", error);
       toast.error("Erro ao carregar plano de contas");

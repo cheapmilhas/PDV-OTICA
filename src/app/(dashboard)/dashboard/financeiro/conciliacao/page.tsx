@@ -44,28 +44,30 @@ import Link from "next/link";
 import { useRouter } from "next/navigation";
 
 // Types
-type BatchStatus = "OPEN" | "IMPORTING" | "MATCHING" | "REVIEWING" | "CLOSED" | "CANCELED";
+type BatchStatus = "DRAFT" | "IMPORTED" | "MATCHING" | "REVIEWING" | "CLOSED" | "CANCELED";
 type BatchSource = "CARD_ACQUIRER" | "BANK_STATEMENT" | "PIX" | "OTHER";
 
 interface ReconciliationBatch {
   id: string;
-  name: string;
+  name?: string;
   source: BatchSource;
-  acquirerName: string;
+  acquirerName?: string;
   status: BatchStatus;
-  periodStart: string;
-  periodEnd: string;
-  totalItems: number;
-  matchedCount: number;
-  unmatchedCount: number;
-  divergentCount: number;
-  totalExternalAmount: number;
+  periodStart?: string;
+  periodEnd?: string;
+  totalItems?: number;
+  matchedCount?: number;
+  unmatchedCount?: number;
+  divergentCount?: number;
+  totalExternalAmount?: number;
+  totalAmount?: number;
   createdAt: string;
+  description?: string;
 }
 
 const statusConfig: Record<BatchStatus, { label: string; variant: "default" | "secondary" | "destructive" | "outline"; className: string }> = {
-  OPEN: { label: "Aberto", variant: "secondary", className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
-  IMPORTING: { label: "Importando", variant: "default", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
+  DRAFT: { label: "Rascunho", variant: "secondary", className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
+  IMPORTED: { label: "Importado", variant: "default", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
   MATCHING: { label: "Conciliando", variant: "default", className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" },
   REVIEWING: { label: "Em Revisao", variant: "default", className: "bg-orange-100 text-orange-700 hover:bg-orange-100" },
   CLOSED: { label: "Fechado", variant: "default", className: "bg-green-100 text-green-700 hover:bg-green-100" },
@@ -228,7 +230,10 @@ function ConciliacaoListPage() {
             <TableBody>
               {batches.map((batch) => {
                 const config = statusConfig[batch.status];
-                const pendingCount = batch.totalItems - batch.matchedCount;
+                const total = batch.totalItems || 0;
+                const matched = batch.matchedCount || 0;
+                const pendingCount = total - matched;
+                const externalAmount = batch.totalExternalAmount || batch.totalAmount || 0;
 
                 return (
                   <TableRow
@@ -238,12 +243,14 @@ function ConciliacaoListPage() {
                   >
                     <TableCell>
                       <div>
-                        <p className="font-medium">{batch.acquirerName}</p>
-                        <p className="text-xs text-muted-foreground">{batch.name}</p>
+                        <p className="font-medium">{batch.acquirerName || batch.name || "-"}</p>
+                        <p className="text-xs text-muted-foreground">{batch.description || batch.name || ""}</p>
                       </div>
                     </TableCell>
                     <TableCell>
-                      {formatPeriod(batch.periodStart, batch.periodEnd)}
+                      {batch.periodStart && batch.periodEnd
+                        ? formatPeriod(batch.periodStart, batch.periodEnd)
+                        : "-"}
                     </TableCell>
                     <TableCell>
                       <Badge className={config.className}>
@@ -252,10 +259,10 @@ function ConciliacaoListPage() {
                     </TableCell>
                     <TableCell className="text-right">
                       <span className="text-green-600 font-medium">
-                        {batch.matchedCount}
+                        {matched}
                       </span>
                       <span className="text-muted-foreground">
-                        /{batch.totalItems}
+                        /{total}
                       </span>
                     </TableCell>
                     <TableCell className="text-right">
@@ -266,7 +273,7 @@ function ConciliacaoListPage() {
                       )}
                     </TableCell>
                     <TableCell className="text-right font-semibold">
-                      {formatCurrency(batch.totalExternalAmount)}
+                      {formatCurrency(externalAmount)}
                     </TableCell>
                     <TableCell className="text-right">
                       <Button

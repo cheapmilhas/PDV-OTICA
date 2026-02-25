@@ -184,7 +184,7 @@ function DashboardFinanceiroContent() {
       }
 
       const json = await res.json();
-      setData(json);
+      setData(json.data || json);
     } catch (error: any) {
       toast.error(error.message || "Erro ao carregar dashboard financeiro");
     } finally {

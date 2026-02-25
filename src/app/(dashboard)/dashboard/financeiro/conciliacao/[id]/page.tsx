@@ -58,7 +58,7 @@ import Link from "next/link";
 import { useParams } from "next/navigation";
 
 // Types
-type BatchStatus = "OPEN" | "IMPORTING" | "MATCHING" | "REVIEWING" | "CLOSED" | "CANCELED";
+type BatchStatus = "DRAFT" | "IMPORTED" | "MATCHING" | "REVIEWING" | "CLOSED" | "CANCELED";
 
 type ItemStatus =
   | "PENDING"
@@ -83,20 +83,24 @@ type ResolutionType =
 
 interface ReconciliationBatch {
   id: string;
-  name: string;
-  source: string;
-  acquirerName: string;
+  name?: string;
+  source?: string;
+  acquirerName?: string;
   status: BatchStatus;
-  periodStart: string;
-  periodEnd: string;
-  totalItems: number;
-  matchedCount: number;
-  unmatchedCount: number;
-  divergentCount: number;
-  totalExternalAmount: number;
-  totalInternalAmount: number;
-  totalDifference: number;
-  createdAt: string;
+  periodStart?: string;
+  periodEnd?: string;
+  totalItems?: number;
+  matchedCount?: number;
+  unmatchedCount?: number;
+  divergentCount?: number;
+  totalExternalAmount?: number;
+  totalInternalAmount?: number;
+  totalDifference?: number;
+  totalAmount?: number;
+  createdAt?: string;
+  description?: string;
+  _count?: { items: number };
+  statusBreakdown?: Record<string, number>;
 }
 
 interface ReconciliationItem {
@@ -124,11 +128,62 @@ interface InternalPayment {
   saleId: string | null;
 }
 
+// Transform API batch response to match UI interface
+function transformBatch(raw: any): ReconciliationBatch {
+  const sb = raw.statusBreakdown || {};
+  const totalItems = raw.totalItems || raw._count?.items || 0;
+  const matchedCount = raw.matchedCount || (sb["AUTO_MATCHED"] || 0) + (sb["MANUAL_MATCHED"] || 0) + (sb["RESOLVED"] || 0);
+  const unmatchedCount = raw.unmatchedCount || sb["UNMATCHED"] || 0;
+  const divergentCount = raw.divergentCount || sb["DIVERGENT"] || 0;
+
+  return {
+    ...raw,
+    totalItems,
+    matchedCount,
+    unmatchedCount,
+    divergentCount,
+    totalExternalAmount: raw.totalExternalAmount || raw.totalAmount || 0,
+    totalInternalAmount: raw.totalInternalAmount || 0,
+    totalDifference: raw.totalDifference || 0,
+  };
+}
+
+// Transform API item to match UI interface
+function transformItem(raw: any): ReconciliationItem {
+  return {
+    id: raw.id,
+    externalDate: raw.externalDate || "",
+    nsu: raw.nsu || raw.externalId || "",
+    authCode: raw.authorizationCode || raw.authCode || raw.externalRef || null,
+    cardBrand: raw.cardBrand || null,
+    externalAmount: Number(raw.externalAmount || 0),
+    internalAmount: raw.internalAmount != null ? Number(raw.internalAmount) : (raw.matchedSalePayment ? Number(raw.matchedSalePayment.amount) : null),
+    difference: raw.differenceAmount != null ? Number(raw.differenceAmount) : (raw.difference != null ? Number(raw.difference) : null),
+    status: raw.status,
+    resolutionType: raw.resolutionType || null,
+    notes: raw.resolutionNotes || raw.notes || null,
+    matchedPaymentId: raw.matchedSalePaymentId || raw.matchedPaymentId || null,
+  };
+}
+
+// Transform API payment to match UI interface
+function transformPayment(raw: any): InternalPayment {
+  return {
+    id: raw.id,
+    date: raw.receivedAt || raw.date || "",
+    nsu: raw.nsu || null,
+    amount: Number(raw.amount || 0),
+    method: raw.method || "",
+    customerName: raw.sale?.customer?.name || raw.customerName || null,
+    saleId: raw.sale?.id || raw.saleId || null,
+  };
+}
+
 type FilterTab = "ALL" | "PENDING" | "MATCHED" | "UNMATCHED" | "SUGGESTED";
 
 const batchStatusConfig: Record<BatchStatus, { label: string; className: string }> = {
-  OPEN: { label: "Aberto", className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
-  IMPORTING: { label: "Importando", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
+  DRAFT: { label: "Rascunho", className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
+  IMPORTED: { label: "Importado", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
   MATCHING: { label: "Conciliando", className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" },
   REVIEWING: { label: "Em Revisao", className: "bg-orange-100 text-orange-700 hover:bg-orange-100" },
   CLOSED: { label: "Fechado", className: "bg-green-100 text-green-700 hover:bg-green-100" },
@@ -179,6 +234,8 @@ function ConciliacaoDetailPage() {
   const [showImportDialog, setShowImportDialog] = useState(false);
   const [importFile, setImportFile] = useState<File | null>(null);
   const [importing, setImporting] = useState(false);
+  const [templates, setTemplates] = useState<{ id: string; name: string; acquirerName: string }[]>([]);
+  const [selectedTemplateId, setSelectedTemplateId] = useState("");
 
   // Close batch dialog
   const [showCloseDialog, setShowCloseDialog] = useState(false);
@@ -210,7 +267,7 @@ function ConciliacaoDetailPage() {
       if (!res.ok) throw new Error("Erro ao carregar batch");
 
       const data = await res.json();
-      setBatch(data.data || data);
+      setBatch(transformBatch(data.data || data));
     } catch (error: any) {
       console.error("Erro ao carregar batch:", error);
       toast.error("Erro ao carregar detalhes do batch");
@@ -243,7 +300,7 @@ function ConciliacaoDetailPage() {
       if (!res.ok) throw new Error("Erro ao carregar itens");
 
       const data = await res.json();
-      setItems(data.data || []);
+      setItems((data.data || []).map(transformItem));
       setTotalPages(data.pagination?.totalPages || 1);
     } catch (error: any) {
       console.error("Erro ao carregar itens:", error);
@@ -268,10 +325,30 @@ function ConciliacaoDetailPage() {
     setPage(1);
   }, [activeTab]);
 
+  // Fetch templates when import dialog opens
+  useEffect(() => {
+    if (showImportDialog && templates.length === 0) {
+      fetch("/api/finance/reconciliation/templates")
+        .then((res) => res.ok ? res.json() : null)
+        .then((json) => {
+          const list = json?.data || json || [];
+          setTemplates(Array.isArray(list) ? list : []);
+          if (Array.isArray(list) && list.length > 0 && !selectedTemplateId) {
+            setSelectedTemplateId(list[0].id);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [showImportDialog]);
+
   // Import CSV
   const handleImportCSV = async () => {
     if (!importFile) {
       toast.error("Selecione um arquivo CSV");
+      return;
+    }
+    if (!selectedTemplateId) {
+      toast.error("Selecione um template de mapeamento");
       return;
     }
 
@@ -279,6 +356,7 @@ function ConciliacaoDetailPage() {
     try {
       const formData = new FormData();
       formData.append("file", importFile);
+      formData.append("templateId", selectedTemplateId);
 
       const res = await fetch(`/api/finance/reconciliation/batches/${id}/import`, {
         method: "POST",
@@ -290,10 +368,12 @@ function ConciliacaoDetailPage() {
         throw new Error(errData?.error?.message || "Erro ao importar CSV");
       }
 
-      const data = await res.json();
-      toast.success(data.message || "CSV importado com sucesso!");
+      const json = await res.json();
+      const result = json.data || json;
+      toast.success(`CSV importado: ${result.imported || 0} itens`);
       setShowImportDialog(false);
       setImportFile(null);
+      setSelectedTemplateId("");
       fetchBatch();
       fetchItems();
     } catch (error: any) {
@@ -383,9 +463,10 @@ function ConciliacaoDetailPage() {
       if (!res.ok) throw new Error("Erro ao buscar pagamentos");
 
       const data = await res.json();
-      setSearchPayments(data.data || []);
+      const payments = (data.data || []).map(transformPayment);
+      setSearchPayments(payments);
 
-      if ((data.data || []).length === 0) {
+      if (payments.length === 0) {
         toast("Nenhum pagamento encontrado com esses filtros", { icon: "i" });
       }
     } catch (error: any) {
@@ -412,9 +493,9 @@ function ConciliacaoDetailPage() {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
-            paymentId: selectedPaymentId,
+            matchedSalePaymentId: selectedPaymentId,
             resolutionType,
-            notes: resolutionNotes || undefined,
+            resolutionNotes: resolutionNotes || undefined,
           }),
         }
       );
@@ -498,9 +579,9 @@ function ConciliacaoDetailPage() {
     );
   }
 
-  const batchConfig = batchStatusConfig[batch.status];
+  const batchConfig = batchStatusConfig[batch.status] || { label: batch.status, className: "bg-gray-100 text-gray-700" };
   const isClosed = batch.status === "CLOSED" || batch.status === "CANCELED";
-  const pendingCount = batch.totalItems - batch.matchedCount;
+  const pendingCount = (batch.totalItems || 0) - (batch.matchedCount || 0);
 
   const filterTabs: { key: FilterTab; label: string }[] = [
     { key: "ALL", label: "Todos" },
@@ -525,7 +606,7 @@ function ConciliacaoDetailPage() {
             <Badge className={batchConfig.className}>{batchConfig.label}</Badge>
           </div>
           <p className="text-muted-foreground">
-            {batch.acquirerName} - {formatDate(batch.periodStart)} a {formatDate(batch.periodEnd)}
+            {batch.acquirerName || ""} {batch.periodStart ? `- ${formatDate(batch.periodStart)} a ${formatDate(batch.periodEnd || "")}` : ""}
           </p>
         </div>
       </div>
@@ -534,18 +615,18 @@ function ConciliacaoDetailPage() {
       <div className="grid gap-4 md:grid-cols-4">
         <KPICard
           title="Total Itens"
-          value={String(batch.totalItems)}
+          value={String(batch.totalItems || 0)}
           icon={FileText}
           subtitle="Itens no batch"
           className="border-l-4 border-l-blue-500"
         />
         <KPICard
           title="Conciliados"
-          value={String(batch.matchedCount)}
+          value={String(batch.matchedCount || 0)}
           icon={CheckCircle2}
           subtitle={
-            batch.totalItems > 0
-              ? `${Math.round((batch.matchedCount / batch.totalItems) * 100)}% do total`
+            (batch.totalItems || 0) > 0
+              ? `${Math.round(((batch.matchedCount || 0) / (batch.totalItems || 1)) * 100)}% do total`
               : "0% do total"
           }
           className="border-l-4 border-l-green-500"
@@ -758,6 +839,28 @@ function ConciliacaoDetailPage() {
               )}
             </div>
 
+            {/* Template select */}
+            <div className="space-y-2">
+              <Label>Template de Mapeamento</Label>
+              <Select value={selectedTemplateId} onValueChange={setSelectedTemplateId}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o template..." />
+                </SelectTrigger>
+                <SelectContent>
+                  {templates.map((tpl) => (
+                    <SelectItem key={tpl.id} value={tpl.id}>
+                      {tpl.name || tpl.acquirerName || tpl.id}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {templates.length === 0 && (
+                <p className="text-xs text-muted-foreground">
+                  Nenhum template disponivel. Cadastre um template de mapeamento primeiro.
+                </p>
+              )}
+            </div>
+
             <div className="p-3 rounded-md bg-muted">
               <p className="text-xs font-medium mb-1">Formato esperado:</p>
               <p className="text-xs text-muted-foreground">
@@ -814,11 +917,11 @@ function ConciliacaoDetailPage() {
               <div className="grid grid-cols-2 gap-2 text-sm">
                 <div>
                   <p className="text-muted-foreground">Total de itens:</p>
-                  <p className="font-medium">{batch.totalItems}</p>
+                  <p className="font-medium">{batch.totalItems || 0}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Conciliados:</p>
-                  <p className="font-medium text-green-600">{batch.matchedCount}</p>
+                  <p className="font-medium text-green-600">{batch.matchedCount || 0}</p>
                 </div>
                 <div>
                   <p className="text-muted-foreground">Pendentes:</p>
@@ -826,7 +929,7 @@ function ConciliacaoDetailPage() {
                 </div>
                 <div>
                   <p className="text-muted-foreground">Divergentes:</p>
-                  <p className="font-medium text-orange-600">{batch.divergentCount}</p>
+                  <p className="font-medium text-orange-600">{batch.divergentCount || 0}</p>
                 </div>
               </div>
             </div>

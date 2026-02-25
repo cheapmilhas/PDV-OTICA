@@ -157,7 +157,7 @@ function FluxoCaixaPageContent() {
       }
 
       const reportData = await res.json();
-      setData(reportData);
+      setData(reportData.data || reportData);
       toast.success("Fluxo de caixa gerado com sucesso!");
     } catch (error: any) {
       toast.error(error.message);

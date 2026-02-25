@@ -172,7 +172,7 @@ function DREDinamicoPageContent() {
       }
 
       const dreData = await res.json();
-      setData(dreData);
+      setData(dreData.data || dreData);
       toast.success("DRE gerado com sucesso!");
     } catch (error: any) {
       toast.error(error.message);

@@ -196,8 +196,10 @@ function TabComparativoMensal() {
         throw new Error("Erro ao buscar dados do DRE");
       }
 
-      const currentDre: DREReport = await currentRes.json();
-      const previousDre: DREReport = await previousRes.json();
+      const currentDreJson = await currentRes.json();
+      const previousDreJson = await previousRes.json();
+      const currentDre: DREReport = currentDreJson.data || currentDreJson;
+      const previousDre: DREReport = previousDreJson.data || previousDreJson;
 
       // Also fetch dashboard data for salesCount and avgTicket
       const [curDashRes, prevDashRes] = await Promise.all([
@@ -209,8 +211,10 @@ function TabComparativoMensal() {
       let prevDash: DashboardMetrics | null = null;
 
       if (curDashRes.ok && prevDashRes.ok) {
-        const curDashData: DashboardResponse = await curDashRes.json();
-        const prevDashData: DashboardResponse = await prevDashRes.json();
+        const curDashJson = await curDashRes.json();
+        const prevDashJson = await prevDashRes.json();
+        const curDashData: DashboardResponse = curDashJson.data || curDashJson;
+        const prevDashData: DashboardResponse = prevDashJson.data || prevDashJson;
         curDash = curDashData.metrics;
         prevDash = prevDashData.metrics;
         setCurrentDash(curDash);
@@ -419,11 +423,13 @@ function TabEvolucao12Meses() {
       const drePromises = months.map((m) =>
         fetch(`/api/finance/reports/dre?startDate=${m.start}&endDate=${m.end}`)
           .then((r) => (r.ok ? r.json() : null))
+          .then((json) => json?.data || json)
           .catch(() => null)
       );
       const dashPromises = months.map((m) =>
         fetch(`/api/finance/dashboard?startDate=${m.start}&endDate=${m.end}`)
           .then((r) => (r.ok ? r.json() : null))
+          .then((json) => json?.data || json)
           .catch(() => null)
       );
 
@@ -906,7 +912,8 @@ function TabRentabilidadeProduto() {
         throw new Error("Erro ao buscar dados de rentabilidade");
       }
 
-      const result = await res.json();
+      const resultJson = await res.json();
+      const result = resultJson.data || resultJson;
       const items: any[] = result.data || [];
 
       // Map product type names to Portuguese
@@ -929,7 +936,8 @@ function TabRentabilidadeProduto() {
       );
       let totalCostRatio = 0.5; // default 50% cost ratio
       if (brandRes.ok) {
-        const brandData = await brandRes.json();
+        const brandJson = await brandRes.json();
+        const brandData = brandJson.data || brandJson;
         const brandItems: any[] = brandData.data || [];
         const totalRevenue = brandItems.reduce((s: number, b: any) => s + (b.revenue || 0), 0);
         const totalCost = brandItems.reduce((s: number, b: any) => s + (b.cost || 0), 0);

@@ -20,6 +20,15 @@ import {
   Settings,
   Warehouse,
   X,
+  BookOpen,
+  ArrowLeftRight,
+  Receipt,
+  Building2,
+  ListTree,
+  RotateCcw,
+  RefreshCw,
+  Boxes,
+  PieChart,
 } from "lucide-react";
 
 const primaryNav = [
@@ -33,11 +42,21 @@ const moreNav = [
   { icon: FileText, label: "Vendas", href: "/dashboard/vendas", permission: "sales.view" },
   { icon: Package, label: "Produtos", href: "/dashboard/produtos", permission: "products.view" },
   { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque", permission: "stock.view" },
-  { icon: DollarSign, label: "Financeiro", href: "/dashboard/financeiro", permission: "financial.view" },
+  { icon: FileText, label: "Contas Pagar/Receber", href: "/dashboard/financeiro", permission: "financial.view" },
   { icon: Wallet, label: "Caixa", href: "/dashboard/caixa", permission: "cash_shift.view" },
   { icon: Wallet, label: "Cashback", href: "/dashboard/cashback", permission: "cashback.view" },
   { icon: Target, label: "Metas", href: "/dashboard/metas", permission: "goals.view" },
   { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", permission: "reports.sales" },
+  { icon: DollarSign, label: "Dashboard Fin.", href: "/dashboard/financeiro/dashboard", permission: "financial.view" },
+  { icon: BookOpen, label: "DRE", href: "/dashboard/financeiro/dre", permission: "financial.view" },
+  { icon: ArrowLeftRight, label: "Fluxo Caixa", href: "/dashboard/financeiro/fluxo-caixa", permission: "financial.view" },
+  { icon: Receipt, label: "Lançamentos", href: "/dashboard/financeiro/lancamentos", permission: "financial.view" },
+  { icon: Building2, label: "Contas Fin.", href: "/dashboard/financeiro/contas", permission: "financial.view" },
+  { icon: ListTree, label: "Plano Contas", href: "/dashboard/financeiro/plano-contas", permission: "financial.view" },
+  { icon: RotateCcw, label: "Devoluções", href: "/dashboard/financeiro/devolucoes", permission: "financial.view" },
+  { icon: RefreshCw, label: "Conciliação", href: "/dashboard/financeiro/conciliacao", permission: "financial.view" },
+  { icon: Boxes, label: "Lotes Estoque", href: "/dashboard/financeiro/lotes-estoque", permission: "financial.view" },
+  { icon: PieChart, label: "BI Analítico", href: "/dashboard/financeiro/bi", permission: "financial.view" },
   { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];
 
