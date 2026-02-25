@@ -1,6 +1,7 @@
 import { PrismaClient } from '@prisma/client';
 import bcrypt from 'bcryptjs';
 import { seedCategoriesAndBrands } from './seeds/categories-brands.seed';
+import { setupCompanyFinance } from '../src/services/finance-setup.service';
 
 const prisma = new PrismaClient();
 
@@ -417,6 +418,14 @@ async function main() {
       },
     },
   });
+
+  // Configurar módulo financeiro
+  try {
+    await setupCompanyFinance(prisma, company.id, branch.id);
+    console.log('💰 Módulo financeiro configurado');
+  } catch (financeError) {
+    console.error('[FINANCE] Erro ao configurar módulo financeiro:', financeError);
+  }
 
   console.log('\n✅ Seed concluído com sucesso!\n');
   console.log('📊 Resumo:');

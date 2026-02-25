@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
+import { setupCompanyFinance } from "@/services/finance-setup.service";
 
 function generateSlug(name: string): string {
   return name
@@ -219,6 +220,13 @@ export async function POST(request: Request) {
           discountPercent: discountPercent || null,
         },
       });
+
+      // 7.1. Configurar módulo financeiro
+      try {
+        await setupCompanyFinance(tx, company.id, branch?.id);
+      } catch (financeError) {
+        console.error("[FINANCE] Erro ao configurar módulo financeiro:", financeError);
+      }
 
       // 8. Criar Invite (mantém para fluxo de ativação por email)
       const inviteToken = randomBytes(32).toString("hex");

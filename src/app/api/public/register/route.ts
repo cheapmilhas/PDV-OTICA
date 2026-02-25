@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { setupCompanyFinance } from "@/services/finance-setup.service";
 
 /**
  * POST /api/public/register
@@ -164,6 +165,13 @@ export async function POST(request: Request) {
           billingCycle: "MONTHLY",
         },
       });
+
+      // 5.1. Configurar módulo financeiro
+      try {
+        await setupCompanyFinance(tx, company.id, branch.id);
+      } catch (financeError) {
+        console.error("[FINANCE] Erro ao configurar módulo financeiro:", financeError);
+      }
 
       // 6. Auditoria (actorId é FK para AdminUser, não User — usar null)
       await tx.globalAudit.create({
