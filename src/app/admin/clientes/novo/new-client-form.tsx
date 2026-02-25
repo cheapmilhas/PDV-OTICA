@@ -12,6 +12,8 @@ import {
   Users,
   BarChart3,
   Settings,
+  KeyRound,
+  RefreshCw,
 } from "lucide-react";
 
 interface Plan {
@@ -77,6 +79,11 @@ export function NewClientForm({ plans, networks }: Props) {
   const [acquisitionChannel, setAcquisitionChannel] = useState("");
   const [notes, setNotes] = useState("");
 
+  // Admin da ótica
+  const [adminName, setAdminName] = useState("");
+  const [adminEmail, setAdminEmail] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+
   // Opções
   const [sendInviteEmail, setSendInviteEmail] = useState(true);
 
@@ -135,6 +142,9 @@ export function NewClientForm({ plans, networks }: Props) {
           acquisitionChannel,
           notes,
           sendInviteEmail,
+          adminName: adminName || ownerName,
+          adminEmail: adminEmail || ownerEmail,
+          adminPassword,
         }),
       });
 
@@ -385,6 +395,67 @@ export function NewClientForm({ plans, networks }: Props) {
               className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
               placeholder="(85) 99999-1234"
             />
+          </div>
+        </div>
+      </section>
+
+      {/* ADMINISTRADOR DA ÓTICA */}
+      <section className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+        <h2 className="text-lg font-semibold text-white mb-4 flex items-center gap-2">
+          <KeyRound className="w-5 h-5 text-gray-400" />
+          Administrador da Ótica
+        </h2>
+        <p className="text-sm text-gray-500 mb-4">
+          Cria o usuário admin que terá acesso imediato ao sistema. Se não preenchido, a empresa precisará ativar via convite por email.
+        </p>
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Nome Completo</label>
+            <input
+              type="text"
+              value={adminName}
+              onChange={(e) => setAdminName(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              placeholder={ownerName || "Nome do administrador"}
+            />
+            <p className="text-xs text-gray-600 mt-1">Se vazio, usa o nome do responsável</p>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Email (login)</label>
+            <input
+              type="email"
+              value={adminEmail}
+              onChange={(e) => setAdminEmail(e.target.value)}
+              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              placeholder={ownerEmail || "admin@otica.com"}
+            />
+            <p className="text-xs text-gray-600 mt-1">Se vazio, usa o email do responsável</p>
+          </div>
+          <div>
+            <label className="block text-sm text-gray-400 mb-1">Senha</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                value={adminPassword}
+                onChange={(e) => setAdminPassword(e.target.value)}
+                className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+                placeholder="Mínimo 8 caracteres"
+              />
+              <button
+                type="button"
+                onClick={() => {
+                  const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
+                  let pwd = "Otica@";
+                  for (let i = 0; i < 4; i++) pwd += chars.charAt(Math.floor(Math.random() * chars.length));
+                  setAdminPassword(pwd);
+                }}
+                className="flex items-center gap-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-600 hover:text-white transition-colors text-sm whitespace-nowrap"
+              >
+                <RefreshCw className="w-3.5 h-3.5" />
+                Gerar
+              </button>
+            </div>
+            <p className="text-xs text-gray-600 mt-1">O admin pode alterar a senha depois no primeiro login</p>
           </div>
         </div>
       </section>

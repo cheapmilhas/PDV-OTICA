@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { randomBytes } from "crypto";
+import bcrypt from "bcryptjs";
 
 function generateSlug(name: string): string {
   return name
@@ -50,11 +51,23 @@ export async function POST(request: Request) {
     acquisitionChannel,
     notes,
     sendInviteEmail,
+    // Novos campos — admin da ótica
+    adminName,
+    adminEmail,
+    adminPassword,
   } = body;
 
   // Validações
   if (!tradeName || !cnpj || !email || !city || !state || !ownerName || !ownerEmail || !planId) {
     return NextResponse.json({ error: "Campos obrigatórios não preenchidos" }, { status: 400 });
+  }
+
+  // Se adminEmail fornecido, verificar duplicidade
+  if (adminEmail) {
+    const existingUserEmail = await prisma.user.findFirst({ where: { email: adminEmail.toLowerCase().trim() } });
+    if (existingUserEmail) {
+      return NextResponse.json({ error: "Email do administrador já está em uso por outro usuário" }, { status: 400 });
+    }
   }
 
   // Verificar CNPJ duplicado
@@ -140,7 +153,54 @@ export async function POST(request: Request) {
         });
       }
 
-      // 5. Criar Subscription
+      // 5. Criar Branch (Matriz)
+      const branch = await tx.branch.create({
+        data: {
+          companyId: company.id,
+          name: `${tradeName} - Matriz`,
+          phone: phone || null,
+          city: city || null,
+          state: state || null,
+          zipCode: zipCode || null,
+          address: address || null,
+        },
+      });
+
+      // 6. Criar User admin da ótica (se dados fornecidos)
+      let user = null;
+      if (adminEmail && adminPassword && adminName) {
+        const passwordHash = await bcrypt.hash(adminPassword, 12);
+        user = await tx.user.create({
+          data: {
+            companyId: company.id,
+            name: adminName.trim(),
+            email: adminEmail.toLowerCase().trim(),
+            passwordHash,
+            role: "ADMIN",
+            active: true,
+          },
+        });
+
+        // 6b. Vincular user à branch
+        await tx.userBranch.create({
+          data: {
+            userId: user.id,
+            branchId: branch.id,
+          },
+        });
+
+        // Marcar empresa como acessível e onboarding ativo
+        await tx.company.update({
+          where: { id: company.id },
+          data: {
+            accessEnabled: true,
+            accessEnabledAt: new Date(),
+            onboardingStatus: "ACTIVE",
+          },
+        });
+      }
+
+      // 7. Criar Subscription
       const now = new Date();
       const trialEnd = new Date(now.getTime() + (trialDays || 14) * 24 * 60 * 60 * 1000);
 
@@ -158,7 +218,7 @@ export async function POST(request: Request) {
         },
       });
 
-      // 6. Criar Invite
+      // 8. Criar Invite (mantém para fluxo de ativação por email)
       const inviteToken = randomBytes(32).toString("hex");
       const invite = await tx.invite.create({
         data: {
@@ -170,11 +230,13 @@ export async function POST(request: Request) {
           expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000), // 7 dias
           createdById: admin.id,
           createdByName: admin.name,
+          // Se user já criado, marcar invite como ativado
+          ...(user ? { status: "ACTIVATED" as const, activatedAt: now, activatedUserId: user.id } : {}),
         },
       });
 
-      // 7. Adicionar à fila de email
-      if (sendInviteEmail) {
+      // 9. Adicionar à fila de email
+      if (sendInviteEmail && !user) {
         await tx.emailQueue.create({
           data: {
             to: ownerEmail,
@@ -189,13 +251,15 @@ export async function POST(request: Request) {
           },
         });
 
-        await tx.company.update({
-          where: { id: company.id },
-          data: { onboardingStatus: "INVITE_SENT" },
-        });
+        if (!user) {
+          await tx.company.update({
+            where: { id: company.id },
+            data: { onboardingStatus: "INVITE_SENT" },
+          });
+        }
       }
 
-      // 8. Criar nota se houver observações
+      // 10. Criar nota se houver observações
       if (notes) {
         await tx.companyNote.create({
           data: {
@@ -208,7 +272,7 @@ export async function POST(request: Request) {
         });
       }
 
-      // 9. Auditoria
+      // 11. Auditoria
       await tx.globalAudit.create({
         data: {
           actorType: "ADMIN_USER",
@@ -222,17 +286,21 @@ export async function POST(request: Request) {
             networkId,
             inviteId: invite.id,
             sendInviteEmail,
+            adminUserCreated: !!user,
+            adminEmail: user?.email || null,
           },
         },
       });
 
-      return { company, invite };
+      return { company, invite, user, branch };
     });
 
     return NextResponse.json({
       success: true,
       company: result.company,
       inviteId: result.invite.id,
+      adminUserCreated: !!result.user,
+      adminEmail: result.user?.email || null,
     });
   } catch (error: any) {
     console.error("[CREATE_CLIENT]", error);

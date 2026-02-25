@@ -6,6 +6,7 @@ import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, D
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyNotes } from "./company-notes";
+import { CompanyUsers } from "./company-users";
 import { HealthBadge } from "@/components/health-badge";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -350,6 +351,14 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
               </div>
             )}
           </div>
+        </TabPanel>
+
+        {/* TAB: USUÁRIOS */}
+        <TabPanel tabId="usuarios">
+          <CompanyUsers
+            companyId={id}
+            branches={company.branches.map((b) => ({ id: b.id, name: b.name }))}
+          />
         </TabPanel>
 
         {/* TAB: FATURAS */}

@@ -1,9 +1,9 @@
 "use client";
 
 import { createContext, useContext, useState, ReactNode } from "react";
-import { FileText, Activity, CreditCard, StickyNote, TrendingUp } from "lucide-react";
+import { FileText, Activity, CreditCard, StickyNote, TrendingUp, Users } from "lucide-react";
 
-export type TabId = "resumo" | "assinatura" | "faturas" | "notas" | "uso";
+export type TabId = "resumo" | "assinatura" | "usuarios" | "faturas" | "notas" | "uso";
 
 interface Tab {
   id: TabId;
@@ -14,6 +14,7 @@ interface Tab {
 const tabs: Tab[] = [
   { id: "resumo", label: "Resumo", icon: Activity },
   { id: "assinatura", label: "Assinatura", icon: CreditCard },
+  { id: "usuarios", label: "Usuários", icon: Users },
   { id: "faturas", label: "Faturas", icon: FileText },
   { id: "notas", label: "Notas", icon: StickyNote },
   { id: "uso", label: "Uso", icon: TrendingUp },
