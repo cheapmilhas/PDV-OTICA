@@ -784,8 +784,43 @@ export class QuoteService {
             status: "RECEIVED",
             receivedAt: new Date(),
             receivedByUserId: userId,
+            ...((payment as any).cardBrand && { cardBrand: (payment as any).cardBrand }),
+            ...((payment as any).cardLastDigits && { cardLastDigits: (payment as any).cardLastDigits }),
+            ...((payment as any).nsu && { nsu: (payment as any).nsu }),
+            ...((payment as any).authorizationCode && { authorizationCode: (payment as any).authorizationCode }),
+            ...((payment as any).acquirer && { acquirer: (payment as any).acquirer }),
           },
         });
+
+        // Auto-calcular taxas de cartão se não informadas
+        if (
+          (payment.method === "CREDIT_CARD" || payment.method === "DEBIT_CARD") &&
+          !salePayment.feeAmount
+        ) {
+          try {
+            const { calculateCardFee } = await import("@/services/card-fee.service");
+            const feeResult = await calculateCardFee(
+              companyId,
+              (payment as any).cardBrand || "VISA",
+              payment.method === "CREDIT_CARD" ? "CREDIT" : "DEBIT",
+              payment.installments || 1,
+              Number(payment.amount)
+            );
+            if (feeResult) {
+              await tx.salePayment.update({
+                where: { id: salePayment.id },
+                data: {
+                  feePercent: feeResult.feePercent,
+                  feeAmount: feeResult.feeAmount,
+                  netAmount: feeResult.netAmount,
+                  settlementDate: feeResult.settlementDate,
+                },
+              });
+            }
+          } catch {
+            // Falha no cálculo de fee não deve impedir a venda
+          }
+        }
 
         // 7.5. Criar CashMovement para TODOS os métodos de pagamento
         await tx.cashMovement.create({
@@ -873,6 +908,15 @@ export class QuoteService {
           convertedFromQuote: true,
         },
       });
+
+      // Gerar lançamentos financeiros (ledger)
+      try {
+        const { generateSaleEntries } = await import("@/services/finance-entry.service");
+        await generateSaleEntries(tx, sale.id, companyId);
+      } catch (financeError) {
+        console.error("[FINANCE] Erro ao gerar lançamentos:", financeError);
+        // NÃO throw — venda já completada, finance é secundário
+      }
 
       return { sale: completeSale, quote: updatedQuote };
     });

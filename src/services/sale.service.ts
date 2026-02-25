@@ -404,6 +404,36 @@ export class SaleService {
           },
         });
 
+        // 4.1. Auto-calcular taxas de cartão se não informadas
+        if (
+          (payment.method === "CREDIT_CARD" || payment.method === "DEBIT_CARD") &&
+          !salePayment.feeAmount
+        ) {
+          try {
+            const { calculateCardFee } = await import("@/services/card-fee.service");
+            const feeResult = await calculateCardFee(
+              companyId,
+              payment.cardBrand || "VISA",
+              payment.method === "CREDIT_CARD" ? "CREDIT" : "DEBIT",
+              payment.installmentConfig?.count || payment.installments || 1,
+              Number(payment.amount)
+            );
+            if (feeResult) {
+              await tx.salePayment.update({
+                where: { id: salePayment.id },
+                data: {
+                  feePercent: feeResult.feePercent,
+                  feeAmount: feeResult.feeAmount,
+                  netAmount: feeResult.netAmount,
+                  settlementDate: feeResult.settlementDate,
+                },
+              });
+            }
+          } catch {
+            // Falha no cálculo de fee não deve impedir a venda
+          }
+        }
+
         // 5. Criar CashMovement para TODOS os métodos de pagamento
         console.log(`💰 Criando CashMovement para pagamento:`, {
           cashShiftId: openShift.id,
@@ -532,10 +562,19 @@ export class SaleService {
         },
       });
 
+      // 8. Gerar lançamentos financeiros (ledger)
+      try {
+        const { generateSaleEntries } = await import("@/services/finance-entry.service");
+        await generateSaleEntries(tx, newSale.id, companyId);
+      } catch (financeError) {
+        console.error("[FINANCE] Erro ao gerar lançamentos:", financeError);
+        // NÃO throw — venda já completada, finance é secundário
+      }
+
       return newSale;
     });
 
-    // 8. Gerar cashback (se aplicável - fora da transação principal)
+    // 9. Gerar cashback (se aplicável - fora da transação principal)
     if (customerId) {
       try {
         console.log(`💰 Gerando cashback para venda ${sale.id}, cliente ${customerId}`);
