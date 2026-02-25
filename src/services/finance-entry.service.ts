@@ -228,6 +228,7 @@ export async function generateSaleEntries(
       sourceId: saleId,
       description: `Venda #${saleId.substring(0, 8)}`,
       entryDate: sale.completedAt ?? sale.createdAt,
+      cashDate: null, // Receita é competência — caixa vem no pagamento
     },
   });
 
@@ -258,6 +259,7 @@ export async function generateSaleEntries(
         sourceId: saleId,
         description: `Desconto venda #${saleId.substring(0, 8)}`,
         entryDate: sale.completedAt ?? sale.createdAt,
+        cashDate: null, // Desconto é competência
       },
     });
   }
@@ -316,6 +318,7 @@ export async function generateSaleEntries(
         sourceId: item.id,
         description: `CMV - ${item.description || item.productId}`,
         entryDate: sale.completedAt ?? sale.createdAt,
+        cashDate: null, // CMV é competência pura
       },
     });
   }
@@ -354,6 +357,7 @@ export async function generateSaleEntries(
         sourceId: payment.id,
         description: `Pagamento ${payment.method} - Venda #${saleId.substring(0, 8)}`,
         entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
+        cashDate: payment.receivedAt ?? sale.completedAt ?? new Date(),
       },
     });
 
@@ -395,6 +399,7 @@ export async function generateSaleEntries(
           sourceId: payment.id,
           description: `Taxa cartão ${payment.cardBrand || payment.method} - Venda #${saleId.substring(0, 8)}`,
           entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
+          cashDate: payment.settlementDate ?? payment.receivedAt ?? new Date(),
         },
       });
     }
@@ -456,6 +461,7 @@ export async function generateRefundEntries(
       sourceId: refundId,
       description: `Devolução #${refundId.substring(0, 8)} - Venda #${refund.saleId.substring(0, 8)}`,
       entryDate: refund.completedAt ?? new Date(),
+      cashDate: refund.completedAt ?? new Date(),
     },
   });
 
@@ -494,6 +500,7 @@ export async function generateRefundEntries(
           sourceId: item.id,
           description: `Reversão CMV - Devolução #${refundId.substring(0, 8)}`,
           entryDate: refund.completedAt ?? new Date(),
+          cashDate: null, // Reversão CMV é competência
         },
       });
     }
@@ -533,6 +540,7 @@ export async function generateRefundEntries(
         sourceId: refundId,
         description: `Reembolso ${refund.refundMethod} - Devolução #${refundId.substring(0, 8)}`,
         entryDate: refund.completedAt ?? new Date(),
+        cashDate: refund.completedAt ?? new Date(),
       },
     });
 
@@ -558,6 +566,7 @@ interface ManualExpenseData {
   financeAccountType?: string; // "CASH", "BANK", "PIX"
   branchId?: string;
   entryDate?: Date;
+  cashDate?: Date;
   sourceType?: string;
   sourceId?: string;
 }
@@ -601,6 +610,7 @@ export async function generateManualExpenseEntry(
       sourceId: data.sourceId ?? `manual-${Date.now()}`,
       description: data.description,
       entryDate: data.entryDate ?? new Date(),
+      cashDate: data.cashDate ?? data.entryDate ?? new Date(),
     },
   });
 

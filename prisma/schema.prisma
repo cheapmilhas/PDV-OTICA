@@ -3555,10 +3555,12 @@ model FinanceEntry {
 
   description String?
   entryDate   DateTime         @default(now())
+  cashDate    DateTime?        // Data do regime de caixa (quando dinheiro entra/sai)
   createdAt   DateTime         @default(now())
 
   @@unique([companyId, sourceType, sourceId, type, side])
   @@index([companyId, entryDate])
+  @@index([companyId, cashDate])
   @@index([companyId, type])
   @@index([debitAccountId])
   @@index([creditAccountId])

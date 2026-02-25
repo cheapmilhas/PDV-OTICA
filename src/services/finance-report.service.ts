@@ -170,7 +170,7 @@ export async function getCashFlow(
 ): Promise<CashFlowEntry[]> {
   const where: Prisma.FinanceEntryWhereInput = {
     companyId,
-    entryDate: { gte: startDate, lte: endDate },
+    cashDate: { not: null, gte: startDate, lte: endDate },
     ...(branchId ? { branchId } : {}),
     ...(financeAccountId ? { financeAccountId } : {}),
   };
@@ -178,19 +178,19 @@ export async function getCashFlow(
   const entries = await prisma.financeEntry.findMany({
     where,
     select: {
-      entryDate: true,
+      cashDate: true,
       type: true,
       side: true,
       amount: true,
     },
-    orderBy: { entryDate: "asc" },
+    orderBy: { cashDate: "asc" },
   });
 
-  // Agrupar por data
+  // Agrupar por data de caixa
   const byDate = new Map<string, { inflows: number; outflows: number }>();
 
   for (const entry of entries) {
-    const dateKey = entry.entryDate.toISOString().split("T")[0];
+    const dateKey = entry.cashDate!.toISOString().split("T")[0];
     const current = byDate.get(dateKey) || { inflows: 0, outflows: 0 };
     const amount = Number(entry.amount);
 
