@@ -38,7 +38,7 @@ export async function resolveItem(
   await tx.reconciliationItem.update({
     where: { id: itemId },
     data: {
-      status: "MANUAL_MATCHED",
+      status: "RESOLVED",
       matchedSalePaymentId: data.matchedSalePaymentId || item.matchedSalePaymentId,
       internalAmount,
       differenceAmount: differenceAmount !== null ? Math.round(differenceAmount * 100) / 100 : null,
@@ -64,11 +64,11 @@ export async function closeBatch(
     where: { id: batchId },
   });
 
-  // Verificar se há itens pendentes
+  // Verificar se há itens em status não-final
   const pendingCount = await tx.reconciliationItem.count({
     where: {
       batchId,
-      status: { in: ["PENDING", "UNMATCHED", "SUGGESTED_MATCH"] },
+      status: { in: ["PENDING", "UNMATCHED", "SUGGESTED_MATCH", "DIVERGENT", "DISPUTED"] },
     },
   });
 
@@ -83,7 +83,7 @@ export async function closeBatch(
   const divergentCount = await tx.reconciliationItem.count({
     where: {
       batchId,
-      status: { in: ["AUTO_MATCHED", "MANUAL_MATCHED"] },
+      status: { in: ["AUTO_MATCHED", "MANUAL_MATCHED", "RESOLVED"] },
       differenceAmount: { not: 0 },
     },
   });
@@ -95,7 +95,7 @@ export async function closeBatch(
   const matchedCount = await tx.reconciliationItem.count({
     where: {
       batchId,
-      status: { in: ["AUTO_MATCHED", "MANUAL_MATCHED"] },
+      status: { in: ["AUTO_MATCHED", "MANUAL_MATCHED", "RESOLVED"] },
     },
   });
 
