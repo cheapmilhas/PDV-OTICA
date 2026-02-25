@@ -3719,6 +3719,8 @@ model DailyAgg {
 enum ReconciliationSource {
   CARD_ACQUIRER
   BANK_STATEMENT
+  RECEIVABLES
+  CASH_REGISTER
   PIX
   OTHER
 }
@@ -3741,6 +3743,8 @@ enum ReconciliationItemStatus {
   UNMATCHED
   IGNORED
   DIVERGENT
+  RESOLVED
+  DISPUTED
 }
 
 enum ReconciliationItemDirection {
@@ -3754,6 +3758,11 @@ enum ReconciliationResolutionType {
   PARTIAL
   WRITTEN_OFF
   IGNORED
+  FEE_ADJUSTMENT
+  CHARGEBACK
+  DUPLICATE
+  MISSING_INTERNAL
+  MISSING_EXTERNAL
 }
 
 // ============================================================
