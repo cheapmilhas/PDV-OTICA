@@ -146,22 +146,31 @@ export async function POST(
   }
 
   // Buscar branch (usar primeira da empresa se não especificada)
-  let targetBranchId = branchId;
+  let targetBranchId: string | null = branchId || null;
   if (!targetBranchId) {
     const branch = await prisma.branch.findFirst({
       where: { companyId },
       orderBy: { createdAt: "asc" },
     });
-    if (!branch) {
-      return NextResponse.json({ error: "Empresa não possui filial" }, { status: 400 });
-    }
-    targetBranchId = branch.id;
+    targetBranchId = branch?.id || null;
   }
 
   try {
     const passwordHash = await bcrypt.hash(password, 12);
 
     const user = await prisma.$transaction(async (tx) => {
+      // Se empresa não tem branch, criar Matriz automaticamente
+      let finalBranchId = targetBranchId;
+      if (!finalBranchId) {
+        const newBranch = await tx.branch.create({
+          data: {
+            companyId,
+            name: `${company.tradeName || company.name} - Matriz`,
+          },
+        });
+        finalBranchId = newBranch.id;
+      }
+
       const newUser = await tx.user.create({
         data: {
           companyId,
@@ -176,7 +185,7 @@ export async function POST(
       await tx.userBranch.create({
         data: {
           userId: newUser.id,
-          branchId: targetBranchId!,
+          branchId: finalBranchId,
         },
       });
 
