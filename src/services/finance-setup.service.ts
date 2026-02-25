@@ -1,4 +1,5 @@
-import { PrismaClient, Prisma } from "@prisma/client";
+import { PrismaClient } from "@prisma/client";
+import { setupReconciliationDefaults } from "./reconciliation-template.service";
 
 type TransactionClient = Omit<
   PrismaClient,
@@ -130,4 +131,7 @@ export async function setupCompanyFinance(
       },
     });
   }
+
+  // 3. Criar templates de conciliação padrão
+  await setupReconciliationDefaults(tx, companyId);
 }
