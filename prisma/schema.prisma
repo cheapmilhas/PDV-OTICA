@@ -241,6 +241,19 @@ model Company {
   contactGoals      ContactGoal[]      @relation("ContactGoals")
   crmSettings       CrmSettings?       @relation("CrmSettings")
 
+  // ========================================
+  // MÓDULO FINANCEIRO
+  // ========================================
+  chartOfAccounts        ChartOfAccounts[]
+  financeAccounts        FinanceAccount[]
+  financeEntries         FinanceEntry[]
+  inventoryLots          InventoryLot[]
+  refunds                Refund[]
+  dailyAggs              DailyAgg[]
+  reconciliationBatches  ReconciliationBatch[]
+  reconciliationTemplates ReconciliationTemplate[]
+  reconciliationRules    ReconciliationRule[]
+
   // Índices
   @@index([networkId])
   @@index([onboardingStatus])
@@ -295,6 +308,14 @@ model Branch {
 
   // CRM / Lembretes
   contactGoals ContactGoal[] @relation("BranchContactGoals")
+
+  // Financeiro
+  financeAccounts       FinanceAccount[]
+  financeEntries        FinanceEntry[]
+  inventoryLots         InventoryLot[]
+  refunds               Refund[]
+  dailyAggs             DailyAgg[]
+  reconciliationBatches ReconciliationBatch[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -435,6 +456,9 @@ model Customer {
   crmReminders CustomerReminder[] @relation("CustomerReminders")
   crmContacts  CrmContact[]       @relation("CrmContacts")
 
+  // Financeiro
+  refunds Refund[]
+
   @@unique([companyId, cpf])
   @@index([companyId, name])
   @@index([companyId, phone])
@@ -574,6 +598,9 @@ model Supplier {
   // Campanhas
   campaignItems ProductCampaignItem[]
 
+  // Financeiro
+  inventoryLots InventoryLot[] @relation("LotSupplier")
+
   @@unique([companyId, cnpj])
   @@index([companyId, name])
 }
@@ -706,6 +733,9 @@ model Product {
 
   // Campanhas
   campaignItems ProductCampaignItem[]
+
+  // Financeiro
+  inventoryLots InventoryLot[]
 
   @@unique([companyId, sku])
   @@index([companyId, name])
@@ -1137,6 +1167,9 @@ model Sale {
   // Campanhas
   campaignBonusEntries CampaignBonusEntry[]
 
+  // Financeiro
+  refunds Refund[]
+
   @@index([companyId, branchId, createdAt])
   @@index([customerId, createdAt])
   @@index([sellerUserId, createdAt])
@@ -1162,6 +1195,10 @@ model SaleItem {
 
   // Campanhas
   campaignBonusEntries CampaignBonusEntry[]
+
+  // Financeiro
+  lotConsumptions SaleItemLot[]
+  refundItems     RefundItem[]
 
   @@index([saleId])
   @@index([productId])
@@ -1197,9 +1234,14 @@ model SalePayment {
   receivedByUser User?          @relation("PaymentReceiver", fields: [receivedByUserId], references: [id])
   sale           Sale           @relation(fields: [saleId], references: [id])
 
+  // Conciliação
+  reconciliationItems ReconciliationItem[]
+
   @@index([saleId, status])
   @@index([method, status])
   @@index([settlementDate, settlementStatus])
+  @@index([nsu])
+  @@index([authorizationCode])
 }
 
 model CommissionRule {
@@ -1573,6 +1615,9 @@ model AccountReceivable {
   customer          Customer?               @relation(fields: [customerId], references: [id])
   receivedBy        User?                   @relation("AccountReceivableReceiver", fields: [receivedByUserId], references: [id])
   sale              Sale?                   @relation(fields: [saleId], references: [id])
+
+  // Conciliação
+  reconciliationItems ReconciliationItem[]
 
   @@index([companyId, status, dueDate])
   @@index([customerId, status])
@@ -3385,4 +3430,442 @@ model CrmSettings {
   updatedAt DateTime @updatedAt
 
   @@map("crm_settings")
+}
+
+// ============================================================
+// MÓDULO FINANCEIRO — ENUMS
+// ============================================================
+
+enum FinanceEntryType {
+  SALE_REVENUE
+  COGS
+  PAYMENT_RECEIVED
+  CARD_FEE
+  COMMISSION_EXPENSE
+  EXPENSE
+  REFUND
+  STOCK_ADJUST
+  TRANSFER
+  OTHER
+}
+
+enum FinanceEntrySide {
+  DEBIT
+  CREDIT
+}
+
+enum FinanceAccountType {
+  CASH
+  BANK
+  PIX
+  CARD_ACQUIRER
+  OTHER
+}
+
+enum ChartAccountKind {
+  ASSET
+  LIABILITY
+  REVENUE
+  EXPENSE
+  EQUITY
+}
+
+enum RefundStatus {
+  PENDING
+  APPROVED
+  COMPLETED
+  CANCELED
+}
+
+// ============================================================
+// MÓDULO FINANCEIRO — MODELS
+// ============================================================
+
+model ChartOfAccounts {
+  id        String           @id @default(cuid())
+  companyId String
+  company   Company          @relation(fields: [companyId], references: [id])
+
+  code      String           // "1.1.01"
+  name      String           // "Caixa"
+  kind      ChartAccountKind // ASSET, LIABILITY, REVENUE, EXPENSE, EQUITY
+  parentId  String?
+  parent    ChartOfAccounts? @relation("ChartHierarchy", fields: [parentId], references: [id])
+  children  ChartOfAccounts[] @relation("ChartHierarchy")
+  isSystem  Boolean          @default(true) // Contas padrão não podem ser removidas
+  active    Boolean          @default(true)
+
+  createdAt DateTime         @default(now())
+  updatedAt DateTime         @updatedAt
+
+  debitEntries  FinanceEntry[] @relation("DebitAccount")
+  creditEntries FinanceEntry[] @relation("CreditAccount")
+
+  @@unique([companyId, code])
+  @@index([companyId, kind])
+  @@index([parentId])
+}
+
+model FinanceAccount {
+  id        String             @id @default(cuid())
+  companyId String
+  company   Company            @relation(fields: [companyId], references: [id])
+  branchId  String?
+  branch    Branch?            @relation(fields: [branchId], references: [id])
+
+  name      String             // "Caixa Principal", "PIX", "Conta Itaú"
+  type      FinanceAccountType // CASH, BANK, PIX, CARD_ACQUIRER
+  balance   Decimal            @default(0) @db.Decimal(14, 2)
+  isDefault Boolean            @default(false)
+  active    Boolean            @default(true)
+
+  createdAt DateTime           @default(now())
+  updatedAt DateTime           @updatedAt
+
+  financeEntries        FinanceEntry[]
+  reconciliationBatches ReconciliationBatch[]
+
+  @@unique([companyId, name])
+  @@index([companyId, type])
+  @@index([branchId])
+}
+
+model FinanceEntry {
+  id        String           @id @default(cuid())
+  companyId String
+  company   Company          @relation(fields: [companyId], references: [id])
+  branchId  String?
+  branch    Branch?          @relation(fields: [branchId], references: [id])
+
+  type      FinanceEntryType // SALE_REVENUE, COGS, PAYMENT_RECEIVED, etc.
+  side      FinanceEntrySide // DEBIT ou CREDIT
+  amount    Decimal          @db.Decimal(14, 2)
+
+  debitAccountId  String
+  debitAccount    ChartOfAccounts @relation("DebitAccount", fields: [debitAccountId], references: [id])
+  creditAccountId String
+  creditAccount   ChartOfAccounts @relation("CreditAccount", fields: [creditAccountId], references: [id])
+
+  financeAccountId String?
+  financeAccount   FinanceAccount? @relation(fields: [financeAccountId], references: [id])
+
+  // Rastreabilidade — qual entidade originou este lançamento
+  sourceType String?          // "Sale", "SalePayment", "Refund", "Expense"
+  sourceId   String?
+
+  description String?
+  entryDate   DateTime         @default(now())
+  createdAt   DateTime         @default(now())
+
+  @@unique([companyId, sourceType, sourceId, type, side])
+  @@index([companyId, entryDate])
+  @@index([companyId, type])
+  @@index([debitAccountId])
+  @@index([creditAccountId])
+  @@index([financeAccountId])
+  @@index([sourceType, sourceId])
+}
+
+model InventoryLot {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+
+  productId  String
+  product    Product  @relation(fields: [productId], references: [id])
+  supplierId String?
+  supplier   Supplier? @relation("LotSupplier", fields: [supplierId], references: [id])
+
+  qtyIn        Int              // Quantidade de entrada
+  qtyRemaining Int              // Quantidade restante (FIFO)
+  unitCost     Decimal          @db.Decimal(12, 2)
+  totalCost    Decimal          @db.Decimal(14, 2)
+
+  invoiceNumber String?         // NF de entrada
+  acquiredAt    DateTime        @default(now())
+  createdAt     DateTime        @default(now())
+
+  saleItemLots SaleItemLot[]
+
+  @@index([companyId, productId, acquiredAt])
+  @@index([productId, qtyRemaining])
+  @@index([branchId])
+}
+
+model SaleItemLot {
+  id            String       @id @default(cuid())
+  saleItemId    String
+  saleItem      SaleItem     @relation(fields: [saleItemId], references: [id])
+  inventoryLotId String
+  inventoryLot  InventoryLot @relation(fields: [inventoryLotId], references: [id])
+
+  qtyConsumed Int
+  unitCost    Decimal        @db.Decimal(12, 2)
+  totalCost   Decimal        @db.Decimal(14, 2)
+
+  createdAt   DateTime       @default(now())
+
+  @@unique([saleItemId, inventoryLotId])
+  @@index([inventoryLotId])
+}
+
+model Refund {
+  id         String       @id @default(cuid())
+  companyId  String
+  company    Company      @relation(fields: [companyId], references: [id])
+  branchId   String?
+  branch     Branch?      @relation(fields: [branchId], references: [id])
+  saleId     String
+  sale       Sale         @relation(fields: [saleId], references: [id])
+  customerId String?
+  customer   Customer?    @relation(fields: [customerId], references: [id])
+
+  status     RefundStatus @default(PENDING)
+  reason     String?
+  totalRefund Decimal     @db.Decimal(12, 2)
+  totalCost   Decimal     @default(0) @db.Decimal(12, 2) // Custo dos itens devolvidos
+  refundMethod String?    // "CASH", "CREDIT", "STORE_CREDIT"
+  notes      String?
+
+  approvedAt  DateTime?
+  completedAt DateTime?
+  canceledAt  DateTime?
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  items RefundItem[]
+
+  @@index([companyId, createdAt])
+  @@index([saleId])
+  @@index([customerId])
+  @@index([status])
+}
+
+model RefundItem {
+  id          String   @id @default(cuid())
+  refundId    String
+  refund      Refund   @relation(fields: [refundId], references: [id])
+  saleItemId  String
+  saleItem    SaleItem @relation(fields: [saleItemId], references: [id])
+
+  qtyReturned  Int
+  refundAmount Decimal  @db.Decimal(12, 2)
+  costAmount   Decimal  @default(0) @db.Decimal(12, 2) // Custo FIFO dos itens devolvidos
+
+  createdAt    DateTime @default(now())
+
+  @@index([refundId])
+  @@index([saleItemId])
+}
+
+model DailyAgg {
+  id        String   @id @default(cuid())
+  companyId String
+  company   Company  @relation(fields: [companyId], references: [id])
+  branchId  String?
+  branch    Branch?  @relation(fields: [branchId], references: [id])
+
+  date      DateTime @db.Date
+
+  // Métricas de vendas
+  salesCount    Int     @default(0)
+  grossRevenue  Decimal @default(0) @db.Decimal(14, 2)
+  discountTotal Decimal @default(0) @db.Decimal(14, 2)
+  netRevenue    Decimal @default(0) @db.Decimal(14, 2)
+  cogs          Decimal @default(0) @db.Decimal(14, 2) // CMV
+  grossMargin   Decimal @default(0) @db.Decimal(14, 2) // Margem bruta
+  cardFees      Decimal @default(0) @db.Decimal(14, 2)
+  commissions   Decimal @default(0) @db.Decimal(14, 2)
+  netProfit     Decimal @default(0) @db.Decimal(14, 2) // Lucro líquido estimado
+  avgTicket     Decimal @default(0) @db.Decimal(14, 2)
+  itemsSold     Int     @default(0)
+
+  // Totais por método de pagamento
+  cashTotal       Decimal @default(0) @db.Decimal(14, 2)
+  pixTotal        Decimal @default(0) @db.Decimal(14, 2)
+  debitCardTotal  Decimal @default(0) @db.Decimal(14, 2)
+  creditCardTotal Decimal @default(0) @db.Decimal(14, 2)
+  boletoTotal     Decimal @default(0) @db.Decimal(14, 2)
+  otherTotal      Decimal @default(0) @db.Decimal(14, 2)
+
+  // Devoluções
+  refundsCount  Int     @default(0)
+  refundsTotal  Decimal @default(0) @db.Decimal(14, 2)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, branchId, date])
+  @@index([companyId, date])
+  @@index([branchId, date])
+}
+
+// ============================================================
+// CONCILIAÇÃO FINANCEIRA — ENUMS
+// ============================================================
+
+enum ReconciliationSource {
+  CARD_ACQUIRER
+  BANK_STATEMENT
+  PIX
+  OTHER
+}
+
+enum ReconciliationBatchStatus {
+  DRAFT
+  IMPORTED
+  MATCHING
+  MATCHED
+  REVIEWING
+  CLOSED
+  CANCELED
+}
+
+enum ReconciliationItemStatus {
+  PENDING
+  AUTO_MATCHED
+  SUGGESTED_MATCH
+  MANUAL_MATCHED
+  UNMATCHED
+  IGNORED
+  DIVERGENT
+}
+
+enum ReconciliationItemDirection {
+  CREDIT
+  DEBIT
+}
+
+enum ReconciliationResolutionType {
+  EXACT_MATCH
+  ADJUSTED
+  PARTIAL
+  WRITTEN_OFF
+  IGNORED
+}
+
+// ============================================================
+// CONCILIAÇÃO FINANCEIRA — MODELS
+// ============================================================
+
+model ReconciliationBatch {
+  id        String                     @id @default(cuid())
+  companyId String
+  company   Company                    @relation(fields: [companyId], references: [id])
+  branchId  String?
+  branch    Branch?                    @relation(fields: [branchId], references: [id])
+
+  financeAccountId String?
+  financeAccount   FinanceAccount?     @relation(fields: [financeAccountId], references: [id])
+
+  source       ReconciliationSource      // CARD_ACQUIRER, BANK_STATEMENT, PIX
+  status       ReconciliationBatchStatus @default(DRAFT)
+  acquirerName String?                   // "Stone", "Cielo", "Rede"
+  periodStart  DateTime?
+  periodEnd    DateTime?
+  fileName     String?
+  description  String?
+
+  // Contadores
+  totalItems    Int     @default(0)
+  totalAmount   Decimal @default(0) @db.Decimal(14, 2)
+  matchedCount  Int     @default(0)
+  unmatchedCount Int    @default(0)
+  divergentCount Int    @default(0)
+  ignoredCount   Int    @default(0)
+
+  importedAt DateTime?
+  closedAt   DateTime?
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  items ReconciliationItem[]
+
+  @@index([companyId, status])
+  @@index([companyId, createdAt])
+  @@index([financeAccountId])
+}
+
+model ReconciliationItem {
+  id      String              @id @default(cuid())
+  batchId String
+  batch   ReconciliationBatch @relation(fields: [batchId], references: [id], onDelete: Cascade)
+
+  // Dados externos (do CSV/adquirente)
+  externalDate   DateTime
+  externalAmount Decimal            @db.Decimal(14, 2)
+  externalId     String?            // NSU do adquirente
+  externalRef    String?            // Código de autorização externo
+  cardBrand      String?
+  cardLastDigits String?
+  installments   Int?
+  direction      ReconciliationItemDirection @default(CREDIT)
+  rawData        Json?              // Linha original do CSV
+
+  // Match interno
+  status              ReconciliationItemStatus @default(PENDING)
+  matchedSalePaymentId String?
+  matchedSalePayment   SalePayment?            @relation(fields: [matchedSalePaymentId], references: [id])
+  matchedReceivableId  String?
+  matchedReceivable    AccountReceivable?      @relation(fields: [matchedReceivableId], references: [id])
+
+  internalAmount    Decimal?           @db.Decimal(14, 2) // Valor encontrado internamente
+  differenceAmount  Decimal?           @db.Decimal(14, 2) // Diferença (externo - interno)
+  matchConfidence   Int?               // 0-100 %
+  resolutionType    ReconciliationResolutionType?
+  resolutionNotes   String?
+  resolvedAt        DateTime?
+  resolvedByUserId  String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([batchId, status])
+  @@index([externalId])
+  @@index([externalRef])
+  @@index([matchedSalePaymentId])
+  @@index([matchedReceivableId])
+}
+
+model ReconciliationTemplate {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name          String        // "Stone Padrão", "Cielo CSV"
+  acquirerName  String?       // "Stone", "Cielo", "Rede"
+  isSystem      Boolean       @default(false) // Templates padrão
+  columnMapping Json          // { nsu: 0, date: 1, amount: 2, brand: 3, ... }
+  delimiter     String        @default(",")
+  encoding      String        @default("utf-8")
+  skipRows      Int           @default(1) // Pular header
+  dateFormat    String        @default("dd/MM/yyyy")
+  decimalSep    String        @default(",")
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@unique([companyId, name])
+  @@index([companyId, active])
+}
+
+model ReconciliationRule {
+  id        String  @id @default(cuid())
+  companyId String
+  company   Company @relation(fields: [companyId], references: [id])
+
+  name           String
+  description    String?
+  matchCriteria  Json       // { fields: ["nsu", "amount"], tolerances: { amount: 0.01, dateDays: 2 } }
+  autoApprove    Boolean    @default(false)
+  priority       Int        @default(0) // Prioridade (menor = mais prioritário)
+
+  active    Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([companyId, active, priority])
 }
