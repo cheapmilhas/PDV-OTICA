@@ -22,8 +22,8 @@ async function verifyAdminToken(token: string) {
 export async function middleware(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
-  // Rotas /admin/**
-  if (pathname.startsWith("/admin")) {
+  // Rotas /admin/** e /api/admin/**
+  if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
     // Sempre permitir API de auth
     if (pathname.startsWith("/api/admin/auth")) {
       return NextResponse.next();
@@ -43,14 +43,21 @@ export async function middleware(request: NextRequest) {
 
     // Verificar token admin
     const token = request.cookies.get("admin.session-token")?.value;
+    const isApiRoute = pathname.startsWith("/api/");
 
     if (!token) {
+      if (isApiRoute) {
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+      }
       return NextResponse.redirect(new URL("/admin/login", request.url));
     }
 
     const payload = await verifyAdminToken(token);
 
     if (!payload || !payload.isAdmin) {
+      if (isApiRoute) {
+        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+      }
       // Token inválido ou expirado
       const response = NextResponse.redirect(new URL("/admin/login", request.url));
       response.cookies.delete("admin.session-token");

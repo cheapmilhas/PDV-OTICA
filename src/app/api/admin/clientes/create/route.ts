@@ -189,13 +189,15 @@ export async function POST(request: Request) {
           },
         });
 
-        // Marcar empresa como acessível e onboarding ativo
+        // Marcar empresa como acessível e pular onboarding (admin já configurou)
         await tx.company.update({
           where: { id: company.id },
           data: {
             accessEnabled: true,
             accessEnabledAt: new Date(),
             onboardingStatus: "ACTIVE",
+            onboardingStep: 4,
+            onboardingDoneAt: new Date(),
           },
         });
       }

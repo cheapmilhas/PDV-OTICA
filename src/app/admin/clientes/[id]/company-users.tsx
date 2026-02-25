@@ -14,6 +14,7 @@ import {
   RefreshCw,
   X,
   Users,
+  Shield,
 } from "lucide-react";
 
 interface UserData {
@@ -69,6 +70,7 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
   const [showPasswordModal, setShowPasswordModal] = useState<{ userId: string; userName: string } | null>(null);
   const [showEditModal, setShowEditModal] = useState<UserData | null>(null);
   const [showResetResult, setShowResetResult] = useState<string | null>(null);
+  const [showPermissionsModal, setShowPermissionsModal] = useState<{ userId: string; userName: string; role: string } | null>(null);
   const [dropdownOpen, setDropdownOpen] = useState<string | null>(null);
 
   const fetchUsers = useCallback(async () => {
@@ -248,6 +250,16 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
                             <Pencil className="w-4 h-4" />
                             Editar Dados
                           </button>
+                          <button
+                            onClick={() => {
+                              setDropdownOpen(null);
+                              setShowPermissionsModal({ userId: user.id, userName: user.name, role: user.role });
+                            }}
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+                          >
+                            <Shield className="w-4 h-4" />
+                            Gerenciar Permissões
+                          </button>
                           <div className="border-t border-gray-700 my-1" />
                           <button
                             onClick={() => handleToggleActive(user.id, user.active)}
@@ -324,6 +336,21 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
           onClose={() => setShowEditModal(null)}
           onSaved={() => {
             setShowEditModal(null);
+            fetchUsers();
+          }}
+        />
+      )}
+
+      {/* Modal: Gerenciar Permissões */}
+      {showPermissionsModal && (
+        <PermissionsModal
+          companyId={companyId}
+          userId={showPermissionsModal.userId}
+          userName={showPermissionsModal.userName}
+          userRole={showPermissionsModal.role}
+          onClose={() => setShowPermissionsModal(null)}
+          onSaved={() => {
+            setShowPermissionsModal(null);
             fetchUsers();
           }}
         />
@@ -775,6 +802,317 @@ function EditUserModal({
             </button>
           </div>
         </form>
+      </div>
+    </div>
+  );
+}
+
+// ─── Modal: Gerenciar Permissões ─────────────────────────────────
+
+interface PermissionItem {
+  id: string;
+  code: string;
+  name: string;
+  category: string;
+  fromRole: boolean;
+  customOverride: boolean | null;
+  effective: boolean;
+}
+
+interface PermissionsData {
+  user: { id: string; name: string; email: string; role: string };
+  modules: Record<string, { module: string; permissions: PermissionItem[] }>;
+  summary: { total: number; effective: number; customOverrides: number };
+}
+
+const MODULE_LABELS: Record<string, string> = {
+  sales: "Vendas",
+  quotes: "Orçamentos",
+  customers: "Clientes",
+  products: "Produtos",
+  stock: "Estoque",
+  financial: "Financeiro",
+  accounts_receivable: "Contas a Receber",
+  accounts_payable: "Contas a Pagar",
+  cash_shift: "Caixa",
+  reports: "Relatórios",
+  users: "Usuários",
+  permissions: "Permissões",
+  settings: "Configurações",
+  company: "Empresa",
+  branch: "Filiais",
+  service_orders: "Ordens de Serviço",
+  suppliers: "Fornecedores",
+  laboratories: "Laboratórios",
+  cashback: "Cashback",
+  goals: "Metas",
+  campaigns: "Campanhas",
+  reminders: "Lembretes",
+};
+
+function PermissionsModal({
+  companyId,
+  userId,
+  userName,
+  userRole,
+  onClose,
+  onSaved,
+}: {
+  companyId: string;
+  userId: string;
+  userName: string;
+  userRole: string;
+  onClose: () => void;
+  onSaved: () => void;
+}) {
+  const [data, setData] = useState<PermissionsData | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState("");
+  const [role, setRole] = useState(userRole);
+  const [changes, setChanges] = useState<Map<string, boolean>>(new Map());
+  const [roleChanged, setRoleChanged] = useState(false);
+
+  const fetchPermissions = useCallback(async () => {
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${companyId}/users/${userId}/permissions`);
+      const json = await res.json();
+      if (res.ok) {
+        setData(json);
+        setRole(json.user.role);
+        setChanges(new Map());
+        setRoleChanged(false);
+      } else {
+        setError(json.error);
+      }
+    } catch {
+      setError("Erro ao carregar permissões");
+    } finally {
+      setLoading(false);
+    }
+  }, [companyId, userId]);
+
+  useEffect(() => {
+    fetchPermissions();
+  }, [fetchPermissions]);
+
+  const handleTogglePermission = (code: string, currentEffective: boolean) => {
+    if (roleChanged) return; // Don't allow individual changes when role changed
+    const newChanges = new Map(changes);
+    newChanges.set(code, !currentEffective);
+    setChanges(newChanges);
+  };
+
+  const handleRoleChange = (newRole: string) => {
+    setRole(newRole);
+    setRoleChanged(newRole !== data?.user.role);
+    if (newRole !== data?.user.role) {
+      setChanges(new Map()); // Clear individual changes when role changes
+    }
+  };
+
+  const handleSave = async () => {
+    setSaving(true);
+    setError("");
+
+    try {
+      const body: { role?: string; permissions?: Array<{ code: string; granted: boolean }> } = {};
+
+      if (roleChanged) {
+        body.role = role;
+      } else if (changes.size > 0) {
+        body.permissions = Array.from(changes.entries()).map(([code, granted]) => ({
+          code,
+          granted,
+        }));
+      }
+
+      const res = await fetch(`/api/admin/companies/${companyId}/users/${userId}/permissions`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      onSaved();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const handleReset = async () => {
+    if (!confirm("Resetar todas as permissões customizadas para o padrão do cargo?")) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${companyId}/users/${userId}/permissions`, {
+        method: "DELETE",
+      });
+      const json = await res.json();
+      if (!res.ok) throw new Error(json.error);
+      await fetchPermissions();
+    } catch (err: any) {
+      setError(err.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  const getEffective = (perm: PermissionItem): boolean => {
+    if (roleChanged) return perm.fromRole; // Show role defaults when role is being changed
+    if (changes.has(perm.code)) return changes.get(perm.code)!;
+    return perm.effective;
+  };
+
+  const effectiveCount = data
+    ? Object.values(data.modules).reduce(
+        (acc, mod) => acc + mod.permissions.filter((p) => getEffective(p)).length,
+        0
+      )
+    : 0;
+
+  const hasChanges = roleChanged || changes.size > 0;
+
+  return (
+    <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
+      <div
+        className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {/* Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 flex-shrink-0">
+          <div>
+            <h3 className="text-lg font-semibold text-white">Permissões</h3>
+            <p className="text-sm text-gray-400">
+              {userName} ({ROLE_LABELS[userRole] ?? userRole})
+            </p>
+          </div>
+          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white">
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        {loading ? (
+          <div className="flex items-center justify-center py-16">
+            <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+          </div>
+        ) : data ? (
+          <>
+            {/* Role selector + summary */}
+            <div className="px-6 py-4 border-b border-gray-800 flex-shrink-0">
+              {error && (
+                <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded-lg text-sm mb-3">
+                  {error}
+                </div>
+              )}
+
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-3">
+                  <label className="text-sm text-gray-400">Cargo:</label>
+                  <select
+                    value={role}
+                    onChange={(e) => handleRoleChange(e.target.value)}
+                    className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                  >
+                    <option value="ADMIN">Administrador</option>
+                    <option value="GERENTE">Gerente</option>
+                    <option value="VENDEDOR">Vendedor</option>
+                    <option value="CAIXA">Caixa</option>
+                    <option value="ATENDENTE">Atendente</option>
+                  </select>
+                </div>
+                <span className="text-xs text-gray-500">
+                  {effectiveCount} de {data.summary.total} permissões
+                </span>
+              </div>
+
+              {roleChanged && (
+                <p className="text-xs text-yellow-400 mt-2">
+                  Alterar o cargo vai resetar as permissões customizadas para o padrão do novo cargo.
+                </p>
+              )}
+            </div>
+
+            {/* Permissions list */}
+            <div className="flex-1 overflow-y-auto px-6 py-4 space-y-4">
+              {Object.entries(data.modules).map(([moduleKey, moduleData]) => {
+                const moduleEffective = moduleData.permissions.filter((p) => getEffective(p)).length;
+                return (
+                  <div key={moduleKey} className="rounded-lg border border-gray-800 overflow-hidden">
+                    <div className="px-4 py-2.5 bg-gray-800/50 flex items-center justify-between">
+                      <span className="text-sm font-medium text-white">
+                        {MODULE_LABELS[moduleKey] ?? moduleKey}
+                      </span>
+                      <span className="text-xs text-gray-500">
+                        {moduleEffective} de {moduleData.permissions.length}
+                      </span>
+                    </div>
+                    <div className="divide-y divide-gray-800/50">
+                      {moduleData.permissions.map((perm) => {
+                        const effective = getEffective(perm);
+                        const isCustom = perm.customOverride !== null || changes.has(perm.code);
+                        return (
+                          <label
+                            key={perm.code}
+                            className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-800/30 transition-colors ${
+                              roleChanged ? "opacity-60 cursor-default" : ""
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={effective}
+                              onChange={() => handleTogglePermission(perm.code, effective)}
+                              disabled={roleChanged}
+                              className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+                            />
+                            <span className="text-sm text-gray-300 flex-1">{perm.name}</span>
+                            {isCustom && !roleChanged && (
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-400">
+                                custom
+                              </span>
+                            )}
+                          </label>
+                        );
+                      })}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
+
+            {/* Footer */}
+            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-800 flex-shrink-0">
+              <button
+                onClick={handleReset}
+                disabled={saving || data.summary.customOverrides === 0}
+                className="text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              >
+                Resetar para padrão do cargo
+              </button>
+              <div className="flex gap-3">
+                <button
+                  onClick={onClose}
+                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                >
+                  Cancelar
+                </button>
+                <button
+                  onClick={handleSave}
+                  disabled={saving || !hasChanges}
+                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 text-sm"
+                >
+                  {saving && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Salvar Permissões
+                </button>
+              </div>
+            </div>
+          </>
+        ) : (
+          <div className="p-8 text-center text-red-400">{error || "Erro ao carregar"}</div>
+        )}
       </div>
     </div>
   );

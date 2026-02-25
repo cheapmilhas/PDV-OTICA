@@ -105,6 +105,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
           companyName={company.name}
           isBlocked={company.isBlocked}
           subscriptionStatus={currentSubscription?.status ?? null}
+          billingCycle={currentSubscription?.billingCycle ?? null}
+          currentPlanId={currentSubscription?.planId ?? null}
         />
       </div>
 
@@ -332,7 +334,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                               {hist.action === "canceled" && "Cancelada"}
                               {hist.action === "reactivated" && "Reativada"}
                               {hist.action === "extended_trial" && "Trial Estendido"}
-                              {!["created", "upgraded", "downgraded", "canceled", "reactivated", "extended_trial"].includes(hist.action) && hist.action}
+                              {hist.action === "billing_cycle_changed" && "Ciclo Alterado"}
+                              {!["created", "upgraded", "downgraded", "canceled", "reactivated", "extended_trial", "billing_cycle_changed"].includes(hist.action) && hist.action}
                             </span>
                             <span className="text-xs text-gray-500">{new Date(hist.createdAt).toLocaleString("pt-BR")}</span>
                           </div>
