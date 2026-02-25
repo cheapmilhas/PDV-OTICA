@@ -165,14 +165,16 @@ export async function POST(request: Request) {
         },
       });
 
-      // 6. Auditoria
+      // 6. Auditoria (actorId é FK para AdminUser, não User — usar null)
       await tx.globalAudit.create({
         data: {
           actorType: "USER",
-          actorId: user.id,
+          actorId: null,
           companyId: company.id,
           action: "SELF_REGISTRATION",
           metadata: {
+            userId: user.id,
+            userEmail: user.email,
             planId: plan.id,
             planName: plan.name,
             trialDays: plan.trialDays,
