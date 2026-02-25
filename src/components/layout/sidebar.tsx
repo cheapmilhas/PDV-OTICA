@@ -23,6 +23,16 @@ import {
   FlaskConical,
   Sparkles,
   TrendingUp,
+  DollarSign,
+  BookOpen,
+  ArrowLeftRight,
+  Receipt,
+  Building2,
+  ListTree,
+  RotateCcw,
+  RefreshCw,
+  Boxes,
+  PieChart,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -124,7 +134,7 @@ const menuItems = [
         permission: "cash_shift.view"
       },
       {
-        name: "Financeiro",
+        name: "Contas Pagar/Receber",
         href: "/dashboard/financeiro",
         icon: FileText,
         permission: "financial.view"
@@ -158,6 +168,71 @@ const menuItems = [
         href: "/dashboard/relatorios",
         icon: BarChart3,
         permission: "reports.sales"
+      },
+    ],
+  },
+  {
+    title: "Financeiro",
+    items: [
+      {
+        name: "Dashboard Financeiro",
+        href: "/dashboard/financeiro/dashboard",
+        icon: DollarSign,
+        permission: "financial.view"
+      },
+      {
+        name: "DRE Dinâmica",
+        href: "/dashboard/financeiro/dre",
+        icon: BookOpen,
+        permission: "financial.view"
+      },
+      {
+        name: "Fluxo de Caixa",
+        href: "/dashboard/financeiro/fluxo-caixa",
+        icon: ArrowLeftRight,
+        permission: "financial.view"
+      },
+      {
+        name: "Lançamentos",
+        href: "/dashboard/financeiro/lancamentos",
+        icon: Receipt,
+        permission: "financial.view"
+      },
+      {
+        name: "Contas",
+        href: "/dashboard/financeiro/contas",
+        icon: Building2,
+        permission: "financial.view"
+      },
+      {
+        name: "Plano de Contas",
+        href: "/dashboard/financeiro/plano-contas",
+        icon: ListTree,
+        permission: "financial.view"
+      },
+      {
+        name: "Devoluções",
+        href: "/dashboard/financeiro/devolucoes",
+        icon: RotateCcw,
+        permission: "financial.view"
+      },
+      {
+        name: "Conciliação",
+        href: "/dashboard/financeiro/conciliacao",
+        icon: RefreshCw,
+        permission: "financial.view"
+      },
+      {
+        name: "Lotes de Estoque",
+        href: "/dashboard/financeiro/lotes-estoque",
+        icon: Boxes,
+        permission: "financial.view"
+      },
+      {
+        name: "BI Analítico",
+        href: "/dashboard/financeiro/bi",
+        icon: PieChart,
+        permission: "financial.view"
       },
     ],
   },

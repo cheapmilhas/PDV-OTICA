@@ -28,9 +28,12 @@ async function main() {
   for (const company of companies) {
     try {
       const branchId = company.branches[0]?.id;
-      await prisma.$transaction(async (tx) => {
-        await setupCompanyFinance(tx as any, company.id, branchId);
-      });
+      await prisma.$transaction(
+        async (tx) => {
+          await setupCompanyFinance(tx as any, company.id, branchId);
+        },
+        { maxWait: 30000, timeout: 60000 }
+      );
       console.log(`  ✅ ${company.name} (${company.id})`);
       success++;
     } catch (err) {
