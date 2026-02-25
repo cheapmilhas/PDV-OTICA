@@ -3519,6 +3519,14 @@ model FinanceAccount {
   isDefault Boolean            @default(false)
   active    Boolean            @default(true)
 
+  bankName          String?          // "Itaú", "Bradesco", "Nubank"
+  agency            String?          // "1234"
+  accountNumber     String?          // "56789-0"
+  pixKey            String?          // Chave PIX
+  acquirerName      String?          // "Stone", "Cielo", "Rede"
+  defaultFeePercent Decimal?         @db.Decimal(5, 2) // Taxa padrão do adquirente
+  description       String?          // Observações
+
   createdAt DateTime           @default(now())
   updatedAt DateTime           @updatedAt
 
