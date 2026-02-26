@@ -13,10 +13,22 @@ export async function POST(req: NextRequest) {
     const companyId = await getCompanyId();
     const body = await req.json();
 
-    const { startDate, endDate, branchId } = body;
+    const { startDate, endDate } = body;
+    let { branchId } = body;
 
     if (!startDate || !endDate) {
       return handleApiError(new Error("startDate e endDate são obrigatórios"));
+    }
+
+    // If no branchId provided, use the first branch for this company
+    if (!branchId) {
+      const defaultBranch = await prisma.branch.findFirst({
+        where: { companyId },
+        select: { id: true },
+      });
+      if (defaultBranch) {
+        branchId = defaultBranch.id;
+      }
     }
 
     const start = new Date(startDate);
@@ -127,7 +139,7 @@ export async function POST(req: NextRequest) {
         where: {
           companyId_branchId_date: {
             companyId,
-            branchId: branchId || null,
+            branchId,
             date: dayStart,
           },
         },
@@ -154,7 +166,7 @@ export async function POST(req: NextRequest) {
         },
         create: {
           companyId,
-          branchId: branchId || null,
+          branchId,
           date: dayStart,
           salesCount,
           grossRevenue,
