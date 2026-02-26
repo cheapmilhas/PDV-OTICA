@@ -87,6 +87,7 @@ export async function getDynamicDRE(
   const cmvAccounts = await prisma.chartOfAccounts.findMany({
     where: {
       id: { in: cmvAccountIds },
+      companyId,
     },
     select: { id: true, code: true, name: true },
   });

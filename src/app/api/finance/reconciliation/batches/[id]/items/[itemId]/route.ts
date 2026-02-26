@@ -30,8 +30,8 @@ export async function PATCH(
     const updateData: any = {};
 
     if (matchedSalePaymentId) {
-      const payment = await prisma.salePayment.findUnique({
-        where: { id: matchedSalePaymentId },
+      const payment = await prisma.salePayment.findFirst({
+        where: { id: matchedSalePaymentId, sale: { companyId } },
       });
       if (payment) {
         updateData.matchedSalePaymentId = matchedSalePaymentId;

@@ -22,14 +22,19 @@ export async function resolveItem(
 ): Promise<void> {
   const item = await tx.reconciliationItem.findUniqueOrThrow({
     where: { id: itemId },
+    include: { batch: { select: { companyId: true } } },
   });
 
+  const companyId = item.batch.companyId;
   let internalAmount: number | null = null;
   let differenceAmount: number | null = null;
 
   if (data.matchedSalePaymentId) {
-    const payment = await tx.salePayment.findUniqueOrThrow({
-      where: { id: data.matchedSalePaymentId },
+    const payment = await tx.salePayment.findFirstOrThrow({
+      where: {
+        id: data.matchedSalePaymentId,
+        sale: { companyId },
+      },
     });
     internalAmount = Number(payment.amount);
     differenceAmount = Number(item.externalAmount) - internalAmount;
