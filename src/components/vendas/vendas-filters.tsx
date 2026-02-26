@@ -56,6 +56,8 @@ export function VendasFilters({ onFilterChange, sellers }: VendasFiltersProps) {
     { value: "PIX", label: "PIX" },
     { value: "DEBIT_CARD", label: "Débito" },
     { value: "CREDIT_CARD", label: "Crédito" },
+    { value: "BOLETO", label: "Boleto" },
+    { value: "CHEQUE", label: "Cheque" },
     { value: "STORE_CREDIT", label: "Crediário" },
   ];
 

@@ -8,18 +8,16 @@ import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import {
-  CreditCard,
-  Banknote,
-  Smartphone,
-  Wallet,
   Trash2,
   Check,
   Loader2,
   Gift,
+  Wallet,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { ModalConfigurarCrediario } from "./modal-configurar-crediario";
 import toast from "react-hot-toast";
+import { ALL_PAYMENT_METHODS, DEFAULT_PAYMENT_METHOD_IDS, type PaymentMethodConfig } from "@/lib/payment-methods";
 
 interface InstallmentConfig {
   count: number;
@@ -49,15 +47,13 @@ interface ModalFinalizarVendaProps {
   loading?: boolean;
 }
 
-const paymentMethods = [
-  { id: "CASH", label: "Dinheiro", icon: Banknote, color: "bg-green-500" },
-  { id: "PIX", label: "PIX", icon: Smartphone, color: "bg-blue-500" },
-  { id: "DEBIT_CARD", label: "Débito", icon: CreditCard, color: "bg-purple-500" },
-  { id: "CREDIT_CARD", label: "Crédito", icon: CreditCard, color: "bg-orange-500" },
-  { id: "STORE_CREDIT", label: "Crediário", icon: Wallet, color: "bg-gray-500" },
-];
+// Default payment methods (used until company settings load)
+const defaultPaymentMethods = ALL_PAYMENT_METHODS.filter((m) =>
+  DEFAULT_PAYMENT_METHOD_IDS.includes(m.id)
+);
 
 export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onConfirm, loading = false }: ModalFinalizarVendaProps) {
+  const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(defaultPaymentMethods);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [selectedMethod, setSelectedMethod] = useState("");
   const [amount, setAmount] = useState("");
@@ -85,6 +81,26 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   // Arredondar para 2 casas decimais para evitar erro de precisão de ponto flutuante
   const totalAfterCashback = Math.round((total - cashbackUsed) * 100) / 100;
   const remaining = Math.round((totalAfterCashback - totalPaid) * 100) / 100;
+
+  // Carregar formas de pagamento habilitadas pela empresa
+  useEffect(() => {
+    if (open) {
+      fetch("/api/company/payment-methods")
+        .then((res) => res.json())
+        .then((data) => {
+          if (data.success && data.data && data.data.length > 0) {
+            const enabledIds = data.data as string[];
+            const filtered = ALL_PAYMENT_METHODS.filter((m) => enabledIds.includes(m.id));
+            if (filtered.length > 0) {
+              setPaymentMethods(filtered);
+            }
+          }
+        })
+        .catch((error) => {
+          console.error("Erro ao carregar formas de pagamento:", error);
+        });
+    }
+  }, [open]);
 
   // Carregar saldo de cashback quando abrir modal
   useEffect(() => {

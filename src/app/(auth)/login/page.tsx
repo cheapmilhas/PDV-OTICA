@@ -142,17 +142,6 @@ export default function LoginPage() {
             Limpar Sessão Anterior
           </Button>
 
-          <div className="mt-6 rounded-lg bg-muted p-4 text-sm space-y-2">
-            <p className="font-semibold text-foreground">Credenciais de teste:</p>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">ADMIN:</p>
-              <p className="text-muted-foreground">admin@pdvotica.com / admin123</p>
-            </div>
-            <div>
-              <p className="text-xs text-muted-foreground font-medium">VENDEDOR:</p>
-              <p className="text-muted-foreground">vendedor@pdvotica.com / vendedor123</p>
-            </div>
-          </div>
         </CardContent>
       </Card>
     </div>
