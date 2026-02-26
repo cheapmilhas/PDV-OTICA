@@ -29,6 +29,7 @@ import {
   RefreshCw,
   Boxes,
   PieChart,
+  TrendingUp,
 } from "lucide-react";
 
 const primaryNav = [
@@ -47,6 +48,7 @@ const moreNav = [
   { icon: Wallet, label: "Cashback", href: "/dashboard/cashback", permission: "cashback.view" },
   { icon: Target, label: "Metas", href: "/dashboard/metas", permission: "goals.view" },
   { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", permission: "reports.sales" },
+  { icon: TrendingUp, label: "Rel. Avançados", href: "/dashboard/relatorios/avancados", permission: "reports.sales" },
   { icon: DollarSign, label: "Dashboard Fin.", href: "/dashboard/financeiro/dashboard", permission: "financial.view" },
   { icon: BookOpen, label: "DRE", href: "/dashboard/financeiro/dre", permission: "financial.view" },
   { icon: ArrowLeftRight, label: "Fluxo Caixa", href: "/dashboard/financeiro/fluxo-caixa", permission: "financial.view" },

@@ -19,7 +19,8 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { TrendingUp, Users, ShoppingCart, Clock } from "lucide-react";
+import { TrendingUp, Users, ShoppingCart, Clock, ArrowRight } from "lucide-react";
+import Link from "next/link";
 
 type PeriodType = "today" | "week" | "month" | "quarter" | "year";
 
@@ -199,7 +200,15 @@ export default function ReportsPage() {
             <h1 className="text-3xl font-bold">Relatórios e Tendências</h1>
             <p className="text-muted-foreground">Análise de vendas, clientes e produtos</p>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
+            <Link href="/dashboard/relatorios/avancados">
+              <Button variant="outline" size="sm" className="gap-1">
+                <TrendingUp className="h-4 w-4" />
+                Avançados
+                <ArrowRight className="h-3 w-3" />
+              </Button>
+            </Link>
+            <div className="w-px h-6 bg-border" />
             {(["today", "week", "month", "quarter", "year"] as PeriodType[]).map((p) => (
               <Button
                 key={p}
