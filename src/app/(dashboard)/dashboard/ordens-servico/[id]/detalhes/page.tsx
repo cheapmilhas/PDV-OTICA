@@ -17,13 +17,13 @@ import {
   Printer,
 } from "lucide-react";
 import Link from "next/link";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
   APPROVED: "Aprovado",
-  SENT_TO_LAB: "No Laboratório",
+  SENT_TO_LAB: "No Lab",
   IN_PROGRESS: "Em Produção",
   READY: "Pronta",
   DELIVERED: "Entregue",
@@ -101,9 +101,9 @@ export default function DetalhesOrdemServicoPage() {
     const labels: Record<string, string> = {
       DRAFT: "Rascunho",
       APPROVED: "Aprovado",
-      SENT_TO_LAB: "Enviado Lab",
-      IN_PROGRESS: "Em Progresso",
-      READY: "Pronto",
+      SENT_TO_LAB: "No Lab",
+      IN_PROGRESS: "Em Produção",
+      READY: "Pronta",
       DELIVERED: "Entregue",
       CANCELED: "Cancelado",
     };
@@ -125,10 +125,7 @@ export default function DetalhesOrdemServicoPage() {
 
   const calcularDiasRestantes = (expectedDate?: string) => {
     if (!expectedDate) return null;
-    const hoje = new Date();
-    const prazo = new Date(expectedDate);
-    const diff = Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24));
-    return diff;
+    return differenceInCalendarDays(new Date(expectedDate), new Date());
   };
 
   if (loading) {

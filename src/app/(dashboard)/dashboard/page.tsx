@@ -6,6 +6,9 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Separator } from "@/components/ui/separator";
+import { PAYMENT_METHOD_LABELS } from "@/lib/payment-methods";
+import { getStatusLabel as getOSStatusLabel } from "@/lib/validations/service-order.schema";
+import { differenceInCalendarDays } from "date-fns";
 import {
   DollarSign,
   ShoppingCart,
@@ -48,11 +51,12 @@ import {
   Cell,
 } from "recharts";
 import Link from "next/link";
+import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { useRouter } from "next/navigation";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const [currentTime, setCurrentTime] = useState(new Date());
+  const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [metrics, setMetrics] = useState({
     salesToday: 0,
     salesYesterday: 0,
@@ -140,8 +144,9 @@ export default function DashboardPage() {
     loadAllData();
   }, []);
 
-  // Atualizar relógio a cada minuto
+  // Atualizar relógio a cada minuto (inicializa no cliente para evitar hydration mismatch)
   useEffect(() => {
+    setCurrentTime(new Date());
     const timer = setInterval(() => setCurrentTime(new Date()), 60000);
     return () => clearInterval(timer);
   }, []);
@@ -190,23 +195,30 @@ export default function DashboardPage() {
           </p>
         </div>
         <div className="text-right">
-          <div className="flex items-center gap-1.5 text-muted-foreground justify-end">
-            <Clock className="h-4 w-4" />
-            <span className="text-sm font-medium">
-              {currentTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
-            </span>
-          </div>
-          <div className="hidden md:flex items-center gap-2 text-muted-foreground justify-end">
-            <Calendar className="h-4 w-4" />
-            <span className="text-sm">
-              {currentTime.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
-            </span>
-          </div>
-          <p className="text-xs text-muted-foreground md:hidden">
-            {currentTime.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
-          </p>
+          {currentTime && (
+            <>
+              <div className="flex items-center gap-1.5 text-muted-foreground justify-end">
+                <Clock className="h-4 w-4" />
+                <span className="text-sm font-medium" suppressHydrationWarning>
+                  {currentTime.toLocaleTimeString("pt-BR", { hour: "2-digit", minute: "2-digit" })}
+                </span>
+              </div>
+              <div className="hidden md:flex items-center gap-2 text-muted-foreground justify-end">
+                <Calendar className="h-4 w-4" />
+                <span className="text-sm" suppressHydrationWarning>
+                  {currentTime.toLocaleDateString("pt-BR", { day: "2-digit", month: "long", year: "numeric" })}
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground md:hidden" suppressHydrationWarning>
+                {currentTime.toLocaleDateString("pt-BR", { day: "2-digit", month: "short" })}
+              </p>
+            </>
+          )}
         </div>
       </div>
+
+      {/* Alerta de caixa aberto há muito tempo */}
+      <CashShiftAlert />
 
       {/* ===== MOBILE ONLY: Alertas ===== */}
       {(metrics.productsLowStock > 0 || metrics.osDelayed > 0) && (
@@ -513,15 +525,14 @@ export default function DashboardPage() {
               ) : (
                 osUrgentes.map((os: any) => {
                   const prazo = os.promisedDate ? new Date(os.promisedDate) : null;
-                  const hoje = new Date();
-                  const dias = prazo ? Math.ceil((prazo.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                  const dias = prazo ? differenceInCalendarDays(prazo, new Date()) : null;
 
                   return (
                     <div key={os.id} className="flex items-center justify-between rounded-lg border border-blue-200 bg-white p-3">
                       <div className="space-y-1">
                         <div className="flex items-center gap-2">
                           <p className="text-sm font-mono font-medium">OS #{String(os.number).padStart(5, "0")}</p>
-                          <Badge variant="outline">{os.status}</Badge>
+                          <Badge variant="outline">{getOSStatusLabel(os.status)}</Badge>
                         </div>
                         <p className="text-xs text-muted-foreground">
                           {os.customer?.name || 'Cliente não informado'}
@@ -576,7 +587,7 @@ export default function DashboardPage() {
                 <div className="flex items-center justify-between rounded-lg border bg-blue-50 p-4">
                   <div className="w-full">
                     <p className="text-xs text-muted-foreground">PERÍODO ATUAL</p>
-                    <p className="text-sm text-muted-foreground">{new Date().toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' })}</p>
+                    <p className="text-sm text-muted-foreground" suppressHydrationWarning>{currentTime?.toLocaleDateString('pt-BR', { month: 'long', year: 'numeric' }) || ''}</p>
                     <div className="mt-2">
                       <p className="text-2xl font-bold">{formatCurrency(metrics.salesMonth)}</p>
                       <Progress value={monthProgress} className="mt-2 h-2" />
@@ -737,7 +748,7 @@ export default function DashboardPage() {
                           <p className="text-xs text-muted-foreground">{saleTime}</p>
                           <Separator orientation="vertical" className="h-3" />
                           <Badge variant="outline" className="text-xs">
-                            {paymentMethod}
+                            {PAYMENT_METHOD_LABELS[paymentMethod] || paymentMethod}
                           </Badge>
                         </div>
                       </div>

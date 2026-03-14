@@ -265,8 +265,8 @@ function DashboardFinanceiroContent() {
   const costBreakdownData = data
     ? [
         { name: "CMV", valor: data.metrics.cogs, fill: "#ef4444" },
-        { name: "Taxas Cartao", valor: data.metrics.cardFees, fill: "#f59e0b" },
-        { name: "Comissoes", valor: data.metrics.commissions, fill: "#8b5cf6" },
+        { name: "Taxas Cartão", valor: data.metrics.cardFees, fill: "#f59e0b" },
+        { name: "Comissões", valor: data.metrics.commissions, fill: "#8b5cf6" },
         { name: "Despesas", valor: data.metrics.expenses, fill: "#06b6d4" },
       ].filter((item) => item.valor > 0)
     : [];
@@ -280,7 +280,7 @@ function DashboardFinanceiroContent() {
         <div>
           <h1 className="text-3xl font-bold">Dashboard Financeiro</h1>
           <p className="text-muted-foreground">
-            Visao geral das financas do periodo
+            Visão geral das finanças do período
           </p>
         </div>
         <Button
@@ -383,7 +383,7 @@ function DashboardFinanceiroContent() {
           {/* KPI Row 1 */}
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
             <KPICard
-              title="Receita Liquida"
+              title="Receita Líquida"
               value={formatCurrency(data.metrics.netRevenue)}
               icon={DollarSign}
               subtitle={`Bruta: ${formatCurrency(data.metrics.grossRevenue)}`}
@@ -395,7 +395,7 @@ function DashboardFinanceiroContent() {
               subtitle={formatCurrency(data.metrics.grossMargin)}
             />
             <KPICard
-              title="Ticket Medio"
+              title="Ticket Médio"
               value={formatCurrency(data.metrics.avgTicket)}
               icon={ShoppingCart}
               subtitle="Por venda"
@@ -404,20 +404,20 @@ function DashboardFinanceiroContent() {
               title="Vendas"
               value={data.metrics.salesCount.toString()}
               icon={Package}
-              subtitle="No periodo"
+              subtitle="No período"
             />
           </div>
 
           {/* KPI Row 2 */}
           <div className="grid gap-4 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
             <KPICard
-              title="Lucro Liquido"
+              title="Lucro Líquido"
               value={formatCurrency(data.metrics.netProfit)}
               icon={data.metrics.netProfit >= 0 ? TrendingUp : AlertTriangle}
               subtitle={
                 data.metrics.netRevenue > 0
                   ? `${((data.metrics.netProfit / data.metrics.netRevenue) * 100).toFixed(1)}% da receita`
-                  : "Sem receita no periodo"
+                  : "Sem receita no período"
               }
               className={
                 data.metrics.netProfit >= 0
@@ -426,7 +426,7 @@ function DashboardFinanceiroContent() {
               }
             />
             <KPICard
-              title="Taxas Cartao"
+              title="Taxas Cartão"
               value={formatCurrency(data.metrics.cardFees)}
               icon={CreditCard}
               subtitle={
@@ -577,7 +577,7 @@ function DashboardFinanceiroContent() {
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                    Sem vendedores no periodo
+                    Sem vendedores no período
                   </div>
                 )}
               </CardContent>
@@ -586,7 +586,7 @@ function DashboardFinanceiroContent() {
             {/* Chart 4: Cost Breakdown */}
             <Card>
               <CardHeader>
-                <CardTitle className="text-base">Composicao de Custos</CardTitle>
+                <CardTitle className="text-base">Composição de Custos</CardTitle>
               </CardHeader>
               <CardContent>
                 {costBreakdownData.length > 0 ? (
@@ -605,7 +605,7 @@ function DashboardFinanceiroContent() {
                   </ResponsiveContainer>
                 ) : (
                   <div className="flex h-[300px] items-center justify-center text-muted-foreground">
-                    Sem custos registrados no periodo
+                    Sem custos registrados no período
                   </div>
                 )}
               </CardContent>
@@ -627,7 +627,7 @@ function DashboardFinanceiroContent() {
                         <th className="p-2 text-left">Vendedor</th>
                         <th className="p-2 text-right">Qtd. Vendas</th>
                         <th className="p-2 text-right">Total Vendido</th>
-                        <th className="p-2 text-right">Ticket Medio</th>
+                        <th className="p-2 text-right">Ticket Médio</th>
                       </tr>
                     </thead>
                     <tbody>
@@ -703,7 +703,7 @@ function DashboardFinanceiroContent() {
             <DollarSign className="mb-4 h-12 w-12 text-muted-foreground" />
             <p className="text-lg font-medium">Nenhum dado encontrado</p>
             <p className="text-sm text-muted-foreground">
-              Tente ajustar o periodo ou a filial selecionada
+              Tente ajustar o período ou a filial selecionada
             </p>
           </CardContent>
         </Card>

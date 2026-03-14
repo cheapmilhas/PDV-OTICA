@@ -49,6 +49,17 @@ export async function GET(request: NextRequest) {
       });
     }
 
+    // Se displayName não estiver preenchido, usar Company.name como fallback
+    if (!settings.displayName) {
+      const company = await prisma.company.findUnique({
+        where: { id: companyId },
+        select: { name: true },
+      });
+      if (company?.name) {
+        (settings as any).displayName = company.name;
+      }
+    }
+
     return NextResponse.json({
       success: true,
       data: settings,

@@ -17,8 +17,12 @@ function NovoClientePageContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
+    personType: "PF",
     name: "",
     cpf: "",
+    cnpj: "",
+    tradeName: "",
+    companyName: "",
     rg: "",
     email: "",
     phone: "",
@@ -86,11 +90,30 @@ function NovoClientePageContent() {
             <CardTitle>Dados do Cliente</CardTitle>
           </CardHeader>
           <CardContent className="space-y-6">
-            {/* Dados Pessoais */}
+            {/* Tipo de Pessoa */}
+            <div className="grid gap-4 md:grid-cols-2">
+              <div className="space-y-2">
+                <Label htmlFor="personType">Tipo de Pessoa</Label>
+                <Select
+                  value={formData.personType}
+                  onValueChange={(value) => setFormData({ ...formData, personType: value })}
+                >
+                  <SelectTrigger>
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="PF">Pessoa Física</SelectItem>
+                    <SelectItem value="PJ">Pessoa Jurídica</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+
+            {/* Dados Pessoais / Empresariais */}
             <div className="grid gap-4 md:grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="name">
-                  Nome Completo <span className="text-red-500">*</span>
+                  {formData.personType === "PJ" ? "Nome do Contato" : "Nome Completo"} <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="name"
@@ -100,16 +123,47 @@ function NovoClientePageContent() {
                 />
               </div>
 
-              <div className="space-y-2">
-                <Label htmlFor="cpf">CPF</Label>
-                <Input
-                  id="cpf"
-                  value={formData.cpf}
-                  onChange={(e) => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
-                  maxLength={11}
-                  placeholder="Apenas números"
-                />
-              </div>
+              {formData.personType === "PF" ? (
+                <div className="space-y-2">
+                  <Label htmlFor="cpf">CPF</Label>
+                  <Input
+                    id="cpf"
+                    value={formData.cpf}
+                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
+                    maxLength={11}
+                    placeholder="Apenas números"
+                  />
+                </div>
+              ) : (
+                <>
+                  <div className="space-y-2">
+                    <Label htmlFor="cnpj">CNPJ</Label>
+                    <Input
+                      id="cnpj"
+                      value={formData.cnpj}
+                      onChange={(e) => setFormData({ ...formData, cnpj: e.target.value.replace(/\D/g, "") })}
+                      maxLength={14}
+                      placeholder="Apenas números"
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="companyName">Razão Social</Label>
+                    <Input
+                      id="companyName"
+                      value={formData.companyName}
+                      onChange={(e) => setFormData({ ...formData, companyName: e.target.value })}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="tradeName">Nome Fantasia</Label>
+                    <Input
+                      id="tradeName"
+                      value={formData.tradeName}
+                      onChange={(e) => setFormData({ ...formData, tradeName: e.target.value })}
+                    />
+                  </div>
+                </>
+              )}
 
               <div className="space-y-2">
                 <Label htmlFor="rg">RG</Label>

@@ -73,7 +73,7 @@ const kindConfig: Record<
     className: "bg-red-100 text-red-800 border-red-200",
   },
   EQUITY: {
-    label: "Patrimonio",
+    label: "Patrimônio",
     className: "bg-purple-100 text-purple-800 border-purple-200",
   },
 };
@@ -259,7 +259,7 @@ function PlanoContasPageContent() {
   const handleCreate = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!form.code || !form.name || !form.kind) {
-      toast.error("Preencha todos os campos obrigatorios");
+      toast.error("Preencha todos os campos obrigatórios");
       return;
     }
 
@@ -312,7 +312,7 @@ function PlanoContasPageContent() {
         <div className="flex-1">
           <h1 className="text-3xl font-bold">Plano de Contas</h1>
           <p className="text-muted-foreground">
-            Estrutura hierarquica das contas contabeis
+            Estrutura hierárquica das contas contábeis
           </p>
         </div>
         <Button onClick={() => setShowNewDialog(true)}>
@@ -373,7 +373,7 @@ function PlanoContasPageContent() {
             {/* Code */}
             <div className="space-y-2">
               <Label htmlFor="code">
-                Codigo <span className="text-red-500">*</span>
+                Código <span className="text-red-500">*</span>
               </Label>
               <Input
                 id="code"
@@ -417,7 +417,7 @@ function PlanoContasPageContent() {
                   <SelectItem value="LIABILITY">Passivo</SelectItem>
                   <SelectItem value="REVENUE">Receita</SelectItem>
                   <SelectItem value="EXPENSE">Despesa</SelectItem>
-                  <SelectItem value="EQUITY">Patrimonio</SelectItem>
+                  <SelectItem value="EQUITY">Patrimônio</SelectItem>
                 </SelectContent>
               </Select>
             </div>

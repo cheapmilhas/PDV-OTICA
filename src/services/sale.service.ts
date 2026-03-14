@@ -360,9 +360,18 @@ export class SaleService {
         },
       });
 
-      // 2. Criar itens
+      // 2. Buscar custo dos produtos para gravar no SaleItem
+      const productIds = items.map((i) => i.productId).filter(Boolean);
+      const productsWithCost = await tx.product.findMany({
+        where: { id: { in: productIds } },
+        select: { id: true, costPrice: true },
+      });
+      const costMap = new Map(productsWithCost.map((p) => [p.id, Number(p.costPrice)]));
+
+      // 3. Criar itens
       for (const item of items) {
         const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
+        const itemCostPrice = item.productId ? (costMap.get(item.productId) || 0) : 0;
         await tx.saleItem.create({
           data: {
             saleId: newSale.id,
@@ -371,6 +380,7 @@ export class SaleService {
             unitPrice: item.unitPrice,
             discount: item.discount || 0,
             lineTotal: itemTotal,
+            costPrice: itemCostPrice,
           },
         });
 
@@ -383,6 +393,19 @@ export class SaleService {
             400
           );
         }
+
+        // 3.1. Criar registro de movimentação de estoque (auditoria)
+        await tx.stockMovement.create({
+          data: {
+            companyId,
+            branchId,
+            productId: item.productId,
+            type: "SALE",
+            quantity: -item.qty, // Negativo = saída de estoque
+            createdByUserId: userId,
+            notes: `Saída por venda #${newSale.id.substring(0, 8)}`,
+          },
+        });
       }
 
       // 4. Criar pagamentos
@@ -685,7 +708,7 @@ export class SaleService {
         },
       });
 
-      // 2. Estornar estoque de cada item
+      // 2. Estornar estoque de cada item e registrar movimentação
       for (const item of sale.items) {
         if (item.productId) {
           await tx.product.update({
@@ -694,6 +717,18 @@ export class SaleService {
               stockQty: {
                 increment: item.qty,
               },
+            },
+          });
+
+          // Registrar movimentação de estorno
+          await tx.stockMovement.create({
+            data: {
+              companyId: sale.companyId,
+              branchId: sale.branchId,
+              productId: item.productId,
+              type: "CUSTOMER_RETURN",
+              quantity: item.qty, // Positivo = entrada de estoque
+              notes: `Estorno por cancelamento de venda #${id.substring(0, 8)}${reason ? ` - ${reason}` : ""}`,
             },
           });
         }

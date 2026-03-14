@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Check, Star, Users, Building2, Package, Loader2 } from "lucide-react";
 
@@ -27,27 +27,28 @@ interface Plan {
 
 const FEATURE_LABELS: Record<string, string> = {
   crm: "CRM Inteligente",
-  goals: "Metas & Comissões",
+  goals: "Metas & Comissoes",
   campaigns: "Campanhas",
   cashback: "Cashback",
   multi_branch: "Multi-filial",
-  reports_advanced: "Relatórios Avançados",
-  api_access: "Acesso à API",
+  reports_advanced: "Relatorios Avancados",
+  api_access: "Acesso a API",
 };
 
 const BASE_FEATURES = [
   "PDV completo",
-  "Gestão de estoque",
+  "Gestao de estoque",
   "Financeiro integrado",
-  "Ordens de serviço",
-  "Orçamentos",
-  "Relatórios básicos",
+  "Ordens de servico",
+  "Orcamentos",
+  "Relatorios basicos",
 ];
 
 export function Pricing() {
   const [billing, setBilling] = useState<"monthly" | "yearly">("monthly");
   const [plans, setPlans] = useState<Plan[]>([]);
   const [loading, setLoading] = useState(true);
+  const sectionRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
     fetch("/api/public/plans")
@@ -57,46 +58,82 @@ export function Pricing() {
       .finally(() => setLoading(false));
   }, []);
 
-  return (
-    <section id="precos" className="relative py-20 md:py-28 bg-gray-950">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-800 to-transparent" />
-      <div className="absolute inset-0 bg-gradient-to-b from-indigo-600/5 via-transparent to-transparent" />
+  useEffect(() => {
+    const section = sectionRef.current;
+    if (!section) return;
 
-      <div className="relative max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+    const prefersReduced = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (entry.isIntersecting) {
+            if (prefersReduced) {
+              entry.target.classList.remove("opacity-0");
+            } else {
+              entry.target.classList.add("animate-fade-up");
+              entry.target.classList.remove("opacity-0");
+            }
+          }
+        });
+      },
+      { threshold: 0.05 }
+    );
+
+    section.querySelectorAll("[data-animate]").forEach((el) => observer.observe(el));
+    return () => observer.disconnect();
+  }, [loading]);
+
+  return (
+    <section ref={sectionRef} id="precos" className="relative py-24 md:py-32 bg-navy-900 scroll-mt-20">
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
+
+      {/* Background accent */}
+      <div className="absolute top-0 inset-x-0 h-96 bg-gradient-to-b from-gold/3 to-transparent" />
+
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
-        <div className="text-center mb-12">
-          <h2 className="text-3xl md:text-4xl font-bold text-white">
+        <div data-animate className="opacity-0 text-center mb-14 stagger-1">
+          <p className="text-gold text-sm font-medium tracking-[0.2em] uppercase mb-4">
+            Precos
+          </p>
+          <h2
+            className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-white"
+            style={{ textWrap: "balance" } as React.CSSProperties}
+          >
             Planos que cabem{" "}
-            <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">
-              no seu bolso
-            </span>
+            <span className="text-gold-gradient">no seu bolso</span>
           </h2>
-          <p className="mt-4 text-lg text-gray-400">
-            Comece com teste grátis de 14 dias. Sem compromisso.
+          <p className="mt-5 text-lg text-white/35">
+            Comece com teste gratis de 14 dias. Sem compromisso.
           </p>
 
           {/* Toggle */}
-          <div className="mt-8 inline-flex items-center rounded-xl bg-gray-900 border border-gray-800 p-1">
+          <div data-animate className="opacity-0 mt-10 inline-flex items-center rounded-xl bg-white/[0.03] border border-white/8 p-1 stagger-2" role="radiogroup" aria-label="Periodo de cobranca">
             <button
               onClick={() => setBilling("monthly")}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all ${
+              role="radio"
+              aria-checked={billing === "monthly"}
+              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-[background,color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
                 billing === "monthly"
-                  ? "bg-indigo-600 text-white shadow-lg"
-                  : "text-gray-400 hover:text-white"
+                  ? "bg-gold text-navy-900 shadow-lg shadow-gold/20"
+                  : "text-white/40 hover:text-white"
               }`}
             >
               Mensal
             </button>
             <button
               onClick={() => setBilling("yearly")}
-              className={`px-5 py-2 rounded-lg text-sm font-medium transition-all flex items-center gap-2 ${
+              role="radio"
+              aria-checked={billing === "yearly"}
+              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-[background,color,box-shadow] duration-300 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
                 billing === "yearly"
-                  ? "bg-indigo-600 text-white shadow-lg"
-                  : "text-gray-400 hover:text-white"
+                  ? "bg-gold text-navy-900 shadow-lg shadow-gold/20"
+                  : "text-white/40 hover:text-white"
               }`}
             >
               Anual
-              <span className="text-xs px-1.5 py-0.5 rounded bg-green-500/20 text-green-400 font-semibold">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/20">
                 Economize
               </span>
             </button>
@@ -105,16 +142,17 @@ export function Pricing() {
 
         {/* Plans Grid */}
         {loading ? (
-          <div className="flex justify-center py-20">
-            <Loader2 className="h-8 w-8 animate-spin text-indigo-500" />
+          <div className="flex justify-center py-20" role="status">
+            <Loader2 className="h-8 w-8 animate-spin text-gold/50" aria-hidden="true" />
+            <span className="sr-only">Carregando planos…</span>
           </div>
         ) : plans.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-gray-500">Planos em breve disponíveis.</p>
+            <p className="text-white/30">Planos em breve disponiveis.</p>
           </div>
         ) : (
           <div className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 3 ? "lg:grid-cols-3" : ""} gap-6 max-w-5xl mx-auto`}>
-            {plans.map((plan) => {
+            {plans.map((plan, index) => {
               const price = billing === "monthly" ? plan.priceMonthly : plan.priceYearly;
               const monthlyEquiv = billing === "yearly" ? Math.round(plan.priceYearly / 12) : plan.priceMonthly;
               const discount =
@@ -128,81 +166,86 @@ export function Pricing() {
               return (
                 <div
                   key={plan.id}
-                  className={`relative rounded-2xl border overflow-hidden transition-all ${
-                    plan.isFeatured
-                      ? "border-indigo-500/50 bg-gray-900 shadow-xl shadow-indigo-500/10 scale-[1.02]"
-                      : "border-gray-800 bg-gray-900/50 hover:border-gray-700"
-                  }`}
+                  data-animate
+                  className={`opacity-0 stagger-${Math.min(index + 3, 8)}`}
                 >
-                  {plan.isFeatured && (
-                    <div className="bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-center">
-                      <span className="flex items-center justify-center gap-1.5 text-xs font-semibold text-white">
-                        <Star className="h-3.5 w-3.5" />
-                        Mais popular
-                      </span>
-                    </div>
-                  )}
-
-                  <div className="p-6 md:p-8">
-                    {/* Nome */}
-                    <h3 className="text-xl font-bold text-white">{plan.name}</h3>
-                    {plan.description && (
-                      <p className="text-sm text-gray-500 mt-1">{plan.description}</p>
+                  <div
+                    className={`relative rounded-2xl overflow-hidden transition-[background,border-color,transform,box-shadow] duration-500 h-full ${
+                      plan.isFeatured
+                        ? "border-2 border-gold/40 bg-white/[0.04] shadow-2xl gold-glow scale-[1.02]"
+                        : "border border-white/8 bg-white/[0.02] hover:border-gold/20 hover:bg-white/[0.04]"
+                    }`}
+                  >
+                    {plan.isFeatured && (
+                      <div className="bg-gradient-to-r from-gold to-gold-light px-4 py-2.5 text-center">
+                        <span className="flex items-center justify-center gap-2 text-xs font-bold text-navy-900 uppercase tracking-wider">
+                          <Star className="h-3.5 w-3.5" aria-hidden="true" />
+                          Mais popular
+                        </span>
+                      </div>
                     )}
 
-                    {/* Preço */}
-                    <div className="mt-6 mb-8">
-                      <div className="flex items-baseline gap-1">
-                        <span className="text-4xl font-bold text-white">
-                          R$ {(monthlyEquiv / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </span>
-                        <span className="text-gray-500">/mês</span>
-                      </div>
-                      {billing === "yearly" && (
-                        <div className="mt-1 flex items-center gap-2">
-                          <span className="text-sm text-gray-500">
-                            R$ {(price / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ano
+                    <div className="p-7 md:p-8">
+                      {/* Name */}
+                      <h3 className="text-xl font-display font-bold text-white">{plan.name}</h3>
+                      {plan.description && (
+                        <p className="text-sm text-white/30 mt-1">{plan.description}</p>
+                      )}
+
+                      {/* Price */}
+                      <div className="mt-7 mb-8">
+                        <div className="flex items-baseline gap-1.5">
+                          <span className="text-4xl font-display font-bold text-gold-gradient tabular-nums">
+                            R$ {(monthlyEquiv / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
-                          {discount > 0 && (
-                            <span className="text-xs px-2 py-0.5 rounded-full bg-green-500/20 text-green-400 font-medium">
-                              -{discount}%
-                            </span>
-                          )}
+                          <span className="text-white/25 text-sm">/mes</span>
                         </div>
-                      )}
-                      {plan.trialDays > 0 && (
-                        <p className="text-xs text-indigo-400 mt-2">{plan.trialDays} dias grátis para testar</p>
-                      )}
-                    </div>
+                        {billing === "yearly" && (
+                          <div className="mt-2 flex items-center gap-2">
+                            <span className="text-sm text-white/25 tabular-nums">
+                              R$ {(price / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ano
+                            </span>
+                            {discount > 0 && (
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/20">
+                                -{discount}%
+                              </span>
+                            )}
+                          </div>
+                        )}
+                        {plan.trialDays > 0 && (
+                          <p className="text-xs text-gold/60 mt-3">{plan.trialDays} dias gratis para testar</p>
+                        )}
+                      </div>
 
-                    {/* CTA */}
-                    <Link
-                      href="/registro"
-                      className={`block w-full text-center py-3 rounded-xl text-sm font-medium transition-all ${
-                        plan.isFeatured
-                          ? "bg-gradient-to-r from-indigo-600 to-purple-600 text-white hover:from-indigo-500 hover:to-purple-500 shadow-lg shadow-indigo-500/25"
-                          : "bg-gray-800 text-white hover:bg-gray-700 border border-gray-700"
-                      }`}
-                    >
-                      Começar teste grátis
-                    </Link>
+                      {/* CTA */}
+                      <Link
+                        href="/registro"
+                        className={`block w-full text-center py-3.5 rounded-xl text-sm font-semibold transition-[background,color,border-color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-900 ${
+                          plan.isFeatured
+                            ? "bg-gradient-to-r from-gold to-gold-light text-navy-900 hover:from-gold-light hover:to-gold shadow-lg shadow-gold/20 hover:shadow-gold/30"
+                            : "bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-gold/20"
+                        }`}
+                      >
+                        Comecar teste gratis
+                      </Link>
 
-                    {/* Limites */}
-                    <div className="mt-8 space-y-3 pb-6 border-b border-gray-800">
-                      <LimitItem icon={Users} label="Usuários" value={plan.maxUsers} />
-                      <LimitItem icon={Building2} label="Filiais" value={plan.maxBranches} />
-                      <LimitItem icon={Package} label="Produtos" value={plan.maxProducts} />
-                    </div>
+                      {/* Limits */}
+                      <div className="mt-8 space-y-3 pb-6 border-b border-white/5">
+                        <LimitItem icon={Users} label="Usuarios" value={plan.maxUsers} />
+                        <LimitItem icon={Building2} label="Filiais" value={plan.maxBranches} />
+                        <LimitItem icon={Package} label="Produtos" value={plan.maxProducts} />
+                      </div>
 
-                    {/* Features base */}
-                    <div className="mt-6 space-y-3">
-                      <p className="text-xs font-medium text-gray-500 uppercase tracking-wider">Inclui:</p>
-                      {BASE_FEATURES.map((f) => (
-                        <FeatureItem key={f} label={f} />
-                      ))}
-                      {enabledFeatures.map((f) => (
-                        <FeatureItem key={f} label={f} highlight />
-                      ))}
+                      {/* Features */}
+                      <div className="mt-6 space-y-3">
+                        <p className="text-[11px] font-medium text-white/20 uppercase tracking-[0.15em]">Inclui:</p>
+                        {BASE_FEATURES.map((f) => (
+                          <FeatureItem key={f} label={f} />
+                        ))}
+                        {enabledFeatures.map((f) => (
+                          <FeatureItem key={f} label={f} highlight />
+                        ))}
+                      </div>
                     </div>
                   </div>
                 </div>
@@ -218,11 +261,11 @@ export function Pricing() {
 function LimitItem({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: number }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="flex items-center gap-2 text-gray-400">
-        <Icon className="h-4 w-4" />
+      <span className="flex items-center gap-2.5 text-white/30">
+        <Icon className="h-4 w-4 text-white/20" aria-hidden="true" />
         {label}
       </span>
-      <span className="font-medium text-white">
+      <span className="font-semibold text-white tabular-nums">
         {value === -1 ? "Ilimitado" : value}
       </span>
     </div>
@@ -232,8 +275,8 @@ function LimitItem({ icon: Icon, label, value }: { icon: React.ElementType; labe
 function FeatureItem({ label, highlight }: { label: string; highlight?: boolean }) {
   return (
     <div className="flex items-center gap-2.5 text-sm">
-      <Check className={`h-4 w-4 flex-shrink-0 ${highlight ? "text-indigo-400" : "text-green-500"}`} />
-      <span className={highlight ? "text-indigo-300" : "text-gray-300"}>{label}</span>
+      <Check className={`h-4 w-4 flex-shrink-0 ${highlight ? "text-gold" : "text-emerald-500/60"}`} aria-hidden="true" />
+      <span className={highlight ? "text-gold-light" : "text-white/40"}>{label}</span>
     </div>
   );
 }

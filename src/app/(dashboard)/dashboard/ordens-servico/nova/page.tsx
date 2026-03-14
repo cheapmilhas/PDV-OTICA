@@ -237,8 +237,42 @@ function NovaOrdemServicoPageContent() {
         notes: formData.notes || undefined,
       };
 
-      // Adicionar dados da prescrição como string JSON se preenchidos
-      if (prescriptionData.od.esf || prescriptionData.oe.esf) {
+      // Validar dados da receita se a seção foi expandida e algum campo preenchido
+      const hasAnyPrescriptionField =
+        prescriptionData.od.esf || prescriptionData.od.cil || prescriptionData.od.eixo ||
+        prescriptionData.od.dnp || prescriptionData.od.altura ||
+        prescriptionData.oe.esf || prescriptionData.oe.cil || prescriptionData.oe.eixo ||
+        prescriptionData.oe.dnp || prescriptionData.oe.altura ||
+        prescriptionData.adicao;
+
+      if (hasAnyPrescriptionField) {
+        // Validar eixo (0 a 180)
+        for (const eye of ["od", "oe"] as const) {
+          const eixo = prescriptionData[eye].eixo;
+          if (eixo) {
+            const eixoNum = parseInt(eixo);
+            if (isNaN(eixoNum) || eixoNum < 0 || eixoNum > 180) {
+              throw new Error(`Eixo do ${eye === "od" ? "OD" : "OE"} deve estar entre 0° e 180°`);
+            }
+          }
+          // Validar DNP (20 a 40)
+          const dnp = prescriptionData[eye].dnp;
+          if (dnp) {
+            const dnpNum = parseFloat(dnp.replace(",", "."));
+            if (isNaN(dnpNum) || dnpNum < 20 || dnpNum > 40) {
+              throw new Error(`DNP do ${eye === "od" ? "OD" : "OE"} deve estar entre 20 e 40 mm`);
+            }
+          }
+          // Validar Altura (10 a 40)
+          const altura = prescriptionData[eye].altura;
+          if (altura) {
+            const altNum = parseFloat(altura.replace(",", "."));
+            if (isNaN(altNum) || altNum < 10 || altNum > 40) {
+              throw new Error(`Altura do ${eye === "od" ? "OD" : "OE"} deve estar entre 10 e 40 mm`);
+            }
+          }
+        }
+
         payload.prescription = JSON.stringify(prescriptionData);
       }
 
@@ -495,7 +529,7 @@ function NovaOrdemServicoPageContent() {
                           od: { ...prescriptionData.od, esf: e.target.value },
                         })
                       }
-                      placeholder="+2.00"
+                      placeholder="Ex: +2.00 ou -1.50"
                     />
                   </div>
                   <div>
@@ -508,7 +542,7 @@ function NovaOrdemServicoPageContent() {
                           od: { ...prescriptionData.od, cil: e.target.value },
                         })
                       }
-                      placeholder="-0.50"
+                      placeholder="Ex: -0.75"
                     />
                   </div>
                   <div>
@@ -521,7 +555,7 @@ function NovaOrdemServicoPageContent() {
                           od: { ...prescriptionData.od, eixo: sanitizeIntegerField(e.target.value) },
                         })
                       }
-                      placeholder="90"
+                      placeholder="0° a 180°"
                       inputMode="numeric"
                     />
                   </div>
@@ -535,7 +569,7 @@ function NovaOrdemServicoPageContent() {
                           od: { ...prescriptionData.od, dnp: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="32"
+                      placeholder="mm"
                       inputMode="decimal"
                     />
                   </div>
@@ -549,7 +583,7 @@ function NovaOrdemServicoPageContent() {
                           od: { ...prescriptionData.od, altura: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="20"
+                      placeholder="mm"
                       inputMode="decimal"
                     />
                   </div>
@@ -570,7 +604,7 @@ function NovaOrdemServicoPageContent() {
                           oe: { ...prescriptionData.oe, esf: e.target.value },
                         })
                       }
-                      placeholder="+1.75"
+                      placeholder="Ex: +2.00 ou -1.50"
                     />
                   </div>
                   <div>
@@ -583,7 +617,7 @@ function NovaOrdemServicoPageContent() {
                           oe: { ...prescriptionData.oe, cil: e.target.value },
                         })
                       }
-                      placeholder="-0.75"
+                      placeholder="Ex: -0.75"
                     />
                   </div>
                   <div>
@@ -596,7 +630,7 @@ function NovaOrdemServicoPageContent() {
                           oe: { ...prescriptionData.oe, eixo: sanitizeIntegerField(e.target.value) },
                         })
                       }
-                      placeholder="85"
+                      placeholder="0° a 180°"
                       inputMode="numeric"
                     />
                   </div>
@@ -610,7 +644,7 @@ function NovaOrdemServicoPageContent() {
                           oe: { ...prescriptionData.oe, dnp: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="31"
+                      placeholder="mm"
                       inputMode="decimal"
                     />
                   </div>
@@ -624,7 +658,7 @@ function NovaOrdemServicoPageContent() {
                           oe: { ...prescriptionData.oe, altura: sanitizeNumericField(e.target.value) },
                         })
                       }
-                      placeholder="20"
+                      placeholder="mm"
                       inputMode="decimal"
                     />
                   </div>
@@ -643,7 +677,7 @@ function NovaOrdemServicoPageContent() {
                         adicao: e.target.value,
                       })
                     }
-                    placeholder="+2.00"
+                    placeholder="Ex: +2.00"
                   />
                 </div>
                 <div>

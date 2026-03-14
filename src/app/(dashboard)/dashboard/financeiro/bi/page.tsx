@@ -348,8 +348,8 @@ function BIPageContent() {
     if (!biData) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
-      title: "Analise de Negocio (BI)",
-      subtitle: `Dimensao: ${DIMENSION_TABS.find((t) => t.value === activeDimension)?.label}`,
+      title: "Análise de Negócio (BI)",
+      subtitle: `Dimensão: ${DIMENSION_TABS.find((t) => t.value === activeDimension)?.label}`,
       period: { start: startDate, end: endDate },
       sections: [
         {
@@ -358,7 +358,7 @@ function BIPageContent() {
             { header: "Nome", key: "dimension", format: "text" as const },
             { header: "Receita", key: "revenue", format: "currency" as const },
             { header: "Qtd", key: "quantity", format: "number" as const },
-            { header: "Ticket Medio", key: "avgTicket", format: "currency" as const },
+            { header: "Ticket Médio", key: "avgTicket", format: "currency" as const },
             { header: "Margem %", key: "margin", format: "number" as const },
           ],
           data: biData.data,
@@ -375,7 +375,7 @@ function BIPageContent() {
         Nome: row.dimension,
         Receita: row.revenue,
         Quantidade: row.quantity,
-        "Ticket Medio": row.avgTicket,
+        "Ticket Médio": row.avgTicket,
         "Margem %": row.margin,
       }))
     );
@@ -395,9 +395,9 @@ function BIPageContent() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold">Analise de Negocio (BI)</h1>
+            <h1 className="text-3xl font-bold">Análise de Negócio (BI)</h1>
             <p className="text-muted-foreground">
-              Analise multidimensional de receitas, margens e estoque
+              Análise multidimensional de receitas, margens e estoque
             </p>
           </div>
         </div>
@@ -502,19 +502,19 @@ function BIPageContent() {
           <KPICard
             title="Receita Total"
             value={formatCurrency(biData.totals.revenue)}
-            subtitle={`Periodo: ${format(startDate, "dd/MM/yy")} - ${format(endDate, "dd/MM/yy")}`}
+            subtitle={`Período: ${format(startDate, "dd/MM/yy")} - ${format(endDate, "dd/MM/yy")}`}
             icon={DollarSign}
           />
           <KPICard
             title="Quantidade Total"
             value={biData.totals.quantity.toLocaleString("pt-BR")}
-            subtitle="Itens vendidos no periodo"
+            subtitle="Itens vendidos no período"
             icon={ShoppingCart}
           />
           <KPICard
-            title="Ticket Medio"
+            title="Ticket Médio"
             value={formatCurrency(biData.totals.avgTicket)}
-            subtitle="Valor medio por venda"
+            subtitle="Valor médio por venda"
             icon={TrendingUp}
           />
         </div>
@@ -549,7 +549,7 @@ function BIPageContent() {
                 <CardContent className="flex flex-col items-center justify-center py-12">
                   <BarChart3 className="h-12 w-12 text-muted-foreground mb-4" />
                   <p className="text-muted-foreground text-center">
-                    Selecione o periodo e clique em &quot;Gerar&quot; para visualizar os dados.
+                    Selecione o período e clique em &quot;Gerar&quot; para visualizar os dados.
                   </p>
                 </CardContent>
               </Card>
@@ -566,7 +566,7 @@ function BIPageContent() {
                   <CardContent>
                     {biData.data.length === 0 ? (
                       <p className="text-muted-foreground text-center py-8">
-                        Nenhum dado encontrado para o periodo selecionado.
+                        Nenhum dado encontrado para o período selecionado.
                       </p>
                     ) : (
                       <div className="overflow-x-auto">
@@ -577,7 +577,7 @@ function BIPageContent() {
                               <TableHead>Nome</TableHead>
                               <TableHead className="text-right">Receita</TableHead>
                               <TableHead className="text-right">Qtd</TableHead>
-                              <TableHead className="text-right">Ticket Medio</TableHead>
+                              <TableHead className="text-right">Ticket Médio</TableHead>
                               <TableHead className="text-right">Margem %</TableHead>
                             </TableRow>
                           </TableHeader>
@@ -659,7 +659,7 @@ function BIPageContent() {
                     {/* PieChart: Revenue Distribution */}
                     <Card>
                       <CardHeader>
-                        <CardTitle>Distribuicao de Receita</CardTitle>
+                        <CardTitle>Distribuição de Receita</CardTitle>
                       </CardHeader>
                       <CardContent>
                         <ResponsiveContainer width="100%" height={400}>
@@ -705,7 +705,7 @@ function BIPageContent() {
           <div>
             <h2 className="text-2xl font-bold">Aging de Estoque</h2>
             <p className="text-muted-foreground">
-              Analise de tempo de permanencia dos produtos em estoque
+              Análise de tempo de permanência dos produtos em estoque
             </p>
           </div>
         </div>

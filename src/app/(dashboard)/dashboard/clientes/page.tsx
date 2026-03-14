@@ -2,6 +2,7 @@
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
+import { getInitials } from "@/lib/utils";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
@@ -123,10 +124,7 @@ function ClientesPage() {
     }
   };
 
-  const getInitials = (name: string) => {
-    const parts = name.split(" ");
-    return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-  };
+  // Usa função centralizada de src/lib/utils.ts
 
   const handleExport = async () => {
     setExporting(true);

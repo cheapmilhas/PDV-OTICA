@@ -144,13 +144,13 @@ export function validateStatusTransition(
 /**
  * Helper para obter label do status em português
  */
-export function getStatusLabel(status: ServiceOrderStatus): string {
-  const labels: Record<ServiceOrderStatus, string> = {
+export function getStatusLabel(status: ServiceOrderStatus | string): string {
+  const labels: Record<string, string> = {
     DRAFT: "Rascunho",
     APPROVED: "Aprovado",
-    SENT_TO_LAB: "Enviado Lab",
-    IN_PROGRESS: "Em Progresso",
-    READY: "Pronto",
+    SENT_TO_LAB: "No Lab",
+    IN_PROGRESS: "Em Produção",
+    READY: "Pronta",
     DELIVERED: "Entregue",
     CANCELED: "Cancelado",
   };

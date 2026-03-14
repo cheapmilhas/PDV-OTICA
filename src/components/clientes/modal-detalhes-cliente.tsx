@@ -4,7 +4,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from "@/components/u
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { formatCurrency, formatCPF } from "@/lib/utils";
+import { formatCurrency, formatCPF, getInitials } from "@/lib/utils";
 import {
   User,
   Mail,
@@ -61,10 +61,7 @@ const getStatusLabel = (status: string) => {
   }
 };
 
-const getInitials = (nome: string) => {
-  const parts = nome.split(" ");
-  return `${parts[0][0]}${parts[parts.length - 1][0]}`.toUpperCase();
-};
+// Importado de @/lib/utils
 
 const formatDate = (dateString: string) => {
   const date = new Date(dateString);

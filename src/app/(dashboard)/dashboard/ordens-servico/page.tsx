@@ -21,7 +21,7 @@ import { Can } from "@/components/permissions/can";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
-import { format } from "date-fns";
+import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
 // ===== TIPOS =====
@@ -78,8 +78,7 @@ function isOrderDelayed(order: ServiceOrder): boolean {
 }
 
 function getDelayDays(promisedDate: string): number {
-  const diff = new Date().getTime() - new Date(promisedDate).getTime();
-  return Math.ceil(diff / (1000 * 60 * 60 * 24));
+  return differenceInCalendarDays(new Date(), new Date(promisedDate));
 }
 
 // Formata número da OS: se 0 ou inexistente, mostra ID curto. Sufixo -G para garantia, -R para retrabalho
@@ -93,17 +92,17 @@ function osNum(order: ServiceOrder): string {
 }
 
 function StatusBadge({ status, delayed }: { status: string; delayed: boolean }) {
-  if (delayed) {
-    return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border bg-red-100 text-red-700 border-red-300">
-        <AlertTriangle className="h-3 w-3" />
-        ATRASADA
-      </span>
-    );
-  }
   return (
-    <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${STATUS_COLOR[status] || "bg-gray-100 text-gray-700"}`}>
-      {STATUS_LABEL[status] || status}
+    <span className="inline-flex items-center gap-1.5">
+      <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-bold border ${STATUS_COLOR[status] || "bg-gray-100 text-gray-700"}`}>
+        {STATUS_LABEL[status] || status}
+      </span>
+      {delayed && (
+        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-bold border bg-red-100 text-red-700 border-red-300">
+          <AlertTriangle className="h-3 w-3" />
+          Atrasada
+        </span>
+      )}
     </span>
   );
 }

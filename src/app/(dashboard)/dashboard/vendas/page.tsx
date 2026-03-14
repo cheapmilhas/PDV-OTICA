@@ -275,6 +275,11 @@ function VendasContent() {
                           ))}
                         </div>
                       )}
+                      {venda.payments?.some((p: any) => p.method === "STORE_CREDIT") && (
+                        <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
+                          Crediário
+                        </Badge>
+                      )}
                       {venda.sellerUser && (
                         <span className="text-muted-foreground hidden md:inline">
                           {venda.sellerUser.name}

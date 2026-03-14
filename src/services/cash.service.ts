@@ -223,6 +223,11 @@ export class CashService {
       include: {
         movements: {
           orderBy: { createdAt: "asc" },
+          include: {
+            createdByUser: {
+              select: { id: true, name: true },
+            },
+          },
         },
         openedByUser: {
           select: { id: true, name: true },

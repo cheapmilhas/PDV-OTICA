@@ -96,21 +96,21 @@ const TYPE_CONFIG: Record<
     className: "bg-blue-100 text-blue-800",
   },
   CARD_FEE: {
-    label: "Taxa Cartao",
+    label: "Taxa Cartão",
     className: "bg-yellow-100 text-yellow-800",
   },
   COMMISSION_EXPENSE: {
-    label: "Comissao",
+    label: "Comissão",
     className: "bg-purple-100 text-purple-800",
   },
   EXPENSE: { label: "Despesa", className: "bg-red-100 text-red-800" },
-  REFUND: { label: "Devolucao", className: "bg-violet-100 text-violet-800" },
+  REFUND: { label: "Devolução", className: "bg-violet-100 text-violet-800" },
   STOCK_ADJUST: {
     label: "Ajuste Estoque",
     className: "bg-teal-100 text-teal-800",
   },
   TRANSFER: {
-    label: "Transferencia",
+    label: "Transferência",
     className: "bg-cyan-100 text-cyan-800",
   },
   OTHER: { label: "Outro", className: "bg-gray-100 text-gray-800" },
@@ -193,14 +193,14 @@ function LancamentosPage() {
       if (typeFilter && typeFilter !== "ALL") params.set("type", typeFilter);
 
       const res = await fetch(`/api/finance/entries?${params}`);
-      if (!res.ok) throw new Error("Erro ao carregar lancamentos");
+      if (!res.ok) throw new Error("Erro ao carregar lançamentos");
 
       const data = await res.json();
       setEntries(data.data || []);
       setPagination(data.pagination);
     } catch (error: any) {
-      console.error("Erro ao carregar lancamentos:", error);
-      toast.error("Erro ao carregar lancamentos");
+      console.error("Erro ao carregar lançamentos:", error);
+      toast.error("Erro ao carregar lançamentos");
     } finally {
       setLoading(false);
     }
@@ -230,7 +230,7 @@ function LancamentosPage() {
             setFinanceAccounts(accountsData.data || []);
           }
         } catch (error) {
-          console.error("Erro ao carregar dados do formulario:", error);
+          console.error("Erro ao carregar dados do formulário:", error);
         }
       };
       loadData();
@@ -244,7 +244,7 @@ function LancamentosPage() {
 
     try {
       if (!newEntry.description || !newEntry.amount) {
-        throw new Error("Preencha todos os campos obrigatorios");
+        throw new Error("Preencha todos os campos obrigatórios");
       }
 
       const res = await fetch("/api/finance/entries", {
@@ -278,13 +278,13 @@ function LancamentosPage() {
           detailMsg ||
           errData?.error?.message ||
           errData?.message ||
-          "Erro ao criar lancamento";
+          "Erro ao criar lançamento";
         throw new Error(
           typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg)
         );
       }
 
-      toast.success("Lancamento criado com sucesso!");
+      toast.success("Lançamento criado com sucesso!");
       setShowNewDialog(false);
       setNewEntry({
         type: "EXPENSE",
@@ -344,14 +344,14 @@ function LancamentosPage() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-3xl font-bold">Lancamentos Financeiros</h1>
+          <h1 className="text-3xl font-bold">Lançamentos Financeiros</h1>
           <p className="text-muted-foreground">
-            Visualize e gerencie os lancamentos contabeis
+            Visualize e gerencie os lançamentos contábeis
           </p>
         </div>
         <Button onClick={() => setShowNewDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Novo Lancamento
+          Novo Lançamento
         </Button>
       </div>
 
@@ -402,10 +402,10 @@ function LancamentosPage() {
                   <SelectItem value="SALE_REVENUE">Receita</SelectItem>
                   <SelectItem value="COGS">CMV</SelectItem>
                   <SelectItem value="PAYMENT_RECEIVED">Pagamento</SelectItem>
-                  <SelectItem value="CARD_FEE">Taxa Cartao</SelectItem>
-                  <SelectItem value="COMMISSION_EXPENSE">Comissao</SelectItem>
+                  <SelectItem value="CARD_FEE">Taxa Cartão</SelectItem>
+                  <SelectItem value="COMMISSION_EXPENSE">Comissão</SelectItem>
                   <SelectItem value="EXPENSE">Despesa</SelectItem>
-                  <SelectItem value="REFUND">Devolucao</SelectItem>
+                  <SelectItem value="REFUND">Devolução</SelectItem>
                   <SelectItem value="OTHER">Outro</SelectItem>
                 </SelectContent>
               </Select>
@@ -415,7 +415,7 @@ function LancamentosPage() {
               <div className="relative">
                 <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
                 <Input
-                  placeholder="Descricao, conta..."
+                  placeholder="Descrição, conta..."
                   value={search}
                   onChange={(e) => setSearch(e.target.value)}
                   className="pl-9"
@@ -448,11 +448,11 @@ function LancamentosPage() {
       {!loading && filteredEntries.length === 0 && (
         <EmptyState
           icon={<BookOpen className="h-12 w-12" />}
-          title="Nenhum lancamento encontrado"
+          title="Nenhum lançamento encontrado"
           description={
             search || typeFilter !== "ALL"
               ? "Tente ajustar os filtros"
-              : "Nenhum lancamento no periodo selecionado"
+              : "Nenhum lançamento no período selecionado"
           }
         />
       )}
@@ -467,9 +467,9 @@ function LancamentosPage() {
                   <TableRow>
                     <TableHead>Data</TableHead>
                     <TableHead>Tipo</TableHead>
-                    <TableHead>Descricao</TableHead>
-                    <TableHead>Debito</TableHead>
-                    <TableHead>Credito</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead>Débito</TableHead>
+                    <TableHead>Crédito</TableHead>
                     <TableHead className="text-right">Valor</TableHead>
                   </TableRow>
                 </TableHeader>
@@ -558,9 +558,9 @@ function LancamentosPage() {
       <Dialog open={showNewDialog} onOpenChange={setShowNewDialog}>
         <DialogContent className="max-w-2xl">
           <DialogHeader>
-            <DialogTitle>Novo Lancamento</DialogTitle>
+            <DialogTitle>Novo Lançamento</DialogTitle>
             <DialogDescription>
-              Crie um lancamento contabil manual
+              Crie um lançamento contábil manual
             </DialogDescription>
           </DialogHeader>
 
@@ -582,7 +582,7 @@ function LancamentosPage() {
                   </SelectTrigger>
                   <SelectContent>
                     <SelectItem value="EXPENSE">Despesa</SelectItem>
-                    <SelectItem value="TRANSFER">Transferencia</SelectItem>
+                    <SelectItem value="TRANSFER">Transferência</SelectItem>
                     <SelectItem value="OTHER">Outro</SelectItem>
                   </SelectContent>
                 </Select>
@@ -609,7 +609,7 @@ function LancamentosPage() {
               {/* Description */}
               <div className="space-y-2 md:col-span-2">
                 <Label>
-                  Descricao <span className="text-red-500">*</span>
+                  Descrição <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   placeholder="Ex: Pagamento de aluguel"
@@ -627,7 +627,7 @@ function LancamentosPage() {
               {/* Entry Date */}
               <div className="space-y-2">
                 <Label>
-                  Data Competencia <span className="text-red-500">*</span>
+                  Data Competência <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   type="date"
@@ -653,7 +653,7 @@ function LancamentosPage() {
 
               {/* Debit Account */}
               <div className="space-y-2">
-                <Label>Conta Debito</Label>
+                <Label>Conta Débito</Label>
                 <Select
                   value={newEntry.debitAccountCode}
                   onValueChange={(value) =>
@@ -675,7 +675,7 @@ function LancamentosPage() {
 
               {/* Credit Account */}
               <div className="space-y-2">
-                <Label>Conta Credito</Label>
+                <Label>Conta Crédito</Label>
                 <Select
                   value={newEntry.creditAccountCode}
                   onValueChange={(value) =>
@@ -735,7 +735,7 @@ function LancamentosPage() {
                     Criando...
                   </>
                 ) : (
-                  "Criar Lancamento"
+                  "Criar Lançamento"
                 )}
               </Button>
             </div>

@@ -171,15 +171,15 @@ function FluxoCaixaPageContent() {
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
       title: "Fluxo de Caixa",
-      subtitle: "Movimentacao financeira no periodo",
+      subtitle: "Movimentação financeira no período",
       period: { start: startDate, end: endDate },
       sections: [
         {
-          title: "Fluxo de Caixa Diario",
+          title: "Fluxo de Caixa Diário",
           columns: [
             { header: "Data", key: "date", format: "text" },
             { header: "Entradas", key: "inflows", format: "currency" },
-            { header: "Saidas", key: "outflows", format: "currency" },
+            { header: "Saídas", key: "outflows", format: "currency" },
             { header: "Saldo Dia", key: "net", format: "currency" },
             { header: "Acumulado", key: "balance", format: "currency" },
           ],
@@ -204,7 +204,7 @@ function FluxoCaixaPageContent() {
         {
           name: "Fluxo de Caixa",
           data: [
-            ["Data", "Entradas (R$)", "Saidas (R$)", "Saldo Dia (R$)", "Acumulado (R$)"],
+            ["Data", "Entradas (R$)", "Saídas (R$)", "Saldo Dia (R$)", "Acumulado (R$)"],
             ...data.map((entry) => [
               format(new Date(entry.date + "T12:00:00"), "dd/MM/yyyy"),
               entry.inflows,
@@ -253,7 +253,7 @@ function FluxoCaixaPageContent() {
         <div className="flex-1">
           <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
           <p className="text-muted-foreground">
-            Acompanhe entradas, saidas e saldo acumulado
+            Acompanhe entradas, saídas e saldo acumulado
           </p>
         </div>
       </div>
@@ -381,18 +381,18 @@ function FluxoCaixaPageContent() {
               title="Total Entradas"
               value={formatCurrency(kpis.totalInflows)}
               icon={ArrowUpCircle}
-              subtitle="No periodo selecionado"
+              subtitle="No período selecionado"
               className="border-l-4 border-l-green-500"
             />
             <KPICard
-              title="Total Saidas"
+              title="Total Saídas"
               value={formatCurrency(kpis.totalOutflows)}
               icon={ArrowDownCircle}
-              subtitle="No periodo selecionado"
+              subtitle="No período selecionado"
               className="border-l-4 border-l-red-500"
             />
             <KPICard
-              title="Saldo Liquido"
+              title="Saldo Líquido"
               value={formatCurrency(kpis.finalBalance)}
               icon={Wallet}
               subtitle="Saldo acumulado final"
@@ -408,7 +408,7 @@ function FluxoCaixaPageContent() {
           {/* Chart */}
           <Card>
             <CardHeader>
-              <CardTitle>Fluxo de Caixa - Grafico</CardTitle>
+              <CardTitle>Fluxo de Caixa - Gráfico</CardTitle>
             </CardHeader>
             <CardContent>
               <ResponsiveContainer width="100%" height={400}>
@@ -426,7 +426,7 @@ function FluxoCaixaPageContent() {
                   />
                   <Bar
                     dataKey="outflows"
-                    name="Saidas"
+                    name="Saídas"
                     fill="#ef4444"
                     radius={[4, 4, 0, 0]}
                   />
@@ -447,7 +447,7 @@ function FluxoCaixaPageContent() {
           {/* Table */}
           <Card>
             <CardHeader>
-              <CardTitle>Detalhamento Diario</CardTitle>
+              <CardTitle>Detalhamento Diário</CardTitle>
             </CardHeader>
             <CardContent>
               <div className="overflow-x-auto">
@@ -456,7 +456,7 @@ function FluxoCaixaPageContent() {
                     <tr className="border-b">
                       <th className="text-left p-2">Data</th>
                       <th className="text-right p-2">Entradas</th>
-                      <th className="text-right p-2">Saidas</th>
+                      <th className="text-right p-2">Saídas</th>
                       <th className="text-right p-2">Saldo Dia</th>
                       <th className="text-right p-2">Acumulado</th>
                     </tr>

@@ -273,10 +273,10 @@ function LotesEstoquePage() {
         throw new Error("Selecione um produto da lista");
       }
       if (!newLot.quantity || parseFloat(newLot.quantity) <= 0) {
-        throw new Error("Informe uma quantidade valida");
+        throw new Error("Informe uma quantidade válida");
       }
       if (!newLot.unitCost || parseFloat(newLot.unitCost) <= 0) {
-        throw new Error("Informe um custo unitario valido");
+        throw new Error("Informe um custo unitário válido");
       }
 
       const body: Record<string, any> = {
@@ -685,7 +685,7 @@ function LotesEstoquePage() {
               {/* Unit Cost */}
               <div className="space-y-2">
                 <Label>
-                  Custo Unitario <span className="text-red-500">*</span>
+                  Custo Unitário <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   type="number"
@@ -707,7 +707,7 @@ function LotesEstoquePage() {
             <div className="grid gap-4 grid-cols-2">
               {/* Invoice Number */}
               <div className="space-y-2">
-                <Label>Numero da NF</Label>
+                <Label>Número da NF</Label>
                 <Input
                   placeholder="Ex: 12345"
                   value={newLot.invoiceNumber}

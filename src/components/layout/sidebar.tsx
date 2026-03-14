@@ -128,6 +128,12 @@ const menuItems = [
         permission: "stock.view"
       },
       {
+        name: "Lotes de Estoque",
+        href: "/dashboard/financeiro/lotes-estoque",
+        icon: Boxes,
+        permission: "stock.view"
+      },
+      {
         name: "Caixa",
         href: "/dashboard/caixa",
         icon: CreditCard,
@@ -220,12 +226,6 @@ const menuItems = [
         name: "Conciliação",
         href: "/dashboard/financeiro/conciliacao",
         icon: RefreshCw,
-        permission: "financial.view"
-      },
-      {
-        name: "Lotes de Estoque",
-        href: "/dashboard/financeiro/lotes-estoque",
-        icon: Boxes,
         permission: "financial.view"
       },
       {

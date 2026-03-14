@@ -69,14 +69,14 @@ const statusConfig: Record<BatchStatus, { label: string; variant: "default" | "s
   DRAFT: { label: "Rascunho", variant: "secondary", className: "bg-gray-100 text-gray-700 hover:bg-gray-100" },
   IMPORTED: { label: "Importado", variant: "default", className: "bg-blue-100 text-blue-700 hover:bg-blue-100" },
   MATCHING: { label: "Conciliando", variant: "default", className: "bg-yellow-100 text-yellow-700 hover:bg-yellow-100" },
-  REVIEWING: { label: "Em Revisao", variant: "default", className: "bg-orange-100 text-orange-700 hover:bg-orange-100" },
+  REVIEWING: { label: "Em Revisão", variant: "default", className: "bg-orange-100 text-orange-700 hover:bg-orange-100" },
   CLOSED: { label: "Fechado", variant: "default", className: "bg-green-100 text-green-700 hover:bg-green-100" },
   CANCELED: { label: "Cancelado", variant: "destructive", className: "bg-red-100 text-red-700 hover:bg-red-100" },
 };
 
 const sourceLabels: Record<BatchSource, string> = {
-  CARD_ACQUIRER: "Adquirente de Cartao",
-  BANK_STATEMENT: "Extrato Bancario",
+  CARD_ACQUIRER: "Adquirente de Cartão",
+  BANK_STATEMENT: "Extrato Bancário",
   PIX: "PIX",
   OTHER: "Outro",
 };
@@ -108,13 +108,13 @@ function ConciliacaoListPage() {
     setLoading(true);
     try {
       const res = await fetch("/api/finance/reconciliation/batches");
-      if (!res.ok) throw new Error("Erro ao carregar batches de conciliacao");
+      if (!res.ok) throw new Error("Erro ao carregar lotes de conciliação");
 
       const data = await res.json();
       setBatches(data.data || []);
     } catch (error: any) {
       console.error("Erro ao carregar batches:", error);
-      toast.error("Erro ao carregar batches de conciliacao");
+      toast.error("Erro ao carregar lotes de conciliação");
     } finally {
       setLoading(false);
     }
@@ -127,7 +127,7 @@ function ConciliacaoListPage() {
 
     try {
       if (!newBatchForm.name || !newBatchForm.acquirerName) {
-        throw new Error("Preencha todos os campos obrigatorios");
+        throw new Error("Preencha todos os campos obrigatórios");
       }
 
       const res = await fetch("/api/finance/reconciliation/batches", {
@@ -144,11 +144,11 @@ function ConciliacaoListPage() {
 
       if (!res.ok) {
         const errData = await res.json();
-        const errMsg = errData?.error?.message || errData?.message || "Erro ao criar batch";
+        const errMsg = errData?.error?.message || errData?.message || "Erro ao criar lote";
         throw new Error(typeof errMsg === "string" ? errMsg : JSON.stringify(errMsg));
       }
 
-      toast.success("Batch de conciliacao criado com sucesso!");
+      toast.success("Lote de conciliação criado com sucesso!");
       setShowNewBatchDialog(false);
       setNewBatchForm({
         name: "",
@@ -179,14 +179,14 @@ function ConciliacaoListPage() {
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">Conciliacao Financeira</h1>
+          <h1 className="text-3xl font-bold">Conciliação Financeira</h1>
           <p className="text-muted-foreground">
-            Gerencie a conciliacao de pagamentos com adquirentes
+            Gerencie a conciliação de pagamentos com adquirentes
           </p>
         </div>
         <Button onClick={() => setShowNewBatchDialog(true)}>
           <Plus className="h-4 w-4 mr-2" />
-          Novo Batch
+          Novo Lote
         </Button>
       </div>
 
@@ -201,12 +201,12 @@ function ConciliacaoListPage() {
       {!loading && batches.length === 0 && (
         <EmptyState
           icon={<CreditCard className="h-12 w-12" />}
-          title="Nenhum batch de conciliacao encontrado"
-          description="Comece criando seu primeiro batch para conciliar pagamentos"
+          title="Nenhum lote de conciliação encontrado"
+          description="Comece criando seu primeiro lote para conciliar pagamentos"
           action={
             <Button onClick={() => setShowNewBatchDialog(true)}>
               <Plus className="mr-2 h-4 w-4" />
-              Novo Batch
+              Novo Lote
             </Button>
           }
         />
@@ -219,12 +219,12 @@ function ConciliacaoListPage() {
             <TableHeader>
               <TableRow>
                 <TableHead>Adquirente</TableHead>
-                <TableHead>Periodo</TableHead>
+                <TableHead>Período</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead className="text-right">Conciliados</TableHead>
                 <TableHead className="text-right">Pendentes</TableHead>
                 <TableHead className="text-right">Valor Total</TableHead>
-                <TableHead className="text-right">Acoes</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -300,7 +300,7 @@ function ConciliacaoListPage() {
       <Dialog open={showNewBatchDialog} onOpenChange={setShowNewBatchDialog}>
         <DialogContent className="max-w-lg">
           <DialogHeader>
-            <DialogTitle>Novo Batch de Conciliacao</DialogTitle>
+            <DialogTitle>Novo Lote de Conciliação</DialogTitle>
             <DialogDescription>
               Crie um novo batch para importar e conciliar pagamentos
             </DialogDescription>
@@ -338,8 +338,8 @@ function ConciliacaoListPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="CARD_ACQUIRER">Adquirente de Cartao</SelectItem>
-                  <SelectItem value="BANK_STATEMENT">Extrato Bancario</SelectItem>
+                  <SelectItem value="CARD_ACQUIRER">Adquirente de Cartão</SelectItem>
+                  <SelectItem value="BANK_STATEMENT">Extrato Bancário</SelectItem>
                   <SelectItem value="PIX">PIX</SelectItem>
                   <SelectItem value="OTHER">Outro</SelectItem>
                 </SelectContent>
@@ -366,7 +366,7 @@ function ConciliacaoListPage() {
             <div className="grid gap-4 grid-cols-2">
               <div className="space-y-2">
                 <Label htmlFor="batch-period-start">
-                  Inicio do Periodo <span className="text-red-500">*</span>
+                  Início do Período <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="batch-period-start"
@@ -380,7 +380,7 @@ function ConciliacaoListPage() {
               </div>
               <div className="space-y-2">
                 <Label htmlFor="batch-period-end">
-                  Fim do Periodo <span className="text-red-500">*</span>
+                  Fim do Período <span className="text-red-500">*</span>
                 </Label>
                 <Input
                   id="batch-period-end"
@@ -411,7 +411,7 @@ function ConciliacaoListPage() {
                     Criando...
                   </>
                 ) : (
-                  "Criar Batch"
+                  "Criar Lote"
                 )}
               </Button>
             </div>

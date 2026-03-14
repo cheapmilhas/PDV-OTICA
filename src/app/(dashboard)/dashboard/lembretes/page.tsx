@@ -9,6 +9,8 @@ import { Badge } from "@/components/ui/badge";
 import { useToast } from "@/hooks/use-toast";
 import Link from "next/link";
 import { usePermissions } from "@/hooks/usePermissions";
+import { getCustomerSegmentLabel } from "@/lib/customer-segments";
+import { differenceInCalendarDays } from "date-fns";
 
 const SEGMENTS = [
   { key: "all", label: "Todos" },
@@ -288,7 +290,7 @@ function CrmPageContent() {
                   <div className="flex-1 min-w-0">
                     <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <h3 className="text-base md:text-lg font-semibold truncate">{reminder.customer.name}</h3>
-                      <Badge className="text-xs">{reminder.segment.replace(/_/g, " ")}</Badge>
+                      <Badge className="text-xs">{getCustomerSegmentLabel(reminder.segment)}</Badge>
                     </div>
                     <p className="text-sm text-gray-600 mb-2">
                       {reminder.customer.phone || "Sem telefone"}
@@ -299,7 +301,7 @@ function CrmPageContent() {
                         <p>
                           Última compra:{" "}
                           {new Date(reminder.lastPurchaseDate).toLocaleDateString("pt-BR")} (
-                          {reminder.daysSinceLastPurchase} dias)
+                          {differenceInCalendarDays(new Date(), new Date(reminder.lastPurchaseDate))} dias)
                         </p>
                         {reminder.lastPurchaseAmount && (
                           <p>

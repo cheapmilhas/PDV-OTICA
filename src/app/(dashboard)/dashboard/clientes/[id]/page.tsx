@@ -27,6 +27,7 @@ import {
 import { Textarea } from "@/components/ui/textarea";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
+import { CUSTOMER_SEGMENT_LABELS } from "@/lib/customer-segments";
 import {
   ArrowLeft,
   Edit,
@@ -55,7 +56,7 @@ import {
   UserCheck,
 } from "lucide-react";
 import Link from "next/link";
-import { formatCurrency } from "@/lib/utils";
+import { formatCurrency, getInitials } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import toast from "react-hot-toast";
@@ -161,20 +162,7 @@ interface CrmReminder {
   createdAt: string;
 }
 
-const SEGMENT_LABELS: Record<string, string> = {
-  BIRTHDAY: "Aniversário",
-  POST_SALE_30_DAYS: "Pós-venda 30 dias",
-  POST_SALE_90_DAYS: "Pós-venda 90 dias",
-  INACTIVE_6_MONTHS: "Inativo 6 meses",
-  INACTIVE_1_YEAR: "Inativo 1 ano",
-  INACTIVE_2_YEARS: "Inativo 2 anos",
-  INACTIVE_3_YEARS: "Inativo 3+ anos",
-  CASHBACK_EXPIRING: "Cashback expirando",
-  PRESCRIPTION_EXPIRING: "Receita vencendo",
-  VIP_CUSTOMER: "Cliente VIP",
-  CONTACT_LENS_BUYER: "Compra lentes de contato",
-  CUSTOM: "Personalizado",
-};
+const SEGMENT_LABELS = CUSTOMER_SEGMENT_LABELS;
 
 const RESULT_LABELS: Record<string, string> = {
   ANSWERED_SCHEDULED: "Atendeu - Agendou",
@@ -543,14 +531,7 @@ function ClienteDetalhesPage() {
     return colors[result] || "bg-gray-100 text-gray-800";
   };
 
-  const getInitials = (name?: string) => {
-    if (!name) return "??";
-    const parts = name.split(" ");
-    if (parts.length >= 2) {
-      return `${parts[0][0]}${parts[1][0]}`.toUpperCase();
-    }
-    return name.substring(0, 2).toUpperCase();
-  };
+  // Usa função centralizada de src/lib/utils.ts
 
   const getStatusBadge = (status: string, type: "sale" | "quote" | "order") => {
     const configs: Record<string, { label: string; variant: any }> = {
@@ -564,9 +545,10 @@ function ClienteDetalhesPage() {
       CONVERTED: { label: "Convertido", variant: "default" },
       EXPIRED: { label: "Expirado", variant: "secondary" },
       // Ordens de Serviço
-      PENDING: { label: "Pendente", variant: "secondary" },
-      IN_PROGRESS: { label: "Em Andamento", variant: "default" },
-      READY: { label: "Pronto", variant: "default" },
+      DRAFT: { label: "Rascunho", variant: "secondary" },
+      SENT_TO_LAB: { label: "No Lab", variant: "outline" },
+      IN_PROGRESS: { label: "Em Produção", variant: "default" },
+      READY: { label: "Pronta", variant: "default" },
       DELIVERED: { label: "Entregue", variant: "default" },
     };
 

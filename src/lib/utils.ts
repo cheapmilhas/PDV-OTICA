@@ -59,6 +59,14 @@ export function removeFormatting(value: string): string {
   return value.replace(/\D/g, "");
 }
 
+// Gera iniciais do avatar: primeira letra do primeiro nome + primeira letra do último nome
+export function getInitials(name?: string): string {
+  if (!name) return "?";
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0][0].toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 // Serializa Decimal do Prisma para number
 export function serializeDecimal(value: any): number {
   if (value === null || value === undefined) return 0;

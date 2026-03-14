@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, Search, User, Building2, ChevronDown, LogOut, Loader2, Eye, EyeOff } from "lucide-react";
+import { Bell, User, Building2, ChevronDown, LogOut, Loader2, Eye, EyeOff, AlertTriangle, Package, Clock, DollarSign } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -24,7 +24,10 @@ import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
 import { signOut, useSession } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import { Separator } from "@/components/ui/separator";
 import { MobileSidebar } from "./mobile-sidebar";
+import { GlobalSearch } from "./global-search";
 import toast from "react-hot-toast";
 
 interface Branch {
@@ -40,7 +43,13 @@ export function Header() {
   const router = useRouter();
   const [branches, setBranches] = useState<Branch[]>([]);
   const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
-  const [notifications] = useState(0);
+  const [notifData, setNotifData] = useState<{
+    osDelayed: number;
+    lowStock: number;
+    shiftOpen: boolean;
+    shiftHours: number;
+  }>({ osDelayed: 0, lowStock: 0, shiftOpen: false, shiftHours: 0 });
+  const notifCount = notifData.osDelayed + notifData.lowStock + (notifData.shiftOpen && notifData.shiftHours >= 12 ? 1 : 0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -180,6 +189,39 @@ export function Header() {
     }
   }, [session]);
 
+  // Buscar contagens de notificações
+  useEffect(() => {
+    if (!session?.user) return;
+    const fetchNotifications = async () => {
+      try {
+        const [metricsRes, shiftRes] = await Promise.all([
+          fetch("/api/dashboard/metrics"),
+          fetch("/api/cash/shift"),
+        ]);
+        if (metricsRes.ok) {
+          const m = await metricsRes.json();
+          setNotifData((prev) => ({
+            ...prev,
+            osDelayed: m.osDelayed || 0,
+            lowStock: m.productsLowStock || 0,
+          }));
+        }
+        if (shiftRes.ok) {
+          const s = await shiftRes.json();
+          if (s.shift && s.shift.status === "OPEN") {
+            const hours = (Date.now() - new Date(s.shift.openedAt).getTime()) / (1000 * 60 * 60);
+            setNotifData((prev) => ({ ...prev, shiftOpen: true, shiftHours: hours }));
+          }
+        }
+      } catch {
+        // Silencioso
+      }
+    };
+    fetchNotifications();
+    const interval = setInterval(fetchNotifications, 5 * 60 * 1000);
+    return () => clearInterval(interval);
+  }, [session]);
+
   return (
     <>
     <header className="flex h-14 md:h-16 items-center justify-between border-b bg-background px-4 md:px-6">
@@ -188,14 +230,7 @@ export function Header() {
 
       {/* Search - esconde em mobile */}
       <div className="hidden sm:flex flex-1 items-center gap-4 max-w-md">
-        <div className="relative w-full">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            type="search"
-            placeholder="Buscar produtos, clientes..."
-            className="pl-10"
-          />
-        </div>
+        <GlobalSearch />
       </div>
 
       {/* Actions */}
@@ -228,14 +263,74 @@ export function Header() {
         )}
 
         {/* Notifications */}
-        <Button variant="ghost" size="icon" className="relative" onClick={() => router.push("/dashboard/lembretes")}>
-          <Bell className="h-5 w-5" />
-          {notifications > 0 && (
-            <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
-              {notifications}
-            </span>
-          )}
-        </Button>
+        <Popover>
+          <PopoverTrigger asChild>
+            <Button variant="ghost" size="icon" className="relative">
+              <Bell className="h-5 w-5" />
+              {notifCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                  {notifCount}
+                </span>
+              )}
+            </Button>
+          </PopoverTrigger>
+          <PopoverContent align="end" className="w-80 p-0">
+            <div className="p-3 border-b">
+              <p className="text-sm font-semibold">Notificações</p>
+            </div>
+            <div className="max-h-64 overflow-y-auto">
+              {notifCount === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">Nenhuma notificação</p>
+              ) : (
+                <div className="divide-y">
+                  {notifData.osDelayed > 0 && (
+                    <button
+                      className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                      onClick={() => router.push("/dashboard/ordens-servico?filter=atrasadas")}
+                    >
+                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notifData.osDelayed} OS atrasada{notifData.osDelayed > 1 ? "s" : ""}</p>
+                        <p className="text-xs text-muted-foreground">Ordens de serviço além do prazo</p>
+                      </div>
+                    </button>
+                  )}
+                  {notifData.lowStock > 0 && (
+                    <button
+                      className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                      onClick={() => router.push("/dashboard/estoque")}
+                    >
+                      <Package className="h-4 w-4 text-amber-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{notifData.lowStock} produto{notifData.lowStock > 1 ? "s" : ""} com estoque baixo</p>
+                        <p className="text-xs text-muted-foreground">Abaixo do estoque mínimo</p>
+                      </div>
+                    </button>
+                  )}
+                  {notifData.shiftOpen && notifData.shiftHours >= 12 && (
+                    <button
+                      className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                      onClick={() => router.push("/dashboard/caixa")}
+                    >
+                      <Clock className="h-4 w-4 text-orange-500 shrink-0" />
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">Caixa aberto há {Math.floor(notifData.shiftHours)}h</p>
+                        <p className="text-xs text-muted-foreground">Considere fechar o caixa</p>
+                      </div>
+                    </button>
+                  )}
+                </div>
+              )}
+            </div>
+            <Separator />
+            <button
+              className="w-full px-3 py-2 text-sm text-center text-primary hover:bg-accent transition-colors"
+              onClick={() => router.push("/dashboard/lembretes")}
+            >
+              Ver todos os lembretes
+            </button>
+          </PopoverContent>
+        </Popover>
 
         {/* User Menu */}
         <DropdownMenu>

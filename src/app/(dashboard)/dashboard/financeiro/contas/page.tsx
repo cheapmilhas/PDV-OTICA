@@ -141,12 +141,12 @@ const translateEntryType = (type: string) => {
     SALE_REVENUE: "Receita de Venda",
     COGS: "Custo de Mercadoria",
     PAYMENT_RECEIVED: "Pagamento Recebido",
-    CARD_FEE: "Taxa de Cartao",
-    COMMISSION_EXPENSE: "Comissao",
+    CARD_FEE: "Taxa de Cartão",
+    COMMISSION_EXPENSE: "Comissão",
     EXPENSE: "Despesa",
     REFUND: "Estorno",
     STOCK_ADJUST: "Ajuste de Estoque",
-    TRANSFER: "Transferencia",
+    TRANSFER: "Transferência",
     OTHER: "Outro",
   };
   return translations[type] || type;
@@ -394,7 +394,7 @@ function ContasFinanceirasPage() {
                       <div className="flex items-center gap-2">
                         {account.isDefault && (
                           <Badge variant="secondary" className="text-xs">
-                            Padrao
+                            Padrão
                           </Badge>
                         )}
                         <Badge variant="outline" className="text-xs">
@@ -550,7 +550,7 @@ function ContasFinanceirasPage() {
                 <Card>
                   <CardContent className="py-12 text-center">
                     <p className="text-muted-foreground">
-                      Nenhuma movimentacao encontrada no periodo selecionado.
+                      Nenhuma movimentação encontrada no período selecionado.
                     </p>
                   </CardContent>
                 </Card>
@@ -561,9 +561,9 @@ function ContasFinanceirasPage() {
                       <TableRow>
                         <TableHead>Data</TableHead>
                         <TableHead>Tipo</TableHead>
-                        <TableHead>Descricao</TableHead>
+                        <TableHead>Descrição</TableHead>
                         <TableHead className="text-right">Entrada</TableHead>
-                        <TableHead className="text-right">Saida</TableHead>
+                        <TableHead className="text-right">Saída</TableHead>
                         <TableHead className="text-right">Saldo</TableHead>
                       </TableRow>
                     </TableHeader>
@@ -660,7 +660,7 @@ function ContasFinanceirasPage() {
                   <SelectItem value="CASH">Dinheiro</SelectItem>
                   <SelectItem value="BANK">Banco</SelectItem>
                   <SelectItem value="PIX">PIX</SelectItem>
-                  <SelectItem value="CARD_ACQUIRER">Adquirente de Cartao</SelectItem>
+                  <SelectItem value="CARD_ACQUIRER">Adquirente de Cartão</SelectItem>
                   <SelectItem value="OTHER">Outro</SelectItem>
                 </SelectContent>
               </Select>
@@ -681,7 +681,7 @@ function ContasFinanceirasPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="acc-agency">Agencia</Label>
+                  <Label htmlFor="acc-agency">Agência</Label>
                   <Input
                     id="acc-agency"
                     placeholder="1234"
@@ -711,7 +711,7 @@ function ContasFinanceirasPage() {
                 <Label htmlFor="acc-pix">Chave PIX</Label>
                 <Input
                   id="acc-pix"
-                  placeholder="CPF, e-mail, telefone ou chave aleatoria"
+                  placeholder="CPF, e-mail, telefone ou chave aleatória"
                   value={form.pixKey}
                   onChange={(e) =>
                     setForm({ ...form, pixKey: e.target.value })
@@ -735,7 +735,7 @@ function ContasFinanceirasPage() {
                   />
                 </div>
                 <div className="space-y-2">
-                  <Label htmlFor="acc-fee">Taxa Padrao (%)</Label>
+                  <Label htmlFor="acc-fee">Taxa Padrão (%)</Label>
                   <Input
                     id="acc-fee"
                     type="number"
@@ -754,10 +754,10 @@ function ContasFinanceirasPage() {
 
             {/* Description */}
             <div className="space-y-2">
-              <Label htmlFor="acc-desc">Descricao (opcional)</Label>
+              <Label htmlFor="acc-desc">Descrição (opcional)</Label>
               <Textarea
                 id="acc-desc"
-                placeholder="Observacoes sobre a conta..."
+                placeholder="Observações sobre a conta..."
                 value={form.description}
                 onChange={(e) =>
                   setForm({ ...form, description: e.target.value })
@@ -776,7 +776,7 @@ function ContasFinanceirasPage() {
                 }
               />
               <Label htmlFor="acc-default" className="cursor-pointer">
-                Definir como conta padrao
+                Definir como conta padrão
               </Label>
             </div>
 

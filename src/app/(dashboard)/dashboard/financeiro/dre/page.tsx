@@ -201,7 +201,7 @@ function DREDinamicoPageContent() {
           fill: COLORS.blue,
         },
         {
-          name: "(-) Deducoes",
+          name: "(-) Deduções",
           value: -Math.abs(data.summary.deductions),
           fill: COLORS.yellow,
         },
@@ -228,11 +228,11 @@ function DREDinamicoPageContent() {
     ? [
         { name: "CMV", value: Math.abs(data.summary.cogs) },
         {
-          name: "Taxas Cartao",
+          name: "Taxas Cartão",
           value: Math.abs(data.summary.deductions),
         },
         {
-          name: "Comissoes",
+          name: "Comissões",
           value: Math.abs(data.summary.expenses) * 0.4,
         },
         {
@@ -247,8 +247,8 @@ function DREDinamicoPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
-      title: "DRE Dinamica (Ledger)",
-      subtitle: "Demonstrativo de Resultado do Exercicio",
+      title: "DRE Dinâmica (Ledger)",
+      subtitle: "Demonstrativo de Resultado do Exercício",
       period: { start: startDate, end: endDate },
       sections: [
         {
@@ -256,7 +256,7 @@ function DREDinamicoPageContent() {
           columns: [
             { header: "Conta", key: "name", format: "text" },
             { header: "Valor (R$)", key: "amount", format: "currency" },
-            { header: "% Receita Liq.", key: "percent", format: "percent" },
+            { header: "% Receita Líq.", key: "percent", format: "percent" },
           ],
           data: data.lines.flatMap((line) => {
             const netRev = data.summary.netRevenue || 1;
@@ -289,7 +289,7 @@ function DREDinamicoPageContent() {
     const netRev = data.summary.netRevenue || 1;
 
     const sheetData: any[][] = [
-      ["Codigo", "Conta", "Valor (R$)", "% Receita Liq."],
+      ["Código", "Conta", "Valor (R$)", "% Receita Líq."],
     ];
 
     for (const line of data.lines) {
@@ -314,12 +314,12 @@ function DREDinamicoPageContent() {
     sheetData.push([]);
     sheetData.push(["Resumo"]);
     sheetData.push(["Receita Bruta", data.summary.grossRevenue]);
-    sheetData.push(["Deducoes", data.summary.deductions]);
-    sheetData.push(["Receita Liquida", data.summary.netRevenue]);
+    sheetData.push(["Deduções", data.summary.deductions]);
+    sheetData.push(["Receita Líquida", data.summary.netRevenue]);
     sheetData.push(["CMV", data.summary.cogs]);
     sheetData.push(["Margem Bruta", data.summary.grossMargin]);
     sheetData.push(["Despesas", data.summary.expenses]);
-    sheetData.push(["Lucro Liquido", data.summary.netProfit]);
+    sheetData.push(["Lucro Líquido", data.summary.netProfit]);
 
     await exportToExcel({
       fileName: `dre-dinamica-${format(startDate, "yyyy-MM-dd")}.xlsx`,
@@ -337,9 +337,9 @@ function DREDinamicoPageContent() {
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">DRE Dinamica (Ledger)</h1>
+          <h1 className="text-3xl font-bold">DRE Dinâmica (Ledger)</h1>
           <p className="text-muted-foreground">
-            Demonstrativo de Resultado baseado no razao contabil
+            Demonstrativo de Resultado baseado no razão contábil
           </p>
         </div>
       </div>
@@ -444,7 +444,7 @@ function DREDinamicoPageContent() {
           {/* KPI Cards */}
           <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-4">
             <KPICard
-              title="Receita Liquida"
+              title="Receita Líquida"
               value={formatCurrency(data.summary.netRevenue)}
               icon={DollarSign}
               subtitle={`${format(startDate, "dd/MM")} a ${format(endDate, "dd/MM/yyyy")}`}
@@ -459,16 +459,16 @@ function DREDinamicoPageContent() {
               title="Margem Bruta %"
               value={`${grossMarginPercent}%`}
               icon={Percent}
-              subtitle="Lucro Bruto / Receita Liq."
+              subtitle="Lucro Bruto / Receita Líq."
               className={
                 Number(grossMarginPercent) >= 30 ? "border-green-200" : "border-yellow-200"
               }
             />
             <KPICard
-              title="Margem Liquida %"
+              title="Margem Líquida %"
               value={`${netMarginPercent}%`}
               icon={BarChart3}
-              subtitle="Lucro Liquido / Receita Liq."
+              subtitle="Lucro Líquido / Receita Líq."
               className={
                 Number(netMarginPercent) >= 10
                   ? "border-green-200"
@@ -492,7 +492,7 @@ function DREDinamicoPageContent() {
                       <th className="text-left p-3 font-semibold">Conta</th>
                       <th className="text-right p-3 font-semibold">Valor</th>
                       <th className="text-right p-3 font-semibold">
-                        % Rec. Liquida
+                        % Rec. Líquida
                       </th>
                     </tr>
                   </thead>
@@ -620,7 +620,7 @@ function DREDinamicoPageContent() {
             {/* Pie Chart - Cost Composition */}
             <Card>
               <CardHeader>
-                <CardTitle>Composicao de Custos</CardTitle>
+                <CardTitle>Composição de Custos</CardTitle>
               </CardHeader>
               <CardContent>
                 <ResponsiveContainer width="100%" height={350}>

@@ -36,6 +36,7 @@ import { ModalAberturaCaixa } from "@/components/caixa/modal-abertura-caixa";
 import { ModalFechamentoCaixa } from "@/components/caixa/modal-fechamento-caixa";
 import { ModalSangria } from "@/components/caixa/modal-sangria";
 import { ModalReforco } from "@/components/caixa/modal-reforco";
+import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { usePermissions } from "@/hooks/usePermissions";
 
 type CashShift = {
@@ -288,6 +289,9 @@ function CaixaPage() {
       />
 
       <div className="space-y-6">
+        {/* Alerta de caixa aberto há muito tempo */}
+        <CashShiftAlert hideAction />
+
         {/* Header */}
         <div className="flex items-center justify-between">
           <div>

@@ -28,10 +28,21 @@ import toast from "react-hot-toast";
 import { Can } from "@/components/permissions/can";
 import { usePermissions } from "@/hooks/usePermissions";
 
+const PRODUCT_TYPE_LABELS: Record<string, string> = {
+  FRAME: "Armação",
+  SUNGLASSES: "Óculos de Sol",
+  LENS: "Lente",
+  CONTACT_LENS: "Lente de Contato",
+  ACCESSORY: "Acessório",
+  SERVICE: "Serviço",
+  OTHER: "Outros",
+};
+
 interface Product {
   id: string;
   sku: string;
   name: string;
+  type: string;
   stockQty: number;
   stockMin: number;
   stockMax: number | null;
@@ -463,7 +474,7 @@ function EstoquePage() {
                             </TableCell>
                             <TableCell>
                               <Badge variant="outline">
-                                {produto.category?.name || "Sem categoria"}
+                                {produto.category?.name || PRODUCT_TYPE_LABELS[produto.type] || "Sem categoria"}
                               </Badge>
                             </TableCell>
                             <TableCell className="text-center">

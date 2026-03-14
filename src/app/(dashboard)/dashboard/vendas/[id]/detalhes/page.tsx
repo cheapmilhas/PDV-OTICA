@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, Clock, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, FileText } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -79,6 +79,7 @@ export default function DetalhesVendaPage() {
   const [updatingSeller, setUpdatingSeller] = useState(false);
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [cashbackInfo, setCashbackInfo] = useState<{ amount: number; expiresAt: string | null } | null>(null);
+  const [cashbackLoaded, setCashbackLoaded] = useState(false);
 
   // Verifica permissões do usuário (permission-based)
   const canCancelSale = hasPermission("sales.cancel");
@@ -107,23 +108,17 @@ export default function DetalhesVendaPage() {
   // Buscar cashback da venda
   useEffect(() => {
     const fetchCashback = async () => {
-      if (!sale?.id) {
-        console.log("⚠️ Sale ID não disponível para buscar cashback");
-        return;
-      }
-      console.log("🔍 Buscando cashback para venda:", sale.id);
+      if (!sale?.id) return;
       try {
         const res = await fetch(`/api/sales/${sale.id}/cashback`);
-        console.log("📡 Resposta da API cashback:", res.status);
         if (res.ok) {
           const data = await res.json();
-          console.log("💰 Dados de cashback recebidos:", data);
-          setCashbackInfo(data.data);
-        } else {
-          console.log("❌ Erro na API de cashback:", res.status, await res.text());
+          setCashbackInfo(data.data || null);
         }
-      } catch (e) {
-        console.log("❌ Erro ao buscar cashback:", e);
+      } catch {
+        // Silencioso — seção mostrará "sem cashback"
+      } finally {
+        setCashbackLoaded(true);
       }
     };
     fetchCashback();
@@ -666,12 +661,16 @@ export default function DetalhesVendaPage() {
       </Card>
 
       {/* Cashback Gerado */}
-      {(() => {
-        console.log("🔍 DEBUG cashbackInfo:", cashbackInfo);
-        console.log("🔍 DEBUG amount:", cashbackInfo?.amount);
-        return null;
-      })()}
-      {cashbackInfo && Number(cashbackInfo.amount) > 0 ? (
+      {!cashbackLoaded ? (
+        <Card className="border-gray-200 bg-gray-50">
+          <CardContent className="p-4 flex items-center gap-2">
+            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              Carregando informações de cashback...
+            </p>
+          </CardContent>
+        </Card>
+      ) : cashbackInfo && Number(cashbackInfo.amount) > 0 ? (
         <Card className="border-purple-200 bg-purple-50">
           <CardHeader>
             <CardTitle className="flex items-center gap-2 text-purple-700">
@@ -699,7 +698,7 @@ export default function DetalhesVendaPage() {
             </div>
             {sale?.customer && (
               <p className="text-sm text-muted-foreground border-t pt-3">
-                💰 Cashback creditado para {sale.customer.name}
+                Cashback creditado para {sale.customer.name}
               </p>
             )}
           </CardContent>
@@ -708,9 +707,7 @@ export default function DetalhesVendaPage() {
         <Card className="border-gray-200 bg-gray-50">
           <CardContent className="p-4">
             <p className="text-sm text-muted-foreground">
-              {cashbackInfo === null
-                ? "⏳ Carregando informações de cashback..."
-                : "ℹ️ Nenhum cashback gerado nesta venda"}
+              Nenhum cashback gerado nesta venda
             </p>
           </CardContent>
         </Card>

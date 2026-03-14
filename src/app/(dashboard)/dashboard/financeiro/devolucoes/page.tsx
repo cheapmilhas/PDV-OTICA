@@ -89,14 +89,14 @@ type RefundStatus = "PENDING" | "APPROVED" | "COMPLETED" | "CANCELED";
 const REASON_LABELS: Record<RefundReason, string> = {
   DEFEITO: "Defeito no Produto",
   TROCA: "Troca",
-  INSATISFACAO: "Insatisfacao do Cliente",
+  INSATISFACAO: "Insatisfação do Cliente",
   ERRO_VENDA: "Erro na Venda",
   OUTRO: "Outro",
 };
 
 const METHOD_LABELS: Record<RefundMethod, string> = {
   CASH: "Dinheiro",
-  CREDIT: "Credito Loja",
+  CREDIT: "Crédito Loja",
   PIX: "PIX",
 };
 
@@ -106,7 +106,7 @@ const STATUS_CONFIG: Record<
 > = {
   PENDING: { label: "Pendente", className: "bg-yellow-100 text-yellow-800" },
   APPROVED: { label: "Aprovado", className: "bg-blue-100 text-blue-800" },
-  COMPLETED: { label: "Concluido", className: "bg-green-100 text-green-800" },
+  COMPLETED: { label: "Concluído", className: "bg-green-100 text-green-800" },
   CANCELED: { label: "Cancelado", className: "bg-red-100 text-red-800" },
 };
 
@@ -168,7 +168,7 @@ function DevolucoesPageContent() {
 
   const handleSearch = useCallback(async () => {
     if (!searchTerm.trim()) {
-      toast.error("Digite um numero de venda ou nome do cliente");
+      toast.error("Digite um número de venda ou nome do cliente");
       return;
     }
 
@@ -324,11 +324,11 @@ function DevolucoesPageContent() {
       if (!res.ok) {
         const err = await res.json();
         throw new Error(
-          err.error?.message || err.error || "Erro ao processar devolucao"
+          err.error?.message || err.error || "Erro ao processar devolução"
         );
       }
 
-      toast.success("Devolucao processada com sucesso!");
+      toast.success("Devolução processada com sucesso!");
 
       // Reset state
       setSelectedSale(null);
@@ -337,7 +337,7 @@ function DevolucoesPageContent() {
       setSearchResults([]);
       setObservations("");
     } catch (error: any) {
-      toast.error(error.message || "Erro ao processar devolucao");
+      toast.error(error.message || "Erro ao processar devolução");
     } finally {
       setProcessing(false);
     }
@@ -363,9 +363,9 @@ function DevolucoesPageContent() {
           </Button>
         </Link>
         <div className="flex-1">
-          <h1 className="text-3xl font-bold">Devolucoes</h1>
+          <h1 className="text-3xl font-bold">Devoluções</h1>
           <p className="text-muted-foreground">
-            Processe devolucoes e reembolsos de vendas concluidas
+            Processe devoluções e reembolsos de vendas concluídas
           </p>
         </div>
       </div>
@@ -380,7 +380,7 @@ function DevolucoesPageContent() {
             <div className="flex gap-2">
               <div className="flex-1">
                 <Input
-                  placeholder="Numero da venda ou nome do cliente..."
+                  placeholder="Número da venda ou nome do cliente..."
                   value={searchTerm}
                   onChange={(e) => setSearchTerm(e.target.value)}
                   onKeyDown={(e) => {
@@ -413,7 +413,7 @@ function DevolucoesPageContent() {
                         Venda #{sale.id.slice(-8).toUpperCase()}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
-                        {sale.customer?.name || "Cliente nao identificado"}
+                        {sale.customer?.name || "Cliente não identificado"}
                       </p>
                     </div>
                     <div className="text-right shrink-0">
@@ -436,7 +436,7 @@ function DevolucoesPageContent() {
               searchResults.length === 0 &&
               searchTerm.trim() && (
                 <div className="absolute z-50 mt-1 w-full rounded-md border bg-background p-4 text-center text-sm text-muted-foreground shadow-lg">
-                  Nenhuma venda concluida encontrada
+                  Nenhuma venda concluída encontrada
                 </div>
               )}
           </div>
@@ -484,7 +484,7 @@ function DevolucoesPageContent() {
                 <div>
                   <p className="text-sm text-muted-foreground">Cliente</p>
                   <p className="font-medium">
-                    {selectedSale.customer?.name || "Nao identificado"}
+                    {selectedSale.customer?.name || "Não identificado"}
                   </p>
                 </div>
                 <div>
@@ -515,7 +515,7 @@ function DevolucoesPageContent() {
                 <EmptyState
                   icon={<ShoppingBag className="h-12 w-12" />}
                   title="Nenhum item encontrado"
-                  description="Esta venda nao possui itens para devolucao."
+                  description="Esta venda não possui itens para devolução."
                 />
               ) : (
                 <Table>
@@ -583,7 +583,7 @@ function DevolucoesPageContent() {
           {/* Refund Details */}
           <Card>
             <CardHeader>
-              <CardTitle>Detalhes da Devolucao</CardTitle>
+              <CardTitle>Detalhes da Devolução</CardTitle>
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
@@ -614,13 +614,13 @@ function DevolucoesPageContent() {
 
                 {/* Refund method */}
                 <div className="space-y-2">
-                  <Label htmlFor="refundMethod">Metodo de Devolucao</Label>
+                  <Label htmlFor="refundMethod">Método de Devolução</Label>
                   <Select
                     value={refundMethod}
                     onValueChange={(v) => setRefundMethod(v as RefundMethod)}
                   >
                     <SelectTrigger id="refundMethod">
-                      <SelectValue placeholder="Selecione o metodo" />
+                      <SelectValue placeholder="Selecione o método" />
                     </SelectTrigger>
                     <SelectContent>
                       {(
@@ -640,10 +640,10 @@ function DevolucoesPageContent() {
 
               {/* Observations */}
               <div className="space-y-2">
-                <Label htmlFor="observations">Observacoes</Label>
+                <Label htmlFor="observations">Observações</Label>
                 <Textarea
                   id="observations"
-                  placeholder="Observacoes adicionais sobre a devolucao..."
+                  placeholder="Observações adicionais sobre a devolução..."
                   value={observations}
                   onChange={(e) => setObservations(e.target.value)}
                   rows={3}
@@ -692,7 +692,7 @@ function DevolucoesPageContent() {
                     <Loader2 className="mr-2 h-4 w-4 animate-spin" />
                   )}
                   <RotateCcw className="mr-2 h-4 w-4" />
-                  Processar Devolucao
+                  Processar Devolução
                 </Button>
               </div>
             </CardContent>
@@ -705,7 +705,7 @@ function DevolucoesPageContent() {
         <EmptyState
           icon={<RotateCcw className="h-12 w-12" />}
           title="Nenhuma venda selecionada"
-          description="Busque e selecione uma venda concluida para iniciar o processo de devolucao."
+          description="Busque e selecione uma venda concluída para iniciar o processo de devolução."
         />
       )}
 
@@ -715,10 +715,10 @@ function DevolucoesPageContent() {
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <AlertTriangle className="h-5 w-5 text-amber-500" />
-              Confirmar Devolucao
+              Confirmar Devolução
             </DialogTitle>
             <DialogDescription>
-              Revise os detalhes antes de confirmar a devolucao.
+              Revise os detalhes antes de confirmar a devolução.
             </DialogDescription>
           </DialogHeader>
 
@@ -734,19 +734,19 @@ function DevolucoesPageContent() {
               <span className="font-medium">{REASON_LABELS[reason]}</span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Metodo</span>
+              <span className="text-muted-foreground">Método</span>
               <span className="font-medium">{METHOD_LABELS[refundMethod]}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Reestoquear</span>
               <span className="font-medium">
-                {restockItems ? "Sim" : "Nao"}
+                {restockItems ? "Sim" : "Não"}
               </span>
             </div>
 
             {/* Items list */}
             <div className="rounded-md border p-3 space-y-1">
-              <p className="font-medium mb-2">Itens para devolucao:</p>
+              <p className="font-medium mb-2">Itens para devolução:</p>
               {selectedSale?.items
                 .filter((item) => selectedItems[item.id]?.checked)
                 .map((item) => (
@@ -787,7 +787,7 @@ function DevolucoesPageContent() {
               {processing && (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               )}
-              Confirmar Devolucao
+              Confirmar Devolução
             </Button>
           </DialogFooter>
         </DialogContent>

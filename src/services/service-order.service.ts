@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { ServiceOrderStatus, Prisma } from "@prisma/client";
+import { differenceInCalendarDays } from "date-fns";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } from "@/lib/validations/service-order.schema";
@@ -650,8 +651,7 @@ export class ServiceOrderService {
     });
 
     for (const order of delayed) {
-      const diffMs = today.getTime() - order.promisedDate!.getTime();
-      const delayDays = Math.ceil(diffMs / (1000 * 60 * 60 * 24));
+      const delayDays = differenceInCalendarDays(today, order.promisedDate!);
       await prisma.serviceOrder.update({
         where: { id: order.id },
         data: { isDelayed: true, delayDays },

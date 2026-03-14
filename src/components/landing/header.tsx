@@ -6,7 +6,7 @@ import { Menu, X, Glasses } from "lucide-react";
 
 const navLinks = [
   { label: "Funcionalidades", href: "/#funcionalidades" },
-  { label: "Preços", href: "/#precos" },
+  { label: "Precos", href: "/#precos" },
   { label: "FAQ", href: "/#faq" },
   { label: "Contato", href: "/contato" },
 ];
@@ -23,96 +23,102 @@ export function Header() {
 
   return (
     <header
-      className={`fixed top-0 left-0 right-0 z-50 transition-all duration-300 ${
+      className={`fixed top-0 left-0 right-0 z-50 transition-[background,border,box-shadow] duration-500 ${
         scrolled
-          ? "bg-gray-950/80 backdrop-blur-xl border-b border-gray-800/50 shadow-lg shadow-black/20"
+          ? "bg-navy-900/90 backdrop-blur-2xl border-b border-gold/10 shadow-lg shadow-black/30"
           : "bg-transparent"
       }`}
     >
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         <div className="flex items-center justify-between h-16 md:h-20">
           {/* Logo */}
-          <Link href="/" className="flex items-center gap-2.5 group">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 flex items-center justify-center group-hover:scale-105 transition-transform">
-              <Glasses className="h-5 w-5 text-white" />
+          <Link href="/" className="flex items-center gap-3 group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 rounded-lg">
+            <div className="relative w-10 h-10 rounded-xl bg-gradient-to-br from-gold to-gold-dark flex items-center justify-center group-hover:scale-105 transition-transform shadow-lg shadow-gold/20">
+              <Glasses className="h-5 w-5 text-navy-900" aria-hidden="true" />
             </div>
-            <span className="text-xl font-bold text-white">
-              PDV <span className="bg-gradient-to-r from-indigo-400 to-purple-400 bg-clip-text text-transparent">Ótica</span>
-            </span>
+            <div className="flex flex-col">
+              <span className="text-lg font-display font-bold tracking-wide text-white leading-none">
+                PDV <span className="text-gold">Otica</span>
+              </span>
+              <span className="text-[10px] uppercase tracking-[0.2em] text-gold/60 font-medium">
+                Gestao inteligente
+              </span>
+            </div>
           </Link>
 
           {/* Nav Desktop */}
-          <nav className="hidden md:flex items-center gap-8">
+          <nav className="hidden md:flex items-center gap-10">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
-                className="text-sm text-gray-400 hover:text-white transition-colors"
+                className="relative text-sm text-white/50 hover:text-white transition-colors duration-300 after:absolute after:bottom-0 after:left-0 after:w-0 after:h-px after:bg-gold after:transition-all after:duration-300 hover:after:w-full focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 rounded px-1"
               >
                 {link.label}
               </Link>
             ))}
           </nav>
 
-          {/* Botões Desktop */}
-          <div className="hidden md:flex items-center gap-3">
+          {/* Botoes Desktop */}
+          <div className="hidden md:flex items-center gap-4">
             <Link
               href="/login"
-              className="px-4 py-2 text-sm text-gray-300 hover:text-white transition-colors"
+              className="px-5 py-2 text-sm text-white/60 hover:text-white transition-colors border border-white/10 rounded-lg hover:border-white/20 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
             >
               Entrar
             </Link>
             <Link
               href="/registro"
-              className="px-5 py-2.5 text-sm font-medium text-white bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg hover:from-indigo-500 hover:to-purple-500 transition-all shadow-lg shadow-indigo-500/25"
+              className="px-6 py-2.5 text-sm font-semibold text-navy-900 bg-gradient-to-r from-gold to-gold-light rounded-lg hover:from-gold-light hover:to-gold transition-[background,transform,box-shadow] shadow-lg shadow-gold/20 hover:shadow-gold/30 hover:scale-[1.02] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-900"
             >
-              Teste Grátis
+              Teste Gratis
             </Link>
           </div>
 
           {/* Hamburger Mobile */}
           <button
             onClick={() => setMenuOpen(!menuOpen)}
-            className="md:hidden p-2 text-gray-400 hover:text-white"
-            aria-label="Menu"
+            className="md:hidden p-2 text-white/60 hover:text-white focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 rounded-lg"
+            aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+            aria-expanded={menuOpen}
           >
-            {menuOpen ? <X className="h-6 w-6" /> : <Menu className="h-6 w-6" />}
+            {menuOpen ? <X className="h-6 w-6" aria-hidden="true" /> : <Menu className="h-6 w-6" aria-hidden="true" />}
           </button>
         </div>
       </div>
 
       {/* Menu Mobile */}
       {menuOpen && (
-        <div className="md:hidden bg-gray-950/95 backdrop-blur-xl border-t border-gray-800/50">
-          <div className="px-4 py-4 space-y-1">
+        <nav className="md:hidden bg-navy-900/98 backdrop-blur-2xl border-t border-gold/10" aria-label="Menu mobile">
+          <div className="px-4 py-6 space-y-1">
             {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
                 onClick={() => setMenuOpen(false)}
-                className="block px-4 py-3 text-gray-300 hover:text-white hover:bg-gray-800/50 rounded-lg transition-colors"
+                className="block px-4 py-3.5 text-white/70 hover:text-white hover:bg-white/5 rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
               >
                 {link.label}
               </Link>
             ))}
-            <div className="pt-3 mt-3 border-t border-gray-800 space-y-2">
+            <div className="pt-4 mt-4 border-t border-white/10 space-y-3">
               <Link
                 href="/login"
                 onClick={() => setMenuOpen(false)}
-                className="block px-4 py-3 text-center text-gray-300 hover:text-white border border-gray-700 rounded-lg transition-colors"
+                className="block px-4 py-3 text-center text-white/70 border border-white/10 rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
               >
                 Entrar
               </Link>
               <Link
                 href="/registro"
                 onClick={() => setMenuOpen(false)}
-                className="block px-4 py-3 text-center text-white font-medium bg-gradient-to-r from-indigo-600 to-purple-600 rounded-lg"
+                className="block px-4 py-3 text-center text-navy-900 font-semibold bg-gradient-to-r from-gold to-gold-light rounded-lg focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50"
               >
-                Teste Grátis
+                Teste Gratis
               </Link>
             </div>
           </div>
-        </div>
+        </nav>
       )}
     </header>
   );
