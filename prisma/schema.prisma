@@ -438,6 +438,7 @@ model Customer {
   acceptsMarketing   Boolean                @default(true)
   referralSource     String?
   notes              String?
+  externalId         String?              // ID do sistema anterior (importação)
   active             Boolean                @default(true)
   deletedAt          DateTime?
   createdAt          DateTime               @default(now())

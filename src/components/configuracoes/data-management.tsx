@@ -1,5 +1,6 @@
 "use client";
 
+import { ImportData } from "./import-data";
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -271,6 +272,9 @@ export function DataManagement() {
 
   return (
     <div className="space-y-6">
+      {/* Import Section */}
+      <ImportData />
+
       {/* Header Card */}
       <Card className="border-amber-200 bg-amber-50/50">
         <CardHeader>
