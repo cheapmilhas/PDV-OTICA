@@ -367,6 +367,12 @@ function ClientesPage() {
                       </p>
                     )}
 
+                    {cliente.originBranch && (
+                      <p className="text-xs text-muted-foreground">
+                        Loja: {cliente.originBranch.name}
+                      </p>
+                    )}
+
                     <div className="flex items-center gap-2 pt-2 flex-wrap">
                       <Button
                         size="sm"

@@ -7,6 +7,8 @@ import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyNotes } from "./company-notes";
 import { CompanyUsers } from "./company-users";
+import { CompanyBranches } from "./company-branches";
+import { CompanyDataForm } from "./company-data-form";
 import { HealthBadge } from "@/components/health-badge";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -279,6 +281,26 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
           </div>
         </TabPanel>
 
+        {/* TAB: DADOS DA EMPRESA */}
+        <TabPanel tabId="dados">
+          <CompanyDataForm
+            company={{
+              id: company.id,
+              name: company.name,
+              tradeName: company.tradeName,
+              cnpj: company.cnpj,
+              email: company.email,
+              phone: company.phone,
+              address: company.address,
+              city: company.city,
+              state: company.state,
+              zipCode: company.zipCode,
+              website: company.website,
+              createdAt: company.createdAt.toISOString(),
+            }}
+          />
+        </TabPanel>
+
         {/* TAB: ASSINATURA */}
         <TabPanel tabId="assinatura">
           <div className="space-y-5">
@@ -354,6 +376,11 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
               </div>
             )}
           </div>
+        </TabPanel>
+
+        {/* TAB: FILIAIS */}
+        <TabPanel tabId="filiais">
+          <CompanyBranches companyId={id} maxBranches={company.maxBranches} />
         </TabPanel>
 
         {/* TAB: USUÁRIOS */}

@@ -19,7 +19,11 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = serviceOrderQuerySchema.parse(Object.fromEntries(searchParams));
 
-    const result = await serviceOrderService.list(query, companyId);
+    // Filtro por branch (do seletor de lojas)
+    const branchId = searchParams.get("branchId");
+    const effectiveBranchId = branchId && branchId !== "ALL" ? branchId : null;
+
+    const result = await serviceOrderService.list(query, companyId, effectiveBranchId);
 
     return paginatedResponse(result.data, result.pagination);
   } catch (error) {

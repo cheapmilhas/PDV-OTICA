@@ -182,6 +182,9 @@ export class ProductService {
           brand: true,
           color: true,
           shape: true,
+          branchStocks: {
+            include: { branch: { select: { id: true, name: true } } },
+          },
         },
       }),
       prisma.product.count({ where }),

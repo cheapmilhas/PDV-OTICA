@@ -27,6 +27,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { ProtectedAction } from "@/components/auth/ProtectedAction";
 import { VendasFilters, VendasFilterValues } from "@/components/vendas/vendas-filters";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useBranchContext } from "@/hooks/use-branch-context";
 
 export default function VendasPage() {
   return (
@@ -39,6 +40,7 @@ export default function VendasPage() {
 function VendasContent() {
   const router = useRouter();
   const { data: session } = useSession();
+  const { activeBranchId, isAllBranches } = useBranchContext();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
@@ -77,6 +79,7 @@ function VendasContent() {
     if (filters.endDate) params.set("endDate", filters.endDate.toISOString());
     if (filters.sellerUserId) params.set("sellerUserId", filters.sellerUserId);
     if (filters.paymentMethod) params.set("paymentMethod", filters.paymentMethod);
+    if (activeBranchId !== "ALL") params.set("branchId", activeBranchId);
 
     fetch(`/api/sales?${params}`)
       .then((res) => res.json())
@@ -90,7 +93,7 @@ function VendasContent() {
         toast.error("Erro ao carregar vendas");
         setLoading(false);
       });
-  }, [search, page, statusFilter, filters]);
+  }, [search, page, statusFilter, filters, activeBranchId]);
 
   const getPaymentMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
@@ -113,7 +116,16 @@ function VendasContent() {
           <p className="text-muted-foreground text-sm hidden sm:block">Histórico de vendas realizadas</p>
         </div>
         <ProtectedAction permission="sales.create">
-          <Button onClick={() => router.push("/dashboard/pdv")}>
+          <Button
+            onClick={() => {
+              if (isAllBranches) {
+                toast.error("Selecione uma loja específica para criar vendas");
+                return;
+              }
+              router.push("/dashboard/pdv");
+            }}
+            variant={isAllBranches ? "outline" : "default"}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Nova Venda
           </Button>

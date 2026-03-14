@@ -35,6 +35,7 @@ import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
+import { useBranchContext } from "@/hooks/use-branch-context";
 
 // Types
 type EntryType =
@@ -131,6 +132,7 @@ function flattenChartOfAccounts(
 }
 
 function LancamentosPage() {
+  const { activeBranchId } = useBranchContext();
   // Current month defaults
   const now = new Date();
   const firstDayOfMonth = format(
@@ -191,6 +193,7 @@ function LancamentosPage() {
       if (startDate) params.set("startDate", startDate);
       if (endDate) params.set("endDate", endDate);
       if (typeFilter && typeFilter !== "ALL") params.set("type", typeFilter);
+      if (activeBranchId !== "ALL") params.set("branchId", activeBranchId);
 
       const res = await fetch(`/api/finance/entries?${params}`);
       if (!res.ok) throw new Error("Erro ao carregar lançamentos");
@@ -204,7 +207,7 @@ function LancamentosPage() {
     } finally {
       setLoading(false);
     }
-  }, [page, startDate, endDate, typeFilter]);
+  }, [page, startDate, endDate, typeFilter, activeBranchId]);
 
   useEffect(() => {
     fetchEntries();

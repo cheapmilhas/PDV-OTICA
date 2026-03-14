@@ -15,8 +15,12 @@ export async function GET(req: NextRequest) {
     const status = searchParams.get("status");
     const userName = searchParams.get("userName");
 
+    const qBranchId = searchParams.get("branchId");
+    const branchFilter = qBranchId && qBranchId !== "ALL" ? { branchId: qBranchId } : {};
+
     const where: any = {
       companyId,
+      ...branchFilter,
     };
 
     if (dateFrom && dateTo) {

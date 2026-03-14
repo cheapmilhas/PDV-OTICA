@@ -356,7 +356,7 @@ export class StockMovementService {
 
       // Atualizar estoque do produto de forma atômica (deduzir da origem)
       if (product.stockControlled) {
-        const transferResult = await atomicStockDebit(data.productId, data.quantity, companyId, tx);
+        const transferResult = await atomicStockDebit(data.productId, data.quantity, companyId, tx, data.sourceBranchId);
         if (!transferResult.success) {
           throw new Error(transferResult.error || "Estoque insuficiente para transferência");
         }

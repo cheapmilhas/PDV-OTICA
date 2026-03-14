@@ -254,6 +254,9 @@ model Company {
   reconciliationTemplates ReconciliationTemplate[]
   reconciliationRules    ReconciliationRule[]
 
+  // Multi-loja: transferências de estoque
+  stockTransfers StockTransfer[]
+
   // Índices
   @@index([networkId])
   @@index([onboardingStatus])
@@ -317,6 +320,12 @@ model Branch {
   dailyAggs             DailyAgg[]
   reconciliationBatches ReconciliationBatch[]
 
+  // Multi-loja: estoque por filial e transferências
+  branchStocks      BranchStock[]
+  transfersFrom     StockTransfer[] @relation("TransferFrom")
+  transfersTo       StockTransfer[] @relation("TransferTo")
+  originCustomers   Customer[]      @relation("BranchOriginCustomers")
+
   @@unique([companyId, code])
   @@index([companyId, name])
 }
@@ -377,6 +386,10 @@ model User {
   crmContactsMade   CrmContact[]       @relation("CrmContactsMade")
   userGoals         ContactGoal[]      @relation("UserGoals")
   goalsCreated      ContactGoal[]      @relation("GoalCreator")
+
+  // Multi-loja: transferências de estoque
+  transfersRequested StockTransfer[] @relation("TransferRequester")
+  transfersApproved  StockTransfer[] @relation("TransferApprover")
 
   @@index([companyId, role])
   @@index([companyId, name])
@@ -464,10 +477,15 @@ model Customer {
   // Financeiro
   refunds Refund[]
 
+  // Multi-loja: onde o cliente foi cadastrado originalmente
+  originBranchId String? @map("origin_branch_id")
+  originBranch   Branch? @relation("BranchOriginCustomers", fields: [originBranchId], references: [id])
+
   @@unique([companyId, cpf])
   @@index([companyId, name])
   @@index([companyId, phone])
   @@index([companyId, email])
+  @@index([originBranchId])
 }
 
 model CustomerDependent {
@@ -741,6 +759,10 @@ model Product {
 
   // Financeiro
   inventoryLots InventoryLot[]
+
+  // Multi-loja: estoque por filial e transferências
+  branchStocks       BranchStock[]
+  transferItems      StockTransferItem[]
 
   @@unique([companyId, sku])
   @@index([companyId, name])
@@ -2812,6 +2834,79 @@ model UsageSnapshot {
 
   @@index([companyId, date])
   @@map("usage_snapshots")
+}
+
+// ============================================
+// MULTI-LOJA: ESTOQUE POR FILIAL
+// ============================================
+
+model BranchStock {
+  id        String   @id @default(cuid())
+  branchId  String   @map("branch_id")
+  productId String   @map("product_id")
+  quantity  Int      @default(0)
+  minStock  Int      @default(0) @map("min_stock")
+  maxStock  Int?     @map("max_stock")
+  location  String? // localização no estoque da loja (prateleira, gaveta)
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  branch  Branch  @relation(fields: [branchId], references: [id])
+  product Product @relation(fields: [productId], references: [id])
+
+  @@unique([branchId, productId])
+  @@index([productId])
+  @@map("branch_stocks")
+}
+
+// ============================================
+// MULTI-LOJA: TRANSFERÊNCIA DE ESTOQUE
+// ============================================
+
+enum StockTransferStatus {
+  PENDING
+  APPROVED
+  IN_TRANSIT
+  COMPLETED
+  CANCELLED
+}
+
+model StockTransfer {
+  id            String              @id @default(cuid())
+  companyId     String              @map("company_id")
+  fromBranchId  String              @map("from_branch_id")
+  toBranchId    String              @map("to_branch_id")
+  requestedById String              @map("requested_by_id")
+  approvedById  String?             @map("approved_by_id")
+  status        StockTransferStatus @default(PENDING)
+  notes         String?
+  createdAt     DateTime            @default(now()) @map("created_at")
+  approvedAt    DateTime?           @map("approved_at")
+  completedAt   DateTime?           @map("completed_at")
+
+  company     Company             @relation(fields: [companyId], references: [id])
+  fromBranch  Branch              @relation("TransferFrom", fields: [fromBranchId], references: [id])
+  toBranch    Branch              @relation("TransferTo", fields: [toBranchId], references: [id])
+  requestedBy User                @relation("TransferRequester", fields: [requestedById], references: [id])
+  approvedBy  User?               @relation("TransferApprover", fields: [approvedById], references: [id])
+  items       StockTransferItem[]
+
+  @@index([companyId, status])
+  @@index([fromBranchId])
+  @@index([toBranchId])
+  @@map("stock_transfers")
+}
+
+model StockTransferItem {
+  id         String @id @default(cuid())
+  transferId String @map("transfer_id")
+  productId  String @map("product_id")
+  quantity   Int
+
+  transfer StockTransfer @relation(fields: [transferId], references: [id], onDelete: Cascade)
+  product  Product       @relation(fields: [productId], references: [id])
+
+  @@index([transferId])
+  @@map("stock_transfer_items")
 }
 
 // ============================================

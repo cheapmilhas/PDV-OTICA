@@ -37,8 +37,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = saleQuerySchema.parse(Object.fromEntries(searchParams));
 
+    // Filtro por branch (do seletor de lojas)
+    const branchId = searchParams.get("branchId");
+    const effectiveBranchId = branchId && branchId !== "ALL" ? branchId : null;
+
     // Busca vendas via service
-    const result = await saleService.list(query, companyId);
+    const result = await saleService.list(query, companyId, effectiveBranchId);
 
     // Serializa Decimals para number
     const serializedData = result.data.map((sale) => ({

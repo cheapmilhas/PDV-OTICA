@@ -28,21 +28,13 @@ import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover
 import { Separator } from "@/components/ui/separator";
 import { MobileSidebar } from "./mobile-sidebar";
 import { GlobalSearch } from "./global-search";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
-
-interface Branch {
-  id: string;
-  name: string;
-  code: string;
-  city?: string;
-  state?: string;
-}
 
 export function Header() {
   const { data: session } = useSession();
   const router = useRouter();
-  const [branches, setBranches] = useState<Branch[]>([]);
-  const [selectedBranch, setSelectedBranch] = useState<Branch | null>(null);
+  const { activeBranchId, activeBranch, branches, setActiveBranch, isAllBranches, isAdmin: isAdminUser } = useBranchContext();
   const [notifData, setNotifData] = useState<{
     osDelayed: number;
     lowStock: number;
@@ -162,32 +154,7 @@ export function Header() {
     }
   };
 
-  // Carregar filiais da empresa
-  useEffect(() => {
-    async function loadBranches() {
-      try {
-        const response = await fetch("/api/branches");
-        if (response.ok) {
-          const result = await response.json();
-          const branchesData = result.data || [];
-          setBranches(branchesData);
-
-          // Selecionar a filial do usuário logado ou a primeira disponível
-          if (branchesData.length > 0) {
-            const userBranchId = session?.user?.branchId;
-            const userBranch = branchesData.find((b: Branch) => b.id === userBranchId);
-            setSelectedBranch(userBranch || branchesData[0]);
-          }
-        }
-      } catch (error) {
-        console.error("Erro ao carregar filiais:", error);
-      }
-    }
-
-    if (session?.user) {
-      loadBranches();
-    }
-  }, [session]);
+  // Branches são carregadas pelo BranchContext (BranchProvider)
 
   // Buscar contagens de notificações
   useEffect(() => {
@@ -236,26 +203,43 @@ export function Header() {
       {/* Actions */}
       <div className="flex items-center gap-2 md:gap-4">
         {/* Branch Selector */}
-        {selectedBranch && branches.length > 0 && (
+        {branches.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button variant="outline" className="hidden md:flex gap-2">
                 <Building2 className="h-4 w-4" />
-                <span className="max-w-[150px] truncate">{selectedBranch.name}</span>
-                <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                <span className="max-w-[150px] truncate">
+                  {isAllBranches ? "Todas as Lojas" : activeBranch?.name || "Selecionar"}
+                </span>
+                {branches.length > 1 && <ChevronDown className="h-4 w-4 text-muted-foreground" />}
               </Button>
             </DropdownMenuTrigger>
             <DropdownMenuContent align="end" className="w-56">
               <DropdownMenuLabel>Selecionar Filial</DropdownMenuLabel>
               <DropdownMenuSeparator />
+              {isAdminUser && (
+                <>
+                  <DropdownMenuItem
+                    onClick={() => setActiveBranch("ALL")}
+                    className={isAllBranches ? "bg-accent" : ""}
+                  >
+                    <Building2 className="mr-2 h-4 w-4 text-primary" />
+                    <span className="font-medium">Todas as Lojas</span>
+                  </DropdownMenuItem>
+                  <DropdownMenuSeparator />
+                </>
+              )}
               {branches.map((branch) => (
                 <DropdownMenuItem
                   key={branch.id}
-                  onClick={() => setSelectedBranch(branch)}
-                  className={selectedBranch.id === branch.id ? "bg-accent" : ""}
+                  onClick={() => setActiveBranch(branch.id)}
+                  className={activeBranchId === branch.id ? "bg-accent" : ""}
                 >
                   <Building2 className="mr-2 h-4 w-4" />
                   {branch.name}
+                  {branch.city && (
+                    <span className="ml-auto text-xs text-muted-foreground">{branch.city}</span>
+                  )}
                 </DropdownMenuItem>
               ))}
             </DropdownMenuContent>

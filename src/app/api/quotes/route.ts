@@ -32,8 +32,12 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const query = quoteQuerySchema.parse(Object.fromEntries(searchParams));
 
+    // Filtro por branch (do seletor de lojas)
+    const branchId = searchParams.get("branchId");
+    const effectiveBranchId = branchId && branchId !== "ALL" ? branchId : null;
+
     // Busca orçamentos via service
-    const result = await quoteService.list(query, companyId);
+    const result = await quoteService.list(query, companyId, effectiveBranchId);
 
     // Serializa Decimals para number
     const serializedData = result.data.map((quote: any) => ({

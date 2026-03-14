@@ -2,12 +2,16 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
+
+    const { searchParams } = new URL(request.url);
+    const qBranchId = searchParams.get("branchId");
+    const branchFilter = qBranchId && qBranchId !== "ALL" ? { branchId: qBranchId } : {};
 
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
@@ -20,6 +24,7 @@ export async function GET() {
         companyId: session.user.companyId,
         createdAt: { gte: startOfMonth },
         status: "COMPLETED",
+        ...branchFilter,
       },
       _sum: { total: true },
       _count: true,
@@ -31,6 +36,7 @@ export async function GET() {
         companyId: session.user.companyId,
         createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         status: "COMPLETED",
+        ...branchFilter,
       },
       _sum: { total: true },
     });
@@ -42,6 +48,7 @@ export async function GET() {
           companyId: session.user.companyId,
           createdAt: { gte: startOfMonth },
           status: "COMPLETED",
+          ...branchFilter,
         }
       },
       _sum: {
@@ -58,6 +65,7 @@ export async function GET() {
           companyId: session.user.companyId,
           createdAt: { gte: startOfMonth },
           status: "COMPLETED",
+          ...branchFilter,
         }
       },
       select: {

@@ -29,9 +29,12 @@ const paymentNames: Record<string, string> = {
   OTHER: "Outros",
 };
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const companyId = await getCompanyId();
+    const { searchParams } = new URL(request.url);
+    const qBranchId = searchParams.get("branchId");
+    const branchFilter = qBranchId && qBranchId !== "ALL" ? { branchId: qBranchId } : {};
     const today = new Date();
     const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
 
@@ -41,6 +44,7 @@ export async function GET() {
       where: {
         sale: {
           companyId,
+          ...branchFilter,
           status: "COMPLETED",
           createdAt: {
             gte: startOfMonth,

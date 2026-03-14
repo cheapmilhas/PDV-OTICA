@@ -80,9 +80,14 @@ export async function GET(request: Request) {
       Object.fromEntries(searchParams)
     );
 
+    // Branch filter
+    const qBranchId = searchParams.get("branchId");
+    const branchFilter = qBranchId && qBranchId !== "ALL" ? { branchId: qBranchId } : {};
+
     // Construir filtros
     const where: any = {
       companyId,
+      ...branchFilter,
     };
 
     // Filtro de status

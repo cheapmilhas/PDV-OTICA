@@ -3,10 +3,20 @@ import { prisma } from "@/lib/prisma";
 import { getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { addDays } from "date-fns";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const companyId = await getCompanyId();
-    const branchId = await getBranchId().catch(() => null);
+    const defaultBranchId = await getBranchId().catch(() => null);
+
+    // Aceitar branchId via query param (do seletor de lojas)
+    const { searchParams } = new URL(request.url);
+    const qBranchId = searchParams.get("branchId");
+    // Se branchId = "ALL" ou não informado, não filtra por branch
+    const branchId = qBranchId && qBranchId !== "ALL" ? qBranchId : null;
+
+    // Filtro condicional por branch (dados isolados)
+    const branchFilter = branchId ? { branchId } : {};
+
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
@@ -21,6 +31,7 @@ export async function GET() {
     const salesToday = await prisma.sale.aggregate({
       where: {
         companyId,
+        ...branchFilter,
         createdAt: { gte: today },
         status: "COMPLETED",
       },
@@ -32,6 +43,7 @@ export async function GET() {
     const salesYesterday = await prisma.sale.aggregate({
       where: {
         companyId,
+        ...branchFilter,
         createdAt: { gte: yesterday, lt: today },
         status: "COMPLETED",
       },
@@ -42,6 +54,7 @@ export async function GET() {
     const salesMonth = await prisma.sale.aggregate({
       where: {
         companyId,
+        ...branchFilter,
         createdAt: { gte: startOfMonth },
         status: "COMPLETED",
       },
@@ -53,6 +66,7 @@ export async function GET() {
     const salesLastMonth = await prisma.sale.aggregate({
       where: {
         companyId,
+        ...branchFilter,
         createdAt: { gte: startOfLastMonth, lte: endOfLastMonth },
         status: "COMPLETED",
       },
@@ -78,30 +92,62 @@ export async function GET() {
       where: { companyId, active: true },
     });
 
-    // Produtos com estoque baixo (usando $queryRaw pois Prisma não suporta comparar campos entre si)
-    const lowStockResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
-      SELECT COUNT(*) as count
-      FROM "Product"
-      WHERE "companyId" = ${companyId}
-        AND "stockControlled" = true
-        AND "active" = true
-        AND "stockMin" > 0
-        AND "stockQty" <= "stockMin"
-    `;
-    const productsLowStock = Number(lowStockResult[0]?.count || 0);
+    // Produtos com estoque baixo
+    // Se branch selecionada, usar BranchStock; senão, usar Product.stockQty (cache global)
+    let productsLowStock: number;
+    let productsLowStockList: Array<{ id: string; name: string; stockQty: number; stockMin: number }>;
 
-    // Lista dos produtos com estoque baixo para exibir no card
-    const productsLowStockList = await prisma.$queryRaw<Array<{ id: string; name: string; stockQty: number; stockMin: number }>>`
-      SELECT id, name, "stockQty", "stockMin"
-      FROM "Product"
-      WHERE "companyId" = ${companyId}
-        AND "stockControlled" = true
-        AND "active" = true
-        AND "stockMin" > 0
-        AND "stockQty" <= "stockMin"
-      ORDER BY ("stockQty" - "stockMin") ASC
-      LIMIT 5
-    `;
+    if (branchId) {
+      const lowStockResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as count
+        FROM "branch_stocks" bs
+        JOIN "Product" p ON p."id" = bs."product_id"
+        WHERE p."companyId" = ${companyId}
+          AND bs."branch_id" = ${branchId}
+          AND p."stockControlled" = true
+          AND p."active" = true
+          AND bs."min_stock" > 0
+          AND bs."quantity" <= bs."min_stock"
+      `;
+      productsLowStock = Number(lowStockResult[0]?.count || 0);
+
+      productsLowStockList = await prisma.$queryRaw`
+        SELECT p."id", p."name", bs."quantity" as "stockQty", bs."min_stock" as "stockMin"
+        FROM "branch_stocks" bs
+        JOIN "Product" p ON p."id" = bs."product_id"
+        WHERE p."companyId" = ${companyId}
+          AND bs."branch_id" = ${branchId}
+          AND p."stockControlled" = true
+          AND p."active" = true
+          AND bs."min_stock" > 0
+          AND bs."quantity" <= bs."min_stock"
+        ORDER BY (bs."quantity" - bs."min_stock") ASC
+        LIMIT 5
+      `;
+    } else {
+      const lowStockResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
+        SELECT COUNT(*) as count
+        FROM "Product"
+        WHERE "companyId" = ${companyId}
+          AND "stockControlled" = true
+          AND "active" = true
+          AND "stockMin" > 0
+          AND "stockQty" <= "stockMin"
+      `;
+      productsLowStock = Number(lowStockResult[0]?.count || 0);
+
+      productsLowStockList = await prisma.$queryRaw`
+        SELECT id, name, "stockQty", "stockMin"
+        FROM "Product"
+        WHERE "companyId" = ${companyId}
+          AND "stockControlled" = true
+          AND "active" = true
+          AND "stockMin" > 0
+          AND "stockQty" <= "stockMin"
+        ORDER BY ("stockQty" - "stockMin") ASC
+        LIMIT 5
+      `;
+    }
 
     // Ticket médio
     const avgTicket =
@@ -113,11 +159,12 @@ export async function GET() {
     // depois SystemRule, depois valor padrão
     const currentYear = today.getFullYear();
     const currentMonth = today.getMonth() + 1;
+    const goalBranchId = branchId || defaultBranchId;
 
     const [salesGoal, goalRule] = await Promise.all([
-      branchId
+      goalBranchId
         ? prisma.salesGoal.findFirst({
-            where: { branchId, year: currentYear, month: currentMonth },
+            where: { branchId: goalBranchId, year: currentYear, month: currentMonth },
           })
         : Promise.resolve(null),
       prisma.systemRule.findFirst({
@@ -135,6 +182,7 @@ export async function GET() {
     const osOpen = await prisma.serviceOrder.count({
       where: {
         companyId,
+        ...branchFilter,
         status: {
           in: ["APPROVED", "IN_PROGRESS", "READY"],
         },
@@ -144,6 +192,7 @@ export async function GET() {
     const osPending = await prisma.serviceOrder.count({
       where: {
         companyId,
+        ...branchFilter,
         status: "SENT_TO_LAB",
       },
     });
@@ -155,6 +204,7 @@ export async function GET() {
     const osDelayed = await prisma.serviceOrder.count({
       where: {
         companyId,
+        ...branchFilter,
         status: { notIn: ["DELIVERED", "CANCELED"] },
         OR: [
           { promisedDate: { lt: now } },
@@ -167,6 +217,7 @@ export async function GET() {
     const osNearDeadline = await prisma.serviceOrder.count({
       where: {
         companyId,
+        ...branchFilter,
         promisedDate: { gte: now, lte: in3Days },
         status: { notIn: ["DELIVERED", "CANCELED"] },
       },
@@ -176,6 +227,7 @@ export async function GET() {
     const osDelayedList = await prisma.serviceOrder.findMany({
       where: {
         companyId,
+        ...branchFilter,
         status: { notIn: ["DELIVERED", "CANCELED"] },
         OR: [
           { promisedDate: { lt: now } },

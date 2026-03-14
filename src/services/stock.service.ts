@@ -9,18 +9,71 @@ interface StockDebitResult {
 }
 
 /**
- * Debita estoque de forma atômica, garantindo que não fique negativo.
- * Usa UPDATE com WHERE condicional para evitar race condition.
+ * Debita estoque de forma atômica no BranchStock da filial.
+ * Também atualiza Product.stockQty como cache (soma total).
  */
 export async function atomicStockDebit(
   productId: string,
   quantity: number,
   companyId: string,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  branchId?: string | null
 ): Promise<StockDebitResult> {
   const client = tx || prisma;
 
-  // Atomic update: só debita se tiver estoque suficiente
+  // Verificar se produto é controlado
+  const product = await client.product.findFirst({
+    where: { id: productId, companyId },
+    select: { stockQty: true, name: true, stockControlled: true },
+  });
+
+  if (!product) {
+    return { success: false, previousQty: 0, newQty: 0, error: "Produto não encontrado" };
+  }
+
+  if (!product.stockControlled) {
+    return { success: true, previousQty: 0, newQty: 0 };
+  }
+
+  // Se branchId fornecido, usar BranchStock
+  if (branchId) {
+    const branchStock = await client.branchStock.findUnique({
+      where: { branchId_productId: { branchId, productId } },
+    });
+
+    const currentQty = branchStock?.quantity ?? 0;
+    if (currentQty < quantity) {
+      return {
+        success: false,
+        previousQty: currentQty,
+        newQty: currentQty,
+        error: `Estoque insuficiente para "${product.name}". Disponível: ${currentQty}, Solicitado: ${quantity}`,
+      };
+    }
+
+    // Debitar BranchStock
+    await client.branchStock.update({
+      where: { branchId_productId: { branchId, productId } },
+      data: { quantity: { decrement: quantity } },
+    });
+
+    // Atualizar cache Product.stockQty
+    await client.$executeRaw`
+      UPDATE "Product"
+      SET "stockQty" = "stockQty" - ${quantity},
+          "updatedAt" = NOW()
+      WHERE "id" = ${productId}
+        AND "companyId" = ${companyId}
+    `;
+
+    return {
+      success: true,
+      previousQty: currentQty,
+      newQty: currentQty - quantity,
+    };
+  }
+
+  // Fallback: sem branchId, usar Product.stockQty diretamente (compatibilidade)
   const result = await client.$executeRaw`
     UPDATE "Product"
     SET "stockQty" = "stockQty" - ${quantity},
@@ -32,21 +85,6 @@ export async function atomicStockDebit(
   `;
 
   if (result === 0) {
-    // Não atualizou — ou não existe, ou estoque insuficiente, ou não controlado
-    const product = await client.product.findFirst({
-      where: { id: productId, companyId },
-      select: { stockQty: true, name: true, stockControlled: true },
-    });
-
-    if (!product) {
-      return { success: false, previousQty: 0, newQty: 0, error: "Produto não encontrado" };
-    }
-
-    if (!product.stockControlled) {
-      // Produto sem controle de estoque — permite vender sem alterar
-      return { success: true, previousQty: 0, newQty: 0 };
-    }
-
     return {
       success: false,
       previousQty: product.stockQty,
@@ -55,7 +93,6 @@ export async function atomicStockDebit(
     };
   }
 
-  // Buscar valores pós-update
   const updated = await client.product.findUnique({
     where: { id: productId },
     select: { stockQty: true },
@@ -70,15 +107,43 @@ export async function atomicStockDebit(
 
 /**
  * Credita estoque de forma atômica (devolução, entrada).
+ * Também atualiza Product.stockQty como cache.
  */
 export async function atomicStockCredit(
   productId: string,
   quantity: number,
   companyId: string,
-  tx?: Prisma.TransactionClient
+  tx?: Prisma.TransactionClient,
+  branchId?: string | null
 ): Promise<StockDebitResult> {
   const client = tx || prisma;
 
+  // Se branchId fornecido, usar BranchStock
+  if (branchId) {
+    // Upsert: cria se não existir (ex: devolução para branch que não tinha estoque)
+    const updated = await client.branchStock.upsert({
+      where: { branchId_productId: { branchId, productId } },
+      create: { branchId, productId, quantity },
+      update: { quantity: { increment: quantity } },
+    });
+
+    // Atualizar cache Product.stockQty
+    await client.$executeRaw`
+      UPDATE "Product"
+      SET "stockQty" = "stockQty" + ${quantity},
+          "updatedAt" = NOW()
+      WHERE "id" = ${productId}
+        AND "companyId" = ${companyId}
+    `;
+
+    return {
+      success: true,
+      previousQty: updated.quantity - quantity,
+      newQty: updated.quantity,
+    };
+  }
+
+  // Fallback: sem branchId
   await client.$executeRaw`
     UPDATE "Product"
     SET "stockQty" = "stockQty" + ${quantity},

@@ -128,6 +128,12 @@ const menuItems = [
         permission: "stock.view"
       },
       {
+        name: "Transferências",
+        href: "/dashboard/estoque/transferencias",
+        icon: ArrowLeftRight,
+        permission: "stock.view"
+      },
+      {
         name: "Lotes de Estoque",
         href: "/dashboard/financeiro/lotes-estoque",
         icon: Boxes,

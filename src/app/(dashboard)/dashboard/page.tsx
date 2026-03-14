@@ -53,9 +53,11 @@ import {
 import Link from "next/link";
 import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { useRouter } from "next/navigation";
+import { useBranchContext } from "@/hooks/use-branch-context";
 
 export default function DashboardPage() {
   const router = useRouter();
+  const { activeBranchId } = useBranchContext();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [metrics, setMetrics] = useState({
     salesToday: 0,
@@ -95,42 +97,49 @@ export default function DashboardPage() {
       .catch(() => {});
   }, [router]);
 
-  // Buscar todos os dados da API
+  // Buscar todos os dados da API (recarrega quando branch muda)
   useEffect(() => {
+    const bp = activeBranchId !== "ALL" ? `branchId=${activeBranchId}` : "";
+    const q = (base: string) => {
+      const sep = base.includes("?") ? "&" : "?";
+      return bp ? `${base}${sep}${bp}` : base;
+    };
+
     const loadAllData = async () => {
+      setLoading(true);
       try {
         // Métricas
-        const metricsRes = await fetch('/api/dashboard/metrics');
+        const metricsRes = await fetch(q('/api/dashboard/metrics'));
         const metricsData = await metricsRes.json();
         setMetrics(metricsData.metrics);
 
         // Vendas recentes (hoje)
-        const salesRes = await fetch('/api/sales?pageSize=5&sortBy=createdAt&sortOrder=desc');
+        const salesRes = await fetch(q('/api/sales?pageSize=5&sortBy=createdAt&sortOrder=desc'));
         const salesData = await salesRes.json();
         setRecentSales(salesData.data || []);
 
-        // Produtos com estoque baixo
+        // Produtos com estoque baixo (compartilhado — NÃO filtra por branch)
         const productsRes = await fetch('/api/products?lowStock=true&pageSize=4');
         const productsData = await productsRes.json();
         setLowStockProducts(productsData.data || []);
 
-        // Ordens de serviço urgentes (buscar apenas APPROVED por enquanto)
-        const osRes = await fetch('/api/service-orders?orderStatus=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3');
+        // Ordens de serviço urgentes
+        const osRes = await fetch(q('/api/service-orders?orderStatus=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3'));
         const osData = await osRes.json();
         setOsUrgentes(osData.data || []);
 
         // Vendas dos últimos 7 dias (para gráfico)
-        const salesChartRes = await fetch('/api/dashboard/sales-last-7-days');
+        const salesChartRes = await fetch(q('/api/dashboard/sales-last-7-days'));
         const salesChartData = await salesChartRes.json();
         setSalesChartData(salesChartData.data || []);
 
         // Top 5 produtos mais vendidos (para gráfico)
-        const topProductsRes = await fetch('/api/dashboard/top-products');
+        const topProductsRes = await fetch(q('/api/dashboard/top-products'));
         const topProductsData = await topProductsRes.json();
         setTopProductsData(topProductsData.data || []);
 
         // Distribuição de métodos de pagamento (para gráfico)
-        const paymentDistRes = await fetch('/api/dashboard/payment-distribution');
+        const paymentDistRes = await fetch(q('/api/dashboard/payment-distribution'));
         const paymentDistData = await paymentDistRes.json();
         setPaymentMethodsData(paymentDistData.data || []);
 
@@ -142,7 +151,7 @@ export default function DashboardPage() {
     };
 
     loadAllData();
-  }, []);
+  }, [activeBranchId]);
 
   // Atualizar relógio a cada minuto (inicializa no cliente para evitar hydration mismatch)
   useEffect(() => {

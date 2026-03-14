@@ -27,6 +27,7 @@ import toast from "react-hot-toast";
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { Input } from "@/components/ui/input";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Calendar } from "@/components/ui/calendar";
 import { CalendarIcon } from "lucide-react";
@@ -76,6 +77,7 @@ interface Stats {
 
 function OrcamentosPage() {
   const router = useRouter();
+  const { activeBranchId, isAllBranches } = useBranchContext();
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [quotes, setQuotes] = useState<Quote[]>([]);
@@ -115,6 +117,8 @@ function OrcamentosPage() {
       params.set("createdBefore", customDate.toISOString());
     }
 
+    if (activeBranchId !== "ALL") params.set("branchId", activeBranchId);
+
     fetch(`/api/quotes?${params}`)
       .then((res) => res.json())
       .then((data) => {
@@ -127,7 +131,7 @@ function OrcamentosPage() {
         toast.error("Erro ao carregar orçamentos");
         setLoading(false);
       });
-  }, [search, page, daysFilter, customDate]);
+  }, [search, page, daysFilter, customDate, activeBranchId]);
 
   const handleDaysFilter = (days: number) => {
     setDaysFilter(days);
@@ -294,7 +298,16 @@ function OrcamentosPage() {
           <p className="text-muted-foreground text-sm hidden sm:block">Gerenciamento de orçamentos</p>
         </div>
         <Can permission="quotes.create">
-          <Button onClick={() => router.push("/dashboard/orcamentos/novo")}>
+          <Button
+            onClick={() => {
+              if (isAllBranches) {
+                toast.error("Selecione uma loja específica para criar orçamentos");
+                return;
+              }
+              router.push("/dashboard/orcamentos/novo");
+            }}
+            variant={isAllBranches ? "outline" : "default"}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Novo Orçamento
           </Button>

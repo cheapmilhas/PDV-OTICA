@@ -25,7 +25,7 @@ export class ServiceOrderService {
   /**
    * Lista OS com paginação, busca e filtros
    */
-  async list(query: ServiceOrderQuery, companyId: string) {
+  async list(query: ServiceOrderQuery, companyId: string, branchId?: string | null) {
     const {
       search = "",
       page = 1,
@@ -44,6 +44,7 @@ export class ServiceOrderService {
 
     const where: Prisma.ServiceOrderWhereInput = {
       companyId,
+      ...(branchId && { branchId }),
       ...(status === "ativos" && !filter && { status: { not: "CANCELED" } }),
       ...(status === "inativos" && !filter && { status: "CANCELED" }),
       ...(customerId && { customerId }),

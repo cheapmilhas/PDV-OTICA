@@ -23,6 +23,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { useBranchContext } from "@/hooks/use-branch-context";
 
 // ===== TIPOS =====
 interface ServiceOrder {
@@ -411,6 +412,7 @@ function OrdensServicoPage() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const { hasPermission } = usePermissions();
+  const { activeBranchId, isAllBranches } = useBranchContext();
   const filterParam = searchParams.get("filter") || "";
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
@@ -437,6 +439,7 @@ function OrdensServicoPage() {
     if (filterParam) {
       params.set("filter", filterParam);
     }
+    if (activeBranchId !== "ALL") params.set("branchId", activeBranchId);
 
     Promise.all([
       fetch(`/api/service-orders?${params}`).then((r) => r.json()),
@@ -447,7 +450,7 @@ function OrdensServicoPage() {
       })
       .catch(() => toast.error("Erro ao carregar ordens de serviço"))
       .finally(() => setLoading(false));
-  }, [search, page, statusFilter, filterParam]);
+  }, [search, page, statusFilter, filterParam, activeBranchId]);
 
   useEffect(() => {
     fetchOrders();
@@ -526,7 +529,16 @@ function OrdensServicoPage() {
           <p className="text-muted-foreground">Controle completo do fluxo de OS</p>
         </div>
         <Can permission="service_orders.create">
-          <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
+          <Button
+            onClick={() => {
+              if (isAllBranches) {
+                toast.error("Selecione uma loja específica para criar OS");
+                return;
+              }
+              router.push("/dashboard/ordens-servico/nova");
+            }}
+            variant={isAllBranches ? "outline" : "default"}
+          >
             <Plus className="mr-2 h-4 w-4" />
             Nova OS
           </Button>

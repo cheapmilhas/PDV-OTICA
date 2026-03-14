@@ -27,7 +27,7 @@ export class QuoteService {
   /**
    * Lista orçamentos com paginação, busca e filtros
    */
-  async list(query: QuoteQuery, companyId: string) {
+  async list(query: QuoteQuery, companyId: string, branchId?: string | null) {
     const {
       search = "",
       page = 1,
@@ -45,6 +45,7 @@ export class QuoteService {
     // Build where clause
     const where: Prisma.QuoteWhereInput = {
       companyId,
+      ...(branchId && { branchId }),
       ...(status === "ativos" && { status: { notIn: ["CANCELED", "EXPIRED", "LOST"] } }),
       ...(status === "inativos" && { status: { in: ["CANCELED", "EXPIRED", "LOST"] } }),
       ...(quoteStatus && { status: quoteStatus }),

@@ -22,7 +22,7 @@ export class SaleService {
   /**
    * Lista vendas com paginação, busca e filtros
    */
-  async list(query: SaleQuery, companyId: string) {
+  async list(query: SaleQuery, companyId: string, branchId?: string | null) {
     const {
       search = "",
       page = 1,
@@ -40,6 +40,7 @@ export class SaleService {
     // Build where clause
     const where: Prisma.SaleWhereInput = {
       companyId,
+      ...(branchId && { branchId }),
       ...(status === "ativos" && { status: { notIn: ["CANCELED", "REFUNDED"] } }),
       ...(status === "inativos" && { status: { in: ["CANCELED", "REFUNDED"] } }),
       ...(customerId && { customerId }),
@@ -385,7 +386,7 @@ export class SaleService {
         });
 
         // 3. Atualizar estoque de forma atômica (race condition safe)
-        const stockResult = await atomicStockDebit(item.productId, item.qty, companyId, tx);
+        const stockResult = await atomicStockDebit(item.productId, item.qty, companyId, tx, branchId);
         if (!stockResult.success) {
           throw new AppError(
             ERROR_CODES.VALIDATION_ERROR,
@@ -711,6 +712,14 @@ export class SaleService {
       // 2. Estornar estoque de cada item e registrar movimentação
       for (const item of sale.items) {
         if (item.productId) {
+          // Devolver ao BranchStock da filial da venda
+          await tx.branchStock.upsert({
+            where: { branchId_productId: { branchId: sale.branchId, productId: item.productId } },
+            create: { branchId: sale.branchId, productId: item.productId, quantity: item.qty },
+            update: { quantity: { increment: item.qty } },
+          });
+
+          // Atualizar cache Product.stockQty
           await tx.product.update({
             where: { id: item.productId },
             data: {
@@ -852,7 +861,7 @@ export class SaleService {
           });
 
           if (product?.stockControlled) {
-            const reactivateResult = await atomicStockDebit(item.product.id, item.qty, sale.companyId, tx);
+            const reactivateResult = await atomicStockDebit(item.product.id, item.qty, sale.companyId, tx, sale.branchId);
             if (!reactivateResult.success) {
               throw new AppError(
                 ERROR_CODES.VALIDATION_ERROR,

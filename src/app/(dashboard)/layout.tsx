@@ -7,6 +7,7 @@ import { ThemeProvider } from "@/components/theme-provider";
 import { checkSubscription } from "@/lib/subscription";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 import { SubscriptionBlocked } from "@/components/subscription/subscription-blocked";
+import { BranchProviderWrapper } from "@/components/providers/branch-provider-wrapper";
 
 export default async function DashboardLayout({
   children,
@@ -45,35 +46,37 @@ export default async function DashboardLayout({
 
   return (
     <ThemeProvider>
-      {/* Banner de aviso de assinatura (trial, past_due) */}
-      {subscriptionCheck && (
-        <SubscriptionBanner
-          status={subscriptionCheck.status}
-          message={subscriptionCheck.message}
-          daysLeft={subscriptionCheck.daysLeft}
-          daysOverdue={subscriptionCheck.daysOverdue}
-          readOnly={subscriptionCheck.readOnly}
-        />
-      )}
+      <BranchProviderWrapper>
+        {/* Banner de aviso de assinatura (trial, past_due) */}
+        {subscriptionCheck && (
+          <SubscriptionBanner
+            status={subscriptionCheck.status}
+            message={subscriptionCheck.message}
+            daysLeft={subscriptionCheck.daysLeft}
+            daysOverdue={subscriptionCheck.daysOverdue}
+            readOnly={subscriptionCheck.readOnly}
+          />
+        )}
 
-      <div className="flex h-screen overflow-hidden">
-        {/* Sidebar - esconde em mobile */}
-        <div className="hidden md:block">
-          <Sidebar />
+        <div className="flex h-screen overflow-hidden">
+          {/* Sidebar - esconde em mobile */}
+          <div className="hidden md:block">
+            <Sidebar />
+          </div>
+
+          {/* Main content */}
+          <div className="flex flex-1 flex-col overflow-hidden w-full md:w-auto">
+            <Header />
+            {/* pb-16 em mobile para não sobrepor o bottom nav */}
+            <main className="flex-1 overflow-y-auto bg-muted/10 p-4 md:p-6 pb-20 md:pb-6">
+              {children}
+            </main>
+          </div>
         </div>
 
-        {/* Main content */}
-        <div className="flex flex-1 flex-col overflow-hidden w-full md:w-auto">
-          <Header />
-          {/* pb-16 em mobile para não sobrepor o bottom nav */}
-          <main className="flex-1 overflow-y-auto bg-muted/10 p-4 md:p-6 pb-20 md:pb-6">
-            {children}
-          </main>
-        </div>
-      </div>
-
-      {/* Navegação inferior — apenas mobile */}
-      <MobileNav />
+        {/* Navegação inferior — apenas mobile */}
+        <MobileNav />
+      </BranchProviderWrapper>
     </ThemeProvider>
   );
 }

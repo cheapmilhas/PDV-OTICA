@@ -6,7 +6,7 @@ import {
   sanitizeCustomerDTO,
   type CreateCustomerDTO,
 } from "@/lib/validations/customer.schema";
-import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 
@@ -64,8 +64,11 @@ export async function POST(request: Request) {
     // Sanitiza dados (remove strings vazias)
     const sanitizedData = sanitizeCustomerDTO(data) as CreateCustomerDTO;
 
+    // Setar originBranchId automaticamente (loja onde o cliente foi cadastrado)
+    const originBranchId = await getBranchId().catch(() => null);
+
     // Cria cliente via service
-    const customer = await customerService.create(sanitizedData, companyId);
+    const customer = await customerService.create(sanitizedData, companyId, originBranchId);
 
     // Retorna 201 Created
     return createdResponse(customer);

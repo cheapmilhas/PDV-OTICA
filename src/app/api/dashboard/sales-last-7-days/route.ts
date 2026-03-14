@@ -5,9 +5,12 @@ import { handleApiError } from "@/lib/error-handler";
 import { format, subDays, startOfDay } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-export async function GET() {
+export async function GET(request: Request) {
   try {
     const companyId = await getCompanyId();
+    const { searchParams } = new URL(request.url);
+    const qBranchId = searchParams.get("branchId");
+    const branchFilter = qBranchId && qBranchId !== "ALL" ? { branchId: qBranchId } : {};
     const today = new Date();
     const sevenDaysAgo = subDays(today, 6); // Últimos 7 dias incluindo hoje
 
@@ -15,6 +18,7 @@ export async function GET() {
     const sales = await prisma.sale.findMany({
       where: {
         companyId,
+        ...branchFilter,
         status: "COMPLETED",
         createdAt: {
           gte: startOfDay(sevenDaysAgo),

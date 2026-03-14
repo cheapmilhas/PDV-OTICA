@@ -38,6 +38,8 @@ import { ModalSangria } from "@/components/caixa/modal-sangria";
 import { ModalReforco } from "@/components/caixa/modal-reforco";
 import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useBranchContext } from "@/hooks/use-branch-context";
+import toast from "react-hot-toast";
 
 type CashShift = {
   id: string;
@@ -62,6 +64,7 @@ type CashMovement = {
 
 function CaixaPage() {
   const { hasPermission } = usePermissions();
+  const { isAllBranches } = useBranchContext();
   const [modalAberturaOpen, setModalAberturaOpen] = useState(false);
   const [modalFechamentoOpen, setModalFechamentoOpen] = useState(false);
   const [modalSangriaOpen, setModalSangriaOpen] = useState(false);
@@ -335,7 +338,16 @@ function CaixaPage() {
               </>
             ) : (
               hasPermission("cash_shift.open") && (
-                <Button onClick={() => setModalAberturaOpen(true)}>
+                <Button
+                  onClick={() => {
+                    if (isAllBranches) {
+                      toast.error("Selecione uma loja específica para abrir o caixa");
+                      return;
+                    }
+                    setModalAberturaOpen(true);
+                  }}
+                  variant={isAllBranches ? "outline" : "default"}
+                >
                   <Unlock className="mr-2 h-4 w-4" />
                   Abrir Caixa
                 </Button>

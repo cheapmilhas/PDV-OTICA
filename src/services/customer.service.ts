@@ -130,6 +130,9 @@ export class CustomerService {
         skip: birthdayMonth ? undefined : skip,
         take: birthdayMonth ? undefined : take,
         orderBy,
+        include: {
+          originBranch: { select: { id: true, name: true } },
+        },
       }),
       prisma.customer.count({ where }),
     ]);
@@ -199,7 +202,7 @@ export class CustomerService {
    * @example
    * const customer = await customerService.create({ name: "João", cpf: "12345678901" }, "cm_001")
    */
-  async create(data: CreateCustomerDTO, companyId: string): Promise<Customer> {
+  async create(data: CreateCustomerDTO, companyId: string, originBranchId?: string | null): Promise<Customer> {
     // Validação: CPF duplicado (se fornecido)
     if (data.cpf) {
       const existing = await prisma.customer.findFirst({
@@ -233,6 +236,7 @@ export class CustomerService {
       data: {
         ...data,
         companyId,
+        ...(originBranchId && { originBranchId }),
       },
     });
 
