@@ -22,9 +22,12 @@ import {
   Info,
   Palette,
   ExternalLink,
+  Database,
 } from "lucide-react";
 import Link from "next/link";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useSession } from "next-auth/react";
+import { DataManagement } from "@/components/configuracoes/data-management";
 
 // Mensagens padrão
 const MENSAGENS_PADRAO = {
@@ -79,6 +82,8 @@ Como presente, preparamos uma condição especial para você. Venha nos visitar!
 function ConfiguracoesPage() {
   const { toast } = useToast();
   const { hasPermission } = usePermissions();
+  const { data: session } = useSession();
+  const isAdmin = session?.user?.role === "ADMIN";
   const [loading, setLoading] = useState(false);
 
   // Estados para configurações da empresa
@@ -174,6 +179,12 @@ function ConfiguracoesPage() {
             <FileText className="mr-2 h-4 w-4" />
             Configurações de PDF
           </TabsTrigger>
+          {hasPermission("settings.edit") && isAdmin && (
+            <TabsTrigger value="dados">
+              <Database className="mr-2 h-4 w-4" />
+              Gerenciamento de Dados
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Tab Dados da Empresa */}
@@ -551,6 +562,13 @@ function ConfiguracoesPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab Gerenciamento de Dados (Admin only) */}
+        {isAdmin && (
+          <TabsContent value="dados" className="space-y-4">
+            <DataManagement />
+          </TabsContent>
+        )}
       </Tabs>
     </div>
   );
