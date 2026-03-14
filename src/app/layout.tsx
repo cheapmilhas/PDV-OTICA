@@ -10,7 +10,7 @@ const playfair = Playfair_Display({ subsets: ["latin"], variable: "--font-displa
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#0a0f1e",
+  themeColor: "#faf9f7",
 };
 
 export const metadata: Metadata = {
@@ -56,7 +56,7 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="pt-BR" style={{ colorScheme: "dark" }}>
+    <html lang="pt-BR">
       <head>
         <script
           type="application/ld+json"

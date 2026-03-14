@@ -85,39 +85,36 @@ export function Pricing() {
   }, [loading]);
 
   return (
-    <section ref={sectionRef} id="precos" className="relative py-24 md:py-32 bg-navy-900 scroll-mt-20">
-      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gold/15 to-transparent" />
-
-      {/* Background accent */}
-      <div className="absolute top-0 inset-x-0 h-96 bg-gradient-to-b from-gold/3 to-transparent" />
+    <section ref={sectionRef} id="precos" className="relative py-24 md:py-32 bg-sand-50 scroll-mt-20">
+      <div className="absolute top-0 left-0 right-0 h-px bg-gradient-to-r from-transparent via-gray-200 to-transparent" />
 
       <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
         {/* Header */}
         <div data-animate className="opacity-0 text-center mb-14 stagger-1">
-          <p className="text-gold text-sm font-medium tracking-[0.2em] uppercase mb-4">
+          <p className="text-teal-600 text-sm font-medium tracking-[0.2em] uppercase mb-4">
             Precos
           </p>
           <h2
-            className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-white"
+            className="text-3xl md:text-4xl lg:text-5xl font-display font-bold text-gray-900"
             style={{ textWrap: "balance" } as React.CSSProperties}
           >
             Planos que cabem{" "}
-            <span className="text-gold-gradient">no seu bolso</span>
+            <span className="text-teal-gradient">no seu bolso</span>
           </h2>
-          <p className="mt-5 text-lg text-white/35">
+          <p className="mt-5 text-lg text-gray-500">
             Comece com teste gratis de 14 dias. Sem compromisso.
           </p>
 
           {/* Toggle */}
-          <div data-animate className="opacity-0 mt-10 inline-flex items-center rounded-xl bg-white/[0.03] border border-white/8 p-1 stagger-2" role="radiogroup" aria-label="Periodo de cobranca">
+          <div data-animate className="opacity-0 mt-10 inline-flex items-center rounded-xl bg-white border border-gray-200 p-1 shadow-sm stagger-2" role="radiogroup" aria-label="Periodo de cobranca">
             <button
               onClick={() => setBilling("monthly")}
               role="radio"
               aria-checked={billing === "monthly"}
-              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-[background,color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
+              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-[background,color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50 ${
                 billing === "monthly"
-                  ? "bg-gold text-navy-900 shadow-lg shadow-gold/20"
-                  : "text-white/40 hover:text-white"
+                  ? "bg-teal-600 text-white shadow-md shadow-teal-600/20"
+                  : "text-gray-500 hover:text-gray-900"
               }`}
             >
               Mensal
@@ -126,14 +123,14 @@ export function Pricing() {
               onClick={() => setBilling("yearly")}
               role="radio"
               aria-checked={billing === "yearly"}
-              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-[background,color,box-shadow] duration-300 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 ${
+              className={`px-6 py-2.5 rounded-lg text-sm font-medium transition-[background,color,box-shadow] duration-300 flex items-center gap-2 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50 ${
                 billing === "yearly"
-                  ? "bg-gold text-navy-900 shadow-lg shadow-gold/20"
-                  : "text-white/40 hover:text-white"
+                  ? "bg-teal-600 text-white shadow-md shadow-teal-600/20"
+                  : "text-gray-500 hover:text-gray-900"
               }`}
             >
               Anual
-              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-semibold border border-emerald-500/20">
+              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-semibold">
                 Economize
               </span>
             </button>
@@ -143,12 +140,12 @@ export function Pricing() {
         {/* Plans Grid */}
         {loading ? (
           <div className="flex justify-center py-20" role="status">
-            <Loader2 className="h-8 w-8 animate-spin text-gold/50" aria-hidden="true" />
+            <Loader2 className="h-8 w-8 animate-spin text-teal-500" aria-hidden="true" />
             <span className="sr-only">Carregando planos…</span>
           </div>
         ) : plans.length === 0 ? (
           <div className="text-center py-20">
-            <p className="text-white/30">Planos em breve disponiveis.</p>
+            <p className="text-gray-400">Planos em breve disponiveis.</p>
           </div>
         ) : (
           <div className={`grid grid-cols-1 md:grid-cols-2 ${plans.length >= 3 ? "lg:grid-cols-3" : ""} gap-6 max-w-5xl mx-auto`}>
@@ -172,13 +169,13 @@ export function Pricing() {
                   <div
                     className={`relative rounded-2xl overflow-hidden transition-[background,border-color,transform,box-shadow] duration-500 h-full ${
                       plan.isFeatured
-                        ? "border-2 border-gold/40 bg-white/[0.04] shadow-2xl gold-glow scale-[1.02]"
-                        : "border border-white/8 bg-white/[0.02] hover:border-gold/20 hover:bg-white/[0.04]"
+                        ? "border-2 border-teal-400 bg-white shadow-xl shadow-teal-100/50 scale-[1.02]"
+                        : "border border-gray-200 bg-white hover:border-teal-200 hover:shadow-lg hover:shadow-teal-50"
                     }`}
                   >
                     {plan.isFeatured && (
-                      <div className="bg-gradient-to-r from-gold to-gold-light px-4 py-2.5 text-center">
-                        <span className="flex items-center justify-center gap-2 text-xs font-bold text-navy-900 uppercase tracking-wider">
+                      <div className="bg-teal-600 px-4 py-2.5 text-center">
+                        <span className="flex items-center justify-center gap-2 text-xs font-bold text-white uppercase tracking-wider">
                           <Star className="h-3.5 w-3.5" aria-hidden="true" />
                           Mais popular
                         </span>
@@ -186,59 +183,54 @@ export function Pricing() {
                     )}
 
                     <div className="p-7 md:p-8">
-                      {/* Name */}
-                      <h3 className="text-xl font-display font-bold text-white">{plan.name}</h3>
+                      <h3 className="text-xl font-display font-bold text-gray-900">{plan.name}</h3>
                       {plan.description && (
-                        <p className="text-sm text-white/30 mt-1">{plan.description}</p>
+                        <p className="text-sm text-gray-400 mt-1">{plan.description}</p>
                       )}
 
-                      {/* Price */}
                       <div className="mt-7 mb-8">
                         <div className="flex items-baseline gap-1.5">
-                          <span className="text-4xl font-display font-bold text-gold-gradient tabular-nums">
+                          <span className="text-4xl font-display font-bold text-teal-gradient tabular-nums">
                             R$ {(monthlyEquiv / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </span>
-                          <span className="text-white/25 text-sm">/mes</span>
+                          <span className="text-gray-400 text-sm">/mes</span>
                         </div>
                         {billing === "yearly" && (
                           <div className="mt-2 flex items-center gap-2">
-                            <span className="text-sm text-white/25 tabular-nums">
+                            <span className="text-sm text-gray-400 tabular-nums">
                               R$ {(price / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ano
                             </span>
                             {discount > 0 && (
-                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-500/15 text-emerald-400 font-medium border border-emerald-500/20">
+                              <span className="text-[11px] px-2 py-0.5 rounded-full bg-emerald-100 text-emerald-700 font-medium">
                                 -{discount}%
                               </span>
                             )}
                           </div>
                         )}
                         {plan.trialDays > 0 && (
-                          <p className="text-xs text-gold/60 mt-3">{plan.trialDays} dias gratis para testar</p>
+                          <p className="text-xs text-teal-600 mt-3">{plan.trialDays} dias gratis para testar</p>
                         )}
                       </div>
 
-                      {/* CTA */}
                       <Link
                         href="/registro"
-                        className={`block w-full text-center py-3.5 rounded-xl text-sm font-semibold transition-[background,color,border-color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-gold/50 focus-visible:ring-offset-2 focus-visible:ring-offset-navy-900 ${
+                        className={`block w-full text-center py-3.5 rounded-xl text-sm font-semibold transition-[background,color,border-color,box-shadow] duration-300 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-500/50 focus-visible:ring-offset-2 ${
                           plan.isFeatured
-                            ? "bg-gradient-to-r from-gold to-gold-light text-navy-900 hover:from-gold-light hover:to-gold shadow-lg shadow-gold/20 hover:shadow-gold/30"
-                            : "bg-white/5 text-white hover:bg-white/10 border border-white/10 hover:border-gold/20"
+                            ? "bg-teal-600 text-white hover:bg-teal-700 shadow-md shadow-teal-600/20"
+                            : "bg-gray-50 text-gray-700 hover:bg-teal-50 border border-gray-200 hover:border-teal-200 hover:text-teal-700"
                         }`}
                       >
                         Comecar teste gratis
                       </Link>
 
-                      {/* Limits */}
-                      <div className="mt-8 space-y-3 pb-6 border-b border-white/5">
+                      <div className="mt-8 space-y-3 pb-6 border-b border-gray-100">
                         <LimitItem icon={Users} label="Usuarios" value={plan.maxUsers} />
                         <LimitItem icon={Building2} label="Filiais" value={plan.maxBranches} />
                         <LimitItem icon={Package} label="Produtos" value={plan.maxProducts} />
                       </div>
 
-                      {/* Features */}
                       <div className="mt-6 space-y-3">
-                        <p className="text-[11px] font-medium text-white/20 uppercase tracking-[0.15em]">Inclui:</p>
+                        <p className="text-[11px] font-medium text-gray-300 uppercase tracking-[0.15em]">Inclui:</p>
                         {BASE_FEATURES.map((f) => (
                           <FeatureItem key={f} label={f} />
                         ))}
@@ -261,11 +253,11 @@ export function Pricing() {
 function LimitItem({ icon: Icon, label, value }: { icon: React.ElementType; label: string; value: number }) {
   return (
     <div className="flex items-center justify-between text-sm">
-      <span className="flex items-center gap-2.5 text-white/30">
-        <Icon className="h-4 w-4 text-white/20" aria-hidden="true" />
+      <span className="flex items-center gap-2.5 text-gray-500">
+        <Icon className="h-4 w-4 text-gray-400" aria-hidden="true" />
         {label}
       </span>
-      <span className="font-semibold text-white tabular-nums">
+      <span className="font-semibold text-gray-900 tabular-nums">
         {value === -1 ? "Ilimitado" : value}
       </span>
     </div>
@@ -275,8 +267,8 @@ function LimitItem({ icon: Icon, label, value }: { icon: React.ElementType; labe
 function FeatureItem({ label, highlight }: { label: string; highlight?: boolean }) {
   return (
     <div className="flex items-center gap-2.5 text-sm">
-      <Check className={`h-4 w-4 flex-shrink-0 ${highlight ? "text-gold" : "text-emerald-500/60"}`} aria-hidden="true" />
-      <span className={highlight ? "text-gold-light" : "text-white/40"}>{label}</span>
+      <Check className={`h-4 w-4 flex-shrink-0 ${highlight ? "text-teal-600" : "text-emerald-500"}`} aria-hidden="true" />
+      <span className={highlight ? "text-teal-700 font-medium" : "text-gray-600"}>{label}</span>
     </div>
   );
 }

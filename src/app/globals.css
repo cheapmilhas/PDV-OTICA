@@ -117,64 +117,6 @@ html {
   }
 }
 
-/* ===== LANDING PAGE ===== */
-
-/* Noise grain overlay */
-.grain::after {
-  content: '';
-  position: absolute;
-  inset: 0;
-  background-image: url("data:image/svg+xml,%3Csvg viewBox='0 0 256 256' xmlns='http://www.w3.org/2000/svg'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23noise)' opacity='0.03'/%3E%3C/svg%3E");
-  pointer-events: none;
-  z-index: 1;
-}
-
-/* Gold gradient text */
-.text-gold-gradient {
-  background: linear-gradient(135deg, #d4a853 0%, #e8c97a 40%, #d4a853 60%, #b8903d 100%);
-  -webkit-background-clip: text;
-  -webkit-text-fill-color: transparent;
-  background-clip: text;
-}
-
-/* Glass card effect for landing */
-.glass-card {
-  background: rgba(255, 255, 255, 0.03);
-  backdrop-filter: blur(12px);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.glass-card:hover {
-  background: rgba(255, 255, 255, 0.06);
-  border-color: rgba(212, 168, 83, 0.2);
-}
-
-/* Staggered animation delays */
-.stagger-1 { animation-delay: 0.1s; }
-.stagger-2 { animation-delay: 0.2s; }
-.stagger-3 { animation-delay: 0.3s; }
-.stagger-4 { animation-delay: 0.4s; }
-.stagger-5 { animation-delay: 0.5s; }
-.stagger-6 { animation-delay: 0.6s; }
-.stagger-7 { animation-delay: 0.7s; }
-.stagger-8 { animation-delay: 0.8s; }
-
-/* Gold border glow */
-.gold-glow {
-  box-shadow: 0 0 40px rgba(212, 168, 83, 0.15), 0 0 80px rgba(212, 168, 83, 0.05);
-}
-
-/* Diagonal line pattern */
-.diagonal-lines {
-  background-image: repeating-linear-gradient(
-    -45deg,
-    transparent,
-    transparent 20px,
-    rgba(212, 168, 83, 0.03) 20px,
-    rgba(212, 168, 83, 0.03) 21px
-  );
-}
-
 /* Dialogs full-screen em mobile */
 @media (max-width: 767px) {
   [data-radix-dialog-content] {
@@ -187,4 +129,44 @@ html {
     left: 0 !important;
     transform: none !important;
   }
+}
+
+/* ===== LANDING PAGE (Light/Health theme) ===== */
+
+/* Teal gradient text */
+.text-teal-gradient {
+  background: linear-gradient(135deg, #0d9488 0%, #14b8a6 40%, #0d9488 60%, #0f766e 100%);
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+/* Soft card for landing */
+.soft-card {
+  background: rgba(255, 255, 255, 0.7);
+  backdrop-filter: blur(12px);
+  border: 1px solid rgba(13, 148, 136, 0.1);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 4px 12px rgba(0, 0, 0, 0.03);
+}
+
+.soft-card:hover {
+  background: rgba(255, 255, 255, 0.9);
+  border-color: rgba(13, 148, 136, 0.25);
+  box-shadow: 0 4px 16px rgba(13, 148, 136, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+}
+
+/* Staggered animation delays */
+.stagger-1 { animation-delay: 0.1s; }
+.stagger-2 { animation-delay: 0.2s; }
+.stagger-3 { animation-delay: 0.3s; }
+.stagger-4 { animation-delay: 0.4s; }
+.stagger-5 { animation-delay: 0.5s; }
+.stagger-6 { animation-delay: 0.6s; }
+.stagger-7 { animation-delay: 0.7s; }
+.stagger-8 { animation-delay: 0.8s; }
+
+/* Subtle dot pattern */
+.dot-pattern {
+  background-image: radial-gradient(circle, rgba(13, 148, 136, 0.07) 1px, transparent 1px);
+  background-size: 24px 24px;
 }

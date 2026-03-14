@@ -46,19 +46,12 @@ module.exports = {
           DEFAULT: "hsl(var(--card))",
           foreground: "hsl(var(--card-foreground))",
         },
-        // Landing page colors
-        navy: {
-          900: '#0a0f1e',
-          800: '#111833',
-          700: '#1a2447',
-          600: '#243059',
+        // Landing page colors (light/health theme)
+        sand: {
+          50: '#faf9f7',
+          100: '#f5f3ef',
+          200: '#ebe7df',
         },
-        gold: {
-          DEFAULT: '#d4a853',
-          light: '#e8c97a',
-          dark: '#b8903d',
-        },
-        ivory: '#f5f0e8',
       },
       borderRadius: {
         lg: "var(--radius)",
@@ -67,27 +60,17 @@ module.exports = {
       },
       keyframes: {
         'fade-up': {
-          '0%': { opacity: '0', transform: 'translateY(30px)' },
+          '0%': { opacity: '0', transform: 'translateY(24px)' },
           '100%': { opacity: '1', transform: 'translateY(0)' },
         },
         'fade-in': {
           '0%': { opacity: '0' },
           '100%': { opacity: '1' },
         },
-        'slide-in-right': {
-          '0%': { opacity: '0', transform: 'translateX(30px)' },
-          '100%': { opacity: '1', transform: 'translateX(0)' },
-        },
-        shimmer: {
-          '0%': { backgroundPosition: '-200% 0' },
-          '100%': { backgroundPosition: '200% 0' },
-        },
       },
       animation: {
-        'fade-up': 'fade-up 0.8s ease-out forwards',
-        'fade-in': 'fade-in 0.6s ease-out forwards',
-        'slide-in-right': 'slide-in-right 0.6s ease-out forwards',
-        shimmer: 'shimmer 3s ease-in-out infinite',
+        'fade-up': 'fade-up 0.7s ease-out forwards',
+        'fade-in': 'fade-in 0.5s ease-out forwards',
       },
     },
   },
