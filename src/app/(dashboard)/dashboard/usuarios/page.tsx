@@ -82,9 +82,9 @@ function UsuariosPage() {
 
       const data = await res.json();
       const arr = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-      // Filtra: só quem faz login no sistema (exclui vendedores)
+      // Filtra: só quem faz login no sistema (exclui vendedores criados via Funcionários)
       const systemUsers = arr.filter((u: UserType) =>
-        ["ADMIN", "GERENTE", "CAIXA", "ATENDENTE"].includes(u.role)
+        !u.email.endsWith("@funcionario.interno")
       );
       setUsers(systemUsers);
     } catch (error: any) {
@@ -112,15 +112,14 @@ function UsuariosPage() {
   }
 
   async function handleCreate() {
-    if (!form.name || !form.password || !form.role) {
-      toast.error("Preencha nome, senha e cargo");
+    if (!form.name || !form.email || !form.password || !form.role) {
+      toast.error("Preencha nome, login, senha e cargo");
       return;
     }
 
     setSaving(true);
     try {
-      // Gera email automático se não informado
-      const email = form.email.trim() || `${form.name.trim().toLowerCase().replace(/\s+/g, ".").normalize("NFD").replace(/[\u0300-\u036f]/g, "")}.${Date.now()}@sistema.interno`;
+      const email = form.email.trim();
 
       const body: any = {
         name: form.name.trim(),
@@ -160,6 +159,10 @@ function UsuariosPage() {
         name: form.name.trim(),
         role: form.role,
       };
+
+      if (form.email && form.email !== selectedUser.email) {
+        body.email = form.email.trim();
+      }
 
       if (form.password) {
         body.password = form.password;
@@ -280,6 +283,7 @@ function UsuariosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
+                  <TableHead>Login</TableHead>
                   <TableHead>Cargo</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -297,6 +301,9 @@ function UsuariosPage() {
                         </Avatar>
                         <p className="font-medium">{user.name}</p>
                       </div>
+                    </TableCell>
+                    <TableCell>
+                      <span className="text-sm text-muted-foreground">{user.email}</span>
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
@@ -388,9 +395,19 @@ function UsuariosPage() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Nome do usuário"
+                placeholder="Ex: PACAJUS"
                 autoFocus
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>Login (email) *</Label>
+              <Input
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+                placeholder="Ex: pacajus@loja.com"
+              />
+              <p className="text-xs text-muted-foreground">Usado para entrar no sistema</p>
             </div>
 
             <div className="space-y-2">
@@ -410,10 +427,11 @@ function UsuariosPage() {
                   <SelectValue placeholder="Selecione o cargo" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADMIN">Administrador</SelectItem>
+                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
+                  <SelectItem value="ADMIN">Administrador</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -447,6 +465,14 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
+              <Label>Login (email)</Label>
+              <Input
+                value={form.email}
+                onChange={(e) => setForm({ ...form, email: e.target.value })}
+              />
+            </div>
+
+            <div className="space-y-2">
               <Label>Nova Senha</Label>
               <Input
                 type="password"
@@ -463,10 +489,11 @@ function UsuariosPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="ADMIN">Administrador</SelectItem>
+                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
+                  <SelectItem value="ADMIN">Administrador</SelectItem>
                 </SelectContent>
               </Select>
             </div>
