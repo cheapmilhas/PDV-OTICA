@@ -33,6 +33,7 @@ import {
   RefreshCw,
   Boxes,
   PieChart,
+  Shield,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -256,7 +257,13 @@ const menuItems = [
         href: "/dashboard/configuracoes",
         icon: Settings,
         permission: "settings.view"
-      }
+      },
+      {
+        name: "Usuários",
+        href: "/dashboard/usuarios",
+        icon: Shield,
+        permission: "users.view"
+      },
     ],
   },
 ];
