@@ -28,6 +28,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
 import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
 
 interface Product {
@@ -56,6 +57,7 @@ function PDVPage() {
   const { data: session } = useSession();
   const router = useRouter();
   const searchParams = useSearchParams();
+  const { activeBranchId } = useBranchContext();
   const quoteId = searchParams.get("quoteId");
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
@@ -69,9 +71,32 @@ function PDVPage() {
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [finalizingVenda, setFinalizingVenda] = useState(false);
 
+  // Vendedor
+  const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
+  const [selectedSellerId, setSelectedSellerId] = useState<string>("");
+
   // Estados para dialog de carnê
   const [showCarneDialog, setShowCarneDialog] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+
+  // Carregar vendedores (filtrados pela branch ativa)
+  useEffect(() => {
+    const branchParam = activeBranchId !== "ALL" ? `?branchId=${activeBranchId}` : "";
+    fetch(`/api/users/sellers${branchParam}`)
+      .then((res) => res.json())
+      .then((data) => {
+        const list = data.data || [];
+        setSellers(list);
+        // Restaurar vendedor do localStorage
+        const saved = localStorage.getItem("pdv-selected-seller");
+        if (saved && list.find((s: { id: string }) => s.id === saved)) {
+          setSelectedSellerId(saved);
+        } else {
+          setSelectedSellerId("");
+        }
+      })
+      .catch(console.error);
+  }, [activeBranchId]);
 
   // Refs para atalhos
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -89,6 +114,10 @@ function PDVPage() {
       } else if (e.key === "F4") {
         e.preventDefault();
         if (carrinho.length > 0 && !modalVendaOpen) {
+          if (sellers.length > 0 && !selectedSellerId) {
+            toast.error("Selecione um vendedor antes de finalizar");
+            return;
+          }
           setModalVendaOpen(true);
         }
       } else if (e.key === "F8") {
@@ -97,6 +126,8 @@ function PDVPage() {
           setCarrinho([]);
           setClienteSelecionado(null);
           setBuscaCliente("");
+          setSelectedSellerId("");
+          localStorage.removeItem("pdv-selected-seller");
           toast.success("Venda limpa");
         }
       } else if (e.key === "F3") {
@@ -405,6 +436,7 @@ function PDVPage() {
       const saleData = {
         customerId: clienteSelecionado?.id || null,
         branchId: session.user.branchId,
+        ...(selectedSellerId && { sellerUserId: selectedSellerId }),
         items: carrinho.map((item) => ({
           productId: item.id,
           qty: item.quantity,
@@ -518,193 +550,144 @@ function PDVPage() {
           toast.success(`${cliente.name} selecionado`);
         }}
       />
-    <div className="pb-24 space-y-4">
-      {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-2">
-        <div>
-          <h1 className="text-2xl md:text-3xl font-bold">PDV</h1>
-          <p className="text-muted-foreground text-sm hidden md:block">
-            Finalize vendas de forma rápida e eficiente
-          </p>
-        </div>
-        <div className="flex gap-2 items-center">
-          <Badge variant="outline" className="text-xs md:text-sm px-2 md:px-4 py-1 md:py-2">
+    <div className="flex flex-col h-[calc(100vh-3.5rem)] -m-4 md:-m-6">
+      {/* Header compacto */}
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-background flex-shrink-0">
+        <div className="flex items-center gap-3">
+          <h1 className="text-lg font-bold">PDV</h1>
+          <Badge variant="outline" className="text-xs">
             {products.length} produtos
           </Badge>
-          <div className="hidden lg:flex gap-1 text-xs text-muted-foreground">
-            <Badge variant="secondary" className="text-xs">F2 Busca</Badge>
-            <Badge variant="secondary" className="text-xs">F3 Cliente</Badge>
-            <Badge variant="secondary" className="text-xs">F4 Finalizar</Badge>
-            <Badge variant="secondary" className="text-xs">F8 Limpar</Badge>
-          </div>
+        </div>
+        <div className="flex gap-1 text-xs">
+          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F2 Busca</Badge>
+          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F3 Cliente</Badge>
+          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F4 Finalizar</Badge>
+          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F8 Limpar</Badge>
         </div>
       </div>
 
-      <div className="grid grid-cols-1 gap-4 lg:grid-cols-3">
+      {/* Conteúdo principal — sem scroll na página */}
+      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 overflow-hidden">
         {/* Produtos e Busca - 2 colunas */}
-        <div className="space-y-4 lg:col-span-2">
-          {/* Busca de Produtos */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <Search className="h-5 w-5" />
-                Buscar Produto
-              </CardTitle>
-              <CardDescription>
-                Digite o SKU, nome ou passe o leitor de código de barras
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <div className="flex gap-2">
-                <div className="relative flex-1">
-                  <Barcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-                  <Input
-                    ref={searchInputRef}
-                    placeholder="SKU ou nome do produto... (F2)"
-                    className="pl-9"
-                    value={buscaProduto}
-                    onChange={(e) => setBuscaProduto(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter" && produtosDisponiveis.length > 0) {
-                        adicionarProduto(produtosDisponiveis[0]);
-                        setBuscaProduto("");
-                      }
-                    }}
-                    autoFocus
-                  />
-                </div>
-                {buscaProduto && (
-                  <Button variant="outline" onClick={() => setBuscaProduto("")}>
-                    Limpar
-                  </Button>
-                )}
+        <div className="lg:col-span-2 flex flex-col border-r overflow-hidden">
+          {/* Busca */}
+          <div className="p-3 border-b flex-shrink-0">
+            <div className="flex gap-2">
+              <div className="relative flex-1">
+                <Barcode className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                <Input
+                  ref={searchInputRef}
+                  placeholder="SKU ou nome do produto... (F2)"
+                  className="pl-9"
+                  value={buscaProduto}
+                  onChange={(e) => setBuscaProduto(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter" && produtosDisponiveis.length > 0) {
+                      adicionarProduto(produtosDisponiveis[0]);
+                      setBuscaProduto("");
+                    }
+                  }}
+                  autoFocus
+                />
               </div>
-              {loadingProducts && (
-                <div className="flex items-center gap-2 mt-2">
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  <span className="text-sm text-muted-foreground">Buscando produtos...</span>
-                </div>
+              {buscaProduto && (
+                <Button variant="outline" size="sm" onClick={() => setBuscaProduto("")}>
+                  Limpar
+                </Button>
               )}
-              {!loadingProducts && buscaProduto && produtosDisponiveis.length === 0 && (
-                <p className="mt-2 text-sm text-muted-foreground">
-                  Nenhum produto encontrado
-                </p>
-              )}
-            </CardContent>
-          </Card>
+            </div>
+          </div>
 
-          {/* Produtos Rápidos */}
-          <Card>
-            <CardHeader>
-              <CardTitle>
-                {buscaProduto ? "Resultados da Busca" : "Produtos Disponíveis"}
-              </CardTitle>
-              <CardDescription>
-                Clique para adicionar ao carrinho
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              {loadingProducts ? (
-                <div className="flex items-center justify-center py-12">
-                  <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-                </div>
-              ) : produtosDisponiveis.length === 0 ? (
-                <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
-                  <Package className="mb-2 h-12 w-12 opacity-20" />
-                  <p>Nenhum produto disponível</p>
-                </div>
-              ) : (
-                <div className="grid grid-cols-2 gap-2">
-                  {produtosDisponiveis.map((produto) => (
-                    <Button
-                      key={produto.id}
-                      variant="outline"
-                      className="h-auto flex-col items-start gap-2 p-4"
-                      onClick={() => adicionarProduto(produto)}
-                      disabled={produto.stockQty === 0}
-                    >
-                      <div className="flex w-full items-center justify-between">
-                        <span className="font-mono text-xs text-muted-foreground">
-                          {produto.sku}
-                        </span>
-                        <Badge variant={produto.stockQty > 10 ? "secondary" : produto.stockQty > 0 ? "outline" : "destructive"}>
-                          {produto.stockQty}
-                        </Badge>
-                      </div>
-                      <p className="line-clamp-2 text-left text-sm font-medium">
-                        {produto.name}
-                      </p>
-                      <p className="text-lg font-bold">
-                        {formatCurrency(produto.salePrice)}
-                      </p>
-                    </Button>
-                  ))}
-                </div>
-              )}
-            </CardContent>
-          </Card>
+          {/* Grid de produtos — scroll interno */}
+          <div className="flex-1 overflow-y-auto p-3">
+            {loadingProducts ? (
+              <div className="flex items-center justify-center py-12">
+                <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+              </div>
+            ) : produtosDisponiveis.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-12 text-center text-muted-foreground">
+                <Package className="mb-2 h-12 w-12 opacity-20" />
+                <p>Nenhum produto encontrado</p>
+              </div>
+            ) : (
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-2">
+                {produtosDisponiveis.map((produto) => (
+                  <Button
+                    key={produto.id}
+                    variant="outline"
+                    className="h-auto flex-col items-start gap-1 p-3"
+                    onClick={() => adicionarProduto(produto)}
+                    disabled={produto.stockQty === 0}
+                  >
+                    <div className="flex w-full items-center justify-between">
+                      <span className="font-mono text-xs text-muted-foreground">
+                        {produto.sku}
+                      </span>
+                      <Badge variant={produto.stockQty > 10 ? "secondary" : produto.stockQty > 0 ? "outline" : "destructive"} className="text-xs">
+                        {produto.stockQty}
+                      </Badge>
+                    </div>
+                    <p className="line-clamp-1 text-left text-sm font-medium">
+                      {produto.name}
+                    </p>
+                    <p className="text-base font-bold">
+                      {formatCurrency(produto.salePrice)}
+                    </p>
+                  </Button>
+                ))}
+              </div>
+            )}
+          </div>
         </div>
 
-        {/* Carrinho - 1 coluna */}
-        <div className="space-y-4">
-          {/* Informações do Cliente */}
-          <Card>
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2 text-base">
-                <User className="h-4 w-4" />
-                Cliente
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
+        {/* Coluna direita — Cliente + Vendedor + Carrinho + Resumo */}
+        <div className="flex flex-col overflow-hidden">
+          {/* Cliente + Vendedor — compacto */}
+          <div className="p-3 border-b space-y-2 flex-shrink-0">
+            {/* Cliente */}
+            <div>
               {clienteSelecionado ? (
-                <div className="space-y-2">
-                  <div className="rounded-lg border bg-muted/50 p-3">
-                    <p className="font-medium">{clienteSelecionado.name}</p>
+                <div className="flex items-center justify-between rounded-lg border bg-muted/50 px-3 py-2">
+                  <div>
+                    <p className="text-sm font-medium">{clienteSelecionado.name}</p>
                     {clienteSelecionado.phone && (
-                      <p className="text-sm text-muted-foreground">{clienteSelecionado.phone}</p>
-                    )}
-                    {clienteSelecionado.cpf && (
-                      <p className="text-sm text-muted-foreground">CPF: {clienteSelecionado.cpf}</p>
+                      <p className="text-xs text-muted-foreground">{clienteSelecionado.phone}</p>
                     )}
                   </div>
                   <Button
-                    variant="outline"
+                    variant="ghost"
                     size="sm"
-                    className="w-full"
-                    onClick={() => {
-                      setClienteSelecionado(null);
-                      setBuscaCliente("");
-                    }}
+                    className="h-7 text-xs"
+                    onClick={() => { setClienteSelecionado(null); setBuscaCliente(""); }}
                   >
-                    Remover Cliente
+                    Remover
                   </Button>
                 </div>
               ) : (
-                <div className="space-y-2">
+                <div className="space-y-1">
                   <div className="relative">
                     <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
                     <Input
-                      placeholder="Buscar cliente..."
-                      className="pl-9"
+                      placeholder="Buscar cliente... (F3)"
+                      className="pl-9 h-9"
                       value={buscaCliente}
                       onChange={(e) => setBuscaCliente(e.target.value)}
                     />
                   </div>
-
                   {loadingCustomers && (
-                    <div className="flex items-center gap-2 py-2">
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      <span className="text-sm text-muted-foreground">Buscando...</span>
+                    <div className="flex items-center gap-2 py-1">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      <span className="text-xs text-muted-foreground">Buscando...</span>
                     </div>
                   )}
-
                   {!loadingCustomers && customers.length > 0 && (
-                    <div className="space-y-1 max-h-40 overflow-y-auto">
+                    <div className="space-y-0.5 max-h-28 overflow-y-auto border rounded-lg">
                       {customers.map((cliente) => (
                         <Button
                           key={cliente.id}
                           variant="ghost"
-                          className="w-full justify-start h-auto py-2"
+                          className="w-full justify-start h-auto py-1.5 px-3"
                           onClick={() => {
                             setClienteSelecionado(cliente);
                             setBuscaCliente("");
@@ -712,62 +695,61 @@ function PDVPage() {
                           }}
                         >
                           <div className="text-left">
-                            <p className="font-medium text-sm">{cliente.name}</p>
-                            {cliente.phone && (
-                              <p className="text-xs text-muted-foreground">{cliente.phone}</p>
-                            )}
+                            <p className="font-medium text-xs">{cliente.name}</p>
+                            {cliente.phone && <p className="text-xs text-muted-foreground">{cliente.phone}</p>}
                           </div>
                         </Button>
                       ))}
                     </div>
                   )}
-
-                  {!loadingCustomers && buscaCliente.length >= 2 && customers.length === 0 && (
-                    <div className="text-center py-3 text-sm text-muted-foreground">
-                      <p className="mb-2">Cliente não encontrado</p>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        onClick={() => setModalClienteOpen(true)}
-                      >
-                        <Plus className="mr-2 h-3 w-3" />
-                        Cadastrar Novo Cliente
-                      </Button>
-                    </div>
-                  )}
-
                   {buscaCliente.length < 2 && (
-                    <Button
-                      variant="outline"
-                      className="w-full"
-                      onClick={() => setModalClienteOpen(true)}
-                    >
-                      <Plus className="mr-2 h-4 w-4" />
+                    <Button variant="outline" size="sm" className="w-full h-8 text-xs" onClick={() => setModalClienteOpen(true)}>
+                      <Plus className="mr-1 h-3 w-3" />
                       Adicionar Cliente (F3)
                     </Button>
                   )}
                 </div>
               )}
-            </CardContent>
-          </Card>
+            </div>
 
-          {/* Carrinho */}
-          <Card className="flex flex-col">
-            <CardHeader>
-              <CardTitle className="flex items-center gap-2">
-                <ShoppingCart className="h-5 w-5" />
-                Carrinho ({totalItens})
-              </CardTitle>
-            </CardHeader>
-            <CardContent className="flex-1">
-              {carrinho.length === 0 ? (
-                <div className="flex h-40 flex-col items-center justify-center text-center text-muted-foreground">
-                  <Package className="mb-2 h-12 w-12 opacity-20" />
-                  <p>Carrinho vazio</p>
-                  <p className="text-sm">Adicione produtos para iniciar a venda</p>
-                </div>
-              ) : (
-                <ScrollArea className="h-64">
+            {/* Seletor de Vendedor (obrigatório quando há vendedores) */}
+            {sellers.length > 0 && (
+              <div>
+                <label className="text-xs text-muted-foreground mb-0.5 block">
+                  Vendedor <span className="text-destructive">*</span>
+                </label>
+                <select
+                  value={selectedSellerId}
+                  onChange={(e) => {
+                    setSelectedSellerId(e.target.value);
+                    localStorage.setItem("pdv-selected-seller", e.target.value);
+                  }}
+                  className={`w-full h-8 text-sm rounded-md border bg-background px-3 focus:outline-none focus:ring-1 focus:ring-ring ${
+                    !selectedSellerId ? "border-destructive text-muted-foreground" : "border-input"
+                  }`}
+                >
+                  <option value="" disabled>Selecione o vendedor...</option>
+                  {sellers.map((s) => (
+                    <option key={s.id} value={s.id}>{s.name}</option>
+                  ))}
+                </select>
+              </div>
+            )}
+          </div>
+
+          {/* Carrinho — scroll interno */}
+          <div className="flex-1 overflow-y-auto p-3">
+            <p className="text-sm font-semibold mb-2 flex items-center gap-1.5">
+              <ShoppingCart className="h-4 w-4" />
+              Carrinho ({totalItens})
+            </p>
+            {carrinho.length === 0 ? (
+              <div className="flex flex-col items-center justify-center py-8 text-center text-muted-foreground">
+                <Package className="mb-2 h-10 w-10 opacity-20" />
+                <p className="text-sm">Carrinho vazio</p>
+              </div>
+            ) : (
+              <div className="space-y-2">
                   <div className="space-y-3">
                     {carrinho.map((item) => (
                       <div
@@ -866,89 +848,37 @@ function PDVPage() {
                       </div>
                     ))}
                   </div>
-                </ScrollArea>
-              )}
-            </CardContent>
-          </Card>
-
-          {/* Resumo (visível apenas desktop, mobile usa barra fixa) */}
-          <Card className="hidden lg:block">
-            <CardContent className="pt-4 space-y-3">
-              <div className="space-y-2">
-                <div className="flex justify-between text-sm">
-                  <span className="text-muted-foreground">Subtotal ({totalItens} itens)</span>
-                  <span>{formatCurrency(subtotal)}</span>
-                </div>
-                {desconto > 0 && (
-                  <div className="flex justify-between text-sm">
-                    <span className="text-muted-foreground">Desconto</span>
-                    <span className="text-green-600">
-                      -{formatCurrency(desconto)}
-                    </span>
-                  </div>
-                )}
-                <Separator />
-                <div className="flex justify-between text-xl font-bold">
-                  <span>Total</span>
-                  <span>{formatCurrency(total)}</span>
-                </div>
               </div>
-              <Button
-                className="w-full"
-                size="lg"
-                disabled={carrinho.length === 0}
-                onClick={() => setModalVendaOpen(true)}
-              >
-                <CreditCard className="mr-2 h-4 w-4" />
-                Finalizar Venda (F4)
-              </Button>
-              {carrinho.length > 0 && (
-                <Button
-                  variant="outline"
-                  className="w-full"
-                  onClick={() => {
-                    setCarrinho([]);
-                    setClienteSelecionado(null);
-                    setBuscaCliente("");
-                    toast.success("Venda limpa");
-                  }}
-                >
-                  Limpar Venda (F8)
-                </Button>
-              )}
-            </CardContent>
-          </Card>
-        </div>
-      </div>
-    </div>
-
-    {/* Barra fixa de totalização - sempre visível */}
-    <div className="fixed bottom-0 left-0 right-0 md:left-64 bg-background border-t shadow-lg z-40 p-3 md:p-4">
-      <div className="flex items-center justify-between max-w-7xl mx-auto gap-4">
-        <div className="flex items-center gap-3">
-          <ShoppingCart className="h-5 w-5 text-muted-foreground hidden sm:block" />
-          <div>
-            <span className="text-sm text-muted-foreground">{totalItens} {totalItens === 1 ? "item" : "itens"}</span>
-            {clienteSelecionado && (
-              <p className="text-xs text-muted-foreground hidden sm:block">{clienteSelecionado.name}</p>
             )}
           </div>
-        </div>
-        <div className="flex items-center gap-3 md:gap-4">
-          <div className="text-right">
-            <p className="text-xs text-muted-foreground hidden sm:block">Total</p>
-            <p className="text-xl md:text-2xl font-bold">{formatCurrency(total)}</p>
+
+          {/* Resumo + Botão Finalizar — fixo no fundo da coluna */}
+          <div className="p-3 border-t flex-shrink-0 space-y-2">
+            <div className="flex justify-between text-sm">
+              <span className="text-muted-foreground">Subtotal ({totalItens} itens)</span>
+              <span>{formatCurrency(subtotal)}</span>
+            </div>
+            <Separator />
+            <div className="flex justify-between text-lg font-bold">
+              <span>Total</span>
+              <span>{formatCurrency(total)}</span>
+            </div>
+            <Button
+              className="w-full"
+              size="lg"
+              disabled={carrinho.length === 0 || (sellers.length > 0 && !selectedSellerId)}
+              onClick={() => {
+                if (sellers.length > 0 && !selectedSellerId) {
+                  toast.error("Selecione um vendedor");
+                  return;
+                }
+                setModalVendaOpen(true);
+              }}
+            >
+              <CreditCard className="mr-2 h-4 w-4" />
+              {sellers.length > 0 && !selectedSellerId ? "Selecione o vendedor" : "Finalizar Venda (F4)"}
+            </Button>
           </div>
-          <Button
-            size="lg"
-            disabled={carrinho.length === 0}
-            onClick={() => setModalVendaOpen(true)}
-            className="px-4 md:px-8"
-          >
-            <CreditCard className="mr-2 h-4 w-4" />
-            <span className="hidden sm:inline">Finalizar</span>
-            <span className="sm:hidden">F4</span>
-          </Button>
         </div>
       </div>
     </div>
