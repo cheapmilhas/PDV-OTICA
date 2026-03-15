@@ -53,67 +53,93 @@ export async function POST(request: NextRequest) {
       const rowNum = i + 2; // +2 porque Excel começa em 1 e tem header
 
       try {
+        // Suporte a múltiplos formatos de coluna (sistema padrão + sistema antigo Ado)
+        const nome = row["Nome"] || row["Nome / Razão Social"];
+        const docRaw = row["CPF"] || row["Documento"];
+        const rgRaw = row["RG"] || row["RG / IE"];
+        const emailRaw = row["Email"] || row["email"];
+        const telRaw = row["Telefone"] || row["telefone"] || row["celular"];
+        const tel2Raw = row["Telefone 2"] || row["celular1"] || row["celular2"];
+        const cepRaw = row["CEP"];
+        const enderecoRaw = row["Endereço"];
+        const numeroRaw = row["Número"];
+        const compRaw = row["Complemento"];
+        const bairroRaw = row["Bairro"];
+        const cidadeRaw = row["Cidade"];
+        const estadoRaw = row["Estado"];
+        const dataNascRaw = row["Data de Nascimento"];
+        const generoRaw = row["Gênero"] || row["Sexo"];
+        const ativoRaw = row["Ativo"];
+        const obsRaw = row["Observações"] || row["Observação"];
+        const externalIdRaw = row["Cliente ID"] || row["Codigo Externo"];
+
         // Validações básicas
-        if (!row["Nome"]) {
+        if (!nome) {
           results.errors.push(`Linha ${rowNum}: Nome é obrigatório`);
           continue;
         }
 
-        // Remover formatação do CPF (deixar só números)
-        const cpf = row["CPF"]
-          ? row["CPF"].toString().replace(/\D/g, "")
+        // Remover formatação do CPF/CNPJ (deixar só números)
+        const cpf = docRaw
+          ? docRaw.toString().replace(/\D/g, "")
           : null;
 
-        // Validar CPF se fornecido
-        if (cpf && cpf.length !== 11) {
-          results.errors.push(`Linha ${rowNum}: CPF inválido`);
+        // Validar CPF se fornecido (aceitar CPF 11 ou CNPJ 14 dígitos)
+        if (cpf && cpf.length !== 11 && cpf.length !== 14) {
+          results.errors.push(`Linha ${rowNum}: CPF/CNPJ inválido`);
           continue;
         }
 
         // Remover formatação dos telefones
-        const phone = row["Telefone"]
-          ? row["Telefone"].toString().replace(/\D/g, "")
+        const phone = telRaw
+          ? telRaw.toString().replace(/\D/g, "")
           : null;
-        const phone2 = row["Telefone 2"]
-          ? row["Telefone 2"].toString().replace(/\D/g, "")
+        const phone2 = tel2Raw
+          ? tel2Raw.toString().replace(/\D/g, "")
           : null;
 
         // Remover formatação do CEP
-        const zipCode = row["CEP"]
-          ? row["CEP"].toString().replace(/\D/g, "")
+        const zipCode = cepRaw
+          ? cepRaw.toString().replace(/\D/g, "")
           : null;
 
-        // Parsear data de nascimento
+        // Parsear data de nascimento (dd/MM/yyyy ou serial Excel)
         let birthDate = null;
-        if (row["Data de Nascimento"]) {
-          const dateStr = row["Data de Nascimento"].toString();
-          const parsedDate = parse(dateStr, "dd/MM/yyyy", new Date());
-          if (isValid(parsedDate)) {
-            birthDate = parsedDate;
+        if (dataNascRaw) {
+          if (typeof dataNascRaw === "number") {
+            // Serial Excel: dias desde 1900-01-01
+            const excelEpoch = new Date(1899, 11, 30);
+            birthDate = new Date(excelEpoch.getTime() + dataNascRaw * 86400000);
+          } else {
+            const dateStr = dataNascRaw.toString();
+            const parsedDate = parse(dateStr, "dd/MM/yyyy", new Date());
+            if (isValid(parsedDate)) {
+              birthDate = parsedDate;
+            }
           }
         }
 
         // Parsear gênero
         let gender = null;
-        if (row["Gênero"]) {
-          const genderStr = row["Gênero"].toString().toUpperCase();
-          if (["M", "F", "OUTRO"].includes(genderStr)) {
-            gender = genderStr;
-          }
+        if (generoRaw) {
+          const genderStr = generoRaw.toString().toUpperCase().trim();
+          if (genderStr === "M" || genderStr === "MASCULINO") gender = "M";
+          else if (genderStr === "F" || genderStr === "FEMININO") gender = "F";
+          else if (genderStr === "OUTRO") gender = "OUTRO";
         }
 
         // Parsear aceita marketing
         const acceptsMarketing = row["Aceita Marketing"]
           ? row["Aceita Marketing"].toString().toLowerCase() === "sim" || row["Aceita Marketing"] === "1"
-          : false;
+          : true;
 
         // Parsear ativo
-        const active = row["Ativo"]
-          ? row["Ativo"].toString().toLowerCase() === "sim" || row["Ativo"] === "1"
+        const active = ativoRaw
+          ? ativoRaw.toString().toLowerCase() === "sim" || ativoRaw === "1"
           : true;
 
         // Verificar se cliente já existe (por CPF ou nome)
-        const whereConditions: any[] = [{ name: row["Nome"] }];
+        const whereConditions: any[] = [{ name: nome }];
         if (cpf) {
           whereConditions.push({ cpf });
         }
@@ -125,25 +151,31 @@ export async function POST(request: NextRequest) {
           },
         });
 
+        // Determinar tipo de pessoa (PF ou PJ)
+        const personType = cpf && cpf.length === 14 ? "PJ" : "PF";
+
         const customerData = {
-          name: row["Nome"],
-          cpf,
-          rg: row["RG"] || null,
+          name: nome,
+          personType,
+          cpf: cpf && cpf.length === 11 ? cpf : null,
+          cnpj: cpf && cpf.length === 14 ? cpf : null,
+          rg: rgRaw ? String(rgRaw) : null,
           phone,
           phone2,
-          email: row["Email"] || null,
+          email: emailRaw ? String(emailRaw) : null,
           birthDate,
           gender,
-          address: row["Endereço"] || null,
-          number: row["Número"] || null,
-          complement: row["Complemento"] || null,
-          neighborhood: row["Bairro"] || null,
-          city: row["Cidade"] || null,
-          state: row["Estado"] || null,
+          address: enderecoRaw ? String(enderecoRaw) : null,
+          number: numeroRaw ? String(numeroRaw) : null,
+          complement: compRaw ? String(compRaw) : null,
+          neighborhood: bairroRaw ? String(bairroRaw) : null,
+          city: cidadeRaw ? String(cidadeRaw) : null,
+          state: estadoRaw ? String(estadoRaw) : null,
           zipCode,
           acceptsMarketing,
-          referralSource: row["Fonte de Indicação"] || null,
-          notes: row["Observações"] || null,
+          referralSource: row["Fonte de Indicação"] || row["Origem do Cliente"] || null,
+          notes: obsRaw ? String(obsRaw) : null,
+          externalId: externalIdRaw ? String(externalIdRaw) : null,
           active,
         };
 
@@ -153,7 +185,7 @@ export async function POST(request: NextRequest) {
             where: { id: existingCustomer.id },
             data: customerData,
           });
-          results.updated.push(row["Nome"]);
+          results.updated.push(nome);
         } else {
           // Criar novo cliente
           await prisma.customer.create({
@@ -162,7 +194,7 @@ export async function POST(request: NextRequest) {
               ...customerData,
             },
           });
-          results.created.push(row["Nome"]);
+          results.created.push(nome);
         }
 
         results.success++;

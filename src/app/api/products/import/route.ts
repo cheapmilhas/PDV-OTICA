@@ -53,41 +53,64 @@ export async function POST(request: NextRequest) {
       const rowNum = i + 2; // +2 porque Excel começa em 1 e tem header
 
       try {
+        // Suporte a múltiplos formatos de coluna (sistema padrão + sistema antigo Ado)
+        const nome = row["Nome"] || row["Descrição"] || row["Nome / Razão Social"];
+        const precoVenda = row["Preço de Venda"] || row["Preço de venda"];
+        const precoCusto = row["Preço de Custo"] || row["Preço de custo"] || "0";
+        const skuRaw = row["SKU"] || row["Referência"] || row["Codigo"];
+        const grupoRaw = row["Categoria"] || row["Grupo"] || row["Subgrupo"];
+        const marcaRaw = row["Marca"] || row["Grife"];
+        const fornecedorRaw = row["Fornecedor"];
+        const tipoRaw = row["Tipo"] || grupoRaw;
+        const estoqueAtual = row["Quantidade em Estoque"] || row["Estoque Atual"] || "0";
+        const estoqueMin = row["Estoque Mínimo"] || row["Estoque Minimo"] || "0";
+        const estoqueMax = row["Estoque Máximo"] || row["Estoque Maximo"];
+        const controleEstoque = row["Controle de Estoque"] || row["Controlar Estoque"];
+        const ativoRaw = row["Ativo"];
+        const ncmRaw = row["NCM"] || row["Ncm"];
+        const cestRaw = row["CEST"] || row["Cest"];
+
         // Validações básicas
-        if (!row["Nome"]) {
+        if (!nome) {
           results.errors.push(`Linha ${rowNum}: Nome é obrigatório`);
           continue;
         }
 
-        if (!row["Preço de Venda"]) {
+        if (!precoVenda) {
           results.errors.push(`Linha ${rowNum}: Preço de Venda é obrigatório`);
           continue;
         }
 
         // Determinar tipo (FRAME, CONTACT_LENS, OPHTHALMIC_LENS)
         let type: ProductType = ProductType.FRAME; // Default
-        if (row["Tipo"]) {
-          const tipoLower = row["Tipo"].toLowerCase();
+        if (tipoRaw) {
+          const tipoLower = String(tipoRaw).toLowerCase();
           if (tipoLower.includes("lente de contato") || tipoLower === "contact_lens") {
             type = ProductType.CONTACT_LENS;
-          } else if (tipoLower.includes("lente oft") || tipoLower === "ophthalmic_lens") {
+          } else if (tipoLower.includes("lente") || tipoLower.includes("oft") || tipoLower === "ophthalmic_lens") {
             type = ProductType.OPHTHALMIC_LENS;
+          } else if (tipoLower.includes("acess")) {
+            type = ProductType.ACCESSORY;
+          } else if (tipoLower.includes("solar")) {
+            type = ProductType.SUNGLASSES;
+          } else if (tipoLower.includes("serviço") || tipoLower.includes("servico")) {
+            type = ProductType.SERVICE;
           }
         }
 
         // Buscar ou criar categoria
         let categoryId = null;
-        if (row["Categoria"]) {
+        if (grupoRaw) {
           const category = await prisma.category.upsert({
             where: {
               companyId_name: {
                 companyId,
-                name: row["Categoria"],
+                name: String(grupoRaw),
               },
             },
             create: {
               companyId,
-              name: row["Categoria"],
+              name: String(grupoRaw),
             },
             update: {},
           });
@@ -96,9 +119,9 @@ export async function POST(request: NextRequest) {
 
         // Buscar ou criar marca
         let brandId = null;
-        if (row["Marca"]) {
-          // Gera código da marca baseado no nome
-          const brandCode = row["Marca"].toUpperCase().replace(/\s+/g, "_").slice(0, 20);
+        if (marcaRaw) {
+          const brandName = String(marcaRaw);
+          const brandCode = brandName.toUpperCase().replace(/\s+/g, "_").slice(0, 20);
           const brand = await prisma.brand.upsert({
             where: {
               companyId_code: {
@@ -109,45 +132,46 @@ export async function POST(request: NextRequest) {
             create: {
               companyId,
               code: brandCode,
-              name: row["Marca"],
+              name: brandName,
             },
             update: {},
           });
           brandId = brand.id;
         }
 
-        // Buscar fornecedor
+        // Buscar ou criar fornecedor
         let supplierId = null;
-        if (row["Fornecedor"]) {
-          const supplier = await prisma.supplier.findFirst({
-            where: {
-              companyId,
-              name: row["Fornecedor"],
-            },
+        if (fornecedorRaw) {
+          const supplierName = String(fornecedorRaw);
+          let supplier = await prisma.supplier.findFirst({
+            where: { companyId, name: supplierName },
           });
-          supplierId = supplier?.id || null;
+          if (!supplier) {
+            supplier = await prisma.supplier.create({
+              data: { companyId, name: supplierName },
+            });
+          }
+          supplierId = supplier.id;
         }
 
         // Preparar dados do produto
-        const sku = row["SKU"] || `PROD-${Date.now()}-${i}`;
-        const costPrice = parseFloat(row["Preço de Custo"] || "0") || 0;
-        const salePrice = parseFloat(row["Preço de Venda"]) || 0;
+        const sku = String(skuRaw || "").trim() || `PROD-${Date.now()}-${i}`;
+        const costPrice = parseFloat(String(precoCusto)) || 0;
+        const salePrice = parseFloat(String(precoVenda)) || 0;
         const promoPrice = row["Preço Promocional"]
           ? parseFloat(row["Preço Promocional"])
           : null;
 
-        const stockControlled = row["Controle de Estoque"]
-          ? row["Controle de Estoque"].toLowerCase() === "sim" || row["Controle de Estoque"] === "1"
+        const stockControlled = controleEstoque
+          ? String(controleEstoque).toLowerCase() === "sim" || controleEstoque === "1" || controleEstoque === true
           : true;
 
-        const stockQty = parseInt(row["Quantidade em Estoque"] || "0") || 0;
-        const stockMin = parseInt(row["Estoque Mínimo"] || "0") || 0;
-        const stockMax = row["Estoque Máximo"]
-          ? parseInt(row["Estoque Máximo"])
-          : null;
+        const stockQty = parseInt(String(estoqueAtual)) || 0;
+        const stockMin = parseInt(String(estoqueMin)) || 0;
+        const stockMax = estoqueMax ? parseInt(String(estoqueMax)) : null;
 
-        const active = row["Ativo"]
-          ? row["Ativo"].toLowerCase() === "sim" || row["Ativo"] === "1"
+        const active = ativoRaw
+          ? String(ativoRaw).toLowerCase() === "sim" || ativoRaw === "1" || ativoRaw === true
           : true;
 
         const featured = row["Destaque"]
@@ -164,7 +188,7 @@ export async function POST(request: NextRequest) {
             companyId,
             OR: [
               { sku },
-              { name: row["Nome"] },
+              { name: nome },
             ],
           },
         });
@@ -174,9 +198,9 @@ export async function POST(request: NextRequest) {
           await prisma.product.update({
             where: { id: existingProduct.id },
             data: {
-              barcode: row["Código de Barras"] || null,
-              manufacturerCode: row["Código do Fabricante"] || null,
-              name: row["Nome"],
+              barcode: row["Código de Barras"] || row["Código GTIN"] || null,
+              manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
+              name: nome,
               description: row["Descrição"] || null,
               type,
               categoryId,
@@ -189,23 +213,23 @@ export async function POST(request: NextRequest) {
               stockQty,
               stockMin,
               stockMax,
-              ncm: row["NCM"] || null,
-              cest: row["CEST"] || null,
+              ncm: ncmRaw ? String(ncmRaw) : null,
+              cest: cestRaw ? String(cestRaw) : null,
               active,
               featured,
               launch,
             },
           });
-          results.updated.push(row["Nome"]);
+          results.updated.push(nome);
         } else {
           // Criar novo produto
           await prisma.product.create({
             data: {
               companyId,
               sku,
-              barcode: row["Código de Barras"] || null,
-              manufacturerCode: row["Código do Fabricante"] || null,
-              name: row["Nome"],
+              barcode: row["Código de Barras"] || row["Código GTIN"] || null,
+              manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
+              name: nome,
               description: row["Descrição"] || null,
               type,
               categoryId,
@@ -218,14 +242,14 @@ export async function POST(request: NextRequest) {
               stockQty,
               stockMin,
               stockMax,
-              ncm: row["NCM"] || null,
-              cest: row["CEST"] || null,
+              ncm: ncmRaw ? String(ncmRaw) : null,
+              cest: cestRaw ? String(cestRaw) : null,
               active,
               featured,
               launch,
             },
           });
-          results.created.push(row["Nome"]);
+          results.created.push(nome);
         }
 
         results.success++;
