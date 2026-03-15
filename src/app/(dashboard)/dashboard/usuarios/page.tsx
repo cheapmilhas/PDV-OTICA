@@ -82,9 +82,10 @@ function UsuariosPage() {
 
       const data = await res.json();
       const arr = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-      // Filtra localmente para mostrar apenas ADMIN, GERENTE, CAIXA, ATENDENTE (quem tem acesso real)
+      // Filtra localmente para mostrar usuários com acesso ao sistema
       const systemUsers = arr.filter((u: UserType) =>
-        ["ADMIN", "GERENTE", "CAIXA", "ATENDENTE"].includes(u.role)
+        ["ADMIN", "GERENTE", "VENDEDOR", "CAIXA", "ATENDENTE"].includes(u.role) &&
+        !u.email.endsWith("@funcionario.interno") // Exclui vendedores cadastrados via Funcionários
       );
       setUsers(systemUsers);
     } catch (error: any) {
@@ -214,6 +215,7 @@ function UsuariosPage() {
     const labels: Record<string, string> = {
       ADMIN: "Administrador",
       GERENTE: "Gerente",
+      VENDEDOR: "Vendedor",
       CAIXA: "Caixa",
       ATENDENTE: "Atendente",
     };
@@ -224,6 +226,7 @@ function UsuariosPage() {
     switch (role) {
       case "ADMIN": return "bg-red-100 text-red-700";
       case "GERENTE": return "bg-blue-100 text-blue-700";
+      case "VENDEDOR": return "bg-green-100 text-green-700";
       case "CAIXA": return "bg-yellow-100 text-yellow-700";
       case "ATENDENTE": return "bg-purple-100 text-purple-700";
       default: return "bg-gray-100 text-gray-700";
@@ -410,6 +413,7 @@ function UsuariosPage() {
                 <SelectContent>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
+                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
                 </SelectContent>
@@ -463,6 +467,7 @@ function UsuariosPage() {
                 <SelectContent>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
+                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
                 </SelectContent>
