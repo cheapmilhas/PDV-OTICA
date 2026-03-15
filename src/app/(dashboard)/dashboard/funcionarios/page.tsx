@@ -2,7 +2,7 @@
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect } from "react";
-import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
+import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -23,15 +23,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from "@/components/ui/dialog";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
-import { Search, Plus, Loader2, Edit, User, Phone, Percent, Building2 } from "lucide-react";
+import { Search, Plus, Loader2, Edit, User, Percent } from "lucide-react";
 import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -41,18 +34,16 @@ interface Employee {
   id: string;
   name: string;
   email: string;
-  role: "ADMIN" | "GERENTE" | "VENDEDOR" | "CAIXA" | "ATENDENTE";
+  role: string;
   active: boolean;
   defaultCommissionPercent: number | null;
   createdAt: string;
-  branches?: Array<{ branch: { id: string; name: string } }>;
 }
 
 function FuncionariosPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
-  const [roleFilter, setRoleFilter] = useState<string>("");
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -63,15 +54,12 @@ function FuncionariosPage() {
 
   const [form, setForm] = useState({
     name: "",
-    email: "",
-    password: "",
-    role: "" as string,
     defaultCommissionPercent: "" as string | number,
   });
 
   useEffect(() => {
     fetchEmployees();
-  }, [search, page, statusFilter, roleFilter]);
+  }, [search, page, statusFilter]);
 
   async function fetchEmployees() {
     setLoading(true);
@@ -79,13 +67,10 @@ function FuncionariosPage() {
       const params = new URLSearchParams({
         search,
         page: page.toString(),
-        pageSize: "20",
+        pageSize: "50",
         status: statusFilter,
+        role: "VENDEDOR",
       });
-
-      if (roleFilter) {
-        params.set("role", roleFilter);
-      }
 
       const res = await fetch(`/api/users?${params}`);
       if (!res.ok) throw new Error("Erro ao buscar funcionários");
@@ -103,7 +88,7 @@ function FuncionariosPage() {
 
   function openCreate() {
     setSelectedEmployee(null);
-    setForm({ name: "", email: "", password: "", role: "", defaultCommissionPercent: "" });
+    setForm({ name: "", defaultCommissionPercent: "" });
     setCreateDialogOpen(true);
   }
 
@@ -111,27 +96,29 @@ function FuncionariosPage() {
     setSelectedEmployee(emp);
     setForm({
       name: emp.name,
-      email: emp.email,
-      password: "",
-      role: emp.role,
       defaultCommissionPercent: emp.defaultCommissionPercent ?? "",
     });
     setEditDialogOpen(true);
   }
 
   async function handleCreate() {
-    if (!form.name || !form.email || !form.password || !form.role) {
-      toast.error("Preencha nome, email, senha e cargo");
+    if (!form.name.trim()) {
+      toast.error("Informe o nome do funcionário");
       return;
     }
 
     setSaving(true);
     try {
+      // Gera email e senha automáticos — funcionário não precisa de login
+      const slug = form.name.trim().toLowerCase().replace(/\s+/g, ".").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const autoEmail = `${slug}.${Date.now()}@funcionario.interno`;
+      const autoPassword = `func${Date.now()}`;
+
       const body: any = {
-        name: form.name,
-        email: form.email,
-        password: form.password,
-        role: form.role,
+        name: form.name.trim(),
+        email: autoEmail,
+        password: autoPassword,
+        role: "VENDEDOR",
         active: true,
       };
 
@@ -147,13 +134,10 @@ function FuncionariosPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        if (err?.error?.details && Array.isArray(err.error.details)) {
-          throw new Error(err.error.details.map((d: any) => d.message).join(", "));
-        }
-        throw new Error(err?.error?.message || "Erro ao criar funcionário");
+        throw new Error(err?.error?.message || "Erro ao cadastrar funcionário");
       }
 
-      toast.success("Funcionário cadastrado com sucesso!");
+      toast.success(`${form.name.trim()} cadastrado com sucesso!`);
       setCreateDialogOpen(false);
       fetchEmployees();
     } catch (error: any) {
@@ -169,17 +153,8 @@ function FuncionariosPage() {
     setSaving(true);
     try {
       const body: any = {
-        name: form.name,
-        role: form.role,
+        name: form.name.trim(),
       };
-
-      if (form.email !== selectedEmployee.email) {
-        body.email = form.email;
-      }
-
-      if (form.password) {
-        body.password = form.password;
-      }
 
       if (form.defaultCommissionPercent !== "" && form.defaultCommissionPercent !== null) {
         body.defaultCommissionPercent = Number(form.defaultCommissionPercent);
@@ -232,30 +207,6 @@ function FuncionariosPage() {
     return `${parts[0][0]}${parts[parts.length - 1]?.[0] || parts[0][1] || ""}`.toUpperCase();
   };
 
-  const getRoleLabel = (role: string) => {
-    const labels: Record<string, string> = {
-      ADMIN: "Administrador",
-      GERENTE: "Gerente",
-      VENDEDOR: "Vendedor",
-      CAIXA: "Caixa",
-      ATENDENTE: "Atendente",
-    };
-    return labels[role] || role;
-  };
-
-  const getRoleColor = (role: string) => {
-    switch (role) {
-      case "ADMIN": return "bg-red-100 text-red-700";
-      case "GERENTE": return "bg-blue-100 text-blue-700";
-      case "VENDEDOR": return "bg-green-100 text-green-700";
-      case "CAIXA": return "bg-yellow-100 text-yellow-700";
-      case "ATENDENTE": return "bg-purple-100 text-purple-700";
-      default: return "bg-gray-100 text-gray-700";
-    }
-  };
-
-  const totalEmployees = pagination?.total || 0;
-
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -263,36 +214,15 @@ function FuncionariosPage() {
         <div>
           <h1 className="text-3xl font-bold">Funcionários</h1>
           <p className="text-muted-foreground">
-            Gerencie a equipe da ótica
+            Vendedores e equipe da ótica
           </p>
         </div>
         <Can permission="users.create">
           <Button onClick={openCreate}>
             <Plus className="mr-2 h-4 w-4" />
-            Novo Funcionário
+            Novo Vendedor
           </Button>
         </Can>
-      </div>
-
-      {/* Summary */}
-      <div className="grid gap-4 grid-cols-2 md:grid-cols-4">
-        <Card>
-          <CardContent className="pt-6">
-            <div className="text-2xl font-bold">{totalEmployees}</div>
-            <p className="text-xs text-muted-foreground">Total</p>
-          </CardContent>
-        </Card>
-        {["VENDEDOR", "GERENTE", "CAIXA"].map((role) => {
-          const count = employees.filter((e) => e.role === role).length;
-          return (
-            <Card key={role}>
-              <CardContent className="pt-6">
-                <div className="text-2xl font-bold">{count}</div>
-                <p className="text-xs text-muted-foreground">{getRoleLabel(role)}s</p>
-              </CardContent>
-            </Card>
-          );
-        })}
       </div>
 
       {/* Filters */}
@@ -306,29 +236,6 @@ function FuncionariosPage() {
             className="pl-9"
           />
         </div>
-        <Select value={roleFilter || "todos"} onValueChange={(v) => { setRoleFilter(v === "todos" ? "" : v); setPage(1); }}>
-          <SelectTrigger className="w-full md:w-[160px]">
-            <SelectValue placeholder="Cargo" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="VENDEDOR">Vendedor</SelectItem>
-            <SelectItem value="GERENTE">Gerente</SelectItem>
-            <SelectItem value="CAIXA">Caixa</SelectItem>
-            <SelectItem value="ATENDENTE">Atendente</SelectItem>
-            <SelectItem value="ADMIN">Admin</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={statusFilter} onValueChange={(v: any) => { setStatusFilter(v); setPage(1); }}>
-          <SelectTrigger className="w-full md:w-[140px]">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="ativos">Ativos</SelectItem>
-            <SelectItem value="inativos">Inativos</SelectItem>
-            <SelectItem value="todos">Todos</SelectItem>
-          </SelectContent>
-        </Select>
       </div>
 
       {/* Loading */}
@@ -342,12 +249,12 @@ function FuncionariosPage() {
       {!loading && employees.length === 0 && (
         <EmptyState
           icon={<User className="h-12 w-12" />}
-          title="Nenhum funcionário encontrado"
-          description={search ? `Sem resultados para "${search}"` : "Cadastre seu primeiro funcionário"}
+          title="Nenhum vendedor cadastrado"
+          description={search ? `Sem resultados para "${search}"` : "Cadastre seus vendedores para aparecerem no PDV"}
           action={!search && (
             <Button onClick={openCreate}>
               <Plus className="mr-2 h-4 w-4" />
-              Novo Funcionário
+              Novo Vendedor
             </Button>
           )}
         />
@@ -361,7 +268,6 @@ function FuncionariosPage() {
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
-                  <TableHead>Cargo</TableHead>
                   <TableHead className="text-center">Comissão</TableHead>
                   <TableHead className="text-center">Status</TableHead>
                   <TableHead className="text-right">Ações</TableHead>
@@ -373,26 +279,17 @@ function FuncionariosPage() {
                     <TableCell>
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
-                          <AvatarFallback className={getRoleColor(emp.role)}>
+                          <AvatarFallback className="bg-green-100 text-green-700">
                             {getInitials(emp.name)}
                           </AvatarFallback>
                         </Avatar>
-                        <div>
-                          <p className="font-medium">{emp.name}</p>
-                          <p className="text-xs text-muted-foreground">{emp.email}</p>
-                        </div>
+                        <p className="font-medium">{emp.name}</p>
                       </div>
-                    </TableCell>
-                    <TableCell>
-                      <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(emp.role)}`}>
-                        {getRoleLabel(emp.role)}
-                      </span>
                     </TableCell>
                     <TableCell className="text-center">
                       {emp.defaultCommissionPercent ? (
                         <span className="inline-flex items-center gap-1 text-sm font-medium">
-                          <Percent className="h-3 w-3" />
-                          {emp.defaultCommissionPercent}
+                          {emp.defaultCommissionPercent}%
                         </span>
                       ) : (
                         <span className="text-muted-foreground text-sm">-</span>
@@ -435,13 +332,13 @@ function FuncionariosPage() {
         />
       )}
 
-      {/* Create Dialog */}
+      {/* Create Dialog — só nome e comissão */}
       <Dialog open={createDialogOpen} onOpenChange={setCreateDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Novo Funcionário</DialogTitle>
+            <DialogTitle>Novo Vendedor</DialogTitle>
             <DialogDescription>
-              Cadastre um novo membro da equipe
+              Cadastre um vendedor para aparecer no PDV
             </DialogDescription>
           </DialogHeader>
 
@@ -451,59 +348,22 @@ function FuncionariosPage() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
-                placeholder="Nome completo"
+                placeholder="Nome do vendedor"
+                autoFocus
               />
             </div>
 
-            <div className="grid gap-4 grid-cols-2">
-              <div className="space-y-2">
-                <Label>Email *</Label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  placeholder="email@exemplo.com"
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Senha *</Label>
-                <Input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Mínimo 6 caracteres"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 grid-cols-2">
-              <div className="space-y-2">
-                <Label>Cargo *</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Selecione" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="VENDEDOR">Vendedor</SelectItem>
-                    <SelectItem value="GERENTE">Gerente</SelectItem>
-                    <SelectItem value="CAIXA">Caixa</SelectItem>
-                    <SelectItem value="ATENDENTE">Atendente</SelectItem>
-                    <SelectItem value="ADMIN">Administrador</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Comissão (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value={form.defaultCommissionPercent}
-                  onChange={(e) => setForm({ ...form, defaultCommissionPercent: e.target.value })}
-                  placeholder="Ex: 5"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Comissão (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={form.defaultCommissionPercent}
+                onChange={(e) => setForm({ ...form, defaultCommissionPercent: e.target.value })}
+                placeholder="Ex: 5"
+              />
             </div>
           </div>
 
@@ -517,14 +377,11 @@ function FuncionariosPage() {
         </DialogContent>
       </Dialog>
 
-      {/* Edit Dialog */}
+      {/* Edit Dialog — só nome e comissão */}
       <Dialog open={editDialogOpen} onOpenChange={setEditDialogOpen}>
-        <DialogContent>
+        <DialogContent className="max-w-md">
           <DialogHeader>
-            <DialogTitle>Editar Funcionário</DialogTitle>
-            <DialogDescription>
-              Atualize as informações do funcionário
-            </DialogDescription>
+            <DialogTitle>Editar Vendedor</DialogTitle>
           </DialogHeader>
 
           <div className="space-y-4">
@@ -533,57 +390,21 @@ function FuncionariosPage() {
               <Input
                 value={form.name}
                 onChange={(e) => setForm({ ...form, name: e.target.value })}
+                autoFocus
               />
             </div>
 
-            <div className="grid gap-4 grid-cols-2">
-              <div className="space-y-2">
-                <Label>Email</Label>
-                <Input
-                  type="email"
-                  value={form.email}
-                  onChange={(e) => setForm({ ...form, email: e.target.value })}
-                />
-              </div>
-              <div className="space-y-2">
-                <Label>Nova Senha</Label>
-                <Input
-                  type="password"
-                  value={form.password}
-                  onChange={(e) => setForm({ ...form, password: e.target.value })}
-                  placeholder="Deixe vazio para manter"
-                />
-              </div>
-            </div>
-
-            <div className="grid gap-4 grid-cols-2">
-              <div className="space-y-2">
-                <Label>Cargo *</Label>
-                <Select value={form.role} onValueChange={(v) => setForm({ ...form, role: v })}>
-                  <SelectTrigger>
-                    <SelectValue />
-                  </SelectTrigger>
-                  <SelectContent>
-                    <SelectItem value="VENDEDOR">Vendedor</SelectItem>
-                    <SelectItem value="GERENTE">Gerente</SelectItem>
-                    <SelectItem value="CAIXA">Caixa</SelectItem>
-                    <SelectItem value="ATENDENTE">Atendente</SelectItem>
-                    <SelectItem value="ADMIN">Administrador</SelectItem>
-                  </SelectContent>
-                </Select>
-              </div>
-              <div className="space-y-2">
-                <Label>Comissão (%)</Label>
-                <Input
-                  type="number"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  value={form.defaultCommissionPercent}
-                  onChange={(e) => setForm({ ...form, defaultCommissionPercent: e.target.value })}
-                  placeholder="Ex: 5"
-                />
-              </div>
+            <div className="space-y-2">
+              <Label>Comissão (%)</Label>
+              <Input
+                type="number"
+                min="0"
+                max="100"
+                step="0.5"
+                value={form.defaultCommissionPercent}
+                onChange={(e) => setForm({ ...form, defaultCommissionPercent: e.target.value })}
+                placeholder="Ex: 5"
+              />
             </div>
           </div>
 
