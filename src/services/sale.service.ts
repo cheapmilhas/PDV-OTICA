@@ -191,7 +191,8 @@ export class SaleService {
    * - Pelo menos 1 pagamento
    */
   async create(data: CreateSaleDTO, companyId: string, userId: string) {
-    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes } = data;
+    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId } = data;
+    const effectiveSellerId = sellerUserId || userId;
 
     // Validação: pelo menos 1 item
     if (!items || items.length === 0) {
@@ -265,7 +266,7 @@ export class SaleService {
     for (const item of items) {
       const product = await prisma.product.findUnique({
         where: { id: item.productId },
-        select: { id: true, name: true, stockQty: true, companyId: true },
+        select: { id: true, name: true, stockQty: true, companyId: true, stockControlled: true },
       });
 
       if (!product) {
@@ -280,7 +281,8 @@ export class SaleService {
         );
       }
 
-      if (product.stockQty < item.qty) {
+      // Só valida estoque para produtos com controle de estoque ativo
+      if (product.stockControlled && product.stockQty < item.qty) {
         throw new AppError(
           ERROR_CODES.VALIDATION_ERROR,
           `Estoque insuficiente para ${product.name}. Disponível: ${product.stockQty}, Solicitado: ${item.qty}`,
@@ -354,7 +356,7 @@ export class SaleService {
           companyId,
           customerId,
           branchId,
-          sellerUserId: userId,
+          sellerUserId: effectiveSellerId,
           subtotal,
           discountTotal: discount,
           cashbackUsed,
@@ -563,9 +565,9 @@ export class SaleService {
         console.log(`✅ Cashback debitado com sucesso!`);
       }
 
-      // 7. Calcular e criar comissão do vendedor
+      // 7. Calcular e criar comissão do vendedor (usa vendedor selecionado, não quem logou)
       const seller = await tx.user.findUnique({
-        where: { id: userId },
+        where: { id: effectiveSellerId },
         select: { defaultCommissionPercent: true },
       });
 
@@ -579,7 +581,7 @@ export class SaleService {
         data: {
           companyId,
           saleId: newSale.id,
-          userId,
+          userId: effectiveSellerId,
           baseAmount,
           percentage: commissionPercent,
           commissionAmount,
