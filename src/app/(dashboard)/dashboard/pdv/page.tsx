@@ -37,6 +37,7 @@ interface Product {
   name: string;
   salePrice: number;
   stockQty: number;
+  stockControlled: boolean;
 }
 
 interface CartItem extends Product {
@@ -255,8 +256,8 @@ function PDVPage() {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
 
     if (itemExistente) {
-      // Verificar se tem estoque disponível
-      if (itemExistente.quantity >= produto.stockQty) {
+      // Verificar estoque apenas se produto tem controle de estoque
+      if (produto.stockControlled && itemExistente.quantity >= produto.stockQty) {
         toast.error(`Estoque insuficiente. Disponível: ${produto.stockQty}`);
         return;
       }
@@ -270,7 +271,7 @@ function PDVPage() {
       );
       toast.success(`+1 ${produto.name}`);
     } else {
-      if (produto.stockQty < 1) {
+      if (produto.stockControlled && produto.stockQty < 1) {
         toast.error("Produto sem estoque");
         return;
       }
@@ -294,8 +295,8 @@ function PDVPage() {
         if (item.id === produtoId) {
           const novaQuantidade = Math.max(1, item.quantity + delta);
 
-          // Verificar estoque
-          if (novaQuantidade > item.stockQty) {
+          // Verificar estoque (apenas se controlado)
+          if (item.stockControlled && novaQuantidade > item.stockQty) {
             toast.error(`Estoque insuficiente. Disponível: ${item.stockQty}`);
             return item;
           }
@@ -617,7 +618,7 @@ function PDVPage() {
                     variant="outline"
                     className="h-auto flex-col items-start gap-1 p-3"
                     onClick={() => adicionarProduto(produto)}
-                    disabled={produto.stockQty === 0}
+                    disabled={produto.stockControlled && produto.stockQty === 0}
                   >
                     <div className="flex w-full items-center justify-between">
                       <span className="font-mono text-xs text-muted-foreground">
@@ -827,7 +828,7 @@ function PDVPage() {
                               size="icon"
                               className="h-6 w-6"
                               onClick={() => alterarQuantidade(item.id, 1)}
-                              disabled={item.quantity >= item.stockQty}
+                              disabled={item.stockControlled && item.quantity >= item.stockQty}
                             >
                               <Plus className="h-3 w-3" />
                             </Button>
