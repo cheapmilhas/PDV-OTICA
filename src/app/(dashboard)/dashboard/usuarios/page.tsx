@@ -82,10 +82,9 @@ function UsuariosPage() {
 
       const data = await res.json();
       const arr = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-      // Filtra localmente para mostrar usuários com acesso ao sistema
+      // Filtra: só quem faz login no sistema (exclui vendedores)
       const systemUsers = arr.filter((u: UserType) =>
-        ["ADMIN", "GERENTE", "VENDEDOR", "CAIXA", "ATENDENTE"].includes(u.role) &&
-        !u.email.endsWith("@funcionario.interno") // Exclui vendedores cadastrados via Funcionários
+        ["ADMIN", "GERENTE", "CAIXA", "ATENDENTE"].includes(u.role)
       );
       setUsers(systemUsers);
     } catch (error: any) {
@@ -413,7 +412,6 @@ function UsuariosPage() {
                 <SelectContent>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
-                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
                 </SelectContent>
@@ -467,7 +465,6 @@ function UsuariosPage() {
                 <SelectContent>
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
-                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
                 </SelectContent>
