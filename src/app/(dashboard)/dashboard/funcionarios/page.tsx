@@ -563,6 +563,55 @@ function FuncionariosPage() {
                         <Button
                           variant="ghost"
                           size="sm"
+                          onClick={() => {
+                            handleViewDetails(user.id);
+                            // Abrir direto em modo edição
+                            setTimeout(() => handleStartEdit(), 500);
+                          }}
+                          title="Editar"
+                        >
+                          <Edit className="h-4 w-4" />
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          onClick={async () => {
+                            const newPass = prompt(`Nova senha para ${user.name}:\n(mínimo 6 caracteres)`);
+                            if (!newPass) return;
+                            if (newPass.length < 6) { toast.error("Senha deve ter pelo menos 6 caracteres"); return; }
+                            try {
+                              const res = await fetch(`/api/users/${user.id}`, {
+                                method: "PATCH",
+                                headers: { "Content-Type": "application/json" },
+                                body: JSON.stringify({ password: newPass }),
+                              });
+                              if (!res.ok) throw new Error();
+                              toast.success(`Senha de ${user.name} alterada!`);
+                            } catch {
+                              toast.error("Erro ao alterar senha");
+                            }
+                          }}
+                          title="Resetar Senha"
+                        >
+                          <Shield className="h-4 w-4" />
+                        </Button>
+                        {user.role !== "ADMIN" && (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="text-destructive hover:text-destructive"
+                            onClick={() => {
+                              if (!confirm(`Desativar "${user.name}"?`)) return;
+                              handleToggleStatus(user.id, user.active);
+                            }}
+                            title={user.active ? "Desativar" : "Ativar"}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        )}
+                        <Button
+                          variant="ghost"
+                          size="sm"
                           onClick={() => handleViewDetails(user.id)}
                           title="Ver Detalhes"
                         >
