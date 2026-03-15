@@ -181,6 +181,12 @@ const menuItems = [
         icon: BarChart3,
         permission: "reports.sales"
       },
+      {
+        name: "Comparativo Lojas",
+        href: "/dashboard/relatorios/comparativo-lojas",
+        icon: ArrowLeftRight,
+        permission: "reports.sales"
+      },
     ],
   },
   {

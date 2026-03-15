@@ -6,6 +6,7 @@ export interface CommissionsReportFilters {
   endDate: Date;
   userId?: string;
   status?: string;
+  branchId?: string;
 }
 
 export interface SellerCommissionData {
@@ -63,6 +64,7 @@ export class CommissionsService {
         gte: filters.startDate,
         lte: filters.endDate,
       },
+      ...(filters.branchId && { branchId: filters.branchId }),
     };
 
     if (filters.userId) {

@@ -9,6 +9,7 @@ import { CompanyNotes } from "./company-notes";
 import { CompanyUsers } from "./company-users";
 import { CompanyBranches } from "./company-branches";
 import { CompanyDataForm } from "./company-data-form";
+import { CompanyNetwork } from "./company-network";
 import { HealthBadge } from "@/components/health-badge";
 
 const STATUS_LABELS: Record<string, string> = {
@@ -484,6 +485,11 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
               ))}
             </div>
           )}
+        </TabPanel>
+
+        {/* TAB: REDE */}
+        <TabPanel tabId="rede">
+          <CompanyNetwork companyId={id} networkId={company.networkId} />
         </TabPanel>
       </CompanyTabs>
     </div>

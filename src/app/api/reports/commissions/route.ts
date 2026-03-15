@@ -24,11 +24,14 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const branchId = searchParams.get("branchId") || undefined;
+
     const filters = {
       startDate: parseISO(startDate),
       endDate: parseISO(endDate),
       userId: searchParams.get("userId") || undefined,
       status: searchParams.get("status") || undefined,
+      branchId: branchId && branchId !== "ALL" ? branchId : undefined,
     };
 
     // Validate date range (max 1 year)

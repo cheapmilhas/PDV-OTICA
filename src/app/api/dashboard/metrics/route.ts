@@ -244,6 +244,27 @@ export async function GET(request: Request) {
       take: 5,
     });
 
+    // Breakdown por branch (quando admin vê todas as lojas)
+    let salesTodayByBranch: Array<{ branchId: string; branchName: string; total: number; count: number }> = [];
+    if (!branchId) {
+      const activeBranches = await prisma.branch.findMany({
+        where: { companyId, active: true },
+        select: { id: true, name: true },
+      });
+      const byBranch = await prisma.sale.groupBy({
+        by: ["branchId"],
+        where: { companyId, createdAt: { gte: today }, status: "COMPLETED" },
+        _sum: { total: true },
+        _count: true,
+      });
+      salesTodayByBranch = byBranch.map((sb) => ({
+        branchId: sb.branchId,
+        branchName: activeBranches.find((b) => b.id === sb.branchId)?.name || "—",
+        total: Number(sb._sum.total || 0),
+        count: sb._count,
+      }));
+    }
+
     const metrics = {
       salesToday: Number(salesToday._sum.total || 0),
       salesYesterday: Number(salesYesterday._sum.total || 0),
@@ -263,6 +284,7 @@ export async function GET(request: Request) {
       osDelayed,
       osNearDeadline,
       osDelayedList,
+      salesTodayByBranch,
     };
 
     return NextResponse.json({ metrics });

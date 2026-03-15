@@ -30,6 +30,7 @@ import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import {
   BarChart,
   Bar,
@@ -108,6 +109,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function RelatorioComissoesPageContent() {
+  const { activeBranchId } = useBranchContext();
   const [startDate, setStartDate] = useState<Date>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
@@ -157,6 +159,7 @@ function RelatorioComissoesPageContent() {
 
       if (userId && userId !== "ALL") params.set("userId", userId);
       if (status && status !== "ALL") params.set("status", status);
+      if (activeBranchId && activeBranchId !== "ALL") params.set("branchId", activeBranchId);
 
       const res = await fetch(`/api/reports/commissions?${params}`);
       if (!res.ok) {

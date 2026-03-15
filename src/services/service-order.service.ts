@@ -96,6 +96,9 @@ export class ServiceOrderService {
         take,
         orderBy,
         include: {
+          branch: {
+            select: { id: true, name: true },
+          },
           customer: {
             select: { id: true, name: true, cpf: true, phone: true },
           },

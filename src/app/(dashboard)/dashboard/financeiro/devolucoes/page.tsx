@@ -32,6 +32,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { Textarea } from "@/components/ui/textarea";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import { EmptyState } from "@/components/shared/empty-state";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import toast from "react-hot-toast";
@@ -124,6 +125,8 @@ function RefundStatusBadge({ status }: { status: RefundStatus }) {
 // ---------- Page content ----------
 
 function DevolucoesPageContent() {
+  const { activeBranchId } = useBranchContext();
+
   // Search state
   const [searchTerm, setSearchTerm] = useState("");
   const [searchResults, setSearchResults] = useState<Sale[]>([]);
@@ -180,6 +183,9 @@ function DevolucoesPageContent() {
         status: "COMPLETED",
         pageSize: "5",
       });
+      if (activeBranchId && activeBranchId !== "ALL") {
+        params.set("branchId", activeBranchId);
+      }
 
       const res = await fetch(`/api/sales?${params}`);
       if (!res.ok) {

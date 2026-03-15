@@ -321,10 +321,12 @@ model Branch {
   reconciliationBatches ReconciliationBatch[]
 
   // Multi-loja: estoque por filial e transferências
-  branchStocks      BranchStock[]
-  transfersFrom     StockTransfer[] @relation("TransferFrom")
-  transfersTo       StockTransfer[] @relation("TransferTo")
-  originCustomers   Customer[]      @relation("BranchOriginCustomers")
+  branchStocks       BranchStock[]
+  transfersFrom      StockTransfer[] @relation("TransferFrom")
+  transfersTo        StockTransfer[] @relation("TransferTo")
+  originCustomers    Customer[]      @relation("BranchOriginCustomers")
+  prescriptions      Prescription[]
+  stockAdjustments   StockAdjustment[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -764,6 +766,9 @@ model Product {
   branchStocks       BranchStock[]
   transferItems      StockTransferItem[]
 
+  // Rede de lojas: compartilhamento entre empresas
+  sharedToNetwork    Boolean            @default(false) @map("shared_to_network")
+
   @@unique([companyId, sku])
   @@index([companyId, name])
   @@index([companyId, barcode])
@@ -837,6 +842,10 @@ model Prescription {
   createdByUserId  String?
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
+  // Multi-loja
+  branchId         String?             @map("branch_id")
+  branch           Branch?             @relation(fields: [branchId], references: [id])
+
   company          Company             @relation(fields: [companyId], references: [id])
   customer         Customer            @relation(fields: [customerId], references: [id])
   doctor           Doctor?             @relation(fields: [doctorId], references: [id])
@@ -846,6 +855,7 @@ model Prescription {
 
   @@index([companyId, customerId])
   @@index([customerId, expiresAt])
+  @@index([branchId])
 }
 
 model PrescriptionValues {
@@ -1671,6 +1681,10 @@ model StockAdjustment {
   rejectionReason  String?
   createdAt        DateTime              @default(now())
   updatedAt        DateTime              @updatedAt
+  // Multi-loja
+  branchId         String?               @map("branch_id")
+  branch           Branch?               @relation(fields: [branchId], references: [id])
+
   approvedBy       User?                 @relation("AdjustmentApprover", fields: [approvedByUserId], references: [id])
   company          Company               @relation(fields: [companyId], references: [id])
   createdBy        User                  @relation("AdjustmentCreator", fields: [createdByUserId], references: [id])
@@ -1678,6 +1692,7 @@ model StockAdjustment {
 
   @@index([companyId, status, createdAt])
   @@index([productId, createdAt])
+  @@index([branchId])
   @@index([createdByUserId])
   @@index([status, totalValue])
 }

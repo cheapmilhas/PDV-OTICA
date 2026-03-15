@@ -57,7 +57,7 @@ import { useBranchContext } from "@/hooks/use-branch-context";
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { activeBranchId } = useBranchContext();
+  const { activeBranchId, isAllBranches } = useBranchContext();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const [metrics, setMetrics] = useState({
     salesToday: 0,
@@ -78,6 +78,7 @@ export default function DashboardPage() {
     osDelayed: 0,
     osNearDeadline: 0,
     osDelayedList: [] as Array<{ id: string; number: number; promisedDate: string; customer: { name: string } }>,
+    salesTodayByBranch: [] as Array<{ branchId: string; branchName: string; total: number; count: number }>,
   });
   const [loading, setLoading] = useState(true);
 
@@ -310,6 +311,16 @@ export default function DashboardPage() {
             <p className="text-xs text-muted-foreground mt-1">
               {metrics.salesCount} vendas • Ticket: {formatCurrency(metrics.avgTicket)}
             </p>
+            {isAllBranches && metrics.salesTodayByBranch.length > 0 && (
+              <div className="mt-2 pt-2 border-t space-y-0.5">
+                {metrics.salesTodayByBranch.map((b) => (
+                  <div key={b.branchId} className="flex justify-between text-xs text-muted-foreground">
+                    <span>{b.branchName}</span>
+                    <span className="font-medium">{formatCurrency(b.total)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
           </CardContent>
         </Card>
 

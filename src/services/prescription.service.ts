@@ -95,10 +95,11 @@ export const prescriptionService = {
   /**
    * Listar receitas com paginação
    */
-  async list(companyId: string, page = 1, pageSize = 10, customerId?: string) {
+  async list(companyId: string, page = 1, pageSize = 10, customerId?: string, branchId?: string) {
     const where = {
       companyId,
       ...(customerId && { customerId }),
+      ...(branchId && { branchId }),
     };
 
     const [data, total] = await Promise.all([

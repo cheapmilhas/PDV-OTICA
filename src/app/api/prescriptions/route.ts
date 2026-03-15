@@ -18,11 +18,15 @@ export async function GET(request: NextRequest) {
       pageSize: searchParams.get("pageSize") || 10,
     });
 
+    const qBranchId = searchParams.get("branchId");
+    const branchId = qBranchId && qBranchId !== "ALL" ? qBranchId : undefined;
+
     const result = await prescriptionService.list(
       companyId,
       query.page,
       query.pageSize,
-      query.customerId
+      query.customerId,
+      branchId
     );
 
     return NextResponse.json({
