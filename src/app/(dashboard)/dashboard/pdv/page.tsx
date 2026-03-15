@@ -189,7 +189,6 @@ function PDVPage() {
         const params = new URLSearchParams({
           status: "ativos",
           pageSize: "50",
-          inStock: "true",
         });
 
         if (buscaProduto) {
@@ -250,7 +249,7 @@ function PDVPage() {
     return () => clearTimeout(debounce);
   }, [buscaCliente]);
 
-  const produtosDisponiveis = products.slice(0, 6);
+  const produtosDisponiveis = products.slice(0, 12);
 
   const adicionarProduto = (produto: Product) => {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
