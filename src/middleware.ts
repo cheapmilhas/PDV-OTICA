@@ -72,7 +72,8 @@ export async function middleware(request: NextRequest) {
   if (
     publicRoutes.includes(pathname) ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/public")
+    pathname.startsWith("/api/public") ||
+    pathname.startsWith("/api/debug-auth")
   ) {
     return NextResponse.next();
   }
