@@ -162,9 +162,13 @@ export async function POST(request: NextRequest) {
           ? parseFloat(row["Preço Promocional"])
           : null;
 
-        const stockControlled = controleEstoque
-          ? String(controleEstoque).toLowerCase() === "sim" || controleEstoque === "1" || controleEstoque === true
-          : true;
+        // Tipos que NÃO controlam estoque por padrão
+        const noStockTypes: string[] = ["OPHTHALMIC_LENS", "CONTACT_LENS", "SERVICE", "LENS_SERVICE"];
+        const stockControlled = noStockTypes.includes(type)
+          ? false
+          : controleEstoque
+            ? String(controleEstoque).toLowerCase() === "sim" || controleEstoque === "1" || controleEstoque === true
+            : true;
 
         const stockQty = parseInt(String(estoqueAtual)) || 0;
         const stockMin = parseInt(String(estoqueMin)) || 0;
