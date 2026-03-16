@@ -77,7 +77,9 @@ function FuncionariosPage() {
 
       const data = await res.json();
       const arr = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-      setEmployees(arr);
+      // Exclui usuários do sistema (@login) — só mostra vendedores reais
+      const filtered = arr.filter((e: Employee) => !e.email.endsWith("@login"));
+      setEmployees(filtered);
       setPagination(data.pagination);
     } catch (error: any) {
       toast.error("Erro ao carregar funcionários");
