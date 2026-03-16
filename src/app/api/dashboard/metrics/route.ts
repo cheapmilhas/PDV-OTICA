@@ -19,11 +19,23 @@ export async function GET(request: Request) {
     const branchFilter = branchId ? { branchId } : {};
 
     // Datas calculadas no fuso America/Sao_Paulo → UTC
-    const today = startOfLocalDay(new Date());
-    const yesterday = startOfLocalDay(addDays(new Date(), -1));
-    const startOfMonth = startOfLocalMonth();
-    const startOfLastMonth = startOfLocalMonth(addDays(startOfMonth, -1));
-    const endOfLastMonth = endOfLocalMonth(addDays(startOfMonth, -1));
+    // Usa try/catch para fallback robusto caso date-fns-tz falhe no edge
+    let today: Date, yesterday: Date, startOfMonth: Date, startOfLastMonth: Date, endOfLastMonth: Date;
+    try {
+      today = startOfLocalDay(new Date());
+      yesterday = startOfLocalDay(addDays(new Date(), -1));
+      startOfMonth = startOfLocalMonth();
+      startOfLastMonth = startOfLocalMonth(addDays(startOfMonth, -1));
+      endOfLastMonth = endOfLocalMonth(addDays(startOfMonth, -1));
+    } catch {
+      // Fallback: usar UTC direto (diferença de ~3h aceitável)
+      const now = new Date();
+      today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+      yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+      startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+      startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
+    }
 
     // Vendas de hoje
     const salesToday = await prisma.sale.aggregate({

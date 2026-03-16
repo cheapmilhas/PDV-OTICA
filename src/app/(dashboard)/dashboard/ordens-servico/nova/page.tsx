@@ -100,7 +100,14 @@ function NovaOrdemServicoPageContent() {
 
         if (branchesRes.ok) {
           const branchesData = await branchesRes.json();
-          setBranches(branchesData.data || []);
+          const branchList = branchesData.data || [];
+          setBranches(branchList);
+          // Auto-selecionar branch: usa a branch da sessão ou a primeira disponível
+          if (!formData.branchId && branchList.length > 0) {
+            const sessionBranch = session?.user?.branchId;
+            const match = branchList.find((b: any) => b.id === sessionBranch);
+            setFormData(prev => ({ ...prev, branchId: match?.id || branchList[0].id }));
+          }
         }
 
         if (productsRes.ok) {
