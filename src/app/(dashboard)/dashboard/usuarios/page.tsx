@@ -82,8 +82,11 @@ function UsuariosPage() {
 
       const data = await res.json();
       const arr = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-      // Exclui vendedores criados em Funcionários (email automático @funcionario.interno)
-      const systemUsers = arr.filter((u: UserType) => !u.email.endsWith("@funcionario.interno"));
+      // Mostra: quem não é vendedor OU quem foi criado via Usuários (@login)
+      // Exclui vendedores antigos (email real) e vendedores de Funcionários (@funcionario.interno)
+      const systemUsers = arr.filter((u: UserType) =>
+        u.role !== "VENDEDOR" || u.email.endsWith("@login")
+      );
       setUsers(systemUsers);
     } catch (error: any) {
       toast.error("Erro ao carregar usuários");
