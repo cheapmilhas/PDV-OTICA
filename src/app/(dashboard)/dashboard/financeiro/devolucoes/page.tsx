@@ -97,7 +97,7 @@ const REASON_LABELS: Record<RefundReason, string> = {
 
 const METHOD_LABELS: Record<RefundMethod, string> = {
   CASH: "Dinheiro",
-  CREDIT: "Crédito Loja",
+  CREDIT: "Crediário",
   PIX: "PIX",
 };
 

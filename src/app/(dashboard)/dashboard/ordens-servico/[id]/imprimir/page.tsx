@@ -7,6 +7,7 @@ import toast from "react-hot-toast";
 import { Loader2, Printer, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatDateBR } from "@/lib/date-utils";
 import Link from "next/link";
 
 export default function ImprimirOrdemServicoPage() {
@@ -330,7 +331,7 @@ export default function ImprimirOrdemServicoPage() {
             </div>
             <div className={`text-2xl font-black ${order.promisedDate ? "text-red-600" : "text-gray-400"}`}>
               {order.promisedDate
-                ? format(new Date(order.promisedDate), "dd/MM/yyyy", { locale: ptBR })
+                ? formatDateBR(order.promisedDate)
                 : "Não definido"}
             </div>
           </div>

@@ -143,7 +143,7 @@ function CaixaPage() {
       DEBIT_CARD: "Debito",
       PIX: "PIX",
       BOLETO: "Boleto",
-      STORE_CREDIT: "Credito Loja",
+      STORE_CREDIT: "Crediário",
       CHEQUE: "Cheque",
       AGREEMENT: "Convenio",
       OTHER: "Outro",

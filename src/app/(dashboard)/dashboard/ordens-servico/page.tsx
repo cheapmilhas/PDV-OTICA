@@ -23,6 +23,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatDateBR } from "@/lib/date-utils";
 import { useBranchContext } from "@/hooks/use-branch-context";
 
 // ===== TIPOS =====
@@ -160,7 +161,7 @@ function ModalEntrega({ order, onClose, onSuccess }: {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Prazo:</span>
               <span className={`font-medium ${order.isDelayed ? "text-red-600" : ""}`}>
-                {format(new Date(order.promisedDate), "dd/MM/yyyy", { locale: ptBR })}
+                {formatDateBR(order.promisedDate)}
                 {order.isDelayed && ` (${order.delayDays}d atrasada)`}
               </span>
             </div>
@@ -668,7 +669,7 @@ function OrdensServicoPage() {
                         )}
                         {order.promisedDate && (
                           <span className={`font-medium ${order.isDelayed && !["DELIVERED", "CANCELED"].includes(order.status) ? "text-red-600" : ""}`}>
-                            📅 Prazo: {format(new Date(order.promisedDate), "dd/MM/yyyy", { locale: ptBR })}
+                            📅 Prazo: {formatDateBR(order.promisedDate)}
                             {order.isDelayed && order.delayDays && !["DELIVERED", "CANCELED"].includes(order.status) && (
                               <span className="ml-1">({order.delayDays}d atrasada)</span>
                             )}

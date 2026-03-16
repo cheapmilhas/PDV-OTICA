@@ -91,3 +91,34 @@ export function getLocalHour(utcDate: Date | string): number {
   const local = toZonedTime(new Date(utcDate), TIMEZONE);
   return local.getHours();
 }
+
+/**
+ * Formata data UTC para exibição no fuso local.
+ * Evita o bug de datas "date-only" (T00:00:00Z) mostrarem dia anterior.
+ *
+ * Ex: "2026-03-23T00:00:00Z" → "23/03/2026" (em SP, sem cair pra 22/03)
+ */
+export function formatDateBR(utcDate: Date | string | null | undefined): string {
+  if (!utcDate) return "-";
+  const d = new Date(utcDate);
+  // Extrai dia/mês/ano da data UTC diretamente (ignora timezone)
+  const day = String(d.getUTCDate()).padStart(2, "0");
+  const month = String(d.getUTCMonth() + 1).padStart(2, "0");
+  const year = d.getUTCFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+/**
+ * Formata data+hora UTC para exibição no fuso local (America/Sao_Paulo).
+ * Usa quando a hora importa (ex: data de criação, hora do pagamento).
+ */
+export function formatDateTimeBR(utcDate: Date | string | null | undefined): string {
+  if (!utcDate) return "-";
+  const local = toZonedTime(new Date(utcDate), TIMEZONE);
+  const day = String(local.getDate()).padStart(2, "0");
+  const month = String(local.getMonth() + 1).padStart(2, "0");
+  const year = local.getFullYear();
+  const hours = String(local.getHours()).padStart(2, "0");
+  const minutes = String(local.getMinutes()).padStart(2, "0");
+  return `${day}/${month}/${year} ${hours}:${minutes}`;
+}

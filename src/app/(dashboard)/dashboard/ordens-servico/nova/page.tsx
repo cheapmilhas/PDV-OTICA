@@ -293,9 +293,10 @@ function NovaOrdemServicoPageContent() {
       const result = await res.json();
       console.log("✅ Ordem criada:", result);
 
-      toast.success("Ordem de serviço criada com sucesso!");
-      window.open(`/dashboard/ordens-servico/${result.data.id}/imprimir`, "_blank");
-      router.push("/dashboard/ordens-servico");
+      const osNumber = result.data.number || result.data.id.substring(0, 8);
+      toast.success(`OS #${osNumber} criada com sucesso!`);
+      // Redireciona para detalhes (impressão disponível lá se quiser)
+      router.push(`/dashboard/ordens-servico/${result.data.id}/detalhes`);
     } catch (error: any) {
       console.error("❌ Erro:", error);
       toast.error(error.message);

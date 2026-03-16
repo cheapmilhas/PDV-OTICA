@@ -19,6 +19,7 @@ import {
 import Link from "next/link";
 import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { formatDateBR } from "@/lib/date-utils";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
@@ -244,9 +245,7 @@ export default function DetalhesOrdemServicoPage() {
             {order.promisedDate ? (
               <div>
                 <p className="text-lg font-bold">
-                  {format(new Date(order.promisedDate), "dd/MM/yyyy", {
-                    locale: ptBR,
-                  })}
+                  {formatDateBR(order.promisedDate)}
                 </p>
                 {diasRestantes !== null && order.status !== "DELIVERED" && order.status !== "CANCELED" && (
                   <p

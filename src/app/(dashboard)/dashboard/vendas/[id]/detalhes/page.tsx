@@ -282,7 +282,7 @@ export default function DetalhesVendaPage() {
       CREDIT_CARD: "Crédito",
       PIX: "PIX",
       BANK_SLIP: "Boleto",
-      STORE_CREDIT: "Crédito Loja",
+      STORE_CREDIT: "Crediário",
     };
     return labels[method] || method;
   };
