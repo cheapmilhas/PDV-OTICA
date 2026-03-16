@@ -102,7 +102,7 @@ function UsuariosPage() {
     setSelectedUser(user);
     setForm({
       name: user.name,
-      email: user.email,
+      email: user.email.endsWith("@login") ? user.email.replace("@login", "") : user.email,
       password: "",
       role: user.role,
     });
@@ -117,7 +117,9 @@ function UsuariosPage() {
 
     setSaving(true);
     try {
-      const email = form.email.trim();
+      // Se não tem @, adiciona @login para o banco aceitar
+      const loginValue = form.email.trim();
+      const email = loginValue.includes("@") ? loginValue : `${loginValue.toLowerCase()}@login`;
 
       const body: any = {
         name: form.name.trim(),
@@ -158,8 +160,10 @@ function UsuariosPage() {
         role: form.role,
       };
 
-      if (form.email && form.email !== selectedUser.email) {
-        body.email = form.email.trim();
+      const editLogin = form.email.trim();
+      const editEmail = editLogin.includes("@") ? editLogin : `${editLogin.toLowerCase()}@login`;
+      if (editEmail !== selectedUser.email) {
+        body.email = editEmail;
       }
 
       if (form.password) {
@@ -301,7 +305,9 @@ function UsuariosPage() {
                       </div>
                     </TableCell>
                     <TableCell>
-                      <span className="text-sm text-muted-foreground">{user.email}</span>
+                      <span className="text-sm text-muted-foreground">
+                        {user.email.endsWith("@login") ? user.email.replace("@login", "") : user.email}
+                      </span>
                     </TableCell>
                     <TableCell>
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
@@ -399,11 +405,11 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Login (email) *</Label>
+              <Label>Login *</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
-                placeholder="Ex: pacajus@loja.com"
+                placeholder="Ex: pacajus"
               />
               <p className="text-xs text-muted-foreground">Usado para entrar no sistema</p>
             </div>
@@ -463,7 +469,7 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Login (email)</Label>
+              <Label>Login</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}

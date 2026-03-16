@@ -6,7 +6,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 
 const loginSchema = z.object({
-  email: z.string().email(),
+  email: z.string().min(1), // Aceita login ou email
   password: z.string().min(6),
 });
 
@@ -39,11 +39,16 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       },
       async authorize(credentials) {
         try {
-          const { email, password } = loginSchema.parse(credentials);
+          const { email: login, password } = loginSchema.parse(credentials);
 
-          // Buscar usuário no banco de dados
-          const user = await prisma.user.findUnique({
-            where: { email },
+          // Buscar por email OU por nome (login)
+          const user = await prisma.user.findFirst({
+            where: {
+              OR: [
+                { email: login },
+                { email: login.includes("@") ? login : `${login.toLowerCase()}@login` },
+              ],
+            },
             include: {
               company: true,
               branches: {
@@ -68,7 +73,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           );
 
           if (!isPasswordValid) {
-            console.log(`❌ Senha inválida para ${email}`);
+            console.log(`❌ Senha inválida para ${login}`);
             return null;
           }
 
@@ -76,7 +81,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const firstBranch = user.branches[0]?.branch;
 
           if (!firstBranch) {
-            console.log(`❌ Usuário ${email} não possui filial vinculada`);
+            console.log(`❌ Usuário ${login} não possui filial vinculada`);
             return null;
           }
 

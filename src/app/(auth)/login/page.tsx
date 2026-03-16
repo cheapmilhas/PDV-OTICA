@@ -68,7 +68,7 @@ export default function LoginPage() {
         toast({
           variant: "destructive",
           title: "Erro ao fazer login",
-          description: "Email ou senha incorretos",
+          description: "Login ou senha incorretos",
         });
       } else {
         // Redirecionar e forçar refresh da sessão
@@ -101,11 +101,11 @@ export default function LoginPage() {
         <CardContent>
           <form onSubmit={handleSubmit} className="space-y-4">
             <div className="space-y-2">
-              <Label htmlFor="email">Email</Label>
+              <Label htmlFor="email">Login</Label>
               <Input
                 id="email"
-                type="email"
-                placeholder="seu@email.com"
+                type="text"
+                placeholder="Seu login"
                 value={formData.email}
                 onChange={(e) => setFormData({ ...formData, email: e.target.value })}
                 disabled={isLoading}
