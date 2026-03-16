@@ -8,6 +8,8 @@ import {
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import bcrypt from "bcryptjs";
+import { prisma } from "@/lib/prisma";
 
 /**
  * GET /api/users/[id]
@@ -56,6 +58,50 @@ export async function PUT(
     );
 
     return successResponse(user);
+  } catch (error) {
+    return handleApiError(error);
+  }
+}
+
+/**
+ * PATCH /api/users/[id]
+ * Altera a senha de um usuário
+ */
+export async function PATCH(
+  request: Request,
+  { params }: { params: Promise<{ id: string }> }
+) {
+  try {
+    await requireAuth();
+    const companyId = await getCompanyId();
+    const { id } = await params;
+
+    const body = await request.json();
+    const { password } = body;
+
+    if (!password || password.length < 6) {
+      return NextResponse.json(
+        { error: { message: "Senha deve ter pelo menos 6 caracteres" } },
+        { status: 400 }
+      );
+    }
+
+    // Verificar se user pertence à empresa
+    const user = await prisma.user.findFirst({ where: { id, companyId } });
+    if (!user) {
+      return NextResponse.json(
+        { error: { message: "Usuário não encontrado" } },
+        { status: 404 }
+      );
+    }
+
+    const passwordHash = await bcrypt.hash(password, 10);
+    await prisma.user.update({
+      where: { id },
+      data: { passwordHash },
+    });
+
+    return successResponse({ message: "Senha alterada com sucesso" });
   } catch (error) {
     return handleApiError(error);
   }
