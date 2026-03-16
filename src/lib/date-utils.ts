@@ -35,8 +35,10 @@ export function toUTCFromLocal(localDate: Date | string): Date {
  * Use para datas "apenas dia" (sem hora) como vencimento, prazo de entrega, etc.
  */
 export function dateOnlyToUTC(dateStr: string): Date {
+  // Extrai apenas a parte YYYY-MM-DD (ignora hora se vier ISO completa)
+  const dateOnly = dateStr.includes("T") ? dateStr.split("T")[0] : dateStr;
   // Adiciona T12:00:00 no fuso local para garantir que não caia no dia anterior
-  return fromZonedTime(new Date(`${dateStr}T12:00:00`), TIMEZONE);
+  return fromZonedTime(new Date(`${dateOnly}T12:00:00`), TIMEZONE);
 }
 
 /**
