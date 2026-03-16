@@ -19,10 +19,14 @@ export async function GET(req: NextRequest) {
       return handleApiError(new Error("startDate e endDate são obrigatórios"));
     }
 
+    // Ajustar endDate para fim do dia (23:59:59.999) para incluir lançamentos do dia
+    const endOfDay = new Date(endDate);
+    endOfDay.setUTCHours(23, 59, 59, 999);
+
     const cashFlow = await getCashFlow(
       companyId,
       new Date(startDate),
-      new Date(endDate),
+      endOfDay,
       branchId || undefined,
       financeAccountId || undefined
     );

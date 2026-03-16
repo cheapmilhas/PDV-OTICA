@@ -19,10 +19,17 @@ export async function GET(req: NextRequest) {
     const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
+    // Ajustar endDate para fim do dia quando vem da query
+    let effectiveEnd = defaultEnd;
+    if (endDate) {
+      effectiveEnd = new Date(endDate);
+      effectiveEnd.setUTCHours(23, 59, 59, 999);
+    }
+
     const dashboard = await getFinanceDashboard(
       companyId,
       startDate ? new Date(startDate) : defaultStart,
-      endDate ? new Date(endDate) : defaultEnd,
+      effectiveEnd,
       branchId || undefined
     );
 
