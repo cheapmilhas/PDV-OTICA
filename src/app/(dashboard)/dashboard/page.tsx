@@ -55,6 +55,7 @@ import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { useRouter } from "next/navigation";
 import { useBranchContext } from "@/hooks/use-branch-context";
 
+// Dashboard resiliente — todas as APIs com safeFetch
 export default function DashboardPage() {
   const router = useRouter();
   const { activeBranchId, isAllBranches } = useBranchContext();
