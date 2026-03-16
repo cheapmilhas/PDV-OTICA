@@ -163,8 +163,8 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_VIEW, Permission.CUSTOMERS_EDIT,
     // Produtos (apenas visualizar)
     Permission.PRODUCTS_VIEW,
-    // Caixa (apenas visualizar)
-    Permission.CASH_SHIFT_VIEW,
+    // Caixa (abrir, fechar, visualizar)
+    Permission.CASH_SHIFT_VIEW, Permission.CASH_SHIFT_OPEN, Permission.CASH_SHIFT_CLOSE,
     // Cashback
     Permission.CASHBACK_VIEW,
     // Lembretes
@@ -173,8 +173,7 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     Permission.GOALS_VIEW,
     // Campanhas (apenas visualizar)
     Permission.CAMPAIGNS_VIEW,
-    // Configurações básicas
-    Permission.SETTINGS_VIEW,
+    // NÃO tem settings.view — vendedor não acessa configurações
   ],
 
   // Caixa - Foco em operações de caixa e vendas

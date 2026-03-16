@@ -11,11 +11,17 @@ export async function GET(request: Request) {
     const { searchParams } = new URL(request.url);
     const branchId = searchParams.get("branchId");
 
+    // Busca apenas vendedores reais (exclui logins do sistema como PACAJUS)
     const sellers = await prisma.user.findMany({
       where: {
         companyId,
         active: true,
-        role: { in: ["VENDEDOR", "GERENTE", "ADMIN"] },
+        role: "VENDEDOR",
+        // Exclui logins do sistema (@login) e funcionários internos (@funcionario.interno)
+        NOT: [
+          { email: { endsWith: "@login" } },
+          { email: { endsWith: "@funcionario.interno" } },
+        ],
         // Filtrar por branch se informado
         ...(branchId && branchId !== "ALL" && {
           branches: { some: { branchId } },
