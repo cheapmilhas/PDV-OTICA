@@ -106,47 +106,41 @@ export default function DashboardPage() {
       return bp ? `${base}${sep}${bp}` : base;
     };
 
+    // Helper para fetch seguro — retorna null se falhar
+    const safeFetch = async (url: string) => {
+      try {
+        const res = await fetch(url);
+        if (!res.ok) return null;
+        return await res.json();
+      } catch {
+        return null;
+      }
+    };
+
     const loadAllData = async () => {
       setLoading(true);
       try {
-        // Métricas
-        const metricsRes = await fetch(q('/api/dashboard/metrics'));
-        const metricsData = await metricsRes.json();
-        setMetrics(metricsData.metrics);
+        // Buscar tudo em paralelo para performance
+        const [metricsData, salesData, productsData, osData, salesChartData, topProductsData, paymentDistData] = await Promise.all([
+          safeFetch(q('/api/dashboard/metrics')),
+          safeFetch(q('/api/sales?pageSize=5&sortBy=createdAt&sortOrder=desc')),
+          safeFetch('/api/products?lowStock=true&pageSize=4'),
+          safeFetch(q('/api/service-orders?orderStatus=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3')),
+          safeFetch(q('/api/dashboard/sales-last-7-days')),
+          safeFetch(q('/api/dashboard/top-products')),
+          safeFetch(q('/api/dashboard/payment-distribution')),
+        ]);
 
-        // Vendas recentes (hoje)
-        const salesRes = await fetch(q('/api/sales?pageSize=5&sortBy=createdAt&sortOrder=desc'));
-        const salesData = await salesRes.json();
-        setRecentSales(salesData.data || []);
-
-        // Produtos com estoque baixo (compartilhado — NÃO filtra por branch)
-        const productsRes = await fetch('/api/products?lowStock=true&pageSize=4');
-        const productsData = await productsRes.json();
-        setLowStockProducts(productsData.data || []);
-
-        // Ordens de serviço urgentes
-        const osRes = await fetch(q('/api/service-orders?orderStatus=APPROVED&sortBy=promisedDate&sortOrder=asc&pageSize=3'));
-        const osData = await osRes.json();
-        setOsUrgentes(osData.data || []);
-
-        // Vendas dos últimos 7 dias (para gráfico)
-        const salesChartRes = await fetch(q('/api/dashboard/sales-last-7-days'));
-        const salesChartData = await salesChartRes.json();
-        setSalesChartData(salesChartData.data || []);
-
-        // Top 5 produtos mais vendidos (para gráfico)
-        const topProductsRes = await fetch(q('/api/dashboard/top-products'));
-        const topProductsData = await topProductsRes.json();
-        setTopProductsData(topProductsData.data || []);
-
-        // Distribuição de métodos de pagamento (para gráfico)
-        const paymentDistRes = await fetch(q('/api/dashboard/payment-distribution'));
-        const paymentDistData = await paymentDistRes.json();
-        setPaymentMethodsData(paymentDistData.data || []);
-
-        setLoading(false);
+        if (metricsData?.metrics) setMetrics(metricsData.metrics);
+        setRecentSales(salesData?.data || []);
+        setLowStockProducts(productsData?.data || []);
+        setOsUrgentes(osData?.data || []);
+        setSalesChartData(salesChartData?.data || []);
+        setTopProductsData(topProductsData?.data || []);
+        setPaymentMethodsData(paymentDistData?.data || []);
       } catch (err) {
         console.error('Erro ao carregar dados:', err);
+      } finally {
         setLoading(false);
       }
     };
