@@ -154,6 +154,19 @@ export class UserService {
       },
     });
 
+    // Vincular a TODAS as branches da empresa (necessário para login)
+    const branches = await prisma.branch.findMany({
+      where: { companyId, active: true },
+      select: { id: true },
+    });
+    for (const branch of branches) {
+      await prisma.userBranch.upsert({
+        where: { userId_branchId: { userId: user.id, branchId: branch.id } },
+        create: { userId: user.id, branchId: branch.id },
+        update: {},
+      });
+    }
+
     return user;
   }
 
