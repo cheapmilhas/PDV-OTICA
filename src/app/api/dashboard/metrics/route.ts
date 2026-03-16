@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { addDays } from "date-fns";
+import { startOfLocalDay, startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 export async function GET(request: Request) {
   try {
@@ -17,15 +18,12 @@ export async function GET(request: Request) {
     // Filtro condicional por branch (dados isolados)
     const branchFilter = branchId ? { branchId } : {};
 
-    const today = new Date();
-    today.setHours(0, 0, 0, 0);
-
-    const yesterday = new Date(today);
-    yesterday.setDate(yesterday.getDate() - 1);
-
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+    // Datas calculadas no fuso America/Sao_Paulo → UTC
+    const today = startOfLocalDay(new Date());
+    const yesterday = startOfLocalDay(addDays(new Date(), -1));
+    const startOfMonth = startOfLocalMonth();
+    const startOfLastMonth = startOfLocalMonth(addDays(startOfMonth, -1));
+    const endOfLastMonth = endOfLocalMonth(addDays(startOfMonth, -1));
 
     // Vendas de hoje
     const salesToday = await prisma.sale.aggregate({

@@ -5,6 +5,7 @@ import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
+import { dateOnlyToUTC } from "@/lib/date-utils";
 import { cashbackService } from "@/services/cashback.service";
 import { atomicStockDebit } from "@/services/stock.service";
 import { processaSaleForCampaigns, reverseBonusForSale } from "@/services/product-campaign.service";
@@ -507,7 +508,7 @@ export class SaleService {
           const installments = calculateInstallments(
             payment.amount,
             payment.installmentConfig.count,
-            new Date(payment.installmentConfig.firstDueDate),
+            dateOnlyToUTC(payment.installmentConfig.firstDueDate),
             payment.installmentConfig.interval
           );
 

@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { getLocalHour } from "@/lib/date-utils";
 import type {
   ProductReportQueryDTO,
   CustomerReportQueryDTO,
@@ -402,7 +403,8 @@ export const reportsService = {
 
       switch (query.groupBy) {
         case "hour":
-          key = getHours(sale.createdAt);
+          // Usa hora local (America/Sao_Paulo) em vez de UTC
+          key = getLocalHour(sale.createdAt);
           break;
         case "dayOfWeek":
           key = getDay(sale.createdAt);

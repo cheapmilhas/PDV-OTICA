@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { ServiceOrderStatus, Prisma } from "@prisma/client";
 import { differenceInCalendarDays } from "date-fns";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { dateOnlyToUTC } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } from "@/lib/validations/service-order.schema";
 import { getNextSequence } from "@/lib/counter";
@@ -199,7 +200,8 @@ export class ServiceOrderService {
           branchId,
           laboratoryId: laboratoryId || undefined,
           status: "DRAFT",
-          promisedDate: expectedDate ? new Date(expectedDate) : undefined,
+          // Usa dateOnlyToUTC para garantir que "23/03" em SP não vire "22/03" no banco
+          promisedDate: expectedDate ? dateOnlyToUTC(expectedDate) : undefined,
           createdByUserId: userId,
           notes: notes || undefined,
           prescriptionData: prescriptionData || undefined,
@@ -279,7 +281,7 @@ export class ServiceOrderService {
     await prisma.$transaction(async (tx) => {
       const updateData: any = {
         ...(laboratoryId !== undefined && { laboratoryId: laboratoryId || null }),
-        ...(expectedDate && { promisedDate: new Date(expectedDate) }),
+        ...(expectedDate && { promisedDate: dateOnlyToUTC(expectedDate) }),
         ...(hasPrescription && { prescriptionData: prescriptionData || null }),
         ...(notes !== undefined && { notes }),
         ...(labNotes !== undefined && { labNotes }),

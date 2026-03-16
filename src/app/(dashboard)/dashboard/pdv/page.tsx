@@ -256,24 +256,25 @@ function PDVPage() {
     const itemExistente = carrinho.find((item) => item.id === produto.id);
 
     if (itemExistente) {
-      // Verificar estoque apenas se produto tem controle de estoque
-      if (produto.stockControlled && itemExistente.quantity >= produto.stockQty) {
-        toast.error(`Estoque insuficiente. Disponível: ${produto.stockQty}`);
-        return;
+      const novaQtd = itemExistente.quantity + 1;
+
+      // Aviso de estoque insuficiente (não bloqueia — permite venda por encomenda)
+      if (produto.stockControlled && novaQtd > produto.stockQty) {
+        toast(`Estoque: ${produto.stockQty} un. Adicionando ${novaQtd}.`, { icon: "⚠️", duration: 3000 });
       }
 
       setCarrinho(
         carrinho.map((item) =>
           item.id === produto.id
-            ? { ...item, quantity: item.quantity + 1 }
+            ? { ...item, quantity: novaQtd }
             : item
         )
       );
       toast.success(`+1 ${produto.name}`);
     } else {
+      // Aviso se estoque zero (não bloqueia)
       if (produto.stockControlled && produto.stockQty < 1) {
-        toast.error("Produto sem estoque");
-        return;
+        toast(`${produto.name} sem estoque. Adicionando mesmo assim.`, { icon: "⚠️", duration: 3000 });
       }
 
       setCarrinho([...carrinho, { ...produto, quantity: 1 }]);
@@ -618,7 +619,7 @@ function PDVPage() {
                     variant="outline"
                     className="h-auto flex-col items-start gap-1 p-3"
                     onClick={() => adicionarProduto(produto)}
-                    disabled={produto.stockControlled && produto.stockQty === 0}
+                    // Não bloqueia — aviso é exibido no toast ao adicionar
                   >
                     <div className="flex w-full items-center justify-between">
                       <span className="font-mono text-xs text-muted-foreground">
@@ -806,8 +807,10 @@ function PDVPage() {
                               {" "}(-{formatCurrency(calcularDescontoItem(item))})
                             </p>
                           )}
-                          <p className="text-xs text-muted-foreground">
-                            Estoque: {item.stockQty}
+                          <p className={`text-xs ${item.stockControlled && item.quantity > item.stockQty ? "text-amber-600 font-medium" : "text-muted-foreground"}`}>
+                            {item.stockControlled && item.quantity > item.stockQty
+                              ? `⚠️ Estoque: ${item.stockQty} (pedido: ${item.quantity})`
+                              : `Estoque: ${item.stockQty}`}
                           </p>
                         </div>
                         <div className="flex flex-col items-end gap-2">
