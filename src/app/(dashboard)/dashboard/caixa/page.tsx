@@ -161,9 +161,16 @@ function CaixaPage() {
     .filter((m) => m.type === "SUPPLY" && m.direction === "IN")
     .reduce((sum, m) => sum + m.amount, 0);
 
+  // Saldo do caixa: apenas pagamentos à vista (exclui crediário e cartão crédito)
+  const methodsAPrazo = ["STORE_CREDIT", "CREDIT_CARD"];
   const valorAtual = movements.reduce((sum, m) => {
+    if (m.type === "SALE_PAYMENT" && methodsAPrazo.includes(m.method)) return sum; // Ignora a prazo
     return sum + (m.direction === "IN" ? m.amount : -m.amount);
   }, 0);
+  // Total de vendas a prazo (crediário + crédito) para exibição separada
+  const totalAPrazo = movements
+    .filter((m) => m.type === "SALE_PAYMENT" && m.direction === "IN" && methodsAPrazo.includes(m.method))
+    .reduce((sum, m) => sum + m.amount, 0);
 
   const caixaStatus = shift
     ? {
@@ -379,7 +386,7 @@ function CaixaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
               <div className="rounded-lg border bg-white p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                   <User className="h-4 w-4" />
@@ -404,10 +411,20 @@ function CaixaPage() {
               <div className="rounded-lg border bg-white p-4">
                 <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
                   <Wallet className="h-4 w-4" />
-                  <span>Valor Atual</span>
+                  <span>Saldo em Caixa</span>
                 </div>
                 <p className="text-xl font-bold text-green-600">{formatCurrency(caixaStatus.valorAtual)}</p>
               </div>
+              {totalAPrazo > 0 && (
+                <div className="rounded-lg border bg-white p-4">
+                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
+                    <CreditCard className="h-4 w-4" />
+                    <span>Vendas a Prazo</span>
+                  </div>
+                  <p className="text-xl font-bold text-amber-600">{formatCurrency(totalAPrazo)}</p>
+                  <p className="text-xs text-muted-foreground">Crediário / Cartão</p>
+                </div>
+              )}
             </div>
           </CardContent>
         </Card>

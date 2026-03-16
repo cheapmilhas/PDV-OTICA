@@ -66,12 +66,14 @@ function getCMVAccountCode(productType?: ProductType | null): string {
 function getPaymentDebitAccountCode(method: PaymentMethod): string {
   switch (method) {
     case "CASH":
-      return "1.1.01"; // Caixa
+      return "1.1.01"; // Caixa (dinheiro físico)
     case "PIX":
-      return "1.1.02"; // Bancos
+      return "1.1.02"; // Bancos (recebido na hora)
     case "DEBIT_CARD":
     case "CREDIT_CARD":
       return "1.1.05"; // Adquirente Cartão
+    case "STORE_CREDIT":
+      return "1.1.03"; // Contas a Receber (crediário — dinheiro ainda não recebido)
     default:
       return "1.1.02"; // Bancos (fallback)
   }
@@ -80,7 +82,11 @@ function getPaymentDebitAccountCode(method: PaymentMethod): string {
 /**
  * Mapeia PaymentMethod para tipo de FinanceAccount
  */
-function getFinanceAccountType(method: PaymentMethod): string {
+/**
+ * Mapeia PaymentMethod para tipo de FinanceAccount.
+ * Retorna null para STORE_CREDIT — crediário não entra em conta financeira.
+ */
+function getFinanceAccountType(method: PaymentMethod): string | null {
   switch (method) {
     case "CASH":
       return "CASH";
@@ -89,6 +95,8 @@ function getFinanceAccountType(method: PaymentMethod): string {
     case "DEBIT_CARD":
     case "CREDIT_CARD":
       return "CARD_ACQUIRER";
+    case "STORE_CREDIT":
+      return null; // Crediário não entra em conta financeira — será recebido depois
     default:
       return "BANK";
   }
@@ -331,7 +339,7 @@ export async function generateSaleEntries(
     const debitCode = getPaymentDebitAccountCode(payment.method);
     const debitAccount = await getChartAccountByCode(tx, companyId, debitCode);
     const faType = getFinanceAccountType(payment.method);
-    const financeAccount = await getFinanceAccountByType(tx, companyId, faType);
+    const financeAccount = faType ? await getFinanceAccountByType(tx, companyId, faType) : null;
 
     await tx.financeEntry.upsert({
       where: {
@@ -357,7 +365,8 @@ export async function generateSaleEntries(
         sourceId: payment.id,
         description: `Pagamento ${payment.method} - Venda #${saleId.substring(0, 8)}`,
         entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
-        cashDate: payment.receivedAt ?? sale.completedAt ?? new Date(),
+        // Crediário não tem cashDate (dinheiro não entrou ainda)
+        cashDate: payment.method === "STORE_CREDIT" ? null : (payment.receivedAt ?? sale.completedAt ?? new Date()),
       },
     });
 
@@ -514,7 +523,7 @@ export async function generateRefundEntries(
     const debitCode = getPaymentDebitAccountCode(mappedMethod);
     const contaDebito = await getChartAccountByCode(tx, companyId, debitCode);
     const faType = getFinanceAccountType(mappedMethod);
-    const financeAccount = await getFinanceAccountByType(tx, companyId, faType);
+    const financeAccount = faType ? await getFinanceAccountByType(tx, companyId, faType) : null;
 
     await tx.financeEntry.upsert({
       where: {
