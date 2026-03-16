@@ -99,29 +99,29 @@ export async function GET(request: Request) {
     const DEFAULT_MIN = 5;
 
     if (branchId) {
+      // LEFT JOIN: inclui produtos com e sem branch_stock
       const lowStockResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(*) as count
-        FROM "branch_stocks" bs
-        JOIN "Product" p ON p."id" = bs."product_id"
+        FROM "Product" p
+        LEFT JOIN "branch_stocks" bs ON bs."product_id" = p."id" AND bs."branch_id" = ${branchId}
         WHERE p."companyId" = ${companyId}
-          AND bs."branch_id" = ${branchId}
           AND p."stockControlled" = true
           AND p."active" = true
-          AND bs."quantity" <= COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN})
+          AND COALESCE(bs."quantity", p."stockQty") <= COALESCE(NULLIF(COALESCE(bs."min_stock", p."stockMin"), 0), ${DEFAULT_MIN})
       `;
       productsLowStock = Number(lowStockResult[0]?.count || 0);
 
       productsLowStockList = await prisma.$queryRaw`
-        SELECT p."id", p."name", bs."quantity" as "stockQty",
-               COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN}) as "stockMin"
-        FROM "branch_stocks" bs
-        JOIN "Product" p ON p."id" = bs."product_id"
+        SELECT p."id", p."name",
+               COALESCE(bs."quantity", p."stockQty") as "stockQty",
+               COALESCE(NULLIF(COALESCE(bs."min_stock", p."stockMin"), 0), ${DEFAULT_MIN}) as "stockMin"
+        FROM "Product" p
+        LEFT JOIN "branch_stocks" bs ON bs."product_id" = p."id" AND bs."branch_id" = ${branchId}
         WHERE p."companyId" = ${companyId}
-          AND bs."branch_id" = ${branchId}
           AND p."stockControlled" = true
           AND p."active" = true
-          AND bs."quantity" <= COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN})
-        ORDER BY (bs."quantity" - COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN})) ASC
+          AND COALESCE(bs."quantity", p."stockQty") <= COALESCE(NULLIF(COALESCE(bs."min_stock", p."stockMin"), 0), ${DEFAULT_MIN})
+        ORDER BY (COALESCE(bs."quantity", p."stockQty") - COALESCE(NULLIF(COALESCE(bs."min_stock", p."stockMin"), 0), ${DEFAULT_MIN})) ASC
         LIMIT 5
       `;
     } else {

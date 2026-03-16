@@ -506,7 +506,7 @@ export default function DetalhesVendaPage() {
 
       <div className="grid gap-6 md:grid-cols-2">
         {/* Cliente */}
-        <Card>
+        {sale.customer ? <Card>
           <CardHeader>
             <CardTitle className="flex items-center gap-2">
               <User className="h-5 w-5" />
@@ -531,7 +531,19 @@ export default function DetalhesVendaPage() {
               </div>
             )}
           </CardContent>
+        </Card> : (
+        <Card>
+          <CardHeader>
+            <CardTitle className="flex items-center gap-2">
+              <User className="h-5 w-5" />
+              Cliente
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-muted-foreground">Cliente não informado</p>
+          </CardContent>
         </Card>
+        )}
 
         {/* Informações da Venda */}
         <Card>

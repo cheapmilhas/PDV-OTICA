@@ -190,6 +190,8 @@ function PDVPage() {
         const params = new URLSearchParams({
           status: "ativos",
           pageSize: "50",
+          sortBy: "name",
+          sortOrder: "asc",
         });
 
         if (buscaProduto) {

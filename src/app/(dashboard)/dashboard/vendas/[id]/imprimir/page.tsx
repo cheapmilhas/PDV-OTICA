@@ -306,14 +306,14 @@ export default function ImprimirVendaPage() {
           <h2 className="font-bold text-lg mb-2 text-gray-800">Cliente</h2>
           <div className="text-sm space-y-1">
             <p>
-              <span className="font-semibold">Nome:</span> {sale.customer.name}
+              <span className="font-semibold">Nome:</span> {sale.customer?.name || "Cliente não informado"}
             </p>
-            {sale.customer.cpf && (
+            {sale.customer?.cpf && (
               <p>
                 <span className="font-semibold">CPF:</span> {sale.customer.cpf}
               </p>
             )}
-            {sale.customer.phone && (
+            {sale.customer?.phone && (
               <p>
                 <span className="font-semibold">Telefone:</span> {sale.customer.phone}
               </p>
