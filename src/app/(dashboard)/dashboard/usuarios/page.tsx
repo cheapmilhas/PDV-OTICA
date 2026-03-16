@@ -82,10 +82,8 @@ function UsuariosPage() {
 
       const data = await res.json();
       const arr = Array.isArray(data.data) ? data.data : (data.data ? [data.data] : []);
-      // Filtra: só quem faz login no sistema (exclui vendedores criados via Funcionários)
-      const systemUsers = arr.filter((u: UserType) =>
-        !u.email.endsWith("@funcionario.interno")
-      );
+      // Exclui VENDEDOR — vendedores ficam apenas em Funcionários
+      const systemUsers = arr.filter((u: UserType) => u.role !== "VENDEDOR");
       setUsers(systemUsers);
     } catch (error: any) {
       toast.error("Erro ao carregar usuários");
