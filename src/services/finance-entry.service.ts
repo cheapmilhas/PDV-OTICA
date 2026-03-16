@@ -1,5 +1,6 @@
 import { PrismaClient, ProductType, PaymentMethod } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
+import { getPaymentLabel } from "@/lib/payment-labels";
 
 type TransactionClient = Omit<
   PrismaClient,
@@ -363,7 +364,7 @@ export async function generateSaleEntries(
         financeAccountId: financeAccount?.id,
         sourceType: "SalePayment",
         sourceId: payment.id,
-        description: `Pagamento ${payment.method} - Venda #${saleId.substring(0, 8)}`,
+        description: `Pagamento ${getPaymentLabel(payment.method)} - Venda #${saleId.substring(0, 8)}`,
         entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
         // Crediário não tem cashDate (dinheiro não entrou ainda)
         cashDate: payment.method === "STORE_CREDIT" ? null : (payment.receivedAt ?? sale.completedAt ?? new Date()),
@@ -406,7 +407,7 @@ export async function generateSaleEntries(
           financeAccountId: financeAccount?.id,
           sourceType: "SalePayment",
           sourceId: payment.id,
-          description: `Taxa cartão ${payment.cardBrand || payment.method} - Venda #${saleId.substring(0, 8)}`,
+          description: `Taxa cartão ${payment.cardBrand || getPaymentLabel(payment.method)} - Venda #${saleId.substring(0, 8)}`,
           entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
           cashDate: payment.settlementDate ?? payment.receivedAt ?? new Date(),
         },
@@ -547,7 +548,7 @@ export async function generateRefundEntries(
         financeAccountId: financeAccount?.id,
         sourceType: "Refund",
         sourceId: refundId,
-        description: `Reembolso ${refund.refundMethod} - Devolução #${refundId.substring(0, 8)}`,
+        description: `Reembolso ${getPaymentLabel(refund.refundMethod || "OTHER")} - Devolução #${refundId.substring(0, 8)}`,
         entryDate: refund.completedAt ?? new Date(),
         cashDate: refund.completedAt ?? new Date(),
       },

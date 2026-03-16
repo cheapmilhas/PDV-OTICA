@@ -95,6 +95,9 @@ export async function GET(request: Request) {
     let productsLowStock: number;
     let productsLowStockList: Array<{ id: string; name: string; stockQty: number; stockMin: number }>;
 
+    // Estoque baixo padronizado: usa stockMin do produto ou 5 como fallback
+    const DEFAULT_MIN = 5;
+
     if (branchId) {
       const lowStockResult = await prisma.$queryRaw<Array<{ count: bigint }>>`
         SELECT COUNT(*) as count
@@ -104,22 +107,21 @@ export async function GET(request: Request) {
           AND bs."branch_id" = ${branchId}
           AND p."stockControlled" = true
           AND p."active" = true
-          AND bs."min_stock" > 0
-          AND bs."quantity" <= bs."min_stock"
+          AND bs."quantity" <= COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN})
       `;
       productsLowStock = Number(lowStockResult[0]?.count || 0);
 
       productsLowStockList = await prisma.$queryRaw`
-        SELECT p."id", p."name", bs."quantity" as "stockQty", bs."min_stock" as "stockMin"
+        SELECT p."id", p."name", bs."quantity" as "stockQty",
+               COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN}) as "stockMin"
         FROM "branch_stocks" bs
         JOIN "Product" p ON p."id" = bs."product_id"
         WHERE p."companyId" = ${companyId}
           AND bs."branch_id" = ${branchId}
           AND p."stockControlled" = true
           AND p."active" = true
-          AND bs."min_stock" > 0
-          AND bs."quantity" <= bs."min_stock"
-        ORDER BY (bs."quantity" - bs."min_stock") ASC
+          AND bs."quantity" <= COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN})
+        ORDER BY (bs."quantity" - COALESCE(NULLIF(bs."min_stock", 0), ${DEFAULT_MIN})) ASC
         LIMIT 5
       `;
     } else {
@@ -129,20 +131,19 @@ export async function GET(request: Request) {
         WHERE "companyId" = ${companyId}
           AND "stockControlled" = true
           AND "active" = true
-          AND "stockMin" > 0
-          AND "stockQty" <= "stockMin"
+          AND "stockQty" <= COALESCE(NULLIF("stockMin", 0), ${DEFAULT_MIN})
       `;
       productsLowStock = Number(lowStockResult[0]?.count || 0);
 
       productsLowStockList = await prisma.$queryRaw`
-        SELECT id, name, "stockQty", "stockMin"
+        SELECT id, name, "stockQty",
+               COALESCE(NULLIF("stockMin", 0), ${DEFAULT_MIN}) as "stockMin"
         FROM "Product"
         WHERE "companyId" = ${companyId}
           AND "stockControlled" = true
           AND "active" = true
-          AND "stockMin" > 0
-          AND "stockQty" <= "stockMin"
-        ORDER BY ("stockQty" - "stockMin") ASC
+          AND "stockQty" <= COALESCE(NULLIF("stockMin", 0), ${DEFAULT_MIN})
+        ORDER BY ("stockQty" - COALESCE(NULLIF("stockMin", 0), ${DEFAULT_MIN})) ASC
         LIMIT 5
       `;
     }
