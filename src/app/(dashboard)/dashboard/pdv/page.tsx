@@ -554,81 +554,75 @@ function PDVPage() {
       />
       {/* Modal Editar Preço / Desconto */}
       <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
-        <DialogContent className="max-w-sm">
-          <DialogHeader>
-            <DialogTitle>
-              {editModalMode === "price" ? "Editar Preço" : "Aplicar Desconto"}
-            </DialogTitle>
-            <DialogDescription>
-              {(() => {
-                const item = carrinho.find((i) => i.id === editModalItemId);
-                if (!item) return "";
-                const preco = item.customPrice || item.salePrice;
-                return editModalMode === "price"
-                  ? `${item.name} — Preço original: R$ ${item.salePrice.toFixed(2)}`
-                  : `${item.name} — R$ ${preco.toFixed(2)} × ${item.quantity}`;
-              })()}
-            </DialogDescription>
-          </DialogHeader>
+        <DialogContent className="max-w-xs p-4">
+          {(() => {
+            const item = carrinho.find((i) => i.id === editModalItemId);
+            if (!item) return null;
+            const preco = item.customPrice || item.salePrice;
+            return (
+              <>
+                <div className="space-y-1">
+                  <p className="font-semibold text-sm truncate">{item.name}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {editModalMode === "price"
+                      ? `Original: R$ ${item.salePrice.toFixed(2)}`
+                      : `R$ ${preco.toFixed(2)} × ${item.quantity} = R$ ${(preco * item.quantity).toFixed(2)}`}
+                  </p>
+                </div>
 
-          <div className="space-y-3 py-2">
-            {editModalMode === "discount" && (
-              <div className="flex gap-2">
-                <Button
-                  variant={editModalDiscountType === "FIXED" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setEditModalDiscountType("FIXED")}
-                >
-                  R$ Valor
-                </Button>
-                <Button
-                  variant={editModalDiscountType === "PERCENTAGE" ? "default" : "outline"}
-                  size="sm"
-                  className="flex-1"
-                  onClick={() => setEditModalDiscountType("PERCENTAGE")}
-                >
-                  % Percentual
-                </Button>
-              </div>
-            )}
+                {editModalMode === "discount" && (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button
+                      variant={editModalDiscountType === "FIXED" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditModalDiscountType("FIXED")}
+                    >
+                      R$ Valor
+                    </Button>
+                    <Button
+                      variant={editModalDiscountType === "PERCENTAGE" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditModalDiscountType("PERCENTAGE")}
+                    >
+                      % Percentual
+                    </Button>
+                  </div>
+                )}
 
-            <div className="space-y-1">
-              <Label>
-                {editModalMode === "price" ? "Novo preço (R$)" : editModalDiscountType === "PERCENTAGE" ? "Desconto (%)" : "Desconto (R$)"}
-              </Label>
-              <Input
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder={editModalMode === "price" ? "0,00" : "0"}
-                value={editModalValue}
-                onChange={(e) => setEditModalValue(e.target.value)}
-                autoFocus
-                onKeyDown={(e) => e.key === "Enter" && confirmarEdicaoModal()}
-              />
-            </div>
-          </div>
+                <Input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  placeholder="0"
+                  value={editModalValue}
+                  onChange={(e) => setEditModalValue(e.target.value)}
+                  autoFocus
+                  className="text-lg h-10 text-center font-semibold"
+                  onKeyDown={(e) => e.key === "Enter" && confirmarEdicaoModal()}
+                />
 
-          <DialogFooter className="gap-2">
-            {editModalMode === "discount" && (
-              <Button
-                variant="ghost"
-                onClick={() => {
-                  setEditModalValue("0");
-                  confirmarEdicaoModal();
-                }}
-              >
-                Remover Desconto
-              </Button>
-            )}
-            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
-              Cancelar
-            </Button>
-            <Button onClick={confirmarEdicaoModal}>
-              Confirmar
-            </Button>
-          </DialogFooter>
+                <div className="flex gap-2">
+                  {editModalMode === "discount" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground"
+                      onClick={() => { setEditModalValue("0"); confirmarEdicaoModal(); }}
+                    >
+                      Limpar
+                    </Button>
+                  )}
+                  <div className="flex-1" />
+                  <Button variant="outline" size="sm" onClick={() => setEditModalOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button size="sm" onClick={confirmarEdicaoModal}>
+                    OK
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
         </DialogContent>
       </Dialog>
 
