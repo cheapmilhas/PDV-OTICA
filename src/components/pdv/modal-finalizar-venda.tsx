@@ -239,8 +239,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
           </DialogDescription>
         </DialogHeader>
 
-        {/* Conteúdo Compacto SEM Scroll */}
-        <div className="flex-1 px-6 py-2 space-y-2 overflow-hidden">
+        {/* Conteúdo com scroll quando campos extras aparecem */}
+        <div className="flex-1 px-6 py-2 space-y-2 overflow-y-auto">
           {/* Resumo Compacto - Uma Linha */}
           <div className="rounded border p-1.5 bg-muted/50">
             <div className="flex items-center justify-around gap-2 text-sm">
