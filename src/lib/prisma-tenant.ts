@@ -23,7 +23,6 @@ const TENANT_TABLES = [
   "accountpayable",
   "accountreceivable",
   "cashshift",
-  "appointment",
   "loyaltypoint",
   "warranty",
   "dreport",

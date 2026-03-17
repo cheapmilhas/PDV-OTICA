@@ -170,12 +170,10 @@ export async function POST(req: NextRequest) {
       if (category === "customers" || category === "all") {
         const customerIds = (await tx.customer.findMany({ where: { companyId }, select: { id: true } })).map((c) => c.id);
         if (customerIds.length > 0) {
-          await tx.customerDependent.deleteMany({ where: { customerId: { in: customerIds } } });
           await tx.customerContact.deleteMany({ where: { customerId: { in: customerIds } } });
           await tx.customerCashback.deleteMany({ where: { customerId: { in: customerIds } } });
           await tx.loyaltyPoints.deleteMany({ where: { customerId: { in: customerIds } } });
           await tx.reminder.deleteMany({ where: { customerId: { in: customerIds } } });
-          await tx.appointment.deleteMany({ where: { customerId: { in: customerIds } } });
           await tx.customerReminder.deleteMany({ where: { customerId: { in: customerIds } } });
           await tx.crmContact.deleteMany({ where: { customerId: { in: customerIds } } });
           // Unlink sales and service orders
@@ -292,7 +290,6 @@ export async function POST(req: NextRequest) {
 
         // Reminders & Appointments
         await tx.reminder.deleteMany({ where: { branch: { companyId } } });
-        await tx.appointment.deleteMany({ where: { companyId } });
 
         // CRM data
         await tx.customerReminder.deleteMany({ where: { companyId } });

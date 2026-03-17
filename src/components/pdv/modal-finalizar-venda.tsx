@@ -377,10 +377,10 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                 )}
               </div>
 
-              {/* Dados do cartão - compacto em 2 linhas */}
+              {/* Dados do cartão — 2 linhas compactas */}
               {(selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD") && (
                 <div className="border rounded p-1.5 bg-muted/30 space-y-1">
-                  <div className="grid grid-cols-4 gap-1">
+                  <div className="grid grid-cols-2 gap-1">
                     <Select value={cardBrand} onValueChange={setCardBrand}>
                       <SelectTrigger className="h-6 text-[10px]">
                         <SelectValue placeholder="Bandeira" />
@@ -405,8 +405,11 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                         <SelectItem value="Getnet">Getnet</SelectItem>
                       </SelectContent>
                     </Select>
+                  </div>
+                  <div className="grid grid-cols-3 gap-1">
                     <Input placeholder="NSU" value={nsu} onChange={(e) => setNsu(e.target.value)} className="h-6 text-[10px]" />
-                    <Input placeholder="4 dígitos" maxLength={4} value={cardLastDigits} onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))} className="h-6 text-[10px]" />
+                    <Input placeholder="Cod. Autoriz." value={authorizationCode} onChange={(e) => setAuthorizationCode(e.target.value)} className="h-6 text-[10px]" />
+                    <Input placeholder="4 digitos" maxLength={4} value={cardLastDigits} onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))} className="h-6 text-[10px]" />
                   </div>
                 </div>
               )}

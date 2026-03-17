@@ -121,7 +121,6 @@ model Company {
   accountsPayable    AccountPayable[]
   accountsReceivable AccountReceivable[]
   agreements         Agreement[]
-  appointments       Appointment[]
   auditLogs          AuditLog[]
   branches           Branch[]
   brands             Brand[]
@@ -280,7 +279,6 @@ model Branch {
   updatedAt            DateTime            @updatedAt
   accountsPayable      AccountPayable[]
   accountsReceivable   AccountReceivable[]
-  appointments         Appointment[]
   auditLogs            AuditLog[]
   company              Company             @relation(fields: [companyId], references: [id])
   cashMovements        CashMovement[]
@@ -460,11 +458,9 @@ model Customer {
   updatedAt          DateTime               @updatedAt
   accountsReceivable AccountReceivable[]
   agreementBenefits  AgreementBeneficiary[]
-  appointments       Appointment[]
   company            Company                @relation(fields: [companyId], references: [id])
   cashback           CustomerCashback[]
   contacts           CustomerContact[]
-  dependents         CustomerDependent[]
   loyaltyPoints      LoyaltyPoints[]
   prescriptions      Prescription[]
   quotes             Quote[]
@@ -490,18 +486,6 @@ model Customer {
   @@index([originBranchId])
 }
 
-model CustomerDependent {
-  id           String    @id @default(cuid())
-  customerId   String
-  name         String
-  relationship String
-  birthDate    DateTime?
-  cpf          String?
-  createdAt    DateTime  @default(now())
-  customer     Customer  @relation(fields: [customerId], references: [id])
-
-  @@index([customerId])
-}
 
 model Doctor {
   id                       String         @id @default(cuid())
@@ -1426,40 +1410,6 @@ model WarrantyClaim {
   @@index([status])
 }
 
-model Appointment {
-  id                 String            @id @default(cuid())
-  companyId          String
-  branchId           String
-  customerId         String?
-  contactName        String?
-  contactPhone       String?
-  type               AppointmentType
-  status             AppointmentStatus @default(SCHEDULED)
-  scheduledAt        DateTime
-  scheduledEndAt     DateTime?
-  durationMinutes    Int               @default(30)
-  serviceOrderId     String?
-  assignedUserId     String?
-  confirmed          Boolean           @default(false)
-  confirmedAt        DateTime?
-  confirmationMethod String?
-  reminderSent       Boolean           @default(false)
-  reminderSentAt     DateTime?
-  checkinAt          DateTime?
-  checkoutAt         DateTime?
-  attendedByUserId   String?
-  notes              String?
-  internalNotes      String?
-  createdAt          DateTime          @default(now())
-  updatedAt          DateTime          @updatedAt
-  branch             Branch            @relation(fields: [branchId], references: [id])
-  company            Company           @relation(fields: [companyId], references: [id])
-  customer           Customer?         @relation(fields: [customerId], references: [id])
-
-  @@index([branchId, scheduledAt])
-  @@index([customerId, scheduledAt])
-  @@index([status, scheduledAt])
-}
 
 model Agreement {
   id                String                 @id @default(cuid())
@@ -2147,22 +2097,7 @@ enum CommissionStatus {
   CANCELED
 }
 
-enum AppointmentType {
-  PICKUP
-  ADJUSTMENT
-  CONSULTATION
-  RETURN
-  EXAM
-}
 
-enum AppointmentStatus {
-  SCHEDULED
-  CONFIRMED
-  IN_PROGRESS
-  COMPLETED
-  NO_SHOW
-  CANCELED
-}
 
 enum AgreementType {
   HEALTH_PLAN
