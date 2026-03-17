@@ -18,6 +18,7 @@ function getPaymentMethodLabel(method: string): string {
     DEBIT_CARD: "Cartão de Débito",
     PIX: "PIX",
     STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
     MIXED: "Misto",
   };
   return labels[method] || method;

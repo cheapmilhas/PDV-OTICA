@@ -68,6 +68,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CREDIT_CARD: "Cartão Crédito",
   BOLETO: "Boleto",
   STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
   CHEQUE: "Cheque",
   AGREEMENT: "Convênio",
   OTHER: "Outro",

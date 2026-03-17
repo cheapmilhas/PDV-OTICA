@@ -36,6 +36,7 @@ export async function GET() {
       PIX: "PIX",
       BANK_SLIP: "Boleto",
       STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
     };
 
     const data = paymentData.map(item => ({

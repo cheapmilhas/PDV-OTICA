@@ -24,6 +24,7 @@ const paymentNames: Record<string, string> = {
   CREDIT_CARD: "Crédito",
   BOLETO: "Boleto",
   STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
   CHEQUE: "Cheque",
   AGREEMENT: "Convênio",
   OTHER: "Outros",

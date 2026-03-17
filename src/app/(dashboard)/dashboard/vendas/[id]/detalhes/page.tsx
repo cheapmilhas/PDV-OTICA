@@ -283,6 +283,7 @@ export default function DetalhesVendaPage() {
       PIX: "PIX",
       BANK_SLIP: "Boleto",
       STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
     };
     return labels[method] || method;
   };

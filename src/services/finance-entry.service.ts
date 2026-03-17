@@ -74,7 +74,8 @@ function getPaymentDebitAccountCode(method: PaymentMethod): string {
     case "CREDIT_CARD":
       return "1.1.05"; // Adquirente Cartão
     case "STORE_CREDIT":
-      return "1.1.03"; // Contas a Receber (crediário — dinheiro ainda não recebido)
+    case "BALANCE_DUE":
+      return "1.1.03"; // Contas a Receber (crediário/saldo a receber — dinheiro ainda não recebido)
     default:
       return "1.1.02"; // Bancos (fallback)
   }
@@ -97,7 +98,8 @@ function getFinanceAccountType(method: PaymentMethod): string | null {
     case "CREDIT_CARD":
       return "CARD_ACQUIRER";
     case "STORE_CREDIT":
-      return null; // Crediário não entra em conta financeira — será recebido depois
+    case "BALANCE_DUE":
+      return null; // Crediário/Saldo a Receber não entra em conta financeira — será recebido depois
     default:
       return "BANK";
   }
@@ -366,8 +368,8 @@ export async function generateSaleEntries(
         sourceId: payment.id,
         description: `Pagamento ${getPaymentLabel(payment.method)} - Venda #${saleId.substring(0, 8)}`,
         entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
-        // Crediário não tem cashDate (dinheiro não entrou ainda)
-        cashDate: payment.method === "STORE_CREDIT" ? null : (payment.receivedAt ?? sale.completedAt ?? new Date()),
+        // Crediário/Saldo a Receber não tem cashDate (dinheiro não entrou ainda)
+        cashDate: (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") ? null : (payment.receivedAt ?? sale.completedAt ?? new Date()),
       },
     });
 

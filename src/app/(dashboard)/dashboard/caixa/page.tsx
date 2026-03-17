@@ -144,6 +144,7 @@ function CaixaPage() {
       PIX: "PIX",
       BOLETO: "Boleto",
       STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
       CHEQUE: "Cheque",
       AGREEMENT: "Convenio",
       OTHER: "Outro",
@@ -162,7 +163,7 @@ function CaixaPage() {
     .reduce((sum, m) => sum + m.amount, 0);
 
   // Saldo do caixa: apenas pagamentos à vista (exclui crediário e cartão crédito)
-  const methodsAPrazo = ["STORE_CREDIT", "CREDIT_CARD"];
+  const methodsAPrazo = ["STORE_CREDIT", "CREDIT_CARD", "BALANCE_DUE"];
   const valorAtual = movements.reduce((sum, m) => {
     if (m.type === "SALE_PAYMENT" && methodsAPrazo.includes(m.method)) return sum; // Ignora a prazo
     return sum + (m.direction === "IN" ? m.amount : -m.amount);

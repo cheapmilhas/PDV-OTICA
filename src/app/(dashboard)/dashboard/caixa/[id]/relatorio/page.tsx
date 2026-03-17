@@ -78,6 +78,7 @@ export default function RelatorioFechamentoCaixaPage() {
       PIX: "PIX",
       BOLETO: "Boleto",
       STORE_CREDIT: "Crediário",
+      BALANCE_DUE: "Saldo a Receber",
     };
     return labels[method] || method;
   };

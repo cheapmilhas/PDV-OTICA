@@ -8,6 +8,7 @@ export const PAYMENT_METHOD_LABELS: Record<string, string> = {
   CREDIT_CARD: "Cartão de Crédito",
   DEBIT_CARD: "Cartão de Débito",
   STORE_CREDIT: "Crediário",
+  BALANCE_DUE: "Saldo a Receber",
   BANK_TRANSFER: "Transferência Bancária",
   BOLETO: "Boleto",
   CHEQUE: "Cheque",

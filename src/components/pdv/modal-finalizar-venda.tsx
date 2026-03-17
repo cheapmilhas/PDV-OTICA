@@ -136,6 +136,14 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
       return; // Não adiciona ainda
     }
 
+    // Saldo a Receber: exige cliente vinculado (sem modal de parcelas)
+    if (selectedMethod === "BALANCE_DUE") {
+      if (!customerId) {
+        toast.error("Saldo a Receber exige um cliente vinculado");
+        return;
+      }
+    }
+
     const isCard = selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD";
     const newPayment: Payment = {
       id: Date.now().toString(),

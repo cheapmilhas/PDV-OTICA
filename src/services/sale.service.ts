@@ -6,6 +6,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { dateOnlyToUTC } from "@/lib/date-utils";
+import { addDays } from "date-fns";
 import { cashbackService } from "@/services/cashback.service";
 import { atomicStockDebit } from "@/services/stock.service";
 import { processaSaleForCampaigns, reverseBonusForSale } from "@/services/product-campaign.service";
@@ -292,7 +293,7 @@ export class SaleService {
       }
     }
 
-    // Validar crediário (cliente obrigatório + limite de crédito)
+    // Validar crediário e saldo a receber (cliente obrigatório)
     for (const payment of payments) {
       if (payment.method === "STORE_CREDIT") {
         validateStoreCredit(payment, customerId);
@@ -307,6 +308,17 @@ export class SaleService {
           throw new AppError(
             ERROR_CODES.VALIDATION_ERROR,
             creditCheck.message || "Limite de crédito excedido",
+            400
+          );
+        }
+      }
+
+      // Saldo a Receber: cliente obrigatório (paga ao receber o produto)
+      if (payment.method === "BALANCE_DUE") {
+        if (!customerId) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            "Saldo a Receber exige um cliente vinculado",
             400
           );
         }
@@ -530,6 +542,29 @@ export class SaleService {
           }
 
           console.log(`✅ Criadas ${installments.length} parcelas em AccountReceivable para venda ${newSale.id}`);
+        }
+
+        // 6b. Se for Saldo a Receber, criar 1 parcela em AccountReceivable
+        if (payment.method === "BALANCE_DUE") {
+          // Vencimento: +30 dias (pagamento na entrega do produto)
+          const dueDate = addDays(new Date(), 30);
+
+          await tx.accountReceivable.create({
+            data: {
+              companyId,
+              customerId: customerId!,
+              saleId: newSale.id,
+              description: `Saldo a Receber - Venda #${newSale.id.substring(0, 8)} - Pagamento na entrega`,
+              amount: payment.amount,
+              dueDate,
+              installmentNumber: 1,
+              totalInstallments: 1,
+              status: "PENDING",
+              createdByUserId: userId,
+            },
+          });
+
+          console.log(`✅ Saldo a Receber criado em AccountReceivable para venda ${newSale.id}`);
         }
       }
 

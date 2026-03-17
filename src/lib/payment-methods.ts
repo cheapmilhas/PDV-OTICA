@@ -5,6 +5,7 @@ import {
   Wallet,
   FileText,
   CheckSquare,
+  Clock,
   type LucideIcon,
 } from "lucide-react";
 
@@ -28,13 +29,14 @@ export const ALL_PAYMENT_METHODS: PaymentMethodConfig[] = [
   { id: "BOLETO", onboardingId: "boleto", label: "Boleto", icon: FileText, color: "bg-yellow-600" },
   { id: "CHEQUE", onboardingId: "cheque", label: "Cheque", icon: CheckSquare, color: "bg-teal-500" },
   { id: "STORE_CREDIT", onboardingId: "crediario", label: "Crediário", icon: Wallet, color: "bg-gray-500" },
+  { id: "BALANCE_DUE", onboardingId: "saldo_receber", label: "Saldo a Receber", icon: Clock, color: "bg-amber-500" },
 ];
 
 /**
  * Default payment methods when no company settings are configured.
  * Matches the onboarding default selection.
  */
-export const DEFAULT_PAYMENT_METHOD_IDS = ["CASH", "PIX", "DEBIT_CARD", "CREDIT_CARD", "STORE_CREDIT"];
+export const DEFAULT_PAYMENT_METHOD_IDS = ["CASH", "PIX", "DEBIT_CARD", "CREDIT_CARD", "STORE_CREDIT", "BALANCE_DUE"];
 
 /**
  * Maps onboarding lowercase IDs to Prisma enum IDs.
