@@ -11,6 +11,7 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import { Label } from "@/components/ui/label";
 import {
   Search,
   Barcode,
@@ -79,6 +80,13 @@ function PDVPage() {
   // Estados para dialog de carnê
   const [showCarneDialog, setShowCarneDialog] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+
+  // Modal de editar preço/desconto
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editModalMode, setEditModalMode] = useState<"price" | "discount">("price");
+  const [editModalItemId, setEditModalItemId] = useState<string>("");
+  const [editModalValue, setEditModalValue] = useState("");
+  const [editModalDiscountType, setEditModalDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
 
   // Carregar vendedores (filtrados pela branch ativa)
   useEffect(() => {
@@ -311,90 +319,81 @@ function PDVPage() {
     );
   };
 
+  // Abre modal de editar preço
   const editarPreco = (produtoId: string) => {
     const item = carrinho.find((i) => i.id === produtoId);
     if (!item) return;
-
-    const precoAtual = item.customPrice || item.salePrice;
-    const novoPreco = prompt(`Editar preço unitário de "${item.name}":\n\nPreço original: R$ ${item.salePrice.toFixed(2)}\nPreço atual: R$ ${precoAtual.toFixed(2)}`, precoAtual.toString());
-
-    if (novoPreco === null) return; // Cancelou
-
-    const preco = parseFloat(novoPreco);
-    if (isNaN(preco) || preco <= 0) {
-      toast.error("Preço inválido");
-      return;
-    }
-
-    setCarrinho(
-      carrinho.map((i) =>
-        i.id === produtoId ? { ...i, customPrice: preco } : i
-      )
-    );
-
-    toast.success(`Preço alterado para R$ ${preco.toFixed(2)}`);
+    setEditModalItemId(produtoId);
+    setEditModalMode("price");
+    setEditModalValue((item.customPrice || item.salePrice).toString());
+    setEditModalOpen(true);
   };
 
-  const resetarPreco = (produtoId: string) => {
-    setCarrinho(
-      carrinho.map((i) =>
-        i.id === produtoId ? { ...i, customPrice: undefined } : i
-      )
-    );
-    toast.success("Preço restaurado");
-  };
-
+  // Abre modal de desconto
   const editarDesconto = (produtoId: string) => {
     const item = carrinho.find((i) => i.id === produtoId);
     if (!item) return;
+    setEditModalItemId(produtoId);
+    setEditModalMode("discount");
+    setEditModalDiscountType(item.discountType || "FIXED");
+    setEditModalValue(item.discountValue ? item.discountValue.toString() : "");
+    setEditModalOpen(true);
+  };
 
-    const preco = item.customPrice || item.salePrice;
-    const tipoAtual = item.discountType || "FIXED";
-    const valorAtual = item.discountValue || 0;
+  const resetarPreco = (produtoId: string) => {
+    setCarrinho(carrinho.map((i) => i.id === produtoId ? { ...i, customPrice: undefined } : i));
+    toast.success("Preço restaurado");
+  };
 
-    const input = prompt(
-      `Desconto em "${item.name}":\n\nPreço unitário: R$ ${preco.toFixed(2)} × ${item.quantity} = R$ ${(preco * item.quantity).toFixed(2)}\n\nDigite o valor do desconto:\n- Número sem símbolo = R$ (ex: 10)\n- Número com % = percentual (ex: 10%)\n- 0 para remover desconto\n\nDesconto atual: ${valorAtual > 0 ? (tipoAtual === "PERCENTAGE" ? `${valorAtual}%` : `R$ ${valorAtual.toFixed(2)}`) : "Nenhum"}`,
-      valorAtual > 0 ? (tipoAtual === "PERCENTAGE" ? `${valorAtual}%` : valorAtual.toString()) : ""
-    );
+  // Confirma a edição do modal
+  const confirmarEdicaoModal = () => {
+    const item = carrinho.find((i) => i.id === editModalItemId);
+    if (!item) return;
 
-    if (input === null) return;
+    if (editModalMode === "price") {
+      const preco = parseFloat(editModalValue.replace(",", "."));
+      if (isNaN(preco) || preco <= 0) {
+        toast.error("Preço inválido");
+        return;
+      }
+      setCarrinho(carrinho.map((i) => i.id === editModalItemId ? { ...i, customPrice: preco } : i));
+      toast.success(`Preço alterado para R$ ${preco.toFixed(2)}`);
+    } else {
+      // Desconto
+      if (!editModalValue || editModalValue === "0") {
+        setCarrinho(carrinho.map((i) => i.id === editModalItemId ? { ...i, discountValue: undefined, discountType: undefined } : i));
+        toast.success("Desconto removido");
+        setEditModalOpen(false);
+        return;
+      }
 
-    if (input === "" || input === "0") {
+      const valor = parseFloat(editModalValue.replace(",", "."));
+      if (isNaN(valor) || valor < 0) {
+        toast.error("Valor inválido");
+        return;
+      }
+
+      const preco = item.customPrice || item.salePrice;
+      if (editModalDiscountType === "PERCENTAGE" && valor > 100) {
+        toast.error("Percentual máximo: 100%");
+        return;
+      }
+      if (editModalDiscountType === "FIXED" && valor > preco * item.quantity) {
+        toast.error("Desconto maior que o total do item");
+        return;
+      }
+
       setCarrinho(carrinho.map((i) =>
-        i.id === produtoId ? { ...i, discountValue: undefined, discountType: undefined } : i
+        i.id === editModalItemId
+          ? { ...i, discountValue: valor, discountType: editModalDiscountType }
+          : i
       ));
-      toast.success("Desconto removido");
-      return;
+
+      const calc = editModalDiscountType === "PERCENTAGE" ? (preco * item.quantity * valor) / 100 : valor;
+      toast.success(`Desconto de ${editModalDiscountType === "PERCENTAGE" ? `${valor}%` : `R$ ${valor.toFixed(2)}`} aplicado (-R$ ${calc.toFixed(2)})`);
     }
 
-    const isPercentage = input.includes("%");
-    const valor = parseFloat(input.replace("%", "").replace(",", "."));
-
-    if (isNaN(valor) || valor < 0) {
-      toast.error("Valor inválido");
-      return;
-    }
-
-    if (isPercentage && valor > 100) {
-      toast.error("Percentual não pode ser maior que 100%");
-      return;
-    }
-
-    if (!isPercentage && valor > preco * item.quantity) {
-      toast.error("Desconto não pode ser maior que o total do item");
-      return;
-    }
-
-    setCarrinho(carrinho.map((i) =>
-      i.id === produtoId
-        ? { ...i, discountValue: valor, discountType: isPercentage ? "PERCENTAGE" : "FIXED" }
-        : i
-    ));
-
-    const descontoCalculado = isPercentage
-      ? (preco * item.quantity * valor) / 100
-      : valor;
-    toast.success(`Desconto de ${isPercentage ? `${valor}%` : `R$ ${valor.toFixed(2)}`} aplicado (R$ ${descontoCalculado.toFixed(2)})`);
+    setEditModalOpen(false);
   };
 
   const calcularDescontoItem = (item: CartItem): number => {
@@ -553,6 +552,86 @@ function PDVPage() {
           toast.success(`${cliente.name} selecionado`);
         }}
       />
+      {/* Modal Editar Preço / Desconto */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-sm">
+          <DialogHeader>
+            <DialogTitle>
+              {editModalMode === "price" ? "Editar Preço" : "Aplicar Desconto"}
+            </DialogTitle>
+            <DialogDescription>
+              {(() => {
+                const item = carrinho.find((i) => i.id === editModalItemId);
+                if (!item) return "";
+                const preco = item.customPrice || item.salePrice;
+                return editModalMode === "price"
+                  ? `${item.name} — Preço original: R$ ${item.salePrice.toFixed(2)}`
+                  : `${item.name} — R$ ${preco.toFixed(2)} × ${item.quantity}`;
+              })()}
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 py-2">
+            {editModalMode === "discount" && (
+              <div className="flex gap-2">
+                <Button
+                  variant={editModalDiscountType === "FIXED" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditModalDiscountType("FIXED")}
+                >
+                  R$ Valor
+                </Button>
+                <Button
+                  variant={editModalDiscountType === "PERCENTAGE" ? "default" : "outline"}
+                  size="sm"
+                  className="flex-1"
+                  onClick={() => setEditModalDiscountType("PERCENTAGE")}
+                >
+                  % Percentual
+                </Button>
+              </div>
+            )}
+
+            <div className="space-y-1">
+              <Label>
+                {editModalMode === "price" ? "Novo preço (R$)" : editModalDiscountType === "PERCENTAGE" ? "Desconto (%)" : "Desconto (R$)"}
+              </Label>
+              <Input
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder={editModalMode === "price" ? "0,00" : "0"}
+                value={editModalValue}
+                onChange={(e) => setEditModalValue(e.target.value)}
+                autoFocus
+                onKeyDown={(e) => e.key === "Enter" && confirmarEdicaoModal()}
+              />
+            </div>
+          </div>
+
+          <DialogFooter className="gap-2">
+            {editModalMode === "discount" && (
+              <Button
+                variant="ghost"
+                onClick={() => {
+                  setEditModalValue("0");
+                  confirmarEdicaoModal();
+                }}
+              >
+                Remover Desconto
+              </Button>
+            )}
+            <Button variant="outline" onClick={() => setEditModalOpen(false)}>
+              Cancelar
+            </Button>
+            <Button onClick={confirmarEdicaoModal}>
+              Confirmar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
     <div className="flex flex-col h-[calc(100vh-3.5rem)] -m-4 md:-m-6">
       {/* Header compacto */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-background flex-shrink-0">
