@@ -788,15 +788,16 @@ export class SaleService {
         }
       }
 
-      // 3. Marcar pagamentos como cancelados e criar movimentos de REFUND
+      // 3. Marcar pagamentos como cancelados e criar REFUND apenas para pagamentos à vista
+      const methodsComCaixa = ["CASH", "PIX", "DEBIT_CARD"];
       for (const payment of sale.payments) {
         await tx.salePayment.update({
           where: { id: payment.id },
           data: { status: "VOIDED" },
         });
 
-        // Se tinha caixa aberto, criar movimento de REFUND para TODOS os métodos
-        if (openShift) {
+        // CashMovement REFUND apenas para métodos que geraram entrada no caixa
+        if (openShift && methodsComCaixa.includes(payment.method)) {
           await tx.cashMovement.create({
             data: {
               cashShiftId: openShift.id,
@@ -815,7 +816,18 @@ export class SaleService {
         }
       }
 
-      // 4. Cancelar comissões pendentes
+      // 4. Cancelar parcelas em Contas a Receber (crediário / saldo a receber)
+      await tx.accountReceivable.updateMany({
+        where: {
+          saleId: id,
+          status: { in: ["PENDING", "OVERDUE"] },
+        },
+        data: {
+          status: "CANCELED",
+        },
+      });
+
+      // 5. Cancelar comissões pendentes
       await tx.commission.updateMany({
         where: {
           saleId: id,
@@ -825,16 +837,96 @@ export class SaleService {
           status: "CANCELED",
         },
       });
+
+      // 6. Reverter lançamentos financeiros (FinanceEntry)
+      // Deleta todos os lançamentos vinculados a esta venda e seus pagamentos
+      await tx.financeEntry.deleteMany({
+        where: {
+          companyId: sale.companyId,
+          OR: [
+            { sourceType: "Sale", sourceId: id },
+            { sourceType: "SalePayment", sourceId: { in: sale.payments.map((p: any) => p.id) } },
+            { sourceType: "SaleItem", sourceId: { in: sale.items.map((i: any) => i.id) } },
+          ],
+        },
+      });
+
+      // 7. Reverter saldo das contas financeiras (FinanceAccount)
+      for (const payment of sale.payments) {
+        if (methodsComCaixa.includes(payment.method) || payment.method === "CREDIT_CARD") {
+          // Buscar a FinanceEntry que incrementou o saldo
+          // Para pagamentos à vista: decrementar o saldo que foi incrementado
+          const faType = payment.method === "CASH" ? "CASH" : payment.method === "PIX" ? "PIX" : "CARD_ACQUIRER";
+          const fa = await tx.financeAccount.findFirst({
+            where: { companyId: sale.companyId, type: faType as any, active: true },
+          });
+          if (fa) {
+            await tx.financeAccount.update({
+              where: { id: fa.id },
+              data: { balance: { decrement: Number(payment.amount) } },
+            });
+          }
+        }
+      }
     });
 
-    // 5. Reverter bônus de campanhas (se aplicável - fora da transação principal)
+    // 8. Reverter cashback (se cliente ganhou)
+    if (sale.customerId) {
+      try {
+        const cashbackMovement = await prisma.cashbackMovement.findFirst({
+          where: { saleId: id, type: "CREDIT" },
+          include: { customerCashback: true },
+        });
+        if (cashbackMovement) {
+          // Estornar o cashback ganho
+          await prisma.customerCashback.update({
+            where: { id: cashbackMovement.customerCashbackId },
+            data: {
+              balance: { decrement: Number(cashbackMovement.amount) },
+              totalEarned: { decrement: Number(cashbackMovement.amount) },
+            },
+          });
+          // Criar movimento de estorno
+          await prisma.cashbackMovement.create({
+            data: {
+              customerCashbackId: cashbackMovement.customerCashbackId,
+              type: "DEBIT",
+              amount: Number(cashbackMovement.amount),
+              saleId: id,
+              description: `Estorno cashback - Cancelamento venda #${id.substring(0, 8)}`,
+            },
+          });
+          console.log(`💸 Cashback estornado: R$ ${Number(cashbackMovement.amount)}`);
+        }
+      } catch (cashbackError) {
+        console.error(`❌ Erro ao estornar cashback (venda cancelada):`, cashbackError);
+      }
+    }
+
+    // 9. Cancelar lembrete pós-venda (se existir)
+    if (sale.customerId) {
+      try {
+        await prisma.customerReminder.updateMany({
+          where: {
+            companyId,
+            customerId: sale.customerId,
+            segment: "POST_SALE_30_DAYS",
+            status: { in: ["PENDING", "SCHEDULED"] },
+          },
+          data: { status: "CANCELLED" },
+        });
+      } catch {
+        // Sem lembrete — ignora
+      }
+    }
+
+    // 10. Reverter bônus de campanhas (se aplicável)
     try {
       console.log(`🎯 Revertendo bônus de campanhas para venda ${id}`);
       const reversalResult = await reverseBonusForSale(id, companyId);
       console.log(`✅ Bônus revertidos: ${reversalResult.reversed} entradas`);
     } catch (campaignError) {
-      // Log mas não falha o cancelamento se reversão der erro
-      console.error(`❌ Erro ao reverter bônus de campanhas (venda cancelada com sucesso):`, campaignError);
+      console.error(`❌ Erro ao reverter bônus de campanhas:`, campaignError);
     }
 
     return this.getById(id, companyId, true);
