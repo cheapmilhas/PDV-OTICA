@@ -288,7 +288,9 @@ export async function GET(request: Request) {
       salesTodayByBranch,
     };
 
-    return NextResponse.json({ metrics });
+    // Converter BigInt para Number antes de serializar (PostgreSQL $queryRaw retorna BigInt)
+    const safeMetrics = JSON.parse(JSON.stringify(metrics, (_, v) => typeof v === 'bigint' ? Number(v) : v));
+    return NextResponse.json({ metrics: safeMetrics });
   } catch (error: any) {
     console.error("Erro ao buscar métricas:", error?.message, error?.stack);
     return NextResponse.json(
