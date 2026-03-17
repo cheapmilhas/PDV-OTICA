@@ -239,8 +239,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
           </DialogDescription>
         </DialogHeader>
 
-        {/* Conteúdo com scroll quando campos extras aparecem */}
-        <div className="flex-1 px-6 py-2 space-y-2 overflow-y-auto">
+        {/* Conteúdo compacto — tudo visível sem scroll */}
+        <div className="flex-1 px-6 py-2 space-y-2 overflow-hidden">
           {/* Resumo Compacto - Uma Linha */}
           <div className="rounded border p-1.5 bg-muted/50">
             <div className="flex items-center justify-around gap-2 text-sm">
@@ -377,74 +377,36 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                 )}
               </div>
 
-              {/* Campos de cartão - visíveis apenas para débito/crédito */}
+              {/* Dados do cartão - compacto em 2 linhas */}
               {(selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD") && (
-                <div className="space-y-1.5 border rounded p-2 bg-muted/30">
-                  <Label className="text-[11px] font-semibold">Dados do Cartão</Label>
-                  <div className="grid grid-cols-2 gap-1.5">
-                    <div className="space-y-0.5">
-                      <Label htmlFor="cardBrand" className="text-[10px]">Bandeira</Label>
-                      <Select value={cardBrand} onValueChange={setCardBrand}>
-                        <SelectTrigger className="h-7 text-xs">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Visa">Visa</SelectItem>
-                          <SelectItem value="Mastercard">Mastercard</SelectItem>
-                          <SelectItem value="Elo">Elo</SelectItem>
-                          <SelectItem value="Amex">Amex</SelectItem>
-                          <SelectItem value="Hipercard">Hipercard</SelectItem>
-                          <SelectItem value="Outro">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-0.5">
-                      <Label htmlFor="acquirer" className="text-[10px]">Operadora</Label>
-                      <Select value={acquirer} onValueChange={setAcquirer}>
-                        <SelectTrigger className="h-7 text-xs">
-                          <SelectValue placeholder="Selecione" />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="Cielo">Cielo</SelectItem>
-                          <SelectItem value="Stone">Stone</SelectItem>
-                          <SelectItem value="Rede">Rede</SelectItem>
-                          <SelectItem value="PagSeguro">PagSeguro</SelectItem>
-                          <SelectItem value="Getnet">Getnet</SelectItem>
-                          <SelectItem value="Outro">Outro</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
-                    <div className="space-y-0.5">
-                      <Label htmlFor="nsu" className="text-[10px]">NSU</Label>
-                      <Input
-                        id="nsu"
-                        placeholder="N. transacao"
-                        value={nsu}
-                        onChange={(e) => setNsu(e.target.value)}
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                    <div className="space-y-0.5">
-                      <Label htmlFor="authorizationCode" className="text-[10px]">Cod. Autorizacao</Label>
-                      <Input
-                        id="authorizationCode"
-                        placeholder="Codigo"
-                        value={authorizationCode}
-                        onChange={(e) => setAuthorizationCode(e.target.value)}
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                    <div className="space-y-0.5 col-span-2">
-                      <Label htmlFor="cardLastDigits" className="text-[10px]">Ultimos 4 digitos</Label>
-                      <Input
-                        id="cardLastDigits"
-                        placeholder="0000"
-                        maxLength={4}
-                        value={cardLastDigits}
-                        onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))}
-                        className="h-7 text-xs w-24"
-                      />
-                    </div>
+                <div className="border rounded p-1.5 bg-muted/30 space-y-1">
+                  <div className="grid grid-cols-4 gap-1">
+                    <Select value={cardBrand} onValueChange={setCardBrand}>
+                      <SelectTrigger className="h-6 text-[10px]">
+                        <SelectValue placeholder="Bandeira" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Visa">Visa</SelectItem>
+                        <SelectItem value="Mastercard">Master</SelectItem>
+                        <SelectItem value="Elo">Elo</SelectItem>
+                        <SelectItem value="Amex">Amex</SelectItem>
+                        <SelectItem value="Hipercard">Hiper</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Select value={acquirer} onValueChange={setAcquirer}>
+                      <SelectTrigger className="h-6 text-[10px]">
+                        <SelectValue placeholder="Operadora" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Cielo">Cielo</SelectItem>
+                        <SelectItem value="Stone">Stone</SelectItem>
+                        <SelectItem value="Rede">Rede</SelectItem>
+                        <SelectItem value="PagSeguro">PagSeg</SelectItem>
+                        <SelectItem value="Getnet">Getnet</SelectItem>
+                      </SelectContent>
+                    </Select>
+                    <Input placeholder="NSU" value={nsu} onChange={(e) => setNsu(e.target.value)} className="h-6 text-[10px]" />
+                    <Input placeholder="4 dígitos" maxLength={4} value={cardLastDigits} onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))} className="h-6 text-[10px]" />
                   </div>
                 </div>
               )}
