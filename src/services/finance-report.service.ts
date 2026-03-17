@@ -307,15 +307,22 @@ export async function getFinanceDashboard(
   const sellerIds = topSellers.map((s) => s.sellerUserId);
   const sellers = await prisma.user.findMany({
     where: { id: { in: sellerIds } },
-    select: { id: true, name: true },
+    select: { id: true, name: true, email: true, role: true },
   });
 
-  const topSellersData = topSellers.map((s) => ({
-    userId: s.sellerUserId,
-    name: sellers.find((u) => u.id === s.sellerUserId)?.name || "Desconhecido",
-    totalSales: Number(s._sum.total || 0),
-    salesCount: s._count,
-  }));
+  // Exclui logins do sistema (Admin, PACAJUS) — mostra só vendedores reais
+  const topSellersData = topSellers
+    .map((s) => {
+      const seller = sellers.find((u) => u.id === s.sellerUserId);
+      if (seller?.email?.endsWith("@login") || seller?.role === "ADMIN") return null;
+      return {
+        userId: s.sellerUserId,
+        name: seller?.name || "Desconhecido",
+        totalSales: Number(s._sum.total || 0),
+        salesCount: s._count,
+      };
+    })
+    .filter(Boolean);
 
   // Saldos das contas financeiras
   const accountBalances = await prisma.financeAccount.findMany({

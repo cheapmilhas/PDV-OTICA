@@ -245,7 +245,7 @@ export const goalsService = {
     const userIds = salesByUser.map((s) => s.sellerUserId).filter(Boolean) as string[];
     const users = await prisma.user.findMany({
       where: { id: { in: userIds } },
-      select: { id: true, name: true, email: true },
+      select: { id: true, name: true, email: true, role: true },
     });
 
     // Total de vendas da filial
@@ -254,10 +254,15 @@ export const goalsService = {
       0
     );
 
-    // Montar ranking de vendedores
+    // Montar ranking — exclui logins do sistema (Admin, PACAJUS, etc.)
+    // Mostra apenas vendedores reais (role VENDEDOR com email real)
     const ranking = salesByUser
       .map((sale) => {
         const user = users.find((u) => u.id === sale.sellerUserId);
+        // Excluir logins do sistema do ranking
+        if (user?.email?.endsWith("@login") || user?.role === "ADMIN") {
+          return null;
+        }
         const sellerGoal = goal?.sellerGoals.find((sg) => sg.userId === sale.sellerUserId);
         const totalSold = Number(sale._sum?.total || 0);
         const goalAmount = sellerGoal ? Number(sellerGoal.goalAmount) : 0;
@@ -274,7 +279,8 @@ export const goalsService = {
           goalAchieved: totalSold >= goalAmount && goalAmount > 0,
         };
       })
-      .sort((a, b) => b.totalSales - a.totalSales);
+      .filter(Boolean)
+      .sort((a, b) => b!.totalSales - a!.totalSales) as any[];
 
     // Progresso da filial
     const branchGoal = goal ? Number(goal.branchGoal) : 0;
