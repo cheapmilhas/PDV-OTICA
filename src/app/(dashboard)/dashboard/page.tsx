@@ -60,7 +60,7 @@ export default function DashboardPage() {
   const router = useRouter();
   const { activeBranchId, isAllBranches } = useBranchContext();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
-  const [metrics, setMetrics] = useState({
+  const defaultMetrics = {
     salesToday: 0,
     salesYesterday: 0,
     salesMonth: 0,
@@ -80,7 +80,8 @@ export default function DashboardPage() {
     osNearDeadline: 0,
     osDelayedList: [] as Array<{ id: string; number: number; promisedDate: string; customer: { name: string } }>,
     salesTodayByBranch: [] as Array<{ branchId: string; branchName: string; total: number; count: number }>,
-  });
+  };
+  const [metrics, setMetrics] = useState(defaultMetrics);
   const [loading, setLoading] = useState(true);
 
   // Verificar se precisa completar onboarding
@@ -137,7 +138,8 @@ export default function DashboardPage() {
           safeFetch(q('/api/dashboard/payment-distribution')),
         ]);
 
-        if (metricsData?.metrics) setMetrics(metricsData.metrics);
+        // Mescla com defaults para garantir que nenhum campo fique undefined
+        if (metricsData?.metrics) setMetrics(prev => ({ ...prev, ...metricsData.metrics }));
         setRecentSales(salesData?.data || []);
         setLowStockProducts(productsData?.data || []);
         setOsUrgentes(osData?.data || []);
