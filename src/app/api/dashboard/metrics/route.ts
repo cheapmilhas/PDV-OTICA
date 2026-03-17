@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { addDays } from "date-fns";
-import { startOfLocalDay, startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 export async function GET(request: Request) {
   try {
@@ -18,24 +17,16 @@ export async function GET(request: Request) {
     // Filtro condicional por branch (dados isolados)
     const branchFilter = branchId ? { branchId } : {};
 
-    // Datas calculadas no fuso America/Sao_Paulo → UTC
-    // Usa try/catch para fallback robusto caso date-fns-tz falhe no edge
-    let today: Date, yesterday: Date, startOfMonth: Date, startOfLastMonth: Date, endOfLastMonth: Date;
-    try {
-      today = startOfLocalDay(new Date());
-      yesterday = startOfLocalDay(addDays(new Date(), -1));
-      startOfMonth = startOfLocalMonth();
-      startOfLastMonth = startOfLocalMonth(addDays(startOfMonth, -1));
-      endOfLastMonth = endOfLocalMonth(addDays(startOfMonth, -1));
-    } catch {
-      // Fallback: usar UTC direto (diferença de ~3h aceitável)
-      const now = new Date();
-      today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-      yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
-      startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-      startOfLastMonth = new Date(now.getFullYear(), now.getMonth() - 1, 1);
-      endOfLastMonth = new Date(now.getFullYear(), now.getMonth(), 0, 23, 59, 59);
-    }
+    // Datas: cálculo simples com offset UTC-3 (São Paulo)
+    // Evita dependência de date-fns-tz no serverless
+    const now = new Date();
+    const spOffset = -3 * 60 * 60 * 1000; // UTC-3
+    const nowSP = new Date(now.getTime() + spOffset);
+    const today = new Date(Date.UTC(nowSP.getUTCFullYear(), nowSP.getUTCMonth(), nowSP.getUTCDate()) - spOffset);
+    const yesterday = new Date(today.getTime() - 24 * 60 * 60 * 1000);
+    const startOfMonth = new Date(Date.UTC(nowSP.getUTCFullYear(), nowSP.getUTCMonth(), 1) - spOffset);
+    const startOfLastMonth = new Date(Date.UTC(nowSP.getUTCFullYear(), nowSP.getUTCMonth() - 1, 1) - spOffset);
+    const endOfLastMonth = new Date(startOfMonth.getTime() - 1); // 1ms antes do início deste mês
 
     // Vendas de hoje
     const salesToday = await prisma.sale.aggregate({
@@ -208,7 +199,6 @@ export async function GET(request: Request) {
       },
     });
 
-    const now = new Date();
     const in3Days = addDays(now, 3);
 
     // OS atrasadas: prazo vencido OU marcada como atrasada, não entregue/cancelada
@@ -299,10 +289,10 @@ export async function GET(request: Request) {
     };
 
     return NextResponse.json({ metrics });
-  } catch (error) {
-    console.error("Erro ao buscar métricas:", error);
+  } catch (error: any) {
+    console.error("Erro ao buscar métricas:", error?.message, error?.stack);
     return NextResponse.json(
-      { error: "Erro ao buscar métricas" },
+      { error: "Erro ao buscar métricas", details: error?.message || String(error) },
       { status: 500 }
     );
   }

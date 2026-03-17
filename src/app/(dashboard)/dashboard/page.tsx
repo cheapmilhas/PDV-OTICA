@@ -111,9 +111,14 @@ export default function DashboardPage() {
     const safeFetch = async (url: string) => {
       try {
         const res = await fetch(url);
-        if (!res.ok) return null;
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          console.error(`[Dashboard] API error ${res.status} ${url}:`, err.details || err.error || res.statusText);
+          return null;
+        }
         return await res.json();
-      } catch {
+      } catch (e) {
+        console.error(`[Dashboard] Fetch error ${url}:`, e);
         return null;
       }
     };
