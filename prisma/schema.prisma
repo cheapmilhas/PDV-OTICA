@@ -1170,6 +1170,8 @@ model Sale {
   updatedAt            DateTime            @updatedAt
   convertedFromQuoteId String?             @unique
   cashbackUsed         Decimal             @default(0) @db.Decimal(10, 2)
+  legacyId             String?             @unique // Nº da venda no sistema antigo
+  legacySource         String?             // "ADO_PACAJUS", etc.
   accountsReceivable   AccountReceivable[]
   cashbackMovements    CashbackMovement[]
   commissions          Commission[]
