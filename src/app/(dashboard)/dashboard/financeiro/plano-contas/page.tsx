@@ -435,7 +435,7 @@ function PlanoContasPageContent() {
                   <SelectValue placeholder="Nenhuma (conta raiz)" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Nenhuma (conta raiz)</SelectItem>
+                  <SelectItem value="NONE">Nenhuma (conta raiz)</SelectItem>
                   {parentOptions.map((acc) => (
                     <SelectItem key={acc.id} value={acc.id}>
                       {acc.code} - {acc.name}

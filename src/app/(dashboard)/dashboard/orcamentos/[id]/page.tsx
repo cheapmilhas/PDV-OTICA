@@ -665,7 +665,7 @@ function DetalhesOrcamentoPageContent() {
                   <SelectValue placeholder="Selecione..." />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Sem resultado específico</SelectItem>
+                  <SelectItem value="NONE">Sem resultado específico</SelectItem>
                   <SelectItem value="INTERESTED">Interessado</SelectItem>
                   <SelectItem value="ASKED_DISCOUNT">Pediu desconto</SelectItem>
                   <SelectItem value="WILL_THINK">Vai pensar</SelectItem>

@@ -263,8 +263,8 @@ function FinanceiroPage() {
           category: newPayableForm.category,
           amount: parseFloat(newPayableForm.amount),
           dueDate: new Date(newPayableForm.dueDate).toISOString(),
-          supplierId: newPayableForm.supplierId || undefined,
-          branchId: newPayableForm.branchId || undefined,
+          supplierId: newPayableForm.supplierId && newPayableForm.supplierId !== "NONE" ? newPayableForm.supplierId : undefined,
+          branchId: newPayableForm.branchId && newPayableForm.branchId !== "NONE" ? newPayableForm.branchId : undefined,
           invoiceNumber: newPayableForm.invoiceNumber || undefined,
           notes: newPayableForm.notes || undefined,
         }),
@@ -1263,7 +1263,7 @@ function FinanceiroPage() {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhum</SelectItem>
+                    <SelectItem value="NONE">Nenhum</SelectItem>
                     {suppliers.map((supplier) => (
                       <SelectItem key={supplier.id} value={supplier.id}>
                         {supplier.tradeName || supplier.name}
@@ -1286,7 +1286,7 @@ function FinanceiroPage() {
                     <SelectValue placeholder="Selecione..." />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma</SelectItem>
+                    <SelectItem value="NONE">Nenhuma</SelectItem>
                     {branches.map((branch) => (
                       <SelectItem key={branch.id} value={branch.id}>
                         {branch.name}
