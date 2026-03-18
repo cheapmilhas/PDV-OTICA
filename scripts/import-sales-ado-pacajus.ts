@@ -132,13 +132,19 @@ function parsePaymentMethods(raw: string, totalAmount: number): Array<{ method: 
       if (pLow.includes("credz")) { cardBrand = "Credz"; acquirer = "Credz"; }
       if (pLow.includes("blu")) { acquirer = "Blu"; }
       if (pLow.includes("toncard")) { cardBrand = "Toncard"; acquirer = "Toncard"; }
+    } else if (pLow.includes("sum")) {
+      method = "CREDIT_CARD";
+      acquirer = "SumUp";
     } else if (pLow.includes("cheque")) {
       method = "CHEQUE";
     } else {
       method = "OTHER";
     }
 
-    methods.push({ method, installments, cardBrand, acquirer });
+    // BALANCE_DUE e STORE_CREDIT não têm parcelas — o "Nx" é repetição do método
+    const finalInstallments = (method === "BALANCE_DUE" || method === "STORE_CREDIT") ? 1 : installments;
+
+    methods.push({ method, installments: finalInstallments, cardBrand, acquirer });
   }
 
   if (methods.length === 0) {
@@ -304,7 +310,7 @@ async function importSales() {
   }
   console.log(`Clientes pré-carregados: ${existingCustomers.length}`);
 
-  // Pre-carregar produtos existentes
+  // Pre-carregar TODOS os produtos (incluindo os já importados via ADO-)
   const existingProducts = await prisma.product.findMany({
     where: { companyId: CONFIG.COMPANY_ID },
     select: { id: true, name: true, sku: true },
@@ -313,7 +319,7 @@ async function importSales() {
     productCache.set(p.sku.toLowerCase(), p.id);
     productCache.set(p.name.toLowerCase(), p.id);
   }
-  console.log(`Produtos pré-carregados: ${existingProducts.length}`);
+  console.log(`Produtos pré-carregados: ${existingProducts.length} (incluindo ADO-)`);
 
   // 4. Contadores
   let imported = 0, skipped = 0, errors = 0;
