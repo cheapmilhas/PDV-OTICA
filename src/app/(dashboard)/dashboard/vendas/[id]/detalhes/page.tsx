@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams } from "next/navigation";
+import Link from "next/link";
 import { useSession } from "next-auth/react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -10,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, FileText } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, FileText, ExternalLink } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -517,7 +518,13 @@ export default function DetalhesVendaPage() {
           <CardContent className="space-y-2">
             <div>
               <p className="text-sm text-muted-foreground">Nome</p>
-              <p className="font-semibold">{sale.customer.name}</p>
+              <Link
+                href={`/dashboard/clientes?search=${encodeURIComponent(sale.customer.name)}`}
+                className="font-semibold text-primary hover:underline inline-flex items-center gap-1"
+              >
+                {sale.customer.name}
+                <ExternalLink className="h-3.5 w-3.5" />
+              </Link>
             </div>
             {sale.customer.cpf && (
               <div>

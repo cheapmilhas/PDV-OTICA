@@ -28,15 +28,16 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/shared/can";
 import { Can as CanPermission } from "@/components/permissions/can";
 import { usePermissions } from "@/hooks/usePermissions";
-import { useRouter } from "next/navigation";
+import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
 function ClientesPage() {
   const { hasPermission } = usePermissions();
   const router = useRouter();
+  const searchParams = useSearchParams();
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
   const [modalOpen, setModalOpen] = useState(false);
-  const [search, setSearch] = useState("");
+  const [search, setSearch] = useState(searchParams.get("search") || "");
   const [page, setPage] = useState(1);
   const [clientes, setClientes] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
