@@ -7,7 +7,7 @@ import { prisma } from "@/lib/prisma";
  * POST /api/company/logo
  * Upload logotipo da empresa
  *
- * Aceita: PNG, JPG, SVG
+ * Aceita: PNG, JPG
  * Tamanho máximo: 2MB
  * Salva como base64 (Data URL) no banco
  */
@@ -28,10 +28,10 @@ export async function POST(request: NextRequest) {
     }
 
     // Validar tipo
-    const allowedTypes = ["image/png", "image/jpeg", "image/jpg", "image/svg+xml"];
+    const allowedTypes = ["image/png", "image/jpeg", "image/jpg"];
     if (!allowedTypes.includes(file.type)) {
       return NextResponse.json(
-        { success: false, message: "Tipo de arquivo inválido. Use PNG, JPG ou SVG." },
+        { success: false, message: "Tipo de arquivo inválido. Use PNG ou JPG." },
         { status: 400 }
       );
     }

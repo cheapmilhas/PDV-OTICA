@@ -315,7 +315,7 @@ export function GerenciadorCodigos({ productId }: GerenciadorCodigosProps) {
       />
 
       <Dialog open={!!viewBarcode} onOpenChange={() => setViewBarcode(null)}>
-        <DialogContent className="sm:max-w-[500px]">
+        <DialogContent className="sm:max-w-lg">
           <DialogHeader>
             <DialogTitle>Visualizar Código</DialogTitle>
             <DialogDescription>

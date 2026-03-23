@@ -113,22 +113,27 @@ export class CustomerService {
     const orderBy: any = {};
     orderBy[sortBy] = sortOrder;
 
-    // Filtro de aniversariantes (por mês)
-    // Como Prisma não suporta EXTRACT(MONTH), filtramos após buscar
+    // Filtro de aniversariantes (por mês) — usar raw query para filtrar no banco
     if (birthdayMonth) {
-      where.birthDate = { not: null };
+      const birthdayCustomerIds: { id: string }[] = await prisma.$queryRaw`
+        SELECT id FROM "Customer"
+        WHERE "companyId" = ${companyId}
+          AND "birthDate" IS NOT NULL
+          AND EXTRACT(MONTH FROM "birthDate") = ${birthdayMonth}
+      `;
+      const birthdayIds = birthdayCustomerIds.map((c) => c.id);
+      where.id = { in: birthdayIds };
     }
 
     // Paginação
     const { skip, take } = getPaginationParams(page, pageSize);
 
     // Execute query + count em paralelo (performance)
-    console.log("🔍 Query where completa:", JSON.stringify(where, null, 2));
     let [data, total] = await Promise.all([
       prisma.customer.findMany({
         where,
-        skip: birthdayMonth ? undefined : skip,
-        take: birthdayMonth ? undefined : take,
+        skip,
+        take,
         orderBy,
         include: {
           originBranch: { select: { id: true, name: true } },
@@ -136,21 +141,6 @@ export class CustomerService {
       }),
       prisma.customer.count({ where }),
     ]);
-    console.log(`✅ Encontrados ${data.length} clientes (total: ${total})`);
-
-    // Filtrar por mês de aniversário no JavaScript (pós-processamento)
-    if (birthdayMonth) {
-      data = data.filter((customer) => {
-        if (!customer.birthDate) return false;
-        const month = new Date(customer.birthDate).getMonth() + 1; // getMonth() retorna 0-11
-        return month === birthdayMonth;
-      });
-
-      // Recalcular total e aplicar paginação manualmente
-      total = data.length;
-      const start = (page - 1) * pageSize;
-      data = data.slice(start, start + pageSize);
-    }
 
     // Retorna dados + metadados de paginação
     return {

@@ -9,11 +9,11 @@ import {
   Plus,
   DollarSign,
   Eye,
-  Loader2,
   Search,
   ShoppingCart,
   AlertTriangle,
 } from "lucide-react";
+import { StatsSkeleton, TableSkeleton } from "@/components/shared/skeleton-loader";
 import { formatCurrency } from "@/lib/utils";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
@@ -164,46 +164,50 @@ function VendasContent() {
       )}
 
       {/* Summary Cards */}
-      <div className="grid gap-4 md:grid-cols-3">
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Total de Vendas
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">{pagination?.total || 0}</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Vendas Hoje
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold">
-              {vendas.filter((v) => {
-                const today = new Date().toDateString();
-                const saleDate = new Date(v.createdAt).toDateString();
-                return today === saleDate;
-              }).length}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="pb-2">
-            <CardTitle className="text-sm font-medium text-muted-foreground">
-              Valor Total
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <p className="text-2xl font-bold text-primary">
-              {formatCurrency(totalAmount)}
-            </p>
-          </CardContent>
-        </Card>
-      </div>
+      {loading ? (
+        <StatsSkeleton count={3} />
+      ) : (
+        <div className="grid gap-4 md:grid-cols-3">
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Total de Vendas
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">{pagination?.total || 0}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Vendas Hoje
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold">
+                {vendas.filter((v) => {
+                  const today = new Date().toDateString();
+                  const saleDate = new Date(v.createdAt).toDateString();
+                  return today === saleDate;
+                }).length}
+              </p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm font-medium text-muted-foreground">
+                Valor Total
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              <p className="text-2xl font-bold text-primary">
+                {formatCurrency(totalAmount)}
+              </p>
+            </CardContent>
+          </Card>
+        </div>
+      )}
 
       {/* Search */}
       <SearchBar
@@ -214,11 +218,7 @@ function VendasContent() {
       />
 
       {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      )}
+      {loading && <TableSkeleton rows={5} />}
 
       {/* Empty State */}
       {!loading && vendas.length === 0 && (

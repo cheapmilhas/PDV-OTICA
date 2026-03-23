@@ -2,9 +2,9 @@ import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-change-me"
-);
+const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
+const JWT_SECRET = new TextEncoder().encode(authSecret);
 
 export interface AdminPayload {
   id: string;

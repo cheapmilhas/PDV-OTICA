@@ -51,12 +51,6 @@ export async function GET(request: Request) {
       discountTotal: Number(sale.discountTotal),
       total: Number(sale.total),
       agreementDiscount: sale.agreementDiscount ? Number(sale.agreementDiscount) : null,
-      items: sale.items.map((item) => ({
-        ...item,
-        unitPrice: Number(item.unitPrice),
-        discount: Number(item.discount),
-        lineTotal: Number(item.lineTotal),
-      })),
       payments: sale.payments.map((payment) => ({
         ...payment,
         amount: Number(payment.amount),

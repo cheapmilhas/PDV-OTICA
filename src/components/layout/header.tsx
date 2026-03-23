@@ -37,10 +37,11 @@ export function Header() {
   const { activeBranchId, activeBranch, branches, setActiveBranch, isAllBranches, isAdmin: isAdminUser } = useBranchContext();
   const [notifData, setNotifData] = useState<{
     osDelayed: number;
+    osDelayedList: Array<{ id: string; number: number; promisedDate: string; customer: { name: string } }>;
     lowStock: number;
     shiftOpen: boolean;
     shiftHours: number;
-  }>({ osDelayed: 0, lowStock: 0, shiftOpen: false, shiftHours: 0 });
+  }>({ osDelayed: 0, osDelayedList: [], lowStock: 0, shiftOpen: false, shiftHours: 0 });
   const notifCount = notifData.osDelayed + notifData.lowStock + (notifData.shiftOpen && notifData.shiftHours >= 12 ? 1 : 0);
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState("");
@@ -101,8 +102,8 @@ export function Header() {
       }
       if (!newPassword) {
         newErrors.newPassword = "Informe a nova senha";
-      } else if (newPassword.length < 6) {
-        newErrors.newPassword = "A senha deve ter pelo menos 6 caracteres";
+      } else if (newPassword.length < 8) {
+        newErrors.newPassword = "A senha deve ter pelo menos 8 caracteres";
       }
       if (!confirmPassword) {
         newErrors.confirmPassword = "Confirme a nova senha";
@@ -167,10 +168,12 @@ export function Header() {
         ]);
         if (metricsRes.ok) {
           const m = await metricsRes.json();
+          const metricsObj = m.metrics || m;
           setNotifData((prev) => ({
             ...prev,
-            osDelayed: m.osDelayed || 0,
-            lowStock: m.productsLowStock || 0,
+            osDelayed: metricsObj.osDelayed || 0,
+            osDelayedList: metricsObj.osDelayedList || [],
+            lowStock: metricsObj.productsLowStock || 0,
           }));
         }
         if (shiftRes.ok) {
@@ -268,16 +271,31 @@ export function Header() {
               ) : (
                 <div className="divide-y">
                   {notifData.osDelayed > 0 && (
-                    <button
-                      className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
-                      onClick={() => router.push("/dashboard/ordens-servico?filter=atrasadas")}
-                    >
-                      <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{notifData.osDelayed} OS atrasada{notifData.osDelayed > 1 ? "s" : ""}</p>
-                        <p className="text-xs text-muted-foreground">Ordens de serviço além do prazo</p>
-                      </div>
-                    </button>
+                    <>
+                      <button
+                        className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                        onClick={() => router.push("/dashboard/ordens-servico?filter=atrasadas")}
+                      >
+                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{notifData.osDelayed} OS atrasada{notifData.osDelayed > 1 ? "s" : ""}</p>
+                          <p className="text-xs text-muted-foreground">Clique para ver todas</p>
+                        </div>
+                      </button>
+                      {notifData.osDelayedList.slice(0, 3).map((os) => (
+                        <button
+                          key={os.id}
+                          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-accent transition-colors pl-10"
+                          onClick={() => router.push(`/dashboard/ordens-servico?filter=atrasadas`)}
+                        >
+                          <Clock className="h-3.5 w-3.5 text-red-400 shrink-0" />
+                          <div className="flex-1 min-w-0">
+                            <p className="text-xs font-medium">OS #{String(os.number).padStart(5, "0")}</p>
+                            <p className="text-xs text-muted-foreground truncate">{os.customer?.name || "Cliente"}</p>
+                          </div>
+                        </button>
+                      ))}
+                    </>
                   )}
                   {notifData.lowStock > 0 && (
                     <button

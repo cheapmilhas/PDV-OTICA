@@ -28,6 +28,25 @@ export async function generateReminders(companyId: string) {
     },
   });
 
+  // Buscar totais de vendas por cliente em uma única query (evita N+1)
+  const customerIds = customers.map((c) => c.id);
+  const saleTotals = await prisma.sale.groupBy({
+    by: ["customerId"],
+    where: {
+      customerId: { in: customerIds },
+      status: { not: "CANCELED" },
+    },
+    _count: { _all: true },
+    _sum: { total: true },
+  });
+
+  const saleTotalsMap = new Map(
+    saleTotals.map((s) => [
+      s.customerId,
+      { count: s._count._all, total: Number(s._sum.total || 0) },
+    ])
+  );
+
   const reminders: any[] = [];
 
   for (const customer of customers) {
@@ -37,14 +56,9 @@ export async function generateReminders(companyId: string) {
       ? Math.floor((today.getTime() - lastSaleDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
-    // Calcular totais
-    const allSales = await prisma.sale.findMany({
-      where: { customerId: customer.id, status: { not: "CANCELED" } },
-      select: { total: true },
-    });
-
-    const totalPurchases = allSales.length;
-    const totalSpent = allSales.reduce((sum, sale) => sum + Number(sale.total || 0), 0);
+    const customerSaleTotals = saleTotalsMap.get(customer.id);
+    const totalPurchases = customerSaleTotals?.count ?? 0;
+    const totalSpent = customerSaleTotals?.total ?? 0;
 
     // TODO: Buscar cashback do cliente
     const cashbackBalance = 0;

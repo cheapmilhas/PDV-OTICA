@@ -10,7 +10,7 @@ import { z } from "zod";
 const profileSchema = z.object({
   name: z.string().min(2, "Nome deve ter pelo menos 2 caracteres").max(100),
   currentPassword: z.string().optional(),
-  newPassword: z.string().min(6, "Senha deve ter pelo menos 6 caracteres").optional(),
+  newPassword: z.string().min(8, "Senha deve ter pelo menos 8 caracteres").optional(),
 });
 
 /**

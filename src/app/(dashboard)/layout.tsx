@@ -8,6 +8,7 @@ import { checkSubscription } from "@/lib/subscription";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 import { SubscriptionBlocked } from "@/components/subscription/subscription-blocked";
 import { BranchProviderWrapper } from "@/components/providers/branch-provider-wrapper";
+import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 
 export default async function DashboardLayout({
   children,
@@ -76,6 +77,9 @@ export default async function DashboardLayout({
 
         {/* Navegação inferior — apenas mobile */}
         <MobileNav />
+
+        {/* Atalhos de teclado globais */}
+        <KeyboardShortcuts />
       </BranchProviderWrapper>
     </ThemeProvider>
   );

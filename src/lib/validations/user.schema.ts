@@ -11,7 +11,7 @@ export const UserRoleEnum = z.enum(["ADMIN", "GERENTE", "VENDEDOR", "CAIXA", "AT
 export const createUserSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
   email: z.string().min(1, "Login é obrigatório"),
-  password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres"),
+  password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
   role: UserRoleEnum,
   defaultCommissionPercent: z.coerce.number().min(0).max(100).nullable().optional(),
   active: z.boolean().default(true),
@@ -25,7 +25,7 @@ export type CreateUserDTO = z.infer<typeof createUserSchema>;
 export const updateUserSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório").optional(),
   email: z.string().min(1, "Login é obrigatório").optional(),
-  password: z.string().min(6, "Senha deve ter no mínimo 6 caracteres").optional(),
+  password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres").optional(),
   role: UserRoleEnum.optional(),
   defaultCommissionPercent: z.coerce.number().min(0).max(100).nullable().optional(),
   active: z.boolean().optional(),

@@ -73,15 +73,16 @@ export async function PATCH(
 ) {
   try {
     await requireAuth();
+    await requirePermission("users.edit");
     const companyId = await getCompanyId();
     const { id } = await params;
 
     const body = await request.json();
     const { password } = body;
 
-    if (!password || password.length < 6) {
+    if (!password || password.length < 8) {
       return NextResponse.json(
-        { error: { message: "Senha deve ter pelo menos 6 caracteres" } },
+        { error: { message: "Senha deve ter pelo menos 8 caracteres" } },
         { status: 400 }
       );
     }

@@ -103,19 +103,6 @@ export class SaleService {
           sellerUser: {
             select: { id: true, name: true },
           },
-          items: {
-            select: {
-              id: true,
-              productId: true,
-              qty: true,
-              unitPrice: true,
-              discount: true,
-              lineTotal: true,
-              product: {
-                select: { id: true, name: true, sku: true },
-              },
-            },
-          },
           payments: {
             select: {
               id: true,

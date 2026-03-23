@@ -18,6 +18,7 @@ import { ptBR } from "date-fns/locale";
 import { hasPermission as hasRolePermission, Permission } from "@/lib/permissions";
 import { usePermissions } from "@/hooks/usePermissions";
 import { replaceMessageVariables, openWhatsAppWithMessage } from "@/lib/default-messages";
+import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 
 interface SaleDetails {
   id: string;
@@ -363,6 +364,13 @@ export default function DetalhesVendaPage() {
       </Dialog>
 
       <div className="space-y-6">
+      {/* Breadcrumbs */}
+      <Breadcrumbs items={[
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "Vendas", href: "/dashboard/vendas" },
+        { label: "Detalhes" },
+      ]} />
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">

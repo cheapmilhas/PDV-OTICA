@@ -4,9 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { SignJWT } from "jose";
 import { cookies } from "next/headers";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-change-me"
-);
+const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
+const JWT_SECRET = new TextEncoder().encode(authSecret);
 
 export async function POST(request: Request) {
   try {

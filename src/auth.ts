@@ -7,7 +7,7 @@ import { z } from "zod";
 
 const loginSchema = z.object({
   email: z.string().min(1), // Aceita login ou email
-  password: z.string().min(6),
+  password: z.string().min(8),
 });
 
 export const { handlers, signIn, signOut, auth } = NextAuth({

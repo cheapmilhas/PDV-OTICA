@@ -8,6 +8,10 @@ import { handleApiError } from "@/lib/error-handler";
  * Rota de debug para verificar CashMovements
  */
 export async function GET(request: Request) {
+  if (process.env.NODE_ENV !== "development") {
+    return NextResponse.json({ error: { message: "Not found" } }, { status: 404 });
+  }
+
   try {
     await requireAuth();
     const companyId = await getCompanyId();

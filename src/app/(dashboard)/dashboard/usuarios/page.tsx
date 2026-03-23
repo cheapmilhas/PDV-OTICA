@@ -346,9 +346,9 @@ function UsuariosPage() {
                           variant="ghost"
                           size="sm"
                           onClick={async () => {
-                            const newPass = prompt(`Nova senha para ${user.name}:\n(mínimo 6 caracteres)`);
+                            const newPass = prompt(`Nova senha para ${user.name}:\n(mínimo 8 caracteres)`);
                             if (!newPass) return;
-                            if (newPass.length < 6) { toast.error("Senha deve ter pelo menos 6 caracteres"); return; }
+                            if (newPass.length < 8) { toast.error("Senha deve ter pelo menos 8 caracteres"); return; }
                             try {
                               const res = await fetch(`/api/users/${user.id}`, {
                                 method: "PATCH",

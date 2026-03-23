@@ -4,9 +4,9 @@ import { getAdminSession } from "@/lib/admin-session";
 import { SignJWT } from "jose";
 import { z } from "zod";
 
-const JWT_SECRET = new TextEncoder().encode(
-  process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || "fallback-secret-change-me"
-);
+const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
+const JWT_SECRET = new TextEncoder().encode(authSecret);
 
 const impersonateSchema = z.object({
   companyId: z.string().min(1, "companyId é obrigatório"),

@@ -198,6 +198,16 @@ export async function generateSaleEntries(
   saleId: string,
   companyId: string
 ): Promise<void> {
+  // Cache para evitar queries repetidas de contas contábeis
+  const chartAccountCache = new Map<string, Awaited<ReturnType<typeof getChartAccountByCode>>>();
+  const getCachedChartAccount = async (code: string) => {
+    const cached = chartAccountCache.get(code);
+    if (cached) return cached;
+    const account = await getChartAccountByCode(tx, companyId, code);
+    chartAccountCache.set(code, account);
+    return account;
+  };
+
   const sale = await tx.sale.findUniqueOrThrow({
     where: { id: saleId },
     include: {
@@ -213,8 +223,8 @@ export async function generateSaleEntries(
   const discountTotal = Number(sale.discountTotal);
 
   // 1. RECEITA DE VENDA — Débito: Contas a Receber, Crédito: Receita de Vendas
-  const contasAReceber = await getChartAccountByCode(tx, companyId, "1.1.03");
-  const receitaVendas = await getChartAccountByCode(tx, companyId, "3.1.01");
+  const contasAReceber = await getCachedChartAccount("1.1.03");
+  const receitaVendas = await getCachedChartAccount("3.1.01");
 
   await tx.financeEntry.upsert({
     where: {
@@ -245,7 +255,7 @@ export async function generateSaleEntries(
 
   // 2. DESCONTO (se houver)
   if (discountTotal > 0) {
-    const descontos = await getChartAccountByCode(tx, companyId, "3.2.02");
+    const descontos = await getCachedChartAccount("3.2.02");
 
     await tx.financeEntry.upsert({
       where: {
@@ -276,7 +286,7 @@ export async function generateSaleEntries(
   }
 
   // 3. CMV por item (FIFO ou fallback costPrice)
-  const estoque = await getChartAccountByCode(tx, companyId, "1.1.04");
+  const estoque = await getCachedChartAccount("1.1.04");
 
   for (const item of sale.items) {
     if (!item.productId || !item.stockControlled) continue;
@@ -304,7 +314,7 @@ export async function generateSaleEntries(
     if (itemCost <= 0) continue;
 
     const cmvCode = getCMVAccountCode(item.product?.type);
-    const cmvAccount = await getChartAccountByCode(tx, companyId, cmvCode);
+    const cmvAccount = await getCachedChartAccount(cmvCode);
 
     await tx.financeEntry.upsert({
       where: {
@@ -340,7 +350,7 @@ export async function generateSaleEntries(
 
     const paymentAmount = Number(payment.amount);
     const debitCode = getPaymentDebitAccountCode(payment.method);
-    const debitAccount = await getChartAccountByCode(tx, companyId, debitCode);
+    const debitAccount = await getCachedChartAccount(debitCode);
     const faType = getFinanceAccountType(payment.method);
     const financeAccount = faType ? await getFinanceAccountByType(tx, companyId, faType) : null;
 
@@ -384,8 +394,8 @@ export async function generateSaleEntries(
     // 5. TAXA DE CARTÃO (se aplicável)
     const feeAmount = payment.feeAmount ? Number(payment.feeAmount) : 0;
     if (feeAmount > 0) {
-      const taxaCartao = await getChartAccountByCode(tx, companyId, "5.1.01");
-      const adquirente = await getChartAccountByCode(tx, companyId, "1.1.05");
+      const taxaCartao = await getCachedChartAccount("5.1.01");
+      const adquirente = await getCachedChartAccount("1.1.05");
 
       await tx.financeEntry.upsert({
         where: {

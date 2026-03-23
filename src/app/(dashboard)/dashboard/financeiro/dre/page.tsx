@@ -34,6 +34,7 @@ import { ptBR } from "date-fns/locale";
 import { formatCurrency, cn } from "@/lib/utils";
 import toast from "react-hot-toast";
 import Link from "next/link";
+import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import {
   BarChart,
   Bar,
@@ -329,6 +330,13 @@ function DREDinamicoPageContent() {
 
   return (
     <div className="space-y-6">
+      {/* Breadcrumbs */}
+      <Breadcrumbs items={[
+        { label: "Dashboard", href: "/dashboard" },
+        { label: "Financeiro", href: "/dashboard/financeiro" },
+        { label: "DRE" },
+      ]} />
+
       {/* Header */}
       <div className="flex items-center gap-4">
         <Link href="/dashboard/financeiro">

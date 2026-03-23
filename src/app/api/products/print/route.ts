@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, requireAuth } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
@@ -20,6 +21,9 @@ export async function GET(req: NextRequest) {
 
     if (filter === "low") {
       // Produtos com estoque baixo (stockQty <= stockMin e stockMin > 0)
+      const categoryFilter = categoryId
+        ? Prisma.sql`AND p."categoryId" = ${categoryId}`
+        : Prisma.empty;
       products = await prisma.$queryRaw<any[]>`
         SELECT p.id, p.sku, p.name, p."stockQty", p."stockMin", p."costPrice", p."salePrice",
                c.name as "categoryName"
@@ -30,7 +34,7 @@ export async function GET(req: NextRequest) {
           AND p."stockControlled" = true
           AND p."stockMin" > 0
           AND p."stockQty" <= p."stockMin"
-        ${categoryId ? `AND p."categoryId" = '${categoryId}'` : ""}
+        ${categoryFilter}
         ORDER BY p.name ASC
       `;
     } else if (filter === "zero") {
