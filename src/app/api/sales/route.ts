@@ -63,8 +63,12 @@ export async function GET(request: Request) {
       })),
     }));
 
-    // Retorna resposta paginada
-    return paginatedResponse(serializedData, result.pagination);
+    // Retorna resposta paginada com totalAmount do filtro
+    return NextResponse.json({
+      data: serializedData,
+      pagination: result.pagination,
+      totalAmount: result.totalAmount,
+    });
   } catch (error) {
     return handleApiError(error);
   }

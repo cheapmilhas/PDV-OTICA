@@ -87,7 +87,7 @@ export class SaleService {
     }
 
     // Query paralela para performance
-    const [data, total] = await Promise.all([
+    const [data, total, aggregate] = await Promise.all([
       prisma.sale.findMany({
         where,
         skip,
@@ -130,11 +130,15 @@ export class SaleService {
         },
       }),
       prisma.sale.count({ where }),
+      prisma.sale.aggregate({
+        where,
+        _sum: { total: true },
+      }),
     ]);
 
     const pagination = createPaginationMeta(page, pageSize, total);
 
-    return { data, pagination };
+    return { data, pagination, totalAmount: Number(aggregate._sum.total || 0) };
   }
 
   /**

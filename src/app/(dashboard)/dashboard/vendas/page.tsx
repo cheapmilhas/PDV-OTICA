@@ -46,6 +46,7 @@ function VendasContent() {
   const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
   const [vendas, setVendas] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
+  const [totalAmount, setTotalAmount] = useState(0);
   const [loading, setLoading] = useState(true);
   const [filters, setFilters] = useState<VendasFilterValues>({
     startDate: undefined,
@@ -86,6 +87,7 @@ function VendasContent() {
       .then((data) => {
         setVendas(data.data || []);
         setPagination(data.pagination);
+        setTotalAmount(data.totalAmount || 0);
         setLoading(false);
       })
       .catch((err) => {
@@ -192,14 +194,12 @@ function VendasContent() {
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="text-sm font-medium text-muted-foreground">
-              Valor Total (Página)
+              Valor Total
             </CardTitle>
           </CardHeader>
           <CardContent>
             <p className="text-2xl font-bold text-primary">
-              {formatCurrency(
-                vendas.reduce((sum, v) => sum + Number(v.total || 0), 0)
-              )}
+              {formatCurrency(totalAmount)}
             </p>
           </CardContent>
         </Card>
