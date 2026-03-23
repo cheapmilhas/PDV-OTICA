@@ -519,7 +519,7 @@ export default function DetalhesVendaPage() {
             <div>
               <p className="text-sm text-muted-foreground">Nome</p>
               <Link
-                href={`/dashboard/clientes?search=${encodeURIComponent(sale.customer.name)}`}
+                href={`/dashboard/clientes/${sale.customer.id}`}
                 className="font-semibold text-primary hover:underline inline-flex items-center gap-1"
               >
                 {sale.customer.name}
