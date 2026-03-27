@@ -15,6 +15,7 @@ import {
   FileBarChart
 } from "lucide-react";
 import { AdminLogoutButton } from "./AdminLogoutButton";
+import { NotificationBell } from "@/components/admin/NotificationBell";
 
 export const metadata: Metadata = {
   title: "PDV Ótica - Admin",
@@ -113,6 +114,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
+        {/* Top bar com sino de notificações */}
+        <div className="flex justify-end items-center px-6 py-3 border-b border-gray-800 bg-gray-950">
+          <NotificationBell />
+        </div>
         {children}
       </main>
     </div>

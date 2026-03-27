@@ -1,6 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logActivity } from "@/services/activity-log.service";
+import { ActorType } from "@prisma/client";
 
 export async function POST(
   request: Request,
@@ -23,6 +25,7 @@ export async function POST(
         await prisma.globalAudit.create({
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "COMPANY_BLOCKED", metadata: { adminEmail: admin.email } },
         });
+        await logActivity({ companyId, type: "COMPANY_BLOCKED", title: "Empresa bloqueada", actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: "Empresa bloqueada" });
       }
 
@@ -34,6 +37,7 @@ export async function POST(
         await prisma.globalAudit.create({
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "COMPANY_UNBLOCKED", metadata: { adminEmail: admin.email } },
         });
+        await logActivity({ companyId, type: "COMPANY_UNBLOCKED", title: "Empresa desbloqueada", actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: "Empresa desbloqueada" });
       }
 
@@ -47,6 +51,7 @@ export async function POST(
         await prisma.globalAudit.create({
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "SUBSCRIPTION_REACTIVATED", metadata: { subscriptionId: subscription.id } },
         });
+        await logActivity({ companyId, type: "SUBSCRIPTION_REACTIVATED", title: "Assinatura reativada", actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: "Assinatura reativada" });
       }
 
@@ -59,6 +64,7 @@ export async function POST(
         await prisma.globalAudit.create({
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "TRIAL_EXTENDED", metadata: { newTrialEnd: newEnd.toISOString() } },
         });
+        await logActivity({ companyId, type: "TRIAL_EXTENDED", title: `Trial estendido até ${newEnd.toLocaleDateString("pt-BR")}`, detail: { newTrialEnd: newEnd.toISOString() }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Trial estendido até ${newEnd.toLocaleDateString("pt-BR")}` });
       }
 
@@ -115,6 +121,7 @@ export async function POST(
           }),
         ]);
 
+        await logActivity({ companyId, type: "PLAN_CHANGED", title: `Plano alterado: ${oldPlan.name} → ${newPlan.name}`, detail: { fromPlan: oldPlan.name, toPlan: newPlan.name }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Plano alterado: ${oldPlan.name} → ${newPlan.name}` });
       }
 
@@ -154,6 +161,7 @@ export async function POST(
           }),
         ]);
 
+        await logActivity({ companyId, type: "SUBSCRIPTION_CANCELED", title: "Assinatura cancelada", detail: { reason }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: "Assinatura cancelada" });
       }
 
@@ -201,6 +209,7 @@ export async function POST(
           }),
         ]);
 
+        await logActivity({ companyId, type: "CYCLE_CHANGED", title: `Ciclo alterado para ${cycle === "MONTHLY" ? "Mensal" : "Anual"}`, detail: { fromCycle: oldCycle, toCycle: cycle }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Ciclo alterado para ${cycle === "MONTHLY" ? "Mensal" : "Anual"}` });
       }
 

@@ -4,6 +4,9 @@ import { getAdminSession } from "@/lib/admin-session";
 import { randomBytes } from "crypto";
 import bcrypt from "bcryptjs";
 import { setupCompanyFinance } from "@/services/finance-setup.service";
+import { logActivity } from "@/services/activity-log.service";
+import { createOnboardingChecklist, completeOnboardingStep } from "@/services/onboarding-checklist.service";
+import { ActorType } from "@prisma/client";
 
 function generateSlug(name: string): string {
   return name
@@ -303,6 +306,29 @@ export async function POST(request: Request) {
       });
 
       return { company, invite, user, branch };
+    });
+
+    // Pós-transaction: checklist, activity log (falha silenciosa)
+    await createOnboardingChecklist(result.company.id);
+
+    // Marca steps já concluídos pela criação
+    await completeOnboardingStep(result.company.id, "COMPANY_DATA", admin.id);
+    await completeOnboardingStep(result.company.id, "PLAN_SELECTED", admin.id);
+    if (result.branch) {
+      await completeOnboardingStep(result.company.id, "FIRST_BRANCH", admin.id);
+    }
+    if (result.user) {
+      await completeOnboardingStep(result.company.id, "FIRST_USER", admin.id);
+    }
+
+    await logActivity({
+      companyId: result.company.id,
+      type: "COMPANY_CREATED",
+      title: "Empresa criada",
+      detail: { planId, trialDays, adminEmail: result.user?.email ?? null },
+      actorId: admin.id,
+      actorType: ActorType.ADMIN,
+      actorName: admin.name,
     });
 
     return NextResponse.json({
