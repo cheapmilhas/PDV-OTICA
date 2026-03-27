@@ -27,6 +27,7 @@ import {
 import Link from "next/link";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useSession } from "next-auth/react";
+import { useEffect } from "react";
 import { DataManagement } from "@/components/configuracoes/data-management";
 
 // Mensagens padrão
@@ -103,7 +104,7 @@ function ConfiguracoesPage() {
   });
 
   // Carregar dados reais da empresa
-  useState(() => {
+  useEffect(() => {
     fetch("/api/company/settings")
       .then((r) => r.json())
       .then((result) => {
@@ -126,7 +127,7 @@ function ConfiguracoesPage() {
       })
       .catch(() => {})
       .finally(() => setLoadingDados(false));
-  });
+  }, []);
 
   // Estados para mensagens personalizadas
   const [mensagens, setMensagens] = useState({
