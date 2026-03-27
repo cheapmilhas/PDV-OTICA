@@ -291,15 +291,15 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   })();
 
   // Classes condicionais baseadas na cor do sidebar
-  const textColor = useWhiteText ? "text-white/90" : "text-foreground";
-  const mutedTextColor = useWhiteText ? "text-white/40" : "text-muted-foreground";
+  const textColor = useWhiteText ? "text-white" : "text-foreground";
+  const mutedTextColor = useWhiteText ? "text-white/50" : "text-muted-foreground";
   const activeClass = useWhiteText
-    ? "bg-white/15 text-white font-medium"
-    : "bg-primary/10 text-primary font-medium";
+    ? "bg-white/25 text-white font-semibold"
+    : "bg-primary/10 text-primary font-semibold";
   const hoverClass = useWhiteText
-    ? "text-white/65 hover:bg-white/10 hover:text-white/90"
+    ? "text-white/80 hover:bg-white/15 hover:text-white"
     : "text-muted-foreground hover:bg-muted hover:text-foreground";
-  const borderColor = useWhiteText ? "border-white/10" : "border-border";
+  const borderColor = useWhiteText ? "border-white/15" : "border-border";
 
   const defaultSidebarStyle = !sidebarBg
     ? { backgroundColor: "hsl(var(--sidebar))" }
