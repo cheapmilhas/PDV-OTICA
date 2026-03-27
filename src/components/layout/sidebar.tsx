@@ -307,28 +307,28 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
 
   return (
     <aside
-      className="flex h-screen w-[220px] flex-col border-r shrink-0"
+      className="flex h-screen w-64 flex-col border-r shrink-0"
       style={defaultSidebarStyle}
     >
       {/* Logo */}
-      <div className={cn("flex h-[60px] items-center px-4 border-b", borderColor)}>
-        <Link href="/dashboard" className="flex items-center gap-2.5 w-full min-w-0">
+      <div className={cn("flex h-[72px] items-center justify-center border-b px-4", borderColor)}>
+        <Link href="/dashboard" className="flex items-center justify-center w-full">
           {logoUrl ? (
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoUrl}
               alt="Logo"
-              className="h-8 w-auto max-w-[160px] object-contain"
+              className="h-11 w-auto max-w-[200px] object-contain"
             />
           ) : (
             <>
               <div className={cn(
-                "flex h-7 w-7 items-center justify-center rounded-lg flex-shrink-0",
+                "flex h-8 w-8 items-center justify-center rounded-lg flex-shrink-0",
                 useWhiteText ? "bg-white/15" : "bg-primary/10"
               )}>
-                <ShoppingCart className={cn("h-4 w-4", useWhiteText ? "text-white/90" : "text-primary")} />
+                <ShoppingCart className={cn("h-5 w-5", useWhiteText ? "text-white/90" : "text-primary")} />
               </div>
-              <span className={cn("font-semibold text-sm truncate", textColor)}>
+              <span className={cn("ml-2.5 font-bold text-base truncate", textColor)}>
                 {displayName || "PDV Ótica"}
               </span>
             </>
@@ -337,7 +337,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       </div>
 
       {/* Menu */}
-      <nav className="flex-1 overflow-y-auto px-2 py-3">
+      <nav className="flex-1 overflow-y-auto px-3 py-4">
         {menuItems.map((section) => {
           const visibleItems = section.items.filter(
             (item) => !item.permission || isAdmin || hasPermission(item.permission)
@@ -346,9 +346,9 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={section.title} className="mb-4">
+            <div key={section.title} className="mb-5">
               <p className={cn(
-                "mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest",
+                "mb-1.5 px-3 text-[10px] font-semibold uppercase tracking-widest",
                 mutedTextColor
               )}>
                 {section.title}
@@ -364,17 +364,17 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                         href={item.href}
                         onClick={onNavigate}
                         className={cn(
-                          "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-all duration-150",
+                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-all duration-150",
                           isActive ? activeClass : hoverClass
                         )}
                       >
-                        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
-                        <span className="flex-1 truncate text-xs">{item.name}</span>
+                        <Icon className="h-4 w-4 flex-shrink-0" />
+                        <span className="flex-1 truncate">{item.name}</span>
                         {item.hotkey && (
                           <kbd className={cn(
                             "hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono rounded",
                             useWhiteText
-                              ? "border border-white/20 bg-white/8 text-white/50"
+                              ? "border border-white/20 bg-white/10 text-white/50"
                               : "border border-border bg-muted text-muted-foreground"
                           )}>
                             {item.hotkey}
@@ -390,7 +390,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
         })}
       </nav>
 
-      {/* Footer minimalista */}
+      {/* Footer */}
       <div className={cn("border-t px-4 py-3", borderColor)}>
         <p className={cn("text-[10px] text-center", mutedTextColor)}>
           v1.0 · PDV Ótica
