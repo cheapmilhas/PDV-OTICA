@@ -85,20 +85,47 @@ function ConfiguracoesPage() {
   const { data: session } = useSession();
   const isAdmin = session?.user?.role === "ADMIN";
   const [loading, setLoading] = useState(false);
+  const [loadingDados, setLoadingDados] = useState(true);
 
   // Estados para configurações da empresa
   const [dadosEmpresa, setDadosEmpresa] = useState({
-    nome: "Ótica Visão Perfeita",
-    cnpj: "12.345.678/0001-90",
-    email: "contato@oticavisaoperfeita.com.br",
-    telefone: "(11) 3456-7890",
-    whatsapp: "(11) 98765-4321",
-    endereco: "Rua das Flores, 123",
-    cidade: "São Paulo",
-    estado: "SP",
-    cep: "01234-567",
-    site: "www.oticavisaoperfeita.com.br",
-    instagram: "@oticavisaoperfeita",
+    nome: "",
+    cnpj: "",
+    email: "",
+    telefone: "",
+    whatsapp: "",
+    endereco: "",
+    cidade: "",
+    estado: "",
+    cep: "",
+    site: "",
+    instagram: "",
+  });
+
+  // Carregar dados reais da empresa
+  useState(() => {
+    fetch("/api/company/settings")
+      .then((r) => r.json())
+      .then((result) => {
+        if (result.success && result.data) {
+          const d = result.data;
+          setDadosEmpresa({
+            nome: d.displayName ?? "",
+            cnpj: d.cnpj ?? "",
+            email: d.email ?? "",
+            telefone: d.phone ?? "",
+            whatsapp: d.whatsapp ?? "",
+            endereco: d.address ?? "",
+            cidade: d.city ?? "",
+            estado: d.state ?? "",
+            cep: d.zipCode ?? "",
+            site: "",
+            instagram: "",
+          });
+        }
+      })
+      .catch(() => {})
+      .finally(() => setLoadingDados(false));
   });
 
   // Estados para mensagens personalizadas
@@ -117,15 +144,35 @@ function ConfiguracoesPage() {
     rodape: "Obrigado pela preferência!",
   });
 
-  const handleSalvarConfiguracoes = () => {
+  const handleSalvarConfiguracoes = async () => {
     setLoading(true);
-    setTimeout(() => {
-      toast({
-        title: "Configurações salvas!",
-        description: "As alterações foram aplicadas com sucesso.",
+    try {
+      const res = await fetch("/api/company/settings", {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          displayName: dadosEmpresa.nome,
+          cnpj: dadosEmpresa.cnpj,
+          email: dadosEmpresa.email,
+          phone: dadosEmpresa.telefone,
+          whatsapp: dadosEmpresa.whatsapp,
+          address: dadosEmpresa.endereco,
+          city: dadosEmpresa.cidade,
+          state: dadosEmpresa.estado,
+          zipCode: dadosEmpresa.cep,
+        }),
       });
+      const result = await res.json();
+      if (result.success) {
+        toast({ title: "Configurações salvas!", description: "As alterações foram aplicadas com sucesso." });
+      } else {
+        toast({ title: "Erro ao salvar", description: result.error ?? "Tente novamente.", variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro ao salvar", description: "Tente novamente.", variant: "destructive" });
+    } finally {
       setLoading(false);
-    }, 1000);
+    }
   };
 
   const handleRestaurarMensagem = (tipo: keyof typeof MENSAGENS_PADRAO) => {

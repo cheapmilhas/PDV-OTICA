@@ -224,6 +224,21 @@ export async function POST(request: Request) {
         },
       });
 
+      // 7.0. Criar CompanySettings com dados cadastrais
+      await tx.companySettings.create({
+        data: {
+          companyId: company.id,
+          displayName: tradeName || companyName,
+          cnpj: cleanCnpj || null,
+          phone: phone || null,
+          email: email || null,
+          address: address || null,
+          city: city || null,
+          state: state || null,
+          zipCode: zipCode || null,
+        },
+      });
+
       // 7.1. Configurar módulo financeiro
       try {
         await setupCompanyFinance(tx, company.id, branch?.id);
