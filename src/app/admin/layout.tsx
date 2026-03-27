@@ -1,65 +1,13 @@
 import type { Metadata } from "next";
-import Link from "next/link";
-import {
-  LayoutDashboard,
-  Users,
-  Wallet,
-  FileText,
-  AlertTriangle,
-  Settings,
-  Package,
-  UserCog,
-  ScrollText,
-  UserPlus,
-  Ticket,
-  FileBarChart
-} from "lucide-react";
 import { AdminLogoutButton } from "./AdminLogoutButton";
 import { NotificationBell } from "@/components/admin/NotificationBell";
+import { AdminNav } from "./admin-nav";
+import { AdminBreadcrumb } from "./admin-breadcrumb";
 
 export const metadata: Metadata = {
   title: "PDV Ótica - Admin",
   description: "Portal de administração do PDV Ótica SaaS",
 };
-
-const menuItems = [
-  {
-    section: "Principal",
-    items: [
-      { href: "/admin", icon: LayoutDashboard, label: "Dashboard" },
-      { href: "/admin/clientes", icon: Users, label: "Todos os Clientes" },
-      { href: "/admin/clientes/novo", icon: UserPlus, label: "Novo Cliente" },
-    ]
-  },
-  {
-    section: "Suporte",
-    items: [
-      { href: "/admin/suporte/tickets", icon: Ticket, label: "Tickets" },
-    ]
-  },
-  {
-    section: "Financeiro",
-    items: [
-      { href: "/admin/financeiro", icon: Wallet, label: "Visão Geral" },
-      { href: "/admin/financeiro/faturas", icon: FileText, label: "Faturas" },
-      { href: "/admin/financeiro/inadimplencia", icon: AlertTriangle, label: "Inadimplência" },
-    ]
-  },
-  {
-    section: "Relatórios",
-    items: [
-      { href: "/admin/relatorios", icon: FileBarChart, label: "Relatórios" },
-    ]
-  },
-  {
-    section: "Configurações",
-    items: [
-      { href: "/admin/configuracoes/planos", icon: Package, label: "Planos" },
-      { href: "/admin/configuracoes/equipe", icon: UserCog, label: "Equipe" },
-      { href: "/admin/configuracoes/logs", icon: ScrollText, label: "Logs" },
-    ]
-  }
-];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   return (
@@ -84,27 +32,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
 
         {/* Menu */}
-        <nav className="flex-1 px-3 py-4 overflow-y-auto">
-          {menuItems.map((section) => (
-            <div key={section.section} className="mb-6">
-              <p className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
-                {section.section}
-              </p>
-              <div className="space-y-0.5">
-                {section.items.map((item) => (
-                  <Link
-                    key={item.href}
-                    href={item.href}
-                    className="flex items-center gap-2.5 px-3 py-2 rounded-lg text-gray-400 hover:text-white hover:bg-gray-800 transition-colors text-sm"
-                  >
-                    <item.icon className="h-4 w-4 flex-shrink-0" />
-                    {item.label}
-                  </Link>
-                ))}
-              </div>
-            </div>
-          ))}
-        </nav>
+        <AdminNav />
 
         {/* Footer */}
         <div className="px-3 py-3 border-t border-gray-800">
@@ -114,8 +42,9 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
-        {/* Top bar com sino de notificações */}
-        <div className="flex justify-end items-center px-6 py-3 border-b border-gray-800 bg-gray-950">
+        {/* Top bar com breadcrumb e sino */}
+        <div className="flex items-center justify-between px-6 py-3 border-b border-gray-800 bg-gray-950">
+          <AdminBreadcrumb />
           <NotificationBell />
         </div>
         {children}

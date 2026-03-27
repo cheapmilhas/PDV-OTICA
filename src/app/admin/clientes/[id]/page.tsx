@@ -11,6 +11,9 @@ import { CompanyBranches } from "./company-branches";
 import { CompanyDataForm } from "./company-data-form";
 import { CompanyNetwork } from "./company-network";
 import { HealthBadge } from "@/components/health-badge";
+import { CompanyTimeline } from "./company-timeline";
+import { CompanyOnboarding } from "./company-onboarding";
+import { CompanyTags } from "./company-tags";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -79,6 +82,26 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
     where: { companyId: id },
     orderBy: { calculatedAt: "desc" },
   });
+
+  // Sprint 2.2 — ActivityLog, Onboarding, Tags
+  const activityLogs = await prisma.activityLog.findMany({
+    where: { companyId: id },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  const onboardingChecklist = await prisma.onboardingChecklist.findUnique({
+    where: { companyId: id },
+    include: { steps: { orderBy: { order: "asc" } } },
+  });
+
+  const companyTags = await prisma.companyTag.findMany({
+    where: { companyId: id },
+    include: { tag: true },
+    orderBy: { createdAt: "asc" },
+  });
+
+  const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
   return (
     <div className="p-6 text-white">
@@ -179,6 +202,9 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                 <MetricCard label="Clientes" value={company._count.customers} icon={Users} />
               </div>
 
+              {/* Onboarding Checklist */}
+              <CompanyOnboarding checklist={onboardingChecklist} />
+
               {/* Usuários */}
               <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
                 <div className="px-5 py-4 border-b border-gray-800">
@@ -223,6 +249,9 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                   </div>
                 </div>
               )}
+
+              {/* Timeline de Atividades */}
+              <CompanyTimeline logs={activityLogs} />
             </div>
 
             {/* Coluna lateral */}
@@ -251,6 +280,13 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                   </div>
                 )}
               </div>
+
+              {/* Tags */}
+              <CompanyTags
+                companyId={id}
+                initialTags={companyTags}
+                availableTags={allTags}
+              />
 
               {/* Últimas Faturas (resumo) */}
               {invoices.length > 0 && (
