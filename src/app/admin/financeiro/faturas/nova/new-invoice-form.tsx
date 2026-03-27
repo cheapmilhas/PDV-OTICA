@@ -35,7 +35,7 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
 
     setLoading(true);
     try {
-      const res = await fetch("/api/admin/financeiro/faturas/create", {
+      const res = await fetch("/api/admin/faturas/create", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
