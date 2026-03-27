@@ -65,7 +65,6 @@ export function Header() {
     role: session?.user?.role || "USER",
   };
 
-  // Inicializar nome do perfil quando a sessão carregar
   useEffect(() => {
     if (session?.user?.name) {
       setProfileName(session.user.name);
@@ -94,7 +93,6 @@ export function Header() {
       newErrors.name = "Nome é obrigatório";
     }
 
-    // Se qualquer campo de senha foi preenchido, valida todos
     const changingPassword = currentPassword || newPassword || confirmPassword;
     if (changingPassword) {
       if (!currentPassword) {
@@ -136,7 +134,6 @@ export function Header() {
 
       if (!res.ok) {
         const msg = data.error?.message || "Erro ao salvar perfil";
-        // Erros específicos de senha voltam para o campo correto
         if (data.error?.code === "INVALID_PASSWORD") {
           setErrors({ currentPassword: "Senha atual incorreta" });
         } else {
@@ -155,9 +152,6 @@ export function Header() {
     }
   };
 
-  // Branches são carregadas pelo BranchContext (BranchProvider)
-
-  // Buscar contagens de notificações
   useEffect(() => {
     if (!session?.user) return;
     const fetchNotifications = async () => {
@@ -194,31 +188,31 @@ export function Header() {
 
   return (
     <>
-    <header className="flex h-14 md:h-16 items-center justify-between border-b bg-background px-4 md:px-6">
+    <header className="flex h-[60px] items-center justify-between border-b bg-background/95 backdrop-blur-sm px-4 md:px-5 sticky top-0 z-30">
       {/* Mobile menu button */}
       <MobileSidebar />
 
-      {/* Search - esconde em mobile */}
-      <div className="hidden sm:flex flex-1 items-center gap-4 max-w-md">
+      {/* Search */}
+      <div className="hidden sm:flex flex-1 items-center gap-4 max-w-sm">
         <GlobalSearch />
       </div>
 
       {/* Actions */}
-      <div className="flex items-center gap-2 md:gap-4">
+      <div className="flex items-center gap-1.5 md:gap-2">
         {/* Branch Selector */}
         {branches.length > 0 && (
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
-              <Button variant="outline" className="hidden md:flex gap-2">
-                <Building2 className="h-4 w-4" />
-                <span className="max-w-[150px] truncate">
+              <Button variant="outline" size="sm" className="hidden md:flex gap-1.5 h-8 text-xs">
+                <Building2 className="h-3.5 w-3.5" />
+                <span className="max-w-[120px] truncate">
                   {isAllBranches ? "Todas as Lojas" : activeBranch?.name || "Selecionar"}
                 </span>
-                {branches.length > 1 && <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+                {branches.length > 1 && <ChevronDown className="h-3 w-3 text-muted-foreground" />}
               </Button>
             </DropdownMenuTrigger>
-            <DropdownMenuContent align="end" className="w-56">
-              <DropdownMenuLabel>Selecionar Filial</DropdownMenuLabel>
+            <DropdownMenuContent align="end" className="w-52">
+              <DropdownMenuLabel className="text-xs">Selecionar Filial</DropdownMenuLabel>
               <DropdownMenuSeparator />
               {isAdminUser && (
                 <>
@@ -226,8 +220,8 @@ export function Header() {
                     onClick={() => setActiveBranch("ALL")}
                     className={isAllBranches ? "bg-accent" : ""}
                   >
-                    <Building2 className="mr-2 h-4 w-4 text-primary" />
-                    <span className="font-medium">Todas as Lojas</span>
+                    <Building2 className="mr-2 h-3.5 w-3.5 text-primary" />
+                    <span className="font-medium text-sm">Todas as Lojas</span>
                   </DropdownMenuItem>
                   <DropdownMenuSeparator />
                 </>
@@ -238,8 +232,8 @@ export function Header() {
                   onClick={() => setActiveBranch(branch.id)}
                   className={activeBranchId === branch.id ? "bg-accent" : ""}
                 >
-                  <Building2 className="mr-2 h-4 w-4" />
-                  {branch.name}
+                  <Building2 className="mr-2 h-3.5 w-3.5" />
+                  <span className="text-sm">{branch.name}</span>
                   {branch.city && (
                     <span className="ml-auto text-xs text-muted-foreground">{branch.city}</span>
                   )}
@@ -252,45 +246,52 @@ export function Header() {
         {/* Notifications */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative">
-              <Bell className="h-5 w-5" />
+            <Button variant="ghost" size="icon" className="relative h-8 w-8">
+              <Bell className="h-4 w-4" />
               {notifCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-5 w-5 items-center justify-center rounded-full bg-destructive text-[10px] font-bold text-destructive-foreground">
+                <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground ring-2 ring-background">
                   {notifCount}
                 </span>
               )}
             </Button>
           </PopoverTrigger>
-          <PopoverContent align="end" className="w-80 p-0">
-            <div className="p-3 border-b">
+          <PopoverContent align="end" className="w-80 p-0 shadow-elevated">
+            <div className="px-4 py-3 border-b">
               <p className="text-sm font-semibold">Notificações</p>
+              {notifCount > 0 && (
+                <p className="text-xs text-muted-foreground mt-0.5">{notifCount} item{notifCount > 1 ? "s" : ""} pendente{notifCount > 1 ? "s" : ""}</p>
+              )}
             </div>
-            <div className="max-h-64 overflow-y-auto">
+            <div className="max-h-72 overflow-y-auto">
               {notifCount === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">Nenhuma notificação</p>
+                <div className="flex flex-col items-center py-8 gap-2">
+                  <Bell className="h-8 w-8 text-muted-foreground/30" />
+                  <p className="text-sm text-muted-foreground">Tudo em dia</p>
+                </div>
               ) : (
                 <div className="divide-y">
                   {notifData.osDelayed > 0 && (
                     <>
                       <button
-                        className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                        className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors duration-150"
                         onClick={() => router.push("/dashboard/ordens-servico?filter=atrasadas")}
                       >
-                        <AlertTriangle className="h-4 w-4 text-red-500 shrink-0" />
+                        <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-destructive/10">
+                          <AlertTriangle className="h-3.5 w-3.5 text-destructive" />
+                        </div>
                         <div className="flex-1 min-w-0">
                           <p className="text-sm font-medium">{notifData.osDelayed} OS atrasada{notifData.osDelayed > 1 ? "s" : ""}</p>
                           <p className="text-xs text-muted-foreground">Clique para ver todas</p>
                         </div>
                       </button>
-                      {notifData.osDelayedList.slice(0, 3).map((os) => (
+                      {notifData.osDelayedList.slice(0, 2).map((os) => (
                         <button
                           key={os.id}
-                          className="flex items-center gap-3 w-full px-3 py-2 text-left hover:bg-accent transition-colors pl-10"
+                          className="flex items-center gap-3 w-full px-4 py-2.5 text-left hover:bg-muted/50 transition-colors duration-150 pl-14"
                           onClick={() => router.push(`/dashboard/ordens-servico?filter=atrasadas`)}
                         >
-                          <Clock className="h-3.5 w-3.5 text-red-400 shrink-0" />
                           <div className="flex-1 min-w-0">
-                            <p className="text-xs font-medium">OS #{String(os.number).padStart(5, "0")}</p>
+                            <p className="text-xs font-medium text-foreground">OS #{String(os.number).padStart(5, "0")}</p>
                             <p className="text-xs text-muted-foreground truncate">{os.customer?.name || "Cliente"}</p>
                           </div>
                         </button>
@@ -299,10 +300,12 @@ export function Header() {
                   )}
                   {notifData.lowStock > 0 && (
                     <button
-                      className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                      className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors duration-150"
                       onClick={() => router.push("/dashboard/estoque")}
                     >
-                      <Package className="h-4 w-4 text-amber-500 shrink-0" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning/10">
+                        <Package className="h-3.5 w-3.5 text-warning" />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">{notifData.lowStock} produto{notifData.lowStock > 1 ? "s" : ""} com estoque baixo</p>
                         <p className="text-xs text-muted-foreground">Abaixo do estoque mínimo</p>
@@ -311,10 +314,12 @@ export function Header() {
                   )}
                   {notifData.shiftOpen && notifData.shiftHours >= 12 && (
                     <button
-                      className="flex items-center gap-3 w-full px-3 py-2.5 text-left hover:bg-accent transition-colors"
+                      className="flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors duration-150"
                       onClick={() => router.push("/dashboard/caixa")}
                     >
-                      <Clock className="h-4 w-4 text-orange-500 shrink-0" />
+                      <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-warning/10">
+                        <Clock className="h-3.5 w-3.5 text-warning" />
+                      </div>
                       <div className="flex-1 min-w-0">
                         <p className="text-sm font-medium">Caixa aberto há {Math.floor(notifData.shiftHours)}h</p>
                         <p className="text-xs text-muted-foreground">Considere fechar o caixa</p>
@@ -326,10 +331,10 @@ export function Header() {
             </div>
             <Separator />
             <button
-              className="w-full px-3 py-2 text-sm text-center text-primary hover:bg-accent transition-colors"
+              className="w-full px-4 py-2.5 text-xs text-center text-primary hover:bg-muted/50 transition-colors duration-150 font-medium"
               onClick={() => router.push("/dashboard/lembretes")}
             >
-              Ver todos os lembretes
+              Ver todos os lembretes →
             </button>
           </PopoverContent>
         </Popover>
@@ -337,40 +342,41 @@ export function Header() {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" className="gap-2">
-              <Avatar className="h-8 w-8">
-                <AvatarFallback className="bg-primary text-primary-foreground text-sm">
+            <Button variant="ghost" size="sm" className="gap-2 h-8 px-2">
+              <Avatar className="h-6 w-6">
+                <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                   {user.name.charAt(0)}
                 </AvatarFallback>
               </Avatar>
-              <span className="hidden md:inline-block">{user.name}</span>
+              <span className="hidden md:inline-block text-sm font-medium max-w-[120px] truncate">{user.name}</span>
+              <ChevronDown className="hidden md:block h-3 w-3 text-muted-foreground" />
             </Button>
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-56">
+          <DropdownMenuContent align="end" className="w-56 shadow-elevated">
             <DropdownMenuLabel>
-              <div className="flex flex-col space-y-1">
-                <p className="text-sm font-medium">{user.name}</p>
-                <p className="text-xs text-muted-foreground">{user.email}</p>
-                <Badge variant="secondary" className="w-fit text-xs">
+              <div className="flex flex-col gap-0.5">
+                <p className="text-sm font-semibold">{user.name}</p>
+                <p className="text-xs text-muted-foreground font-normal">{user.email}</p>
+                <Badge variant="secondary" className="w-fit text-xs mt-1">
                   {user.role}
                 </Badge>
               </div>
             </DropdownMenuLabel>
             <DropdownMenuSeparator />
-            <DropdownMenuItem onClick={() => setProfileOpen(true)}>
-              <User className="mr-2 h-4 w-4" />
+            <DropdownMenuItem onClick={() => setProfileOpen(true)} className="text-sm">
+              <User className="mr-2 h-3.5 w-3.5" />
               Meu Perfil
             </DropdownMenuItem>
-            <DropdownMenuItem onClick={() => router.push("/dashboard/lembretes")}>
-              <Bell className="mr-2 h-4 w-4" />
+            <DropdownMenuItem onClick={() => router.push("/dashboard/lembretes")} className="text-sm">
+              <Bell className="mr-2 h-3.5 w-3.5" />
               Notificações
             </DropdownMenuItem>
             <DropdownMenuSeparator />
             <DropdownMenuItem
-              className="text-destructive"
+              className="text-destructive text-sm"
               onClick={() => signOut({ callbackUrl: "/" })}
             >
-              <LogOut className="mr-2 h-4 w-4" />
+              <LogOut className="mr-2 h-3.5 w-3.5" />
               Sair
             </DropdownMenuItem>
           </DropdownMenuContent>
@@ -388,22 +394,22 @@ export function Header() {
 
         <div className="space-y-4 py-2">
           {/* Info do usuário */}
-          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted">
-            <Avatar className="h-12 w-12">
-              <AvatarFallback className="bg-primary text-primary-foreground text-lg">
+          <div className="flex items-center gap-3 p-3 rounded-lg bg-muted/50 border border-border">
+            <Avatar className="h-11 w-11">
+              <AvatarFallback className="bg-primary text-primary-foreground text-base font-semibold">
                 {user.name.charAt(0)}
               </AvatarFallback>
             </Avatar>
             <div>
-              <p className="font-medium">{user.name}</p>
-              <p className="text-sm text-muted-foreground">{user.email}</p>
+              <p className="font-semibold text-sm">{user.name}</p>
+              <p className="text-xs text-muted-foreground">{user.email}</p>
               <Badge variant="secondary" className="text-xs mt-1">{user.role}</Badge>
             </div>
           </div>
 
           {/* Nome */}
           <div className="space-y-1.5">
-            <Label htmlFor="profile-name">Nome</Label>
+            <Label htmlFor="profile-name" className="text-sm font-medium">Nome</Label>
             <Input
               id="profile-name"
               value={profileName}
@@ -415,12 +421,14 @@ export function Header() {
           </div>
 
           {/* Separador senha */}
-          <div className="pt-2">
-            <p className="text-sm font-medium text-muted-foreground mb-3">Alterar Senha <span className="font-normal">(opcional)</span></p>
+          <div className="pt-1">
+            <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">
+              Alterar Senha <span className="font-normal normal-case tracking-normal">(opcional)</span>
+            </p>
 
             <div className="space-y-3">
               <div className="space-y-1.5">
-                <Label htmlFor="current-password">Senha atual</Label>
+                <Label htmlFor="current-password" className="text-sm font-medium">Senha atual</Label>
                 <div className="relative">
                   <Input
                     id="current-password"
@@ -433,42 +441,42 @@ export function Header() {
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    size="icon-sm"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2"
                     onClick={() => setShowCurrentPassword(!showCurrentPassword)}
                   >
-                    {showCurrentPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showCurrentPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
                 {errors.currentPassword && <p className="text-xs text-destructive">{errors.currentPassword}</p>}
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="new-password">Nova senha</Label>
+                <Label htmlFor="new-password" className="text-sm font-medium">Nova senha</Label>
                 <div className="relative">
                   <Input
                     id="new-password"
                     type={showNewPassword ? "text" : "password"}
                     value={newPassword}
                     onChange={(e) => { setNewPassword(e.target.value); setErrors(p => ({ ...p, newPassword: undefined })); }}
-                    placeholder="Mínimo 6 caracteres"
+                    placeholder="Mínimo 8 caracteres"
                     className={errors.newPassword ? "border-destructive focus-visible:ring-destructive pr-10" : "pr-10"}
                   />
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    size="icon-sm"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2"
                     onClick={() => setShowNewPassword(!showNewPassword)}
                   >
-                    {showNewPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showNewPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
                 {errors.newPassword && <p className="text-xs text-destructive">{errors.newPassword}</p>}
               </div>
 
               <div className="space-y-1.5">
-                <Label htmlFor="confirm-password">Confirmar nova senha</Label>
+                <Label htmlFor="confirm-password" className="text-sm font-medium">Confirmar nova senha</Label>
                 <div className="relative">
                   <Input
                     id="confirm-password"
@@ -481,11 +489,11 @@ export function Header() {
                   <Button
                     type="button"
                     variant="ghost"
-                    size="icon"
-                    className="absolute right-1 top-1/2 -translate-y-1/2 h-7 w-7"
+                    size="icon-sm"
+                    className="absolute right-1.5 top-1/2 -translate-y-1/2"
                     onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   >
-                    {showConfirmPassword ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                    {showConfirmPassword ? <EyeOff className="h-3.5 w-3.5" /> : <Eye className="h-3.5 w-3.5" />}
                   </Button>
                 </div>
                 {errors.confirmPassword && <p className="text-xs text-destructive">{errors.confirmPassword}</p>}
@@ -494,12 +502,12 @@ export function Header() {
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 pt-2">
-          <Button variant="outline" onClick={() => handleProfileOpenChange(false)} disabled={savingProfile}>
+        <div className="flex justify-end gap-2 pt-2 border-t">
+          <Button variant="outline" size="sm" onClick={() => handleProfileOpenChange(false)} disabled={savingProfile}>
             Cancelar
           </Button>
-          <Button onClick={handleSaveProfile} disabled={savingProfile}>
-            {savingProfile && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
+          <Button size="sm" onClick={handleSaveProfile} disabled={savingProfile}>
+            {savingProfile && <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />}
             Salvar
           </Button>
         </div>

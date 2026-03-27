@@ -72,7 +72,6 @@ export function MobileNav() {
     return pathname === href || pathname.startsWith(href + "/");
   }
 
-  // Filtrar itens baseado nas permissões do usuário
   const visiblePrimaryNav = primaryNav.filter(
     (item) => !item.permission || isAdmin || hasPermission(item.permission)
   );
@@ -83,27 +82,27 @@ export function MobileNav() {
 
   return (
     <>
-      {/* Overlay do menu "Mais" */}
+      {/* Overlay */}
       {showMore && (
         <div
-          className="fixed inset-0 z-40 bg-black/40 md:hidden"
+          className="fixed inset-0 z-40 bg-foreground/20 backdrop-blur-sm md:hidden"
           onClick={() => setShowMore(false)}
         />
       )}
 
-      {/* Sheet do menu "Mais" */}
+      {/* Sheet "Mais" */}
       {showMore && (
-        <div className="fixed bottom-16 left-0 right-0 z-50 md:hidden bg-background border-t rounded-t-2xl shadow-2xl pb-safe">
-          <div className="flex items-center justify-between px-4 pt-4 pb-2">
-            <span className="font-semibold text-sm text-muted-foreground">Mais opções</span>
+        <div className="fixed bottom-[60px] left-0 right-0 z-50 md:hidden bg-card border-t shadow-elevated rounded-t-2xl pb-safe">
+          <div className="flex items-center justify-between px-4 pt-3.5 pb-2">
+            <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mais opções</span>
             <button
               onClick={() => setShowMore(false)}
-              className="h-8 w-8 flex items-center justify-center rounded-full bg-muted"
+              className="flex h-7 w-7 items-center justify-center rounded-full bg-muted hover:bg-muted/70 transition-colors"
             >
-              <X className="h-4 w-4" />
+              <X className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
           </div>
-          <div className="grid grid-cols-3 gap-3 p-4">
+          <div className="grid grid-cols-4 gap-1.5 px-3 pb-3">
             {visibleMoreNav.map((item) => {
               const Icon = item.icon;
               const active = isActive(item.href);
@@ -113,14 +112,14 @@ export function MobileNav() {
                   href={item.href}
                   onClick={() => setShowMore(false)}
                   className={cn(
-                    "flex flex-col items-center justify-center gap-1.5 p-3 rounded-xl text-xs font-medium transition-colors",
+                    "flex flex-col items-center justify-center gap-1.5 p-2.5 rounded-xl text-[10px] font-medium transition-all duration-150",
                     active
-                      ? "bg-primary text-primary-foreground"
-                      : "bg-muted text-muted-foreground hover:bg-muted/80"
+                      ? "bg-primary text-primary-foreground shadow-sm"
+                      : "bg-muted/50 text-muted-foreground hover:bg-muted hover:text-foreground"
                   )}
                 >
-                  <Icon className="h-5 w-5" />
-                  {item.label}
+                  <Icon className="h-4.5 w-4.5" />
+                  <span className="leading-tight text-center">{item.label}</span>
                 </Link>
               );
             })}
@@ -128,9 +127,9 @@ export function MobileNav() {
         </div>
       )}
 
-      {/* Barra de navegação inferior */}
-      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-background border-t pb-safe">
-        <div className="flex items-center justify-around h-14">
+      {/* Bottom nav bar */}
+      <nav className="fixed bottom-0 left-0 right-0 z-40 md:hidden bg-card/95 backdrop-blur-sm border-t pb-safe">
+        <div className="flex items-stretch justify-around h-[58px]">
           {visiblePrimaryNav.map((item) => {
             const Icon = item.icon;
             const active = isActive(item.href);
@@ -139,26 +138,35 @@ export function MobileNav() {
                 key={item.href}
                 href={item.href}
                 className={cn(
-                  "flex flex-col items-center justify-center gap-0.5 w-full h-full text-[10px] font-medium transition-colors",
+                  "flex flex-col items-center justify-center gap-0.5 w-full text-[10px] font-medium transition-colors duration-150 pt-1",
                   active ? "text-primary" : "text-muted-foreground"
                 )}
               >
-                <Icon className={cn("h-5 w-5", active && "stroke-[2.5]")} />
+                <div className={cn(
+                  "flex items-center justify-center h-6 w-10 rounded-full transition-all duration-150",
+                  active ? "bg-primary/10" : ""
+                )}>
+                  <Icon className={cn("h-4.5 w-4.5", active && "stroke-[2.5]")} />
+                </div>
                 {item.label}
               </Link>
             );
           })}
 
-          {/* Botão Mais — só aparece se há itens no moreNav visíveis */}
           {visibleMoreNav.length > 0 && (
             <button
               onClick={() => setShowMore(!showMore)}
               className={cn(
-                "flex flex-col items-center justify-center gap-0.5 w-full h-full text-[10px] font-medium transition-colors",
+                "flex flex-col items-center justify-center gap-0.5 w-full text-[10px] font-medium transition-colors duration-150 pt-1",
                 showMore ? "text-primary" : "text-muted-foreground"
               )}
             >
-              <MoreHorizontal className={cn("h-5 w-5", showMore && "stroke-[2.5]")} />
+              <div className={cn(
+                "flex items-center justify-center h-6 w-10 rounded-full transition-all duration-150",
+                showMore ? "bg-primary/10" : ""
+              )}>
+                <MoreHorizontal className={cn("h-4.5 w-4.5", showMore && "stroke-[2.5]")} />
+              </div>
               Mais
             </button>
           )}

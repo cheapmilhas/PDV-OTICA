@@ -1,51 +1,13 @@
 import type { ReactNode } from "react";
-import { Card, CardContent } from "@/components/ui/card";
 
 interface EmptyStateProps {
-  /**
-   * Ícone a ser mostrado (componente Lucide ou similar)
-   */
   icon?: ReactNode;
-
-  /**
-   * Título da mensagem
-   */
   title: string;
-
-  /**
-   * Descrição adicional (opcional)
-   */
   description?: string;
-
-  /**
-   * Botão de ação (opcional)
-   */
   action?: ReactNode;
-
-  /**
-   * Classe CSS adicional
-   */
   className?: string;
 }
 
-/**
- * Componente de estado vazio
- * Mostra mensagem amigável quando não há dados
- *
- * @example
- * ```tsx
- * <EmptyState
- *   icon={<Users className="h-12 w-12" />}
- *   title="Nenhum cliente encontrado"
- *   description="Comece adicionando seu primeiro cliente"
- *   action={
- *     <Button onClick={() => router.push('/clientes/novo')}>
- *       Novo Cliente
- *     </Button>
- *   }
- * />
- * ```
- */
 export function EmptyState({
   icon,
   title,
@@ -54,31 +16,26 @@ export function EmptyState({
   className = "",
 }: EmptyStateProps) {
   return (
-    <Card className={className}>
-      <CardContent className="flex flex-col items-center justify-center py-12 text-center">
-        {icon && (
-          <div className="mb-4 text-muted-foreground opacity-50">
-            {icon}
-          </div>
-        )}
+    <div className={`flex flex-col items-center justify-center py-16 text-center px-4 ${className}`}>
+      {icon && (
+        <div className="mb-4 text-muted-foreground/30">
+          {icon}
+        </div>
+      )}
 
-        <h3 className="text-lg font-semibold text-foreground">{title}</h3>
+      <h3 className="text-base font-semibold text-foreground">{title}</h3>
 
-        {description && (
-          <p className="mt-2 text-sm text-muted-foreground max-w-md">
-            {description}
-          </p>
-        )}
+      {description && (
+        <p className="mt-1.5 text-sm text-muted-foreground max-w-sm leading-relaxed">
+          {description}
+        </p>
+      )}
 
-        {action && <div className="mt-6">{action}</div>}
-      </CardContent>
-    </Card>
+      {action && <div className="mt-5">{action}</div>}
+    </div>
   );
 }
 
-/**
- * Variant específico para resultados de busca vazios
- */
 export function NoSearchResults({
   searchTerm,
   onClear,
@@ -100,7 +57,7 @@ export function NoSearchResults({
         onClear && searchTerm ? (
           <button
             onClick={onClear}
-            className="text-sm text-primary hover:underline"
+            className="text-sm text-primary hover:underline font-medium"
           >
             Limpar busca
           </button>

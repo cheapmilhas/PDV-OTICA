@@ -277,13 +277,12 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const { logoUrl, displayName, primaryColor } = useCompanySettings();
   const { hasPermission, isAdmin } = usePermissions();
 
-  // Cor do sidebar: usa a cor primária escolhida ou padrão
+  // Cor do sidebar: usa a cor primária escolhida ou padrão escuro
   const sidebarBg = primaryColor || null;
 
-  // Calcula luminância para decidir se texto deve ser branco ou escuro.
-  // Threshold 160 (de 255) — cobre bem azul, verde, roxo, vermelho, rosa, índigo, ciano, laranja
+  // Calcula luminância para decidir se texto deve ser branco ou escuro
   const useWhiteText = (() => {
-    if (!sidebarBg) return false;
+    if (!sidebarBg) return true; // padrão escuro usa texto branco
     const hex = sidebarBg.replace("#", "");
     const r = parseInt(hex.substring(0, 2), 16);
     const g = parseInt(hex.substring(2, 4), 16);
@@ -291,42 +290,45 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
     return (r * 0.299 + g * 0.587 + b * 0.114) < 160;
   })();
 
-  const textColor = useWhiteText ? "text-white" : "text-foreground";
-  const mutedTextColor = useWhiteText ? "text-white/80" : "text-muted-foreground";
+  // Classes condicionais baseadas na cor do sidebar
+  const textColor = useWhiteText ? "text-white/90" : "text-foreground";
+  const mutedTextColor = useWhiteText ? "text-white/40" : "text-muted-foreground";
   const activeClass = useWhiteText
-    ? "bg-white/25 text-white font-medium"
+    ? "bg-white/15 text-white font-medium"
     : "bg-primary/10 text-primary font-medium";
   const hoverClass = useWhiteText
-    ? "text-white/80 hover:bg-white/15 hover:text-white"
-    : "text-muted-foreground hover:bg-accent hover:text-accent-foreground";
-  const borderColor = useWhiteText ? "border-white/20" : "border-border";
+    ? "text-white/65 hover:bg-white/10 hover:text-white/90"
+    : "text-muted-foreground hover:bg-muted hover:text-foreground";
+  const borderColor = useWhiteText ? "border-white/10" : "border-border";
+
+  const defaultSidebarStyle = !sidebarBg
+    ? { backgroundColor: "hsl(var(--sidebar))" }
+    : { backgroundColor: sidebarBg };
 
   return (
     <aside
-      className="flex h-screen w-64 flex-col border-r"
-      style={sidebarBg ? { backgroundColor: sidebarBg } : {}}
+      className="flex h-screen w-[220px] flex-col border-r shrink-0"
+      style={defaultSidebarStyle}
     >
       {/* Logo */}
-      <div className={cn("flex h-20 items-center justify-center border-b px-4", borderColor)}>
-        <Link href="/dashboard" className="flex items-center justify-center w-full">
+      <div className={cn("flex h-[60px] items-center px-4 border-b", borderColor)}>
+        <Link href="/dashboard" className="flex items-center gap-2.5 w-full min-w-0">
           {logoUrl ? (
-            // Com logo: centralizada, sem texto
             // eslint-disable-next-line @next/next/no-img-element
             <img
               src={logoUrl}
               alt="Logo"
-              className="h-12 w-auto max-w-[200px] object-contain"
+              className="h-8 w-auto max-w-[160px] object-contain"
             />
           ) : (
-            // Sem logo: ícone + nome centralizados
             <>
               <div className={cn(
-                "flex h-8 w-8 items-center justify-center rounded-md flex-shrink-0",
-                useWhiteText ? "bg-white/20" : "bg-primary"
+                "flex h-7 w-7 items-center justify-center rounded-lg flex-shrink-0",
+                useWhiteText ? "bg-white/15" : "bg-primary/10"
               )}>
-                <ShoppingCart className={cn("h-5 w-5", useWhiteText ? "text-white" : "text-primary-foreground")} />
+                <ShoppingCart className={cn("h-4 w-4", useWhiteText ? "text-white/90" : "text-primary")} />
               </div>
-              <span className={cn("ml-2 font-bold text-lg", textColor)}>
+              <span className={cn("font-semibold text-sm truncate", textColor)}>
                 {displayName || "PDV Ótica"}
               </span>
             </>
@@ -335,25 +337,26 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       </div>
 
       {/* Menu */}
-      <nav className="flex-1 overflow-y-auto p-4">
+      <nav className="flex-1 overflow-y-auto px-2 py-3">
         {menuItems.map((section) => {
-          // Filtrar itens que o usuário tem acesso
           const visibleItems = section.items.filter(
             (item) => !item.permission || isAdmin || hasPermission(item.permission)
           );
 
-          // Não renderizar seção se não tiver itens visíveis
           if (visibleItems.length === 0) return null;
 
           return (
-            <div key={section.title} className="mb-6">
-              <h3 className={cn("mb-2 px-2 text-xs font-semibold uppercase tracking-wider", mutedTextColor)}>
+            <div key={section.title} className="mb-4">
+              <p className={cn(
+                "mb-1 px-2.5 text-[10px] font-semibold uppercase tracking-widest",
+                mutedTextColor
+              )}>
                 {section.title}
-              </h3>
-              <ul className="space-y-1">
+              </p>
+              <ul className="space-y-0.5">
                 {visibleItems.map((item) => {
                   const Icon = item.icon;
-                  const isActive = pathname === item.href;
+                  const isActive = pathname === item.href || (item.href !== "/dashboard" && pathname.startsWith(item.href + "/"));
 
                   return (
                     <li key={item.name}>
@@ -361,14 +364,19 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                         href={item.href}
                         onClick={onNavigate}
                         className={cn(
-                          "flex items-center gap-3 rounded-md px-3 py-2 text-sm transition-colors",
+                          "flex items-center gap-2.5 rounded-md px-2.5 py-1.5 text-sm transition-all duration-150",
                           isActive ? activeClass : hoverClass
                         )}
                       >
-                        <Icon className="h-4 w-4" />
-                        <span className="flex-1">{item.name}</span>
+                        <Icon className="h-3.5 w-3.5 flex-shrink-0" />
+                        <span className="flex-1 truncate text-xs">{item.name}</span>
                         {item.hotkey && (
-                          <kbd className={cn("hidden lg:inline-block px-1.5 py-0.5 text-xs font-mono border rounded", useWhiteText ? "border-white/30 bg-white/10 text-white/80" : "border bg-background")}>
+                          <kbd className={cn(
+                            "hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono rounded",
+                            useWhiteText
+                              ? "border border-white/20 bg-white/8 text-white/50"
+                              : "border border-border bg-muted text-muted-foreground"
+                          )}>
                             {item.hotkey}
                           </kbd>
                         )}
@@ -382,12 +390,11 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
         })}
       </nav>
 
-      {/* Footer */}
-      <div className={cn("border-t p-4", borderColor)}>
-        <div className={cn("text-xs text-center", mutedTextColor)}>
-          <p>Versão 1.0.0</p>
-          <p className="mt-1">© 2026 PDV Ótica</p>
-        </div>
+      {/* Footer minimalista */}
+      <div className={cn("border-t px-4 py-3", borderColor)}>
+        <p className={cn("text-[10px] text-center", mutedTextColor)}>
+          v1.0 · PDV Ótica
+        </p>
       </div>
     </aside>
   );
