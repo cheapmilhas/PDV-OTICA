@@ -49,14 +49,23 @@ export async function GET(request: NextRequest) {
       });
     }
 
-    // Se displayName não estiver preenchido, usar Company.name como fallback
-    if (!settings.displayName) {
+    // Fallback: preencher campos vazios com dados da Company
+    const needsFallback = !settings.displayName || !settings.cnpj || !settings.phone || !settings.email || !settings.address;
+    if (needsFallback) {
       const company = await prisma.company.findUnique({
         where: { id: companyId },
-        select: { name: true },
+        select: { name: true, tradeName: true, cnpj: true, phone: true, email: true, address: true, city: true, state: true, zipCode: true },
       });
-      if (company?.name) {
-        (settings as any).displayName = company.name;
+      if (company) {
+        const s = settings as any;
+        if (!s.displayName) s.displayName = company.tradeName ?? company.name;
+        if (!s.cnpj) s.cnpj = company.cnpj;
+        if (!s.phone) s.phone = company.phone;
+        if (!s.email) s.email = company.email;
+        if (!s.address) s.address = company.address;
+        if (!s.city) s.city = company.city;
+        if (!s.state) s.state = company.state;
+        if (!s.zipCode) s.zipCode = company.zipCode;
       }
     }
 
