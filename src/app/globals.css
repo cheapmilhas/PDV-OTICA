@@ -2,6 +2,44 @@
 @tailwind components;
 @tailwind utilities;
 
+/* ===== LANDING PAGE — Custom CSS Properties ===== */
+/* These are used by landing components and are separate from the Shadcn HSL system */
+:root {
+  /* Landing dark theme (default) */
+  --lp-background: #08080E;
+  --lp-surface: #0E0E18;
+  --lp-surface-hover: #161625;
+  --lp-foreground: #F8F8FC;
+  --lp-muted: #6B7080;
+  --lp-subtle: #3D3D50;
+  --lp-border: rgba(255, 255, 255, 0.06);
+  --lp-border-hover: rgba(255, 255, 255, 0.13);
+
+  /* Landing brand colors */
+  --brand-primary: #6366F1;
+  --brand-hover: #7C7FF5;
+  --brand-accent: #0EA5E9;
+  --brand-success: #10B981;
+  --brand-warning: #F59E0B;
+  --brand-glow: rgba(99, 102, 241, 0.18);
+
+  /* Typography scale */
+  --text-hero: clamp(2.6rem, 5.5vw, 5rem);
+  --text-h1: clamp(2rem, 3.5vw, 3.2rem);
+  --text-h2: clamp(1.5rem, 2.5vw, 2.2rem);
+}
+
+.light {
+  --lp-background: #F7F7FA;
+  --lp-surface: #FFFFFF;
+  --lp-surface-hover: #F0F0F5;
+  --lp-foreground: #0A0A14;
+  --lp-muted: #52525E;
+  --lp-subtle: #9090A0;
+  --lp-border: rgba(0, 0, 0, 0.07);
+  --lp-border-hover: rgba(0, 0, 0, 0.13);
+}
+
 @layer base {
   :root {
     /* ── Backgrounds ── */
@@ -303,4 +341,152 @@ html {
 /* ===== FOCUS RING ===== */
 .focus-ring {
   @apply focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-1;
+}
+
+/* ===================================================
+   LANDING PAGE — Utility Classes
+   (used by components in src/components/home/ and
+    src/components/landing-layout/)
+   =================================================== */
+
+@layer utilities {
+
+  /* ── Typography ── */
+  .font-heading {
+    font-family: var(--font-body), 'Plus Jakarta Sans', system-ui, sans-serif;
+    letter-spacing: -0.02em;
+  }
+
+  /* ── Text Colors ── */
+  .text-muted {
+    color: var(--lp-muted);
+  }
+  .text-subtle {
+    color: var(--lp-subtle);
+  }
+
+  /* ── Brand Color Utilities ── */
+  .text-brand-primary { color: var(--brand-primary); }
+  .text-brand-accent  { color: var(--brand-accent); }
+  .text-brand-success { color: var(--brand-success); }
+  .text-brand-warning { color: var(--brand-warning); }
+  .bg-brand-primary   { background-color: var(--brand-primary); }
+  .bg-brand-accent    { background-color: var(--brand-accent); }
+  .bg-brand-success   { background-color: var(--brand-success); }
+  .bg-brand-warning   { background-color: var(--brand-warning); }
+  .bg-brand-primary\/10 { background-color: rgba(99, 102, 241, 0.10); }
+  .bg-brand-primary\/5  { background-color: rgba(99, 102, 241, 0.05); }
+  .bg-brand-accent\/10  { background-color: rgba(14, 165, 233, 0.10); }
+  .bg-brand-success\/10 { background-color: rgba(16, 185, 129, 0.10); }
+  .bg-brand-warning\/10 { background-color: rgba(245, 158, 11, 0.10); }
+  .border-brand-primary { border-color: var(--brand-primary); }
+  .border-brand-success { border-color: var(--brand-success); }
+  .border-brand-success\/20 { border-color: rgba(16, 185, 129, 0.20); }
+
+  /* ── Gradient Text — premium, non-cliché ── */
+  /* REMOVED: old purple→cyan gradient (the "AI look")           */
+  /* REPLACED: brand teal underline style via class on the parent */
+  .text-gradient {
+    /* Solid brand teal — strong, confident, not gradient-rainbow */
+    color: var(--brand-primary);
+  }
+  .text-gradient-brand {
+    color: var(--brand-primary);
+  }
+
+  /* ── Backgrounds ── */
+  .bg-gradient-hero {
+    /* Subtle off-black to dark-indigo — atmosphere without cliché */
+    background: radial-gradient(
+      ellipse 80% 50% at 50% -10%,
+      rgba(99, 102, 241, 0.12) 0%,
+      transparent 70%
+    ),
+    radial-gradient(
+      ellipse 50% 40% at 85% 60%,
+      rgba(14, 165, 233, 0.06) 0%,
+      transparent 60%
+    ),
+    var(--lp-background);
+  }
+
+  /* ── Noise Texture Overlay ── */
+  /* Apply as a pseudo element or direct class — adds organic grain */
+  .noise-overlay::after {
+    content: '';
+    position: absolute;
+    inset: 0;
+    background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='300' height='300'%3E%3Cfilter id='noise'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.9' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='300' height='300' filter='url(%23noise)' opacity='0.04'/%3E%3C/svg%3E");
+    opacity: 0.4;
+    pointer-events: none;
+    z-index: 0;
+    border-radius: inherit;
+  }
+
+  /* ── Dot Pattern ── */
+  .bg-dots {
+    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    background-size: 28px 28px;
+  }
+
+  /* ── Glass Effects ── */
+  .glass {
+    background: rgba(8, 8, 14, 0.82);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+  .glass-light {
+    background: rgba(247, 247, 250, 0.88);
+    backdrop-filter: blur(16px) saturate(180%);
+    -webkit-backdrop-filter: blur(16px) saturate(180%);
+  }
+
+  /* ── Glow Border ── */
+  .glow-border {
+    border: 1px solid rgba(99, 102, 241, 0.35);
+    box-shadow: 0 0 24px rgba(99, 102, 241, 0.12), inset 0 1px 0 rgba(255,255,255,0.04);
+  }
+
+  /* ── Shadow Glow for highlighted card ── */
+  .shadow-glow {
+    box-shadow:
+      0 0 0 1px rgba(99, 102, 241, 0.3),
+      0 8px 32px rgba(99, 102, 241, 0.18),
+      0 2px 8px rgba(99, 102, 241, 0.10);
+  }
+
+  /* ── Layout ── */
+  .section-padding {
+    padding-top: clamp(72px, 10vw, 128px);
+    padding-bottom: clamp(72px, 10vw, 128px);
+  }
+
+  .container-custom {
+    width: 100%;
+    max-width: 1200px;
+    margin-left: auto;
+    margin-right: auto;
+    padding-left: clamp(20px, 5vw, 80px);
+    padding-right: clamp(20px, 5vw, 80px);
+  }
+
+  /* ── Surface Hover ── */
+  .hover\:bg-\[var\(--surface-hover\)\]:hover {
+    background-color: var(--lp-surface-hover);
+  }
+}
+
+/* Inline CSS variable overrides for landing components */
+/* These shadow the Tailwind CSS variables so that landing-specific var(--background) etc. work */
+/* Applied via the .landing-scope class on the layout wrapper */
+.landing-scope,
+.landing-scope * {
+  --background: var(--lp-background);
+  --surface: var(--lp-surface);
+  --surface-hover: var(--lp-surface-hover);
+  --foreground: var(--lp-foreground);
+  --muted: var(--lp-muted);
+  --subtle: var(--lp-subtle);
+  --border: var(--lp-border);
+  --border-hover: var(--lp-border-hover);
 }

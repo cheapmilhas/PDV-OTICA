@@ -10,7 +10,8 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['var(--font-body)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-display)', 'Georgia', 'serif'],
+        heading: ['var(--font-body)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-body)', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",
