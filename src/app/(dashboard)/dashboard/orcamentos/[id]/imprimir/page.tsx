@@ -8,6 +8,7 @@ import { Printer, ArrowLeft, Loader2, Download } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface QuoteDetails {
   id: string;
@@ -73,7 +74,7 @@ interface QuoteDetails {
   }>;
 }
 
-export default function ImprimirOrcamentoPage() {
+function ImprimirOrcamentoContent() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -492,5 +493,13 @@ export default function ImprimirOrcamentoPage() {
         }
       `}</style>
     </>
+  );
+}
+
+export default function ImprimirOrcamentoPage() {
+  return (
+    <ProtectedRoute permission="quotes.view">
+      <ImprimirOrcamentoContent />
+    </ProtectedRoute>
   );
 }

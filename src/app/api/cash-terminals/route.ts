@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export async function GET(req: NextRequest) {
   try {
@@ -40,6 +41,11 @@ export async function POST(req: NextRequest) {
     await requireAuth();
     const companyId = await getCompanyId();
     const body = await req.json();
+
+    // Validação de segurança: branchId deve pertencer à empresa do usuário
+    if (body.branchId) {
+      await validateBranchOwnership(body.branchId, companyId);
+    }
 
     const register = await prisma.cashRegister.create({
       data: {

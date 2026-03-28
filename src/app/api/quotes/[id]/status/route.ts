@@ -24,9 +24,7 @@ export async function PATCH(
     const { id: quoteId } = await params;
     const body = await request.json();
 
-    console.log("📥 Status API - Body recebido:", body);
     const { status, lostReason } = updateQuoteStatusSchema.parse(body);
-    console.log("✅ Status validado:", status);
 
     const quote = await quoteService.updateStatus(
       quoteId,

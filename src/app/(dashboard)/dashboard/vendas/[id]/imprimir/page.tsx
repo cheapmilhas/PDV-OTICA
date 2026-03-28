@@ -9,6 +9,7 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import Image from "next/image";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface SaleDetails {
   id: string;
@@ -54,7 +55,7 @@ interface SaleDetails {
   }>;
 }
 
-export default function ImprimirVendaPage() {
+function ImprimirVendaContent() {
   const router = useRouter();
   const params = useParams();
   const searchParams = useSearchParams();
@@ -498,5 +499,13 @@ export default function ImprimirVendaPage() {
         }
       `}</style>
     </>
+  );
+}
+
+export default function ImprimirVendaPage() {
+  return (
+    <ProtectedRoute permission="sales.view">
+      <ImprimirVendaContent />
+    </ProtectedRoute>
   );
 }

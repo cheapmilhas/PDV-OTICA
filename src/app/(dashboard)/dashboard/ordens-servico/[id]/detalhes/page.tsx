@@ -20,6 +20,7 @@ import Link from "next/link";
 import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatDateBR } from "@/lib/date-utils";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
@@ -71,7 +72,7 @@ interface ServiceOrderDetails {
   }>;
 }
 
-export default function DetalhesOrdemServicoPage() {
+function DetalhesOrdemServicoContent() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -576,5 +577,13 @@ export default function DetalhesOrdemServicoPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function DetalhesOrdemServicoPage() {
+  return (
+    <ProtectedRoute permission="service_orders.view">
+      <DetalhesOrdemServicoContent />
+    </ProtectedRoute>
   );
 }

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export async function GET(req: NextRequest) {
   try {
@@ -61,6 +62,11 @@ export async function POST(req: NextRequest) {
 
     if (!productId || !qtyIn || !unitCost) {
       return handleApiError(new Error("productId, qtyIn e unitCost são obrigatórios"));
+    }
+
+    // Validação de segurança: branchId deve pertencer à empresa do usuário
+    if (branchId) {
+      await validateBranchOwnership(branchId, companyId);
     }
 
     const result = await prisma.$transaction(async (tx) => {

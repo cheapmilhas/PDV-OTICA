@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import toast from "react-hot-toast";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function EditarClientePage() {
+function EditarClienteContent() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -370,5 +371,13 @@ export default function EditarClientePage() {
         </Card>
       </form>
     </div>
+  );
+}
+
+export default function EditarClientePage() {
+  return (
+    <ProtectedRoute permission="customers.edit">
+      <EditarClienteContent />
+    </ProtectedRoute>
   );
 }

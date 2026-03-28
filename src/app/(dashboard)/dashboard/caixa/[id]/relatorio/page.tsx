@@ -7,8 +7,9 @@ import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function RelatorioFechamentoCaixaPage() {
+function RelatorioFechamentoCaixaContent() {
   const params = useParams();
   const shiftId = params.id as string;
   const [shift, setShift] = useState<any>(null);
@@ -203,5 +204,13 @@ export default function RelatorioFechamentoCaixaPage() {
         </div>
       </div>
     </div>
+  );
+}
+
+export default function RelatorioFechamentoCaixaPage() {
+  return (
+    <ProtectedRoute permission="cash_shift.view">
+      <RelatorioFechamentoCaixaContent />
+    </ProtectedRoute>
   );
 }

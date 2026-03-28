@@ -6,6 +6,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { dateOnlyToUTC } from "@/lib/date-utils";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 import { addDays } from "date-fns";
 import { cashbackService } from "@/services/cashback.service";
 import { atomicStockDebit } from "@/services/stock.service";
@@ -187,6 +188,9 @@ export class SaleService {
     const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId } = data;
     const effectiveSellerId = sellerUserId || userId;
 
+    // Validação de segurança: branchId deve pertencer à empresa do usuário
+    await validateBranchOwnership(branchId, companyId);
+
     // Validação: pelo menos 1 item
     if (!items || items.length === 0) {
       throw new AppError(
@@ -210,6 +214,15 @@ export class SaleService {
     for (const item of items) {
       const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
       subtotal += itemTotal;
+    }
+
+    // Validação: desconto não pode ser maior que o subtotal
+    if (discount > subtotal) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `Desconto (R$ ${discount.toFixed(2)}) não pode ser maior que o subtotal da venda (R$ ${subtotal.toFixed(2)})`,
+        400
+      );
     }
 
     const total = subtotal - discount;
@@ -317,16 +330,13 @@ export class SaleService {
     }
 
     // Verificar/Criar caixa aberto (auto-abertura se necessário)
-    console.log(`🔍 Buscando caixa aberto para branchId: ${branchId}`);
     let openShift = await prisma.cashShift.findFirst({
       where: { branchId, status: "OPEN" },
     });
 
     // Se não houver caixa aberto, criar automaticamente
     if (!openShift) {
-      console.log(`⚠️ Nenhum caixa aberto. Criando automaticamente...`);
-
-      // Buscar companyId da filial
+      // Buscar companyId da filial (já validada por validateBranchOwnership acima)
       const branch = await prisma.branch.findUnique({
         where: { id: branchId },
         select: { companyId: true },
@@ -346,10 +356,6 @@ export class SaleService {
           openedAt: new Date(),
         },
       });
-
-      console.log(`✅ Caixa criado automaticamente: ${openShift.id}`);
-    } else {
-      console.log(`✅ Caixa aberto encontrado: ${openShift.id}`);
     }
 
     // Criar venda em transação (venda + itens + pagamentos + cashMovement + estoque)
@@ -472,16 +478,8 @@ export class SaleService {
         // CREDIT_CARD NÃO entra no caixa físico — operadora repassa depois
         const methodsInCash = ["CASH", "PIX", "DEBIT_CARD"];
         if (methodsInCash.includes(payment.method)) {
-          console.log(`💰 Criando CashMovement para pagamento:`, {
-            cashShiftId: openShift.id,
-            branchId,
-            method: payment.method,
-            amount: payment.amount,
-            salePaymentId: salePayment.id,
-          });
-
           try {
-            const cashMovement = await tx.cashMovement.create({
+            await tx.cashMovement.create({
               data: {
                 cashShiftId: openShift.id,
                 branchId,
@@ -496,14 +494,10 @@ export class SaleService {
                 note: `Venda #${newSale.id.substring(0, 8)}`,
               },
             });
-
-            console.log(`✅ CashMovement criado com sucesso! ID: ${cashMovement.id}`);
           } catch (cashMovementError: any) {
-            console.error(`❌ ERRO ao criar CashMovement:`, cashMovementError);
+            console.error(`Erro ao criar CashMovement para venda ${newSale.id}:`, cashMovementError);
             throw cashMovementError;
           }
-        } else {
-          console.log(`ℹ️ Pagamento ${payment.method} não gera CashMovement (não é à vista)`);
         }
 
         // 6. Se for crediário, criar parcelas em AccountReceivable
@@ -532,7 +526,6 @@ export class SaleService {
             });
           }
 
-          console.log(`✅ Criadas ${installments.length} parcelas em AccountReceivable para venda ${newSale.id}`);
         }
 
         // 6b. Se for Saldo a Receber, criar 1 parcela em AccountReceivable
@@ -554,15 +547,11 @@ export class SaleService {
               createdByUserId: userId,
             },
           });
-
-          console.log(`✅ Saldo a Receber criado em AccountReceivable para venda ${newSale.id}`);
         }
       }
 
       // 6. Debitar cashback se foi usado
       if (cashbackUsed > 0 && customerId) {
-        console.log(`💸 Debitando cashback: R$ ${cashbackUsed.toFixed(2)} do cliente ${customerId}`);
-
         // Atualizar CustomerCashback (já validamos que existe antes da transação)
         const customerCashback = await tx.customerCashback.update({
           where: {
@@ -593,7 +582,6 @@ export class SaleService {
           },
         });
 
-        console.log(`✅ Cashback debitado com sucesso!`);
       }
 
       // 7. Calcular e criar comissão do vendedor (usa vendedor selecionado, não quem logou)
@@ -637,7 +625,6 @@ export class SaleService {
     // 9. Gerar cashback (se aplicável - fora da transação principal)
     if (customerId) {
       try {
-        console.log(`💰 Gerando cashback para venda ${sale.id}, cliente ${customerId}`);
         await cashbackService.earnCashback(
           customerId,
           sale.id,
@@ -645,21 +632,18 @@ export class SaleService {
           branchId,
           companyId
         );
-        console.log(`✅ Cashback gerado com sucesso para venda ${sale.id}`);
       } catch (cashbackError) {
-        // Log mas não falha a venda se cashback der erro
-        console.error(`❌ Erro ao gerar cashback (venda criada com sucesso):`, cashbackError);
+        // Falha no cashback não deve impedir a venda
+        console.error(`Erro ao gerar cashback para venda ${sale.id}:`, cashbackError);
       }
     }
 
     // 9. Processar campanhas de bonificação (se aplicável - fora da transação principal)
     try {
-      console.log(`🎯 Processando campanhas para venda ${sale.id}`);
-      const campaignResult = await processaSaleForCampaigns(sale.id, companyId);
-      console.log(`✅ Campanhas processadas: ${campaignResult.processed} bônus gerados (R$ ${campaignResult.bonusTotal.toFixed(2)})`);
+      await processaSaleForCampaigns(sale.id, companyId);
     } catch (campaignError) {
-      // Log mas não falha a venda se campanhas derem erro
-      console.error(`❌ Erro ao processar campanhas (venda criada com sucesso):`, campaignError);
+      // Falha em campanhas não deve impedir a venda
+      console.error(`Erro ao processar campanhas para venda ${sale.id}:`, campaignError);
     }
 
     // 10. Gerar lembrete pós-venda automaticamente (se cliente identificado)
@@ -700,10 +684,9 @@ export class SaleService {
               scheduledFor: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
             },
           });
-          console.log(`📋 Lembrete pós-venda criado para cliente ${customerId}`);
         }
       } catch (reminderError) {
-        console.error(`❌ Erro ao criar lembrete pós-venda (venda OK):`, reminderError);
+        console.error(`Erro ao criar lembrete pós-venda para cliente ${customerId}:`, reminderError);
       }
     }
 
@@ -887,10 +870,9 @@ export class SaleService {
               description: `Estorno cashback - Cancelamento venda #${id.substring(0, 8)}`,
             },
           });
-          console.log(`💸 Cashback estornado: R$ ${Number(cashbackMovement.amount)}`);
         }
       } catch (cashbackError) {
-        console.error(`❌ Erro ao estornar cashback (venda cancelada):`, cashbackError);
+        console.error(`Erro ao estornar cashback para venda ${id}:`, cashbackError);
       }
     }
 
@@ -913,11 +895,9 @@ export class SaleService {
 
     // 10. Reverter bônus de campanhas (se aplicável)
     try {
-      console.log(`🎯 Revertendo bônus de campanhas para venda ${id}`);
-      const reversalResult = await reverseBonusForSale(id, companyId);
-      console.log(`✅ Bônus revertidos: ${reversalResult.reversed} entradas`);
+      await reverseBonusForSale(id, companyId);
     } catch (campaignError) {
-      console.error(`❌ Erro ao reverter bônus de campanhas:`, campaignError);
+      console.error(`Erro ao reverter bônus de campanhas para venda ${id}:`, campaignError);
     }
 
     return this.getById(id, companyId, true);
@@ -1055,12 +1035,10 @@ export class SaleService {
 
     // 5. Reprocessar campanhas de bonificação (se aplicável - fora da transação principal)
     try {
-      console.log(`🎯 Reprocessando campanhas para venda reativada ${id}`);
-      const campaignResult = await processaSaleForCampaigns(id, companyId);
-      console.log(`✅ Campanhas reprocessadas: ${campaignResult.processed} bônus gerados (R$ ${campaignResult.bonusTotal.toFixed(2)})`);
+      await processaSaleForCampaigns(id, companyId);
     } catch (campaignError) {
-      // Log mas não falha a reativação se campanhas derem erro
-      console.error(`❌ Erro ao reprocessar campanhas (venda reativada com sucesso):`, campaignError);
+      // Falha em campanhas não deve impedir a reativação da venda
+      console.error(`Erro ao reprocessar campanhas para venda reativada ${id}:`, campaignError);
     }
 
     return this.getById(id, companyId, true);

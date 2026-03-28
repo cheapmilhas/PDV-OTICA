@@ -15,8 +15,6 @@ export async function GET(request: NextRequest) {
     const { searchParams } = new URL(request.url);
     const search = searchParams.get("search") || "";
 
-    console.log(`[API/products/search] Buscando "${search}" para company ${companyId}`);
-
     if (search.length < 2) {
       return NextResponse.json({
         success: true,
@@ -43,8 +41,6 @@ export async function GET(request: NextRequest) {
       take: 20,
       orderBy: { name: "asc" },
     });
-
-    console.log(`[API/products/search] Encontrados ${products.length} produtos`);
 
     return NextResponse.json({
       success: true,

@@ -548,7 +548,7 @@ function RelatorioHistoricoCaixasPageContent() {
 
 export default function RelatorioHistoricoCaixasPage() {
   return (
-    <ProtectedRoute permission="reports.financial">
+    <ProtectedRoute permission="reports.sales">
       <RelatorioHistoricoCaixasPageContent />
     </ProtectedRoute>
   );

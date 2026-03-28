@@ -102,13 +102,10 @@ export async function POST(request: Request) {
 
     // Parse e valida body
     const body = await request.json();
-    console.log("=== POST /api/sales ===");
-    console.log("Body recebido:", JSON.stringify(body, null, 2));
 
     // Valida com safeParse para capturar erros de validação
     const validation = createSaleSchema.safeParse(body);
     if (!validation.success) {
-      console.error("Erro de validação:", validation.error.issues);
       return NextResponse.json(
         {
           success: false,
@@ -123,7 +120,6 @@ export async function POST(request: Request) {
     }
 
     const data = validation.data;
-    console.log("Dados validados:", JSON.stringify(data, null, 2));
 
     // Sanitiza dados (remove valores vazios)
     const sanitized = sanitizeSaleDTO(data) as CreateSaleDTO;

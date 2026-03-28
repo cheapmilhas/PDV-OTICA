@@ -86,17 +86,14 @@ export class CustomerService {
     if (startDate || endDate) {
       where.createdAt = {};
       if (startDate) {
-        console.log("🔍 Filtro startDate:", startDate);
         where.createdAt.gte = startDate;
       }
       if (endDate) {
         // Adiciona 23:59:59 ao endDate para incluir todo o dia
         const endOfDay = new Date(endDate);
         endOfDay.setHours(23, 59, 59, 999);
-        console.log("🔍 Filtro endDate:", endOfDay);
         where.createdAt.lte = endOfDay;
       }
-      console.log("🔍 Where createdAt final:", where.createdAt);
     }
 
     // Busca full-text (OR entre múltiplos campos)

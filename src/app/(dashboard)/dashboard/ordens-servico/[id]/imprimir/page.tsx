@@ -9,8 +9,9 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatDateBR } from "@/lib/date-utils";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function ImprimirOrdemServicoPage() {
+function ImprimirOrdemServicoContent() {
   const params = useParams();
   const id = params.id as string;
   const [order, setOrder] = useState<any>(null);
@@ -401,5 +402,13 @@ export default function ImprimirOrdemServicoPage() {
         }
       `}</style>
     </>
+  );
+}
+
+export default function ImprimirOrdemServicoPage() {
+  return (
+    <ProtectedRoute permission="service_orders.view">
+      <ImprimirOrdemServicoContent />
+    </ProtectedRoute>
   );
 }

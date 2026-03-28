@@ -785,7 +785,6 @@ export async function processaSaleForCampaigns(
     );
 
     if (!limitCheck.allowed) {
-      console.log(`⚠️ Campanha ${campaign.name}: ${limitCheck.reason}`);
       continue;
     }
 
@@ -850,7 +849,6 @@ export async function processaSaleForCampaigns(
         bonusTotal += finalBonus / eligibleItems.length;
       } catch (error) {
         // Unique constraint: já processado, ok
-        console.log(`Item ${saleItem.id} já processado para campanha ${campaign.id}`);
       }
     }
 

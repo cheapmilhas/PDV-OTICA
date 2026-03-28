@@ -11,8 +11,9 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import toast from "react-hot-toast";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
-export default function EditarProdutoPage() {
+function EditarProdutoContent() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -570,5 +571,13 @@ export default function EditarProdutoPage() {
         </Card>
       </form>
     </div>
+  );
+}
+
+export default function EditarProdutoPage() {
+  return (
+    <ProtectedRoute permission="products.edit">
+      <EditarProdutoContent />
+    </ProtectedRoute>
   );
 }

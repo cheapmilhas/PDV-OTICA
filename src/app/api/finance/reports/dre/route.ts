@@ -3,6 +3,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { getDynamicDRE } from "@/services/finance-report.service";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -18,13 +19,13 @@ export async function GET(req: NextRequest) {
       return handleApiError(new Error("startDate e endDate são obrigatórios"));
     }
 
-    // Ajustar endDate para fim do dia (23:59:59.999) para incluir lançamentos do dia
-    const endOfDay = new Date(endDate);
-    endOfDay.setUTCHours(23, 59, 59, 999);
+    // Ajustar datas para o fuso local (America/Sao_Paulo)
+    const start = startOfLocalDay(startDate);
+    const endOfDay = endOfLocalDay(endDate);
 
     const dre = await getDynamicDRE(
       companyId,
-      new Date(startDate),
+      start,
       endOfDay,
       branchId || undefined
     );

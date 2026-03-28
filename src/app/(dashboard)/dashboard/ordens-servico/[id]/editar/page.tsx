@@ -12,6 +12,7 @@ import toast from "react-hot-toast";
 import { ArrowLeft, Trash2, Loader2, Plus } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface ServiceItem {
   description: string;
@@ -19,7 +20,7 @@ interface ServiceItem {
   observations: string;
 }
 
-export default function EditarOrdemServicoPage() {
+function EditarOrdemServicoContent() {
   const router = useRouter();
   const params = useParams();
   const id = params.id as string;
@@ -625,5 +626,13 @@ export default function EditarOrdemServicoPage() {
         </div>
       </form>
     </div>
+  );
+}
+
+export default function EditarOrdemServicoPage() {
+  return (
+    <ProtectedRoute permission="service_orders.edit">
+      <EditarOrdemServicoContent />
+    </ProtectedRoute>
   );
 }

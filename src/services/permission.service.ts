@@ -69,8 +69,6 @@ export class PermissionService {
       }
     });
 
-    console.log(`[PermissionService] ${user.email} (${user.role}): ${effective.size} effective permissions`);
-
     return {
       role: user.role,
       rolePermissions: rolePermissionStrings,
