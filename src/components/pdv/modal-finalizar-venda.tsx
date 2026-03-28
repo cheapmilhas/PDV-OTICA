@@ -364,15 +364,25 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                 {selectedMethod === "CREDIT_CARD" && (
                   <div className="space-y-0.5">
                     <Label htmlFor="installments" className="text-[11px]">Parcelas</Label>
-                    <Input
-                      id="installments"
-                      type="number"
-                      min="1"
-                      max="12"
-                      value={installments}
-                      onChange={(e) => setInstallments(e.target.value)}
-                      className="h-7 text-xs"
-                    />
+                    <Select value={installments} onValueChange={setInstallments}>
+                      <SelectTrigger className="h-7 text-xs">
+                        <SelectValue />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12].map((n) => {
+                          const val = parseFloat(amount) || 0;
+                          return (
+                            <SelectItem key={n} value={String(n)}>
+                              {n === 1
+                                ? `1x (à vista)`
+                                : val > 0
+                                  ? `${n}x R$ ${(val / n).toFixed(2).replace(".", ",")}`
+                                  : `${n}x`}
+                            </SelectItem>
+                          );
+                        })}
+                      </SelectContent>
+                    </Select>
                   </div>
                 )}
               </div>

@@ -247,6 +247,12 @@ const menuItems = [
         icon: PieChart,
         permission: "financial.view"
       },
+      {
+        name: "Cartões",
+        href: "/dashboard/financeiro/cartoes",
+        icon: CreditCard,
+        permission: "financial.view"
+      },
     ],
   },
   {

@@ -110,6 +110,14 @@ function VendasContent() {
     return labels[method] || method;
   };
 
+  const getPaymentDisplay = (method: string, installments?: number | null) => {
+    const label = getPaymentMethodLabel(method);
+    if (method === "CREDIT_CARD" && installments && installments > 1) {
+      return `${label} ${installments}x`;
+    }
+    return label;
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -283,7 +291,7 @@ function VendasContent() {
                         <div className="flex gap-1 flex-wrap">
                           {venda.payments.map((payment: any, idx: number) => (
                             <Badge key={idx} variant="outline" className="text-xs">
-                              {getPaymentMethodLabel(payment.method)}
+                              {getPaymentDisplay(payment.method, payment.installments)}
                             </Badge>
                           ))}
                         </div>

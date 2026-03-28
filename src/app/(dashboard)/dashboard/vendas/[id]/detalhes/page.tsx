@@ -61,6 +61,10 @@ interface SaleDetails {
     method: string;
     amount: number;
     installments: number;
+    cardBrand?: string | null;
+    nsu?: string | null;
+    authorizationCode?: string | null;
+    acquirer?: string | null;
   }>;
 }
 
@@ -667,10 +671,16 @@ export default function DetalhesVendaPage() {
                   <Badge variant="outline">
                     {getPaymentMethodLabel(payment.method)}
                   </Badge>
-                  {payment.installments > 1 && (
-                    <span className="text-sm text-muted-foreground ml-2">
-                      {payment.installments}x
-                    </span>
+                  {payment.method === "CREDIT_CARD" && (
+                    <div className="text-sm text-muted-foreground space-y-0.5 mt-1">
+                      {payment.installments > 1 && (
+                        <p>{payment.installments}x de R$ {(Number(payment.amount) / payment.installments).toFixed(2).replace(".", ",")}</p>
+                      )}
+                      {payment.cardBrand && <p>Bandeira: {payment.cardBrand}</p>}
+                      {payment.nsu && <p>NSU: {payment.nsu}</p>}
+                      {payment.authorizationCode && <p>Autoriz.: {payment.authorizationCode}</p>}
+                      {payment.acquirer && <p>Operadora: {payment.acquirer}</p>}
+                    </div>
                   )}
                 </div>
                 <p className="font-bold text-lg">

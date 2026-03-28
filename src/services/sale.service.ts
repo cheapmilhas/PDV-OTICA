@@ -548,6 +548,34 @@ export class SaleService {
             },
           });
         }
+
+        // 6c. Se for cartão de crédito, criar CardReceivable para previsão de recebimento
+        if (payment.method === "CREDIT_CARD") {
+          const numInstallments = payment.installments || payment.installmentConfig?.count || 1;
+          const installmentAmount = Number(payment.amount) / numInstallments;
+
+          for (let i = 1; i <= numInstallments; i++) {
+            // Operadoras depositam cada parcela em ~30 dias da data de cada parcela
+            const expectedDate = addDays(new Date(), 30 * i);
+
+            await tx.cardReceivable.create({
+              data: {
+                companyId,
+                branchId,
+                saleId: newSale.id,
+                salePaymentId: salePayment.id,
+                installmentNumber: i,
+                totalInstallments: numInstallments,
+                grossAmount: installmentAmount,
+                expectedDate,
+                status: "PENDING",
+                cardBrand: payment.cardBrand || null,
+                acquirer: payment.acquirer || null,
+                nsu: payment.nsu || null,
+              },
+            });
+          }
+        }
       }
 
       // 6. Debitar cashback se foi usado
@@ -762,7 +790,12 @@ export class SaleService {
         }
       }
 
-      // 3. Marcar pagamentos como cancelados e criar REFUND apenas para pagamentos à vista
+      // 3. Deletar CardReceivable da venda (cartão de crédito)
+      await tx.cardReceivable.deleteMany({
+        where: { saleId: id },
+      });
+
+      // 3a. Marcar pagamentos como cancelados e criar REFUND apenas para pagamentos à vista
       const methodsComCaixa: readonly string[] = METHODS_IN_CASH;
       for (const payment of sale.payments) {
         await tx.salePayment.update({
