@@ -84,7 +84,6 @@ export function FinalCta() {
               >
                 <Link
                   href={REGISTER_URL}
-                  target="_blank"
                   className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white group"
                   style={{
                     background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",

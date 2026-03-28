@@ -1,14 +1,15 @@
 export const SITE_NAME = "PDV Ótica";
-export const SITE_URL = "https://pdvotica.com.br";
-export const APP_URL = "https://app.pdvotica.com.br";
+export const SITE_URL = "https://pdv-otica.vercel.app";
+export const APP_URL = "https://pdv-otica.vercel.app";
 export const WHATSAPP_NUMBER = "5585999999999"; // Trocar pelo número real
 export const WHATSAPP_MESSAGE = encodeURIComponent(
   "Olá! Tenho interesse no PDV Ótica. Pode me contar mais?"
 );
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`;
 
-export const REGISTER_URL = `${APP_URL}/registro`;
-export const DEMO_URL = `${APP_URL}/demo`;
+export const REGISTER_URL = "/registro";
+export const LOGIN_URL = "/login";
+export const DEMO_URL = "/demo";
 
 export const SITE_DESCRIPTION =
   "O sistema completo para gestão da sua ótica. PDV, estoque, financeiro, laboratórios, NF-e e muito mais. Experimente grátis.";

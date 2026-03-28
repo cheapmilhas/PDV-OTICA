@@ -4,7 +4,7 @@ import { useState, useEffect } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, Sun, Moon, Eye, ArrowRight } from "lucide-react";
-import { NAV_LINKS, REGISTER_URL } from "@/lib/constants";
+import { NAV_LINKS, REGISTER_URL, LOGIN_URL } from "@/lib/constants";
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
@@ -110,8 +110,7 @@ export function Header() {
               )}
             </button>
             <Link
-              href={REGISTER_URL}
-              target="_blank"
+              href={LOGIN_URL}
               className="text-sm font-medium transition-colors"
               style={{ color: "var(--lp-muted)" }}
             >
@@ -124,7 +123,6 @@ export function Header() {
             >
               <Link
                 href={REGISTER_URL}
-                target="_blank"
                 className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white group transition-all"
                 style={{
                   background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
@@ -191,8 +189,7 @@ export function Header() {
                 style={{ borderTop: "1px solid rgba(255,255,255,0.07)" }}
               >
                 <Link
-                  href={REGISTER_URL}
-                  target="_blank"
+                  href={LOGIN_URL}
                   className="px-4 py-3 rounded-xl text-sm font-medium transition-colors"
                   style={{ color: "var(--lp-muted)" }}
                 >
@@ -200,7 +197,6 @@ export function Header() {
                 </Link>
                 <Link
                   href={REGISTER_URL}
-                  target="_blank"
                   className="flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold text-white"
                   style={{
                     background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",

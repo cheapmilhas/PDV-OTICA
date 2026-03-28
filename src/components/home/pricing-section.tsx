@@ -252,8 +252,8 @@ export function PricingSection() {
                 >
                   <Link
                     href={plan.id === "rede" ? WHATSAPP_URL : REGISTER_URL}
-                    target="_blank"
                     rel={plan.id === "rede" ? "noopener noreferrer" : undefined}
+                    target={plan.id === "rede" ? "_blank" : undefined}
                     className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
                     style={
                       isHighlighted

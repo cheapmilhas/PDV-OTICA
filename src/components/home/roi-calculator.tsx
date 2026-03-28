@@ -178,7 +178,7 @@ export function RoiCalculator() {
             </div>
 
             <Button size="lg" className="w-full" asChild>
-              <Link href={REGISTER_URL} target="_blank">
+              <Link href={REGISTER_URL}>
                 Quero esses resultados
                 <ArrowRight className="h-4 w-4 ml-1" />
               </Link>
