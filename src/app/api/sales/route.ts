@@ -10,6 +10,7 @@ import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * GET /api/sales
@@ -95,6 +96,10 @@ export async function POST(request: Request) {
     if (!session?.user?.id) {
       throw new Error("Usuário não autenticado");
     }
+
+    // Rate limit: 30 vendas por minuto por usuário
+    const rlBlocked = rateLimitResponse(`sales:${session.user.id}`, { maxRequests: 30, windowMs: 60_000 });
+    if (rlBlocked) return rlBlocked;
 
     const companyId = await getCompanyId();
     await requirePermission("sales.create");

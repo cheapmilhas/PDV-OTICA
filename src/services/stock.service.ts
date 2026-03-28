@@ -37,12 +37,22 @@ export async function atomicStockDebit(
 
   // Se branchId fornecido, usar BranchStock
   if (branchId) {
-    const branchStock = await client.branchStock.findUnique({
-      where: { branchId_productId: { branchId, productId } },
+    // Operação atômica: só debita se quantity >= solicitado (previne race condition)
+    const updated = await client.branchStock.updateMany({
+      where: {
+        branchId,
+        productId,
+        quantity: { gte: quantity },
+      },
+      data: { quantity: { decrement: quantity } },
     });
 
-    const currentQty = branchStock?.quantity ?? 0;
-    if (currentQty < quantity) {
+    if (updated.count === 0) {
+      // Buscar qty atual apenas para mensagem de erro
+      const branchStock = await client.branchStock.findUnique({
+        where: { branchId_productId: { branchId, productId } },
+      });
+      const currentQty = branchStock?.quantity ?? 0;
       return {
         success: false,
         previousQty: currentQty,
@@ -51,13 +61,9 @@ export async function atomicStockDebit(
       };
     }
 
-    // Debitar BranchStock
-    await client.branchStock.update({
-      where: { branchId_productId: { branchId, productId } },
-      data: { quantity: { decrement: quantity } },
-    });
+    const previousQty = (product.stockQty ?? 0);
 
-    // Atualizar cache Product.stockQty
+    // Atualizar cache Product.stockQty (atômico via $executeRaw)
     await client.$executeRaw`
       UPDATE "Product"
       SET "stockQty" = "stockQty" - ${quantity},
@@ -68,8 +74,8 @@ export async function atomicStockDebit(
 
     return {
       success: true,
-      previousQty: currentQty,
-      newQty: currentQty - quantity,
+      previousQty: previousQty,
+      newQty: previousQty - quantity,
     };
   }
 

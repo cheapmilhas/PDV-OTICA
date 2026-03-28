@@ -5,6 +5,7 @@ import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * GET /api/cash/shift
@@ -51,6 +52,10 @@ export async function POST(request: Request) {
     if (!session?.user?.id) {
       throw new Error("Usuário não autenticado");
     }
+
+    // Rate limit: 10 aberturas de caixa por minuto por usuário
+    const rlBlocked = rateLimitResponse(`cash-shift-open:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (rlBlocked) return rlBlocked;
 
     const companyId = await getCompanyId();
     const branchId = await getBranchId();

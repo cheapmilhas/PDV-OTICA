@@ -4,6 +4,7 @@ import { closeShiftSchema, type CloseShiftDTO } from "@/lib/validations/cash.sch
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { auth } from "@/auth";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * POST /api/cash/shift/close
@@ -17,6 +18,10 @@ export async function POST(request: Request) {
     if (!session?.user?.id) {
       throw new Error("Usuário não autenticado");
     }
+
+    // Rate limit: 10 fechamentos de caixa por minuto por usuário
+    const rlBlocked = rateLimitResponse(`cash-shift-close:${session.user.id}`, { maxRequests: 10, windowMs: 60_000 });
+    if (rlBlocked) return rlBlocked;
 
     const companyId = await getCompanyId();
     await requirePermission("cash_shift.close");

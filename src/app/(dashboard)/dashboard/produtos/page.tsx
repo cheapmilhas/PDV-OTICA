@@ -49,6 +49,7 @@ function ProdutosPage() {
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState("all");
+  const [stockControlFilter, setStockControlFilter] = useState("all");
   const [produtos, setProdutos] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -70,6 +71,9 @@ function ProdutosPage() {
     if (typeFilter && typeFilter !== "all") {
       params.set("type", typeFilter);
     }
+    if (stockControlFilter === "uncontrolled") {
+      params.set("stockControlled", "false");
+    }
 
     fetch(`/api/products?${params}`)
       .then((res) => res.json())
@@ -83,7 +87,7 @@ function ProdutosPage() {
         toast.error("Erro ao carregar produtos");
         setLoading(false);
       });
-  }, [search, page, typeFilter]);
+  }, [search, page, typeFilter, stockControlFilter]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja deletar este produto?")) return;
@@ -172,8 +176,8 @@ function ProdutosPage() {
         { duration: 5000 }
       );
 
-      if (result.results.errors.length > 0) {
-        console.log("Erros de importação:", result.results.errors);
+      if (result.results.errors.length > 0 && result.results.errors.length < result.results.imported) {
+        toast.warning(`${result.results.errors.length} produto(s) com erro na importação`);
       }
 
       // Recarregar lista
@@ -347,6 +351,15 @@ function ProdutosPage() {
             <SelectItem value="SERVICE">Serviço</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={stockControlFilter} onValueChange={setStockControlFilter}>
+          <SelectTrigger className="w-full md:w-[220px]">
+            <SelectValue placeholder="Controle de estoque" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">Todos</SelectItem>
+            <SelectItem value="uncontrolled">Sem controle de estoque</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Loading */}
@@ -402,6 +415,11 @@ function ProdutosPage() {
                       <p className="text-xl font-bold text-primary">
                         {formatCurrency(produto.salePrice)}
                       </p>
+                      {!produto.stockControlled && (
+                        <span className="inline-block text-xs text-amber-600 bg-amber-50 dark:bg-amber-950/30 dark:text-amber-400 px-1.5 py-0.5 rounded border border-amber-200 dark:border-amber-800">
+                          Sem controle de estoque
+                        </span>
+                      )}
                       {produto.stockControlled && (
                         <div className="flex items-center justify-between text-sm">
                           <span className="text-muted-foreground">Estoque:</span>

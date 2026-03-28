@@ -6,6 +6,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { dateOnlyToUTC, startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
+import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { addDays } from "date-fns";
 import { cashbackService } from "@/services/cashback.service";
@@ -476,8 +477,7 @@ export class SaleService {
         // 5. Criar CashMovement apenas para pagamentos à vista
         // STORE_CREDIT (crediário) NÃO entra no caixa — será recebido depois via parcelas
         // CREDIT_CARD NÃO entra no caixa físico — operadora repassa depois
-        const methodsInCash = ["CASH", "PIX", "DEBIT_CARD"];
-        if (methodsInCash.includes(payment.method)) {
+        if ((METHODS_IN_CASH as readonly string[]).includes(payment.method)) {
           try {
             await tx.cashMovement.create({
               data: {
@@ -763,7 +763,7 @@ export class SaleService {
       }
 
       // 3. Marcar pagamentos como cancelados e criar REFUND apenas para pagamentos à vista
-      const methodsComCaixa = ["CASH", "PIX", "DEBIT_CARD"];
+      const methodsComCaixa: readonly string[] = METHODS_IN_CASH;
       for (const payment of sale.payments) {
         await tx.salePayment.update({
           where: { id: payment.id },

@@ -40,6 +40,7 @@ import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
+import { METHODS_A_PRAZO } from "@/lib/payment-methods";
 
 type CashShift = {
   id: string;
@@ -163,7 +164,7 @@ function CaixaPage() {
     .reduce((sum, m) => sum + m.amount, 0);
 
   // Saldo do caixa: apenas pagamentos à vista (exclui crediário e cartão crédito)
-  const methodsAPrazo = ["STORE_CREDIT", "CREDIT_CARD", "BALANCE_DUE"];
+  const methodsAPrazo: readonly string[] = METHODS_A_PRAZO;
   const valorAtual = movements.reduce((sum, m) => {
     if (m.type === "SALE_PAYMENT" && methodsAPrazo.includes(m.method)) return sum; // Ignora a prazo
     return sum + (m.direction === "IN" ? m.amount : -m.amount);
