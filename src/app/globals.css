@@ -5,15 +5,15 @@
 /* ===== LANDING PAGE — Custom CSS Properties ===== */
 /* These are used by landing components and are separate from the Shadcn HSL system */
 :root {
-  /* Landing dark theme (default) */
-  --lp-background: #08080E;
-  --lp-surface: #0E0E18;
-  --lp-surface-hover: #161625;
-  --lp-foreground: #F8F8FC;
-  --lp-muted: #6B7080;
-  --lp-subtle: #3D3D50;
-  --lp-border: rgba(255, 255, 255, 0.06);
-  --lp-border-hover: rgba(255, 255, 255, 0.13);
+  /* Landing dark theme (default) — medium dark, not OLED black */
+  --lp-background: #111116;
+  --lp-surface: #18181F;
+  --lp-surface-hover: #22222C;
+  --lp-foreground: #F2F2F7;
+  --lp-muted: #8888A0;
+  --lp-subtle: #55556A;
+  --lp-border: rgba(255, 255, 255, 0.08);
+  --lp-border-hover: rgba(255, 255, 255, 0.15);
 
   /* Landing brand colors */
   --brand-primary: #6366F1;
