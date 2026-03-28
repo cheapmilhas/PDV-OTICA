@@ -204,6 +204,7 @@ model Company {
   stockTransfers          StockTransfer[]
   usageSnapshots          UsageSnapshot[]
   cardReceivables         CardReceivable[]
+  recurringExpenses       RecurringExpense[]
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -267,6 +268,7 @@ model Branch {
   transfersFrom         StockTransfer[]          @relation("TransferFrom")
   transfersTo           StockTransfer[]          @relation("TransferTo")
   cardReceivables       CardReceivable[]
+  recurringExpenses     RecurringExpense[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -528,12 +530,13 @@ model Supplier {
   active          Boolean               @default(true)
   createdAt       DateTime              @default(now())
   updatedAt       DateTime              @updatedAt
-  accountsPayable AccountPayable[]
-  inventoryLots   InventoryLot[]        @relation("LotSupplier")
-  products        Product[]
-  campaignItems   ProductCampaignItem[]
-  stockMovements  StockMovement[]
-  company         Company               @relation(fields: [companyId], references: [id])
+  accountsPayable    AccountPayable[]
+  inventoryLots      InventoryLot[]        @relation("LotSupplier")
+  products           Product[]
+  campaignItems      ProductCampaignItem[]
+  stockMovements     StockMovement[]
+  recurringExpenses  RecurringExpense[]
+  company            Company               @relation(fields: [companyId], references: [id])
 
   @@unique([companyId, cnpj])
   @@index([companyId, name])
@@ -1475,21 +1478,56 @@ model AccountPayable {
   paidDate        DateTime?
   paidAmount      Decimal?             @db.Decimal(12, 2)
   status          AccountPayableStatus @default(PENDING)
-  invoiceNumber   String?
-  notes           String?
-  createdByUserId String?
-  paidByUserId    String?
-  createdAt       DateTime             @default(now())
-  updatedAt       DateTime             @updatedAt
-  branch          Branch?              @relation(fields: [branchId], references: [id])
-  company         Company              @relation(fields: [companyId], references: [id])
-  createdBy       User?                @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
-  paidBy          User?                @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
-  supplier        Supplier?            @relation(fields: [supplierId], references: [id])
+  invoiceNumber        String?
+  notes                String?
+  recurringExpenseId   String?
+  createdByUserId      String?
+  paidByUserId         String?
+  createdAt            DateTime             @default(now())
+  updatedAt            DateTime             @updatedAt
+  branch               Branch?              @relation(fields: [branchId], references: [id])
+  company              Company              @relation(fields: [companyId], references: [id])
+  createdBy            User?                @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
+  paidBy               User?                @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
+  supplier             Supplier?            @relation(fields: [supplierId], references: [id])
+  recurringExpense     RecurringExpense?    @relation(fields: [recurringExpenseId], references: [id])
 
   @@index([companyId, status, dueDate])
   @@index([supplierId, status])
   @@index([dueDate, status])
+  @@index([recurringExpenseId])
+}
+
+model RecurringExpense {
+  id              String          @id @default(cuid())
+  companyId       String
+  branchId        String?
+
+  description     String
+  category        AccountCategory
+  amount          Decimal         @db.Decimal(12, 2)
+
+  frequency       String          @default("MONTHLY")
+  dayOfMonth      Int             @default(10)
+
+  supplierId      String?
+  notes           String?
+
+  active          Boolean         @default(true)
+
+  lastGeneratedAt DateTime?
+  nextDueDate     DateTime?
+
+  company            Company          @relation(fields: [companyId], references: [id])
+  branch             Branch?          @relation(fields: [branchId], references: [id])
+  supplier           Supplier?        @relation(fields: [supplierId], references: [id])
+  generatedPayables  AccountPayable[]
+
+  createdAt       DateTime        @default(now())
+  updatedAt       DateTime        @updatedAt
+
+  @@index([companyId])
+  @@index([companyId, active])
 }
 
 model AccountReceivable {
@@ -3356,6 +3394,8 @@ enum AccountCategory {
   MARKETING
   MAINTENANCE
   EQUIPMENT
+  ACCOUNTING
+  INTERNET_PHONE
   OTHER
 }
 

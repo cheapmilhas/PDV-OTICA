@@ -253,6 +253,12 @@ const menuItems = [
         icon: CreditCard,
         permission: "financial.view"
       },
+      {
+        name: "Despesas Fixas",
+        href: "/dashboard/financeiro/despesas-recorrentes",
+        icon: Receipt,
+        permission: "financial.view"
+      },
     ],
   },
   {
