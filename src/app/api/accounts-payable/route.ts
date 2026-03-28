@@ -6,6 +6,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountPayableStatus, AccountCategory } from "@prisma/client";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 /**
  * Schema de validação para query params (GET)
@@ -214,6 +215,11 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const data = createAccountPayableSchema.parse(body);
+
+    // Validação de segurança: branchId deve pertencer à empresa do usuário
+    if (data.branchId) {
+      await validateBranchOwnership(data.branchId, companyId);
+    }
 
     // Criar conta a pagar
     const accountPayable = await prisma.accountPayable.create({

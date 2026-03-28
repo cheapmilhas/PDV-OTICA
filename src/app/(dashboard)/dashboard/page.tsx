@@ -54,11 +54,13 @@ import Link from "next/link";
 import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { useRouter } from "next/navigation";
 import { useBranchContext } from "@/hooks/use-branch-context";
+import { usePermissions } from "@/hooks/usePermissions";
 
 // Dashboard resiliente — todas as APIs com safeFetch
 export default function DashboardPage() {
   const router = useRouter();
   const { activeBranchId, isAllBranches } = useBranchContext();
+  const { hasPermission } = usePermissions();
   const [currentTime, setCurrentTime] = useState<Date | null>(null);
   const defaultMetrics = {
     salesToday: 0,
@@ -265,15 +267,15 @@ export default function DashboardPage() {
         <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mb-3">Acesso Rápido</p>
         <div className="grid grid-cols-4 gap-3">
           {[
-            { icon: ShoppingCart, label: "PDV", href: "/dashboard/pdv", color: "bg-green-500" },
-            { icon: FileText, label: "Vendas", href: "/dashboard/vendas", color: "bg-blue-500" },
-            { icon: Users, label: "Clientes", href: "/dashboard/clientes", color: "bg-purple-500" },
-            { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque", color: "bg-orange-500" },
-            { icon: ClipboardList, label: "OS", href: "/dashboard/ordens-servico", color: "bg-indigo-500" },
-            { icon: FileEdit, label: "Orçamentos", href: "/dashboard/orcamentos", color: "bg-cyan-500" },
-            { icon: DollarSign, label: "Financeiro", href: "/dashboard/financeiro", color: "bg-emerald-500" },
-            { icon: Wallet, label: "Caixa", href: "/dashboard/caixa", color: "bg-amber-500" },
-          ].map((item) => {
+            { icon: ShoppingCart, label: "PDV", href: "/dashboard/pdv", color: "bg-green-500", permission: "sales.create" },
+            { icon: FileText, label: "Vendas", href: "/dashboard/vendas", color: "bg-blue-500", permission: "sales.view" },
+            { icon: Users, label: "Clientes", href: "/dashboard/clientes", color: "bg-purple-500", permission: "customers.view" },
+            { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque", color: "bg-orange-500", permission: "stock.view" },
+            { icon: ClipboardList, label: "OS", href: "/dashboard/ordens-servico", color: "bg-indigo-500", permission: "service_orders.view" },
+            { icon: FileEdit, label: "Orçamentos", href: "/dashboard/orcamentos", color: "bg-cyan-500", permission: "quotes.view" },
+            { icon: DollarSign, label: "Financeiro", href: "/dashboard/financeiro", color: "bg-emerald-500", permission: "financial.view" },
+            { icon: Wallet, label: "Caixa", href: "/dashboard/caixa", color: "bg-amber-500", permission: "cash_shift.view" },
+          ].filter((item) => hasPermission(item.permission)).map((item) => {
             const Icon = item.icon;
             return (
               <Link key={item.href} href={item.href} className="flex flex-col items-center gap-1.5">

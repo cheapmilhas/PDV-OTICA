@@ -589,17 +589,35 @@ function PDVPage() {
                   </div>
                 )}
 
-                <Input
-                  type="number"
-                  step="0.01"
-                  min="0"
-                  placeholder="0"
-                  value={editModalValue}
-                  onChange={(e) => setEditModalValue(e.target.value)}
-                  autoFocus
-                  className="text-lg h-10 text-center font-semibold"
-                  onKeyDown={(e) => e.key === "Enter" && confirmarEdicaoModal()}
-                />
+                {(() => {
+                  const valor = parseFloat(editModalValue.replace(",", "."));
+                  const isDiscountInvalid = editModalMode === "discount" && !isNaN(valor) && valor > 0 && (
+                    (editModalDiscountType === "PERCENTAGE" && valor > 100) ||
+                    (editModalDiscountType === "FIXED" && valor > preco * item.quantity)
+                  );
+                  return (
+                    <div className="space-y-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        value={editModalValue}
+                        onChange={(e) => setEditModalValue(e.target.value)}
+                        autoFocus
+                        className={`text-lg h-10 text-center font-semibold ${isDiscountInvalid ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                        onKeyDown={(e) => e.key === "Enter" && confirmarEdicaoModal()}
+                      />
+                      {isDiscountInvalid && (
+                        <p className="text-xs text-red-500 text-center">
+                          {editModalDiscountType === "PERCENTAGE"
+                            ? "Percentual máximo: 100%"
+                            : `Máximo: R$ ${(preco * item.quantity).toFixed(2).replace(".", ",")}`}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
 
                 <div className="flex gap-2">
                   {editModalMode === "discount" && (
@@ -616,7 +634,17 @@ function PDVPage() {
                   <Button variant="outline" size="sm" onClick={() => setEditModalOpen(false)}>
                     Cancelar
                   </Button>
-                  <Button size="sm" onClick={confirmarEdicaoModal}>
+                  <Button
+                    size="sm"
+                    onClick={confirmarEdicaoModal}
+                    disabled={editModalMode === "discount" && (() => {
+                      const valor = parseFloat(editModalValue.replace(",", "."));
+                      return !isNaN(valor) && valor > 0 && (
+                        (editModalDiscountType === "PERCENTAGE" && valor > 100) ||
+                        (editModalDiscountType === "FIXED" && valor > preco * item.quantity)
+                      );
+                    })()}
+                  >
                     OK
                   </Button>
                 </div>

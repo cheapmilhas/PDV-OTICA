@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -17,10 +18,8 @@ export async function GET(req: NextRequest) {
       : new Date();
     const status = searchParams.get("status"); // PENDING, SETTLED, ALL
 
-    const startOfDay = new Date(startDate);
-    startOfDay.setHours(0, 0, 0, 0);
-    const endOfDay = new Date(endDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = startOfLocalDay(startDate);
+    const endOfDay = endOfLocalDay(endDate);
 
     const where: Record<string, unknown> = {
       sale: { companyId },

@@ -8,6 +8,7 @@ import {
   notFoundError,
   duplicateError,
 } from "@/lib/error-handler";
+import { endOfLocalDay } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { Supplier } from "@prisma/client";
 
@@ -51,10 +52,8 @@ export class SupplierService {
         where.createdAt.gte = startDate;
       }
       if (endDate) {
-        // Adiciona 23:59:59 ao endDate para incluir todo o dia
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        where.createdAt.lte = endOfDay;
+        // Adiciona 23:59:59 ao endDate no fuso local para incluir todo o dia
+        where.createdAt.lte = endOfLocalDay(endDate);
       }
     }
 

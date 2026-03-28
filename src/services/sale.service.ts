@@ -5,7 +5,7 @@ import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
-import { dateOnlyToUTC } from "@/lib/date-utils";
+import { dateOnlyToUTC, startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { addDays } from "date-fns";
 import { cashbackService } from "@/services/cashback.service";
@@ -1083,11 +1083,8 @@ export class SaleService {
    * Busca vendas do dia (para caixa)
    */
   async getDailySales(date: Date, companyId: string, branchId?: string) {
-    const startOfDay = new Date(date);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(date);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = startOfLocalDay(date);
+    const endOfDay = endOfLocalDay(date);
 
     const where: Prisma.SaleWhereInput = {
       companyId,

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 /**
  * POST — Recalcular DailyAgg para um período (idempotente).
@@ -38,10 +39,8 @@ export async function POST(req: NextRequest) {
     // Iterar dia a dia
     const current = new Date(start);
     while (current <= end) {
-      const dayStart = new Date(current);
-      dayStart.setHours(0, 0, 0, 0);
-      const dayEnd = new Date(current);
-      dayEnd.setHours(23, 59, 59, 999);
+      const dayStart = startOfLocalDay(new Date(current));
+      const dayEnd = endOfLocalDay(new Date(current));
 
       const saleWhere: any = {
         companyId,

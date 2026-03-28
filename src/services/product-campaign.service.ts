@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 // ============================================================================
 // TYPES & INTERFACES
@@ -594,11 +595,8 @@ async function checkBonusLimits(
 
   // 4. Limite por dia
   if (campaign.maxBonusPerDay) {
-    const startOfDay = new Date(saleDate);
-    startOfDay.setHours(0, 0, 0, 0);
-
-    const endOfDay = new Date(saleDate);
-    endOfDay.setHours(23, 59, 59, 999);
+    const startOfDay = startOfLocalDay(saleDate);
+    const endOfDay = endOfLocalDay(saleDate);
 
     const dayTotal = await prisma.campaignBonusEntry.aggregate({
       where: {

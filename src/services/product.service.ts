@@ -9,6 +9,7 @@ import {
   duplicateError,
   businessRuleError,
 } from "@/lib/error-handler";
+import { endOfLocalDay } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { Product } from "@prisma/client";
 
@@ -147,9 +148,7 @@ export class ProductService {
         where.createdAt.gte = startDate;
       }
       if (endDate) {
-        const endOfDay = new Date(endDate);
-        endOfDay.setHours(23, 59, 59, 999);
-        where.createdAt.lte = endOfDay;
+        where.createdAt.lte = endOfLocalDay(endDate);
       }
     }
 

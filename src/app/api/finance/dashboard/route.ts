@@ -3,6 +3,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { getFinanceDashboard } from "@/services/finance-report.service";
+import { endOfLocalDay } from "@/lib/date-utils";
 
 export async function GET(req: NextRequest) {
   try {
@@ -19,11 +20,10 @@ export async function GET(req: NextRequest) {
     const defaultStart = new Date(now.getFullYear(), now.getMonth(), 1);
     const defaultEnd = new Date(now.getFullYear(), now.getMonth() + 1, 0, 23, 59, 59);
 
-    // Ajustar endDate para fim do dia quando vem da query
+    // Ajustar endDate para fim do dia no fuso local quando vem da query
     let effectiveEnd = defaultEnd;
     if (endDate) {
-      effectiveEnd = new Date(endDate);
-      effectiveEnd.setUTCHours(23, 59, 59, 999);
+      effectiveEnd = endOfLocalDay(endDate);
     }
 
     const dashboard = await getFinanceDashboard(

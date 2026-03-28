@@ -296,19 +296,22 @@ function TransferenciasContent() {
             </SelectContent>
           </Select>
           {branches.length >= 2 && (
-            <Button
-              onClick={() => {
-                if (isAllBranches && !isAdmin) {
-                  toast.error("Selecione uma loja específica");
-                  return;
-                }
-                resetForm();
-                setShowNewDialog(true);
-              }}
-            >
-              <Plus className="mr-2 h-4 w-4" />
-              Nova Transferência
-            </Button>
+            isAllBranches ? (
+              <div className="flex items-center gap-2 rounded-lg border border-amber-200 bg-amber-50 px-3 py-2 text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                <ArrowLeftRight className="h-4 w-4 flex-shrink-0" />
+                <p className="text-sm">Selecione uma filial específica para criar uma transferência</p>
+              </div>
+            ) : (
+              <Button
+                onClick={() => {
+                  resetForm();
+                  setShowNewDialog(true);
+                }}
+              >
+                <Plus className="mr-2 h-4 w-4" />
+                Nova Transferência
+              </Button>
+            )
           )}
         </div>
       </div>
