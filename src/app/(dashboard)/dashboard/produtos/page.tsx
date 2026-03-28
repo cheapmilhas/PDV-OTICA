@@ -177,7 +177,7 @@ function ProdutosPage() {
       );
 
       if (result.results.errors.length > 0 && result.results.errors.length < result.results.imported) {
-        toast.warning(`${result.results.errors.length} produto(s) com erro na importação`);
+        toast(`${result.results.errors.length} produto(s) com erro na importação`);
       }
 
       // Recarregar lista
