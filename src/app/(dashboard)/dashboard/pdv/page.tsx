@@ -203,7 +203,11 @@ function PDVPage() {
         });
 
         if (buscaProduto) {
-          params.set("search", buscaProduto);
+          // Normaliza acentos para busca sem acento funcionar (ex: "armacao" encontra "Armação")
+          const searchNormalized = buscaProduto
+            .normalize("NFD")
+            .replace(/[\u0300-\u036f]/g, "");
+          params.set("search", searchNormalized);
         }
 
         const res = await fetch(`/api/products?${params}`);

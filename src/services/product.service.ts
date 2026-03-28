@@ -96,38 +96,63 @@ export class ProductService {
     }
 
     // Filtro de nível de estoque
+    // Prisma não suporta comparação entre colunas em where clause,
+    // por isso usamos $queryRaw para obter IDs e depois filtramos
     if (stockLevel) {
       switch (stockLevel) {
         case "zerado":
           where.stockQty = 0;
           break;
-        case "baixo":
+        case "baixo": {
+          const rows = await prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "Product"
+            WHERE "companyId" = ${companyId}
+              AND "stockQty" > 0
+              AND "stockMin" IS NOT NULL
+              AND "stockQty" <= "stockMin"
+          `;
           where.AND = where.AND || [];
-          where.AND.push({
-            stockQty: { gt: 0, lte: prisma.product.fields.stockMin },
-          });
+          where.AND.push({ id: { in: rows.map((r) => r.id) } });
           break;
-        case "normal":
+        }
+        case "normal": {
+          const rows = await prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "Product"
+            WHERE "companyId" = ${companyId}
+              AND (
+                "stockMin" IS NULL
+                OR "stockQty" > "stockMin"
+              )
+          `;
           where.AND = where.AND || [];
-          where.AND.push({
-            stockQty: { gt: prisma.product.fields.stockMin },
-          });
+          where.AND.push({ id: { in: rows.map((r) => r.id) } });
           break;
-        case "alto":
+        }
+        case "alto": {
+          const rows = await prisma.$queryRaw<{ id: string }[]>`
+            SELECT id FROM "Product"
+            WHERE "companyId" = ${companyId}
+              AND "stockMax" IS NOT NULL
+              AND "stockQty" >= "stockMax"
+          `;
           where.AND = where.AND || [];
-          where.AND.push({
-            stockQty: { gte: prisma.product.fields.stockMax },
-          });
+          where.AND.push({ id: { in: rows.map((r) => r.id) } });
           break;
+        }
       }
     }
 
     // Filtro de estoque baixo (stockQty <= stockMin)
+    // Prisma não suporta comparação entre colunas — usar $queryRaw
     if (lowStock) {
+      const lowStockIds = await prisma.$queryRaw<{ id: string }[]>`
+        SELECT id FROM "Product"
+        WHERE "companyId" = ${companyId}
+          AND "stockMin" IS NOT NULL
+          AND "stockQty" <= "stockMin"
+      `;
       where.AND = where.AND || [];
-      where.AND.push({
-        stockQty: { lte: prisma.product.fields.stockMin },
-      });
+      where.AND.push({ id: { in: lowStockIds.map((r) => r.id) } });
     }
 
     // Filtro de faixa de preço
@@ -152,13 +177,16 @@ export class ProductService {
       }
     }
 
-    // Busca full-text
+    // Busca full-text — normaliza acentos para busca sem acento funcionar
     if (search) {
+      const searchNormalized = search
+        .normalize("NFD")
+        .replace(/[\u0300-\u036f]/g, "");
       where.OR = [
-        { name: { contains: search, mode: "insensitive" as const } },
-        { sku: { contains: search, mode: "insensitive" as const } },
+        { name: { contains: searchNormalized, mode: "insensitive" as const } },
+        { sku: { contains: searchNormalized, mode: "insensitive" as const } },
         { barcode: { equals: search } },
-        { brand: { name: { contains: search, mode: "insensitive" as const } } },
+        { brand: { name: { contains: searchNormalized, mode: "insensitive" as const } } },
       ];
     }
 

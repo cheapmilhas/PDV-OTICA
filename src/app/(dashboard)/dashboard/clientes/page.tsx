@@ -271,7 +271,9 @@ function ClientesPage() {
             </CardTitle>
           </CardHeader>
           <CardContent>
-            <p className="text-2xl font-bold">{pagination?.total || 0}</p>
+            <p className="text-2xl font-bold">
+              {loading ? "—" : (pagination?.total || 0).toLocaleString("pt-BR")}
+            </p>
           </CardContent>
         </Card>
         <Card>
