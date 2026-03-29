@@ -3,6 +3,7 @@ import { ProblemsSolutions } from "@/components/home/problems-solutions";
 import { TargetAudience } from "@/components/home/target-audience";
 import { FeaturesBento } from "@/components/home/features-bento";
 import { StatsCounter } from "@/components/home/stats-counter";
+import { LiveSalesTicker } from "@/components/home/live-sales-ticker";
 import { LabIntegration } from "@/components/home/lab-integration";
 import { Security } from "@/components/home/security";
 import { Testimonials } from "@/components/home/testimonials";
@@ -20,6 +21,7 @@ export default function HomePage() {
       <TargetAudience />
       <FeaturesBento />
       <StatsCounter />
+      <LiveSalesTicker />
       <LabIntegration />
       <Security />
       <Testimonials />
