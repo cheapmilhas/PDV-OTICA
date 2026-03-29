@@ -7,6 +7,10 @@ import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountPayableStatus, AccountCategory } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import {
+  generateAccountPayableExpenseEntry,
+  deleteAccountPayableExpenseEntry,
+} from "@/services/finance-entry.service";
 
 /**
  * Schema de validação para query params (GET)
@@ -331,39 +335,76 @@ export async function PATCH(request: Request) {
       updateData.paidByUserId = userId;
     }
 
-    // Atualizar conta a pagar
-    const accountPayable = await prisma.accountPayable.update({
-      where: { id: data.id },
-      data: updateData,
-      include: {
-        supplier: {
-          select: {
-            id: true,
-            name: true,
-            tradeName: true,
-            cnpj: true,
+    // Atualizar conta a pagar e gerar/remover lançamento financeiro dentro de uma transaction
+    const accountPayable = await prisma.$transaction(async (tx) => {
+      const updated = await tx.accountPayable.update({
+        where: { id: data.id },
+        data: updateData,
+        include: {
+          supplier: {
+            select: {
+              id: true,
+              name: true,
+              tradeName: true,
+              cnpj: true,
+            },
+          },
+          branch: {
+            select: {
+              id: true,
+              name: true,
+              code: true,
+            },
+          },
+          createdBy: {
+            select: {
+              id: true,
+              name: true,
+            },
+          },
+          paidBy: {
+            select: {
+              id: true,
+              name: true,
+            },
           },
         },
-        branch: {
-          select: {
-            id: true,
-            name: true,
-            code: true,
-          },
-        },
-        createdBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-        paidBy: {
-          select: {
-            id: true,
-            name: true,
-          },
-        },
-      },
+      });
+
+      // Gerar lançamento EXPENSE ao marcar como PAID
+      if (data.status === AccountPayableStatus.PAID) {
+        const paidAmount = Number(updated.paidAmount ?? updated.amount);
+        const paidDate = updated.paidDate ?? new Date();
+        try {
+          await generateAccountPayableExpenseEntry(
+            tx,
+            updated.id,
+            companyId,
+            updated.category,
+            paidAmount,
+            `Pagamento: ${updated.description}`,
+            paidDate,
+            updated.branchId
+          );
+        } catch {
+          // Falha no lançamento financeiro não impede o pagamento
+        }
+      }
+
+      // Remover lançamento EXPENSE ao reverter pagamento (PENDING/OVERDUE)
+      if (
+        existing.status === AccountPayableStatus.PAID &&
+        (data.status === AccountPayableStatus.PENDING ||
+          data.status === AccountPayableStatus.OVERDUE)
+      ) {
+        try {
+          await deleteAccountPayableExpenseEntry(tx, data.id, companyId);
+        } catch {
+          // Falha na remoção do lançamento não impede a reversão
+        }
+      }
+
+      return updated;
     });
 
     // Serializar Decimals para number

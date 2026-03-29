@@ -1,4 +1,4 @@
-import { PrismaClient, ProductType, PaymentMethod } from "@prisma/client";
+import { PrismaClient, ProductType, PaymentMethod, AccountCategory } from "@prisma/client";
 import { Decimal } from "@prisma/client/runtime/library";
 import { getPaymentLabel } from "@/lib/payment-labels";
 
@@ -574,6 +574,101 @@ export async function generateRefundEntries(
       });
     }
   }
+}
+
+// ============================================================
+// LANÇAMENTO DE CONTA A PAGAR
+// ============================================================
+
+/**
+ * Mapeia AccountCategory para código da conta contábil de despesa.
+ */
+function getCategoryExpenseAccountCode(category: AccountCategory): string {
+  switch (category) {
+    case "RENT":
+      return "5.1.03"; // Aluguel
+    case "UTILITIES":
+      return "5.1.04"; // Energia
+    case "INTERNET_PHONE":
+      return "5.1.05"; // Telefone/Internet
+    case "MARKETING":
+      return "5.1.07"; // Marketing
+    case "SUPPLIERS":
+    case "PERSONNEL":
+    case "TAXES":
+    case "MAINTENANCE":
+    case "EQUIPMENT":
+    case "ACCOUNTING":
+    case "OTHER":
+    default:
+      return "5.1.08"; // Outras Despesas
+  }
+}
+
+/**
+ * Gera lançamento financeiro (EXPENSE) ao pagar uma conta a pagar.
+ * Idempotente — usa upsert na chave única (companyId, sourceType, sourceId, type, side).
+ *
+ * Lançamento: Débito Despesa (5.x) / Crédito Contas a Pagar (2.1.01)
+ */
+export async function generateAccountPayableExpenseEntry(
+  tx: TransactionClient,
+  accountPayableId: string,
+  companyId: string,
+  category: AccountCategory,
+  amount: number,
+  description: string,
+  paidDate: Date,
+  branchId?: string | null
+): Promise<void> {
+  const expenseCode = getCategoryExpenseAccountCode(category);
+  const expenseAccount = await getChartAccountByCode(tx, companyId, expenseCode);
+  const contasAPagar = await getChartAccountByCode(tx, companyId, "2.1.01");
+
+  await tx.financeEntry.upsert({
+    where: {
+      companyId_sourceType_sourceId_type_side: {
+        companyId,
+        sourceType: "AccountPayable",
+        sourceId: accountPayableId,
+        type: "EXPENSE",
+        side: "DEBIT",
+      },
+    },
+    update: { amount, entryDate: paidDate, cashDate: paidDate },
+    create: {
+      companyId,
+      branchId: branchId ?? undefined,
+      type: "EXPENSE",
+      side: "DEBIT",
+      amount,
+      debitAccountId: expenseAccount.id,
+      creditAccountId: contasAPagar.id,
+      sourceType: "AccountPayable",
+      sourceId: accountPayableId,
+      description: description,
+      entryDate: paidDate,
+      cashDate: paidDate,
+    },
+  });
+}
+
+/**
+ * Remove o lançamento EXPENSE vinculado a uma conta a pagar (para reverter pagamento).
+ */
+export async function deleteAccountPayableExpenseEntry(
+  tx: TransactionClient,
+  accountPayableId: string,
+  companyId: string
+): Promise<void> {
+  await tx.financeEntry.deleteMany({
+    where: {
+      companyId,
+      sourceType: "AccountPayable",
+      sourceId: accountPayableId,
+      type: "EXPENSE",
+    },
+  });
 }
 
 // ============================================================
