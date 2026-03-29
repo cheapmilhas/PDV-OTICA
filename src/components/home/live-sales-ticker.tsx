@@ -363,19 +363,21 @@ export function LiveSalesTicker() {
               </div>
             </div>
 
-            {/* Remotion Player */}
+            {/* Remotion Player — aspect ratio 820:340 = 41.46% */}
             {mounted && (
-              <Player
-                component={PDVAnimation}
-                durationInFrames={160}
-                compositionWidth={820}
-                compositionHeight={340}
-                fps={30}
-                loop
-                autoPlay
-                style={{ width: "100%", height: "auto", display: "block" }}
-                controls={false}
-              />
+              <div style={{ position: "relative", width: "100%", paddingBottom: "41.46%" }}>
+                <Player
+                  component={PDVAnimation}
+                  durationInFrames={160}
+                  compositionWidth={820}
+                  compositionHeight={340}
+                  fps={30}
+                  loop
+                  autoPlay
+                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
+                  controls={false}
+                />
+              </div>
             )}
           </div>
 
