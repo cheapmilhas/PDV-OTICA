@@ -20,8 +20,9 @@ function ImpersonateContent() {
     }
 
     // Setar cookie de sessão NextAuth com o token de impersonação
-    document.cookie = `next-auth.session-token=${token}; path=/; max-age=7200; samesite=lax`;
-    document.cookie = `impersonation-session=${sessionId}; path=/; max-age=7200; samesite=lax`;
+    const secure = window.location.protocol === "https:" ? "; secure" : "";
+    document.cookie = `next-auth.session-token=${token}; path=/; max-age=7200; samesite=lax${secure}`;
+    document.cookie = `impersonation-session=${sessionId}; path=/; max-age=7200; samesite=lax${secure}`;
 
     setStatus("redirecting");
 
