@@ -37,7 +37,6 @@ const AVAILABLE_FEATURES = [
   { key: "cashback", label: "Cashback" },
   { key: "multi_branch", label: "Multi-filial" },
   { key: "reports_advanced", label: "Relatórios Avançados" },
-  { key: "api_access", label: "Acesso API" },
 ];
 
 const emptyForm = {
@@ -352,23 +351,25 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
               </FormField>
 
               <div className="grid grid-cols-2 gap-4">
-                <FormField label="Preço Mensal (centavos)">
+                <FormField label="Preço Mensal (R$)">
                   <input
                     type="number"
-                    value={form.priceMonthly}
-                    onChange={(e) => setForm({ ...form, priceMonthly: parseInt(e.target.value) || 0 })}
+                    step="0.01"
+                    min="0"
+                    value={form.priceMonthly / 100}
+                    onChange={(e) => setForm({ ...form, priceMonthly: Math.round(parseFloat(e.target.value) * 100) || 0 })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
                   />
-                  <p className="text-xs text-gray-600 mt-1">= R$ {(form.priceMonthly / 100).toFixed(2)}</p>
                 </FormField>
-                <FormField label="Preço Anual (centavos)">
+                <FormField label="Preço Anual (R$)">
                   <input
                     type="number"
-                    value={form.priceYearly}
-                    onChange={(e) => setForm({ ...form, priceYearly: parseInt(e.target.value) || 0 })}
+                    step="0.01"
+                    min="0"
+                    value={form.priceYearly / 100}
+                    onChange={(e) => setForm({ ...form, priceYearly: Math.round(parseFloat(e.target.value) * 100) || 0 })}
                     className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
                   />
-                  <p className="text-xs text-gray-600 mt-1">= R$ {(form.priceYearly / 100).toFixed(2)}</p>
                 </FormField>
               </div>
 

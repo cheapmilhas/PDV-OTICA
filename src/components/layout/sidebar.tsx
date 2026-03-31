@@ -34,12 +34,28 @@ import {
   Boxes,
   PieChart,
   Shield,
+  Lock,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { usePermissions } from "@/hooks/usePermissions";
+import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 
-const menuItems = [
+interface MenuItem {
+  name: string;
+  href: string;
+  icon: React.ElementType;
+  hotkey?: string;
+  permission?: string;
+  feature?: string;
+}
+
+interface MenuSection {
+  title: string;
+  items: MenuItem[];
+}
+
+const menuItems: MenuSection[] = [
   {
     title: "Principal",
     items: [
@@ -156,25 +172,29 @@ const menuItems = [
         name: "Cashback",
         href: "/dashboard/cashback",
         icon: Wallet,
-        permission: "cashback.view"
+        permission: "cashback.view",
+        feature: "cashback"
       },
       {
         name: "Metas",
         href: "/dashboard/metas",
         icon: Target,
-        permission: "goals.view"
+        permission: "goals.view",
+        feature: "goals"
       },
       {
         name: "Campanhas",
         href: "/dashboard/campanhas",
         icon: TrendingUp,
-        permission: "campaigns.view"
+        permission: "campaigns.view",
+        feature: "campaigns"
       },
       {
         name: "Lembretes",
         href: "/dashboard/lembretes",
         icon: Bell,
-        permission: "reminders.view"
+        permission: "reminders.view",
+        feature: "crm"
       },
       {
         name: "Relatórios",
@@ -186,7 +206,8 @@ const menuItems = [
         name: "Comparativo Lojas",
         href: "/dashboard/relatorios/comparativo-lojas",
         icon: ArrowLeftRight,
-        permission: "reports.sales"
+        permission: "reports.sales",
+        feature: "reports_advanced"
       },
     ],
   },
@@ -288,6 +309,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const pathname = usePathname();
   const { logoUrl, displayName, primaryColor } = useCompanySettings();
   const { hasPermission, isAdmin } = usePermissions();
+  const { hasFeature } = usePlanFeatures();
 
   // Cor do sidebar: usa a cor primária escolhida ou padrão escuro
   const sidebarBg = primaryColor || null;
@@ -382,6 +404,9 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
                       >
                         <Icon className="h-4 w-4 flex-shrink-0" />
                         <span className="flex-1 truncate">{item.name}</span>
+                        {item.feature && !hasFeature(item.feature) && (
+                          <Lock className="h-3 w-3 flex-shrink-0 text-yellow-500/70" />
+                        )}
                         {item.hotkey && (
                           <kbd className={cn(
                             "hidden lg:inline-flex items-center px-1.5 py-0.5 text-[10px] font-mono rounded",

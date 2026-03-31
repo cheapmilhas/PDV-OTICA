@@ -1,6 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { FeatureGate } from "@/components/plan/feature-gate";
 import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -646,7 +647,9 @@ function GoalsPageContent() {
 export default function GoalsPage() {
   return (
     <ProtectedRoute permission="goals.view">
-      <GoalsPageContent />
+      <FeatureGate feature="goals" featureName="Metas & Comissões">
+        <GoalsPageContent />
+      </FeatureGate>
     </ProtectedRoute>
   );
 }

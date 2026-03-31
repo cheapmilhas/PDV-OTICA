@@ -1,6 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { FeatureGate } from "@/components/plan/feature-gate";
 import { useState, useEffect } from "react";
 import { Plus, TrendingUp, Calendar, Award, Edit, Pause, Play, BarChart3, Trash2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -404,7 +405,9 @@ function CampanhasPageContent() {
 export default function CampanhasPage() {
   return (
     <ProtectedRoute permission="campaigns.view">
-      <CampanhasPageContent />
+      <FeatureGate feature="campaigns" featureName="Campanhas">
+        <CampanhasPageContent />
+      </FeatureGate>
     </ProtectedRoute>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { FeatureGate } from "@/components/plan/feature-gate";
 import { useState, useEffect } from "react";
 import { Users, Phone, MessageSquare, TrendingUp, RefreshCw, Settings } from "lucide-react";
 import { Card, CardContent } from "@/components/ui/card";
@@ -332,7 +333,9 @@ function CrmPageContent() {
 export default function CrmPage() {
   return (
     <ProtectedRoute permission="reminders.view">
-      <CrmPageContent />
+      <FeatureGate feature="crm" featureName="CRM / Lembretes">
+        <CrmPageContent />
+      </FeatureGate>
     </ProtectedRoute>
   );
 }
