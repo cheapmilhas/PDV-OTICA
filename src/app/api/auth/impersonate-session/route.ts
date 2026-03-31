@@ -25,16 +25,28 @@ export async function GET(request: Request) {
   }
 
   const isProduction = process.env.NODE_ENV === "production";
-  const cookieOptions = [
-    `next-auth.session-token=${token}`,
-    "Path=/",
-    "Max-Age=7200",
-    "SameSite=Lax",
-    isProduction ? "Secure" : "",
-    "HttpOnly",
-  ].filter(Boolean).join("; ");
 
   const response = NextResponse.redirect(new URL("/dashboard", request.url));
-  response.headers.set("Set-Cookie", cookieOptions);
+
+  // Usar a API de cookies do NextResponse para garantir que o Set-Cookie seja preservado no redirect
+  response.cookies.set("next-auth.session-token", token, {
+    httpOnly: true,
+    sameSite: "lax",
+    path: "/",
+    maxAge: 7200,
+    secure: isProduction,
+  });
+
+  // Setar também o prefixo __Secure- que o NextAuth pode usar em produção
+  if (isProduction) {
+    response.cookies.set("__Secure-next-auth.session-token", token, {
+      httpOnly: true,
+      sameSite: "lax",
+      path: "/",
+      maxAge: 7200,
+      secure: true,
+    });
+  }
+
   return response;
 }
