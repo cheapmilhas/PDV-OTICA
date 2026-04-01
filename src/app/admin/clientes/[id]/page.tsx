@@ -417,7 +417,10 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
         {/* TAB: FILIAIS */}
         <TabPanel tabId="filiais">
-          <CompanyBranches companyId={id} maxBranches={company.maxBranches} />
+          <CompanyBranches
+            companyId={id}
+            maxBranches={currentSubscription?.plan?.maxBranches ?? company.maxBranches}
+          />
         </TabPanel>
 
         {/* TAB: USUÁRIOS */}

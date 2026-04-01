@@ -115,7 +115,7 @@ export function CompanyTimeline({ logs }: { logs: ActivityLogEntry[] }) {
                       {log.actorName ? ` · ${log.actorName}` : ""}
                     </span>
                     <span className="text-gray-700">·</span>
-                    <span className="text-xs text-gray-600" title={new Date(log.createdAt).toLocaleString("pt-BR")}>
+                    <span className="text-xs text-gray-600" suppressHydrationWarning title={new Date(log.createdAt).toLocaleString("pt-BR")}>
                       {formatRelative(log.createdAt)}
                     </span>
                   </div>

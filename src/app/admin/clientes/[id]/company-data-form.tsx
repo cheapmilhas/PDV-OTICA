@@ -179,7 +179,7 @@ export function CompanyDataForm({ company }: { company: CompanyData }) {
         </div>
 
         <div className="mt-5 pt-4 border-t border-gray-700">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-gray-500" suppressHydrationWarning>
             Cadastro: {new Date(company.createdAt).toLocaleDateString("pt-BR")} | ID: {company.id}
           </p>
         </div>

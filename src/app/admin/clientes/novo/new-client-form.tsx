@@ -44,12 +44,13 @@ const STATES = [
   "PA","PB","PR","PE","PI","RJ","RN","RS","RO","RR","SC","SP","SE","TO",
 ];
 
-function Field({ label, children, hint }: { label: string; children: React.ReactNode; hint?: string }) {
+function Field({ label, children, hint, error }: { label: string; children: React.ReactNode; hint?: string; error?: string }) {
   return (
     <div>
       <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
       {children}
-      {hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
+      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
+      {!error && hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
     </div>
   );
 }
@@ -88,6 +89,7 @@ export function NewClientForm({ plans, networks }: Props) {
   const [currentStep, setCurrentStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
   // Step 1 — Empresa
   const [tradeName, setTradeName] = useState("");
@@ -154,15 +156,34 @@ export function NewClientForm({ plans, networks }: Props) {
   }
 
   // Validação por etapa
-  function canProceed(): boolean {
-    if (currentStep === 1) return !!(tradeName && email && phone && city && stateUF);
-    if (currentStep === 2) return !!planId;
-    if (currentStep === 3) return !!(ownerName && ownerEmail);
-    return true;
+  function validateStep(): Record<string, string> {
+    const errs: Record<string, string> = {};
+    if (currentStep === 1) {
+      if (!tradeName.trim()) errs.tradeName = "Nome Fantasia é obrigatório";
+      if (!email.trim()) errs.email = "Email é obrigatório";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) errs.email = "Email inválido";
+      if (!phone.trim()) errs.phone = "Telefone é obrigatório";
+      if (!city.trim()) errs.city = "Cidade é obrigatória";
+      if (!stateUF) errs.stateUF = "UF é obrigatória";
+    }
+    if (currentStep === 2) {
+      if (!planId) errs.planId = "Selecione um plano";
+    }
+    if (currentStep === 3) {
+      if (!ownerName.trim()) errs.ownerName = "Nome do responsável é obrigatório";
+      if (!ownerEmail.trim()) errs.ownerEmail = "Email do responsável é obrigatório";
+      else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(ownerEmail)) errs.ownerEmail = "Email inválido";
+    }
+    return errs;
   }
 
   function next() {
-    if (!canProceed()) return;
+    const errs = validateStep();
+    if (Object.keys(errs).length > 0) {
+      setFieldErrors(errs);
+      return;
+    }
+    setFieldErrors({});
     setCurrentStep((s) => Math.min(s + 1, 5));
   }
 
@@ -275,12 +296,12 @@ export function NewClientForm({ plans, networks }: Props) {
 
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Nome Fantasia *">
+              <Field label="Nome Fantasia *" error={fieldErrors.tradeName}>
                 <Input
                   value={tradeName}
-                  onChange={(e) => setTradeName(e.target.value)}
+                  onChange={(e) => { setTradeName(e.target.value); setFieldErrors((p) => ({ ...p, tradeName: "" })); }}
                   placeholder="Ótica Visão Clara"
-                  required
+                  className={fieldErrors.tradeName ? "border-red-500" : ""}
                 />
               </Field>
               <Field label="Razão Social">
@@ -306,22 +327,22 @@ export function NewClientForm({ plans, networks }: Props) {
                 />
               </Field>
             </div>
-            <Field label="Email da Empresa *">
+            <Field label="Email da Empresa *" error={fieldErrors.email}>
               <Input
                 type="email"
                 value={email}
-                onChange={(e) => setEmail(e.target.value)}
+                onChange={(e) => { setEmail(e.target.value); setFieldErrors((p) => ({ ...p, email: "" })); }}
                 placeholder="contato@oticavisao.com"
-                required
+                className={fieldErrors.email ? "border-red-500" : ""}
               />
             </Field>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Telefone *">
+              <Field label="Telefone *" error={fieldErrors.phone}>
                 <Input
                   value={phone}
-                  onChange={(e) => setPhone(e.target.value)}
+                  onChange={(e) => { setPhone(e.target.value); setFieldErrors((p) => ({ ...p, phone: "" })); }}
                   placeholder="(85) 3333-4444"
-                  required
+                  className={fieldErrors.phone ? "border-red-500" : ""}
                 />
               </Field>
               <Field label="WhatsApp">
@@ -379,11 +400,11 @@ export function NewClientForm({ plans, networks }: Props) {
                   onChange={(e) => setNeighborhood(e.target.value)}
                 />
               </Field>
-              <Field label="UF *">
+              <Field label="UF *" error={fieldErrors.stateUF}>
                 <Select
                   value={stateUF}
-                  onChange={(e) => setStateUF(e.target.value)}
-                  required
+                  onChange={(e) => { setStateUF(e.target.value); setFieldErrors((p) => ({ ...p, stateUF: "" })); }}
+                  className={fieldErrors.stateUF ? "border-red-500" : ""}
                 >
                   <option value="">UF</option>
                   {STATES.map((uf) => (
@@ -392,10 +413,11 @@ export function NewClientForm({ plans, networks }: Props) {
                 </Select>
               </Field>
             </div>
-            <Field label="Cidade *">
+            <Field label="Cidade *" error={fieldErrors.city}>
               <Input
                 value={city}
-                onChange={(e) => setCity(e.target.value)}
+                onChange={(e) => { setCity(e.target.value); setFieldErrors((p) => ({ ...p, city: "" })); }}
+                className={fieldErrors.city ? "border-red-500" : ""}
                 placeholder="Fortaleza"
                 required
               />
@@ -414,13 +436,13 @@ export function NewClientForm({ plans, networks }: Props) {
 
           <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-5">
             {/* Cards de plano */}
-            <Field label="Selecionar Plano *">
+            <Field label="Selecionar Plano *" error={fieldErrors.planId}>
               <div className="grid gap-3 mt-1">
                 {plans.map((plan) => (
                   <button
                     key={plan.id}
                     type="button"
-                    onClick={() => setPlanId(plan.id)}
+                    onClick={() => { setPlanId(plan.id); setFieldErrors((p) => ({ ...p, planId: "" })); }}
                     className={`w-full text-left px-4 py-3.5 rounded-lg border transition-all ${
                       planId === plan.id
                         ? "border-indigo-500 bg-indigo-900/20 ring-1 ring-indigo-500/30"
@@ -430,7 +452,7 @@ export function NewClientForm({ plans, networks }: Props) {
                     <div className="flex items-center justify-between">
                       <span className="text-sm font-medium text-white">{plan.name}</span>
                       <div className="text-right">
-                        <span className="text-sm font-bold text-white">
+                        <span className="text-sm font-bold text-white" suppressHydrationWarning>
                           R$ {(plan.priceMonthly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </span>
                         <span className="text-xs text-gray-500">/mês</span>
@@ -508,12 +530,12 @@ export function NewClientForm({ plans, networks }: Props) {
               Responsável / Proprietário
             </h3>
             <div className="grid grid-cols-2 gap-4">
-              <Field label="Nome Completo *">
+              <Field label="Nome Completo *" error={fieldErrors.ownerName}>
                 <Input
                   value={ownerName}
-                  onChange={(e) => setOwnerName(e.target.value)}
+                  onChange={(e) => { setOwnerName(e.target.value); setFieldErrors((p) => ({ ...p, ownerName: "" })); }}
                   placeholder="João da Silva"
-                  required
+                  className={fieldErrors.ownerName ? "border-red-500" : ""}
                 />
               </Field>
               <Field label="CPF">
@@ -527,14 +549,15 @@ export function NewClientForm({ plans, networks }: Props) {
             <div className="grid grid-cols-2 gap-4">
               <Field
                 label="Email do Responsável *"
-                hint="Receberá o convite de ativação"
+                hint={fieldErrors.ownerEmail ? undefined : "Receberá o convite de ativação"}
+                error={fieldErrors.ownerEmail}
               >
                 <Input
                   type="email"
                   value={ownerEmail}
-                  onChange={(e) => setOwnerEmail(e.target.value)}
+                  onChange={(e) => { setOwnerEmail(e.target.value); setFieldErrors((p) => ({ ...p, ownerEmail: "" })); }}
                   placeholder="joao@otica.com"
-                  required
+                  className={fieldErrors.ownerEmail ? "border-red-500" : ""}
                 />
               </Field>
               <Field label="Telefone">
@@ -815,8 +838,7 @@ export function NewClientForm({ plans, networks }: Props) {
             <button
               type="button"
               onClick={next}
-              disabled={!canProceed()}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
             >
               Próximo
               <ChevronRight className="h-4 w-4" />

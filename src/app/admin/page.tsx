@@ -77,7 +77,7 @@ export default async function AdminDashboardPage() {
 
   const totalRevenueValue = ((totalRevenue._sum?.total) ?? 0) / 100;
   const mrrValue = activeSubs.reduce((acc, sub) => {
-    const monthly = sub.billingCycle === "YEARLY" ? sub.plan.priceMonthly : sub.plan.priceMonthly;
+    const monthly = sub.billingCycle === "YEARLY" ? Math.round(sub.plan.priceYearly / 12) : sub.plan.priceMonthly;
     return acc + monthly;
   }, 0) / 100;
 
@@ -101,8 +101,9 @@ export default async function AdminDashboardPage() {
         />
         <KpiCard title="Em Trial" value={trialCount} icon={Clock} color="yellow" />
         <KpiCard
-          title="Receita Total"
+          title="Recebido Total"
           value={`R$ ${totalRevenueValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+          hint="Soma das faturas pagas"
           icon={TrendingUp}
           color="teal"
         />
@@ -141,6 +142,12 @@ export default async function AdminDashboardPage() {
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+          {pastDueCount === 0 && expiringTrials.length === 0 && pendingInvoices.length === 0 && (
+            <div className="md:col-span-3 flex items-center gap-3 p-4 rounded-xl border border-gray-800 bg-gray-900/50 text-gray-500">
+              <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+              <p className="text-sm">Nenhuma ação pendente no momento</p>
+            </div>
+          )}
           {pastDueCount > 0 && (
             <Link href="/admin/financeiro/inadimplencia" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
               <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0" />
@@ -216,7 +223,7 @@ export default async function AdminDashboardPage() {
   );
 }
 
-function KpiCard({ title, value, icon: Icon, color }: { title: string; value: string | number; icon: React.ElementType; color: string }) {
+function KpiCard({ title, value, icon: Icon, color, hint }: { title: string; value: string | number; icon: React.ElementType; color: string; hint?: string }) {
   const colors: Record<string, string> = {
     blue: "text-blue-400 bg-blue-900/20",
     green: "text-green-400 bg-green-900/20",
@@ -227,7 +234,10 @@ function KpiCard({ title, value, icon: Icon, color }: { title: string; value: st
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
       <div className="flex items-center justify-between mb-3">
-        <p className="text-xs font-medium text-gray-500">{title}</p>
+        <div>
+          <p className="text-xs font-medium text-gray-500">{title}</p>
+          {hint && <p className="text-xs text-gray-600 mt-0.5">{hint}</p>}
+        </div>
         <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colors[color]}`}>
           <Icon className="h-4 w-4" />
         </div>
