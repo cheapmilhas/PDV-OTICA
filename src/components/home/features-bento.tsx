@@ -19,8 +19,8 @@ const features = [
     accentColor: "#6366F1",
     title: "PDV e Vendas",
     description:
-      "O.S. automática com logo da ótica, impressão personalizada, controle de descontos e registro por usuário, data e hora.",
-    tags: ["O.S. com foto", "Desconto com limite", "Multi-forma de pgto"],
+      "Feche uma venda em segundos. O.S. gerada automaticamente com logo da ótica, desconto com limite por vendedor e cliente sai com recibo no WhatsApp na hora.",
+    tags: ["Venda em segundos", "Sem erro de desconto", "Recibo automático"],
     span: "2" as const,
   },
   {
@@ -28,8 +28,8 @@ const features = [
     accentColor: "#10B981",
     title: "Financeiro",
     description:
-      "Caixa, contas a pagar/receber, DRE, boleto sem remessa e comissões configuráveis por vendedor.",
-    tags: ["DRE", "Boleto", "Comissões"],
+      "Saiba exatamente se sua ótica está dando lucro — hoje, esse mês, esse ano. DRE, fluxo de caixa e comissões calculadas automaticamente. Sem planilha, sem contador manual.",
+    tags: ["Lucro em tempo real", "DRE automático", "Comissão calculada"],
     span: "2" as const,
   },
   {
@@ -37,8 +37,8 @@ const features = [
     accentColor: "#0EA5E9",
     title: "Clientes e Receituários",
     description:
-      "Histórico completo de compras e receitas, alertas de vencimento e pós-venda automático.",
-    tags: ["Histórico", "Receitas", "Alertas"],
+      "Nunca perca um cliente por receita vencida. Alerta automático antes do prazo e histórico completo de compras e receitas em um clique.",
+    tags: ["Alerta de vencimento", "Histórico completo", "Recompra fácil"],
     span: "1" as const,
   },
   {
@@ -46,8 +46,8 @@ const features = [
     accentColor: "#F59E0B",
     title: "Estoque",
     description:
-      "Entrada por XML, etiquetas, giro de estoque, estoque mínimo e controle multi-filial.",
-    tags: ["XML", "Multi-loja", "Etiquetas"],
+      "Nunca mais perca venda por falta de produto. Alerta antes de zerar, entrada de nota por XML sem digitar nada e controle de todas as filiais numa tela só.",
+    tags: ["Alerta antes de zerar", "XML sem digitação", "Multi-loja"],
     span: "1" as const,
   },
   {
@@ -55,8 +55,8 @@ const features = [
     accentColor: "#6366F1",
     title: "Laboratório",
     description:
-      "Envie O.S. diretamente ao laboratório, acompanhe o status e notifique o cliente automaticamente.",
-    tags: ["Status em tempo real", "Notificação auto"],
+      "Pare de ligar para saber se o óculos ficou pronto. Envie a O.S. ao laboratório com um clique e o cliente recebe aviso no WhatsApp automaticamente quando estiver pronto.",
+    tags: ["Sem ligação para lab", "Status automático", "Cliente avisado"],
     span: "1" as const,
   },
   {
@@ -64,8 +64,8 @@ const features = [
     accentColor: "#0EA5E9",
     title: "Fiscal",
     description:
-      "NF-e, NFC-e, SAT e envio automático ao contador. Livro de receitas digital incluso.",
-    tags: ["NF-e", "NFC-e", "SAT"],
+      "Emita NF-e, NFC-e e SAT sem sair do sistema. Nunca mais digitar nota fiscal na mão — tudo vai automático para o contador.",
+    tags: ["NF-e sem esforço", "Contador automático", "SAT integrado"],
     span: "1" as const,
   },
   {
@@ -73,8 +73,8 @@ const features = [
     accentColor: "#10B981",
     title: "Pós-venda",
     description:
-      "Aniversários, receitas vencendo, WhatsApp automático e campanhas de fidelização personalizadas.",
-    tags: ["WhatsApp auto", "Campanhas", "Fidelização"],
+      "Traga o cliente de volta sem precisar ligar. WhatsApp automático no aniversário, quando a receita vencer e em campanhas de fidelização — tudo no piloto.",
+    tags: ["Cliente volta sozinho", "WhatsApp automático", "Sem trabalho extra"],
     span: "1" as const,
   },
   {
@@ -82,8 +82,8 @@ const features = [
     accentColor: "#F59E0B",
     title: "Relatórios e BI",
     description:
-      "Dashboard em tempo real, vendas por período/vendedor/produto, ticket médio e análise de inadimplência.",
-    tags: ["Tempo real", "BI", "Exportar"],
+      "Tome decisões com dados, não com feeling. Veja qual vendedor performa mais, qual produto gira menos e onde está a inadimplência — em tempo real.",
+    tags: ["Decisão com dados", "Por vendedor", "Inadimplência visível"],
     span: "1" as const,
   },
 ];

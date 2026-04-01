@@ -60,9 +60,41 @@ export function LabIntegration() {
               para ninguém. Seu laboratório recebe tudo automaticamente.
             </p>
 
-            <div className="flex items-center gap-3 text-sm text-muted">
+            <div className="flex items-center gap-3 text-sm text-muted mb-6">
               <CheckCircle className="h-4 w-4 text-brand-success shrink-0" />
               <span>Integrado com os principais laboratórios do Brasil</span>
+            </div>
+
+            {/* Lab logos */}
+            <div className="flex flex-wrap items-center gap-3">
+              {[
+                "Essilor",
+                "Indo",
+                "Hoya",
+                "Zeiss",
+                "Shamir",
+                "Vision One",
+              ].map((lab) => (
+                <span
+                  key={lab}
+                  className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold"
+                  style={{
+                    background: "rgba(255,255,255,0.04)",
+                    border: "1px solid rgba(255,255,255,0.08)",
+                    color: "var(--lp-muted)",
+                  }}
+                >
+                  {lab}
+                </span>
+              ))}
+              <span
+                className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-medium"
+                style={{
+                  color: "var(--lp-subtle)",
+                }}
+              >
+                + outros
+              </span>
             </div>
           </motion.div>
 

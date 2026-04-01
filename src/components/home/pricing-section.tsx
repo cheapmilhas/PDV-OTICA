@@ -236,9 +236,13 @@ export function PricingSection() {
                       </span>
                     </motion.div>
                   </AnimatePresence>
-                  {annual && (
+                  {annual ? (
+                    <p style={{ color: "var(--brand-success)", fontSize: "0.75rem", marginTop: "0.25rem", fontWeight: 600 }}>
+                      Economize {formatCurrency((plan.monthlyPrice - plan.annualPrice) * 12)}/ano
+                    </p>
+                  ) : (
                     <p style={{ color: "var(--lp-subtle)", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                      Cobrado anualmente ({formatCurrency(plan.annualPrice * 12)}/ano)
+                      ou {formatCurrency(plan.annualPrice)}/mês no plano anual
                     </p>
                   )}
                 </div>

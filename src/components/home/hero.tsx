@@ -207,6 +207,8 @@ export function Hero() {
               <span>no Google</span>
             </div>
             <span className="hidden sm:block opacity-30">·</span>
+            <span className="font-semibold" style={{ color: "var(--lp-foreground)" }}>+500 óticas</span>
+            <span className="hidden sm:block opacity-30">·</span>
             <span>Sem cartão de crédito</span>
             <span className="hidden sm:block opacity-30">·</span>
             <span>Cancele quando quiser</span>
