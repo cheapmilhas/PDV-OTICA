@@ -1,12 +1,8 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
-import { SignJWT } from "jose";
+import { encode } from "next-auth/jwt";
 import { z } from "zod";
-
-const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
-const JWT_SECRET = new TextEncoder().encode(authSecret);
 
 const impersonateSchema = z.object({
   companyId: z.string().min(1, "companyId é obrigatório"),
@@ -71,26 +67,30 @@ export async function POST(request: Request) {
       },
     });
 
-    // Gerar JWT do PDV com marcação de impersonação
-    const token = await new SignJWT({
+    // Montar payload com TODOS os campos que o callback jwt do auth.ts adiciona
+    const tokenPayload = {
+      sub: targetUser.id,
       id: targetUser.id,
-      name: `${admin.name} (Admin)`,
+      name: targetUser.name,
       email: targetUser.email,
       role: targetUser.role,
       branchId: targetUser.branches[0].branchId,
       companyId,
-      networkId: null,
+      networkId: null as string | null,
       impersonation: {
         sessionId: session.id,
         adminId: admin.id,
         adminName: admin.name,
         adminEmail: admin.email,
       },
-    })
-      .setProtectedHeader({ alg: "HS256" })
-      .setIssuedAt()
-      .setExpirationTime("2h")
-      .sign(JWT_SECRET);
+    };
+
+    // Gerar token compatível com NextAuth v5 (usa encode do next-auth/jwt)
+    const sessionToken = await encode({
+      token: tokenPayload,
+      secret: process.env.AUTH_SECRET!,
+      salt: "next-auth.session-token",
+    });
 
     // Registrar auditoria
     await prisma.globalAudit.create({
@@ -112,7 +112,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       data: {
         sessionId: session.id,
-        token,
+        token: sessionToken,
         expiresAt: expiresAt.toISOString(),
         companyName: company.name,
       },

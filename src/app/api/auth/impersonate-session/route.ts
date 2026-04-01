@@ -28,7 +28,8 @@ export async function GET(request: Request) {
 
   const response = NextResponse.redirect(new URL("/dashboard", request.url));
 
-  // Usar a API de cookies do NextResponse para garantir que o Set-Cookie seja preservado no redirect
+  // Setar apenas o cookie canônico — o mesmo configurado em auth.ts (sessionToken.name)
+  // NÃO setar __Secure-next-auth.session-token: causaria conflito pois auth.ts usa apenas next-auth.session-token
   response.cookies.set("next-auth.session-token", token, {
     httpOnly: true,
     sameSite: "lax",
@@ -36,17 +37,6 @@ export async function GET(request: Request) {
     maxAge: 7200,
     secure: isProduction,
   });
-
-  // Setar também o prefixo __Secure- que o NextAuth pode usar em produção
-  if (isProduction) {
-    response.cookies.set("__Secure-next-auth.session-token", token, {
-      httpOnly: true,
-      sameSite: "lax",
-      path: "/",
-      maxAge: 7200,
-      secure: true,
-    });
-  }
 
   return response;
 }
