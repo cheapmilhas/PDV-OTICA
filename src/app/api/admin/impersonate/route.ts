@@ -121,7 +121,8 @@ export async function POST(request: Request) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
     }
-    console.error("[ADMIN-IMPERSONATE] Erro:", error);
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    const message = error instanceof Error ? error.message : String(error);
+    console.error("[ADMIN-IMPERSONATE] Erro:", message, error);
+    return NextResponse.json({ error: "Erro interno", details: message }, { status: 500 });
   }
 }
