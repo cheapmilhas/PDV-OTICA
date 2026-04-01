@@ -86,9 +86,12 @@ export async function POST(request: Request) {
     };
 
     // Gerar token compatível com NextAuth v5 (usa encode do next-auth/jwt)
+    const secret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+    if (!secret) throw new Error("AUTH_SECRET não configurado");
+
     const sessionToken = await encode({
       token: tokenPayload,
-      secret: process.env.AUTH_SECRET!,
+      secret,
       salt: "next-auth.session-token",
     });
 
