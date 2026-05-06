@@ -89,6 +89,7 @@ export const createSaleSchema = z.object({
   customerId: z.union([z.string().min(1), z.null()]).optional(),
   branchId: z.string().min(1, "ID da filial é obrigatório"),
   sellerUserId: z.string().optional(),
+  serviceOrderId: z.string().optional(),
   items: z.array(saleItemSchema).min(1, "Venda deve ter pelo menos 1 item"),
   payments: z.array(paymentSchema).min(1, "Venda deve ter pelo menos 1 pagamento"),
   discount: z.coerce
