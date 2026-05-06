@@ -395,6 +395,10 @@ model Customer {
   tradeName          String?
   externalId         String?
   originBranchId     String?                @map("origin_branch_id")
+  // Limite de crédito individual (sobrepõe SystemRule customers.default_credit_limit)
+  // null = usa o default da empresa. Adicionado no Bug #3 fix.
+  creditLimit            Decimal?  @db.Decimal(12, 2)
+  creditLimitOverridden  Boolean   @default(false)
   accountsReceivable AccountReceivable[]
   agreementBenefits  AgreementBeneficiary[]
   company            Company                @relation(fields: [companyId], references: [id])
@@ -812,9 +816,14 @@ model ServiceOrder {
   deliveryNotes     String?
   qualityRating     Int?
   qualityNotes      String?
-  prescriptionData  Json?
-  notes             String?
-  deletedAt         DateTime?
+  prescriptionData     Json?
+  prescriptionImageUrl String?
+  lensType             String?
+  lensDescription      String?
+  lensColoring         String?
+  treatments           String[]
+  notes                String?
+  deletedAt            DateTime?
   createdAt         DateTime              @default(now())
   updatedAt         DateTime              @updatedAt
   frameMeasurements FrameMeasurement[]
@@ -1545,6 +1554,14 @@ model AccountReceivable {
   receivedAmount      Decimal?                @db.Decimal(12, 2)
   status              AccountReceivableStatus @default(PENDING)
   notes               String?
+  finePercent         Decimal?                @default(0) @db.Decimal(5, 2)
+  fineAmount          Decimal?                @default(0) @db.Decimal(12, 2)
+  interestPercent     Decimal?                @default(0) @db.Decimal(5, 2)
+  interestAmount      Decimal?                @default(0) @db.Decimal(12, 2)
+  discountAmount      Decimal?                @default(0) @db.Decimal(12, 2)
+  graceDays           Int?                    @default(0)
+  reversedAt          DateTime?
+  reversedBy          String?
   createdByUserId     String?
   receivedByUserId    String?
   createdAt           DateTime                @default(now())
@@ -1697,6 +1714,9 @@ model CompanySettings {
   pdfFooterText         String?
   defaultQuoteValidDays Int      @default(15)
   defaultPaymentTerms   String?
+  defaultFinePercent     Decimal? @default(2) @db.Decimal(5, 2)
+  defaultInterestPercent Decimal? @default(1) @db.Decimal(5, 2)
+  defaultGraceDays       Int?     @default(0)
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   primaryColor          String?
@@ -2260,16 +2280,20 @@ model UsageSnapshot {
 }
 
 model BranchStock {
-  id        String   @id @default(cuid())
-  branchId  String   @map("branch_id")
-  productId String   @map("product_id")
-  quantity  Int      @default(0)
-  minStock  Int      @default(0) @map("min_stock")
-  maxStock  Int?     @map("max_stock")
-  location  String?
-  updatedAt DateTime @updatedAt @map("updated_at")
-  branch    Branch   @relation(fields: [branchId], references: [id])
-  product   Product  @relation(fields: [productId], references: [id])
+  id            String   @id @default(cuid())
+  branchId      String   @map("branch_id")
+  productId     String   @map("product_id")
+  quantity      Int      @default(0)
+  minStock      Int      @default(0) @map("min_stock")
+  maxStock      Int?     @map("max_stock")
+  location      String?
+  costPrice     Decimal? @map("cost_price") @db.Decimal(12, 2)
+  salePrice     Decimal? @map("sale_price") @db.Decimal(12, 2)
+  promoPrice    Decimal? @map("promo_price") @db.Decimal(12, 2)
+  marginPercent Decimal? @map("margin_percent") @db.Decimal(5, 2)
+  updatedAt     DateTime @updatedAt @map("updated_at")
+  branch        Branch   @relation(fields: [branchId], references: [id])
+  product       Product  @relation(fields: [productId], references: [id])
 
   @@unique([branchId, productId])
   @@index([productId])
@@ -3383,6 +3407,7 @@ enum AccountReceivableStatus {
   RECEIVED
   OVERDUE
   CANCELED
+  RENEGOTIATED
 }
 
 enum AccountCategory {

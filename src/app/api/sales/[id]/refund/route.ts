@@ -4,6 +4,7 @@ import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError, notFoundError, businessRuleError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { generateRefundEntries } from "@/services/finance-entry.service";
+import { atomicStockCredit } from "@/services/stock.service";
 
 export async function POST(
   req: NextRequest,
@@ -119,15 +120,27 @@ export async function POST(
       });
 
       // 4. Restock — devolver ao estoque
+      // Usa `atomicStockCredit` que faz upsert no BranchStock E atualiza
+      // Product.stockQty atomicamente. Antes desta correção (Bug #2) o código
+      // só fazia `Product.stockQty.increment`, deixando BranchStock dessincronizado.
       for (const ri of refundItems) {
         const saleItem = sale.items.find((si) => si.id === ri.saleItemId);
         if (saleItem?.product?.stockControlled && saleItem.productId) {
-          await tx.product.update({
-            where: { id: saleItem.productId },
-            data: { stockQty: { increment: ri.qtyReturned } },
-          });
+          const creditResult = await atomicStockCredit(
+            saleItem.productId,
+            ri.qtyReturned,
+            companyId,
+            tx,
+            sale.branchId
+          );
+          if (!creditResult.success) {
+            // Se falhar (improvável em credit), aborta a transação inteira.
+            throw businessRuleError(
+              creditResult.error || "Falha ao restituir estoque na devolução"
+            );
+          }
 
-          // Criar StockMovement
+          // Criar StockMovement (auditoria — type CUSTOMER_RETURN)
           await tx.stockMovement.create({
             data: {
               companyId,
@@ -143,10 +156,22 @@ export async function POST(
       }
 
       // 5. Gerar lançamentos financeiros
+      // Comportamento: log estruturado + NÃO bloqueia (decisão documentada —
+      // refund já fez restock e criou Refund; finance é secundário).
       try {
         await generateRefundEntries(tx as any, refund.id, companyId);
       } catch (financeError) {
-        console.error("[FINANCE] Erro ao gerar lançamentos de devolução:", financeError);
+        console.error(
+          JSON.stringify({
+            level: "error",
+            event: "refund_finance_entries_generation_failed",
+            refundId: refund.id,
+            saleId,
+            companyId,
+            error: financeError instanceof Error ? financeError.message : String(financeError),
+            stack: financeError instanceof Error ? financeError.stack : undefined,
+          })
+        );
       }
 
       // 6. Se devolução total, atualizar status da venda

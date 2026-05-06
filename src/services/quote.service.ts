@@ -2,7 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { Prisma, QuoteStatus } from "@prisma/client";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
-import type { PaymentDTO } from "@/lib/validations/sale.schema";
+import { PaymentDTO, validateStoreCredit } from "@/lib/validations/sale.schema";
 import type {
   QuoteQuery,
   CreateQuoteDTO,
@@ -14,6 +14,15 @@ import {
   calculateQuoteTotals,
   calculateQuoteItemTotal,
 } from "@/lib/validations/quote.schema";
+import { validateBranchOwnership } from "@/lib/validate-branch";
+import { validateCreditLimit } from "@/lib/installment-utils";
+import {
+  applyStockDebitInTx,
+  applyPaymentsInTx,
+  applyCommissionInTx,
+  applyFinanceEntriesInTx,
+  applyPostCommitSideEffects,
+} from "@/services/sale-side-effects.service";
 
 /**
  * Service para operações de Orçamentos
@@ -639,6 +648,9 @@ export class QuoteService {
     userId: string,
     payments: PaymentDTO[]
   ) {
+    // 0. Validação multi-tenant — branchId pertence à empresa do usuário?
+    await validateBranchOwnership(branchId, companyId);
+
     // 1. Buscar orçamento com todos os dados
     const quote = await prisma.quote.findFirst({
       where: { id: quoteId, companyId },
@@ -652,6 +664,7 @@ export class QuoteService {
                 sku: true,
                 stockQty: true,
                 salePrice: true,
+                costPrice: true,
               },
             },
           },
@@ -731,9 +744,53 @@ export class QuoteService {
       );
     }
 
-    // 7. Criar venda em transação
+    // 7. Validações por método de pagamento (paridade com sale.create)
+    //
+    // Decisão (Matheus, 2026-05-06): BALANCE_DUE também passa por validateCreditLimit.
+    // Razão: BALANCE_DUE é venda a prazo igual STORE_CREDIT — cliente inadimplente
+    // não deve burlar a validação só trocando o método.
+    for (const payment of payments) {
+      if (payment.method === "STORE_CREDIT") {
+        validateStoreCredit(payment, quote.customerId);
+      }
+
+      if (payment.method === "BALANCE_DUE" && !quote.customerId) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Saldo a Receber exige um cliente vinculado",
+          400
+        );
+      }
+
+      // Validar limite de crédito para vendas a prazo (STORE_CREDIT + BALANCE_DUE)
+      if (
+        (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") &&
+        quote.customerId
+      ) {
+        const creditCheck = await validateCreditLimit(
+          quote.customerId,
+          payment.amount,
+          companyId
+        );
+        if (!creditCheck.approved) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            creditCheck.message || "Limite de crédito excedido",
+            400
+          );
+        }
+      }
+    }
+
+    // 8. Buscar configurações de juros/multa default (para parcelas STORE_CREDIT)
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { companyId },
+      select: { defaultFinePercent: true, defaultInterestPercent: true, defaultGraceDays: true },
+    });
+
+    // 9. Criar venda em transação (usa helpers compartilhados — paridade com sale.create)
     const result = await prisma.$transaction(async (tx) => {
-      // 7.1. Criar venda
+      // 9.1. Criar Sale
       const sale = await tx.sale.create({
         data: {
           companyId,
@@ -744,12 +801,16 @@ export class QuoteService {
           discountTotal: quote.discountTotal,
           total: quote.total,
           status: "COMPLETED",
-          convertedFromQuoteId: quoteId, // ✅ Link bidirecional
+          completedAt: new Date(),
+          convertedFromQuoteId: quoteId, // ✅ Link bidirecional + @unique impede dupla conversão
         },
       });
 
-      // 7.2. Criar itens da venda (baseado nos itens do orçamento)
+      // 9.2. Criar SaleItems com costPrice (paridade com sale.create)
       for (const item of quote.items) {
+        const itemCostPrice = item.product?.costPrice
+          ? Number(item.product.costPrice)
+          : 0;
         await tx.saleItem.create({
           data: {
             saleId: sale.id,
@@ -757,122 +818,50 @@ export class QuoteService {
             qty: item.qty,
             unitPrice: item.unitPrice,
             discount: item.discount,
-            lineTotal: item.total, // Usar 'total' do novo schema
-          },
-        });
-
-        // 7.3. Decrementar estoque (somente se tiver productId)
-        if (item.productId) {
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQty: {
-                decrement: Number(item.qty),
-              },
-            },
-          });
-        }
-      }
-
-      // 7.4. Criar pagamentos
-      for (const payment of payments) {
-        const salePayment = await tx.salePayment.create({
-          data: {
-            saleId: sale.id,
-            method: payment.method,
-            amount: payment.amount,
-            installments: payment.installments || 1,
-            status: "RECEIVED",
-            receivedAt: new Date(),
-            receivedByUserId: userId,
-            ...((payment as any).cardBrand && { cardBrand: (payment as any).cardBrand }),
-            ...((payment as any).cardLastDigits && { cardLastDigits: (payment as any).cardLastDigits }),
-            ...((payment as any).nsu && { nsu: (payment as any).nsu }),
-            ...((payment as any).authorizationCode && { authorizationCode: (payment as any).authorizationCode }),
-            ...((payment as any).acquirer && { acquirer: (payment as any).acquirer }),
-          },
-        });
-
-        // Auto-calcular taxas de cartão se não informadas
-        if (
-          (payment.method === "CREDIT_CARD" || payment.method === "DEBIT_CARD") &&
-          !salePayment.feeAmount
-        ) {
-          try {
-            const { calculateCardFee } = await import("@/services/card-fee.service");
-            const feeResult = await calculateCardFee(
-              companyId,
-              (payment as any).cardBrand || "VISA",
-              payment.method === "CREDIT_CARD" ? "CREDIT" : "DEBIT",
-              payment.installments || 1,
-              Number(payment.amount)
-            );
-            if (feeResult) {
-              await tx.salePayment.update({
-                where: { id: salePayment.id },
-                data: {
-                  feePercent: feeResult.feePercent,
-                  feeAmount: feeResult.feeAmount,
-                  netAmount: feeResult.netAmount,
-                  settlementDate: feeResult.settlementDate,
-                },
-              });
-            }
-          } catch {
-            // Falha no cálculo de fee não deve impedir a venda
-          }
-        }
-
-        // 7.5. Criar CashMovement para TODOS os métodos de pagamento
-        await tx.cashMovement.create({
-          data: {
-            cashShiftId: openShift.id,
-            branchId,
-            type: "SALE_PAYMENT",
-            direction: "IN",
-            method: payment.method,
-            amount: payment.amount,
-            originType: "SALE_PAYMENT",
-            originId: salePayment.id,
-            salePaymentId: salePayment.id,
-            createdByUserId: userId,
-            note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
+            lineTotal: item.total,
+            costPrice: itemCostPrice,
           },
         });
       }
 
-      // 7.6. Criar comissão do vendedor
-      const seller = await tx.user.findUnique({
-        where: { id: userId },
-        select: { defaultCommissionPercent: true },
+      // 9.3. Estoque atomic + StockMovement (helper)
+      await applyStockDebitInTx(tx, {
+        sale: { id: sale.id, branchId, companyId },
+        items: quote.items.map((i) => ({ productId: i.productId, qty: i.qty })),
+        userId,
       });
 
-      const commissionPercent = seller?.defaultCommissionPercent || new Prisma.Decimal(5);
-      const baseAmount = Number(sale.total);
-      const commissionAmount = new Prisma.Decimal(baseAmount)
-        .mul(commissionPercent)
-        .div(100);
-
-      await tx.commission.create({
-        data: {
-          companyId,
-          saleId: sale.id,
-          userId,
-          baseAmount,
-          percentage: commissionPercent,
-          commissionAmount,
-          status: "PENDING",
-          periodMonth: new Date().getMonth() + 1,
-          periodYear: new Date().getFullYear(),
-        },
+      // 9.4. SalePayments + auto-fee + CashMovement (filtrado IN_CASH) + AR + CR (helper)
+      await applyPaymentsInTx(tx, {
+        sale: { id: sale.id, branchId, companyId },
+        payments,
+        userId,
+        openShiftId: openShift.id,
+        customerId: quote.customerId,
+        companySettings,
+        note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
       });
 
-      // 7.7. Atualizar orçamento: status CONVERTED + link para venda
+      // 9.5. Comissão (helper)
+      await applyCommissionInTx(tx, {
+        sale: { id: sale.id, companyId, total: sale.total },
+        sellerUserId: userId,
+      });
+
+      // 9.6. FinanceEntry / DRE (helper — log estruturado, não bloqueia)
+      await applyFinanceEntriesInTx(tx, {
+        saleId: sale.id,
+        companyId,
+      });
+
+      // 9.7. Atualizar orçamento → CONVERTED + link bidirecional
       const updatedQuote = await tx.quote.update({
         where: { id: quoteId },
         data: {
           status: "CONVERTED",
-          convertedToSaleId: sale.id, // ✅ Link bidirecional
+          convertedToSaleId: sale.id,
+          convertedAt: new Date(),
+          convertedByUserId: userId,
         },
         include: {
           items: {
@@ -887,7 +876,7 @@ export class QuoteService {
         },
       });
 
-      // Buscar venda completa
+      // 9.8. Buscar venda completa para retorno
       const completeSale = await tx.sale.findUnique({
         where: { id: sale.id },
         include: {
@@ -910,17 +899,23 @@ export class QuoteService {
         },
       });
 
-      // Gerar lançamentos financeiros (ledger)
-      try {
-        const { generateSaleEntries } = await import("@/services/finance-entry.service");
-        await generateSaleEntries(tx, sale.id, companyId);
-      } catch (financeError) {
-        console.error("[FINANCE] Erro ao gerar lançamentos:", financeError);
-        // NÃO throw — venda já completada, finance é secundário
-      }
-
       return { sale: completeSale, quote: updatedQuote };
     });
+
+    // 10. Side-effects pós-commit (cashback ganho + campanhas + lembrete) — helper
+    if (result.sale) {
+      await applyPostCommitSideEffects({
+        saleId: result.sale.id,
+        customerId: quote.customerId,
+        branchId,
+        companyId,
+        total: Number(result.sale.total),
+        // NOVAS conversões geram cashback normalmente.
+        // Apenas o script de migração de vendas órfãs antigas (fix-bug1-orphan-quotes.ts)
+        // passa skipCashbackEarn=true para não dar cashback retroativo confuso ao cliente.
+        skipCashbackEarn: false,
+      });
+    }
 
     return result;
   }

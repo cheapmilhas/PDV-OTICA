@@ -1,0 +1,570 @@
+/**
+ * Side-effects compartilhados de criação de venda.
+ *
+ * Estas funções são chamadas tanto por `sale.service.ts:create` (PDV direto)
+ * quanto por `quote.service.ts:convertToSale` (conversão de orçamento).
+ *
+ * Antes desta extração, cada um tinha sua própria implementação parcial,
+ * causando o Bug #1 (vendas convertidas não geravam AccountReceivable,
+ * CardReceivable, cashback, etc.).
+ *
+ * Estrutura:
+ * - Funções com sufixo `InTx` recebem `tx` (TransactionClient) e devem ser
+ *   chamadas dentro de uma `prisma.$transaction`.
+ * - Funções com sufixo `AfterTx` rodam fora da transação (depois do commit).
+ */
+
+import { Prisma, type PaymentMethod, type Sale, type SalePayment } from "@prisma/client";
+import { addDays } from "date-fns";
+import { calculateInstallments } from "@/lib/installment-utils";
+import { dateOnlyToUTC } from "@/lib/date-utils";
+import { METHODS_IN_CASH } from "@/lib/payment-methods";
+import { atomicStockDebit } from "@/services/stock.service";
+import { cashbackService } from "@/services/cashback.service";
+import { processaSaleForCampaigns } from "@/services/product-campaign.service";
+import { AppError, ERROR_CODES } from "@/lib/error-handler";
+
+// ============================================================================
+// Tipos compartilhados
+// ============================================================================
+
+export interface SaleItemInput {
+  productId: string | null | undefined;
+  qty: number;
+  unitPrice: number;
+  discount?: number;
+}
+
+export interface PaymentInput {
+  method: PaymentMethod;
+  amount: number;
+  installments?: number;
+  installmentConfig?: {
+    count: number;
+    firstDueDate: string;
+    interval?: number;
+  };
+  cardBrand?: string;
+  cardLastDigits?: string;
+  nsu?: string;
+  authorizationCode?: string;
+  acquirer?: string;
+}
+
+export interface CompanyDefaults {
+  defaultFinePercent: Prisma.Decimal | number | null;
+  defaultInterestPercent: Prisma.Decimal | number | null;
+  defaultGraceDays: number | null;
+}
+
+export type Tx = Prisma.TransactionClient;
+
+// ============================================================================
+// Stock — debit + StockMovement
+// ============================================================================
+
+/**
+ * Debita estoque atomicamente para cada item da venda e registra StockMovement.
+ *
+ * Usa `atomicStockDebit` (race-safe via `UPDATE WHERE quantity >= solicitado`).
+ * Atualiza tanto BranchStock (verdade por filial) quanto Product.stockQty (cache).
+ *
+ * Lança AppError se algum produto não tem estoque.
+ */
+export async function applyStockDebitInTx(
+  tx: Tx,
+  params: {
+    sale: Pick<Sale, "id" | "branchId" | "companyId">;
+    items: Array<{ productId: string | null | undefined; qty: number }>;
+    userId: string;
+  }
+): Promise<void> {
+  const { sale, items, userId } = params;
+
+  for (const item of items) {
+    if (!item.productId) continue;
+
+    const stockResult = await atomicStockDebit(
+      item.productId,
+      item.qty,
+      sale.companyId,
+      tx,
+      sale.branchId
+    );
+
+    if (!stockResult.success) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        stockResult.error || "Estoque insuficiente",
+        400
+      );
+    }
+
+    // Registrar movimentação de saída (auditoria)
+    await tx.stockMovement.create({
+      data: {
+        companyId: sale.companyId,
+        branchId: sale.branchId,
+        productId: item.productId,
+        type: "SALE",
+        quantity: -item.qty,
+        createdByUserId: userId,
+        notes: `Saída por venda #${sale.id.substring(0, 8)}`,
+      },
+    });
+  }
+}
+
+// ============================================================================
+// Payments — SalePayment + auto-fee + CashMovement filtrado + AR + CR
+// ============================================================================
+
+export interface ApplyPaymentsResult {
+  payments: SalePayment[];
+}
+
+/**
+ * Para cada PaymentInput:
+ *   1. Cria SalePayment (status RECEIVED)
+ *   2. Auto-calcula fee de cartão (CREDIT/DEBIT) — falha não bloqueia
+ *   3. Cria CashMovement APENAS para METHODS_IN_CASH (CASH/PIX/DEBIT_CARD)
+ *   4. Cria AccountReceivable (N parcelas) para STORE_CREDIT
+ *   5. Cria AccountReceivable (1 parcela em +30 dias) para BALANCE_DUE
+ *   6. Cria CardReceivable (N parcelas) para CREDIT_CARD
+ *
+ * Caller é responsável por validar:
+ *   - STORE_CREDIT/BALANCE_DUE exigem customerId
+ *   - validateCreditLimit (caller decide quando)
+ */
+export async function applyPaymentsInTx(
+  tx: Tx,
+  params: {
+    sale: Pick<Sale, "id" | "branchId" | "companyId">;
+    payments: PaymentInput[];
+    userId: string;
+    openShiftId: string;
+    customerId: string | null | undefined;
+    companySettings: CompanyDefaults | null;
+    note?: string; // Nota a anexar nos CashMovements (ex: "convertida de orçamento #abc")
+  }
+): Promise<ApplyPaymentsResult> {
+  const { sale, payments, userId, openShiftId, customerId, companySettings, note } = params;
+  const created: SalePayment[] = [];
+
+  for (const payment of payments) {
+    const installmentsCount =
+      payment.installmentConfig?.count || payment.installments || 1;
+
+    // 1. Cria SalePayment
+    const salePayment = await tx.salePayment.create({
+      data: {
+        saleId: sale.id,
+        method: payment.method,
+        amount: payment.amount,
+        installments: installmentsCount,
+        status: "RECEIVED",
+        receivedAt: new Date(),
+        receivedByUserId: userId,
+        ...(payment.cardBrand && { cardBrand: payment.cardBrand }),
+        ...(payment.cardLastDigits && { cardLastDigits: payment.cardLastDigits }),
+        ...(payment.nsu && { nsu: payment.nsu }),
+        ...(payment.authorizationCode && { authorizationCode: payment.authorizationCode }),
+        ...(payment.acquirer && { acquirer: payment.acquirer }),
+      },
+    });
+    created.push(salePayment);
+
+    // 2. Auto-fee para cartões (não bloqueia se falhar)
+    if (
+      (payment.method === "CREDIT_CARD" || payment.method === "DEBIT_CARD") &&
+      !salePayment.feeAmount
+    ) {
+      try {
+        const { calculateCardFee } = await import("@/services/card-fee.service");
+        const feeResult = await calculateCardFee(
+          sale.companyId,
+          payment.cardBrand || "VISA",
+          payment.method === "CREDIT_CARD" ? "CREDIT" : "DEBIT",
+          installmentsCount,
+          Number(payment.amount)
+        );
+        if (feeResult) {
+          await tx.salePayment.update({
+            where: { id: salePayment.id },
+            data: {
+              feePercent: feeResult.feePercent,
+              feeAmount: feeResult.feeAmount,
+              netAmount: feeResult.netAmount,
+              settlementDate: feeResult.settlementDate,
+            },
+          });
+        }
+      } catch (feeError) {
+        // Não bloqueia a venda — fee é informativo
+        console.error(
+          JSON.stringify({
+            level: "warn",
+            event: "card_fee_auto_calc_failed",
+            saleId: sale.id,
+            salePaymentId: salePayment.id,
+            method: payment.method,
+            error: feeError instanceof Error ? feeError.message : String(feeError),
+          })
+        );
+      }
+    }
+
+    // 3. CashMovement APENAS para métodos in-cash
+    if ((METHODS_IN_CASH as readonly string[]).includes(payment.method)) {
+      await tx.cashMovement.create({
+        data: {
+          cashShiftId: openShiftId,
+          branchId: sale.branchId,
+          type: "SALE_PAYMENT",
+          direction: "IN",
+          method: payment.method,
+          amount: payment.amount,
+          originType: "SALE_PAYMENT",
+          originId: salePayment.id,
+          salePaymentId: salePayment.id,
+          createdByUserId: userId,
+          note: note || `Venda #${sale.id.substring(0, 8)}`,
+        },
+      });
+    }
+
+    // 4. AccountReceivable para STORE_CREDIT
+    if (payment.method === "STORE_CREDIT" && payment.installmentConfig && customerId) {
+      const installments = calculateInstallments(
+        payment.amount,
+        payment.installmentConfig.count,
+        dateOnlyToUTC(payment.installmentConfig.firstDueDate),
+        payment.installmentConfig.interval
+      );
+
+      for (const inst of installments) {
+        await tx.accountReceivable.create({
+          data: {
+            companyId: sale.companyId,
+            customerId,
+            saleId: sale.id,
+            description: `Parcela ${inst.installmentNumber}/${installments.length} - Venda #${sale.id.substring(0, 8)}`,
+            amount: inst.amount,
+            dueDate: inst.dueDate,
+            installmentNumber: inst.installmentNumber,
+            totalInstallments: installments.length,
+            status: "PENDING",
+            createdByUserId: userId,
+            finePercent: companySettings?.defaultFinePercent ?? 2,
+            interestPercent: companySettings?.defaultInterestPercent ?? 1,
+            graceDays: companySettings?.defaultGraceDays ?? 0,
+          },
+        });
+      }
+    }
+
+    // 5. AccountReceivable para BALANCE_DUE (+30 dias, 1 parcela)
+    if (payment.method === "BALANCE_DUE" && customerId) {
+      const dueDate = addDays(new Date(), 30);
+      await tx.accountReceivable.create({
+        data: {
+          companyId: sale.companyId,
+          customerId,
+          saleId: sale.id,
+          description: `Saldo a Receber - Venda #${sale.id.substring(0, 8)} - Pagamento na entrega`,
+          amount: payment.amount,
+          dueDate,
+          installmentNumber: 1,
+          totalInstallments: 1,
+          status: "PENDING",
+          createdByUserId: userId,
+        },
+      });
+    }
+
+    // 6. CardReceivable para CREDIT_CARD (N parcelas, +30*i dias cada)
+    if (payment.method === "CREDIT_CARD") {
+      const numInstallments = installmentsCount;
+      const installmentAmount = Number(payment.amount) / numInstallments;
+
+      for (let i = 1; i <= numInstallments; i++) {
+        const expectedDate = addDays(new Date(), 30 * i);
+        await tx.cardReceivable.create({
+          data: {
+            companyId: sale.companyId,
+            branchId: sale.branchId,
+            saleId: sale.id,
+            salePaymentId: salePayment.id,
+            installmentNumber: i,
+            totalInstallments: numInstallments,
+            grossAmount: installmentAmount,
+            expectedDate,
+            status: "PENDING",
+            cardBrand: payment.cardBrand || null,
+            acquirer: payment.acquirer || null,
+            nsu: payment.nsu || null,
+          },
+        });
+      }
+    }
+  }
+
+  return { payments: created };
+}
+
+// ============================================================================
+// Cashback — debit (uso na venda)
+// ============================================================================
+
+/**
+ * Debita cashback usado na venda.
+ * Caller deve já ter validado que o cliente tem saldo suficiente.
+ */
+export async function applyCashbackUsageInTx(
+  tx: Tx,
+  params: {
+    sale: Pick<Sale, "id" | "branchId">;
+    customerId: string;
+    cashbackUsed: number;
+    userId: string;
+  }
+): Promise<void> {
+  const { sale, customerId, cashbackUsed, userId } = params;
+
+  if (cashbackUsed <= 0) return;
+
+  const customerCashback = await tx.customerCashback.update({
+    where: {
+      customerId_branchId: {
+        customerId,
+        branchId: sale.branchId,
+      },
+    },
+    data: {
+      balance: { decrement: cashbackUsed },
+      totalUsed: { increment: cashbackUsed },
+    },
+  });
+
+  await tx.cashbackMovement.create({
+    data: {
+      customerCashbackId: customerCashback.id,
+      type: "DEBIT",
+      amount: cashbackUsed,
+      saleId: sale.id,
+      description: `Cashback usado na venda #${sale.id.substring(0, 8)}`,
+      createdByUserId: userId,
+    },
+  });
+}
+
+// ============================================================================
+// Commission
+// ============================================================================
+
+/**
+ * Calcula e cria Commission do vendedor.
+ * Base de cálculo: Sale.total. Percentual: User.defaultCommissionPercent ou 5%.
+ *
+ * NOTA: Não consulta CommissionRule (modelo no schema mas não usado em runtime hoje).
+ * Manter comportamento idêntico ao atual em sale.service e quote.service para evitar
+ * regressão. Ver `/docs/audit/mapping/09_estoque_multifilial.md` J9.
+ */
+export async function applyCommissionInTx(
+  tx: Tx,
+  params: {
+    sale: Pick<Sale, "id" | "companyId" | "total">;
+    sellerUserId: string;
+  }
+): Promise<void> {
+  const { sale, sellerUserId } = params;
+
+  const seller = await tx.user.findUnique({
+    where: { id: sellerUserId },
+    select: { defaultCommissionPercent: true },
+  });
+
+  const commissionPercent = seller?.defaultCommissionPercent || new Prisma.Decimal(5);
+  const baseAmount = sale.total;
+  const commissionAmount = new Prisma.Decimal(baseAmount.toString())
+    .mul(commissionPercent)
+    .div(100);
+
+  await tx.commission.create({
+    data: {
+      companyId: sale.companyId,
+      saleId: sale.id,
+      userId: sellerUserId,
+      baseAmount,
+      percentage: commissionPercent,
+      commissionAmount,
+      status: "PENDING",
+      periodMonth: new Date().getMonth() + 1,
+      periodYear: new Date().getFullYear(),
+    },
+  });
+}
+
+// ============================================================================
+// Finance entries (DRE)
+// ============================================================================
+
+/**
+ * Gera FinanceEntry da venda.
+ *
+ * Comportamento de erro: NÃO bloqueia a transação (decisão documentada — ver
+ * comentário no caller). Mas LOGA estruturadamente para Sentry/Vercel pickup,
+ * em vez de silently swallow.
+ */
+export async function applyFinanceEntriesInTx(
+  tx: Tx,
+  params: {
+    saleId: string;
+    companyId: string;
+  }
+): Promise<void> {
+  const { saleId, companyId } = params;
+  try {
+    const { generateSaleEntries } = await import("@/services/finance-entry.service");
+    await generateSaleEntries(tx, saleId, companyId);
+  } catch (financeError) {
+    console.error(
+      JSON.stringify({
+        level: "error",
+        event: "finance_entries_generation_failed",
+        saleId,
+        companyId,
+        error: financeError instanceof Error ? financeError.message : String(financeError),
+        stack: financeError instanceof Error ? financeError.stack : undefined,
+      })
+    );
+    // NÃO throw — comportamento documentado: venda completa, DRE precisa correção manual.
+  }
+}
+
+// ============================================================================
+// Side-effects pós-transação
+// ============================================================================
+
+/**
+ * Aplica todos os side-effects após o commit da venda.
+ * Cada um falha silenciosamente (com log estruturado) para não afetar a venda.
+ *
+ * Nota: este conjunto é IDÊNTICO em sale.create e (agora) em quote.convertToSale.
+ */
+export async function applyPostCommitSideEffects(params: {
+  saleId: string;
+  customerId: string | null | undefined;
+  branchId: string;
+  companyId: string;
+  total: number;
+  /**
+   * Se true, NÃO chama earnCashback. Usado pela conversão de orçamento — decisão
+   * de produto: vendas convertidas não geram cashback retroativo (ver
+   * /docs/audit/fixes/bug1_diagnostico.md decisão (a) de Matheus).
+   *
+   * Para conversão NOVA (após este fix), deve ser `false` para gerar cashback
+   * normalmente. Para script de migração de vendas órfãs antigas, deve ser `true`.
+   */
+  skipCashbackEarn?: boolean;
+}): Promise<void> {
+  const { saleId, customerId, branchId, companyId, total, skipCashbackEarn } = params;
+
+  // Cashback ganho
+  if (customerId && !skipCashbackEarn) {
+    try {
+      await cashbackService.earnCashback(customerId, saleId, total, branchId, companyId);
+    } catch (cashbackError) {
+      console.error(
+        JSON.stringify({
+          level: "warn",
+          event: "cashback_earn_failed",
+          saleId,
+          customerId,
+          error: cashbackError instanceof Error ? cashbackError.message : String(cashbackError),
+        })
+      );
+    }
+  }
+
+  // Campanhas
+  try {
+    await processaSaleForCampaigns(saleId, companyId);
+  } catch (campaignError) {
+    console.error(
+      JSON.stringify({
+        level: "warn",
+        event: "process_campaigns_failed",
+        saleId,
+        error: campaignError instanceof Error ? campaignError.message : String(campaignError),
+      })
+    );
+  }
+
+  // Lembrete pós-venda (POST_SALE_30_DAYS)
+  if (customerId) {
+    try {
+      await applyPostSaleReminder({ saleId, customerId, companyId, total });
+    } catch (reminderError) {
+      console.error(
+        JSON.stringify({
+          level: "warn",
+          event: "post_sale_reminder_failed",
+          saleId,
+          customerId,
+          error: reminderError instanceof Error ? reminderError.message : String(reminderError),
+        })
+      );
+    }
+  }
+}
+
+/**
+ * Cria CustomerReminder POST_SALE_30_DAYS se ainda não existir um pendente
+ * para o cliente.
+ */
+async function applyPostSaleReminder(params: {
+  saleId: string;
+  customerId: string;
+  companyId: string;
+  total: number;
+}): Promise<void> {
+  const { prisma } = await import("@/lib/prisma");
+  const { saleId, customerId, companyId, total } = params;
+
+  const saleItems = await prisma.saleItem.findMany({
+    where: { saleId },
+    include: { product: { select: { name: true } } },
+    take: 1,
+  });
+
+  const productName = saleItems[0]?.product?.name || undefined;
+
+  const existingReminder = await prisma.customerReminder.findFirst({
+    where: {
+      companyId,
+      customerId,
+      segment: "POST_SALE_30_DAYS",
+      status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
+    },
+  });
+
+  if (existingReminder) return;
+
+  await prisma.customerReminder.create({
+    data: {
+      companyId,
+      customerId,
+      segment: "POST_SALE_30_DAYS",
+      priority: 80,
+      lastPurchaseDate: new Date(),
+      lastPurchaseAmount: total,
+      lastPurchaseProduct: productName,
+      daysSinceLastPurchase: 0,
+      totalPurchases: 1,
+      totalSpent: total,
+      status: "PENDING",
+      scheduledFor: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+    },
+  });
+}

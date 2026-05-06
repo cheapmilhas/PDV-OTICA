@@ -3,15 +3,21 @@ import { Sale, SaleItem, SalePayment, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
-import { calculateInstallments, validateCreditLimit } from "@/lib/installment-utils";
+import { validateCreditLimit } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
-import { dateOnlyToUTC, startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
-import { addDays } from "date-fns";
-import { cashbackService } from "@/services/cashback.service";
 import { atomicStockDebit } from "@/services/stock.service";
 import { processaSaleForCampaigns, reverseBonusForSale } from "@/services/product-campaign.service";
+import {
+  applyStockDebitInTx,
+  applyPaymentsInTx,
+  applyCashbackUsageInTx,
+  applyCommissionInTx,
+  applyFinanceEntriesInTx,
+  applyPostCommitSideEffects,
+} from "@/services/sale-side-effects.service";
 
 /**
  * Service para operações de Vendas (PDV)
@@ -113,6 +119,9 @@ export class SaleService {
               installments: true,
             },
           },
+          serviceOrder: {
+            select: { id: true, number: true },
+          },
           _count: {
             select: { items: true, payments: true },
           },
@@ -186,7 +195,7 @@ export class SaleService {
    * - Pelo menos 1 pagamento
    */
   async create(data: CreateSaleDTO, companyId: string, userId: string) {
-    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId } = data;
+    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId, serviceOrderId } = data;
     const effectiveSellerId = sellerUserId || userId;
 
     // Validação de segurança: branchId deve pertencer à empresa do usuário
@@ -298,14 +307,36 @@ export class SaleService {
       }
     }
 
-    // Validar crediário e saldo a receber (cliente obrigatório)
+    // Validar crediário e saldo a receber (cliente obrigatório + limite de crédito)
+    //
+    // Decisão (Matheus, 2026-05-06): BALANCE_DUE também passa por validateCreditLimit.
+    // Razão: BALANCE_DUE é venda a prazo igual STORE_CREDIT — cliente inadimplente
+    // não deve burlar a validação só trocando o método. Bloqueio por inadimplência
+    // (overdue_days_to_block) também se aplica a BALANCE_DUE.
+    //
+    // Diferença: BALANCE_DUE é parcela única vinculada à entrega da OS, então
+    // a checagem é a mesma de STORE_CREDIT (totalOpen + requested > limite).
     for (const payment of payments) {
       if (payment.method === "STORE_CREDIT") {
         validateStoreCredit(payment, customerId);
+      }
 
-        // Validar limite de crédito (se aplicável)
+      // Saldo a Receber: cliente obrigatório (paga ao receber o produto)
+      if (payment.method === "BALANCE_DUE" && !customerId) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Saldo a Receber exige um cliente vinculado",
+          400
+        );
+      }
+
+      // Validar limite de crédito para vendas a prazo (STORE_CREDIT + BALANCE_DUE)
+      if (
+        (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") &&
+        customerId
+      ) {
         const creditCheck = await validateCreditLimit(
-          customerId!,
+          customerId,
           payment.amount,
           companyId
         );
@@ -313,17 +344,6 @@ export class SaleService {
           throw new AppError(
             ERROR_CODES.VALIDATION_ERROR,
             creditCheck.message || "Limite de crédito excedido",
-            400
-          );
-        }
-      }
-
-      // Saldo a Receber: cliente obrigatório (paga ao receber o produto)
-      if (payment.method === "BALANCE_DUE") {
-        if (!customerId) {
-          throw new AppError(
-            ERROR_CODES.VALIDATION_ERROR,
-            "Saldo a Receber exige um cliente vinculado",
             400
           );
         }
@@ -359,7 +379,15 @@ export class SaleService {
       });
     }
 
+    // Buscar configurações de juros/multa padrão para crediário
+    const companySettings = await prisma.companySettings.findUnique({
+      where: { companyId },
+      select: { defaultFinePercent: true, defaultInterestPercent: true, defaultGraceDays: true },
+    });
+
     // Criar venda em transação (venda + itens + pagamentos + cashMovement + estoque)
+    // Refatorado para usar helpers compartilhados em sale-side-effects.service.ts
+    // (mesmos side-effects são reusados em quote.service.ts:convertToSale).
     const sale = await prisma.$transaction(async (tx) => {
       // 1. Criar venda
       const newSale = await tx.sale.create({
@@ -368,6 +396,7 @@ export class SaleService {
           customerId,
           branchId,
           sellerUserId: effectiveSellerId,
+          ...(serviceOrderId && { serviceOrderId }),
           subtotal,
           discountTotal: discount,
           cashbackUsed,
@@ -377,7 +406,7 @@ export class SaleService {
         },
       });
 
-      // 2. Buscar custo dos produtos para gravar no SaleItem
+      // 2. Buscar custo dos produtos para gravar no SaleItem (margem em relatórios)
       const productIds = items.map((i) => i.productId).filter(Boolean);
       const productsWithCost = await tx.product.findMany({
         where: { id: { in: productIds } },
@@ -385,7 +414,7 @@ export class SaleService {
       });
       const costMap = new Map(productsWithCost.map((p) => [p.id, Number(p.costPrice)]));
 
-      // 3. Criar itens
+      // 3. Criar SaleItems
       for (const item of items) {
         const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
         const itemCostPrice = item.productId ? (costMap.get(item.productId) || 0) : 0;
@@ -400,323 +429,60 @@ export class SaleService {
             costPrice: itemCostPrice,
           },
         });
-
-        // 3. Atualizar estoque de forma atômica (race condition safe)
-        const stockResult = await atomicStockDebit(item.productId, item.qty, companyId, tx, branchId);
-        if (!stockResult.success) {
-          throw new AppError(
-            ERROR_CODES.VALIDATION_ERROR,
-            stockResult.error || "Estoque insuficiente",
-            400
-          );
-        }
-
-        // 3.1. Criar registro de movimentação de estoque (auditoria)
-        await tx.stockMovement.create({
-          data: {
-            companyId,
-            branchId,
-            productId: item.productId,
-            type: "SALE",
-            quantity: -item.qty, // Negativo = saída de estoque
-            createdByUserId: userId,
-            notes: `Saída por venda #${newSale.id.substring(0, 8)}`,
-          },
-        });
       }
 
-      // 4. Criar pagamentos
-      for (const payment of payments) {
-        const salePayment = await tx.salePayment.create({
-          data: {
-            saleId: newSale.id,
-            method: payment.method,
-            amount: payment.amount,
-            installments: payment.installmentConfig?.count || payment.installments || 1,
-            status: "RECEIVED",
-            receivedAt: new Date(),
-            receivedByUserId: userId,
-            ...(payment.cardBrand && { cardBrand: payment.cardBrand }),
-            ...(payment.cardLastDigits && { cardLastDigits: payment.cardLastDigits }),
-            ...(payment.nsu && { nsu: payment.nsu }),
-            ...(payment.authorizationCode && { authorizationCode: payment.authorizationCode }),
-            ...(payment.acquirer && { acquirer: payment.acquirer }),
-          },
-        });
+      // 4. Estoque atomic + StockMovement (helper)
+      await applyStockDebitInTx(tx, {
+        sale: { id: newSale.id, branchId, companyId },
+        items: items.map((i) => ({ productId: i.productId, qty: i.qty })),
+        userId,
+      });
 
-        // 4.1. Auto-calcular taxas de cartão se não informadas
-        if (
-          (payment.method === "CREDIT_CARD" || payment.method === "DEBIT_CARD") &&
-          !salePayment.feeAmount
-        ) {
-          try {
-            const { calculateCardFee } = await import("@/services/card-fee.service");
-            const feeResult = await calculateCardFee(
-              companyId,
-              payment.cardBrand || "VISA",
-              payment.method === "CREDIT_CARD" ? "CREDIT" : "DEBIT",
-              payment.installmentConfig?.count || payment.installments || 1,
-              Number(payment.amount)
-            );
-            if (feeResult) {
-              await tx.salePayment.update({
-                where: { id: salePayment.id },
-                data: {
-                  feePercent: feeResult.feePercent,
-                  feeAmount: feeResult.feeAmount,
-                  netAmount: feeResult.netAmount,
-                  settlementDate: feeResult.settlementDate,
-                },
-              });
-            }
-          } catch {
-            // Falha no cálculo de fee não deve impedir a venda
-          }
-        }
+      // 5. SalePayments + auto-fee + CashMovement (filtrado) + AR + CR (helper)
+      await applyPaymentsInTx(tx, {
+        sale: { id: newSale.id, branchId, companyId },
+        payments,
+        userId,
+        openShiftId: openShift.id,
+        customerId,
+        companySettings,
+      });
 
-        // 5. Criar CashMovement apenas para pagamentos à vista
-        // STORE_CREDIT (crediário) NÃO entra no caixa — será recebido depois via parcelas
-        // CREDIT_CARD NÃO entra no caixa físico — operadora repassa depois
-        if ((METHODS_IN_CASH as readonly string[]).includes(payment.method)) {
-          try {
-            await tx.cashMovement.create({
-              data: {
-                cashShiftId: openShift.id,
-                branchId,
-                type: "SALE_PAYMENT",
-                direction: "IN",
-                method: payment.method,
-                amount: payment.amount,
-                originType: "SALE_PAYMENT",
-                originId: salePayment.id,
-                salePaymentId: salePayment.id,
-                createdByUserId: userId,
-                note: `Venda #${newSale.id.substring(0, 8)}`,
-              },
-            });
-          } catch (cashMovementError: any) {
-            console.error(`Erro ao criar CashMovement para venda ${newSale.id}:`, cashMovementError);
-            throw cashMovementError;
-          }
-        }
-
-        // 6. Se for crediário, criar parcelas em AccountReceivable
-        if (payment.method === "STORE_CREDIT" && payment.installmentConfig) {
-          const installments = calculateInstallments(
-            payment.amount,
-            payment.installmentConfig.count,
-            dateOnlyToUTC(payment.installmentConfig.firstDueDate),
-            payment.installmentConfig.interval
-          );
-
-          for (const inst of installments) {
-            await tx.accountReceivable.create({
-              data: {
-                companyId,
-                customerId: customerId!,
-                saleId: newSale.id,
-                description: `Parcela ${inst.installmentNumber}/${installments.length} - Venda #${newSale.id.substring(0, 8)}`,
-                amount: inst.amount,
-                dueDate: inst.dueDate,
-                installmentNumber: inst.installmentNumber,
-                totalInstallments: installments.length,
-                status: "PENDING",
-                createdByUserId: userId,
-              },
-            });
-          }
-
-        }
-
-        // 6b. Se for Saldo a Receber, criar 1 parcela em AccountReceivable
-        if (payment.method === "BALANCE_DUE") {
-          // Vencimento: +30 dias (pagamento na entrega do produto)
-          const dueDate = addDays(new Date(), 30);
-
-          await tx.accountReceivable.create({
-            data: {
-              companyId,
-              customerId: customerId!,
-              saleId: newSale.id,
-              description: `Saldo a Receber - Venda #${newSale.id.substring(0, 8)} - Pagamento na entrega`,
-              amount: payment.amount,
-              dueDate,
-              installmentNumber: 1,
-              totalInstallments: 1,
-              status: "PENDING",
-              createdByUserId: userId,
-            },
-          });
-        }
-
-        // 6c. Se for cartão de crédito, criar CardReceivable para previsão de recebimento
-        if (payment.method === "CREDIT_CARD") {
-          const numInstallments = payment.installments || payment.installmentConfig?.count || 1;
-          const installmentAmount = Number(payment.amount) / numInstallments;
-
-          for (let i = 1; i <= numInstallments; i++) {
-            // Operadoras depositam cada parcela em ~30 dias da data de cada parcela
-            const expectedDate = addDays(new Date(), 30 * i);
-
-            await tx.cardReceivable.create({
-              data: {
-                companyId,
-                branchId,
-                saleId: newSale.id,
-                salePaymentId: salePayment.id,
-                installmentNumber: i,
-                totalInstallments: numInstallments,
-                grossAmount: installmentAmount,
-                expectedDate,
-                status: "PENDING",
-                cardBrand: payment.cardBrand || null,
-                acquirer: payment.acquirer || null,
-                nsu: payment.nsu || null,
-              },
-            });
-          }
-        }
-      }
-
-      // 6. Debitar cashback se foi usado
+      // 6. Debitar cashback usado (helper)
       if (cashbackUsed > 0 && customerId) {
-        // Atualizar CustomerCashback (já validamos que existe antes da transação)
-        const customerCashback = await tx.customerCashback.update({
-          where: {
-            customerId_branchId: {
-              customerId,
-              branchId,
-            },
-          },
-          data: {
-            balance: {
-              decrement: cashbackUsed,
-            },
-            totalUsed: {
-              increment: cashbackUsed,
-            },
-          },
+        await applyCashbackUsageInTx(tx, {
+          sale: { id: newSale.id, branchId },
+          customerId,
+          cashbackUsed,
+          userId,
         });
-
-        // Criar movimento de DEBIT
-        await tx.cashbackMovement.create({
-          data: {
-            customerCashbackId: customerCashback.id,
-            type: "DEBIT",
-            amount: cashbackUsed, // POSITIVO! O type "DEBIT" já indica que é saída
-            saleId: newSale.id,
-            description: `Cashback usado na venda #${newSale.id.substring(0, 8)}`,
-            createdByUserId: userId,
-          },
-        });
-
       }
 
-      // 7. Calcular e criar comissão do vendedor (usa vendedor selecionado, não quem logou)
-      const seller = await tx.user.findUnique({
-        where: { id: effectiveSellerId },
-        select: { defaultCommissionPercent: true },
+      // 7. Comissão (helper)
+      await applyCommissionInTx(tx, {
+        sale: { id: newSale.id, companyId, total: newSale.total },
+        sellerUserId: effectiveSellerId,
       });
 
-      const commissionPercent = seller?.defaultCommissionPercent || new Prisma.Decimal(5); // 5% default
-      const baseAmount = newSale.total; // Base de cálculo é o total da venda
-      const commissionAmount = new Prisma.Decimal(baseAmount)
-        .mul(commissionPercent)
-        .div(100);
-
-      await tx.commission.create({
-        data: {
-          companyId,
-          saleId: newSale.id,
-          userId: effectiveSellerId,
-          baseAmount,
-          percentage: commissionPercent,
-          commissionAmount,
-          status: "PENDING",
-          periodMonth: new Date().getMonth() + 1,
-          periodYear: new Date().getFullYear(),
-        },
+      // 8. FinanceEntry / DRE (helper — log estruturado, não bloqueia)
+      await applyFinanceEntriesInTx(tx, {
+        saleId: newSale.id,
+        companyId,
       });
-
-      // 8. Gerar lançamentos financeiros (ledger)
-      try {
-        const { generateSaleEntries } = await import("@/services/finance-entry.service");
-        await generateSaleEntries(tx, newSale.id, companyId);
-      } catch (financeError) {
-        console.error("[FINANCE] Erro ao gerar lançamentos:", financeError);
-        // NÃO throw — venda já completada, finance é secundário
-      }
 
       return newSale;
     });
 
-    // 9. Gerar cashback (se aplicável - fora da transação principal)
-    if (customerId) {
-      try {
-        await cashbackService.earnCashback(
-          customerId,
-          sale.id,
-          total,
-          branchId,
-          companyId
-        );
-      } catch (cashbackError) {
-        // Falha no cashback não deve impedir a venda
-        console.error(`Erro ao gerar cashback para venda ${sale.id}:`, cashbackError);
-      }
-    }
-
-    // 9. Processar campanhas de bonificação (se aplicável - fora da transação principal)
-    try {
-      await processaSaleForCampaigns(sale.id, companyId);
-    } catch (campaignError) {
-      // Falha em campanhas não deve impedir a venda
-      console.error(`Erro ao processar campanhas para venda ${sale.id}:`, campaignError);
-    }
-
-    // 10. Gerar lembrete pós-venda automaticamente (se cliente identificado)
-    if (customerId) {
-      try {
-        const saleItems = await prisma.saleItem.findMany({
-          where: { saleId: sale.id },
-          include: { product: { select: { name: true } } },
-          take: 1,
-        });
-
-        const productName = saleItems[0]?.product?.name || undefined;
-
-        // Verificar se já existe lembrete pós-venda pendente para este cliente
-        const existingReminder = await prisma.customerReminder.findFirst({
-          where: {
-            companyId,
-            customerId,
-            segment: "POST_SALE_30_DAYS",
-            status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
-          },
-        });
-
-        if (!existingReminder) {
-          await prisma.customerReminder.create({
-            data: {
-              companyId,
-              customerId,
-              segment: "POST_SALE_30_DAYS",
-              priority: 80,
-              lastPurchaseDate: new Date(),
-              lastPurchaseAmount: total,
-              lastPurchaseProduct: productName,
-              daysSinceLastPurchase: 0,
-              totalPurchases: 1,
-              totalSpent: total,
-              status: "PENDING",
-              scheduledFor: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
-            },
-          });
-        }
-      } catch (reminderError) {
-        console.error(`Erro ao criar lembrete pós-venda para cliente ${customerId}:`, reminderError);
-      }
-    }
+    // 9. Side-effects pós-commit (cashback ganho + campanhas + lembrete) — helper
+    await applyPostCommitSideEffects({
+      saleId: sale.id,
+      customerId,
+      branchId,
+      companyId,
+      total,
+      // Em vendas novas (PDV direto), gera cashback normalmente.
+      skipCashbackEarn: false,
+    });
 
     // Retornar venda completa
     return this.getById(sale.id, companyId);

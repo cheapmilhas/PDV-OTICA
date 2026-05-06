@@ -260,7 +260,7 @@ export function getDefaultRules() {
     CUSTOMERS: [
       {
         key: "customers.default_credit_limit",
-        value: 1000,
+        value: 500,
         description: "Limite de crédito padrão (R$) para novos clientes",
         type: "number",
       },
@@ -272,7 +272,7 @@ export function getDefaultRules() {
       },
       {
         key: "customers.overdue_days_to_block",
-        value: 15,
+        value: 30,
         description:
           "Dias de atraso para bloquear automaticamente o cliente",
         type: "number",
