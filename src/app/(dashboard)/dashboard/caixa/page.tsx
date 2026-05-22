@@ -190,6 +190,26 @@ function CaixaPage() {
         valorAtual: 0,
       };
 
+  const tempoAberto = (() => {
+    if (!shift || shift.status !== "OPEN") return null;
+    const diffMs = Date.now() - new Date(shift.openedAt).getTime();
+    const totalHours = diffMs / (1000 * 60 * 60);
+    const days = Math.floor(totalHours / 24);
+    const hours = Math.floor(totalHours % 24);
+    const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+    return {
+      hours: totalHours,
+      label:
+        days > 0
+          ? `${days}d ${hours}h`
+          : hours > 0
+            ? `${hours}h ${minutes}m`
+            : `${minutes}m`,
+    };
+  })();
+  const turnoCritico = (tempoAberto?.hours ?? 0) >= 24;
+  const turnoAtencao = !turnoCritico && (tempoAberto?.hours ?? 0) >= 12;
+
   const getTipoIcon = (type: string) => {
     switch (type) {
       case "SALE_PAYMENT":
@@ -366,234 +386,321 @@ function CaixaPage() {
         </div>
 
         {/* Status do Caixa */}
-        <Card className={caixaStatus.aberto ? "border-green-200 bg-green-50" : "border-red-200 bg-red-50"}>
-          <CardHeader>
-            <div className="flex items-center justify-between">
-              <CardTitle className="flex items-center gap-2">
-                {caixaStatus.aberto ? (
-                  <>
-                    <Unlock className="h-5 w-5 text-green-600" />
-                    <span className="text-green-900">Caixa Aberto</span>
-                  </>
-                ) : (
-                  <>
-                    <Lock className="h-5 w-5 text-red-600" />
-                    <span className="text-red-900">Caixa Fechado</span>
-                  </>
-                )}
-              </CardTitle>
-              <Badge variant={caixaStatus.aberto ? "default" : "destructive"} className="text-lg px-3 py-1">
-                {caixaStatus.aberto ? "Ativo" : "Inativo"}
-              </Badge>
+        <Card
+          className={
+            caixaStatus.aberto
+              ? turnoCritico
+                ? "border-red-300 bg-gradient-to-br from-red-50 to-white"
+                : turnoAtencao
+                  ? "border-amber-300 bg-gradient-to-br from-amber-50 to-white"
+                  : "border-emerald-200 bg-gradient-to-br from-emerald-50 to-white"
+              : "border-slate-200 bg-slate-50"
+          }
+        >
+          <CardHeader className="pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              <div className="flex items-center gap-3">
+                <div
+                  className={`flex h-10 w-10 items-center justify-center rounded-full ${
+                    caixaStatus.aberto
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-slate-100 text-slate-500"
+                  }`}
+                >
+                  {caixaStatus.aberto ? (
+                    <Unlock className="h-5 w-5" />
+                  ) : (
+                    <Lock className="h-5 w-5" />
+                  )}
+                </div>
+                <div>
+                  <CardTitle className="text-lg">
+                    {caixaStatus.aberto ? "Caixa aberto" : "Caixa fechado"}
+                  </CardTitle>
+                  {caixaStatus.aberto && tempoAberto && (
+                    <p className="text-xs text-muted-foreground">
+                      Há <span className="font-medium tabular-nums">{tempoAberto.label}</span> ·
+                      operado por <span className="font-medium">{caixaStatus.operador}</span>
+                    </p>
+                  )}
+                </div>
+              </div>
+              {caixaStatus.aberto && tempoAberto && (
+                <Badge
+                  variant={turnoCritico ? "destructive" : "secondary"}
+                  className={
+                    turnoCritico
+                      ? ""
+                      : turnoAtencao
+                        ? "bg-amber-100 text-amber-800 hover:bg-amber-100"
+                        : "bg-emerald-100 text-emerald-800 hover:bg-emerald-100"
+                  }
+                >
+                  {turnoCritico ? "Fechar imediatamente" : turnoAtencao ? "Atenção: > 12h" : "Operação normal"}
+                </Badge>
+              )}
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
               <div className="rounded-lg border bg-white p-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                  <User className="h-4 w-4" />
-                  <span>Operador</span>
-                </div>
-                <p className="font-semibold">{caixaStatus.operador}</p>
-              </div>
-              <div className="rounded-lg border bg-white p-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                  <Clock className="h-4 w-4" />
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <Clock className="h-3.5 w-3.5" />
                   <span>Abertura</span>
                 </div>
-                <p className="font-semibold">{caixaStatus.dataAbertura}</p>
+                <p className="mt-1 text-sm font-medium tabular-nums">{caixaStatus.dataAbertura}</p>
               </div>
               <div className="rounded-lg border bg-white p-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                  <DollarSign className="h-4 w-4" />
-                  <span>Valor Abertura</span>
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
+                  <DollarSign className="h-3.5 w-3.5" />
+                  <span>Valor inicial</span>
                 </div>
-                <p className="font-semibold">{formatCurrency(caixaStatus.valorAbertura)}</p>
+                <p className="mt-1 text-sm font-medium tabular-nums">
+                  {formatCurrency(caixaStatus.valorAbertura)}
+                </p>
               </div>
-              <div className="rounded-lg border bg-white p-4">
-                <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                  <Wallet className="h-4 w-4" />
-                  <span>Saldo em Caixa</span>
+              <div
+                className={`rounded-lg border p-4 ${
+                  caixaStatus.aberto
+                    ? "border-emerald-200 bg-emerald-50"
+                    : "bg-white"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-emerald-800">
+                  <Wallet className="h-3.5 w-3.5" />
+                  <span>Saldo em caixa</span>
                 </div>
-                <p className="text-xl font-bold text-green-600">{formatCurrency(caixaStatus.valorAtual)}</p>
+                <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">
+                  {formatCurrency(caixaStatus.valorAtual)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Dinheiro · PIX · Débito</p>
               </div>
-              {totalAPrazo > 0 && (
-                <div className="rounded-lg border bg-white p-4">
-                  <div className="flex items-center gap-2 text-sm text-muted-foreground mb-1">
-                    <CreditCard className="h-4 w-4" />
-                    <span>Vendas a Prazo</span>
-                  </div>
-                  <p className="text-xl font-bold text-amber-600">{formatCurrency(totalAPrazo)}</p>
-                  <p className="text-xs text-muted-foreground">Crediário / Cartão</p>
+              <div
+                className={`rounded-lg border p-4 ${
+                  totalAPrazo > 0 ? "border-amber-200 bg-amber-50" : "bg-white opacity-60"
+                }`}
+              >
+                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-800">
+                  <CreditCard className="h-3.5 w-3.5" />
+                  <span>A prazo · informativo</span>
                 </div>
-              )}
+                <p className="mt-1 text-2xl font-bold tabular-nums text-amber-700">
+                  {formatCurrency(totalAPrazo)}
+                </p>
+                <p className="text-[11px] text-muted-foreground">Crediário / cartão de crédito · não entra no caixa</p>
+              </div>
             </div>
           </CardContent>
         </Card>
 
         {/* Resumo de Vendas */}
-        <div className="grid gap-4 md:grid-cols-4">
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Total de Vendas
+        <div className="grid gap-3 md:grid-cols-4">
+          <Card className="border-slate-200">
+            <CardHeader className="pb-1">
+              <CardTitle className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <TrendingUp className="h-3.5 w-3.5" />
+                Total de vendas
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-green-600">{formatCurrency(totalVendas)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                {totalTransacoes} transações
+              <p className="text-2xl font-bold tabular-nums text-emerald-700">
+                {formatCurrency(totalVendas)}
+              </p>
+              <p className="mt-1 text-xs text-muted-foreground tabular-nums">
+                {totalTransacoes} transaç{totalTransacoes === 1 ? "ão" : "ões"}
               </p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+          <Card className="border-slate-200">
+            <CardHeader className="pb-1">
+              <CardTitle className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <ArrowDownCircle className="h-3.5 w-3.5" />
                 Sangrias
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-red-600">-{formatCurrency(totalSangrias)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Retiradas do caixa
+              <p className="text-2xl font-bold tabular-nums text-red-600">
+                {totalSangrias > 0 ? `−${formatCurrency(totalSangrias)}` : formatCurrency(0)}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">Retiradas do caixa</p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
+          <Card className="border-slate-200">
+            <CardHeader className="pb-1">
+              <CardTitle className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <ArrowUpCircle className="h-3.5 w-3.5" />
                 Reforços
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold text-blue-600">+{formatCurrency(totalReforcos)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Adições ao caixa
+              <p className="text-2xl font-bold tabular-nums text-sky-600">
+                {totalReforcos > 0 ? `+${formatCurrency(totalReforcos)}` : formatCurrency(0)}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">Adições ao caixa</p>
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader className="pb-2">
-              <CardTitle className="text-sm font-medium text-muted-foreground">
-                Saldo Atual
+          <Card className="border-slate-200 bg-slate-50">
+            <CardHeader className="pb-1">
+              <CardTitle className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                <Wallet className="h-3.5 w-3.5" />
+                Saldo atual
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <p className="text-2xl font-bold">{formatCurrency(caixaStatus.valorAtual)}</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Em caixa
+              <p
+                className={`text-2xl font-bold tabular-nums ${
+                  caixaStatus.valorAtual < 0 ? "text-red-600" : "text-slate-900"
+                }`}
+              >
+                {formatCurrency(caixaStatus.valorAtual)}
               </p>
+              <p className="mt-1 text-xs text-muted-foreground">Em caixa agora</p>
             </CardContent>
           </Card>
         </div>
 
         {/* Resumo por Forma de Pagamento */}
         <Card>
-          <CardHeader>
-            <CardTitle>Resumo por Forma de Pagamento</CardTitle>
-            <CardDescription>
-              Distribuição das vendas por método
-            </CardDescription>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Resumo por forma de pagamento</CardTitle>
+            <CardDescription>Distribuição das vendas do turno por método</CardDescription>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
-              {resumoPagamentos.map((item) => (
-                <div key={item.forma} className="rounded-lg border p-4">
-                  <div className="flex items-center justify-between mb-3">
-                    <div className="flex items-center gap-2">
-                      {getFormaPagamentoIcon(item.forma)}
-                      <span className="font-medium">{item.forma}</span>
+            {resumoPagamentos.length === 0 ? (
+              <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
+                Ainda não há pagamentos registrados neste turno.
+              </div>
+            ) : (
+              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+                {resumoPagamentos.map((item) => {
+                  const percentual = totalVendas > 0 ? (item.valor / totalVendas) * 100 : 0;
+                  return (
+                    <div
+                      key={item.forma}
+                      className="rounded-lg border bg-white p-4 transition-colors hover:border-slate-300"
+                    >
+                      <div className="mb-3 flex items-center justify-between">
+                        <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
+                          {getFormaPagamentoIcon(item.forma)}
+                          <span>{item.forma}</span>
+                        </div>
+                        <Badge variant="secondary" className="tabular-nums">
+                          {item.quantidade}
+                        </Badge>
+                      </div>
+                      <p className="text-2xl font-bold tabular-nums text-slate-900">
+                        {formatCurrency(item.valor)}
+                      </p>
+                      <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
+                        <span className="tabular-nums">
+                          Ticket: {formatCurrency(item.valor / item.quantidade)}
+                        </span>
+                        <span className="tabular-nums font-medium text-slate-600">
+                          {percentual.toFixed(0)}%
+                        </span>
+                      </div>
+                      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
+                        <div
+                          className="h-full rounded-full bg-emerald-500 transition-all"
+                          style={{ width: `${Math.min(percentual, 100)}%` }}
+                        />
+                      </div>
                     </div>
-                    <Badge variant="secondary">{item.quantidade}</Badge>
-                  </div>
-                  <Separator className="my-2" />
-                  <p className="text-2xl font-bold">{formatCurrency(item.valor)}</p>
-                  <p className="text-xs text-muted-foreground mt-1">
-                    Ticket médio: {formatCurrency(item.valor / item.quantidade)}
-                  </p>
-                </div>
-              ))}
-            </div>
+                  );
+                })}
+              </div>
+            )}
           </CardContent>
         </Card>
 
         {/* Movimentações */}
         <Card>
-          <CardHeader>
-            <CardTitle>Movimentações do Caixa</CardTitle>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Movimentações do caixa</CardTitle>
             <CardDescription>
-              Histórico de todas as operações do dia
+              Histórico de todas as operações do turno atual
             </CardDescription>
           </CardHeader>
-          <CardContent>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Horário</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Descrição</TableHead>
-                  <TableHead>Forma de Pagamento</TableHead>
-                  <TableHead>Operador</TableHead>
-                  <TableHead className="text-right">Valor</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {movements.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={6} className="text-center text-muted-foreground py-8">
-                      Nenhuma movimentacao registrada
-                    </TableCell>
+          <CardContent className="p-0 sm:p-6 sm:pt-0">
+            <div className="overflow-x-auto">
+              <Table>
+                <TableHeader>
+                  <TableRow className="bg-slate-50/50">
+                    <TableHead className="w-[88px]">Horário</TableHead>
+                    <TableHead className="w-[140px]">Tipo</TableHead>
+                    <TableHead>Descrição</TableHead>
+                    <TableHead className="w-[150px]">Forma</TableHead>
+                    <TableHead className="w-[160px]">Operador</TableHead>
+                    <TableHead className="w-[140px] text-right">Valor</TableHead>
                   </TableRow>
-                ) : (
-                  movements.map((mov) => (
-                    <TableRow key={mov.id}>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <Clock className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm font-medium">
-                            {new Date(mov.createdAt).toLocaleTimeString("pt-BR", {
-                              hour: "2-digit",
-                              minute: "2-digit",
-                            })}
-                          </span>
+                </TableHeader>
+                <TableBody>
+                  {movements.length === 0 ? (
+                    <TableRow>
+                      <TableCell colSpan={6} className="py-12">
+                        <div className="flex flex-col items-center gap-2 text-center">
+                          <div className="rounded-full bg-slate-100 p-3">
+                            <Wallet className="h-6 w-6 text-slate-400" />
+                          </div>
+                          <p className="text-sm font-medium text-slate-700">Nenhuma movimentação ainda</p>
+                          <p className="text-xs text-muted-foreground">
+                            Vendas, sangrias e reforços aparecerão aqui em tempo real.
+                          </p>
                         </div>
-                      </TableCell>
-                      <TableCell>
-                        <Badge variant={getTipoBadgeVariant(mov.type)} className="flex items-center gap-1 w-fit">
-                          {getTipoIcon(mov.type)}
-                          {getTipoLabel(mov.type)}
-                        </Badge>
-                      </TableCell>
-                      <TableCell>
-                        <p className="text-sm">{getMovementDescription(mov)}</p>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          {getFormaPagamentoIcon(mov.method)}
-                          <span className="text-sm">{getMethodLabel(mov.method)}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell>
-                        <div className="flex items-center gap-2">
-                          <User className="h-3 w-3 text-muted-foreground" />
-                          <span className="text-sm">{mov.createdByUser?.name || "-"}</span>
-                        </div>
-                      </TableCell>
-                      <TableCell className="text-right">
-                        <span className={`font-bold ${
-                          mov.direction === "IN" ? "text-green-600" : "text-red-600"
-                        }`}>
-                          {mov.direction === "IN" ? "+" : "-"}{formatCurrency(mov.amount)}
-                        </span>
                       </TableCell>
                     </TableRow>
-                  ))
-                )}
-              </TableBody>
-            </Table>
+                  ) : (
+                    movements.map((mov) => (
+                      <TableRow
+                        key={mov.id}
+                        className="transition-colors hover:bg-slate-50"
+                      >
+                        <TableCell className="tabular-nums text-sm font-medium text-slate-700">
+                          {new Date(mov.createdAt).toLocaleTimeString("pt-BR", {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </TableCell>
+                        <TableCell>
+                          <Badge variant={getTipoBadgeVariant(mov.type)} className="flex w-fit items-center gap-1">
+                            {getTipoIcon(mov.type)}
+                            {getTipoLabel(mov.type)}
+                          </Badge>
+                        </TableCell>
+                        <TableCell>
+                          <p className="text-sm text-slate-700">{getMovementDescription(mov)}</p>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-sm text-slate-700">
+                            {getFormaPagamentoIcon(mov.method)}
+                            <span>{getMethodLabel(mov.method)}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell>
+                          <div className="flex items-center gap-2 text-sm text-slate-600">
+                            <User className="h-3 w-3 text-muted-foreground" />
+                            <span>{mov.createdByUser?.name || "-"}</span>
+                          </div>
+                        </TableCell>
+                        <TableCell className="text-right">
+                          <span
+                            className={`font-semibold tabular-nums ${
+                              mov.direction === "IN" ? "text-emerald-700" : "text-red-600"
+                            }`}
+                          >
+                            {mov.direction === "IN" ? "+" : "−"}
+                            {formatCurrency(mov.amount)}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </div>
           </CardContent>
         </Card>
       </div>
