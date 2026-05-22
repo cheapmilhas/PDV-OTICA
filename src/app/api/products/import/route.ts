@@ -4,6 +4,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
 import { ProductType } from "@prisma/client";
 import * as XLSX from "xlsx";
+import { parseBooleanField } from "@/lib/import-utils";
 
 /**
  * POST /api/products/import
@@ -45,6 +46,9 @@ export async function POST(request: NextRequest) {
       errors: [] as string[],
       created: [] as string[],
       updated: [] as string[],
+      warnings: [] as string[],
+      deactivated: 0,
+      reactivated: 0,
     };
 
     // Processar cada linha
@@ -164,45 +168,48 @@ export async function POST(request: NextRequest) {
 
         // Tipos que NÃO controlam estoque por padrão
         const noStockTypes: string[] = ["OPHTHALMIC_LENS", "CONTACT_LENS", "SERVICE", "LENS_SERVICE"];
-        const stockControlled = noStockTypes.includes(type)
-          ? false
-          : controleEstoque
-            ? String(controleEstoque).toLowerCase() === "sim" || controleEstoque === "1" || controleEstoque === true
-            : true;
+        const stockControlledParsed = parseBooleanField(controleEstoque, true);
+        const stockControlled = noStockTypes.includes(type) ? false : stockControlledParsed.value;
 
         const stockQty = parseInt(String(estoqueAtual)) || 0;
         const stockMin = parseInt(String(estoqueMin)) || 0;
         const stockMax = estoqueMax ? parseInt(String(estoqueMax)) : null;
 
-        const active = ativoRaw
-          ? String(ativoRaw).toLowerCase() === "sim" || ativoRaw === "1" || ativoRaw === true
-          : true;
+        const activeParsed = parseBooleanField(ativoRaw, true);
+        const active = activeParsed.value;
+        if (!activeParsed.recognized) {
+          results.warnings.push(
+            `Linha ${rowNum}: valor "${ativoRaw}" no campo "Ativo" não reconhecido — assumindo "Sim" (padrão).`
+          );
+        }
 
-        const featured = row["Destaque"]
-          ? row["Destaque"].toLowerCase() === "sim" || row["Destaque"] === "1"
-          : false;
+        const featuredParsed = parseBooleanField(row["Destaque"], false);
+        const featured = featuredParsed.value;
 
-        const launch = row["Lançamento"]
-          ? row["Lançamento"].toLowerCase() === "sim" || row["Lançamento"] === "1"
-          : false;
+        const launchParsed = parseBooleanField(row["Lançamento"], false);
+        const launch = launchParsed.value;
 
-        // Verificar se produto já existe (por SKU ou nome)
-        const existingProduct = await prisma.product.findFirst({
-          where: {
-            companyId,
-            OR: [
-              { sku },
-              { name: nome },
-            ],
-          },
+        // Verificar se produto já existe — match somente por campos únicos
+        // (SKU primeiro, depois barcode). Nunca por nome, que não é único
+        // e causava update em produto errado quando havia duplicatas de nome.
+        const barcodeValue = row["Código de Barras"] || row["Código GTIN"] || null;
+        let existingProduct = await prisma.product.findFirst({
+          where: { companyId, sku },
+          select: { id: true, active: true },
         });
+        if (!existingProduct && barcodeValue) {
+          existingProduct = await prisma.product.findFirst({
+            where: { companyId, barcode: String(barcodeValue) },
+            select: { id: true, active: true },
+          });
+        }
 
         if (existingProduct) {
           // Atualizar produto existente
           await prisma.product.update({
             where: { id: existingProduct.id },
             data: {
-              barcode: row["Código de Barras"] || row["Código GTIN"] || null,
+              barcode: barcodeValue,
               manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
               name: nome,
               description: row["Descrição"] || null,
@@ -224,6 +231,8 @@ export async function POST(request: NextRequest) {
               launch,
             },
           });
+          if (existingProduct.active && !active) results.deactivated++;
+          if (!existingProduct.active && active) results.reactivated++;
           results.updated.push(nome);
         } else {
           // Criar novo produto
@@ -231,7 +240,7 @@ export async function POST(request: NextRequest) {
             data: {
               companyId,
               sku,
-              barcode: row["Código de Barras"] || row["Código GTIN"] || null,
+              barcode: barcodeValue,
               manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
               name: nome,
               description: row["Descrição"] || null,
@@ -262,8 +271,18 @@ export async function POST(request: NextRequest) {
       }
     }
 
+    const summary = [
+      `${results.success} produto(s) processado(s)`,
+      `${results.created.length} criado(s)`,
+      `${results.updated.length} atualizado(s)`,
+    ];
+    if (results.deactivated > 0) summary.push(`${results.deactivated} desativado(s)`);
+    if (results.reactivated > 0) summary.push(`${results.reactivated} reativado(s)`);
+    if (results.errors.length > 0) summary.push(`${results.errors.length} erro(s)`);
+    if (results.warnings.length > 0) summary.push(`${results.warnings.length} aviso(s)`);
+
     return NextResponse.json({
-      message: `Importação concluída: ${results.success} produtos processados`,
+      message: `Importação concluída: ${summary.join(", ")}`,
       results,
     });
   } catch (error) {

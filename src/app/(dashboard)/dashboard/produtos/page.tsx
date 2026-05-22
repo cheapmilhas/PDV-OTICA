@@ -50,6 +50,8 @@ function ProdutosPage() {
   const [page, setPage] = useState(1);
   const [typeFilter, setTypeFilter] = useState("all");
   const [stockControlFilter, setStockControlFilter] = useState("all");
+  const [statusFilter, setStatusFilter] = useState<"ativos" | "inativos" | "todos">("ativos");
+  const [inactiveCount, setInactiveCount] = useState(0);
   const [produtos, setProdutos] = useState<any[]>([]);
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
@@ -65,7 +67,7 @@ function ProdutosPage() {
       search,
       page: page.toString(),
       pageSize: "50",
-      status: "ativos",
+      status: statusFilter,
     });
 
     if (typeFilter && typeFilter !== "all") {
@@ -75,7 +77,7 @@ function ProdutosPage() {
       params.set("stockControlled", "false");
     }
 
-    fetch(`/api/products?${params}`)
+    fetch(`/api/products?${params}`, { cache: "no-store" })
       .then((res) => res.json())
       .then((data) => {
         setProdutos(data.data || []);
@@ -87,7 +89,15 @@ function ProdutosPage() {
         toast.error("Erro ao carregar produtos");
         setLoading(false);
       });
-  }, [search, page, typeFilter, stockControlFilter]);
+  }, [search, page, typeFilter, stockControlFilter, statusFilter]);
+
+  // Contar inativos em paralelo (só para o aviso)
+  useEffect(() => {
+    fetch("/api/products?status=inativos&pageSize=1", { cache: "no-store" })
+      .then((res) => res.json())
+      .then((data) => setInactiveCount(data.pagination?.total || 0))
+      .catch(() => setInactiveCount(0));
+  }, [statusFilter]);
 
   const handleDelete = async (id: string) => {
     if (!confirm("Tem certeza que deseja deletar este produto?")) return;
@@ -276,6 +286,44 @@ function ProdutosPage() {
           </CanPermission>
         </div>
       </div>
+
+      {/* Aviso de produtos inativos */}
+      {statusFilter === "ativos" && inactiveCount > 0 && (
+        <div className="flex items-center justify-between rounded-md border border-yellow-400/50 bg-yellow-500/10 px-4 py-3 text-sm">
+          <span>
+            Você tem <strong>{inactiveCount}</strong> produto(s) inativo(s) que não aparecem nesta lista.
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setStatusFilter("inativos");
+              setPage(1);
+            }}
+          >
+            Ver inativos
+          </Button>
+        </div>
+      )}
+
+      {/* Voltar para ativos */}
+      {statusFilter !== "ativos" && (
+        <div className="flex items-center justify-between rounded-md border border-blue-400/50 bg-blue-500/10 px-4 py-3 text-sm">
+          <span>
+            Exibindo produtos {statusFilter === "inativos" ? "inativos" : "todos os status"}.
+          </span>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => {
+              setStatusFilter("ativos");
+              setPage(1);
+            }}
+          >
+            Voltar para ativos
+          </Button>
+        </div>
+      )}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-4">
