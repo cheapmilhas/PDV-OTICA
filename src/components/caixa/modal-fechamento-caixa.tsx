@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -21,6 +22,7 @@ interface ModalFechamentoCaixaProps {
 
 export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPagamentos, movements = [] }: ModalFechamentoCaixaProps) {
   const { toast } = useToast();
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [showPrintModal, setShowPrintModal] = useState(false);
   const [closedShiftId, setClosedShiftId] = useState<string | null>(null);
@@ -64,16 +66,23 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
 
   const caixaFechado = Math.abs(diferencaTotal) < 0.01; // tolerância de 1 centavo
 
+  // Quando o modal abre, pré-preenche os campos "Conferido" com o valor esperado
+  // (apenas quando >0). Reduz digitação no caso comum em que tudo bate, sem
+  // forçar o operador a aceitar — ele pode sobrescrever livremente.
+  useEffect(() => {
+    if (!open) return;
+    setFormData((prev) => ({
+      ...prev,
+      valorDinheiro: prev.valorDinheiro || (valorEsperadoDinheiro > 0 ? valorEsperadoDinheiro.toFixed(2) : ""),
+      valorCredito: prev.valorCredito || (valorEsperadoCredito > 0 ? valorEsperadoCredito.toFixed(2) : ""),
+      valorDebito: prev.valorDebito || (valorEsperadoDebito > 0 ? valorEsperadoDebito.toFixed(2) : ""),
+      valorPix: prev.valorPix || (valorEsperadoPix > 0 ? valorEsperadoPix.toFixed(2) : ""),
+    }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    // Debug: verificar valores
-    console.log("🔍 DEBUG - Valores:", {
-      valorContadoDinheiro,
-      valorEsperadoDinheiro,
-      diferencaDinheiro,
-      observacoes: formData.observacoes,
-    });
 
     // Validação: exigir justificativa se houver diferença no dinheiro
     const hasDiferenca = Math.abs(diferencaDinheiro) > 0.01;
@@ -114,9 +123,6 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
         differenceJustification: justificativa,
         notes: formData.observacoes.trim() || undefined,
       };
-
-      console.log("Dados de fechamento:", closeData);
-      console.log("🔍 DEBUG - hasDiferenca:", hasDiferenca, "justificativa:", justificativa);
 
       // Fechar caixa
       const closeResponse = await fetch("/api/cash/shift/close", {
@@ -440,7 +446,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
             <Button
               type="submit"
               className="flex-1"
-              disabled={loading || totalContado === 0}
+              disabled={loading || (totalEsperado > 0 && totalContado === 0)}
             >
               {loading ? (
                 <>
@@ -461,10 +467,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
       {/* Modal de Impressão */}
       <Dialog open={showPrintModal} onOpenChange={(open) => {
         setShowPrintModal(open);
-        if (!open) {
-          // Recarregar página quando fechar modal
-          setTimeout(() => window.location.reload(), 300);
-        }
+        if (!open) router.refresh();
       }}>
         <DialogContent className="max-w-md">
           <DialogHeader>
@@ -483,7 +486,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
               className="flex-1"
               onClick={() => {
                 setShowPrintModal(false);
-                setTimeout(() => window.location.reload(), 300);
+                router.refresh();
               }}
             >
               Não
@@ -495,7 +498,7 @@ export function ModalFechamentoCaixa({ open, onOpenChange, caixaInfo, resumoPaga
                   window.open(`/dashboard/caixa/${closedShiftId}/relatorio`, '_blank');
                 }
                 setShowPrintModal(false);
-                setTimeout(() => window.location.reload(), 300);
+                router.refresh();
               }}
             >
               Imprimir Relatório
