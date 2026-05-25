@@ -49,6 +49,8 @@ type CashShift = {
   openingFloatAmount: number;
   openedByUser: { name: string };
   movements: CashMovement[];
+  stalenessHours?: number;
+  stalenessLevel?: "ok" | "warning" | "critical";
 };
 
 type CashMovement = {
@@ -192,11 +194,12 @@ function CaixaPage() {
 
   const tempoAberto = (() => {
     if (!shift || shift.status !== "OPEN") return null;
-    const diffMs = Date.now() - new Date(shift.openedAt).getTime();
-    const totalHours = diffMs / (1000 * 60 * 60);
+    // Prefere staleness do servidor (autoritativa). Cai pro cliente se vier ausente.
+    const totalHours =
+      shift.stalenessHours ?? (Date.now() - new Date(shift.openedAt).getTime()) / (1000 * 60 * 60);
     const days = Math.floor(totalHours / 24);
     const hours = Math.floor(totalHours % 24);
-    const minutes = Math.floor((diffMs / (1000 * 60)) % 60);
+    const minutes = Math.floor((totalHours - Math.floor(totalHours)) * 60);
     return {
       hours: totalHours,
       label:
@@ -207,8 +210,10 @@ function CaixaPage() {
             : `${minutes}m`,
     };
   })();
-  const turnoCritico = (tempoAberto?.hours ?? 0) >= 24;
-  const turnoAtencao = !turnoCritico && (tempoAberto?.hours ?? 0) >= 12;
+  const turnoCritico = shift?.stalenessLevel === "critical" || (tempoAberto?.hours ?? 0) >= 24;
+  const turnoAtencao =
+    !turnoCritico &&
+    (shift?.stalenessLevel === "warning" || (tempoAberto?.hours ?? 0) >= 12);
 
   const getTipoIcon = (type: string) => {
     switch (type) {

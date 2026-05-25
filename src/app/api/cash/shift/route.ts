@@ -23,6 +23,10 @@ export async function GET(request: Request) {
       return NextResponse.json({ shift: null }, { status: 200 });
     }
 
+    // Stalenezza (horas abertas) calculada no servidor — fonte de verdade.
+    // Frontend evita Date.now() local que pode divergir do servidor.
+    const stalenessHours = (Date.now() - new Date(shift.openedAt).getTime()) / (1000 * 60 * 60);
+
     // Serializar Decimals
     const serializedShift = {
       ...shift,
@@ -30,6 +34,9 @@ export async function GET(request: Request) {
       closingDeclaredCash: shift.closingDeclaredCash ? Number(shift.closingDeclaredCash) : null,
       closingExpectedCash: shift.closingExpectedCash ? Number(shift.closingExpectedCash) : null,
       differenceCash: shift.differenceCash ? Number(shift.differenceCash) : null,
+      stalenessHours: Math.round(stalenessHours * 100) / 100,
+      stalenessLevel:
+        stalenessHours >= 24 ? "critical" : stalenessHours >= 12 ? "warning" : "ok",
       movements: (shift as any).movements?.map((m: any) => ({
         ...m,
         amount: Number(m.amount),

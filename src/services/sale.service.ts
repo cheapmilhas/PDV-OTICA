@@ -355,28 +355,78 @@ export class SaleService {
       where: { branchId, status: "OPEN" },
     });
 
-    // Se não houver caixa aberto, criar automaticamente
+    // Se não houver caixa aberto, criar automaticamente.
+    // O try/catch garante que falhas aqui sejam visíveis (antes eram silenciosas
+    // e a venda prosseguia sem CashMovement, causando "nada entrou no caixa").
     if (!openShift) {
-      // Buscar companyId da filial (já validada por validateBranchOwnership acima)
-      const branch = await prisma.branch.findUnique({
-        where: { id: branchId },
-        select: { companyId: true },
-      });
+      try {
+        const branch = await prisma.branch.findUnique({
+          where: { id: branchId },
+          select: { companyId: true },
+        });
+        if (!branch) {
+          throw new AppError(ERROR_CODES.VALIDATION_ERROR, "Filial não encontrada", 400);
+        }
 
-      if (!branch) {
-        throw new AppError(ERROR_CODES.VALIDATION_ERROR, "Filial não encontrada", 400);
-      }
+        // Vincular ao primeiro CashRegister (terminal físico) ativo da filial,
+        // se houver. Hoje turnos auto-criados ficavam com cashRegisterId null.
+        const defaultRegister = await prisma.cashRegister.findFirst({
+          where: { branchId, active: true },
+          orderBy: { createdAt: "asc" },
+          select: { id: true },
+        });
 
-      openShift = await prisma.cashShift.create({
-        data: {
-          companyId: branch.companyId,
+        openShift = await prisma.cashShift.create({
+          data: {
+            companyId: branch.companyId,
+            branchId,
+            openedByUserId: userId,
+            openingFloatAmount: 0,
+            status: "OPEN",
+            openedAt: new Date(),
+            ...(defaultRegister && { cashRegisterId: defaultRegister.id }),
+          },
+        });
+
+        // Auditoria — registra a auto-abertura para que admins possam rastrear
+        // turnos que não foram abertos manualmente.
+        await prisma.activityLog
+          .create({
+            data: {
+              companyId: branch.companyId,
+              type: "DATA_UPDATED",
+              title: "Turno de caixa auto-aberto",
+              detail: {
+                kind: "cash_shift_auto_opened",
+                shiftId: openShift.id,
+                branchId,
+                cashRegisterId: defaultRegister?.id ?? null,
+                triggeredBy: "sale.service.createSale",
+              },
+              actorId: userId,
+              actorType: "CLIENT",
+            },
+          })
+          .catch((auditErr) => {
+            // Log de auditoria nunca deve impedir a venda — apenas registramos no console.
+            console.error("[sale.service] Falha ao gravar ActivityLog de auto-abertura:", auditErr);
+          });
+      } catch (autoOpenErr) {
+        console.error("[sale.service] Falha na auto-abertura de CashShift:", {
           branchId,
-          openedByUserId: userId,
-          openingFloatAmount: 0,
-          status: "OPEN",
-          openedAt: new Date(),
-        },
-      });
+          userId,
+          error: autoOpenErr instanceof Error ? autoOpenErr.message : String(autoOpenErr),
+        });
+        // Re-lança para que o usuário veja a mensagem (antes a falha era silenciosa
+        // e a venda era criada sem CashMovement).
+        throw autoOpenErr instanceof AppError
+          ? autoOpenErr
+          : new AppError(
+              ERROR_CODES.INTERNAL_ERROR,
+              "Não foi possível abrir o caixa automaticamente para registrar a venda. Abra o caixa manualmente e tente novamente.",
+              500,
+            );
+      }
     }
 
     // Buscar configurações de juros/multa padrão para crediário
