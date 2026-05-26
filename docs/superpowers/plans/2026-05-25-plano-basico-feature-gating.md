@@ -18,8 +18,9 @@
 - `src/lib/plan-feature-catalog.ts` — FEATURES const, FEATURE_REGISTRY, pathMatchesAny, findBlockedFeature
 - `src/lib/plan-features-cache.ts` — LRU cache + invalidação
 - `src/lib/with-plan-feature.ts` — wrapper de API com generic ctx
-- `prisma/seed-plan-basico-features.ts` — seed atômico idempotente
-- `prisma/seed-plan-basico-features-rollback.ts` — script de rollback
+- `prisma/seed-plan-basico-features.ts` — seed atômico idempotente (Básico + planos pagos)
+- `prisma/seed-plan-basico-features-paid-only.ts` — variante que SÓ atualiza planos pagos (Passo 6 do rollout)
+- `prisma/seed-plan-basico-features-rollback.ts` — script de rollback (reverte Básico)
 - `vitest.config.ts` — config de unit/integration tests
 - `playwright.config.ts` — config E2E
 - `src/lib/__tests__/plan-feature-catalog.test.ts`
