@@ -18,7 +18,9 @@
     "db:seed:plans": "npx tsx prisma/seed-plans.ts",
     "create:subscription": "npx tsx scripts/create-test-subscription.ts",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "e2e": "playwright test",
+    "e2e:ui": "playwright test --ui"
   },
   "prisma": {
     "seed": "node --require esbuild-register prisma/seed.ts"
@@ -79,6 +81,7 @@
     "zustand": "^5.0.11"
   },
   "devDependencies": {
+    "@playwright/test": "^1.60.0",
     "@prisma/client": "^5.22.0",
     "@testing-library/jest-dom": "^6.9.1",
     "@testing-library/react": "^16.3.2",
