@@ -73,7 +73,7 @@ export async function getCompanyId(): Promise<string> {
   const session = await requireAuth();
 
   if (!session.user.companyId) {
-    console.error("Session missing companyId:", JSON.stringify(session.user, null, 2));
+    console.error("Session missing companyId for userId=", session.user.id);
     throw unauthorizedError(
       "Sessão inválida: companyId não encontrado. Por favor, faça logout e login novamente."
     );
@@ -92,7 +92,7 @@ export async function getBranchId(): Promise<string> {
   const session = await requireAuth();
 
   if (!session.user.branchId) {
-    console.error("Session missing branchId:", JSON.stringify(session.user, null, 2));
+    console.error("Session missing branchId for userId=", session.user.id);
     throw unauthorizedError(
       "Sessão inválida: branchId não encontrado. Por favor, faça logout e login novamente."
     );
@@ -111,7 +111,7 @@ export async function getUserId(): Promise<string> {
   const session = await requireAuth();
 
   if (!session.user.id) {
-    console.error("Session missing id:", JSON.stringify(session.user, null, 2));
+    console.error("Session missing id (email=", session.user.email, ")");
     throw unauthorizedError(
       "Sessão inválida: userId não encontrado. Por favor, faça logout e login novamente."
     );

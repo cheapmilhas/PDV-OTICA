@@ -2,6 +2,11 @@ import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { rateLimitResponse } from "@/lib/rate-limit";
+
+// Limite de tamanho de base64: ~8MB de imagem (cobre fotos de receita de boa qualidade
+// mas previne DoS por payload gigante consumir API Anthropic caro)
+const MAX_BASE64_BYTES = 8 * 1024 * 1024 * 1.4; // ~11.5MB base64 = ~8MB binário
 
 const anthropic = new Anthropic();
 
@@ -60,7 +65,15 @@ type ImageMediaType = "image/jpeg" | "image/png" | "image/gif" | "image/webp";
 
 export async function POST(request: NextRequest) {
   try {
-    await requireAuth();
+    const session = await requireAuth();
+
+    // Rate limit por usuário (não IP — usuário autenticado e custo alto por chamada)
+    const userId = (session.user as { id?: string }).id ?? "anon";
+    const limited = rateLimitResponse(`ocr-prescription:${userId}`, {
+      maxRequests: 10,
+      windowMs: 60 * 60 * 1000, // 10 OCRs por hora por usuário
+    });
+    if (limited) return limited;
 
     const body = await request.json();
     const { imageBase64, mimeType } = body as {
@@ -72,6 +85,18 @@ export async function POST(request: NextRequest) {
       return NextResponse.json(
         { error: { code: "VALIDATION_ERROR", message: "Imagem não enviada" } },
         { status: 400 }
+      );
+    }
+
+    if (imageBase64.length > MAX_BASE64_BYTES) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "PAYLOAD_TOO_LARGE",
+            message: "Imagem muito grande. Reduza para menos de 8MB.",
+          },
+        },
+        { status: 413 }
       );
     }
 

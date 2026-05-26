@@ -92,7 +92,7 @@ export function SubscriptionBlocked({ status, message, companyName }: Subscripti
           <div className="space-y-3">
             {info.showUpgrade && (
               <Link
-                href="/dashboard/configuracoes"
+                href="/dashboard/upgrade"
                 className="w-full inline-flex items-center justify-center gap-2 px-6 py-3 bg-indigo-600 text-white font-medium rounded-lg hover:bg-indigo-700 transition-colors"
               >
                 <CreditCard className="w-5 h-5" />

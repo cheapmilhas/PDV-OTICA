@@ -1,0 +1,231 @@
+import { NextResponse } from "next/server";
+import { prisma } from "@/lib/prisma";
+import { asaas } from "@/lib/asaas";
+import { trackServer } from "@/lib/posthog-server";
+
+/**
+ * Webhook do Asaas.
+ *
+ * Eventos relevantes:
+ *   PAYMENT_CONFIRMED        — pagamento confirmado (PIX/cartão imediato)
+ *   PAYMENT_RECEIVED         — recebido (boleto compensado)
+ *   PAYMENT_OVERDUE          — atrasado
+ *   PAYMENT_REFUNDED         — estornado
+ *   PAYMENT_CHARGEBACK_REQUESTED — disputa de cartão
+ *   SUBSCRIPTION_DELETED     — assinatura cancelada
+ *
+ * Idempotência: usa `event.id` (Asaas garante único) como `externalEventId`
+ * em BillingEvent. Tentativa duplicada retorna 200 sem reprocessar.
+ */
+
+interface AsaasWebhookEvent {
+  id: string;
+  event: string;
+  dateCreated?: string;
+  payment?: {
+    id: string;
+    customer: string;
+    subscription?: string;
+    value: number;
+    netValue?: number;
+    status: string;
+    externalReference?: string;
+    invoiceUrl?: string;
+  };
+  subscription?: {
+    id: string;
+    customer: string;
+    status: string;
+    externalReference?: string;
+  };
+}
+
+export async function POST(request: Request) {
+  // Validar token do webhook (asaas-access-token header)
+  const token = request.headers.get("asaas-access-token");
+  if (!asaas.verifyWebhookToken(token)) {
+    return NextResponse.json({ error: "invalid token" }, { status: 401 });
+  }
+
+  let event: AsaasWebhookEvent;
+  try {
+    event = (await request.json()) as AsaasWebhookEvent;
+  } catch {
+    return NextResponse.json({ error: "invalid json" }, { status: 400 });
+  }
+
+  if (!event?.id || !event?.event) {
+    return NextResponse.json({ error: "malformed event" }, { status: 400 });
+  }
+
+  // Idempotência: BillingEvent.externalEventId é unique
+  const existing = await prisma.billingEvent.findUnique({
+    where: { externalEventId: event.id },
+  });
+  if (existing?.processedAt) {
+    return NextResponse.json({ ok: true, duplicate: true });
+  }
+
+  // Tenta resolver companyId via Subscription
+  const subRef =
+    event.payment?.subscription ?? event.subscription?.id ?? null;
+  const externalRef =
+    event.payment?.externalReference ?? event.subscription?.externalReference ?? null;
+
+  let companyId: string | null = null;
+  let subscriptionDbId: string | null = null;
+
+  if (subRef) {
+    const sub = await prisma.subscription.findFirst({
+      where: { asaasSubscriptionId: subRef },
+      select: { id: true, companyId: true },
+    });
+    if (sub) {
+      companyId = sub.companyId;
+      subscriptionDbId = sub.id;
+    }
+  }
+  // externalReference pode trazer companyId quando criamos a subscription
+  if (!companyId && externalRef?.startsWith("company:")) {
+    companyId = externalRef.slice("company:".length);
+  }
+
+  // Cria/atualiza BillingEvent
+  const billingEvent = await prisma.billingEvent.upsert({
+    where: { externalEventId: event.id },
+    create: {
+      externalEventId: event.id,
+      gateway: "asaas",
+      eventType: event.event,
+      payload: event as unknown as object,
+      companyId,
+    },
+    update: {
+      payload: event as unknown as object,
+      retryCount: { increment: 1 },
+    },
+  });
+
+  // Processa por tipo
+  try {
+    switch (event.event) {
+      case "PAYMENT_CONFIRMED":
+      case "PAYMENT_RECEIVED": {
+        if (subscriptionDbId) {
+          await prisma.subscription.update({
+            where: { id: subscriptionDbId },
+            data: {
+              status: "ACTIVE",
+              pastDueSince: null,
+              activatedAt: new Date(),
+              currentPeriodStart: new Date(),
+            },
+          });
+        }
+        // Atualiza Invoice se existir
+        if (event.payment?.id) {
+          await prisma.invoice.updateMany({
+            where: { asaasPaymentId: event.payment.id },
+            data: {
+              status: "PAID",
+              paidAt: new Date(),
+              paymentConfirmed: true,
+              paymentConfirmedAt: new Date(),
+            },
+          });
+        }
+        if (companyId) {
+          await trackServer(companyId, "payment_succeeded", {
+            asaasPaymentId: event.payment?.id,
+            value: event.payment?.value,
+          });
+        }
+        break;
+      }
+
+      case "PAYMENT_OVERDUE": {
+        if (subscriptionDbId) {
+          await prisma.subscription.update({
+            where: { id: subscriptionDbId },
+            data: { status: "PAST_DUE", pastDueSince: new Date() },
+          });
+        }
+        if (event.payment?.id) {
+          await prisma.invoice.updateMany({
+            where: { asaasPaymentId: event.payment.id },
+            data: { status: "OVERDUE" },
+          });
+        }
+        break;
+      }
+
+      case "PAYMENT_REFUNDED": {
+        if (event.payment?.id) {
+          await prisma.invoice.updateMany({
+            where: { asaasPaymentId: event.payment.id },
+            data: { status: "REFUNDED" },
+          });
+        }
+        break;
+      }
+
+      case "PAYMENT_CHARGEBACK_REQUESTED":
+      case "PAYMENT_CHARGEBACK_DISPUTE": {
+        if (event.payment?.id) {
+          await prisma.invoice.updateMany({
+            where: { asaasPaymentId: event.payment.id },
+            data: { status: "OVERDUE", adminNotes: "Chargeback solicitado" },
+          });
+        }
+        // Suspende assinatura preventivamente
+        if (subscriptionDbId) {
+          await prisma.subscription.update({
+            where: { id: subscriptionDbId },
+            data: { status: "PAST_DUE" },
+          });
+        }
+        break;
+      }
+
+      case "SUBSCRIPTION_DELETED": {
+        if (subscriptionDbId) {
+          await prisma.subscription.update({
+            where: { id: subscriptionDbId },
+            data: {
+              status: "CANCELED",
+              canceledAt: new Date(),
+              cancelReason: "Cancelado via Asaas",
+            },
+          });
+          if (companyId) {
+            await trackServer(companyId, "subscription_canceled", {
+              asaasSubscriptionId: subRef,
+            });
+          }
+        }
+        break;
+      }
+
+      default:
+        // Não-fatal: evento conhecido apenas armazenado em BillingEvent
+        break;
+    }
+
+    await prisma.billingEvent.update({
+      where: { id: billingEvent.id },
+      data: { processedAt: new Date(), error: null },
+    });
+
+    return NextResponse.json({ ok: true });
+  } catch (err) {
+    console.error("[ASAAS_WEBHOOK] erro ao processar", event.event, err);
+    await prisma.billingEvent.update({
+      where: { id: billingEvent.id },
+      data: {
+        error: err instanceof Error ? err.message : String(err),
+      },
+    });
+    // 500 para Asaas reenviar
+    return NextResponse.json({ error: "processing failed" }, { status: 500 });
+  }
+}
