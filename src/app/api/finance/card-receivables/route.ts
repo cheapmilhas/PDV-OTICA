@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function GET(request: Request) {
+export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -76,4 +77,4 @@ export async function GET(request: Request) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
