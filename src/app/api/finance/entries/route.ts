@@ -4,12 +4,13 @@ import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { generateManualExpenseEntry } from "@/services/finance-entry.service";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function GET(req: NextRequest) {
+export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    const searchParams = req.nextUrl.searchParams;
+    const searchParams = (req as NextRequest).nextUrl.searchParams;
 
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "50");
@@ -63,9 +64,9 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -115,4 +116,4 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
