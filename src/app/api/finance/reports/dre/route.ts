@@ -4,12 +4,13 @@ import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { getDynamicDRE } from "@/services/finance-report.service";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function GET(req: NextRequest) {
+export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    const searchParams = req.nextUrl.searchParams;
+    const searchParams = (req as NextRequest).nextUrl.searchParams;
 
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
@@ -34,4 +35,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
