@@ -42,42 +42,62 @@ export class CashService {
       );
     }
 
-    // Criar turno + movimento de abertura em transação
-    const shift = await prisma.$transaction(async (tx) => {
-      // 1. Criar turno
-      const newShift = await tx.cashShift.create({
-        data: {
-          companyId,
-          branchId,
-          openedByUserId: userId,
-          openingFloatAmount,
-          status: "OPEN",
-          notes,
+    // Criar turno + movimento de abertura em transação.
+    // timeout=30s: alinhado com sale.service para tolerar latência Neon.
+    // Partial unique index (CashShift_branchId_open_unique) garante atomicidade
+    // contra race condition do findFirst + create acima.
+    try {
+      const shift = await prisma.$transaction(
+        async (tx) => {
+          // 1. Criar turno
+          const newShift = await tx.cashShift.create({
+            data: {
+              companyId,
+              branchId,
+              openedByUserId: userId,
+              openingFloatAmount,
+              status: "OPEN",
+              notes,
+            },
+          });
+
+          // 2. Criar movimento de abertura
+          if (openingFloatAmount > 0) {
+            await tx.cashMovement.create({
+              data: {
+                cashShiftId: newShift.id,
+                branchId,
+                type: "OPENING_FLOAT",
+                direction: "IN",
+                method: "CASH",
+                amount: openingFloatAmount,
+                originType: "CASH_SHIFT",
+                originId: newShift.id,
+                createdByUserId: userId,
+                note: "Fundo de troco - abertura de caixa",
+              },
+            });
+          }
+
+          return newShift;
         },
-      });
+        { timeout: 30_000 }
+      );
 
-      // 2. Criar movimento de abertura
-      if (openingFloatAmount > 0) {
-        await tx.cashMovement.create({
-          data: {
-            cashShiftId: newShift.id,
-            branchId,
-            type: "OPENING_FLOAT",
-            direction: "IN",
-            method: "CASH",
-            amount: openingFloatAmount,
-            originType: "CASH_SHIFT",
-            originId: newShift.id,
-            createdByUserId: userId,
-            note: "Fundo de troco - abertura de caixa",
-          },
-        });
+      return shift;
+    } catch (err) {
+      if (
+        err instanceof Prisma.PrismaClientKnownRequestError &&
+        err.code === "P2002"
+      ) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Já existe um turno de caixa aberto nesta filial. Feche o turno atual antes de abrir um novo.",
+          400
+        );
       }
-
-      return newShift;
-    });
-
-    return shift;
+      throw err;
+    }
   }
 
   /**

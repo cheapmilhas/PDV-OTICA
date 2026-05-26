@@ -581,8 +581,8 @@ function PDVPage() {
             const cashbackData = await cashbackRes.json();
             cashbackGerado = cashbackData.data?.amount || 0;
           }
-        } catch (e) {
-          console.log("Cashback não disponível");
+        } catch {
+          // Cashback opcional — falha não bloqueia conclusão da venda.
         }
       }
 

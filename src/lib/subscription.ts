@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { SubscriptionStatus } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "subscription" });
 
 export interface SubscriptionCheckResult {
   allowed: boolean;
@@ -18,7 +21,7 @@ export interface SubscriptionCheckResult {
  * Retorna se o acesso é permitido e em qual modo.
  */
 export async function checkSubscription(companyId: string): Promise<SubscriptionCheckResult> {
-  console.log('[checkSubscription] Verificando companyId:', companyId);
+  log.debug("Verificando companyId", { companyId });
 
   // Verificar se empresa tem acesso habilitado (bypass para dev/teste)
   const company = await prisma.company.findUnique({
@@ -26,11 +29,14 @@ export async function checkSubscription(companyId: string): Promise<Subscription
     select: { accessEnabled: true, name: true, isBlocked: true },
   });
 
-  console.log('[checkSubscription] Empresa encontrada:', company);
+  log.debug("Empresa encontrada", { company });
 
   // Se empresa não existe no banco (JWT com companyId antigo após reset)
   if (!company) {
-    console.error(`[checkSubscription] ❌ Empresa não encontrada: ${companyId}. Usuário precisa fazer logout/login.`);
+    log.error("Empresa não encontrada", {
+      companyId,
+      hint: "Usuário precisa fazer logout/login.",
+    });
     return {
       allowed: false,
       status: "NO_SUBSCRIPTION",
@@ -51,7 +57,7 @@ export async function checkSubscription(companyId: string): Promise<Subscription
 
   // Se accessEnabled = true, permitir acesso sem verificar assinatura
   if (company.accessEnabled) {
-    console.log('[checkSubscription] ✅ accessEnabled = true, permitindo acesso');
+    log.debug("accessEnabled=true, permitindo acesso");
     return {
       allowed: true,
       status: "ACTIVE",
@@ -60,7 +66,7 @@ export async function checkSubscription(companyId: string): Promise<Subscription
     };
   }
 
-  console.log('[checkSubscription] ⚠️ accessEnabled = false, verificando assinatura');
+  log.debug("accessEnabled=false, verificando assinatura");
 
   const subscription = await prisma.subscription.findFirst({
     where: {

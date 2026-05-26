@@ -1,5 +1,8 @@
 import { cookies } from "next/headers";
 import { NextResponse } from "next/server";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "auth/clear-session" });
 
 /**
  * GET /api/auth/clear-session
@@ -19,7 +22,7 @@ export async function GET(request: Request) {
     });
   });
 
-  console.log(`🧹 Cookies deletados: ${allCookies.length}`);
+  log.info("Cookies deletados", { count: allCookies.length });
 
   // Redirecionar para login usando origin da requisição
   const url = new URL(request.url);

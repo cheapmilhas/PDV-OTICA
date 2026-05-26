@@ -4,6 +4,9 @@ import { prisma } from "@/lib/prisma";
 import { SignJWT } from "jose";
 import { cookies, headers } from "next/headers";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/auth/login" });
 
 const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
 if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
@@ -38,7 +41,7 @@ export async function POST(request: Request) {
     });
 
     if (!admin) {
-      console.log(`[ADMIN-LOGIN] Admin não encontrado: ${email}`);
+      log.warn("Admin não encontrado", { email });
       return NextResponse.json(
         { error: "Email ou senha inválidos" },
         { status: 401 }
@@ -46,7 +49,7 @@ export async function POST(request: Request) {
     }
 
     if (!admin.active) {
-      console.log(`[ADMIN-LOGIN] Admin inativo: ${email}`);
+      log.warn("Admin inativo", { email });
       return NextResponse.json(
         { error: "Conta desativada" },
         { status: 401 }
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
     const passwordMatch = await bcrypt.compare(password, admin.password);
 
     if (!passwordMatch) {
-      console.log(`[ADMIN-LOGIN] Senha incorreta para: ${email}`);
+      log.warn("Senha incorreta", { email });
       return NextResponse.json(
         { error: "Email ou senha inválidos" },
         { status: 401 }
@@ -93,7 +96,7 @@ export async function POST(request: Request) {
       maxAge: 8 * 60 * 60, // 8 horas
     });
 
-    console.log(`[ADMIN-LOGIN] Login bem-sucedido: ${email} (${admin.role})`);
+    log.info("Login bem-sucedido", { email, role: admin.role });
 
     return NextResponse.json({
       success: true,
