@@ -156,3 +156,46 @@ export const FEATURE_REGISTRY: Record<FeatureKey, FeatureMeta> = {
     sidebarKey: "financeiro-despesas",
   },
 };
+
+/**
+ * Verifica se um path bate em qualquer matcher da lista.
+ *
+ * String matchers casam exato OU como prefixo de sub-path (`/api/foo` casa
+ * `/api/foo`, `/api/foo/bar`, mas NÃO `/api/foobar`). Use RegExp quando
+ * precisar de dynamic segment com `:id` no meio do path.
+ */
+export function pathMatchesAny(path: string, matchers: PathMatcher[]): boolean {
+  for (const m of matchers) {
+    if (typeof m === "string") {
+      if (path === m || path.startsWith(m + "/")) return true;
+    } else if (m.test(path)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Encontra a primeira feature do catálogo que está BLOQUEADA para esse path,
+ * dado o mapa de features ativas (key → boolean).
+ *
+ * Retorna a FeatureKey bloqueada, ou null se o path não cai em nenhuma feature
+ * gated OU se a feature correspondente está ativa.
+ *
+ * Convenções:
+ *  - feature === true → liberada, segue procurando
+ *  - feature === false ou undefined → bloqueada se o path bater
+ */
+export function findBlockedFeature(
+  path: string,
+  features: Record<string, boolean>,
+): FeatureKey | null {
+  for (const [key, meta] of Object.entries(FEATURE_REGISTRY) as Array<
+    [FeatureKey, FeatureMeta]
+  >) {
+    if (features[key] === true) continue;
+    if (pathMatchesAny(path, meta.pageMatchers)) return key;
+    if (pathMatchesAny(path, meta.apiMatchers)) return key;
+  }
+  return null;
+}
