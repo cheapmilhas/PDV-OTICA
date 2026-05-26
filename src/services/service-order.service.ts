@@ -106,6 +106,9 @@ export class ServiceOrderService {
           laboratory: {
             select: { id: true, name: true },
           },
+          sale: {
+            select: { id: true },
+          },
           _count: {
             select: { items: true },
           },
@@ -154,6 +157,9 @@ export class ServiceOrderService {
             },
           },
         },
+        sale: {
+          select: { id: true },
+        },
         originalOrder: {
           select: { id: true, number: true, status: true },
         },
@@ -174,7 +180,7 @@ export class ServiceOrderService {
    * Cria nova OS
    */
   async create(data: CreateServiceOrderDTO, companyId: string, userId: string) {
-    const { customerId, branchId, laboratoryId, items, expectedDate, prescription, notes } = data;
+    const { customerId, branchId, laboratoryId, items, expectedDate, prescription, prescriptionImageUrl, lensType, lensDescription, lensColoring, treatments, notes } = data;
 
     if (!items || items.length === 0) {
       throw new AppError(
@@ -205,6 +211,11 @@ export class ServiceOrderService {
           createdByUserId: userId,
           notes: notes || undefined,
           prescriptionData: prescriptionData || undefined,
+          prescriptionImageUrl: prescriptionImageUrl || undefined,
+          lensType: lensType || undefined,
+          lensDescription: lensDescription || undefined,
+          lensColoring: lensColoring || undefined,
+          treatments: treatments || [],
         },
       });
 
@@ -267,7 +278,7 @@ export class ServiceOrderService {
       );
     }
 
-    const { laboratoryId, items, expectedDate, prescription, notes, labNotes, labOrderNumber } = data;
+    const { laboratoryId, items, expectedDate, prescription, prescriptionImageUrl, lensType, lensDescription, lensColoring, treatments, notes, labNotes, labOrderNumber } = data;
 
     let prescriptionData: any = undefined;
     let hasPrescription = false;
@@ -283,6 +294,11 @@ export class ServiceOrderService {
         ...(laboratoryId !== undefined && { laboratoryId: laboratoryId || null }),
         ...(expectedDate && { promisedDate: dateOnlyToUTC(expectedDate) }),
         ...(hasPrescription && { prescriptionData: prescriptionData || null }),
+        ...(prescriptionImageUrl !== undefined && { prescriptionImageUrl: prescriptionImageUrl || null }),
+        ...(lensType !== undefined && { lensType: lensType || null }),
+        ...(lensDescription !== undefined && { lensDescription: lensDescription || null }),
+        ...(lensColoring !== undefined && { lensColoring: lensColoring || null }),
+        ...(treatments !== undefined && { treatments }),
         ...(notes !== undefined && { notes }),
         ...(labNotes !== undefined && { labNotes }),
         ...(labOrderNumber !== undefined && { labOrderNumber }),
@@ -707,6 +723,64 @@ export class ServiceOrderService {
     return prisma.serviceOrder.count({
       where: { companyId, status: { not: "CANCELED" } },
     });
+  }
+
+  /**
+   * Valida que a OS pode ser convertida em venda.
+   * Retorna dados da OS com itens e produto para popular o PDV.
+   */
+  async validateForSale(serviceOrderId: string, companyId: string) {
+    const order = await prisma.serviceOrder.findFirst({
+      where: { id: serviceOrderId, companyId },
+      include: {
+        items: {
+          include: {
+            product: {
+              select: {
+                id: true,
+                name: true,
+                sku: true,
+                salePrice: true,
+                stockQty: true,
+                stockControlled: true,
+              },
+            },
+          },
+        },
+        customer: { select: { id: true, name: true, cpf: true, phone: true } },
+        sale: { select: { id: true } },
+      },
+    });
+
+    if (!order) {
+      throw notFoundError("Ordem de serviço não encontrada");
+    }
+
+    if (!["READY", "DELIVERED"].includes(order.status)) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        `OS deve estar "Pronta" ou "Entregue" para gerar venda. Status atual: ${order.status}`,
+        400
+      );
+    }
+
+    if (order.sale) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Esta OS já possui uma venda vinculada",
+        409
+      );
+    }
+
+    if (order.items.length === 0) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "OS não possui itens/serviços para gerar venda",
+        400
+      );
+    }
+
+    return order;
   }
 }
 

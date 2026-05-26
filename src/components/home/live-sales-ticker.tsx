@@ -1,12 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { Player } from "@remotion/player";
-import { AbsoluteFill, interpolate, spring, useCurrentFrame, useVideoConfig } from "remotion";
-import { motion } from "framer-motion";
+import { motion, AnimatePresence } from "framer-motion";
 import { fadeInUp, viewportConfig } from "@/lib/animations";
-
-// ─── Types ────────────────────────────────────────────────────────────────────
 
 interface Sale {
   id: string;
@@ -17,8 +13,6 @@ interface Sale {
   status: "done" | "lab" | "pending";
   color: string;
 }
-
-// ─── Data ─────────────────────────────────────────────────────────────────────
 
 const SALES: Sale[] = [
   { id: "OS-0841", customer: "Marina S.", item: "Grau + Armação Silhouette", value: "R$ 890,00", payment: "Cartão 3x", status: "done", color: "#10B981" },
@@ -37,29 +31,16 @@ const STATUS_LABEL: Record<Sale["status"], string> = {
   pending: "Aguardando",
 };
 
-// ─── Remotion: Single Sale Row ────────────────────────────────────────────────
-
-function SaleRow({ sale, delay }: { sale: Sale; delay: number }) {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const progress = spring({
-    frame: frame - delay,
-    fps,
-    config: { damping: 18, stiffness: 120, mass: 0.8 },
-  });
-
-  const opacity = interpolate(frame - delay, [0, 8], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const x = interpolate(progress, [0, 1], [-24, 0]);
-
+function SaleRow({ sale, index }: { sale: Sale; index: number }) {
   return (
-    <div
+    <motion.div
+      initial={{ opacity: 0, x: -24 }}
+      animate={{ opacity: 1, x: 0 }}
+      exit={{ opacity: 0, x: 24 }}
+      transition={{ duration: 0.45, delay: index * 0.08, ease: [0.22, 1, 0.36, 1] }}
       style={{
-        transform: `translateX(${x}px)`,
-        opacity,
         display: "flex",
         alignItems: "center",
-        gap: "0",
         padding: "10px 16px",
         borderRadius: "10px",
         background: "rgba(255,255,255,0.04)",
@@ -67,32 +48,21 @@ function SaleRow({ sale, delay }: { sale: Sale; delay: number }) {
         marginBottom: "8px",
       }}
     >
-      {/* ID */}
       <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#6366F1", fontWeight: 700, minWidth: "68px" }}>
         {sale.id}
       </span>
-
-      {/* Customer */}
       <span style={{ fontSize: "12px", color: "#F2F2F7", fontWeight: 600, minWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
         {sale.customer}
       </span>
-
-      {/* Item */}
       <span style={{ fontSize: "11px", color: "#8888A0", flex: 1, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", padding: "0 12px" }}>
         {sale.item}
       </span>
-
-      {/* Payment */}
       <span style={{ fontSize: "11px", color: "#8888A0", minWidth: "72px", textAlign: "right" }}>
         {sale.payment}
       </span>
-
-      {/* Value */}
       <span style={{ fontSize: "13px", color: "#F2F2F7", fontWeight: 700, minWidth: "90px", textAlign: "right", padding: "0 12px" }}>
         {sale.value}
       </span>
-
-      {/* Status badge */}
       <span
         style={{
           fontSize: "10px",
@@ -109,141 +79,123 @@ function SaleRow({ sale, delay }: { sale: Sale; delay: number }) {
       >
         {STATUS_LABEL[sale.status]}
       </span>
-    </div>
+    </motion.div>
   );
 }
 
-// ─── Remotion: Header Bar ─────────────────────────────────────────────────────
-
-function HeaderBar() {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const dotProgress = spring({ frame, fps, config: { damping: 20, stiffness: 80 } });
-  const opacity = interpolate(frame, [0, 10], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const pulse = interpolate(Math.sin(frame * 0.12), [-1, 1], [0.5, 1]);
-
+function PulsingDot() {
   return (
-    <div style={{ opacity, marginBottom: "14px" }}>
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
-          <div
-            style={{
-              width: "8px",
-              height: "8px",
-              borderRadius: "50%",
-              background: "#10B981",
-              opacity: pulse,
-              boxShadow: "0 0 8px #10B98166",
-            }}
-          />
-          <span style={{ fontSize: "11px", fontWeight: 700, color: "#F2F2F7", letterSpacing: "0.1em", textTransform: "uppercase" }}>
-            PDV ao vivo
-          </span>
-        </div>
-        <span style={{ fontSize: "11px", color: "#8888A0" }}>
-          Hoje · {new Date().toLocaleDateString("pt-BR")}
-        </span>
-      </div>
-
-      {/* Column headers */}
-      <div
-        style={{
-          display: "flex",
-          alignItems: "center",
-          padding: "5px 16px",
-          opacity: interpolate(dotProgress, [0, 1], [0, 0.5]),
-          borderBottom: "1px solid rgba(255,255,255,0.06)",
-          marginBottom: "4px",
-        }}
-      >
-        <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "68px", textTransform: "uppercase", letterSpacing: "0.08em" }}>O.S.</span>
-        <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "80px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Cliente</span>
-        <span style={{ fontSize: "10px", color: "#8888A0", flex: 1, textTransform: "uppercase", letterSpacing: "0.08em", padding: "0 12px" }}>Produto</span>
-        <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "72px", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.08em" }}>Pgto</span>
-        <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "90px", textAlign: "right", padding: "0 12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Valor</span>
-        <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "72px", textAlign: "center", textTransform: "uppercase", letterSpacing: "0.08em" }}>Status</span>
-      </div>
-    </div>
+    <motion.div
+      animate={{ opacity: [0.5, 1, 0.5] }}
+      transition={{ duration: 1.6, repeat: Infinity, ease: "easeInOut" }}
+      style={{
+        width: "8px",
+        height: "8px",
+        borderRadius: "50%",
+        background: "#10B981",
+        boxShadow: "0 0 8px #10B98166",
+      }}
+    />
   );
 }
 
-// ─── Remotion: Summary Footer ─────────────────────────────────────────────────
+function PDVAnimation() {
+  const [tick, setTick] = useState(0);
 
-function SummaryFooter() {
-  const frame = useCurrentFrame();
-  const { fps } = useVideoConfig();
-
-  const startFrame = 80;
-  const progress = spring({ frame: frame - startFrame, fps, config: { damping: 18, stiffness: 100 } });
-  const opacity = interpolate(frame - startFrame, [0, 12], [0, 1], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-
-  const totalAnimated = interpolate(frame - startFrame, [0, 40], [0, 8730], { extrapolateLeft: "clamp", extrapolateRight: "clamp" });
-  const countAnimated = Math.round(interpolate(frame - startFrame, [0, 30], [0, 8], { extrapolateLeft: "clamp", extrapolateRight: "clamp" }));
+  useEffect(() => {
+    const interval = setInterval(() => setTick((t) => t + 1), 6000);
+    return () => clearInterval(interval);
+  }, []);
 
   return (
     <div
       style={{
-        transform: `translateY(${interpolate(progress, [0, 1], [12, 0])}px)`,
-        opacity,
-        display: "flex",
-        gap: "12px",
-        marginTop: "12px",
-        paddingTop: "12px",
-        borderTop: "1px solid rgba(255,255,255,0.07)",
-      }}
-    >
-      {[
-        { label: "Vendas hoje", value: countAnimated.toString(), suffix: " O.S." },
-        { label: "Total", value: `R$ ${Math.round(totalAnimated).toLocaleString("pt-BR")}`, suffix: "" },
-        { label: "No laboratório", value: "3", suffix: " O.S." },
-        { label: "Ticket médio", value: "R$ 1.091", suffix: "" },
-      ].map((stat) => (
-        <div
-          key={stat.label}
-          style={{
-            flex: 1,
-            padding: "8px 12px",
-            borderRadius: "8px",
-            background: "rgba(99,102,241,0.06)",
-            border: "1px solid rgba(99,102,241,0.12)",
-          }}
-        >
-          <div style={{ fontSize: "10px", color: "#8888A0", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
-            {stat.label}
-          </div>
-          <div style={{ fontSize: "13px", fontWeight: 700, color: "#F2F2F7" }}>
-            {stat.value}{stat.suffix}
-          </div>
-        </div>
-      ))}
-    </div>
-  );
-}
-
-// ─── Remotion: Main Composition ───────────────────────────────────────────────
-
-function PDVAnimation() {
-  return (
-    <AbsoluteFill
-      style={{
         background: "#13131A",
         padding: "20px",
         fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
+        minHeight: "340px",
       }}
     >
-      <HeaderBar />
+      <div style={{ marginBottom: "14px" }}>
+        <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: "10px" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: "8px" }}>
+            <PulsingDot />
+            <span style={{ fontSize: "11px", fontWeight: 700, color: "#F2F2F7", letterSpacing: "0.1em", textTransform: "uppercase" }}>
+              PDV ao vivo
+            </span>
+          </div>
+          <span style={{ fontSize: "11px", color: "#8888A0" }}>
+            Hoje · {new Date().toLocaleDateString("pt-BR")}
+          </span>
+        </div>
 
-      {SALES.map((sale, i) => (
-        <SaleRow key={sale.id} sale={sale} delay={i * 9 + 12} />
-      ))}
+        <div
+          style={{
+            display: "flex",
+            alignItems: "center",
+            padding: "5px 16px",
+            opacity: 0.5,
+            borderBottom: "1px solid rgba(255,255,255,0.06)",
+            marginBottom: "4px",
+          }}
+        >
+          <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "68px", textTransform: "uppercase", letterSpacing: "0.08em" }}>O.S.</span>
+          <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "80px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Cliente</span>
+          <span style={{ fontSize: "10px", color: "#8888A0", flex: 1, textTransform: "uppercase", letterSpacing: "0.08em", padding: "0 12px" }}>Produto</span>
+          <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "72px", textAlign: "right", textTransform: "uppercase", letterSpacing: "0.08em" }}>Pgto</span>
+          <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "90px", textAlign: "right", padding: "0 12px", textTransform: "uppercase", letterSpacing: "0.08em" }}>Valor</span>
+          <span style={{ fontSize: "10px", color: "#8888A0", minWidth: "72px", textAlign: "center", textTransform: "uppercase", letterSpacing: "0.08em" }}>Status</span>
+        </div>
+      </div>
 
-      <SummaryFooter />
-    </AbsoluteFill>
+      <AnimatePresence mode="wait">
+        <motion.div key={tick}>
+          {SALES.map((sale, i) => (
+            <SaleRow key={`${tick}-${sale.id}`} sale={sale} index={i} />
+          ))}
+        </motion.div>
+      </AnimatePresence>
+
+      <motion.div
+        initial={{ opacity: 0, y: 12 }}
+        animate={{ opacity: 1, y: 0 }}
+        transition={{ duration: 0.5, delay: 1.0 }}
+        style={{
+          display: "flex",
+          gap: "12px",
+          marginTop: "12px",
+          paddingTop: "12px",
+          borderTop: "1px solid rgba(255,255,255,0.07)",
+        }}
+      >
+        {[
+          { label: "Vendas hoje", value: "8", suffix: " O.S." },
+          { label: "Total", value: "R$ 8.730", suffix: "" },
+          { label: "No laboratório", value: "3", suffix: " O.S." },
+          { label: "Ticket médio", value: "R$ 1.091", suffix: "" },
+        ].map((stat) => (
+          <div
+            key={stat.label}
+            style={{
+              flex: 1,
+              padding: "8px 12px",
+              borderRadius: "8px",
+              background: "rgba(99,102,241,0.06)",
+              border: "1px solid rgba(99,102,241,0.12)",
+            }}
+          >
+            <div style={{ fontSize: "10px", color: "#8888A0", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
+              {stat.label}
+            </div>
+            <div style={{ fontSize: "13px", fontWeight: 700, color: "#F2F2F7" }}>
+              {stat.value}{stat.suffix}
+            </div>
+          </div>
+        ))}
+      </motion.div>
+    </div>
   );
 }
-
-// ─── Section Wrapper ──────────────────────────────────────────────────────────
 
 export function LiveSalesTicker() {
   const [mounted, setMounted] = useState(false);
@@ -257,7 +209,6 @@ export function LiveSalesTicker() {
       className="section-padding relative overflow-hidden"
       style={{ background: "var(--lp-surface)" }}
     >
-      {/* Background glow */}
       <div
         className="absolute inset-0 pointer-events-none"
         style={{
@@ -312,7 +263,6 @@ export function LiveSalesTicker() {
           className="relative mx-auto"
           style={{ maxWidth: "860px" }}
         >
-          {/* Outer glow frame */}
           <div
             className="absolute -inset-px rounded-2xl pointer-events-none"
             style={{
@@ -322,7 +272,6 @@ export function LiveSalesTicker() {
             }}
           />
 
-          {/* Player container */}
           <div
             style={{
               borderRadius: "16px",
@@ -332,7 +281,6 @@ export function LiveSalesTicker() {
                 "0 0 0 1px rgba(99,102,241,0.18), 0 24px 64px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3)",
             }}
           >
-            {/* Top bar — fake window chrome */}
             <div
               style={{
                 background: "#0E0E14",
@@ -363,25 +311,9 @@ export function LiveSalesTicker() {
               </div>
             </div>
 
-            {/* Remotion Player — aspect ratio 820:340 = 41.46% */}
-            {mounted && (
-              <div style={{ position: "relative", width: "100%", paddingBottom: "41.46%" }}>
-                <Player
-                  component={PDVAnimation}
-                  durationInFrames={160}
-                  compositionWidth={820}
-                  compositionHeight={340}
-                  fps={30}
-                  loop
-                  autoPlay
-                  style={{ position: "absolute", top: 0, left: 0, width: "100%", height: "100%" }}
-                  controls={false}
-                />
-              </div>
-            )}
+            {mounted && <PDVAnimation />}
           </div>
 
-          {/* Caption */}
           <p
             className="text-center mt-4 text-xs"
             style={{ color: "var(--lp-muted)", opacity: 0.6 }}

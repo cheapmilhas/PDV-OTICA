@@ -15,6 +15,7 @@ import {
 } from "@/components/ui/card";
 import { Glasses, Loader2, ArrowLeft, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
+import { track } from "@/lib/analytics";
 
 interface Plan {
   id: string;
@@ -152,6 +153,9 @@ export default function RegistroPage() {
         });
         return;
       }
+
+      track("signup", { plan: formData.planId });
+      track("trial_started", { plan: formData.planId });
 
       toast({
         title: "Conta criada com sucesso!",

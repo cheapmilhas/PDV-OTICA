@@ -12,8 +12,10 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Plus, CheckCircle2, Clock, Edit, Eye, Loader2, Search,
   XCircle, AlertCircle, Printer, Truck, AlertTriangle,
-  RotateCcw, Shield, Star,
+  RotateCcw, Shield, Star, ShoppingCart,
+  LayoutList, Kanban,
 } from "lucide-react";
+import { KanbanBoard } from "@/components/ordens-servico/kanban-board";
 import { SearchBar } from "@/components/shared/search-bar";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
@@ -40,6 +42,7 @@ interface ServiceOrder {
   createdAt: string;
   customer: { id: string; name: string; cpf?: string; phone?: string };
   laboratory?: { id: string; name: string };
+  sale?: { id: string } | null;
   _count: { items: number };
 }
 
@@ -415,6 +418,12 @@ function OrdensServicoPage() {
   const { hasPermission } = usePermissions();
   const { activeBranchId, isAllBranches } = useBranchContext();
   const filterParam = searchParams.get("filter") || "";
+  const [viewMode, setViewMode] = useState<"list" | "kanban">(() => {
+    if (typeof window !== "undefined") {
+      return (localStorage.getItem("os-view-mode") as "list" | "kanban") || "list";
+    }
+    return "list";
+  });
   const [search, setSearch] = useState("");
   const [page, setPage] = useState(1);
   const [statusFilter, setStatusFilter] = useState("ativos");
@@ -428,6 +437,32 @@ function OrdensServicoPage() {
   const [modalEntrega, setModalEntrega] = useState<ServiceOrder | null>(null);
   const [modalReverter, setModalReverter] = useState<ServiceOrder | null>(null);
   const [modalGarantia, setModalGarantia] = useState<ServiceOrder | null>(null);
+  const [convertingId, setConvertingId] = useState<string | null>(null);
+
+  const toggleViewMode = (mode: "list" | "kanban") => {
+    setViewMode(mode);
+    localStorage.setItem("os-view-mode", mode);
+  };
+
+  const handleConvertToSale = async (order: ServiceOrder) => {
+    setConvertingId(order.id);
+    try {
+      const res = await fetch(`/api/service-orders/${order.id}/convert`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.error?.message || "Erro ao gerar venda");
+      }
+      toast.success("Redirecionando para o PDV...");
+      router.push(`/dashboard/pdv?serviceOrderId=${order.id}`);
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setConvertingId(null);
+    }
+  };
 
   const fetchOrders = useCallback(() => {
     setLoading(true);
@@ -529,34 +564,64 @@ function OrdensServicoPage() {
           <h1 className="text-3xl font-bold">Ordens de Serviço</h1>
           <p className="text-muted-foreground">Controle completo do fluxo de OS</p>
         </div>
-        <Can permission="service_orders.create">
-          <Button
-            onClick={() => {
-              if (isAllBranches) {
-                toast.error("Selecione uma loja específica para criar OS");
-                return;
-              }
-              router.push("/dashboard/ordens-servico/nova");
-            }}
-            variant={isAllBranches ? "outline" : "default"}
-          >
-            <Plus className="mr-2 h-4 w-4" />
-            Nova OS
-          </Button>
-        </Can>
+        <div className="flex items-center gap-2">
+          {/* Toggle lista/kanban */}
+          <div className="flex items-center rounded-lg border bg-muted p-0.5">
+            <button
+              onClick={() => toggleViewMode("list")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "list"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-muted-foreground hover:text-gray-700"
+              }`}
+            >
+              <LayoutList className="h-4 w-4" />
+              Lista
+            </button>
+            <button
+              onClick={() => toggleViewMode("kanban")}
+              className={`flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                viewMode === "kanban"
+                  ? "bg-white text-gray-900 shadow-sm"
+                  : "text-muted-foreground hover:text-gray-700"
+              }`}
+            >
+              <Kanban className="h-4 w-4" />
+              Kanban
+            </button>
+          </div>
+
+          <Can permission="service_orders.create">
+            <Button
+              onClick={() => {
+                if (isAllBranches) {
+                  toast.error("Selecione uma loja específica para criar OS");
+                  return;
+                }
+                router.push("/dashboard/ordens-servico/nova");
+              }}
+              variant={isAllBranches ? "outline" : "default"}
+            >
+              <Plus className="mr-2 h-4 w-4" />
+              Nova OS
+            </Button>
+          </Can>
+        </div>
       </div>
 
-      {/* Resumo */}
-      <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
-        {summaryCards.map((card) => (
-          <Card key={card.label} className="text-center">
-            <CardContent className="pt-4 pb-3">
-              <p className={`text-2xl font-black ${card.color}`}>{card.value}</p>
-              <p className="text-xs text-muted-foreground mt-0.5">{card.label}</p>
-            </CardContent>
-          </Card>
-        ))}
-      </div>
+      {/* Resumo (lista only) */}
+      {viewMode === "list" && (
+        <div className="grid gap-3 grid-cols-2 md:grid-cols-5">
+          {summaryCards.map((card) => (
+            <Card key={card.label} className="text-center">
+              <CardContent className="pt-4 pb-3">
+                <p className={`text-2xl font-black ${card.color}`}>{card.value}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{card.label}</p>
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="space-y-3">
@@ -566,224 +631,272 @@ function OrdensServicoPage() {
           placeholder="Buscar por cliente, CPF ou telefone..."
           clearable
         />
-        <div className="flex gap-2 flex-wrap">
-          {[
-            { value: "ativos", label: "Ativas" },
-            { value: "inativos", label: "Canceladas" },
-            { value: "todos", label: "Todas" },
-          ].map((f) => (
+        {viewMode === "list" && (
+          <div className="flex gap-2 flex-wrap">
+            {[
+              { value: "ativos", label: "Ativas" },
+              { value: "inativos", label: "Canceladas" },
+              { value: "todos", label: "Todas" },
+            ].map((f) => (
+              <Button
+                key={f.value}
+                size="sm"
+                variant={statusFilter === f.value && !filterParam ? "default" : "outline"}
+                onClick={() => { setStatusFilter(f.value); setPage(1); router.push("/dashboard/ordens-servico"); }}
+              >
+                {f.label}
+              </Button>
+            ))}
             <Button
-              key={f.value}
               size="sm"
-              variant={statusFilter === f.value && !filterParam ? "default" : "outline"}
-              onClick={() => { setStatusFilter(f.value); setPage(1); router.push("/dashboard/ordens-servico"); }}
+              variant={filterParam === "atrasadas" ? "destructive" : "outline"}
+              className={filterParam !== "atrasadas" ? "border-red-300 text-red-700 hover:bg-red-50" : ""}
+              onClick={() => { setPage(1); router.push("/dashboard/ordens-servico?filter=atrasadas"); }}
             >
-              {f.label}
+              <AlertTriangle className="h-3.5 w-3.5 mr-1" />
+              Atrasadas
             </Button>
-          ))}
-          <Button
-            size="sm"
-            variant={filterParam === "atrasadas" ? "destructive" : "outline"}
-            className={filterParam !== "atrasadas" ? "border-red-300 text-red-700 hover:bg-red-50" : ""}
-            onClick={() => { setPage(1); router.push("/dashboard/ordens-servico?filter=atrasadas"); }}
-          >
-            <AlertTriangle className="h-3.5 w-3.5 mr-1" />
-            Atrasadas
-          </Button>
-          <Button
-            size="sm"
-            variant={filterParam === "vencendo" ? "default" : "outline"}
-            className={filterParam === "vencendo" ? "bg-yellow-600 hover:bg-yellow-700" : "border-yellow-400 text-yellow-700 hover:bg-yellow-50"}
-            onClick={() => { setPage(1); router.push("/dashboard/ordens-servico?filter=vencendo"); }}
-          >
-            <Clock className="h-3.5 w-3.5 mr-1" />
-            Vencendo (3 dias)
-          </Button>
-        </div>
+            <Button
+              size="sm"
+              variant={filterParam === "vencendo" ? "default" : "outline"}
+              className={filterParam === "vencendo" ? "bg-yellow-600 hover:bg-yellow-700" : "border-yellow-400 text-yellow-700 hover:bg-yellow-50"}
+              onClick={() => { setPage(1); router.push("/dashboard/ordens-servico?filter=vencendo"); }}
+            >
+              <Clock className="h-3.5 w-3.5 mr-1" />
+              Vencendo (3 dias)
+            </Button>
+          </div>
+        )}
       </div>
 
-      {/* Loading */}
-      {loading && (
-        <div className="flex items-center justify-center py-12">
-          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
-        </div>
-      )}
-
-      {/* Empty */}
-      {!loading && orders.length === 0 && (
-        <EmptyState
-          icon={<Clock className="h-12 w-12" />}
-          title="Nenhuma ordem de serviço encontrada"
-          description={search ? `Sem resultados para "${search}"` : "Crie sua primeira OS"}
-          action={
-            !search && (
-              <Can permission="service_orders.create">
-                <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Nova OS
-                </Button>
-              </Can>
-            )
-          }
+      {/* === KANBAN VIEW === */}
+      {viewMode === "kanban" && (
+        <KanbanBoard
+          search={search}
+          activeBranchId={activeBranchId}
+          onRefresh={() => {}}
         />
       )}
 
-      {/* Lista */}
-      {!loading && orders.length > 0 && (
-        <div className="grid gap-3">
-          {orders.map((order) => {
-            const nextActions = NEXT_STATUS[order.status] || [];
-            const canDeliver = order.status === "READY";
-            const canRevert = ["DELIVERED", "READY", "IN_PROGRESS", "SENT_TO_LAB"].includes(order.status);
-            const canWarranty = ["DELIVERED", "READY"].includes(order.status);
+      {/* === LIST VIEW === */}
+      {viewMode === "list" && (
+        <>
+          {/* Loading */}
+          {loading && (
+            <div className="flex items-center justify-center py-12">
+              <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+            </div>
+          )}
 
-            return (
-              <Card key={order.id} className={`transition-shadow hover:shadow-md ${order.isDelayed && !["DELIVERED", "CANCELED"].includes(order.status) ? "border-red-300 bg-red-50/30" : ""}`}>
-                <CardContent className="p-4">
-                  <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
-                    {/* Info principal */}
-                    <div className="flex-1 min-w-0">
-                      <div className="flex items-center gap-2 flex-wrap mb-1">
-                        <span className="text-lg font-black text-blue-700">{osNum(order)}</span>
-                        <span className="font-semibold text-gray-900 truncate">{order.customer.name}</span>
-                        <StatusBadge status={order.status} delayed={isOrderDelayed(order)} />
-                        {order.isWarranty && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 border border-blue-300">
-                            <Shield className="h-3 w-3" /> Garantia
-                          </span>
-                        )}
-                        {order.isRework && (
-                          <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
-                            <RotateCcw className="h-3 w-3" /> Retrabalho
-                          </span>
-                        )}
-                      </div>
+          {/* Empty */}
+          {!loading && orders.length === 0 && (
+            <EmptyState
+              icon={<Clock className="h-12 w-12" />}
+              title="Nenhuma ordem de serviço encontrada"
+              description={search ? `Sem resultados para "${search}"` : "Crie sua primeira OS"}
+              action={
+                !search && (
+                  <Can permission="service_orders.create">
+                    <Button onClick={() => router.push("/dashboard/ordens-servico/nova")}>
+                      <Plus className="mr-2 h-4 w-4" />
+                      Nova OS
+                    </Button>
+                  </Can>
+                )
+              }
+            />
+          )}
 
-                      <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
-                        <span>{format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
-                        <span>{order._count.items} {order._count.items === 1 ? "item" : "itens"}</span>
-                        {order.laboratory && (
-                          <span className="text-purple-600 font-medium">
-                            🏭 {order.laboratory.name}
-                          </span>
-                        )}
-                        {order.promisedDate && (
-                          <span className={`font-medium ${order.isDelayed && !["DELIVERED", "CANCELED"].includes(order.status) ? "text-red-600" : ""}`}>
-                            📅 Prazo: {formatDateBR(order.promisedDate)}
-                            {order.isDelayed && order.delayDays && !["DELIVERED", "CANCELED"].includes(order.status) && (
-                              <span className="ml-1">({order.delayDays}d atrasada)</span>
+          {/* Lista */}
+          {!loading && orders.length > 0 && (
+            <div className="grid gap-3">
+              {orders.map((order) => {
+                const nextActions = NEXT_STATUS[order.status] || [];
+                const canDeliver = order.status === "READY";
+                const canRevert = ["DELIVERED", "READY", "IN_PROGRESS", "SENT_TO_LAB"].includes(order.status);
+                const canWarranty = ["DELIVERED", "READY"].includes(order.status);
+                const canConvert = ["READY", "DELIVERED"].includes(order.status) && !order.sale;
+                const hasSale = !!order.sale;
+
+                return (
+                  <Card key={order.id} className={`transition-shadow hover:shadow-md ${order.isDelayed && !["DELIVERED", "CANCELED"].includes(order.status) ? "border-red-300 bg-red-50/30" : ""}`}>
+                    <CardContent className="p-4">
+                      <div className="flex flex-col md:flex-row md:items-start md:justify-between gap-3">
+                        {/* Info principal */}
+                        <div className="flex-1 min-w-0">
+                          <div className="flex items-center gap-2 flex-wrap mb-1">
+                            <span className="text-lg font-black text-blue-700">{osNum(order)}</span>
+                            <span className="font-semibold text-gray-900 truncate">{order.customer.name}</span>
+                            <StatusBadge status={order.status} delayed={isOrderDelayed(order)} />
+                            {order.isWarranty && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-blue-100 text-blue-700 border border-blue-300">
+                                <Shield className="h-3 w-3" /> Garantia
+                              </span>
                             )}
-                          </span>
-                        )}
+                            {order.isRework && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
+                                <RotateCcw className="h-3 w-3" /> Retrabalho
+                              </span>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
+                            <span>{format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
+                            <span>{order._count.items} {order._count.items === 1 ? "item" : "itens"}</span>
+                            {order.laboratory && (
+                              <span className="text-purple-600 font-medium">
+                                🏭 {order.laboratory.name}
+                              </span>
+                            )}
+                            {order.promisedDate && (
+                              <span className={`font-medium ${order.isDelayed && !["DELIVERED", "CANCELED"].includes(order.status) ? "text-red-600" : ""}`}>
+                                📅 Prazo: {formatDateBR(order.promisedDate)}
+                                {order.isDelayed && order.delayDays && !["DELIVERED", "CANCELED"].includes(order.status) && (
+                                  <span className="ml-1">({order.delayDays}d atrasada)</span>
+                                )}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+
+                        {/* Ações */}
+                        <div className="flex flex-wrap gap-2 items-center">
+                          {/* Ações rápidas de status */}
+                          {hasPermission("service_orders.edit") && nextActions.map((action) => (
+                            <Button
+                              key={action.value}
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                              disabled={actionLoading === order.id + action.value}
+                              onClick={() => quickStatusChange(order, action.value)}
+                            >
+                              {actionLoading === order.id + action.value
+                                ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                                : action.icon
+                              }
+                              <span className="ml-1">{action.label}</span>
+                            </Button>
+                          ))}
+
+                          {/* Entrega */}
+                          {canDeliver && hasPermission("service_orders.edit") && (
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              onClick={() => setModalEntrega(order)}
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
+                              Entregar
+                            </Button>
+                          )}
+
+                          {/* Reverter */}
+                          {canRevert && hasPermission("service_orders.edit") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-orange-300 text-orange-700 hover:bg-orange-50"
+                              onClick={() => setModalReverter(order)}
+                            >
+                              <RotateCcw className="h-3.5 w-3.5 mr-1" />
+                              Reverter
+                            </Button>
+                          )}
+
+                          {/* Garantia */}
+                          {canWarranty && hasPermission("service_orders.create") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-blue-300 text-blue-700 hover:bg-blue-50"
+                              onClick={() => setModalGarantia(order)}
+                            >
+                              <Shield className="h-3.5 w-3.5 mr-1" />
+                              Garantia
+                            </Button>
+                          )}
+
+                          {/* Gerar Venda */}
+                          {canConvert && hasPermission("sales.create") && (
+                            <Button
+                              size="sm"
+                              className="bg-green-600 hover:bg-green-700 text-white"
+                              disabled={convertingId === order.id}
+                              onClick={() => handleConvertToSale(order)}
+                            >
+                              {convertingId === order.id ? (
+                                <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                              ) : (
+                                <ShoppingCart className="h-3.5 w-3.5 mr-1" />
+                              )}
+                              Gerar Venda
+                            </Button>
+                          )}
+
+                          {/* Badge venda vinculada */}
+                          {hasSale && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="border-green-300 text-green-700 hover:bg-green-50"
+                              onClick={() => router.push(`/dashboard/vendas/${order.sale!.id}/detalhes`)}
+                            >
+                              <ShoppingCart className="h-3.5 w-3.5 mr-1" />
+                              Ver Venda
+                            </Button>
+                          )}
+
+                          {/* Imprimir */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => window.open(`/dashboard/ordens-servico/${order.id}/imprimir`, "_blank")}
+                          >
+                            <Printer className="h-3.5 w-3.5 mr-1" />
+                            Imprimir
+                          </Button>
+
+                          {/* Editar */}
+                          {!["DELIVERED", "CANCELED"].includes(order.status) && hasPermission("service_orders.edit") && (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              onClick={() => router.push(`/dashboard/ordens-servico/${order.id}/editar`)}
+                            >
+                              <Edit className="h-3.5 w-3.5 mr-1" />
+                              Editar
+                            </Button>
+                          )}
+
+                          {/* Detalhes */}
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            onClick={() => router.push(`/dashboard/ordens-servico/${order.id}/detalhes`)}
+                          >
+                            <Eye className="h-3.5 w-3.5 mr-1" />
+                            Detalhes
+                          </Button>
+                        </div>
                       </div>
-                    </div>
+                    </CardContent>
+                  </Card>
+                );
+              })}
+            </div>
+          )}
 
-                    {/* Ações */}
-                    <div className="flex flex-wrap gap-2 items-center">
-                      {/* Ações rápidas de status */}
-                      {hasPermission("service_orders.edit") && nextActions.map((action) => (
-                        <Button
-                          key={action.value}
-                          size="sm"
-                          variant="outline"
-                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                          disabled={actionLoading === order.id + action.value}
-                          onClick={() => quickStatusChange(order, action.value)}
-                        >
-                          {actionLoading === order.id + action.value
-                            ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-                            : action.icon
-                          }
-                          <span className="ml-1">{action.label}</span>
-                        </Button>
-                      ))}
-
-                      {/* Entrega */}
-                      {canDeliver && hasPermission("service_orders.edit") && (
-                        <Button
-                          size="sm"
-                          className="bg-green-600 hover:bg-green-700 text-white"
-                          onClick={() => setModalEntrega(order)}
-                        >
-                          <CheckCircle2 className="h-3.5 w-3.5 mr-1" />
-                          Entregar
-                        </Button>
-                      )}
-
-                      {/* Reverter */}
-                      {canRevert && hasPermission("service_orders.edit") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-orange-300 text-orange-700 hover:bg-orange-50"
-                          onClick={() => setModalReverter(order)}
-                        >
-                          <RotateCcw className="h-3.5 w-3.5 mr-1" />
-                          Reverter
-                        </Button>
-                      )}
-
-                      {/* Garantia */}
-                      {canWarranty && hasPermission("service_orders.create") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          className="border-blue-300 text-blue-700 hover:bg-blue-50"
-                          onClick={() => setModalGarantia(order)}
-                        >
-                          <Shield className="h-3.5 w-3.5 mr-1" />
-                          Garantia
-                        </Button>
-                      )}
-
-                      {/* Imprimir */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => window.open(`/dashboard/ordens-servico/${order.id}/imprimir`, "_blank")}
-                      >
-                        <Printer className="h-3.5 w-3.5 mr-1" />
-                        Imprimir
-                      </Button>
-
-                      {/* Editar */}
-                      {!["DELIVERED", "CANCELED"].includes(order.status) && hasPermission("service_orders.edit") && (
-                        <Button
-                          size="sm"
-                          variant="outline"
-                          onClick={() => router.push(`/dashboard/ordens-servico/${order.id}/editar`)}
-                        >
-                          <Edit className="h-3.5 w-3.5 mr-1" />
-                          Editar
-                        </Button>
-                      )}
-
-                      {/* Detalhes */}
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        onClick={() => router.push(`/dashboard/ordens-servico/${order.id}/detalhes`)}
-                      >
-                        <Eye className="h-3.5 w-3.5 mr-1" />
-                        Detalhes
-                      </Button>
-                    </div>
-                  </div>
-                </CardContent>
-              </Card>
-            );
-          })}
-        </div>
-      )}
-
-      {/* Paginação */}
-      {!loading && pagination && pagination.totalPages > 1 && (
-        <Pagination
-          currentPage={page}
-          totalPages={pagination.totalPages}
-          onPageChange={setPage}
-          showInfo
-        />
+          {/* Paginação */}
+          {!loading && pagination && pagination.totalPages > 1 && (
+            <Pagination
+              currentPage={page}
+              totalPages={pagination.totalPages}
+              onPageChange={setPage}
+              showInfo
+            />
+          )}
+        </>
       )}
     </div>
   );

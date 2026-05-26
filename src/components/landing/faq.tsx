@@ -15,9 +15,9 @@ const faqs = [
       "Sim! Oferecemos suporte para importacao de dados de clientes e produtos via planilha. Entre em contato com nosso suporte para assistencia na migracao — ajudamos em todo o processo.",
   },
   {
-    question: "O sistema emite nota fiscal?",
+    question: "O sistema emite nota fiscal (NFC-e/NF-e)?",
     answer:
-      "Atualmente o PDV Otica nao emite NF-e diretamente. Estamos trabalhando em uma integracao futura. Voce pode usar um emissor externo em paralelo sem problemas.",
+      "Ainda nao. A emissao de documentos fiscais (NFC-e, NF-e, SAT/MF-e) e de responsabilidade do contratante junto a SEFAZ do seu estado. Estamos desenvolvendo a integracao com emissores fiscais (previsao: proximos meses). Hoje voce precisa usar um emissor externo em paralelo.",
   },
   {
     question: "Quantos funcionarios podem usar o sistema?",

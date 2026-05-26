@@ -27,6 +27,11 @@ export const createServiceOrderSchema = z.object({
   items: z.array(serviceOrderItemSchema).min(1, "OS deve ter pelo menos 1 serviço"),
   expectedDate: z.string().datetime().optional(),
   prescription: z.string().max(5000, "Prescrição muito longa").optional(),
+  prescriptionImageUrl: z.string().url("URL da imagem inválida").optional(),
+  lensType: z.string().max(50, "Tipo de lente muito longo").optional(),
+  lensDescription: z.string().max(500, "Descrição da lente muito longa").optional(),
+  lensColoring: z.string().max(200, "Coloração muito longa").optional(),
+  treatments: z.array(z.string().max(200)).optional(),
   notes: z.string().max(1000, "Observações muito longas").optional(),
 });
 
@@ -40,6 +45,11 @@ export const updateServiceOrderSchema = z.object({
   items: z.array(serviceOrderItemSchema).min(1).optional(),
   expectedDate: z.string().datetime().optional(),
   prescription: z.string().max(5000).optional(),
+  prescriptionImageUrl: z.string().url().optional(),
+  lensType: z.string().max(50).optional(),
+  lensDescription: z.string().max(500).optional(),
+  lensColoring: z.string().max(200).optional(),
+  treatments: z.array(z.string().max(200)).optional(),
   notes: z.string().max(1000).optional(),
   labNotes: z.string().max(500).optional(),
   labOrderNumber: z.string().max(100).optional(),
@@ -96,6 +106,7 @@ export function sanitizeServiceOrderDTO(
   const sanitized: any = { ...data };
 
   if (sanitized.prescription === "") delete sanitized.prescription;
+  if (sanitized.prescriptionImageUrl === "") delete sanitized.prescriptionImageUrl;
   if (sanitized.notes === "") delete sanitized.notes;
   if (sanitized.expectedDate === "") delete sanitized.expectedDate;
 

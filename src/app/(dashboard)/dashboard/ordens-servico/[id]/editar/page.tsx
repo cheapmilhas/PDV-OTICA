@@ -9,9 +9,10 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
-import { ArrowLeft, Trash2, Loader2, Plus } from "lucide-react";
+import { ArrowLeft, Trash2, Loader2, Plus, ChevronDown } from "lucide-react";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
+import { PrescriptionImageUpload, type OcrPrescriptionData } from "@/components/ordens-servico/prescription-image-upload";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface ServiceItem {
@@ -38,17 +39,37 @@ function EditarOrdemServicoContent() {
   });
 
   const [showPrescription, setShowPrescription] = useState(false);
+  const [showCeratometria, setShowCeratometria] = useState(false);
   const [prescriptionData, setPrescriptionData] = useState({
-    od: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
-    oe: { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+    od: { esf: "", cil: "", eixo: "", dnp: "", altura: "", add: "", prisma: "", base: "" },
+    oe: { esf: "", cil: "", eixo: "", dnp: "", altura: "", add: "", prisma: "", base: "" },
     adicao: "",
+    olhoDominante: "",
+    pantoscopicAngle: "",
+    vertexDistance: "",
+    frameCurvature: "",
     tipoLente: "",
     material: "",
+    ceratometria: {
+      odH: "", odHEixo: "", odV: "", odVEixo: "",
+      oeH: "", oeHEixo: "", oeV: "", oeVEixo: "",
+    },
   });
 
   const [items, setItems] = useState<ServiceItem[]>([
     { description: "", qty: 1, observations: "" },
   ]);
+
+  const [prescriptionImageUrl, setPrescriptionImageUrl] = useState("");
+
+  // Campos de lente dedicados
+  const [lensData, setLensData] = useState({
+    lensType: "",
+    lensDescription: "",
+    lensColoring: "",
+  });
+  const [selectedTreatments, setSelectedTreatments] = useState<string[]>([]);
+  const [availableTreatments, setAvailableTreatments] = useState<{ id: string; name: string; price: number }[]>([]);
 
   const [statusUpdate, setStatusUpdate] = useState({
     newStatus: "",
@@ -59,9 +80,10 @@ function EditarOrdemServicoContent() {
   useEffect(() => {
     const fetchOrder = async () => {
       try {
-        const [orderRes, laboratoriesRes] = await Promise.all([
+        const [orderRes, laboratoriesRes, treatmentsRes] = await Promise.all([
           fetch(`/api/service-orders/${id}`),
           fetch("/api/laboratories?status=ativos&pageSize=100"),
+          fetch("/api/lens-treatments?active=true"),
         ]);
 
         if (!orderRes.ok) throw new Error("Erro ao carregar ordem de serviço");
@@ -74,6 +96,11 @@ function EditarOrdemServicoContent() {
           setLaboratories(labData.data || []);
         }
 
+        if (treatmentsRes.ok) {
+          const treatmentsData = await treatmentsRes.json();
+          setAvailableTreatments(treatmentsData.data || []);
+        }
+
         // Preencher formulário
         setFormData({
           expectedDate: data.promisedDate
@@ -83,20 +110,47 @@ function EditarOrdemServicoContent() {
           notes: data.notes || "",
         });
 
+        // Preencher imagem da receita se existir
+        if (data.prescriptionImageUrl) {
+          setPrescriptionImageUrl(data.prescriptionImageUrl);
+        }
+
+        // Preencher dados de lente se existirem
+        setLensData({
+          lensType: data.lensType || "",
+          lensDescription: data.lensDescription || "",
+          lensColoring: data.lensColoring || "",
+        });
+        if (data.treatments && data.treatments.length > 0) {
+          setSelectedTreatments(data.treatments);
+        }
+
         // Preencher receita (API returns prescriptionData as JSON object)
         if (data.prescriptionData) {
           try {
             const rx = typeof data.prescriptionData === "string"
               ? JSON.parse(data.prescriptionData)
               : data.prescriptionData;
+            const defaultEye = { esf: "", cil: "", eixo: "", dnp: "", altura: "", add: "", prisma: "", base: "" };
+            const defaultCerat = { odH: "", odHEixo: "", odV: "", odVEixo: "", oeH: "", oeHEixo: "", oeV: "", oeVEixo: "" };
             setPrescriptionData({
-              od: rx.od || { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
-              oe: rx.oe || { esf: "", cil: "", eixo: "", dnp: "", altura: "" },
+              od: { ...defaultEye, ...rx.od },
+              oe: { ...defaultEye, ...rx.oe },
               adicao: rx.adicao || "",
+              olhoDominante: rx.olhoDominante || "",
+              pantoscopicAngle: rx.pantoscopicAngle || "",
+              vertexDistance: rx.vertexDistance || "",
+              frameCurvature: rx.frameCurvature || "",
               tipoLente: rx.tipoLente || "",
               material: rx.material || "",
-            });
+              ceratometria: { ...defaultCerat, ...rx.ceratometria },
+              ...(rx.dnpPertoOd ? { dnpPertoOd: rx.dnpPertoOd } : {}),
+              ...(rx.dnpPertoOe ? { dnpPertoOe: rx.dnpPertoOe } : {}),
+            } as any);
             setShowPrescription(true);
+            if (rx.ceratometria && Object.values(rx.ceratometria).some((v: any) => v)) {
+              setShowCeratometria(true);
+            }
           } catch {
             // prescription is plain text, ignore
           }
@@ -156,6 +210,37 @@ function EditarOrdemServicoContent() {
     return value.replace(/[^0-9]/g, "");
   };
 
+  const handleOcrResult = (data: OcrPrescriptionData) => {
+    const toStr = (val: string | number | null | undefined): string =>
+      val !== null && val !== undefined ? String(val) : "";
+
+    setPrescriptionData((prev) => ({
+      ...prev,
+      od: {
+        esf: toStr(data.od?.esf) || prev.od.esf,
+        cil: toStr(data.od?.cil) || prev.od.cil,
+        eixo: toStr(data.od?.eixo) || prev.od.eixo,
+        dnp: toStr(data.od?.dnp) || prev.od.dnp,
+        altura: toStr(data.od?.altura) || prev.od.altura,
+        add: toStr(data.od?.add) || prev.od.add,
+        prisma: toStr(data.od?.prisma) || prev.od.prisma,
+        base: toStr(data.od?.base) || prev.od.base,
+      },
+      oe: {
+        esf: toStr(data.oe?.esf) || prev.oe.esf,
+        cil: toStr(data.oe?.cil) || prev.oe.cil,
+        eixo: toStr(data.oe?.eixo) || prev.oe.eixo,
+        dnp: toStr(data.oe?.dnp) || prev.oe.dnp,
+        altura: toStr(data.oe?.altura) || prev.oe.altura,
+        add: toStr(data.oe?.add) || prev.oe.add,
+        prisma: toStr(data.oe?.prisma) || prev.oe.prisma,
+        base: toStr(data.oe?.base) || prev.oe.base,
+      },
+    }));
+
+    setShowPrescription(true);
+  };
+
   const numericFields = ["eixo", "dnp", "altura"];
 
   const updatePrescription = (eye: "od" | "oe", field: string, value: string) => {
@@ -200,6 +285,16 @@ function EditarOrdemServicoContent() {
       } else if (!showPrescription) {
         payload.prescription = undefined;
       }
+
+      if (prescriptionImageUrl) {
+        payload.prescriptionImageUrl = prescriptionImageUrl;
+      }
+
+      // Dados de lente
+      payload.lensType = lensData.lensType || undefined;
+      payload.lensDescription = lensData.lensDescription || undefined;
+      payload.lensColoring = lensData.lensColoring || undefined;
+      payload.treatments = selectedTreatments;
 
       const res = await fetch(`/api/service-orders/${id}`, {
         method: "PUT",
@@ -443,86 +538,534 @@ function EditarOrdemServicoContent() {
                 size="sm"
                 onClick={() => setShowPrescription(!showPrescription)}
               >
-                {showPrescription ? "Remover Receita" : "Adicionar Receita"}
+                {showPrescription ? "Ocultar Receita" : "Mostrar Receita"}
               </Button>
             </div>
           </CardHeader>
           {showPrescription && (
             <CardContent className="space-y-4">
-              <div className="grid gap-6 md:grid-cols-2">
-                {/* OD */}
-                <div>
-                  <p className="font-semibold mb-3 text-center bg-gray-800 text-white py-1 rounded">
-                    Olho Direito (OD)
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["esf", "cil", "eixo", "dnp", "altura"].map((field) => (
-                      <div key={field} className="space-y-1">
-                        <Label className="text-xs capitalize">{field}</Label>
-                        <Input
-                          placeholder={field === "eixo" ? "0-180" : "0.00"}
-                          value={(prescriptionData.od as any)[field]}
-                          onChange={(e) => updatePrescription("od", field, e.target.value)}
-                          inputMode={numericFields.includes(field) ? (field === "eixo" ? "numeric" : "decimal") : undefined}
-                        />
-                      </div>
-                    ))}
+
+              {/* Upload de imagem da receita com OCR */}
+              <div className="p-4 bg-muted/30 border border-dashed rounded-lg">
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">
+                  Foto da Receita (OCR Automático)
+                </h3>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Tire uma foto ou envie a imagem da receita. A IA preencherá os campos automaticamente.
+                </p>
+                <PrescriptionImageUpload
+                  onOcrResult={handleOcrResult}
+                  onImageUploaded={(url) => setPrescriptionImageUrl(url)}
+                  existingImageUrl={prescriptionImageUrl || null}
+                />
+              </div>
+
+              {/* BLOCO 1: VISÃO DE LONGE */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Visão de Longe</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
+                        <th className="border p-1.5 text-center font-semibold">Esférico</th>
+                        <th className="border p-1.5 text-center font-semibold">Cilíndrico</th>
+                        <th className="border p-1.5 text-center font-semibold">Eixo</th>
+                        <th className="border p-1.5 text-center font-semibold">DNP</th>
+                        <th className="border p-1.5 text-center font-semibold">Altura</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["od", "oe"] as const).map((eye) => (
+                        <tr key={eye}>
+                          <td className="border p-1.5 font-bold bg-gray-50 text-center">
+                            {eye === "od" ? "OD" : "OE"}
+                          </td>
+                          <td className="border p-0.5">
+                            <Input
+                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              value={prescriptionData[eye].esf}
+                              onChange={(e) => updatePrescription(eye, "esf", e.target.value)}
+                              placeholder="+0.00"
+                              inputMode="decimal"
+                            />
+                          </td>
+                          <td className="border p-0.5">
+                            <Input
+                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              value={prescriptionData[eye].cil}
+                              onChange={(e) => updatePrescription(eye, "cil", e.target.value)}
+                              placeholder="-0.00"
+                              inputMode="decimal"
+                            />
+                          </td>
+                          <td className="border p-0.5">
+                            <Input
+                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              value={prescriptionData[eye].eixo}
+                              onChange={(e) => updatePrescription(eye, "eixo", e.target.value)}
+                              placeholder="0-180"
+                              inputMode="numeric"
+                            />
+                          </td>
+                          <td className="border p-0.5">
+                            <Input
+                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              value={prescriptionData[eye].dnp}
+                              onChange={(e) => updatePrescription(eye, "dnp", e.target.value)}
+                              placeholder="mm"
+                              inputMode="decimal"
+                            />
+                          </td>
+                          <td className="border p-0.5">
+                            <Input
+                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              value={prescriptionData[eye].altura}
+                              onChange={(e) => updatePrescription(eye, "altura", e.target.value)}
+                              placeholder="mm"
+                              inputMode="decimal"
+                            />
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* BLOCO 2: ADIÇÃO / VISÃO DE PERTO */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Adição / Visão de Perto</h3>
+                <div className="overflow-x-auto">
+                  <table className="w-full text-sm border-collapse">
+                    <thead>
+                      <tr className="bg-gray-100">
+                        <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
+                        <th className="border p-1.5 text-center font-semibold">Adição</th>
+                        <th className="border p-1.5 text-center font-semibold">Esf. Perto</th>
+                        <th className="border p-1.5 text-center font-semibold">Cil. Perto</th>
+                        <th className="border p-1.5 text-center font-semibold">Eixo Perto</th>
+                        <th className="border p-1.5 text-center font-semibold">DNP Perto</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["od", "oe"] as const).map((eye) => {
+                        const esfLonge = parseFloat((prescriptionData[eye].esf || "0").replace(",", ".")) || 0;
+                        const addVal = parseFloat((prescriptionData[eye].add || "0").replace(",", ".")) || 0;
+                        const esfPerto = addVal ? (esfLonge + addVal).toFixed(2) : "";
+                        return (
+                          <tr key={eye}>
+                            <td className="border p-1.5 font-bold bg-gray-50 text-center">
+                              {eye === "od" ? "OD" : "OE"}
+                            </td>
+                            <td className="border p-0.5">
+                              <Input
+                                className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                value={prescriptionData[eye].add}
+                                onChange={(e) => updatePrescription(eye, "add", e.target.value)}
+                                placeholder="+0.00"
+                                inputMode="decimal"
+                              />
+                            </td>
+                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50">
+                              {esfPerto ? (parseFloat(esfPerto) > 0 ? `+${esfPerto}` : esfPerto) : "—"}
+                            </td>
+                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50">
+                              {prescriptionData[eye].cil || "—"}
+                            </td>
+                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50">
+                              {prescriptionData[eye].eixo ? `${prescriptionData[eye].eixo}°` : "—"}
+                            </td>
+                            <td className="border p-0.5">
+                              <Input
+                                className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                value={eye === "od"
+                                  ? (prescriptionData as any).dnpPertoOd || ""
+                                  : (prescriptionData as any).dnpPertoOe || ""}
+                                onChange={(e) =>
+                                  setPrescriptionData({
+                                    ...prescriptionData,
+                                    [eye === "od" ? "dnpPertoOd" : "dnpPertoOe"]: sanitizeNumericField(e.target.value),
+                                  } as any)
+                                }
+                                placeholder="mm"
+                                inputMode="decimal"
+                              />
+                            </td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </div>
+                <p className="text-xs text-muted-foreground mt-1">
+                  Esf. Perto, Cil. e Eixo de perto são calculados automaticamente.
+                </p>
+              </div>
+
+              {/* BLOCO 3: DADOS ADICIONAIS */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Dados Adicionais</h3>
+                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+                  <div>
+                    <Label className="text-xs">Prisma OD</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={prescriptionData.od.prisma}
+                      onChange={(e) => updatePrescription("od", "prisma", e.target.value)}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Base OD</Label>
+                    <Select
+                      value={prescriptionData.od.base}
+                      onValueChange={(v) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          od: { ...prescriptionData.od, base: v },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SUP">Superior (SUP)</SelectItem>
+                        <SelectItem value="INF">Inferior (INF)</SelectItem>
+                        <SelectItem value="NAZ">Nasal (NAZ)</SelectItem>
+                        <SelectItem value="TMP">Temporal (TMP)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Prisma OE</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={prescriptionData.oe.prisma}
+                      onChange={(e) => updatePrescription("oe", "prisma", e.target.value)}
+                      placeholder="0.00"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Base OE</Label>
+                    <Select
+                      value={prescriptionData.oe.base}
+                      onValueChange={(v) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          oe: { ...prescriptionData.oe, base: v },
+                        })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="SUP">Superior (SUP)</SelectItem>
+                        <SelectItem value="INF">Inferior (INF)</SelectItem>
+                        <SelectItem value="NAZ">Nasal (NAZ)</SelectItem>
+                        <SelectItem value="TMP">Temporal (TMP)</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </div>
 
-                {/* OE */}
-                <div>
-                  <p className="font-semibold mb-3 text-center bg-gray-800 text-white py-1 rounded">
-                    Olho Esquerdo (OE)
-                  </p>
-                  <div className="grid grid-cols-2 gap-2">
-                    {["esf", "cil", "eixo", "dnp", "altura"].map((field) => (
-                      <div key={field} className="space-y-1">
-                        <Label className="text-xs capitalize">{field}</Label>
-                        <Input
-                          placeholder={field === "eixo" ? "0-180" : "0.00"}
-                          value={(prescriptionData.oe as any)[field]}
-                          onChange={(e) => updatePrescription("oe", field, e.target.value)}
-                          inputMode={numericFields.includes(field) ? (field === "eixo" ? "numeric" : "decimal") : undefined}
-                        />
-                      </div>
-                    ))}
+                <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mt-3">
+                  <div>
+                    <Label className="text-xs">Olho Dominante</Label>
+                    <Select
+                      value={prescriptionData.olhoDominante}
+                      onValueChange={(v) =>
+                        setPrescriptionData({ ...prescriptionData, olhoDominante: v })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="—" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="OD">OD (Direito)</SelectItem>
+                        <SelectItem value="OE">OE (Esquerdo)</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Ang. Pantoscópico</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={prescriptionData.pantoscopicAngle}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          pantoscopicAngle: sanitizeNumericField(e.target.value),
+                        })
+                      }
+                      placeholder="°"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Dist. Vértice</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={prescriptionData.vertexDistance}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          vertexDistance: sanitizeNumericField(e.target.value),
+                        })
+                      }
+                      placeholder="mm"
+                      inputMode="decimal"
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Curva Armação</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={prescriptionData.frameCurvature}
+                      onChange={(e) =>
+                        setPrescriptionData({
+                          ...prescriptionData,
+                          frameCurvature: sanitizeNumericField(e.target.value),
+                        })
+                      }
+                      placeholder="mm"
+                      inputMode="decimal"
+                    />
                   </div>
                 </div>
               </div>
 
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-2 border-t">
-                <div className="space-y-1">
-                  <Label className="text-xs">Adição</Label>
-                  <Input
-                    placeholder="0.00"
-                    value={prescriptionData.adicao}
-                    onChange={(e) =>
-                      setPrescriptionData({ ...prescriptionData, adicao: e.target.value })
-                    }
-                  />
+              {/* BLOCO 4: LENTE — Tipo, Material, Fabricação, Coloração, Tratamentos */}
+              <div>
+                <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Dados da Lente</h3>
+                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                  <div>
+                    <Label className="text-xs">Tipo de Lente</Label>
+                    <Select
+                      value={prescriptionData.tipoLente}
+                      onValueChange={(v) =>
+                        setPrescriptionData({ ...prescriptionData, tipoLente: v })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Visão Simples">Visão Simples</SelectItem>
+                        <SelectItem value="Bifocal">Bifocal</SelectItem>
+                        <SelectItem value="Multifocal">Multifocal</SelectItem>
+                        <SelectItem value="Ocupacional">Ocupacional</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Material</Label>
+                    <Select
+                      value={prescriptionData.material}
+                      onValueChange={(v) =>
+                        setPrescriptionData({ ...prescriptionData, material: v })
+                      }
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="Resina 1.50">Resina 1.50</SelectItem>
+                        <SelectItem value="Resina 1.56">Resina 1.56</SelectItem>
+                        <SelectItem value="Resina 1.61">Resina 1.61</SelectItem>
+                        <SelectItem value="Resina 1.67">Resina 1.67</SelectItem>
+                        <SelectItem value="Resina 1.74">Resina 1.74</SelectItem>
+                        <SelectItem value="Policarbonato">Policarbonato</SelectItem>
+                        <SelectItem value="Trivex">Trivex</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                  <div>
+                    <Label className="text-xs">Fabricação</Label>
+                    <Select
+                      value={lensData.lensType}
+                      onValueChange={(v) => setLensData({ ...lensData, lensType: v })}
+                    >
+                      <SelectTrigger className="h-8 text-sm">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="PRONTA">Pronta</SelectItem>
+                        <SelectItem value="SURFACADA">Surfaçada</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Tipo de Lente</Label>
-                  <Input
-                    placeholder="Ex: Multifocal"
-                    value={prescriptionData.tipoLente}
-                    onChange={(e) =>
-                      setPrescriptionData({ ...prescriptionData, tipoLente: e.target.value })
-                    }
-                  />
+
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mt-3">
+                  <div>
+                    <Label className="text-xs">Descrição da Lente</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={lensData.lensDescription}
+                      onChange={(e) => setLensData({ ...lensData, lensDescription: e.target.value })}
+                      placeholder="Ex: Multifocal Digital Free-Form"
+                      maxLength={500}
+                    />
+                  </div>
+                  <div>
+                    <Label className="text-xs">Coloração</Label>
+                    <Input
+                      className="h-8 text-sm"
+                      value={lensData.lensColoring}
+                      onChange={(e) => setLensData({ ...lensData, lensColoring: e.target.value })}
+                      placeholder="Ex: Cinza 80%, Transitions"
+                      maxLength={200}
+                    />
+                  </div>
                 </div>
-                <div className="space-y-1">
-                  <Label className="text-xs">Material</Label>
-                  <Input
-                    placeholder="Ex: Policarbonato"
-                    value={prescriptionData.material}
-                    onChange={(e) =>
-                      setPrescriptionData({ ...prescriptionData, material: e.target.value })
-                    }
-                  />
-                </div>
+
+                {/* Tratamentos */}
+                {availableTreatments.length > 0 && (
+                  <div className="mt-3">
+                    <Label className="text-xs">Tratamentos</Label>
+                    <div className="flex flex-wrap gap-2 mt-1">
+                      {availableTreatments.map((treatment) => {
+                        const isSelected = selectedTreatments.includes(treatment.name);
+                        return (
+                          <button
+                            key={treatment.id}
+                            type="button"
+                            onClick={() => {
+                              setSelectedTreatments((prev) =>
+                                isSelected
+                                  ? prev.filter((t) => t !== treatment.name)
+                                  : [...prev, treatment.name]
+                              );
+                            }}
+                            className={`px-3 py-1 text-xs rounded-full border transition-colors ${
+                              isSelected
+                                ? "bg-primary text-primary-foreground border-primary"
+                                : "bg-white text-gray-600 border-gray-300 hover:border-primary hover:text-primary"
+                            }`}
+                          >
+                            {treatment.name}
+                            {treatment.price > 0 && (
+                              <span className="ml-1 opacity-70">
+                                +R${treatment.price.toFixed(2)}
+                              </span>
+                            )}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+                )}
               </div>
+
+              {/* BLOCO 5: CERATOMETRIA — Colapsável */}
+              <div className="border rounded-lg">
+                <button
+                  type="button"
+                  className="w-full flex items-center justify-between p-2.5 text-sm font-semibold text-gray-600 hover:bg-gray-50 transition-colors"
+                  onClick={() => setShowCeratometria(!showCeratometria)}
+                >
+                  <span>Ceratometria (Lentes de Contato)</span>
+                  <ChevronDown className={`h-4 w-4 transition-transform ${showCeratometria ? "rotate-180" : ""}`} />
+                </button>
+                {showCeratometria && (
+                  <div className="px-2.5 pb-2.5">
+                    <table className="w-full text-sm border-collapse">
+                      <thead>
+                        <tr className="bg-gray-100">
+                          <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
+                          <th className="border p-1.5 text-center font-semibold">Horiz.</th>
+                          <th className="border p-1.5 text-center font-semibold">Eixo H</th>
+                          <th className="border p-1.5 text-center font-semibold">Vert.</th>
+                          <th className="border p-1.5 text-center font-semibold">Eixo V</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {(["od", "oe"] as const).map((eye) => (
+                          <tr key={eye}>
+                            <td className="border p-1.5 font-bold bg-gray-50 text-center">
+                              {eye === "od" ? "OD" : "OE"}
+                            </td>
+                            <td className="border p-0.5">
+                              <Input
+                                className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                value={prescriptionData.ceratometria[`${eye}H`]}
+                                onChange={(e) =>
+                                  setPrescriptionData({
+                                    ...prescriptionData,
+                                    ceratometria: {
+                                      ...prescriptionData.ceratometria,
+                                      [`${eye}H`]: sanitizeNumericField(e.target.value),
+                                    },
+                                  })
+                                }
+                                placeholder="0.00"
+                                inputMode="decimal"
+                              />
+                            </td>
+                            <td className="border p-0.5">
+                              <Input
+                                className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                value={prescriptionData.ceratometria[`${eye}HEixo`]}
+                                onChange={(e) =>
+                                  setPrescriptionData({
+                                    ...prescriptionData,
+                                    ceratometria: {
+                                      ...prescriptionData.ceratometria,
+                                      [`${eye}HEixo`]: sanitizeIntegerField(e.target.value),
+                                    },
+                                  })
+                                }
+                                placeholder="0-180"
+                                inputMode="numeric"
+                              />
+                            </td>
+                            <td className="border p-0.5">
+                              <Input
+                                className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                value={prescriptionData.ceratometria[`${eye}V`]}
+                                onChange={(e) =>
+                                  setPrescriptionData({
+                                    ...prescriptionData,
+                                    ceratometria: {
+                                      ...prescriptionData.ceratometria,
+                                      [`${eye}V`]: sanitizeNumericField(e.target.value),
+                                    },
+                                  })
+                                }
+                                placeholder="0.00"
+                                inputMode="decimal"
+                              />
+                            </td>
+                            <td className="border p-0.5">
+                              <Input
+                                className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                value={prescriptionData.ceratometria[`${eye}VEixo`]}
+                                onChange={(e) =>
+                                  setPrescriptionData({
+                                    ...prescriptionData,
+                                    ceratometria: {
+                                      ...prescriptionData.ceratometria,
+                                      [`${eye}VEixo`]: sanitizeIntegerField(e.target.value),
+                                    },
+                                  })
+                                }
+                                placeholder="0-180"
+                                inputMode="numeric"
+                              />
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+              </div>
+
             </CardContent>
           )}
         </Card>

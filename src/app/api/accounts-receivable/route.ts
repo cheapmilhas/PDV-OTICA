@@ -7,13 +7,14 @@ import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { calculatePenalties } from "@/lib/penalty-utils";
 
 /**
  * Schema de validação para query params (GET)
  */
 const accountsReceivableQuerySchema = z.object({
   status: z
-    .enum(["PENDING", "RECEIVED", "OVERDUE", "CANCELED", "ALL"])
+    .enum(["PENDING", "RECEIVED", "OVERDUE", "CANCELED", "RENEGOTIATED", "ALL"])
     .optional(),
   page: z.coerce.number().int().min(1).optional().default(1),
   pageSize: z.coerce.number().int().min(1).max(100).optional().default(20),
@@ -48,6 +49,17 @@ const updateAccountReceivableSchema = z.object({
   receivedAmount: z.number().positive().optional(),
   receivedDate: z.string().datetime().optional(),
   paymentMethod: z.enum(["CASH", "PIX", "DEBIT_CARD", "CREDIT_CARD", "BANK_TRANSFER", "BANK_SLIP"]).optional(),
+  discountAmount: z.number().min(0).optional(),
+  fineAmount: z.number().min(0).optional(),
+  interestAmount: z.number().min(0).optional(),
+});
+
+/**
+ * Schema de validação para estorno (reversal)
+ */
+const reversalSchema = z.object({
+  id: z.string().min(1, "ID é obrigatório"),
+  action: z.literal("reverse"),
 });
 
 /**
@@ -181,20 +193,38 @@ export async function GET(request: Request) {
       prisma.accountReceivable.count({ where }),
     ]);
 
-    // Serializar Decimals para number
-    const serializedData = data.map((account) => ({
-      ...account,
-      amount: Number(account.amount),
-      receivedAmount: account.receivedAmount
-        ? Number(account.receivedAmount)
-        : null,
-      sale: account.sale
-        ? {
-            ...account.sale,
-            total: Number(account.sale.total),
-          }
-        : null,
-    }));
+    // Serializar Decimals para number e calcular penalidades em tempo real
+    const now = new Date();
+    const serializedData = data.map((account) => {
+      const penalties = (account.status === "PENDING" || account.status === "OVERDUE")
+        ? calculatePenalties(account, now)
+        : { fine: 0, interest: 0, daysLate: 0, totalWithPenalties: Number(account.amount) };
+
+      return {
+        ...account,
+        amount: Number(account.amount),
+        receivedAmount: account.receivedAmount
+          ? Number(account.receivedAmount)
+          : null,
+        finePercent: Number(account.finePercent ?? 0),
+        fineAmount: Number(account.fineAmount ?? 0),
+        interestPercent: Number(account.interestPercent ?? 0),
+        interestAmount: Number(account.interestAmount ?? 0),
+        discountAmount: Number(account.discountAmount ?? 0),
+        graceDays: account.graceDays ?? 0,
+        // Penalidades calculadas em tempo real
+        calculatedFine: penalties.fine,
+        calculatedInterest: penalties.interest,
+        calculatedTotal: penalties.totalWithPenalties,
+        daysLate: penalties.daysLate,
+        sale: account.sale
+          ? {
+              ...account.sale,
+              total: Number(account.sale.total),
+            }
+          : null,
+      };
+    });
 
     const totalPages = Math.ceil(total / query.pageSize);
     return paginatedResponse(serializedData, {
@@ -339,6 +369,64 @@ export async function PATCH(request: Request) {
     const userId = session.user.id;
 
     const body = await request.json();
+
+    // Verificar se é uma ação de estorno
+    if (body.action === "reverse") {
+      const reversal = reversalSchema.parse(body);
+
+      const existing = await prisma.accountReceivable.findFirst({
+        where: { id: reversal.id, companyId },
+      });
+
+      if (!existing) {
+        return NextResponse.json(
+          { error: "Conta a receber não encontrada" },
+          { status: 404 }
+        );
+      }
+
+      if (existing.status !== AccountReceivableStatus.RECEIVED) {
+        return NextResponse.json(
+          { error: "Apenas contas recebidas podem ser estornadas" },
+          { status: 400 }
+        );
+      }
+
+      const reversed = await prisma.accountReceivable.update({
+        where: { id: reversal.id },
+        data: {
+          status: AccountReceivableStatus.PENDING,
+          receivedDate: null,
+          receivedAmount: null,
+          receivedByUserId: null,
+          fineAmount: 0,
+          interestAmount: 0,
+          discountAmount: 0,
+          reversedAt: new Date(),
+          reversedBy: userId,
+        },
+        include: {
+          customer: { select: { id: true, name: true, cpf: true, phone: true, email: true } },
+          sale: { select: { id: true, total: true, createdAt: true } },
+          branch: { select: { id: true, name: true, code: true } },
+          createdBy: { select: { id: true, name: true } },
+          receivedBy: { select: { id: true, name: true } },
+        },
+      });
+
+      return NextResponse.json({
+        ...reversed,
+        amount: Number(reversed.amount),
+        receivedAmount: null,
+        finePercent: Number(reversed.finePercent ?? 0),
+        fineAmount: 0,
+        interestPercent: Number(reversed.interestPercent ?? 0),
+        interestAmount: 0,
+        discountAmount: 0,
+        sale: reversed.sale ? { ...reversed.sale, total: Number(reversed.sale.total) } : null,
+      });
+    }
+
     const data = updateAccountReceivableSchema.parse(body);
 
     // Verificar se a conta existe e pertence à empresa
@@ -368,7 +456,10 @@ export async function PATCH(request: Request) {
         ? new Date(data.receivedDate)
         : new Date();
       updateData.receivedByUserId = userId;
-      // paymentMethod não é salvo no AccountReceivable, apenas usado para criar CashMovement
+      // Persistir penalidades e desconto
+      if (data.fineAmount !== undefined) updateData.fineAmount = data.fineAmount;
+      if (data.interestAmount !== undefined) updateData.interestAmount = data.interestAmount;
+      if (data.discountAmount !== undefined) updateData.discountAmount = data.discountAmount;
     }
 
     // Usar transação para atualizar conta e criar movimento no caixa
@@ -468,6 +559,11 @@ export async function PATCH(request: Request) {
       receivedAmount: accountReceivable.receivedAmount
         ? Number(accountReceivable.receivedAmount)
         : null,
+      finePercent: Number(accountReceivable.finePercent ?? 0),
+      fineAmount: Number(accountReceivable.fineAmount ?? 0),
+      interestPercent: Number(accountReceivable.interestPercent ?? 0),
+      interestAmount: Number(accountReceivable.interestAmount ?? 0),
+      discountAmount: Number(accountReceivable.discountAmount ?? 0),
       sale: accountReceivable.sale
         ? {
             ...accountReceivable.sale,

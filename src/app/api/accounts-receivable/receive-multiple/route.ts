@@ -5,6 +5,7 @@ import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
+import { calculatePenalties } from "@/lib/penalty-utils";
 
 /**
  * Schema de validação para recebimento com múltiplos pagamentos
@@ -18,6 +19,9 @@ const receiveMultiplePaymentsSchema = z.object({
     })
   ).min(1, "Adicione pelo menos uma forma de pagamento"),
   receivedDate: z.string().datetime().optional(),
+  discountAmount: z.number().min(0).optional().default(0),
+  fineAmount: z.number().min(0).optional(),
+  interestAmount: z.number().min(0).optional(),
 });
 
 /**
@@ -82,20 +86,31 @@ export async function POST(request: Request) {
       );
     }
 
-    // Calcular total recebido
-    const totalReceived = data.payments.reduce((sum, p) => sum + p.amount, 0);
+    // Calcular penalidades
+    const penalties = calculatePenalties(existing, new Date());
     const originalAmount = Number(existing.amount);
 
-    // Validar que não excede o valor total
-    if (totalReceived > originalAmount + 0.01) {
+    // Usar valores enviados pelo frontend ou calculados automaticamente
+    const fineAmount = data.fineAmount ?? penalties.fine;
+    const interestAmount = data.interestAmount ?? penalties.interest;
+    const discountAmount = data.discountAmount ?? 0;
+
+    // Total esperado = valor original + multa + juros - desconto
+    const totalExpected = Math.round((originalAmount + fineAmount + interestAmount - discountAmount) * 100) / 100;
+
+    // Calcular total recebido
+    const totalReceived = data.payments.reduce((sum, p) => sum + p.amount, 0);
+
+    // Validar que não excede o total esperado (com tolerância)
+    if (totalReceived > totalExpected + 0.01) {
       return NextResponse.json(
-        { error: { message: "Valor recebido excede o valor da conta" } },
+        { error: { message: `Valor recebido (R$ ${totalReceived.toFixed(2)}) excede o total esperado (R$ ${totalExpected.toFixed(2)})` } },
         { status: 400 }
       );
     }
 
-    // Determinar se é pagamento parcial ou total
-    const isFullPayment = Math.abs(totalReceived - originalAmount) < 0.01;
+    // Determinar se é pagamento total (comparar com o total esperado)
+    const isFullPayment = Math.abs(totalReceived - totalExpected) < 0.01;
     const newStatus = isFullPayment
       ? AccountReceivableStatus.RECEIVED
       : AccountReceivableStatus.PENDING;
@@ -112,6 +127,9 @@ export async function POST(request: Request) {
           receivedAmount: totalReceived,
           receivedDate,
           receivedByUserId: userId,
+          fineAmount,
+          interestAmount,
+          discountAmount,
           // Guardar informação sobre múltiplos métodos de pagamento nas notas
           notes: existing.notes
             ? `${existing.notes}\n\nPagamento recebido: ${data.payments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(", ")}`
@@ -208,6 +226,11 @@ export async function POST(request: Request) {
       ...result,
       amount: Number(result.amount),
       receivedAmount: result.receivedAmount ? Number(result.receivedAmount) : null,
+      finePercent: Number(result.finePercent ?? 0),
+      fineAmount: Number(result.fineAmount ?? 0),
+      interestPercent: Number(result.interestPercent ?? 0),
+      interestAmount: Number(result.interestAmount ?? 0),
+      discountAmount: Number(result.discountAmount ?? 0),
       sale: result.sale
         ? {
             ...result.sale,
@@ -221,7 +244,7 @@ export async function POST(request: Request) {
       data: serializedAccount,
       message: isFullPayment
         ? "Conta recebida totalmente com sucesso!"
-        : `Recebimento parcial registrado. Restante: R$ ${(originalAmount - totalReceived).toFixed(2)}`,
+        : `Recebimento parcial registrado. Restante: R$ ${(totalExpected - totalReceived).toFixed(2)}`,
     });
   } catch (error) {
     return handleApiError(error);

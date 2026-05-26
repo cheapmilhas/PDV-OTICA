@@ -1,10 +1,15 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
+import { decode } from "next-auth/jwt";
 
 /**
  * GET /api/auth/impersonate-session?token=...&sessionId=...
  * Seta o cookie httpOnly de sessão server-side e redireciona para o dashboard.
  * Único jeito de setar cookie httpOnly via JS (document.cookie não consegue).
+ *
+ * SEGURANÇA: Valida criptograficamente o JWT contra AUTH_SECRET antes de setar
+ * o cookie. Sem isso, qualquer atacante com um sessionId válido poderia forjar
+ * um token e ganhar sessão administrativa.
  */
 export async function GET(request: Request) {
   const { searchParams } = new URL(request.url);
@@ -12,6 +17,30 @@ export async function GET(request: Request) {
   const sessionId = searchParams.get("sessionId");
 
   if (!token || !sessionId) {
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!authSecret) {
+    console.error("[IMPERSONATE] AUTH_SECRET ausente");
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  // CRÍTICO: validar assinatura do JWT antes de aceitá-lo
+  // O salt deve coincidir com o cookie name configurado em auth.ts
+  let payload: Record<string, unknown> | null = null;
+  try {
+    payload = await decode({
+      token,
+      secret: authSecret,
+      salt: "next-auth.session-token",
+    });
+  } catch (err) {
+    console.error("[IMPERSONATE] JWT decode falhou:", err);
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
+  if (!payload || typeof payload !== "object") {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -25,11 +54,8 @@ export async function GET(request: Request) {
   }
 
   const isProduction = process.env.NODE_ENV === "production";
-
   const response = NextResponse.redirect(new URL("/dashboard", request.url));
 
-  // Setar apenas o cookie canônico — o mesmo configurado em auth.ts (sessionToken.name)
-  // NÃO setar __Secure-next-auth.session-token: causaria conflito pois auth.ts usa apenas next-auth.session-token
   response.cookies.set("next-auth.session-token", token, {
     httpOnly: true,
     sameSite: "lax",

@@ -57,6 +57,11 @@ export async function GET(
     const companyName = companySettings?.displayName || company?.name || "Empresa";
     const logoUrl = companySettings?.logoUrl;
     const paidAmount = Number(receivable.receivedAmount || receivable.amount);
+    const fineAmount = Number((receivable as any).fineAmount ?? 0);
+    const interestAmount = Number((receivable as any).interestAmount ?? 0);
+    const discountAmount = Number((receivable as any).discountAmount ?? 0);
+    const originalAmount = Number(receivable.amount);
+    const hasPenalties = fineAmount > 0 || interestAmount > 0 || discountAmount > 0;
     const receiptNumber = `${id.substring(0, 8).toUpperCase()}`;
 
     const html = `<!DOCTYPE html>
@@ -133,6 +138,27 @@ export async function GET(
       <span class="value">${format(receivable.dueDate, "dd/MM/yyyy", { locale: ptBR })}</span>
     </div>
   </div>
+
+  ${hasPenalties ? `
+  <div class="section" style="border:1px solid #ddd; border-radius:6px; padding:8px; margin:12px 0; font-size:11px;">
+    <div class="row">
+      <span class="label">Valor Original:</span>
+      <span class="value">R$ ${originalAmount.toFixed(2).replace(".", ",")}</span>
+    </div>
+    ${fineAmount > 0 ? `<div class="row">
+      <span class="label" style="color:#c62828;">Multa:</span>
+      <span class="value" style="color:#c62828;">+ R$ ${fineAmount.toFixed(2).replace(".", ",")}</span>
+    </div>` : ""}
+    ${interestAmount > 0 ? `<div class="row">
+      <span class="label" style="color:#c62828;">Juros:</span>
+      <span class="value" style="color:#c62828;">+ R$ ${interestAmount.toFixed(2).replace(".", ",")}</span>
+    </div>` : ""}
+    ${discountAmount > 0 ? `<div class="row">
+      <span class="label" style="color:#2e7d32;">Desconto:</span>
+      <span class="value" style="color:#2e7d32;">- R$ ${discountAmount.toFixed(2).replace(".", ",")}</span>
+    </div>` : ""}
+  </div>
+  ` : ""}
 
   <div class="amount-box">
     <div class="amount-label">Valor Pago</div>

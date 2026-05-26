@@ -98,6 +98,10 @@ function ImprimirOrdemServicoContent() {
     : order.id.slice(-6).toUpperCase();
 
   const hasReceita = rx && (rx.od?.esf || rx.oe?.esf || rx.adicao);
+  const hasAdd = rx && (rx.od?.add || rx.oe?.add || rx.adicao);
+  const hasPrisma = rx && (rx.od?.prisma || rx.oe?.prisma);
+  const hasCerat = rx?.ceratometria && (rx.ceratometria.odH || rx.ceratometria.oeH);
+  const hasExtra = rx && (rx.olhoDominante || rx.pantoscopicAngle || rx.vertexDistance || rx.frameCurvature);
 
   return (
     <>
@@ -201,75 +205,127 @@ function ImprimirOrdemServicoContent() {
           </div>
 
           {hasReceita ? (
-            <div className="p-3 bg-green-50">
-              {/* Tabela de graus */}
-              <table className="w-full border-collapse text-sm mb-2">
+            <div className="p-3 bg-green-50 space-y-2">
+              {/* Tabela VISÃO DE LONGE */}
+              <div className="text-[10px] font-black text-green-700 uppercase tracking-widest">Visão de Longe</div>
+              <table className="w-full border-collapse text-sm">
                 <thead>
                   <tr>
-                    <th className="border border-green-400 bg-green-200 p-2 text-center font-black w-12">
-                      OLHO
-                    </th>
-                    <th className="border border-green-400 bg-green-100 p-2 text-center font-bold">
-                      ESF
-                    </th>
-                    <th className="border border-green-400 bg-green-100 p-2 text-center font-bold">
-                      CIL
-                    </th>
-                    <th className="border border-green-400 bg-green-100 p-2 text-center font-bold">
-                      EIXO
-                    </th>
-                    <th className="border border-green-400 bg-green-100 p-2 text-center font-bold">
-                      DNP
-                    </th>
-                    <th className="border border-green-400 bg-green-100 p-2 text-center font-bold">
-                      ALTURA
-                    </th>
-                    {rx?.adicao && (
-                      <th className="border border-green-400 bg-green-100 p-2 text-center font-bold">
-                        ADIÇÃO
-                      </th>
-                    )}
+                    <th className="border border-green-400 bg-green-200 p-1.5 text-center font-black w-12">OLHO</th>
+                    <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">ESF</th>
+                    <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">CIL</th>
+                    <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">EIXO</th>
+                    <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">DNP</th>
+                    <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">ALTURA</th>
                   </tr>
                 </thead>
                 <tbody>
-                  <tr className="text-center text-base font-bold">
-                    <td className="border border-green-400 bg-green-200 p-2 font-black">O.D.</td>
-                    <td className="border border-green-400 bg-white p-2">{formatGrau(rx?.od?.esf)}</td>
-                    <td className="border border-green-400 bg-white p-2">{formatGrau(rx?.od?.cil)}</td>
-                    <td className="border border-green-400 bg-white p-2">
-                      {rx?.od?.eixo ? `${rx.od.eixo}°` : "—"}
-                    </td>
-                    <td className="border border-green-400 bg-white p-2">{rx?.od?.dnp || "—"}</td>
-                    <td className="border border-green-400 bg-white p-2">{rx?.od?.altura || "—"}</td>
-                    {rx?.adicao && (
-                      <td className="border border-green-400 bg-white p-2 font-black text-green-700">
-                        {formatGrau(rx.adicao)}
-                      </td>
-                    )}
-                  </tr>
-                  <tr className="text-center text-base font-bold">
-                    <td className="border border-green-400 bg-green-200 p-2 font-black">O.E.</td>
-                    <td className="border border-green-400 bg-white p-2">{formatGrau(rx?.oe?.esf)}</td>
-                    <td className="border border-green-400 bg-white p-2">{formatGrau(rx?.oe?.cil)}</td>
-                    <td className="border border-green-400 bg-white p-2">
-                      {rx?.oe?.eixo ? `${rx.oe.eixo}°` : "—"}
-                    </td>
-                    <td className="border border-green-400 bg-white p-2">{rx?.oe?.dnp || "—"}</td>
-                    <td className="border border-green-400 bg-white p-2">{rx?.oe?.altura || "—"}</td>
-                    {rx?.adicao && (
-                      <td className="border border-green-400 bg-white p-2 font-black text-green-700">
-                        {formatGrau(rx.adicao)}
-                      </td>
-                    )}
-                  </tr>
+                  {(["od", "oe"] as const).map((eye) => (
+                    <tr key={eye} className="text-center text-base font-bold">
+                      <td className="border border-green-400 bg-green-200 p-1.5 font-black">{eye === "od" ? "O.D." : "O.E."}</td>
+                      <td className="border border-green-400 bg-white p-1.5">{formatGrau(rx?.[eye]?.esf)}</td>
+                      <td className="border border-green-400 bg-white p-1.5">{formatGrau(rx?.[eye]?.cil)}</td>
+                      <td className="border border-green-400 bg-white p-1.5">{rx?.[eye]?.eixo ? `${rx[eye].eixo}°` : "—"}</td>
+                      <td className="border border-green-400 bg-white p-1.5">{rx?.[eye]?.dnp || "—"}</td>
+                      <td className="border border-green-400 bg-white p-1.5">{rx?.[eye]?.altura || "—"}</td>
+                    </tr>
+                  ))}
                 </tbody>
               </table>
 
-              {/* Tipo Lente / Material se não mostrados no header */}
-              {!rx?.tipoLente && rx?.material && (
-                <div className="text-sm text-green-800">
-                  <span className="font-semibold">Material:</span> {rx.material}
+              {/* Tabela ADIÇÃO / VISÃO DE PERTO */}
+              {hasAdd && (
+                <>
+                  <div className="text-[10px] font-black text-green-700 uppercase tracking-widest pt-1">Adição / Visão de Perto</div>
+                  <table className="w-full border-collapse text-sm">
+                    <thead>
+                      <tr>
+                        <th className="border border-green-400 bg-green-200 p-1.5 text-center font-black w-12">OLHO</th>
+                        <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">ADD</th>
+                        <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">ESF. PERTO</th>
+                        <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">CIL. PERTO</th>
+                        <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">EIXO PERTO</th>
+                        <th className="border border-green-400 bg-green-100 p-1.5 text-center font-bold">DNP PERTO</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["od", "oe"] as const).map((eye) => {
+                        const addVal = rx?.[eye]?.add || rx?.adicao || "";
+                        const esfLonge = parseFloat(String(rx?.[eye]?.esf || "0").replace(",", ".")) || 0;
+                        const addNum = parseFloat(String(addVal).replace(",", ".")) || 0;
+                        const esfPerto = addNum ? (esfLonge + addNum).toFixed(2) : "";
+                        const dnpPerto = eye === "od" ? rx?.dnpPertoOd : rx?.dnpPertoOe;
+                        return (
+                          <tr key={eye} className="text-center text-base font-bold">
+                            <td className="border border-green-400 bg-green-200 p-1.5 font-black">{eye === "od" ? "O.D." : "O.E."}</td>
+                            <td className="border border-green-400 bg-white p-1.5 font-black text-green-700">{formatGrau(addVal)}</td>
+                            <td className="border border-green-400 bg-white p-1.5 text-gray-500">
+                              {esfPerto ? (parseFloat(esfPerto) > 0 ? `+${esfPerto}` : esfPerto) : "—"}
+                            </td>
+                            <td className="border border-green-400 bg-white p-1.5 text-gray-500">{formatGrau(rx?.[eye]?.cil) !== "—" ? formatGrau(rx?.[eye]?.cil) : "—"}</td>
+                            <td className="border border-green-400 bg-white p-1.5 text-gray-500">{rx?.[eye]?.eixo ? `${rx[eye].eixo}°` : "—"}</td>
+                            <td className="border border-green-400 bg-white p-1.5">{dnpPerto || "—"}</td>
+                          </tr>
+                        );
+                      })}
+                    </tbody>
+                  </table>
+                </>
+              )}
+
+              {/* Prisma */}
+              {hasPrisma && (
+                <div className="flex gap-6 text-sm pt-1">
+                  <span className="text-[10px] font-black text-green-700 uppercase tracking-widest">Prisma:</span>
+                  {(["od", "oe"] as const).map((eye) => (
+                    rx?.[eye]?.prisma ? (
+                      <span key={eye} className="font-bold">
+                        {eye === "od" ? "OD" : "OE"}: {rx[eye].prisma}
+                        {rx[eye].base ? ` (${rx[eye].base})` : ""}
+                      </span>
+                    ) : null
+                  ))}
                 </div>
+              )}
+
+              {/* Dados extras inline */}
+              {(hasExtra || (!rx?.tipoLente && rx?.material)) && (
+                <div className="flex flex-wrap gap-4 text-xs text-green-800 pt-1">
+                  {rx?.olhoDominante && <span><span className="font-semibold">Olho Dom.:</span> {rx.olhoDominante}</span>}
+                  {rx?.pantoscopicAngle && <span><span className="font-semibold">Ang. Pant.:</span> {rx.pantoscopicAngle}°</span>}
+                  {rx?.vertexDistance && <span><span className="font-semibold">Dist. Vértice:</span> {rx.vertexDistance} mm</span>}
+                  {rx?.frameCurvature && <span><span className="font-semibold">Curva Arm.:</span> {rx.frameCurvature}</span>}
+                  {!rx?.tipoLente && rx?.material && <span><span className="font-semibold">Material:</span> {rx.material}</span>}
+                </div>
+              )}
+
+              {/* Ceratometria */}
+              {hasCerat && (
+                <>
+                  <div className="text-[10px] font-black text-green-700 uppercase tracking-widest pt-1">Ceratometria</div>
+                  <table className="w-full border-collapse text-xs">
+                    <thead>
+                      <tr>
+                        <th className="border border-green-400 bg-green-200 p-1 text-center font-black w-10">OLHO</th>
+                        <th className="border border-green-400 bg-green-100 p-1 text-center font-bold">HORIZ.</th>
+                        <th className="border border-green-400 bg-green-100 p-1 text-center font-bold">EIXO H</th>
+                        <th className="border border-green-400 bg-green-100 p-1 text-center font-bold">VERT.</th>
+                        <th className="border border-green-400 bg-green-100 p-1 text-center font-bold">EIXO V</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {(["od", "oe"] as const).map((eye) => (
+                        <tr key={eye} className="text-center font-bold">
+                          <td className="border border-green-400 bg-green-200 p-1 font-black">{eye === "od" ? "OD" : "OE"}</td>
+                          <td className="border border-green-400 bg-white p-1">{rx.ceratometria[`${eye}H`] || "—"}</td>
+                          <td className="border border-green-400 bg-white p-1">{rx.ceratometria[`${eye}HEixo`] ? `${rx.ceratometria[`${eye}HEixo`]}°` : "—"}</td>
+                          <td className="border border-green-400 bg-white p-1">{rx.ceratometria[`${eye}V`] || "—"}</td>
+                          <td className="border border-green-400 bg-white p-1">{rx.ceratometria[`${eye}VEixo`] ? `${rx.ceratometria[`${eye}VEixo`]}°` : "—"}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </>
               )}
             </div>
           ) : (
@@ -279,6 +335,43 @@ function ImprimirOrdemServicoContent() {
             </div>
           )}
         </div>
+
+        {/* ===== DADOS DA LENTE ===== */}
+        {(order.lensType || order.lensDescription || order.lensColoring || (order.treatments && order.treatments.length > 0)) && (
+          <div className="border border-blue-400 rounded overflow-hidden mb-3">
+            <div className="bg-blue-600 text-white px-4 py-2">
+              <span className="text-sm font-black uppercase tracking-wide">Dados da Lente</span>
+            </div>
+            <div className="p-3 bg-white text-xs">
+              <div className="grid grid-cols-3 gap-2">
+                {order.lensType && (
+                  <div>
+                    <span className="text-gray-500 uppercase font-semibold">Fabricação:</span>{" "}
+                    <span className="font-bold">{order.lensType === "PRONTA" ? "Pronta" : "Surfaçada"}</span>
+                  </div>
+                )}
+                {order.lensDescription && (
+                  <div>
+                    <span className="text-gray-500 uppercase font-semibold">Descrição:</span>{" "}
+                    <span className="font-bold">{order.lensDescription}</span>
+                  </div>
+                )}
+                {order.lensColoring && (
+                  <div>
+                    <span className="text-gray-500 uppercase font-semibold">Coloração:</span>{" "}
+                    <span className="font-bold">{order.lensColoring}</span>
+                  </div>
+                )}
+              </div>
+              {order.treatments && order.treatments.length > 0 && (
+                <div className="mt-2 pt-2 border-t">
+                  <span className="text-gray-500 uppercase font-semibold">Tratamentos:</span>{" "}
+                  <span className="font-bold">{order.treatments.join(", ")}</span>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
 
         {/* ===== ITENS / SERVIÇOS ===== */}
         <div className="section-itens border border-gray-300 rounded overflow-hidden mb-3">

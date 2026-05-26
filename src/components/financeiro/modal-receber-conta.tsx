@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -24,10 +24,28 @@ interface Payment {
   amount: number;
 }
 
+interface PenaltyData {
+  fine: number;
+  interest: number;
+  daysLate: number;
+  totalWithPenalties: number;
+  finePercent: number;
+  interestPercent: number;
+  graceDays: number;
+}
+
 interface ReceivingAccount {
   id: string;
   description: string;
   amount: number;
+  dueDate?: string;
+  finePercent?: number;
+  interestPercent?: number;
+  graceDays?: number;
+  calculatedFine?: number;
+  calculatedInterest?: number;
+  calculatedTotal?: number;
+  daysLate?: number;
   customer?: {
     name: string;
   } | null;
@@ -37,7 +55,7 @@ interface ModalReceberContaProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   account: ReceivingAccount | null;
-  onConfirm: (payments: Payment[]) => Promise<void>;
+  onConfirm: (payments: Payment[], penaltyInfo: { discountAmount: number; fineAmount: number; interestAmount: number }) => Promise<void>;
   loading?: boolean;
 }
 
@@ -54,18 +72,46 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
   const [payments, setPayments] = useState<Payment[]>([]);
   const [selectedMethod, setSelectedMethod] = useState("");
   const [amount, setAmount] = useState("");
+  const [discount, setDiscount] = useState("");
+  const [penaltyData, setPenaltyData] = useState<PenaltyData | null>(null);
+  const [penaltyLoading, setPenaltyLoading] = useState(false);
+
+  // Buscar penalidades ao abrir o modal
+  useEffect(() => {
+    if (account?.id && open) {
+      setPenaltyLoading(true);
+      setDiscount("");
+      setPayments([]);
+      fetch(`/api/accounts-receivable/${account.id}/penalties`)
+        .then(res => res.json())
+        .then(data => {
+          setPenaltyData(data);
+          setPenaltyLoading(false);
+        })
+        .catch(() => setPenaltyLoading(false));
+    } else {
+      setPenaltyData(null);
+    }
+  }, [account?.id, open]);
+
+  // Usar dados do account como fallback se penalty endpoint não retornou
+  const fine = penaltyData?.fine ?? account?.calculatedFine ?? 0;
+  const interest = penaltyData?.interest ?? account?.calculatedInterest ?? 0;
+  const daysLate = penaltyData?.daysLate ?? account?.daysLate ?? 0;
+  const discountValue = parseFloat(discount) || 0;
 
   const totalOriginal = account?.amount || 0;
+  const totalWithPenalties = Math.round((totalOriginal + fine + interest - discountValue) * 100) / 100;
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
-  const remaining = Math.round((totalOriginal - totalPaid) * 100) / 100;
+  const remaining = Math.round((totalWithPenalties - totalPaid) * 100) / 100;
 
   const addPayment = () => {
     if (!selectedMethod || !amount || parseFloat(amount) <= 0) return;
 
     const paymentAmount = parseFloat(amount);
 
-    // Validar se não excede o total
-    if (totalPaid + paymentAmount > totalOriginal + 0.01) {
+    // Validar se não excede o total com penalidades
+    if (totalPaid + paymentAmount > totalWithPenalties + 0.01) {
       toast.error("Valor do pagamento excede o total a receber!");
       return;
     }
@@ -91,17 +137,23 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
     }
 
     // Permitir pagamento parcial
-    if (totalPaid > totalOriginal + 0.01) {
+    if (totalPaid > totalWithPenalties + 0.01) {
       toast.error("Valor total dos pagamentos excede o valor a receber!");
       return;
     }
 
-    await onConfirm(payments);
+    await onConfirm(payments, {
+      discountAmount: discountValue,
+      fineAmount: fine,
+      interestAmount: interest,
+    });
 
     // Limpar após confirmar
     setPayments([]);
     setAmount("");
+    setDiscount("");
     setSelectedMethod("");
+    setPenaltyData(null);
   };
 
   const quickFill = () => {
@@ -127,22 +179,46 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
 
         {/* Conteúdo Compacto SEM Scroll */}
         <div className="flex-1 px-6 py-3 space-y-3 overflow-hidden">
-          {/* Resumo Compacto - Uma Linha */}
-          <div className="rounded-lg border p-2 bg-muted/50">
-            <div className="flex items-center justify-around gap-2 text-sm">
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground">Total a Receber</p>
-                <p className="text-lg font-bold">{formatCurrency(totalOriginal)}</p>
+          {/* Resumo com penalidades */}
+          <div className="rounded-lg border p-2 bg-muted/50 space-y-1">
+            <div className="flex items-center justify-between text-xs px-1">
+              <span className="text-muted-foreground">Valor Original</span>
+              <span className="font-medium">{formatCurrency(totalOriginal)}</span>
+            </div>
+            {daysLate > 0 && fine > 0 && (
+              <div className="flex items-center justify-between text-xs px-1 text-red-600">
+                <span>Multa ({penaltyData?.finePercent ?? account?.finePercent ?? 0}%)</span>
+                <span className="font-medium">+ {formatCurrency(fine)}</span>
               </div>
-              <div className="text-center border-x px-3">
-                <p className="text-xs text-muted-foreground">Recebido</p>
-                <p className="text-lg font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+            )}
+            {daysLate > 0 && interest > 0 && (
+              <div className="flex items-center justify-between text-xs px-1 text-red-600">
+                <span>Juros ({penaltyData?.interestPercent ?? account?.interestPercent ?? 0}%/mês - {daysLate} dias)</span>
+                <span className="font-medium">+ {formatCurrency(interest)}</span>
               </div>
-              <div className="text-center">
-                <p className="text-xs text-muted-foreground">Falta</p>
-                <p className={`text-lg font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
-                  {formatCurrency(remaining)}
-                </p>
+            )}
+            {discountValue > 0 && (
+              <div className="flex items-center justify-between text-xs px-1 text-green-600">
+                <span>Desconto</span>
+                <span className="font-medium">- {formatCurrency(discountValue)}</span>
+              </div>
+            )}
+            <div className="border-t pt-1 mt-1">
+              <div className="flex items-center justify-around gap-2 text-sm">
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Total a Receber</p>
+                  <p className="text-lg font-bold">{formatCurrency(totalWithPenalties)}</p>
+                </div>
+                <div className="text-center border-x px-3">
+                  <p className="text-xs text-muted-foreground">Recebido</p>
+                  <p className="text-lg font-bold text-green-600">{formatCurrency(totalPaid)}</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs text-muted-foreground">Falta</p>
+                  <p className={`text-lg font-bold ${remaining > 0 ? 'text-destructive' : 'text-green-600'}`}>
+                    {formatCurrency(remaining)}
+                  </p>
+                </div>
               </div>
             </div>
           </div>
@@ -150,7 +226,7 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
           {/* Info sobre pagamento parcial */}
           {totalPaid > 0 && remaining > 0.01 && (
             <div className="rounded-lg border border-blue-300 bg-blue-50/50 dark:bg-blue-950/20 p-2 text-xs text-blue-900 dark:text-blue-100">
-              ℹ️ Pagamento parcial: você pode receber apenas parte do valor agora.
+              Pagamento parcial: você pode receber apenas parte do valor agora.
             </div>
           )}
 
@@ -182,6 +258,23 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
                   })}
                 </div>
               </div>
+
+              {/* Desconto */}
+              {(daysLate > 0 || discountValue > 0) && (
+                <div className="space-y-1">
+                  <Label htmlFor="discount" className="text-xs">Desconto (R$)</Label>
+                  <Input
+                    id="discount"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="0,00"
+                    value={discount}
+                    onChange={(e) => setDiscount(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              )}
 
               {/* Valor */}
               <div className="space-y-1">

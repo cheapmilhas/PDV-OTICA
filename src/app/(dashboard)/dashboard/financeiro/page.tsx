@@ -32,6 +32,7 @@ import {
   Calendar,
   Search,
   X,
+  Undo2,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Pagination } from "@/components/shared/pagination";
@@ -46,7 +47,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 
 // Tipos
 type AccountPayableStatus = "PENDING" | "PAID" | "OVERDUE" | "CANCELED";
-type AccountReceivableStatus = "PENDING" | "RECEIVED" | "OVERDUE" | "CANCELED";
+type AccountReceivableStatus = "PENDING" | "RECEIVED" | "OVERDUE" | "CANCELED" | "RENEGOTIATED";
 type AccountCategory =
   | "SUPPLIERS"
   | "RENT"
@@ -85,6 +86,14 @@ interface AccountReceivable {
   receivedDate: string | null;
   installmentNumber: number;
   totalInstallments: number;
+  finePercent?: number;
+  interestPercent?: number;
+  graceDays?: number;
+  calculatedFine?: number;
+  calculatedInterest?: number;
+  calculatedTotal?: number;
+  daysLate?: number;
+  reversedAt?: string | null;
   customer: {
     id: string;
     name: string;
@@ -332,7 +341,7 @@ function FinanceiroPage() {
   };
 
   // Confirmar recebimento com múltiplos pagamentos
-  const handleConfirmReceive = async (payments: any[]) => {
+  const handleConfirmReceive = async (payments: any[], penaltyInfo?: { discountAmount: number; fineAmount: number; interestAmount: number }) => {
     if (!receivingAccount) return;
 
     setReceivingLoading(true);
@@ -344,6 +353,9 @@ function FinanceiroPage() {
           accountId: receivingAccount.id,
           payments: payments,
           receivedDate: new Date().toISOString(),
+          discountAmount: penaltyInfo?.discountAmount ?? 0,
+          fineAmount: penaltyInfo?.fineAmount ?? 0,
+          interestAmount: penaltyInfo?.interestAmount ?? 0,
         }),
       });
 
@@ -386,6 +398,29 @@ function FinanceiroPage() {
 
       toast.success("Conta cancelada!");
       fetchAccountsPayable();
+    } catch (error: any) {
+      toast.error(error.message);
+    }
+  };
+
+  // Estornar recebimento (reversal)
+  const handleReverseReceivable = async (id: string) => {
+    if (!confirm("Deseja estornar este recebimento? A parcela voltará ao status Pendente.")) return;
+
+    try {
+      const res = await fetch("/api/accounts-receivable", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ id, action: "reverse" }),
+      });
+
+      if (!res.ok) {
+        const error = await res.json();
+        throw new Error(error.error || "Erro ao estornar recebimento");
+      }
+
+      toast.success("Recebimento estornado com sucesso!");
+      fetchAccountsReceivable();
     } catch (error: any) {
       toast.error(error.message);
     }
@@ -468,11 +503,12 @@ function FinanceiroPage() {
   };
 
   const translateReceivableStatus = (status: AccountReceivableStatus) => {
-    const translations = {
+    const translations: Record<AccountReceivableStatus, string> = {
       PENDING: "Pendente",
       RECEIVED: "Recebido",
       OVERDUE: "Vencido",
       CANCELED: "Cancelado",
+      RENEGOTIATED: "Renegociado",
     };
     return translations[status] || status;
   };
@@ -518,6 +554,8 @@ function FinanceiroPage() {
       case "OVERDUE":
         return "destructive";
       case "CANCELED":
+        return "outline";
+      case "RENEGOTIATED":
         return "outline";
       default:
         return "outline";
@@ -1077,8 +1115,13 @@ function FinanceiroPage() {
                         <TableCell>
                           {account.installmentNumber}/{account.totalInstallments}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">
-                          {formatCurrency(account.amount)}
+                        <TableCell className="text-right">
+                          <span className="font-semibold">{formatCurrency(account.amount)}</span>
+                          {(account.daysLate ?? 0) > 0 && (account.calculatedFine ?? 0) + (account.calculatedInterest ?? 0) > 0 && (
+                            <p className="text-xs text-red-600">
+                              +{formatCurrency((account.calculatedFine ?? 0) + (account.calculatedInterest ?? 0))} (juros/multa)
+                            </p>
+                          )}
                         </TableCell>
                         <TableCell>
                           <Badge
@@ -1136,6 +1179,19 @@ function FinanceiroPage() {
                                   <XCircle className="h-4 w-4" />
                                 </Button>
                               </>
+                            )}
+                            {account.status === "RECEIVED" && hasPermission("accounts_receivable.manage") && (
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                onClick={() =>
+                                  handleReverseReceivable(account.id)
+                                }
+                              >
+                                <Undo2 className="h-4 w-4 mr-1" />
+                                Estornar
+                              </Button>
                             )}
                           </div>
                         </TableCell>

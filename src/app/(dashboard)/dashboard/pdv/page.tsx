@@ -31,6 +31,7 @@ import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
 import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
 import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
+import { track } from "@/lib/analytics";
 
 interface Product {
   id: string;
@@ -61,6 +62,7 @@ function PDVPage() {
   const searchParams = useSearchParams();
   const { activeBranchId } = useBranchContext();
   const quoteId = searchParams.get("quoteId");
+  const serviceOrderId = searchParams.get("serviceOrderId");
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
@@ -190,6 +192,70 @@ function PDVPage() {
     loadQuoteCustomer();
   }, [quoteId]);
 
+  // Carregar dados da OS se houver serviceOrderId (vindo do botão "Gerar Venda")
+  useEffect(() => {
+    const loadServiceOrderData = async () => {
+      if (!serviceOrderId) return;
+
+      try {
+        // Usa o endpoint de conversão que já retorna itens com dados do produto
+        const res = await fetch(`/api/service-orders/${serviceOrderId}/convert`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          toast.error(err.error?.message || "Erro ao carregar OS para venda");
+          return;
+        }
+
+        const { data: order } = await res.json();
+
+        // Pré-selecionar cliente
+        if (order.customer) {
+          setClienteSelecionado({
+            id: order.customer.id,
+            name: order.customer.name,
+            phone: order.customer.phone,
+            cpf: order.customer.cpf,
+          });
+        }
+
+        // Mapear itens da OS para o carrinho
+        const cartItems: CartItem[] = [];
+        for (const item of order.items || []) {
+          if (item.productId && item.product) {
+            cartItems.push({
+              id: item.product.id,
+              sku: item.product.sku || "",
+              name: item.product.name,
+              salePrice: item.product.salePrice,
+              stockQty: item.product.stockQty,
+              stockControlled: item.product.stockControlled ?? true,
+              quantity: item.qty || 1,
+              customPrice: item.unitPrice !== item.product.salePrice
+                ? item.unitPrice
+                : undefined,
+            });
+          }
+        }
+
+        if (cartItems.length > 0) {
+          setCarrinho(cartItems);
+          toast.success(
+            `OS #${String(order.number).padStart(6, "0")} carregada — ${cartItems.length} ${cartItems.length === 1 ? "item" : "itens"} no carrinho`
+          );
+        } else {
+          toast.error("Nenhum produto encontrado na OS para gerar venda");
+        }
+      } catch (error) {
+        toast.error("Erro ao carregar dados da OS");
+      }
+    };
+
+    loadServiceOrderData();
+  }, [serviceOrderId]);
+
   // Carregar produtos disponíveis
   useEffect(() => {
     const loadProducts = async () => {
@@ -201,6 +267,11 @@ function PDVPage() {
           sortBy: "name",
           sortOrder: "asc",
         });
+
+        // Passar branchId para obter preços específicos da filial
+        if (activeBranchId && activeBranchId !== "ALL") {
+          params.set("branchId", activeBranchId);
+        }
 
         if (buscaProduto) {
           // Normaliza acentos para busca sem acento funcionar (ex: "armacao" encontra "Armação")
@@ -214,7 +285,12 @@ function PDVPage() {
         if (!res.ok) throw new Error("Erro ao carregar produtos");
 
         const data = await res.json();
-        setProducts(data.data || []);
+        // Aplicar branchSalePrice quando disponível, senão usar salePrice global
+        const productsWithBranchPrice = (data.data || []).map((p: any) => ({
+          ...p,
+          salePrice: p.branchSalePrice ?? p.salePrice,
+        }));
+        setProducts(productsWithBranchPrice);
       } catch (error) {
         console.error("Erro ao carregar produtos:", error);
         toast.error("Erro ao carregar produtos");
@@ -228,7 +304,7 @@ function PDVPage() {
     }, 300);
 
     return () => clearTimeout(debounce);
-  }, [buscaProduto]);
+  }, [buscaProduto, activeBranchId]);
 
   // Carregar clientes
   useEffect(() => {
@@ -443,6 +519,7 @@ function PDVPage() {
         customerId: clienteSelecionado?.id || null,
         branchId: session.user.branchId,
         ...(selectedSellerId && { sellerUserId: selectedSellerId }),
+        ...(serviceOrderId && { serviceOrderId }),
         items: carrinho.map((item) => ({
           productId: item.id,
           qty: item.quantity,
@@ -488,6 +565,13 @@ function PDVPage() {
 
       const data = await res.json();
       const vendaId = data.data.id;
+
+      track("first_sale", {
+        saleId: vendaId,
+        total: data.data.total,
+        itemCount: carrinho.length,
+        hasCashback: !!clienteSelecionado?.id,
+      });
 
       // Buscar cashback gerado (se cliente foi informado)
       let cashbackGerado = 0;

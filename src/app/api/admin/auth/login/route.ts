@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { SignJWT } from "jose";
-import { cookies } from "next/headers";
+import { cookies, headers } from "next/headers";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
 if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
@@ -10,6 +11,18 @@ const JWT_SECRET = new TextEncoder().encode(authSecret);
 
 export async function POST(request: Request) {
   try {
+    // Rate limit: 5 tentativas por IP em 15 minutos
+    const hdrs = await headers();
+    const ip =
+      hdrs.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+      hdrs.get("x-real-ip") ||
+      "unknown";
+    const limited = rateLimitResponse(`admin-login:${ip}`, {
+      maxRequests: 5,
+      windowMs: 15 * 60 * 1000,
+    });
+    if (limited) return limited;
+
     const { email, password } = await request.json();
 
     if (!email || !password) {

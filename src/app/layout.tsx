@@ -1,8 +1,10 @@
 import type { Metadata, Viewport } from "next";
 import { Plus_Jakarta_Sans } from "next/font/google";
 import "./globals.css";
+import { Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { PostHogProvider } from "@/components/providers/posthog-provider";
 
 // Plus Jakarta Sans — geometric, contemporary, avoids "AI template" associations
 const jakartaSans = Plus_Jakarta_Sans({
@@ -85,7 +87,11 @@ export default function RootLayout({
         />
       </head>
       <body className={`${jakartaSans.variable} font-sans`}>
-        <SessionProvider>{children}</SessionProvider>
+        <Suspense fallback={null}>
+          <PostHogProvider>
+            <SessionProvider>{children}</SessionProvider>
+          </PostHogProvider>
+        </Suspense>
         <Toaster />
       </body>
     </html>

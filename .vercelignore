@@ -1,0 +1,12 @@
+# Arquivos locais que NÃO devem ir para o build da Vercel.
+# Os scripts ficam no repo apenas como utilitários de manutenção/diagnóstico;
+# não precisam ser typecheckados pelo build de produção.
+scripts/
+prisma/schema.prisma.backup
+Untitled
+*.xlsx
+
+# Documentos de análise/auditoria (mantidos só localmente)
+AUDITORIA_ADMIN.md
+CRUZAMENTO-PDV-OTICA-VS-SSOTICA.md
+RAIO-X-SISTEMA.md

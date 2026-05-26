@@ -12,6 +12,7 @@ import {
   Search,
   ShoppingCart,
   AlertTriangle,
+  FileText,
 } from "lucide-react";
 import { StatsSkeleton, TableSkeleton } from "@/components/shared/skeleton-loader";
 import { formatCurrency } from "@/lib/utils";
@@ -299,6 +300,16 @@ function VendasContent() {
                       {venda.payments?.some((p: any) => p.method === "STORE_CREDIT") && (
                         <Badge variant="outline" className="text-xs border-amber-300 text-amber-700 bg-amber-50">
                           Crediário
+                        </Badge>
+                      )}
+                      {venda.serviceOrder && (
+                        <Badge
+                          variant="outline"
+                          className="text-xs border-blue-300 text-blue-700 bg-blue-50 cursor-pointer hover:bg-blue-100"
+                          onClick={() => router.push(`/dashboard/ordens-servico/${venda.serviceOrder.id}/detalhes`)}
+                        >
+                          <FileText className="h-3 w-3 mr-1" />
+                          OS #{String(venda.serviceOrder.number).padStart(6, "0")}
                         </Badge>
                       )}
                       {venda.sellerUser && (
