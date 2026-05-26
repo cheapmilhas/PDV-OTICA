@@ -1,0 +1,35 @@
+name: Backup Neon → S3
+
+on:
+  schedule:
+    # Diariamente às 03:00 UTC (00:00 BRT)
+    - cron: "0 3 * * *"
+  workflow_dispatch: {}
+
+jobs:
+  backup:
+    name: pg_dump and upload to S3
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install postgresql-client
+        run: sudo apt-get update && sudo apt-get install -y postgresql-client
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
+          aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+          aws-region: ${{ secrets.AWS_REGION || 'us-east-1' }}
+
+      - name: Run backup
+        env:
+          DATABASE_URL: ${{ secrets.DATABASE_URL }}
+          S3_BUCKET: ${{ secrets.BACKUP_S3_BUCKET }}
+        run: ./scripts/backup-neon.sh
+
+      - name: Notify on failure
+        if: failure()
+        run: echo "::warning::Backup failed — investigar manualmente"

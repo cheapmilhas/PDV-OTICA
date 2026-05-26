@@ -399,6 +399,10 @@ model Customer {
   notes              String?
   active             Boolean                @default(true)
   deletedAt          DateTime?
+  // LGPD compliance
+  anonymizedAt       DateTime?              // dados pessoais anonimizados (mantém integridade FK)
+  lgpdConsentAt      DateTime?              // último consentimento registrado
+  lgpdConsentVersion String?                // versão do termo aceito
   createdAt          DateTime               @default(now())
   updatedAt          DateTime               @updatedAt
   cnpj               String?
@@ -426,12 +430,58 @@ model Customer {
   serviceOrders      ServiceOrder[]
   crmContacts        CrmContact[]           @relation("CrmContacts")
   crmReminders       CustomerReminder[]     @relation("CustomerReminders")
+  consentRecords     ConsentRecord[]
+  accessLogs         CustomerAccessLog[]
 
   @@unique([companyId, cpf])
   @@index([companyId, name])
   @@index([companyId, phone])
   @@index([companyId, email])
   @@index([originBranchId])
+}
+
+/// Registro de consentimento LGPD (Art. 8º). Auditável e imutável após criação.
+model ConsentRecord {
+  id           String   @id @default(cuid())
+  customerId   String
+  companyId    String
+  /// Versão do termo aceito (ex: "v1.0", "2026-05-25")
+  termVersion  String
+  /// Escopo do consentimento: ex "marketing,health_data,personal_data"
+  scope        String
+  /// IP do navegador no momento do aceite
+  ipAddress    String?
+  /// User-Agent
+  userAgent    String?
+  acceptedAt   DateTime @default(now())
+  /// Se revogado, quando
+  revokedAt    DateTime?
+  customer     Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, acceptedAt])
+  @@index([companyId, acceptedAt])
+}
+
+/// Log de acesso a dados pessoais de cliente (auditoria LGPD Art. 37).
+/// Apenas para operações sensíveis (visualizar receita, exportar dados).
+model CustomerAccessLog {
+  id           String   @id @default(cuid())
+  companyId    String
+  customerId   String
+  userId       String?
+  /// Tipo de recurso acessado: "prescription" | "personal_data" | "export"
+  resourceType String
+  /// ID do recurso acessado (ex: PrescriptionValues.id)
+  resourceId   String?
+  /// Ação: "view" | "edit" | "export" | "delete"
+  action       String
+  ipAddress    String?
+  createdAt    DateTime @default(now())
+  customer     Customer @relation(fields: [customerId], references: [id])
+
+  @@index([customerId, createdAt])
+  @@index([companyId, createdAt])
+  @@index([userId, createdAt])
 }
 
 model Doctor {
