@@ -5,6 +5,7 @@ import { usePathname } from "next/navigation";
 import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
+import { usePlanFeatures } from "@/hooks/usePlanFeatures";
 import {
   Home,
   ShoppingCart,
@@ -50,15 +51,15 @@ const moreNav = [
   { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", permission: "reports.sales" },
   { icon: TrendingUp, label: "Rel. Avançados", href: "/dashboard/relatorios/avancados", permission: "reports.sales" },
   { icon: DollarSign, label: "Dashboard Fin.", href: "/dashboard/financeiro/dashboard", permission: "financial.view" },
-  { icon: BookOpen, label: "DRE", href: "/dashboard/financeiro/dre", permission: "financial.view" },
-  { icon: ArrowLeftRight, label: "Fluxo Caixa", href: "/dashboard/financeiro/fluxo-caixa", permission: "financial.view" },
-  { icon: Receipt, label: "Lançamentos", href: "/dashboard/financeiro/lancamentos", permission: "financial.view" },
-  { icon: Building2, label: "Contas Fin.", href: "/dashboard/financeiro/contas", permission: "financial.view" },
-  { icon: ListTree, label: "Plano Contas", href: "/dashboard/financeiro/plano-contas", permission: "financial.view" },
-  { icon: RotateCcw, label: "Devoluções", href: "/dashboard/financeiro/devolucoes", permission: "financial.view" },
-  { icon: RefreshCw, label: "Conciliação", href: "/dashboard/financeiro/conciliacao", permission: "financial.view" },
+  { icon: BookOpen, label: "DRE", href: "/dashboard/financeiro/dre", permission: "financial.view", feature: "dre_report" },
+  { icon: ArrowLeftRight, label: "Fluxo Caixa", href: "/dashboard/financeiro/fluxo-caixa", permission: "financial.view", feature: "cash_flow" },
+  { icon: Receipt, label: "Lançamentos", href: "/dashboard/financeiro/lancamentos", permission: "financial.view", feature: "finance_entries" },
+  { icon: Building2, label: "Contas Fin.", href: "/dashboard/financeiro/contas", permission: "financial.view", feature: "finance_accounts" },
+  { icon: ListTree, label: "Plano Contas", href: "/dashboard/financeiro/plano-contas", permission: "financial.view", feature: "chart_of_accounts" },
+  { icon: RotateCcw, label: "Devoluções", href: "/dashboard/financeiro/devolucoes", permission: "financial.view", feature: "sales_refunds" },
+  { icon: RefreshCw, label: "Conciliação", href: "/dashboard/financeiro/conciliacao", permission: "financial.view", feature: "bank_reconciliation" },
   { icon: Boxes, label: "Lotes Estoque", href: "/dashboard/financeiro/lotes-estoque", permission: "financial.view" },
-  { icon: PieChart, label: "BI Analítico", href: "/dashboard/financeiro/bi", permission: "financial.view" },
+  { icon: PieChart, label: "BI Analítico", href: "/dashboard/financeiro/bi", permission: "financial.view", feature: "bi_analytics" },
   { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];
 
@@ -66,19 +67,21 @@ export function MobileNav() {
   const pathname = usePathname();
   const [showMore, setShowMore] = useState(false);
   const { hasPermission, isAdmin } = usePermissions();
+  const { hasFeature } = usePlanFeatures();
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === href;
     return pathname === href || pathname.startsWith(href + "/");
   }
 
-  const visiblePrimaryNav = primaryNav.filter(
-    (item) => !item.permission || isAdmin || hasPermission(item.permission)
-  );
+  const isVisible = (item: { permission?: string; feature?: string }) => {
+    const permissionOk = !item.permission || isAdmin || hasPermission(item.permission);
+    const featureOk = !item.feature || hasFeature(item.feature);
+    return permissionOk && featureOk;
+  };
 
-  const visibleMoreNav = moreNav.filter(
-    (item) => !item.permission || isAdmin || hasPermission(item.permission)
-  );
+  const visiblePrimaryNav = primaryNav.filter(isVisible);
+  const visibleMoreNav = moreNav.filter(isVisible);
 
   return (
     <>

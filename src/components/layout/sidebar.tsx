@@ -125,7 +125,8 @@ const menuItems: MenuSection[] = [
         name: "Tratamentos",
         href: "/dashboard/tratamentos",
         icon: Sparkles,
-        permission: "products.view"
+        permission: "products.view",
+        feature: "lens_treatments"
       },
       {
         name: "Funcionários",
@@ -148,7 +149,8 @@ const menuItems: MenuSection[] = [
         name: "Transferências",
         href: "/dashboard/estoque/transferencias",
         icon: ArrowLeftRight,
-        permission: "stock.view"
+        permission: "stock.view",
+        feature: "stock_transfers"
       },
       {
         name: "Lotes de Estoque",
@@ -207,7 +209,7 @@ const menuItems: MenuSection[] = [
         href: "/dashboard/relatorios/comparativo-lojas",
         icon: ArrowLeftRight,
         permission: "reports.sales",
-        feature: "reports_advanced"
+        feature: "branch_comparison"
       },
     ],
   },
@@ -224,61 +226,71 @@ const menuItems: MenuSection[] = [
         name: "DRE Dinâmica",
         href: "/dashboard/financeiro/dre",
         icon: BookOpen,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "dre_report"
       },
       {
         name: "Fluxo de Caixa",
         href: "/dashboard/financeiro/fluxo-caixa",
         icon: ArrowLeftRight,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "cash_flow"
       },
       {
         name: "Lançamentos",
         href: "/dashboard/financeiro/lancamentos",
         icon: Receipt,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "finance_entries"
       },
       {
         name: "Contas",
         href: "/dashboard/financeiro/contas",
         icon: Building2,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "finance_accounts"
       },
       {
         name: "Plano de Contas",
         href: "/dashboard/financeiro/plano-contas",
         icon: ListTree,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "chart_of_accounts"
       },
       {
         name: "Devoluções",
         href: "/dashboard/financeiro/devolucoes",
         icon: RotateCcw,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "sales_refunds"
       },
       {
         name: "Conciliação",
         href: "/dashboard/financeiro/conciliacao",
         icon: RefreshCw,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "bank_reconciliation"
       },
       {
         name: "BI Analítico",
         href: "/dashboard/financeiro/bi",
         icon: PieChart,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "bi_analytics"
       },
       {
         name: "Cartões",
         href: "/dashboard/financeiro/cartoes",
         icon: CreditCard,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "card_receivables"
       },
       {
         name: "Despesas Fixas",
         href: "/dashboard/financeiro/despesas-recorrentes",
         icon: Receipt,
-        permission: "financial.view"
+        permission: "financial.view",
+        feature: "recurring_expenses"
       },
     ],
   },
@@ -373,9 +385,13 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       {/* Menu */}
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {menuItems.map((section) => {
-          const visibleItems = section.items.filter(
-            (item) => !item.permission || isAdmin || hasPermission(item.permission)
-          );
+          const visibleItems = section.items.filter((item) => {
+            const permissionOk = !item.permission || isAdmin || hasPermission(item.permission);
+            // Esconder 100% itens cuja feature está desativada no plano.
+            // hasFeature retorna true por default (sem dados ou loading) — evita flash.
+            const featureOk = !item.feature || hasFeature(item.feature);
+            return permissionOk && featureOk;
+          });
 
           if (visibleItems.length === 0) return null;
 
