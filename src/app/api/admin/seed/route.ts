@@ -10,6 +10,10 @@ import { getAdminSession } from "@/lib/admin-session";
  */
 export async function POST() {
   try {
+    if (process.env.SEED_ENABLED !== "1") {
+      return NextResponse.json({ error: "Not found" }, { status: 404 });
+    }
+
     const session = await getAdminSession();
     if (!session) {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });

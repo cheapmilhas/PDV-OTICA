@@ -383,8 +383,6 @@ function NovaOrdemServicoPageContent() {
       if (lensData.lensColoring) payload.lensColoring = lensData.lensColoring;
       if (selectedTreatments.length > 0) payload.treatments = selectedTreatments;
 
-      console.log("📤 Enviando ordem de serviço:", payload);
-
       const res = await fetch("/api/service-orders", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -398,7 +396,6 @@ function NovaOrdemServicoPageContent() {
       }
 
       const result = await res.json();
-      console.log("✅ Ordem criada:", result);
 
       const osNumber = result.data.number || result.data.id.substring(0, 8);
       track("first_os", { osId: result.data.id, hasItems: !!result.data.items?.length });

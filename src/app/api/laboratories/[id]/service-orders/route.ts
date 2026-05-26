@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requireAuth } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 
 export async function GET(
@@ -8,6 +8,7 @@ export async function GET(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
+    await requireAuth();
     const companyId = await getCompanyId();
     const { id: laboratoryId } = await params;
 

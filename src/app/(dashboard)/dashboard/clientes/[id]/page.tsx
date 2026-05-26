@@ -220,14 +220,11 @@ function ClienteDetalhesPage() {
         setLoading(true);
 
         // Buscar dados do cliente
-        console.log("=== DEBUG: Buscando cliente ID:", customerId);
         const customerRes = await fetch(`/api/customers/${customerId}`);
         if (!customerRes.ok) throw new Error("Cliente não encontrado");
         const customerData = await customerRes.json();
-        console.log("=== DEBUG: Customer Data:", JSON.stringify(customerData, null, 2));
         // A API retorna { data: customer }, não customer direto
         const customer = customerData.data || customerData;
-        console.log("=== DEBUG: Customer name:", customer?.name);
         setCustomer(customer);
 
         // Buscar vendas do cliente

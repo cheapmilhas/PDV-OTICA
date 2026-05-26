@@ -146,7 +146,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
     const isCard = selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD";
     const newPayment: Payment = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       method: selectedMethod,
       amount: parseFloat(amount),
       ...(selectedMethod === "CREDIT_CARD" && { installments: parseInt(installments) }),
@@ -170,7 +170,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   // Callback para quando confirmar crediário
   const handleConfirmarCrediario = (config: InstallmentConfig) => {
     const newPayment: Payment = {
-      id: Date.now().toString(),
+      id: crypto.randomUUID(),
       method: "STORE_CREDIT",
       amount: pendingCrediarioAmount,
       installmentConfig: config,
@@ -210,9 +210,6 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
       setSelectedMethod("");
       setUseCashback(false);
       setCashbackAmount("");
-
-      // Redirecionar para página de vendas com reload
-      window.location.href = "/dashboard/vendas";
     } else {
       toast.error(`Ainda falta pagar ${formatCurrency(Math.abs(remaining))}`);
     }

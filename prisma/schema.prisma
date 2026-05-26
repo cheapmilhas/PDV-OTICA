@@ -224,6 +224,18 @@ model Branch {
   stateRegistration     String?
   nfeSeries             Int?
   lastNfeNumber         Int?
+  // Configuração fiscal NFC-e (Focus NFe)
+  fiscalEnabled         Boolean                  @default(false)
+  fiscalRegime          String?                  // "SIMPLES_NACIONAL" | "LUCRO_PRESUMIDO" | "LUCRO_REAL"
+  fiscalCsosn           String?                  // ex: "102" (Simples sem permissão de crédito)
+  fiscalCst             String?                  // para regime não-Simples
+  fiscalCfopPadrao      String?                  // ex: "5102" (venda mesma UF)
+  fiscalNcmPadrao       String?                  // ex: "9001.40" (lentes de contato/óculos)
+  fiscalAmbiente        String?                  // "HOMOLOGACAO" | "PRODUCAO"
+  fiscalSerieNfce       Int?                     @default(1)
+  fiscalProximoNumero   Int?                     @default(1)
+  fiscalCscId           String?                  // Código de Segurança do Contribuinte ID
+  fiscalCscToken        String?                  // CSC Token
   active                Boolean                  @default(true)
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
@@ -1061,10 +1073,18 @@ model Sale {
   agreementDiscount    Decimal?             @db.Decimal(12, 2)
   authorizationCode    String?
   fiscalStatus         FiscalStatus         @default(NOT_REQUESTED)
-  fiscalModel          String?
-  fiscalKey            String?
+  fiscalModel          String?              // "65" = NFC-e, "55" = NF-e
+  fiscalKey            String?              // chave de acesso 44 dígitos
   fiscalXmlUrl         String?
   fiscalPdfUrl         String?
+  fiscalNumber         String?              // número sequencial da nota
+  fiscalSerie          String?              // série da nota
+  fiscalRef            String?              @unique // referência única no provedor (Focus NFe)
+  fiscalError          String?              // mensagem amigável de erro
+  fiscalSefazCode      Int?                 // código de erro da SEFAZ
+  fiscalEmittedAt      DateTime?            // momento da autorização
+  fiscalCanceledAt     DateTime?
+  fiscalCancelReason   String?
   completedAt          DateTime?
   deletedAt            DateTime?
   createdAt            DateTime             @default(now())

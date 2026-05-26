@@ -71,14 +71,28 @@ export async function POST(request: NextRequest) {
       );
     }
 
-    const { data: urlData } = supabase.storage
+    // Generate short-lived signed URL (LGPD: prescription images are health PII —
+    // bucket must be private; access goes through signed URLs only).
+    const { data: signedUrlData, error: signedUrlError } = await supabase.storage
       .from(PRESCRIPTION_IMAGES_BUCKET)
-      .getPublicUrl(fileName);
+      .createSignedUrl(fileName, 300); // 5 min
+
+    if (signedUrlError || !signedUrlData) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "INTERNAL_ERROR",
+            message: "Erro ao gerar URL assinada da imagem.",
+          },
+        },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({
       data: {
-        url: urlData.publicUrl,
-        fileName,
+        url: signedUrlData.signedUrl,
+        fileName, // persist this; render via /api/prescription-image/[...path] to get a fresh signed URL
       },
     });
   } catch (error) {
