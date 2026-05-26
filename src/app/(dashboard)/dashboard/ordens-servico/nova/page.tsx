@@ -10,6 +10,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
+import { track } from "@/lib/analytics";
 import { ArrowLeft, Plus, Trash2, ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -400,6 +401,7 @@ function NovaOrdemServicoPageContent() {
       console.log("✅ Ordem criada:", result);
 
       const osNumber = result.data.number || result.data.id.substring(0, 8);
+      track("first_os", { osId: result.data.id, hasItems: !!result.data.items?.length });
       toast.success(`OS #${osNumber} criada com sucesso!`);
       // Redireciona para detalhes (impressão disponível lá se quiser)
       router.push(`/dashboard/ordens-servico/${result.data.id}/detalhes`);

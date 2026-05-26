@@ -13,6 +13,8 @@ export type AnalyticsEvent =
   | "first_product_created"
   | "first_sale"
   | "first_os"
+  | "os_converted_to_sale"
+  | "ocr_prescription_used"
   | "checkout_view"
   | "upgrade_clicked"
   | "payment_succeeded"

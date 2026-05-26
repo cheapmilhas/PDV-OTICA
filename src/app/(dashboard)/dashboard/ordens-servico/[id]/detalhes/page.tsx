@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
+import { track } from "@/lib/analytics";
 import {
   ArrowLeft,
   Loader2,
@@ -151,6 +152,7 @@ function DetalhesOrdemServicoContent() {
         const err = await res.json();
         throw new Error(err.error?.message || "Erro ao gerar venda");
       }
+      track("os_converted_to_sale", { osId: id });
       toast.success("Redirecionando para o PDV...");
       router.push(`/dashboard/pdv?serviceOrderId=${id}`);
     } catch (e: any) {

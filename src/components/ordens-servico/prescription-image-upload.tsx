@@ -4,6 +4,7 @@ import { useState, useRef, useCallback } from "react";
 import { Button } from "@/components/ui/button";
 import { Camera, Upload, Loader2, X, Eye, Sparkles } from "lucide-react";
 import toast from "react-hot-toast";
+import { track } from "@/lib/analytics";
 
 interface OcrEyeData {
   esf: string | number | null;
@@ -135,6 +136,7 @@ export function PrescriptionImageUpload({
       }
 
       const result = await res.json();
+      track("ocr_prescription_used");
       onOcrResult(result.data);
       toast.success("Receita lida com sucesso! Confira os campos preenchidos.");
     } catch {
