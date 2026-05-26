@@ -63,7 +63,7 @@ export function SubscriptionBanner({
         <div className="flex items-center gap-2 flex-shrink-0">
           {(status === "TRIAL" || status === "PAST_DUE") && (
             <Link
-              href="/dashboard/configuracoes"
+              href="/dashboard/upgrade"
               className="text-xs font-semibold bg-white text-gray-900 px-3 py-1.5 rounded-lg hover:bg-gray-100 transition-colors whitespace-nowrap"
             >
               {status === "TRIAL" ? "Assinar agora" : "Regularizar"}

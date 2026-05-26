@@ -438,6 +438,10 @@ export class SaleService {
     // Criar venda em transação (venda + itens + pagamentos + cashMovement + estoque)
     // Refatorado para usar helpers compartilhados em sale-side-effects.service.ts
     // (mesmos side-effects são reusados em quote.service.ts:convertToSale).
+    // timeout=30s: applyFinanceEntriesInTx faz 6-12 queries sequenciais
+    // (chartOfAccounts.findUnique + financeEntry.upsert) que estouravam o
+    // default 5s sob latência alta (Neon US-East), causando P2028 e rollback
+    // silencioso da venda. Mantido até que finance-entries saia da transação.
     const sale = await prisma.$transaction(async (tx) => {
       // 1. Criar venda
       const newSale = await tx.sale.create({
@@ -521,6 +525,9 @@ export class SaleService {
       });
 
       return newSale;
+    }, {
+      maxWait: 10_000,
+      timeout: 30_000,
     });
 
     // 9. Side-effects pós-commit (cashback ganho + campanhas + lembrete) — helper
