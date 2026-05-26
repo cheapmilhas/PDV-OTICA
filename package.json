@@ -16,7 +16,10 @@
     "validate:imports": "npx tsx scripts/validate-lucide-imports.ts",
     "fix:imports": "npx tsx scripts/fix-lucide-imports.ts",
     "db:seed:plans": "npx tsx prisma/seed-plans.ts",
-    "create:subscription": "npx tsx scripts/create-test-subscription.ts"
+    "create:subscription": "npx tsx scripts/create-test-subscription.ts",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "test:coverage": "vitest run --coverage"
   },
   "prisma": {
     "seed": "node --require esbuild-register prisma/seed.ts"
@@ -89,20 +92,23 @@
     "@types/qrcode": "^1.5.6",
     "@types/react": "^19.2.10",
     "@types/react-dom": "^19.2.3",
+    "@vitest/coverage-v8": "^4.1.7",
     "autoprefixer": "^10.4.24",
     "esbuild-register": "^3.6.0",
     "eslint": "^9.39.2",
     "eslint-config-next": "^16.1.6",
     "eslint-config-prettier": "^10.1.8",
     "eslint-plugin-prettier": "^5.5.5",
+    "happy-dom": "^20.9.0",
     "postcss": "^8.5.10",
     "prettier": "^3.8.1",
     "prisma": "^5.22.0",
     "tailwindcss": "^3.3.0",
     "tsx": "^4.21.0",
-    "typescript": "^5.9.3"
+    "typescript": "^5.9.3",
+    "vitest": "^4.1.7"
   },
   "overrides": {
-    "postcss": "$postcss"
+    "postcss": "^8.5.10"
   }
 }

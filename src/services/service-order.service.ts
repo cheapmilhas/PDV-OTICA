@@ -672,13 +672,23 @@ export class ServiceOrderService {
       select: { id: true, promisedDate: true },
     });
 
+    // Agrupa por delayDays e roda 1 updateMany por bucket (substitui N+1)
+    const byDelayDays = new Map<number, string[]>();
     for (const order of delayed) {
-      const delayDays = differenceInCalendarDays(today, order.promisedDate!);
-      await prisma.serviceOrder.update({
-        where: { id: order.id },
-        data: { isDelayed: true, delayDays },
-      });
+      const days = differenceInCalendarDays(today, order.promisedDate!);
+      const arr = byDelayDays.get(days) ?? [];
+      arr.push(order.id);
+      byDelayDays.set(days, arr);
     }
+
+    await Promise.all(
+      Array.from(byDelayDays.entries()).map(([delayDays, ids]) =>
+        prisma.serviceOrder.updateMany({
+          where: { id: { in: ids } },
+          data: { isDelayed: true, delayDays },
+        }),
+      ),
+    );
 
     return delayed.length;
   }

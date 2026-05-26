@@ -2,8 +2,6 @@ import { prisma } from "@/lib/prisma";
 import { Sale, SaleItem, SalePayment, Prisma } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
-
-const log = logger.child({ service: "sale" });
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit } from "@/lib/installment-utils";
@@ -21,6 +19,8 @@ import {
   applyFinanceEntriesInTx,
   applyPostCommitSideEffects,
 } from "@/services/sale-side-effects.service";
+
+const log = logger.child({ service: "sale" });
 
 /**
  * Service para operações de Vendas (PDV)
