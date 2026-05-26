@@ -2,13 +2,14 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 import { auth } from "@/auth";
 
 /**
  * GET /api/stock-transfers
  * Lista transferências de estoque da empresa
  */
-export async function GET(request: Request) {
+export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -46,13 +47,13 @@ export async function GET(request: Request) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
 
 /**
  * POST /api/stock-transfers
  * Cria nova transferência de estoque
  */
-export async function POST(request: Request) {
+export const POST = withPlanFeatureGuard(async (request: Request) => {
   try {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Não autenticado");
@@ -187,4 +188,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
