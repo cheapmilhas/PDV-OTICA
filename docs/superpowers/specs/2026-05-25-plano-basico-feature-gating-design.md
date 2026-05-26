@@ -1,6 +1,6 @@
 # Plano Básico — Feature Gating das 13 Funcionalidades
 
-**Status:** design aprovado, aguardando spec review
+**Status:** design revisado (architect-reviewed v2), aguardando re-review
 **Autor:** Matheus + Claude
 **Data:** 2026-05-25
 **Tipo:** Mudança de escopo de plano + infraestrutura de feature gating
@@ -87,107 +87,138 @@ export const FEATURES = {
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
 
+/**
+ * Um matcher pode ser:
+ *  - string com prefixo exato: "/api/foo" casa "/api/foo", "/api/foo/", "/api/foo/bar"
+ *  - RegExp: para dynamic segments (ex: /api/sales/[id]/refund)
+ */
+type PathMatcher = string | RegExp;
+
 interface FeatureMeta {
-  label: string;            // PT-BR p/ UI, landing, admin
-  description: string;      // texto explicativo p/ landing
-  pageRoutes: string[];     // rotas dashboard a bloquear via middleware
-  apiPrefixes: string[];    // prefixes de API a bloquear via middleware
-  sidebarKey?: string;      // chave do item na sidebar
+  label: string;              // PT-BR p/ UI, landing, admin
+  description: string;        // texto explicativo p/ landing
+  pageMatchers: PathMatcher[]; // rotas dashboard a bloquear via middleware
+  apiMatchers: PathMatcher[];  // APIs a bloquear via middleware
+  sidebarKey?: string;        // chave do item na sidebar
 }
 
+// PATHS AUDITADOS contra src/app/api e src/app/(dashboard)/dashboard em 2026-05-25.
 export const FEATURE_REGISTRY: Record<FeatureKey, FeatureMeta> = {
   [FEATURES.LENS_TREATMENTS]: {
     label: "Tratamentos de Lente",
     description: "Cadastro e gestão de tratamentos ópticos (anti-reflexo, fotossensível etc).",
-    pageRoutes: ["/dashboard/tratamentos"],
-    apiPrefixes: ["/api/lens-treatments"],
+    pageMatchers: ["/dashboard/tratamentos"],
+    apiMatchers: ["/api/lens-treatments"],
     sidebarKey: "tratamentos",
   },
   [FEATURES.STOCK_TRANSFERS]: {
     label: "Transferências entre Filiais",
     description: "Mover estoque entre filiais com aprovação.",
-    pageRoutes: ["/dashboard/estoque/transferencias"],
-    apiPrefixes: ["/api/stock-transfers"],
+    pageMatchers: ["/dashboard/estoque/transferencias"],
+    apiMatchers: [
+      "/api/stock-transfers",
+      "/api/stock-movements/transfer", // caminho secundário usado pelo módulo de ajuste
+    ],
     sidebarKey: "estoque-transferencias",
   },
   [FEATURES.BRANCH_COMPARISON]: {
     label: "Comparativo de Lojas",
     description: "Relatório comparando performance entre filiais.",
-    pageRoutes: ["/dashboard/relatorios/comparativo-lojas"],
-    apiPrefixes: ["/api/reports/branch-comparison"],
+    pageMatchers: ["/dashboard/relatorios/comparativo-lojas"],
+    apiMatchers: ["/api/reports/branch-comparison"],
     sidebarKey: "relatorios-comparativo",
   },
   [FEATURES.DRE_REPORT]: {
     label: "DRE Dinâmico",
     description: "Demonstrativo de Resultados do Exercício.",
-    pageRoutes: ["/dashboard/financeiro/dre", "/dashboard/relatorios/dre"],
-    apiPrefixes: ["/api/finance/reports/dre"],
+    pageMatchers: ["/dashboard/financeiro/dre", "/dashboard/relatorios/dre"],
+    apiMatchers: [
+      "/api/finance/reports/dre",
+      "/api/reports/financial/dre", // caminho legado
+    ],
     sidebarKey: "financeiro-dre",
   },
   [FEATURES.CASH_FLOW]: {
     label: "Fluxo de Caixa",
     description: "Projeção e histórico de fluxo de caixa.",
-    pageRoutes: ["/dashboard/financeiro/fluxo-caixa"],
-    apiPrefixes: ["/api/finance/reports/cash-flow"],
+    pageMatchers: ["/dashboard/financeiro/fluxo-caixa"],
+    apiMatchers: ["/api/finance/reports/cash-flow"],
     sidebarKey: "financeiro-fluxo",
   },
   [FEATURES.FINANCE_ENTRIES]: {
     label: "Lançamentos Financeiros",
     description: "Listagem e gestão manual de lançamentos contábeis.",
-    pageRoutes: ["/dashboard/financeiro/lancamentos"],
-    apiPrefixes: ["/api/finance/entries"],
+    pageMatchers: ["/dashboard/financeiro/lancamentos"],
+    apiMatchers: ["/api/finance/entries"],
     sidebarKey: "financeiro-lancamentos",
   },
   [FEATURES.FINANCE_ACCOUNTS]: {
     label: "Contas Financeiras",
     description: "Contas bancárias, caixa e cartão.",
-    pageRoutes: ["/dashboard/financeiro/contas"],
-    apiPrefixes: ["/api/finance/accounts"],
+    pageMatchers: ["/dashboard/financeiro/contas"],
+    apiMatchers: ["/api/finance/accounts"],
     sidebarKey: "financeiro-contas",
   },
   [FEATURES.CHART_OF_ACCOUNTS]: {
     label: "Plano de Contas",
     description: "Plano de contas contábil personalizado.",
-    pageRoutes: ["/dashboard/financeiro/plano-contas"],
-    apiPrefixes: ["/api/finance/chart"],
+    pageMatchers: ["/dashboard/financeiro/plano-contas"],
+    apiMatchers: ["/api/finance/chart"],
     sidebarKey: "financeiro-plano",
   },
   [FEATURES.SALES_REFUNDS]: {
     label: "Devoluções",
     description: "Workflow formal de devolução de mercadoria.",
-    pageRoutes: ["/dashboard/financeiro/devolucoes"],
-    apiPrefixes: ["/api/sales/refunds"],
+    pageMatchers: ["/dashboard/financeiro/devolucoes"],
+    apiMatchers: [
+      // Dynamic segment :id — precisa regex
+      /^\/api\/sales\/[^/]+\/refund(?:s)?(?:\/.*)?$/,
+    ],
     sidebarKey: "financeiro-devolucoes",
   },
   [FEATURES.BANK_RECONCILIATION]: {
     label: "Conciliação Bancária",
     description: "Importação e match de extratos bancários.",
-    pageRoutes: ["/dashboard/financeiro/conciliacao"],
-    apiPrefixes: ["/api/finance/reconciliation"],
+    pageMatchers: ["/dashboard/financeiro/conciliacao"],
+    apiMatchers: ["/api/finance/reconciliation"],
     sidebarKey: "financeiro-conciliacao",
   },
   [FEATURES.BI_ANALYTICS]: {
     label: "BI Analítico",
     description: "Dashboards analíticos avançados.",
-    pageRoutes: ["/dashboard/financeiro/bi"],
-    apiPrefixes: ["/api/finance/bi", "/api/finance/aggregate"],
+    pageMatchers: ["/dashboard/financeiro/bi"],
+    apiMatchers: ["/api/finance/bi", "/api/finance/aggregate"],
     sidebarKey: "financeiro-bi",
   },
   [FEATURES.CARD_RECEIVABLES]: {
     label: "Cartões",
     description: "Visão de recebíveis de cartão e previsão.",
-    pageRoutes: ["/dashboard/financeiro/cartoes"],
-    apiPrefixes: ["/api/finance/card-receivables"],
+    pageMatchers: ["/dashboard/financeiro/cartoes"],
+    apiMatchers: ["/api/finance/card-receivables"],
     sidebarKey: "financeiro-cartoes",
   },
   [FEATURES.RECURRING_EXPENSES]: {
     label: "Despesas Recorrentes",
     description: "Cadastro de despesas fixas com agenda recorrente.",
-    pageRoutes: ["/dashboard/financeiro/despesas-recorrentes"],
-    apiPrefixes: ["/api/finance/recurring-expenses"],
+    pageMatchers: ["/dashboard/financeiro/despesas-recorrentes"],
+    apiMatchers: ["/api/recurring-expenses"], // sem prefixo /finance
     sidebarKey: "financeiro-despesas",
   },
 };
+
+/**
+ * Helper único de match. Reusa em middleware, testes, FeatureGate.
+ */
+export function pathMatchesAny(path: string, matchers: PathMatcher[]): boolean {
+  for (const m of matchers) {
+    if (typeof m === "string") {
+      if (path === m || path.startsWith(m + "/")) return true;
+    } else {
+      if (m.test(path)) return true;
+    }
+  }
+  return false;
+}
 ```
 
 ---
@@ -196,57 +227,116 @@ export const FEATURE_REGISTRY: Record<FeatureKey, FeatureMeta> = {
 
 ### Camada 1 — Middleware Next.js (`src/middleware.ts`)
 
-Roda em toda request a `/dashboard/*` e `/api/*`. Lê sessão NextAuth, busca features do plano (cache 5min) e:
+**Runtime: Node.js (não Edge).** Decisão crítica: middleware roda como Node Function (`export const runtime = "nodejs"`, suportado desde Next 14.1). Justificativa:
+- Prisma não roda em Edge runtime.
+- O middleware precisa chamar `getCachedPlanFeatures()` que consulta `Subscription`+`PlanFeature` via Prisma.
+- Alternativa rejeitada: middleware Edge fazendo `fetch` interno a um endpoint Node — duplica latência e introduz ponto de falha.
 
-- Rota dashboard bloqueada → redirect `/dashboard?upgrade-required=<feature>` + toast no destino
-- Rota API bloqueada → `403 { error: { code: "PLAN_FEATURE_REQUIRED", feature: "<key>" } }`
+**Já existe middleware no projeto** em `src/middleware.ts` cuidando de auth admin (jose.jwtVerify Edge-safe). Precisamos:
+1. Mover o middleware existente para `runtime: "nodejs"`, OU
+2. Compor: middleware Edge atual chama um novo gate Node via redirect interno, OU
+3. Mover o feature-gating para `(dashboard)/layout.tsx` server component (mais simples, não toca middleware existente)
+
+**Decisão recomendada:** opção 3 (não tocar no middleware existente, fazer gating no `layout.tsx`). Layout do dashboard já é server component (não-Edge), tem acesso a `auth()` e Prisma, e roda em toda navegação.
 
 ```typescript
-// src/middleware.ts (esqueleto)
-import { NextResponse } from "next/server";
-import type { NextRequest } from "next/server";
-import { findBlockedFeature } from "@/lib/plan-feature-catalog";
+// src/app/(dashboard)/layout.tsx (esqueleto adicional ao layout existente)
+import { redirect } from "next/navigation";
+import { auth } from "@/auth";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
-import { getSessionFromCookie } from "@/lib/auth-edge";
+import { findBlockedFeature } from "@/lib/plan-feature-catalog";
+import { headers } from "next/headers";
 
-export async function middleware(req: NextRequest) {
-  const session = await getSessionFromCookie(req);
-  if (!session?.companyId) return NextResponse.next();
+export default async function DashboardLayout({ children }: { children: React.ReactNode }) {
+  const session = await auth();
+  if (!session?.user?.companyId) redirect("/login");
 
-  const features = await getCachedPlanFeatures(session.companyId);
-  const blocked = findBlockedFeature(req.nextUrl.pathname, features);
-  if (!blocked) return NextResponse.next();
-
-  if (req.nextUrl.pathname.startsWith("/api/")) {
-    return NextResponse.json(
-      { error: { code: "PLAN_FEATURE_REQUIRED", feature: blocked } },
-      { status: 403 },
-    );
+  // Kill switch
+  if (process.env.DISABLE_PLAN_FEATURE_GATING !== "true") {
+    const headersList = await headers();
+    const path = headersList.get("x-current-path") ?? ""; // setado por middleware leve
+    const features = await getCachedPlanFeatures(session.user.companyId);
+    const blocked = findBlockedFeature(path, features);
+    if (blocked) {
+      redirect(`/dashboard?upgrade-required=${blocked}`);
+    }
   }
-  const url = req.nextUrl.clone();
-  url.pathname = "/dashboard";
-  url.searchParams.set("upgrade-required", blocked);
-  return NextResponse.redirect(url);
-}
 
-export const config = {
-  matcher: ["/dashboard/:path*", "/api/:path*"],
-};
+  return <>{children}</>;
+}
 ```
+
+Para que o layout saiba o path atual, o middleware Edge existente apenas seta um header `x-current-path`:
+
+```typescript
+// src/middleware.ts (adição mínima, mantém Edge runtime)
+export function middleware(req: NextRequest) {
+  // ... lógica existente de admin auth ...
+  const res = NextResponse.next();
+  res.headers.set("x-current-path", req.nextUrl.pathname);
+  return res;
+}
+```
+
+Para bloqueio de **APIs**, não dá pra usar layout. Cada handler de API precisa chamar `requirePlanFeature` no topo (Camada 2). Para um único ponto de falha menor, criar wrapper:
+
+```typescript
+// src/lib/with-plan-feature.ts
+import { auth } from "@/auth";
+import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
+import { findBlockedFeature } from "@/lib/plan-feature-catalog";
+import { NextResponse } from "next/server";
+
+export function withPlanFeatureGuard(handler: (req: Request) => Promise<Response>) {
+  return async (req: Request) => {
+    if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return handler(req);
+
+    const session = await auth();
+    if (!session?.user?.companyId) return handler(req); // delega ao handler para 401
+
+    const path = new URL(req.url).pathname;
+    const features = await getCachedPlanFeatures(session.user.companyId);
+    const blocked = findBlockedFeature(path, features);
+    if (blocked) {
+      return NextResponse.json(
+        { error: { code: "PLAN_FEATURE_REQUIRED", feature: blocked } },
+        { status: 403 },
+      );
+    }
+    return handler(req);
+  };
+}
+```
+
+Cada handler API listado nos `apiMatchers` envolve seu export: `export const GET = withPlanFeatureGuard(async (req) => { ... });`. Redundante com `requirePlanFeature` interno mas centraliza o catálogo.
 
 `findBlockedFeature(path, features)`:
 ```typescript
+import { FEATURE_REGISTRY, pathMatchesAny, type FeatureKey } from "./plan-feature-catalog";
+
 export function findBlockedFeature(
   path: string,
   features: Record<string, boolean>,
 ): FeatureKey | null {
   for (const [key, meta] of Object.entries(FEATURE_REGISTRY)) {
     if (features[key] === true) continue; // habilitada
-    if (meta.pageRoutes.some((r) => path === r || path.startsWith(r + "/"))) return key as FeatureKey;
-    if (meta.apiPrefixes.some((p) => path === p || path.startsWith(p + "/"))) return key as FeatureKey;
+    if (pathMatchesAny(path, meta.pageMatchers)) return key as FeatureKey;
+    if (pathMatchesAny(path, meta.apiMatchers)) return key as FeatureKey;
   }
   return null;
 }
+```
+
+**Allow-list de hot paths (não passa pelo guard):**
+- `/api/auth/*` — NextAuth handlers
+- `/api/plan-features` — usado pelo hook usePlanFeatures (recursão se não excluído)
+- `/api/health`, `/api/admin-auth/*`
+- Assets estáticos (já fora do matcher por construção)
+
+Implementar como early-return em `withPlanFeatureGuard`:
+```typescript
+const ALLOWLIST_PREFIXES = ["/api/auth", "/api/plan-features", "/api/admin", "/api/health"];
+if (ALLOWLIST_PREFIXES.some((p) => path.startsWith(p))) return handler(req);
 ```
 
 ### Camada 2 — API endpoints (`requirePlanFeature`)
@@ -286,26 +376,58 @@ Locais identificados onde botões precisam ser escondidos dentro de páginas lib
 `src/lib/plan-features-cache.ts`:
 
 ```typescript
-const cache = new Map<string, { features: Record<string, boolean>; expiresAt: number }>();
-const TTL_MS = 5 * 60 * 1000;
+import { LRUCache } from "lru-cache"; // já no node_modules (NextAuth depende)
+import { getSubscriptionInfo } from "@/lib/subscription";
 
-export async function getCachedPlanFeatures(companyId: string): Promise<Record<string, boolean>> {
-  const now = Date.now();
+interface CachedFeatures {
+  features: Record<string, boolean>;
+  // null indica "sem subscription = libera tudo" (modo accessEnabled);
+  // diferente de {} que é "subscription explícita sem features true"
+  hasSubscription: boolean;
+}
+
+// LRU com cap em 500 empresas e TTL 5min.
+const cache = new LRUCache<string, CachedFeatures>({
+  max: 500,
+  ttl: 5 * 60 * 1000,
+});
+
+export async function getCachedPlanFeatures(
+  companyId: string,
+): Promise<{ features: Record<string, boolean>; hasSubscription: boolean }> {
   const hit = cache.get(companyId);
-  if (hit && hit.expiresAt > now) return hit.features;
+  if (hit) return hit;
 
-  const info = await getSubscriptionInfo(companyId);
-  const features = info?.features
-    ? Object.fromEntries(Object.entries(info.features).map(([k, v]) => [k, v === "true"]))
-    : {}; // sem subscription → tudo liberado (modo accessEnabled)
-  cache.set(companyId, { features, expiresAt: now + TTL_MS });
-  return features;
+  let info;
+  try {
+    info = await getSubscriptionInfo(companyId);
+  } catch (err) {
+    // DB falhou — NÃO armazena no cache (evita cache poisoning de erro).
+    // Lança para o caller decidir comportamento de fail-open ou fail-closed.
+    throw err;
+  }
+
+  const value: CachedFeatures = info?.features
+    ? {
+        features: Object.fromEntries(
+          Object.entries(info.features).map(([k, v]) => [k, v === "true"]),
+        ),
+        hasSubscription: true,
+      }
+    : { features: {}, hasSubscription: false };
+
+  cache.set(companyId, value);
+  return value;
 }
 
 export function invalidatePlanFeaturesCache(companyId: string) {
   cache.delete(companyId);
 }
 ```
+
+**Comportamento de fail-open:** `findBlockedFeature` e o layout/wrapper devem tratar a exceção do `getCachedPlanFeatures` como "não bloquear" (fail-open). Justificativa: indisponibilidade de DB transitória não deve bloquear a UI inteira do cliente. Em troca, logar com `level: warn` e contar métrica.
+
+**Sem subscription (`hasSubscription: false`):** modo `accessEnabled`/admin/contas de teste. Não aplica bloqueio. Comportamento já existente em `requirePlanFeature` (linhas 19-20).
 
 **Invalidação:** chamada em `subscriptionService.changePlan(companyId, newPlanId)` e no endpoint admin de troca de plano.
 
@@ -315,7 +437,7 @@ export function invalidatePlanFeaturesCache(companyId: string) {
 
 ## Seed/Migração de dados
 
-`prisma/seed-plan-basico-features.ts` — idempotente:
+`prisma/seed-plan-basico-features.ts` — idempotente, em **transação atômica**:
 
 ```typescript
 import { PrismaClient } from "@prisma/client";
@@ -323,43 +445,58 @@ import { FEATURES } from "../src/lib/plan-feature-catalog";
 
 const prisma = new PrismaClient();
 
+// Planos considerados "pagos" (recebem todas as 13 features = true).
+// Auditar contra prisma/seed-plans.ts: hoje existem "basico", "profissional", "enterprise".
+// "premium" só será incluído se for criado posteriormente.
+const PAID_PLAN_SLUGS = ["profissional", "enterprise"];
+
 async function main() {
-  // 1) Atualiza preço do Básico
-  const basico = await prisma.plan.findUniqueOrThrow({ where: { slug: "basico" } });
-  await prisma.plan.update({
-    where: { id: basico.id },
-    data: { priceMonthly: 14990, priceYearly: 149900 },
-  });
-
-  // 2) Garante 13 features = "false" no Básico
-  for (const key of Object.values(FEATURES)) {
-    await prisma.planFeature.upsert({
-      where: { planId_key: { planId: basico.id, key } },
-      update: { value: "false" },
-      create: { planId: basico.id, key, value: "false" },
+  await prisma.$transaction(async (tx) => {
+    // 1) Atualiza preço do Básico
+    const basico = await tx.plan.findUniqueOrThrow({ where: { slug: "basico" } });
+    await tx.plan.update({
+      where: { id: basico.id },
+      data: { priceMonthly: 14990, priceYearly: 149900 },
     });
-  }
 
-  // 3) Garante 13 features = "true" em planos pagos
-  for (const slug of ["profissional", "premium", "enterprise"]) {
-    const plan = await prisma.plan.findUnique({ where: { slug } });
-    if (!plan) continue;
+    // 2) Garante 13 features = "false" no Básico
     for (const key of Object.values(FEATURES)) {
-      await prisma.planFeature.upsert({
-        where: { planId_key: { planId: plan.id, key } },
-        update: { value: "true" },
-        create: { planId: plan.id, key, value: "true" },
+      await tx.planFeature.upsert({
+        where: { planId_key: { planId: basico.id, key } },
+        update: { value: "false" },
+        create: { planId: basico.id, key, value: "false" },
       });
     }
-  }
+
+    // 3) Garante 13 features = "true" em planos pagos
+    for (const slug of PAID_PLAN_SLUGS) {
+      const plan = await tx.plan.findUnique({ where: { slug } });
+      if (!plan) {
+        console.warn(`[seed] Plano ${slug} não encontrado — pulando (verificar se foi removido).`);
+        continue;
+      }
+      for (const key of Object.values(FEATURES)) {
+        await tx.planFeature.upsert({
+          where: { planId_key: { planId: plan.id, key } },
+          update: { value: "true" },
+          create: { planId: plan.id, key, value: "true" },
+        });
+      }
+    }
+  }, { timeout: 30_000 });
 
   console.log("✓ Plan Básico atualizado: 13 features=false, preço R$ 149,90");
+  console.log(`✓ Planos pagos (${PAID_PLAN_SLUGS.join(", ")}): 13 features=true`);
 }
 
 main().finally(() => prisma.$disconnect());
 ```
 
 Rodável via `npx tsx prisma/seed-plan-basico-features.ts`. Não altera schema. Não destrói dados de cliente.
+
+**Atenção destrutiva:** o seed sobrescreve `PlanFeature.value` das 13 keys nos planos pagos. Se algum cliente em plano pago tem essas features explicitamente como `"false"` (configuração custom), elas viram `"true"`. Hoje não há esse cenário (features estão ausentes nos planos pagos). Documentar na release notes.
+
+**Rollback do seed:** `prisma/seed-plan-basico-features-rollback.ts` reverte para `value: "true"` em todas as 13 keys do Básico (caso a mudança de escopo precise ser revertida sem rotear pelo kill switch).
 
 ---
 
@@ -368,7 +505,61 @@ Rodável via `npx tsx prisma/seed-plan-basico-features.ts`. Não altera schema. 
 `src/components/home/pricing-section.tsx` + `src/components/landing/pricing.tsx`:
 - Leem `Plan.features` do banco (já implementado). Após o seed, exibem corretamente.
 - Refatorar para consumir o `FEATURE_REGISTRY` em vez de strings cruas — usa `label` do catálogo para os nomes.
-- Mostrar tabela comparativa explícita com ✓/✗ para todas as 13 features entre Básico/Profissional/Premium.
+- Mostrar tabela comparativa explícita com ✓/✗ para todas as 13 features entre os planos existentes (Básico, Profissional, Enterprise).
+
+## Endpoint `/api/plan-features` — atualização obrigatória
+
+Hoje em `src/app/api/plan-features/route.ts:7` há um array hardcoded `ALL_FEATURES` com 6 features (`crm`, `goals`, `campaigns`, `cashback`, `multi_branch`, `reports_advanced`). Esse endpoint é consumido pelo hook `usePlanFeatures` no cliente.
+
+**Mudanças obrigatórias:**
+
+1. Adicionar as 13 keys novas ao array, para que contas com `accessEnabled=true` (admin SaaS, contas de teste sem subscription) continuem vendo TUDO liberado:
+
+```typescript
+// src/app/api/plan-features/route.ts
+import { FEATURES } from "@/lib/plan-feature-catalog";
+
+const ALL_FEATURES = [
+  // legacy
+  "crm", "goals", "campaigns", "cashback", "multi_branch", "reports_advanced",
+  // 13 novas (consumidas do catálogo central)
+  ...Object.values(FEATURES),
+];
+```
+
+2. Honrar o kill switch:
+
+```typescript
+if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") {
+  return NextResponse.json({
+    features: Object.fromEntries(ALL_FEATURES.map((k) => [k, "true"])),
+  });
+}
+```
+
+Sem essas duas mudanças, o kill switch fica inconsistente entre backend e UI, e admins SaaS perdem acesso visual às 13 features.
+
+## Componente `<FeatureGate />` — refator menor
+
+Hoje (`src/components/plan/feature-gate.tsx`) o componente exige prop `featureName: string` para a mensagem de upgrade. Refatorar para inferir do registry quando não passado:
+
+```typescript
+interface FeatureGateProps {
+  feature: FeatureKey;
+  featureName?: string; // override opcional
+  children: React.ReactNode;
+}
+
+export function FeatureGate({ feature, featureName, children }: FeatureGateProps) {
+  const { hasFeature, loading } = usePlanFeatures();
+  if (loading) return null;
+  if (hasFeature(feature)) return <>{children}</>;
+  const label = featureName ?? FEATURE_REGISTRY[feature]?.label ?? feature;
+  return <UpgradeBadge feature={label} />;
+}
+```
+
+Fonte única de verdade — label aparece consistentemente na landing, na sidebar (tooltip), e no badge inline.
 
 ---
 
@@ -405,36 +596,91 @@ Rodável via `npx tsx prisma/seed-plan-basico-features.ts`. Não altera schema. 
 
 ---
 
-## Plano de Rollout (8 passos)
+## Plano de Rollout (revisado — 9 passos)
 
-Cada passo é deployável independentemente; o "switch" real é o Passo 6.
+Cada passo é deployável independentemente; o "switch" real é o Passo 7.
 
 ```
-1. Catálogo + middleware + cache       (deploy)   nenhum efeito ainda
-2. requirePlanFeature nas 13 APIs      (deploy)   nenhum efeito (features default true se ausentes? Não: fallback "sem subscription = livre" mantém compatibilidade)
-3. Sidebar/MobileNav com requiresFeature  (deploy) hasFeature retorna true sem PlanFeature → segue mostrando
-4. <FeatureGate> nos botões inline     (deploy)   idem
-5. Seed Profissional/Premium = true    (run)      planos pagos garantidos
-6. Seed Básico = false + preço 14990   (run)      ⚠ clientes do Básico perdem acesso (esperado)
-7. Landing atualiza pricing visual     (deploy)   reflete preço novo + feature list
-8. Smoke test em prod                  (manual)   contas de teste em ambos os planos
+0. Pré-rollout: análise de impacto (1 dia antes do Passo 7)
+   - SQL: empresas em Básico que usaram qualquer das 13 features no último mês.
+   - Decidir: notificar e oferecer trial Pro 30d, ou bloquear sem aviso?
+   - Aliar com produto/CS sobre comunicação (ver "Plano de Comunicação" abaixo).
+
+1. Catálogo + helpers + cache LRU       (deploy)   nenhum efeito (não há matchers ativos ainda)
+2. /api/plan-features inclui 13 keys   (deploy)   ALL_FEATURES atualizado; sem subscription = livre
+3. <FeatureGate> refatorado            (deploy)   nenhum efeito (feature ainda não está em nenhum lugar)
+4. (dashboard)/layout.tsx com gate     (deploy)   ⚠ DISABLE_PLAN_FEATURE_GATING=true em prod por padrão
+                                                  Nada bloqueia ainda.
+   + withPlanFeatureGuard nos 13 grupos de API
+   + middleware existente seta x-current-path header
+   + requirePlanFeature continua nos handlers (defesa interna)
+5. Sidebar/MobileNav com requiresFeature  (deploy) hasFeature retorna true sem PlanFeature → segue mostrando
+6. Seed planos pagos = true             (run)      planos pagos ganham todas as 13 features
+                                                   ainda sem efeito (Básico ainda livre).
+7. ★ Seed Básico = false + preço 14990  (run + flip)
+   E flip do kill switch: DISABLE_PLAN_FEATURE_GATING=false
+   ⚠ Aqui clientes do Básico perdem acesso. Smoke test em conta de teste IMEDIATAMENTE.
+8. Landing atualiza pricing visual      (deploy)   reflete preço novo + feature list
+9. Pós-rollout: monitorar suporte e métricas por 7 dias
 ```
+
+**Atomicidade do Passo 7:** o seed E o flip do kill switch devem acontecer juntos. Sugestão operacional: rodar o seed primeiro (atomic via $transaction); só após sucesso, fazer `vercel env rm DISABLE_PLAN_FEATURE_GATING` ou setar `false` no painel. Janela de inconsistência < 1 minuto.
 
 ## Kill Switch
 
-`DISABLE_PLAN_FEATURE_GATING=true` em env vars curto-circuita o middleware e o `requirePlanFeature`. Roda imediatamente sem deploy.
+`DISABLE_PLAN_FEATURE_GATING=true` em env vars curto-circuita TODAS as 4 camadas de enforcement. Roda imediatamente sem deploy.
+
+**Pontos de aplicação (todos obrigatórios para consistência):**
 
 ```typescript
+// 1. src/lib/plan-features.ts (requirePlanFeature)
 export async function requirePlanFeature(companyId: string, feature: FeatureKey) {
   if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return;
-  // resto
+  // resto...
 }
 
-// middleware.ts
-if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return NextResponse.next();
+// 2. src/app/(dashboard)/layout.tsx
+if (process.env.DISABLE_PLAN_FEATURE_GATING !== "true") {
+  // checagem de blocked
+}
+
+// 3. src/lib/with-plan-feature.ts (wrapper de API)
+if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return handler(req);
+
+// 4. src/app/api/plan-features/route.ts (UI)
+if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") {
+  return NextResponse.json({
+    features: Object.fromEntries(ALL_FEATURES.map((k) => [k, "true"])),
+  });
+}
 ```
 
+Quando kill switch está ligado, sidebar mostra tudo, FeatureGate libera tudo, API responde, layout não redireciona. Estado consistente entre frontend e backend.
+
+**Modo de uso:** ligar via painel Vercel (`DISABLE_PLAN_FEATURE_GATING=true`) e fazer redeploy de zero-config (env var change). Em emergência: trocar o valor invalida cache de features de todos os clientes na próxima request (TTL 5min).
+
 ---
+
+## Plano de Comunicação
+
+Mesmo sem grandfathering automático, é responsabilidade aliar com produto/CS antes do Passo 7:
+
+1. **D-7 antes do flip:** rodar query analítica e exportar lista de empresas Básicas que tocaram em qualquer das 13 features no último mês.
+   ```sql
+   -- Empresas Básicas que usaram DRE recentemente (exemplo)
+   SELECT DISTINCT c.id, c.name, c.email, MAX(al."createdAt") as ultima_acao
+   FROM "Company" c
+   JOIN "Subscription" s ON s."companyId" = c.id AND s.status IN ('ACTIVE','TRIAL')
+   JOIN "Plan" p ON p.id = s."planId" AND p.slug = 'basico'
+   LEFT JOIN "AuditLog" al ON al."companyId" = c.id
+     AND al."entityType" = 'FinanceEntry'
+     AND al."createdAt" > NOW() - INTERVAL '30 days'
+   WHERE al.id IS NOT NULL
+   GROUP BY c.id;
+   ```
+2. **D-3:** email com aviso da mudança + oferta de trial Profissional 30 dias gratuito para os impactados.
+3. **D-0 (Passo 7):** suporte preparado com macro de resposta para "perdi acesso a X".
+4. **D+7:** monitorar tickets de suporte e métricas de upgrade Básico→Profissional.
 
 ## Riscos identificados e mitigação
 
@@ -452,19 +698,54 @@ if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return NextResponse.next
 
 ## Critérios de aceite
 
-- [ ] Catálogo `src/lib/plan-feature-catalog.ts` com 13 features + registry de páginas/APIs/sidebar
-- [ ] Middleware bloqueia 13 rotas e 13 prefixes de API quando feature=false
-- [ ] Cache 5min com invalidação por companyId
-- [ ] 13 famílias de API com `requirePlanFeature` no topo (defesa em profundidade)
+### Funcionais
+- [ ] Catálogo `src/lib/plan-feature-catalog.ts` com 13 features + registry com `pageMatchers` (string|RegExp) e `apiMatchers` (string|RegExp), incluindo dynamic segments para `/api/sales/[id]/refund(s)`
+- [ ] `(dashboard)/layout.tsx` redireciona para `/dashboard?upgrade-required=<feature>` quando rota bloqueada (Node runtime, usa Prisma + cache)
+- [ ] Wrapper `withPlanFeatureGuard` aplicado nas 13 famílias de API (allow-list para `/api/auth`, `/api/plan-features`, `/api/admin`, `/api/health`)
+- [ ] `requirePlanFeature` continua no topo dos handlers das 13 APIs (defesa em profundidade)
 - [ ] Sidebar + MobileNav filtram itens por `hasFeature`
-- [ ] `<FeatureGate>` aplicado nos 4 pontos inline identificados
-- [ ] Seed idempotente atualiza preço (14990) e 13 features no Básico
-- [ ] Seed garante 13 features=true nos planos pagos
-- [ ] Landing exibe preço R$ 149,90 e tabela comparativa correta
-- [ ] Admin SaaS pode trocar plano de cliente e invalidação roda
-- [ ] Testes unit + integration + E2E passam
-- [ ] Kill switch `DISABLE_PLAN_FEATURE_GATING` funciona
-- [ ] Smoke test em produção: cliente Básico vê 13 telas bloqueadas; cliente Pro vê tudo
+- [ ] `<FeatureGate>` refatorado: infere `featureName` do registry; aplicado nos 4 pontos inline
+- [ ] `/api/plan-features` retorna as 13 keys novas no `ALL_FEATURES` (para contas `accessEnabled`)
+
+### Dados
+- [ ] Seed roda dentro de `prisma.$transaction` atômica
+- [ ] Seed atualiza preço Básico (14990 / 149900)
+- [ ] Seed marca 13 features=false no Básico; 13 features=true em `["profissional", "enterprise"]`
+- [ ] Seed loga warning quando plano não encontrado (em vez de continue silencioso)
+- [ ] Seed roda 2x = mesmo estado final (idempotente)
+- [ ] Rollback script `seed-plan-basico-features-rollback.ts` existe e funciona
+
+### Cache e performance
+- [ ] Cache LRU com `max: 500` empresas e `ttl: 5min`
+- [ ] Erros de DB não corrompem cache (não armazena exception)
+- [ ] Cache invalidado via `invalidatePlanFeaturesCache(companyId)` em `subscriptionService.changePlan` e admin endpoint de troca de plano
+- [ ] Latência adicional do gate no layout: P95 < 50ms (medir antes/depois)
+
+### Kill switch
+- [ ] `DISABLE_PLAN_FEATURE_GATING=true` curto-circuita: `requirePlanFeature`, layout gate, withPlanFeatureGuard, `/api/plan-features`
+- [ ] Com kill switch ligado, cliente Básico vê todas as 13 telas como se fosse Pro
+- [ ] Com kill switch ligado, sidebar não esconde nada
+
+### Comportamentos especiais
+- [ ] Cliente com `Subscription = null` (modo `accessEnabled`) NÃO é bloqueado
+- [ ] Cliente com DB indisponível NÃO é bloqueado (fail-open com log warn)
+- [ ] Sale.cancel (do PDV) continua livre em todos os planos
+- [ ] Receber AccountReceivable continua livre em todos os planos
+
+### Testes
+- [ ] Unit: `pathMatchesAny` (string + regex), `findBlockedFeature` (13 positivos + 13 negativos), `requirePlanFeature` (3 cases)
+- [ ] Integration: seed em DB de teste, idempotência, rollback
+- [ ] E2E: Básico bloqueado, Pro livre, troca de plano invalida cache, kill switch funciona
+
+### Site/Admin
+- [ ] Landing exibe preço R$ 149,90 e tabela ✓/✗ correta entre Básico/Profissional/Enterprise
+- [ ] Landing consome `label` do `FEATURE_REGISTRY`
+- [ ] Admin `/admin/companies/[id]` permite trocar plano + invalida cache automaticamente
+
+### Smoke test pós-rollout
+- [ ] Conta de teste Básico: 13 telas redirecionam; APIs respondem 403
+- [ ] Conta de teste Profissional: 13 telas livres
+- [ ] Admin troca conta de teste Pro → Básico em runtime; próxima request reflete
 
 ## Não-objetivos
 
