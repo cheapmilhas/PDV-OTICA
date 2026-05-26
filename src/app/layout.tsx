@@ -5,6 +5,7 @@ import { Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { PostHogProvider } from "@/components/providers/posthog-provider";
+import { PostHogIdentify } from "@/components/providers/posthog-identify";
 
 // Plus Jakarta Sans — geometric, contemporary, avoids "AI template" associations
 const jakartaSans = Plus_Jakarta_Sans({
@@ -89,7 +90,10 @@ export default function RootLayout({
       <body className={`${jakartaSans.variable} font-sans`}>
         <Suspense fallback={null}>
           <PostHogProvider>
-            <SessionProvider>{children}</SessionProvider>
+            <SessionProvider>
+              <PostHogIdentify />
+              {children}
+            </SessionProvider>
           </PostHogProvider>
         </Suspense>
         <Toaster />
