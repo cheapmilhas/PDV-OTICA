@@ -33,6 +33,12 @@ yarn-error.log*
 # script logs (gerados por scripts/diagnose-* e scripts/fix-*)
 /scripts/logs/
 
+# QA artefatos (screenshots, dumps de auth, etc — gerados localmente)
+/qa-artifacts/
+
+# scripts ad-hoc de verificação manual (_prefixados)
+/scripts/_*
+
 # vercel
 .vercel
 
