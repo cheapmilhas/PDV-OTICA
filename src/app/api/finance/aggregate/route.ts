@@ -4,11 +4,12 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
 /**
  * POST — Recalcular DailyAgg para um período (idempotente).
  */
-export async function POST(req: NextRequest) {
+export const POST = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -197,4 +198,4 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
