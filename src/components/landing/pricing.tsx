@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { Check, Star, Users, Building2, Package, Loader2 } from "lucide-react";
+import { FEATURE_REGISTRY } from "@/lib/plan-feature-catalog";
 
 interface PlanFeature {
   id: string;
@@ -25,7 +26,9 @@ interface Plan {
   features: PlanFeature[];
 }
 
-const FEATURE_LABELS: Record<string, string> = {
+// Labels legacy não cobertas pelo catálogo de plan-feature-catalog (que cobre
+// as 13 features novas gated). Mantidas aqui pra retrocompatibilidade.
+const LEGACY_FEATURE_LABELS: Record<string, string> = {
   crm: "CRM Inteligente",
   goals: "Metas & Comissoes",
   campaigns: "Campanhas",
@@ -34,6 +37,12 @@ const FEATURE_LABELS: Record<string, string> = {
   reports_advanced: "Relatorios Avancados",
   api_access: "Acesso a API",
 };
+
+function resolveFeatureLabel(key: string): string {
+  const registryEntry = (FEATURE_REGISTRY as Record<string, { label: string }>)[key];
+  if (registryEntry) return registryEntry.label;
+  return LEGACY_FEATURE_LABELS[key] ?? key;
+}
 
 const BASE_FEATURES = [
   "PDV completo",
@@ -158,7 +167,7 @@ export function Pricing() {
                   : 0;
               const enabledFeatures = plan.features
                 .filter((f) => f.value === "true")
-                .map((f) => FEATURE_LABELS[f.key] || f.key);
+                .map((f) => resolveFeatureLabel(f.key));
 
               return (
                 <div
