@@ -321,6 +321,7 @@ type RouteContext = { params: Promise<Record<string, string>> };
 
 const ALLOWLIST_PREFIXES = [
   "/api/auth",
+  "/api/admin-auth",
   "/api/plan-features",
   "/api/admin",
   "/api/health",

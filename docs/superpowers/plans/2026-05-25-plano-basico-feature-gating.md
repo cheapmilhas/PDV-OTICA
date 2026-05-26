@@ -868,6 +868,8 @@ Expected: FAIL.
 
 Copiar bloco "withPlanFeatureGuard" da spec (seção "Camada 1") para `src/lib/with-plan-feature.ts`.
 
+**⚠️ Atenção:** confirmar que o `ALLOWLIST_PREFIXES` inclui as 5 entradas obrigatórias: `/api/auth`, `/api/admin-auth`, `/api/plan-features`, `/api/admin`, `/api/health`. A spec foi atualizada nessa parte (v3+) — sem `/api/admin-auth`, o login do admin SaaS pode ficar bloqueado em request com sessão de cliente Básico.
+
 - [ ] **Step 4: Rodar, deve passar**
 
 Run: `npm test -- with-plan-feature`
@@ -997,6 +999,200 @@ await requirePlanFeature(companyId, FEATURES.LENS_TREATMENTS);
 - [ ] **Step 3: Redeploy**
 - [ ] **Step 4: Smoke**: logar com conta real, navegar pelas 13 telas — todas devem carregar (porque kill switch on).
 
+#### Task 4.7: Invalidar cache em `subscriptionService.changePlan`
+
+**Files:**
+- Modify: `src/services/subscription.service.ts` (ou onde quer que mora `changePlan`/`updatePlan`)
+- Modify: endpoint admin que troca plano de cliente (provável `src/app/api/admin/companies/[id]/route.ts` ou `src/app/api/admin/plans/[id]/route.ts`)
+
+- [ ] **Step 1: Localizar onde `Subscription.planId` é alterado hoje**
+
+Run: `grep -rn "planId:" src/services src/app/api/admin --include="*.ts" | grep -E "update|set" | head -10`
+Identificar o método (ex: `subscriptionService.changePlan`) ou o handler admin.
+
+- [ ] **Step 2: Test primeiro (mock prisma + cache)**
+
+Em `src/services/__tests__/subscription.service.test.ts` (ou local equivalente):
+```typescript
+import { describe, it, expect, vi } from "vitest";
+vi.mock("@/lib/plan-features-cache", () => ({ invalidatePlanFeaturesCache: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({ prisma: { subscription: { update: vi.fn().mockResolvedValue({}) } } }));
+
+import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
+import { changePlan } from "@/services/subscription.service"; // ajustar import
+
+describe("changePlan", () => {
+  it("invalida cache de features após mudar plano", async () => {
+    await changePlan("co1", "newPlan");
+    expect(invalidatePlanFeaturesCache).toHaveBeenCalledWith("co1");
+  });
+});
+```
+
+- [ ] **Step 3: Rodar, deve falhar**
+
+Run: `npm test -- subscription.service`
+Expected: FAIL.
+
+- [ ] **Step 4: Implementar**
+
+Adicionar import e chamada:
+```typescript
+import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
+
+// ao final do changePlan, após o prisma.subscription.update:
+invalidatePlanFeaturesCache(companyId);
+```
+
+- [ ] **Step 5: Rodar, deve passar**
+
+Run: `npm test -- subscription.service`
+Expected: PASS.
+
+- [ ] **Step 6: Commit**
+
+```bash
+git add src/services/subscription.service.ts src/services/__tests__/subscription.service.test.ts
+git commit -m "feat(plan-gating): invalidar cache em changePlan (cross-camada)"
+```
+
+#### Task 4.8: Banner/toast `upgrade-required` no dashboard
+
+**Files:**
+- Modify: `src/app/(dashboard)/dashboard/page.tsx` (ou onde mora a rota `/dashboard` que recebe o redirect)
+- Create: `src/components/plan/upgrade-required-banner.tsx`
+
+- [ ] **Step 1: Criar componente client-side de banner**
+
+```typescript
+"use client";
+import { useSearchParams } from "next/navigation";
+import { useEffect, useState } from "react";
+import { FEATURE_REGISTRY, type FeatureKey } from "@/lib/plan-feature-catalog";
+
+export function UpgradeRequiredBanner() {
+  const params = useSearchParams();
+  const feature = params.get("upgrade-required") as FeatureKey | null;
+  const [visible, setVisible] = useState(true);
+  useEffect(() => {
+    if (feature) setVisible(true);
+  }, [feature]);
+  if (!feature || !visible) return null;
+  const label = FEATURE_REGISTRY[feature]?.label ?? feature;
+  return (
+    <div className="rounded-md border border-amber-300 bg-amber-50 p-3 text-amber-900">
+      🔒 <strong>{label}</strong> não está disponível no seu plano.{" "}
+      <a href="/dashboard/configuracoes/empresa" className="underline">
+        Ver opções de upgrade
+      </a>
+      <button onClick={() => setVisible(false)} className="ml-2 text-xs">✕</button>
+    </div>
+  );
+}
+```
+
+- [ ] **Step 2: Adicionar ao dashboard principal**
+
+Em `src/app/(dashboard)/dashboard/page.tsx`, importar e renderizar `<UpgradeRequiredBanner />` no topo do conteúdo.
+
+- [ ] **Step 3: Smoke E2E**
+
+`e2e/feature-gating/upgrade-banner.spec.ts`:
+```typescript
+import { test, expect } from "@playwright/test";
+test("dashboard mostra banner quando ?upgrade-required=<feature>", async ({ page }) => {
+  await page.goto("/dashboard?upgrade-required=dre_report");
+  await expect(page.locator("text=DRE Dinâmico").first()).toBeVisible();
+});
+```
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/app/\(dashboard\)/dashboard/page.tsx src/components/plan/upgrade-required-banner.tsx e2e/feature-gating/upgrade-banner.spec.ts
+git commit -m "feat(plan-gating): banner upgrade-required no dashboard"
+```
+
+#### Task 4.9: Teste integração paramétrico das 13 APIs
+
+**Files:**
+- Create: `src/lib/__tests__/api-coverage.test.ts`
+
+- [ ] **Step 1: Test paramétrico**
+
+```typescript
+import { describe, it, expect, vi, beforeEach } from "vitest";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { FEATURES, FEATURE_REGISTRY } from "@/lib/plan-feature-catalog";
+
+vi.mock("@/auth", () => ({ auth: vi.fn() }));
+vi.mock("@/lib/plan-features-cache", () => ({ getCachedPlanFeatures: vi.fn() }));
+import { auth } from "@/auth";
+import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
+
+// Exemplos de path por feature (1 por feature, cobrindo dynamic se for o caso)
+const SAMPLES: Array<[keyof typeof FEATURES, string]> = [
+  ["LENS_TREATMENTS", "/api/lens-treatments"],
+  ["STOCK_TRANSFERS", "/api/stock-transfers"],
+  ["BRANCH_COMPARISON", "/api/reports/branch-comparison"],
+  ["DRE_REPORT", "/api/finance/reports/dre"],
+  ["CASH_FLOW", "/api/finance/reports/cash-flow"],
+  ["FINANCE_ENTRIES", "/api/finance/entries"],
+  ["FINANCE_ACCOUNTS", "/api/finance/accounts"],
+  ["CHART_OF_ACCOUNTS", "/api/finance/chart"],
+  ["SALES_REFUNDS", "/api/sales/abc123/refund"],
+  ["BANK_RECONCILIATION", "/api/finance/reconciliation"],
+  ["BI_ANALYTICS", "/api/finance/bi"],
+  ["CARD_RECEIVABLES", "/api/finance/card-receivables"],
+  ["RECURRING_EXPENSES", "/api/recurring-expenses"],
+];
+
+describe("Cobertura wrapper das 13 APIs", () => {
+  beforeEach(() => {
+    vi.resetAllMocks();
+    delete process.env.DISABLE_PLAN_FEATURE_GATING;
+    (auth as any).mockResolvedValue({ user: { companyId: "co1" } });
+  });
+
+  it.each(SAMPLES)("%s bloqueia %s quando feature=false", async (featureKeyName, path) => {
+    const featureValue = FEATURES[featureKeyName];
+    (getCachedPlanFeatures as any).mockResolvedValue({
+      features: { [featureValue]: false },
+      hasSubscription: true,
+    });
+    const handler = vi.fn(async () => new Response("ok"));
+    const wrapped = withPlanFeatureGuard(handler);
+    const res = await wrapped(new Request(`http://x${path}`), { params: Promise.resolve({}) });
+    expect(res.status).toBe(403);
+    expect(handler).not.toHaveBeenCalled();
+  });
+
+  it.each(SAMPLES)("%s libera %s quando feature=true", async (featureKeyName, path) => {
+    const featureValue = FEATURES[featureKeyName];
+    (getCachedPlanFeatures as any).mockResolvedValue({
+      features: { [featureValue]: true },
+      hasSubscription: true,
+    });
+    const handler = vi.fn(async () => new Response("ok"));
+    const wrapped = withPlanFeatureGuard(handler);
+    const res = await wrapped(new Request(`http://x${path}`), { params: Promise.resolve({}) });
+    expect(res.status).toBe(200);
+  });
+});
+```
+
+- [ ] **Step 2: Rodar, deve passar (sem mexer no wrapper)**
+
+Run: `npm test -- api-coverage`
+Expected: 26 passed (13 block + 13 free).
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add src/lib/__tests__/api-coverage.test.ts
+git commit -m "test(plan-gating): cobertura paramétrica das 13 APIs (block + free)"
+```
+
 ---
 
 ### Fase 5 — Sidebar / MobileNav (Rollout passo 5)
@@ -1046,19 +1242,111 @@ git add src/components/layout/sidebar.tsx src/components/layout/mobile-nav.tsx
 git commit -m "feat(plan-gating): sidebar + mobile-nav filtram 13 itens por hasFeature"
 ```
 
-#### Task 5.2: Aplicar `<FeatureGate>` em 4 botões inline identificados
+#### Task 5.2.a: FeatureGate em "Devolver mercadoria" (vendas detalhes)
+
+**File:** `src/app/(dashboard)/dashboard/vendas/[id]/detalhes/page.tsx`
+
+- [ ] **Step 1: Localizar botão "Devolver"**
+
+Run: `grep -n "Devolver\|refund\|devolução" src/app/\(dashboard\)/dashboard/vendas/\[id\]/detalhes/page.tsx`
+Anotar linha do botão.
+
+- [ ] **Step 2: Envolver com FeatureGate**
+
+```tsx
+import { FeatureGate } from "@/components/plan/feature-gate";
+import { FEATURES } from "@/lib/plan-feature-catalog";
+
+// Em volta do botão:
+<FeatureGate feature={FEATURES.SALES_REFUNDS} fallback={null}>
+  <Button onClick={handleRefund}>Devolver mercadoria</Button>
+</FeatureGate>
+```
+
+- [ ] **Step 3: Smoke visual**
+
+`npm run dev`. Logar como conta Pro (ou kill switch on) — botão aparece. Setar feature=false no banco de teste — botão some.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add src/app/\(dashboard\)/dashboard/vendas/\[id\]/detalhes/page.tsx
+git commit -m "feat(plan-gating): FeatureGate em 'Devolver mercadoria' (vendas detalhes)"
+```
+
+#### Task 5.2.b: FeatureGate em seletor de Tratamentos (OS nova/editar)
 
 **Files:**
-- Modify: `src/app/(dashboard)/dashboard/vendas/[id]/detalhes/page.tsx`
-- Modify: `src/app/(dashboard)/dashboard/ordens-servico/nova/page.tsx` (e variantes editar)
-- Modify: `src/app/(dashboard)/dashboard/estoque/page.tsx`
-- Modify: `src/app/(dashboard)/dashboard/relatorios/page.tsx`
+- `src/app/(dashboard)/dashboard/ordens-servico/nova/page.tsx`
+- `src/app/(dashboard)/dashboard/ordens-servico/[id]/editar/page.tsx`
 
-Para cada um:
-- [ ] Identificar o botão/seção (ver lista em "Camada 4" da spec)
-- [ ] Envolver com `<FeatureGate feature={FEATURES.X}>...</FeatureGate>`
-- [ ] Smoke visual
-- [ ] Commit
+- [ ] **Step 1: Localizar campo de Tratamentos**
+
+Run: `grep -n "treatment\|Tratamento" src/app/\(dashboard\)/dashboard/ordens-servico/{nova,\[id\]/editar}/page.tsx`
+
+- [ ] **Step 2: Envolver com FeatureGate (em ambos os arquivos)**
+
+```tsx
+<FeatureGate feature={FEATURES.LENS_TREATMENTS} fallback={null}>
+  <TreatmentSelector ... />
+</FeatureGate>
+```
+
+- [ ] **Step 3: Smoke + Commit**
+
+```bash
+git add src/app/\(dashboard\)/dashboard/ordens-servico/
+git commit -m "feat(plan-gating): FeatureGate em seletor de Tratamentos (OS)"
+```
+
+#### Task 5.2.c: FeatureGate em "Nova transferência" (estoque)
+
+**File:** `src/app/(dashboard)/dashboard/estoque/page.tsx`
+
+- [ ] **Step 1: Localizar botão**
+
+Run: `grep -n "transferência\|transfer\|Transferir" src/app/\(dashboard\)/dashboard/estoque/page.tsx`
+
+- [ ] **Step 2: Envolver**
+
+```tsx
+<FeatureGate feature={FEATURES.STOCK_TRANSFERS} fallback={null}>
+  <Button asChild><Link href="/dashboard/estoque/transferencias/nova">+ Nova transferência</Link></Button>
+</FeatureGate>
+```
+
+- [ ] **Step 3: Smoke + Commit**
+
+```bash
+git add src/app/\(dashboard\)/dashboard/estoque/page.tsx
+git commit -m "feat(plan-gating): FeatureGate em 'Nova transferência' (estoque)"
+```
+
+#### Task 5.2.d: Filtrar relatórios bloqueados no index
+
+**File:** `src/app/(dashboard)/dashboard/relatorios/page.tsx`
+
+- [ ] **Step 1: Localizar lista de relatórios**
+
+Run: `grep -n "comparativo-lojas\|/dashboard/relatorios/dre\|relatorios/avancados" src/app/\(dashboard\)/dashboard/relatorios/page.tsx`
+
+- [ ] **Step 2: Envolver cards de DRE e Comparativo Lojas com FeatureGate**
+
+```tsx
+<FeatureGate feature={FEATURES.DRE_REPORT} fallback={null}>
+  <ReportCard href="/dashboard/relatorios/dre" title="DRE" />
+</FeatureGate>
+<FeatureGate feature={FEATURES.BRANCH_COMPARISON} fallback={null}>
+  <ReportCard href="/dashboard/relatorios/comparativo-lojas" title="Comparativo Lojas" />
+</FeatureGate>
+```
+
+- [ ] **Step 3: Smoke + Commit**
+
+```bash
+git add src/app/\(dashboard\)/dashboard/relatorios/page.tsx
+git commit -m "feat(plan-gating): FeatureGate em DRE + Comparativo no index de relatórios"
+```
 
 ---
 
@@ -1134,7 +1422,58 @@ git add prisma/seed-plan-basico-features.ts prisma/seed-plan-basico-features-rol
 git commit -m "feat(plan-gating): seed atômico Básico=false + rollback"
 ```
 
-#### Task 6.2: Rodar seed em PRODUÇÃO para os planos pagos APENAS
+#### Task 6.2: Criar script versionado `seed-plan-basico-features-paid-only.ts`
+
+**Files:**
+- Create: `prisma/seed-plan-basico-features-paid-only.ts`
+
+- [ ] **Step 1: Criar script (variante do principal, sem o bloco de Básico)**
+
+```typescript
+// prisma/seed-plan-basico-features-paid-only.ts
+import { PrismaClient } from "@prisma/client";
+import { FEATURES } from "../src/lib/plan-feature-catalog";
+
+const prisma = new PrismaClient();
+const PAID_PLAN_SLUGS = ["profissional", "enterprise"];
+
+async function main() {
+  await prisma.$transaction(async (tx) => {
+    for (const slug of PAID_PLAN_SLUGS) {
+      const plan = await tx.plan.findUnique({ where: { slug } });
+      if (!plan) {
+        console.warn(`[seed-paid-only] Plano ${slug} não encontrado — pulando.`);
+        continue;
+      }
+      for (const key of Object.values(FEATURES)) {
+        await tx.planFeature.upsert({
+          where: { planId_key: { planId: plan.id, key } },
+          update: { value: "true" },
+          create: { planId: plan.id, key, value: "true" },
+        });
+      }
+    }
+  }, { timeout: 30_000 });
+  console.log(`✓ Planos pagos (${PAID_PLAN_SLUGS.join(", ")}): 13 features=true`);
+}
+
+main().finally(() => prisma.$disconnect());
+```
+
+- [ ] **Step 2: Testar em branch Neon de teste**
+
+```bash
+DATABASE_URL="<test-branch>" npx tsx prisma/seed-plan-basico-features-paid-only.ts
+```
+
+- [ ] **Step 3: Commit**
+
+```bash
+git add prisma/seed-plan-basico-features-paid-only.ts
+git commit -m "feat(plan-gating): script seed-only-paid (Passo 6 do rollout)"
+```
+
+#### Task 6.3: Rodar seed-paid-only em PRODUÇÃO
 
 **⚠️ Operação manual. Não automatizar via CI inicialmente.**
 
@@ -1144,17 +1483,13 @@ git commit -m "feat(plan-gating): seed atômico Básico=false + rollback"
 pg_dump "$DATABASE_URL" --table=PlanFeature --table=Plan > backup-plans-$(date +%Y%m%d).sql
 ```
 
-- [ ] **Step 2: Modificar temporariamente o script para SÓ atualizar planos pagos**
-
-Adicionar flag `--paid-only` no script, ou criar uma cópia parcial só com o loop dos paid plans (sem mexer no Básico ainda).
-
-- [ ] **Step 3: Rodar contra produção**
+- [ ] **Step 2: Rodar contra produção**
 
 ```bash
 DATABASE_URL="$PROD_DATABASE_URL" npx tsx prisma/seed-plan-basico-features-paid-only.ts
 ```
 
-- [ ] **Step 4: Verificar**
+- [ ] **Step 3: Verificar**
 
 ```sql
 SELECT p.slug, pf.key, pf.value
@@ -1164,6 +1499,115 @@ WHERE pf.key IN ('lens_treatments', 'cash_flow', 'sales_refunds')
   AND p.slug IN ('profissional', 'enterprise');
 ```
 Esperado: 6 linhas com value="true".
+
+#### Task 6.4: Criar 3 specs E2E (basico-blocked, profissional-livre, kill-switch)
+
+**Files:**
+- Create: `e2e/feature-gating/basico-blocked.spec.ts`
+- Create: `e2e/feature-gating/profissional-livre.spec.ts`
+- Create: `e2e/feature-gating/kill-switch.spec.ts`
+
+Pré-requisito: contas de teste no banco com `Subscription.planId` apontando para basico e profissional respectivamente. Setup helper `e2e/fixtures/login.ts`.
+
+- [ ] **Step 1: Criar fixture de login**
+
+`e2e/fixtures/login.ts`:
+```typescript
+import { Page } from "@playwright/test";
+export async function loginAs(page: Page, plan: "basico" | "profissional") {
+  const email = plan === "basico" ? process.env.E2E_BASICO_EMAIL! : process.env.E2E_PRO_EMAIL!;
+  const password = plan === "basico" ? process.env.E2E_BASICO_PASSWORD! : process.env.E2E_PRO_PASSWORD!;
+  await page.goto("/login");
+  await page.fill('input[name="email"]', email);
+  await page.fill('input[name="password"]', password);
+  await page.click('button[type="submit"]');
+  await page.waitForURL(/\/dashboard/);
+}
+```
+
+- [ ] **Step 2: `basico-blocked.spec.ts`**
+
+```typescript
+import { test, expect } from "@playwright/test";
+import { loginAs } from "../fixtures/login";
+
+test.describe("Cliente Básico", () => {
+  test.beforeEach(async ({ page }) => await loginAs(page, "basico"));
+
+  for (const [feature, path] of [
+    ["DRE", "/dashboard/financeiro/dre"],
+    ["Fluxo de Caixa", "/dashboard/financeiro/fluxo-caixa"],
+    ["Devoluções", "/dashboard/financeiro/devolucoes"],
+    ["Tratamentos", "/dashboard/tratamentos"],
+  ] as const) {
+    test(`bloqueia ${feature}`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page).toHaveURL(/\/dashboard\?upgrade-required=/);
+    });
+  }
+
+  test("sidebar não mostra os 13 itens", async ({ page }) => {
+    await page.goto("/dashboard");
+    await expect(page.locator("text=DRE Dinâmico")).toHaveCount(0);
+    await expect(page.locator("text=Tratamentos")).toHaveCount(0);
+  });
+
+  test("API /api/finance/entries retorna 403", async ({ request }) => {
+    const res = await request.get("/api/finance/entries");
+    expect(res.status()).toBe(403);
+    const body = await res.json();
+    expect(body.error.code).toBe("PLAN_FEATURE_REQUIRED");
+  });
+});
+```
+
+- [ ] **Step 3: `profissional-livre.spec.ts`**
+
+```typescript
+import { test, expect } from "@playwright/test";
+import { loginAs } from "../fixtures/login";
+
+test.describe("Cliente Profissional", () => {
+  test.beforeEach(async ({ page }) => await loginAs(page, "profissional"));
+
+  for (const path of [
+    "/dashboard/financeiro/dre",
+    "/dashboard/financeiro/fluxo-caixa",
+    "/dashboard/tratamentos",
+    "/dashboard/estoque/transferencias",
+  ]) {
+    test(`libera ${path}`, async ({ page }) => {
+      await page.goto(path);
+      await expect(page).not.toHaveURL(/upgrade-required/);
+    });
+  }
+});
+```
+
+- [ ] **Step 4: `kill-switch.spec.ts`**
+
+```typescript
+import { test, expect } from "@playwright/test";
+import { loginAs } from "../fixtures/login";
+
+test.describe("Kill switch DISABLE_PLAN_FEATURE_GATING", () => {
+  test.skip(process.env.E2E_KILL_SWITCH !== "true",
+    "Rodar manualmente após setar DISABLE_PLAN_FEATURE_GATING=true");
+
+  test("básico vê tudo quando kill switch ligado", async ({ page }) => {
+    await loginAs(page, "basico");
+    await page.goto("/dashboard/financeiro/dre");
+    await expect(page).not.toHaveURL(/upgrade-required/);
+  });
+});
+```
+
+- [ ] **Step 5: Commit**
+
+```bash
+git add e2e/feature-gating/ e2e/fixtures/
+git commit -m "test(plan-gating): 3 specs E2E (basico-blocked, profissional-livre, kill-switch)"
+```
 
 ---
 
