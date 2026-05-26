@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError, notFoundError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function PATCH(
-  req: NextRequest,
+export const PATCH = withPlanFeatureGuard(async (
+  req: Request,
   { params }: { params: Promise<{ id: string; itemId: string }> }
-) {
+) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -56,4 +57,4 @@ export async function PATCH(
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

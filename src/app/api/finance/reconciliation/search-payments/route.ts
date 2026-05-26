@@ -3,12 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function GET(req: NextRequest) {
+export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    const searchParams = req.nextUrl.searchParams;
+    const searchParams = (req as NextRequest).nextUrl.searchParams;
 
     const nsu = searchParams.get("nsu");
     const authCode = searchParams.get("authCode");
@@ -57,4 +58,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
