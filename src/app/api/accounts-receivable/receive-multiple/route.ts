@@ -219,7 +219,7 @@ export async function POST(request: Request) {
       }
 
       return updated;
-    });
+    }, { timeout: 30_000 });
 
     // Serializar Decimals para number
     const serializedAccount = {

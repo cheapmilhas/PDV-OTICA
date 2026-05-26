@@ -268,7 +268,7 @@ export class QuoteService {
       }
 
       return newQuote;
-    });
+    }, { timeout: 30_000 });
 
     // Retornar orçamento completo
     return this.getById(quote.id, companyId, true);
@@ -382,7 +382,7 @@ export class QuoteService {
       }
 
       return updated;
-    });
+    }, { timeout: 30_000 });
 
     // Retornar orçamento completo
     return this.getById(quote.id, companyId, true);

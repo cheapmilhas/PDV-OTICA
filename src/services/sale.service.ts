@@ -705,7 +705,7 @@ export class SaleService {
           }
         }
       }
-    });
+    }, { timeout: 30_000 });
 
     // 8. Reverter cashback (se cliente ganhou)
     if (sale.customerId) {
@@ -894,7 +894,7 @@ export class SaleService {
           status: "PENDING",
         },
       });
-    });
+    }, { timeout: 30_000 });
 
     // 5. Reprocessar campanhas de bonificação (se aplicável - fora da transação principal)
     try {

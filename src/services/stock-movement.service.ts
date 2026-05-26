@@ -265,7 +265,7 @@ export class StockMovementService {
       }
 
       return createdMovement;
-    });
+    }, { timeout: 30_000 });
 
     return movement;
   }
@@ -363,7 +363,7 @@ export class StockMovementService {
       }
 
       return { transferOut, transferIn };
-    });
+    }, { timeout: 30_000 });
 
     return result;
   }

@@ -99,7 +99,7 @@ export async function POST(
       }
 
       return newARs;
-    });
+    }, { timeout: 30_000 });
 
     log.info("Conta renegociada", {
       originalId: original.id,

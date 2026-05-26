@@ -188,7 +188,7 @@ export async function POST(
       }
 
       return refund;
-    });
+    }, { timeout: 30_000 });
 
     return createdResponse(JSON.parse(JSON.stringify(result)));
   } catch (error) {

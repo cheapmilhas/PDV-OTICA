@@ -550,7 +550,7 @@ export async function PATCH(request: Request) {
       }
 
       return updated;
-    });
+    }, { timeout: 30_000 });
 
     // Serializar Decimals para number
     const serializedAccount = {

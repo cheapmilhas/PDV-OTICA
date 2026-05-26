@@ -259,7 +259,7 @@ export class ServiceOrderService {
       });
 
       return newOrder;
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(order.id, companyId, true);
   }
@@ -346,7 +346,7 @@ export class ServiceOrderService {
           changedByUserId: userId,
         },
       });
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(id, companyId, true);
   }
@@ -403,7 +403,7 @@ export class ServiceOrderService {
           changedByUserId: userId,
         },
       });
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(id, companyId, true);
   }
@@ -458,7 +458,7 @@ export class ServiceOrderService {
           metadata: options?.qualityRating ? { qualityRating: options.qualityRating } : undefined,
         },
       });
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(id, companyId, true);
   }
@@ -527,7 +527,7 @@ export class ServiceOrderService {
           changedByUserId: userId,
         },
       });
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(id, companyId, true);
   }
@@ -568,7 +568,7 @@ export class ServiceOrderService {
           changedByUserId: userId,
         },
       });
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(id, companyId, true);
   }
@@ -650,7 +650,7 @@ export class ServiceOrderService {
       });
 
       return newOrder;
-    });
+    }, { timeout: 30_000 });
 
     return this.getById(order.id, companyId, true);
   }

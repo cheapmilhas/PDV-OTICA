@@ -201,7 +201,7 @@ export const cashbackService = {
       });
 
       return movement;
-    });
+    }, { timeout: 30_000 });
   },
 
   /**
@@ -312,7 +312,7 @@ export const cashbackService = {
       });
 
       return movement;
-    });
+    }, { timeout: 30_000 });
   },
 
   /**
@@ -366,7 +366,7 @@ export const cashbackService = {
       });
 
       return movement;
-    });
+    }, { timeout: 30_000 });
   },
 
   /**
@@ -429,7 +429,7 @@ export const cashbackService = {
             customerId: movement.customerCashback.customerId,
             amount: Number(movement.amount),
           });
-        });
+        }, { timeout: 30_000 });
       } catch (error) {
         results.push({
           success: false,

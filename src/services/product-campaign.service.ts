@@ -100,7 +100,7 @@ export async function createCampaign(data: CreateCampaignDTO) {
     }
 
     return campaign;
-  });
+  }, { timeout: 30_000 });
 }
 
 export async function getCampaigns(filter: CampaignFilter) {
@@ -271,7 +271,7 @@ export async function updateCampaign(
     }
 
     return updated;
-  });
+  }, { timeout: 30_000 });
 }
 
 export async function pauseCampaign(id: string, companyId: string) {
@@ -909,7 +909,7 @@ export async function reverseBonusForSale(saleId: string, companyId: string) {
         });
       }
     }
-  });
+  }, { timeout: 30_000 });
 
   return { reversed: entries.length };
 }
@@ -994,7 +994,7 @@ export async function reconcileCampaignProgress(
         },
       });
     }
-  });
+  }, { timeout: 30_000 });
 
   return { reconciled: entries.length };
 }
