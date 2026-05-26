@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -32,7 +33,7 @@ function calculateNextDueDate(dayOfMonth: number, frequency: string): Date {
   }
 }
 
-export async function GET(request: Request) {
+export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -62,9 +63,9 @@ export async function GET(request: Request) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
 
-export async function POST(request: Request) {
+export const POST = withPlanFeatureGuard(async (request: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -92,4 +93,4 @@ export async function POST(request: Request) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
