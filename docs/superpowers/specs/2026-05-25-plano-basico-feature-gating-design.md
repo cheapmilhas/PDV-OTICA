@@ -254,11 +254,31 @@ export default async function DashboardLayout({ children }: { children: React.Re
   // Kill switch
   if (process.env.DISABLE_PLAN_FEATURE_GATING !== "true") {
     const headersList = await headers();
-    const path = headersList.get("x-current-path") ?? ""; // setado por middleware leve
-    const features = await getCachedPlanFeatures(session.user.companyId);
-    const blocked = findBlockedFeature(path, features);
-    if (blocked) {
-      redirect(`/dashboard?upgrade-required=${blocked}`);
+    const path = headersList.get("x-current-path") ?? "";
+
+    // Fail-open: erro de DB libera a request com log.
+    let features: Record<string, boolean> | null = null;
+    try {
+      const cached = await getCachedPlanFeatures(session.user.companyId);
+      features = cached.features;
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          event: "plan_features_lookup_failed",
+          companyId: session.user.companyId,
+          path,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      // segue sem bloquear
+    }
+
+    if (features) {
+      const blocked = findBlockedFeature(path, features);
+      if (blocked) {
+        redirect(`/dashboard?upgrade-required=${blocked}`);
+      }
     }
   }
 
@@ -266,19 +286,28 @@ export default async function DashboardLayout({ children }: { children: React.Re
 }
 ```
 
-Para que o layout saiba o path atual, o middleware Edge existente apenas seta um header `x-current-path`:
+Para que o layout enxergue `x-current-path`, o middleware Edge precisa setar o header **no REQUEST** (não no response), usando o padrão oficial Next 14:
 
 ```typescript
 // src/middleware.ts (adição mínima, mantém Edge runtime)
+import { NextResponse, type NextRequest } from "next/server";
+
 export function middleware(req: NextRequest) {
   // ... lógica existente de admin auth ...
-  const res = NextResponse.next();
-  res.headers.set("x-current-path", req.nextUrl.pathname);
-  return res;
+
+  // Reescrever request headers para o server component enxergar.
+  const requestHeaders = new Headers(req.headers);
+  requestHeaders.set("x-current-path", req.nextUrl.pathname);
+
+  return NextResponse.next({
+    request: { headers: requestHeaders },
+  });
 }
 ```
 
-Para bloqueio de **APIs**, não dá pra usar layout. Cada handler de API precisa chamar `requirePlanFeature` no topo (Camada 2). Para um único ponto de falha menor, criar wrapper:
+**Por que `request.headers` e não `res.headers.set`:** `res.headers` escreve no response (visível ao browser/client); `request.headers` reescreve o request que o server component recebe. `headers()` do `next/headers` lê os request headers, não response.
+
+Para bloqueio de **APIs**, não dá pra usar layout. Cada handler de API precisa chamar `requirePlanFeature` no topo (Camada 2). Para um único ponto de falha menor, criar wrapper que **preserva a assinatura `(req, ctx)`** do Next 14 (necessária para handlers com dynamic segments como `[id]`):
 
 ```typescript
 // src/lib/with-plan-feature.ts
@@ -287,15 +316,46 @@ import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
 import { findBlockedFeature } from "@/lib/plan-feature-catalog";
 import { NextResponse } from "next/server";
 
-export function withPlanFeatureGuard(handler: (req: Request) => Promise<Response>) {
-  return async (req: Request) => {
-    if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return handler(req);
+// Tipo genérico para route context (Next 14: { params: Promise<Record<string,string>> })
+type RouteContext = { params: Promise<Record<string, string>> };
 
-    const session = await auth();
-    if (!session?.user?.companyId) return handler(req); // delega ao handler para 401
+const ALLOWLIST_PREFIXES = [
+  "/api/auth",
+  "/api/plan-features",
+  "/api/admin",
+  "/api/health",
+];
+
+export function withPlanFeatureGuard<C extends RouteContext = RouteContext>(
+  handler: (req: Request, ctx: C) => Promise<Response>,
+): (req: Request, ctx: C) => Promise<Response> {
+  return async (req: Request, ctx: C) => {
+    if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return handler(req, ctx);
 
     const path = new URL(req.url).pathname;
-    const features = await getCachedPlanFeatures(session.user.companyId);
+    if (ALLOWLIST_PREFIXES.some((p) => path.startsWith(p))) return handler(req, ctx);
+
+    const session = await auth();
+    if (!session?.user?.companyId) return handler(req, ctx); // delega ao handler para 401
+
+    // Fail-open em erro de DB: log + libera a request.
+    let features: Record<string, boolean>;
+    try {
+      const cached = await getCachedPlanFeatures(session.user.companyId);
+      features = cached.features;
+    } catch (err) {
+      console.warn(
+        JSON.stringify({
+          level: "warn",
+          event: "plan_features_lookup_failed",
+          companyId: session.user.companyId,
+          path,
+          error: err instanceof Error ? err.message : String(err),
+        }),
+      );
+      return handler(req, ctx); // fail-open
+    }
+
     const blocked = findBlockedFeature(path, features);
     if (blocked) {
       return NextResponse.json(
@@ -303,12 +363,22 @@ export function withPlanFeatureGuard(handler: (req: Request) => Promise<Response
         { status: 403 },
       );
     }
-    return handler(req);
+    return handler(req, ctx);
   };
 }
 ```
 
-Cada handler API listado nos `apiMatchers` envolve seu export: `export const GET = withPlanFeatureGuard(async (req) => { ... });`. Redundante com `requirePlanFeature` interno mas centraliza o catálogo.
+Cada handler API listado nos `apiMatchers` envolve seu export, preservando `(req, ctx)`:
+
+```typescript
+// Exemplo: src/app/api/sales/[id]/refunds/route.ts
+export const GET = withPlanFeatureGuard(async (req, { params }) => {
+  const { id } = await params;
+  // ... resto do handler
+});
+```
+
+Redundante com `requirePlanFeature` interno mas centraliza o catálogo. **Crítico:** assinatura `(req, ctx)` é obrigatória — 5 dos 13 grupos de APIs têm dynamic segments (refunds, recurring-expenses/[id], finance/accounts/[id], reconciliation/batches/[id], stock-transfers/[id]).
 
 `findBlockedFeature(path, features)`:
 ```typescript
