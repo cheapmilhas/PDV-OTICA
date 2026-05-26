@@ -900,6 +900,11 @@ export class QuoteService {
       });
 
       return { sale: completeSale, quote: updatedQuote };
+    }, {
+      // timeout=30s — paridade com sale.create. applyFinanceEntriesInTx faz
+      // muitas queries dentro da tx; default 5s estoura sob latência alta.
+      maxWait: 10_000,
+      timeout: 30_000,
     });
 
     // 10. Side-effects pós-commit (cashback ganho + campanhas + lembrete) — helper

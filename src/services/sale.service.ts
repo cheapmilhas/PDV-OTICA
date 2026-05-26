@@ -1,6 +1,9 @@
 import { prisma } from "@/lib/prisma";
 import { Sale, SaleItem, SalePayment, Prisma } from "@prisma/client";
+import { logger } from "@/lib/logger";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
+
+const log = logger.child({ service: "sale" });
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit } from "@/lib/installment-utils";
@@ -278,12 +281,16 @@ export class SaleService {
       );
     }
 
-    // Verificar estoque para cada item
+    // Verificar estoque (bulk fetch — substitui N+1)
+    const productIds = items.map((i) => i.productId);
+    const products = await prisma.product.findMany({
+      where: { id: { in: productIds } },
+      select: { id: true, name: true, stockQty: true, companyId: true, stockControlled: true },
+    });
+    const productById = new Map(products.map((p) => [p.id, p]));
+
     for (const item of items) {
-      const product = await prisma.product.findUnique({
-        where: { id: item.productId },
-        select: { id: true, name: true, stockQty: true, companyId: true, stockControlled: true },
-      });
+      const product = productById.get(item.productId);
 
       if (!product) {
         throw notFoundError(`Produto ${item.productId} não encontrado`);
@@ -408,11 +415,11 @@ export class SaleService {
             },
           })
           .catch((auditErr) => {
-            // Log de auditoria nunca deve impedir a venda — apenas registramos no console.
-            console.error("[sale.service] Falha ao gravar ActivityLog de auto-abertura:", auditErr);
+            // Log de auditoria nunca deve impedir a venda — apenas registramos.
+            log.error("Falha ao gravar ActivityLog de auto-abertura", { err: String(auditErr) });
           });
       } catch (autoOpenErr) {
-        console.error("[sale.service] Falha na auto-abertura de CashShift:", {
+        log.error("Falha na auto-abertura de CashShift", {
           branchId,
           userId,
           error: autoOpenErr instanceof Error ? autoOpenErr.message : String(autoOpenErr),
@@ -728,7 +735,7 @@ export class SaleService {
           });
         }
       } catch (cashbackError) {
-        console.error(`Erro ao estornar cashback para venda ${id}:`, cashbackError);
+        log.error("Erro ao estornar cashback", { saleId: id, err: String(cashbackError) });
       }
     }
 
@@ -753,7 +760,7 @@ export class SaleService {
     try {
       await reverseBonusForSale(id, companyId);
     } catch (campaignError) {
-      console.error(`Erro ao reverter bônus de campanhas para venda ${id}:`, campaignError);
+      log.error("Erro ao reverter bônus de campanhas", { saleId: id, err: String(campaignError) });
     }
 
     return this.getById(id, companyId, true);
@@ -894,7 +901,7 @@ export class SaleService {
       await processaSaleForCampaigns(id, companyId);
     } catch (campaignError) {
       // Falha em campanhas não deve impedir a reativação da venda
-      console.error(`Erro ao reprocessar campanhas para venda reativada ${id}:`, campaignError);
+      log.error("Erro ao reprocessar campanhas", { saleId: id, err: String(campaignError) });
     }
 
     return this.getById(id, companyId, true);

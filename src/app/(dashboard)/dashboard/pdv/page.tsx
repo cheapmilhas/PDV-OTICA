@@ -542,8 +542,6 @@ function PDVPage() {
         notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
       };
 
-      console.log("Dados enviados para API:", JSON.stringify(saleData, null, 2));
-
       const res = await fetch("/api/sales", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -551,20 +549,21 @@ function PDVPage() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
-        console.error("Erro detalhado:", error);
-
+        const error = await res.json().catch(() => ({}));
         // Se houver detalhes de validação, mostra
         if (error.error?.details) {
           const details = error.error.details.map((d: any) => `${d.path.join(".")}: ${d.message}`).join(", ");
           throw new Error(`Erro de validação: ${details}`);
         }
-
-        throw new Error(error.error?.message || error.message || "Erro ao finalizar venda");
+        throw new Error(error.error?.message || error.message || `Erro ao finalizar venda (HTTP ${res.status})`);
       }
 
       const data = await res.json();
-      const vendaId = data.data.id;
+      const vendaId = data?.data?.id;
+      // Defesa: API retornou 200 mas sem corpo esperado — não confiar em sucesso.
+      if (!vendaId) {
+        throw new Error("A venda foi processada mas não retornou identificador. Verifique em /dashboard/vendas antes de refazer.");
+      }
 
       track("first_sale", {
         saleId: vendaId,
@@ -606,10 +605,11 @@ function PDVPage() {
         toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
       }
 
-      // Redirecionar e RECARREGAR página de vendas
-      // Usar window.location para forçar reload completo
+      // Redirecionar via router (Next) em vez de window.location pra preservar
+      // state e cache. router.refresh() força re-fetch da lista de vendas.
       setTimeout(() => {
-        window.location.href = "/dashboard/vendas";
+        router.push("/dashboard/vendas");
+        router.refresh();
       }, 1500);
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);

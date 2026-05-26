@@ -12,6 +12,7 @@ export const ERROR_CODES = {
   NOT_FOUND: "NOT_FOUND",
   DUPLICATE: "DUPLICATE",
   BUSINESS_RULE_VIOLATION: "BUSINESS_RULE_VIOLATION",
+  DATABASE_ERROR: "DATABASE_ERROR",
   INTERNAL_ERROR: "INTERNAL_ERROR",
 } as const;
 
@@ -155,11 +156,25 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
       );
     }
 
+    // Outros erros Prisma conhecidos (P2028 timeout, P2024 pool, P2010 query, etc).
+    // Antes mascarado como "Erro de regra de negócio" genérico — escondia
+    // problemas críticos (ex.: timeout do $transaction). Sempre logamos a stack
+    // server-side; o cliente vê código DATABASE_ERROR + detalhe com o código
+    // Prisma real para diagnóstico.
+    console.error("[handleApiError] Prisma error:", {
+      code: error.code,
+      message: error.message,
+      meta: error.meta,
+    });
     return NextResponse.json<ErrorResponse>(
       {
         error: {
-          code: ERROR_CODES.BUSINESS_RULE_VIOLATION,
-          message: "Erro de regra de negócio",
+          code: ERROR_CODES.DATABASE_ERROR,
+          message:
+            process.env.NODE_ENV === "development"
+              ? `${error.code}: ${error.message}`
+              : "Erro de banco de dados ao processar sua requisição. Tente novamente em instantes.",
+          details: [{ field: "prismaCode", message: error.code }],
         },
       },
       { status }
