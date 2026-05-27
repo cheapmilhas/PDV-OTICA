@@ -1,8 +1,33 @@
 import { NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 const log = logger.child({ route: "webhooks/focus-nfe" });
+
+/**
+ * Valida assinatura HMAC-SHA256 enviada pelo Focus NFe.
+ * Focus envia o header `X-Hub-Signature-256: sha256=<hex>` calculado sobre
+ * o body raw com o segredo configurado em FOCUS_NFE_WEBHOOK_SECRET.
+ * Se o segredo não estiver setado, validação é pulada (compat legacy).
+ */
+function verifyHmac(rawBody: string, signatureHeader: string | null): boolean {
+  const secret = process.env.FOCUS_NFE_WEBHOOK_SECRET;
+  if (!secret) return true; // segredo opcional — backward compat
+  if (!signatureHeader) return false;
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const got = signatureHeader.replace(/^sha256=/, "").trim();
+
+  // Comprimentos diferentes → bytes inválidos pro timingSafeEqual.
+  if (expected.length !== got.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(got, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Webhook do Focus NFe.
@@ -51,9 +76,34 @@ export async function POST(request: Request) {
     return new NextResponse(null, { status: 204 });
   }
 
+  // Q5.2: Rate limit por IP. Focus NFe legítimo envia poucos webhooks por
+  // venda (autoriza/cancela); 60/min é folga sobrando.
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown";
+  const limited = rateLimitResponse(`webhook:focus-nfe:${ip}`, {
+    maxRequests: 60,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    log.warn("Rate limit excedido", { ip });
+    return limited;
+  }
+
+  // Q5.2: HMAC opcional. Configure FOCUS_NFE_WEBHOOK_SECRET no painel Focus
+  // + Vercel pra ativar. Sem isso qualquer um podia falsificar mudança de
+  // fiscalStatus para "AUTHORIZED" mandando POST direto.
+  const rawBody = await request.text();
+  const signature = request.headers.get("x-hub-signature-256");
+  if (!verifyHmac(rawBody, signature)) {
+    log.warn("HMAC inválido", { ip, hasSignature: !!signature });
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  }
+
   let payload: FocusWebhookPayload;
   try {
-    payload = (await request.json()) as FocusWebhookPayload;
+    payload = JSON.parse(rawBody) as FocusWebhookPayload;
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }

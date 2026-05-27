@@ -3,9 +3,26 @@ import { registerAuditMiddleware } from "./prisma-audit-middleware";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
+/**
+ * Constrói a DATABASE_URL com connection_limit anexado quando
+ * PRISMA_CONNECTION_LIMIT está definido. Em Vercel serverless, cada lambda
+ * abre um pool — limitar evita esgotar slots do Neon (default 100 no plano free).
+ * Default Prisma é num_physical_cpus * 2 + 1, alto demais pra serverless.
+ */
+function buildDatabaseUrl(): string | undefined {
+  const base = process.env.DATABASE_URL;
+  if (!base) return undefined;
+  const limit = process.env.PRISMA_CONNECTION_LIMIT;
+  if (!limit || /[?&]connection_limit=/.test(base)) return base;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}connection_limit=${limit}`;
+}
+
 function createPrismaClient(): PrismaClient {
+  const url = buildDatabaseUrl();
   const client = new PrismaClient({
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
+    ...(url && { datasources: { db: { url } } }),
   });
   registerAuditMiddleware(client);
   return client;

@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
 import { trackServer } from "@/lib/posthog-server";
+import { rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ webhook: "asaas" });
 
 /**
  * Webhook do Asaas.
@@ -41,6 +45,22 @@ interface AsaasWebhookEvent {
 }
 
 export async function POST(request: Request) {
+  // Q5.1: Rate limit por IP. Asaas legítimo envia ~10-30 webhooks/min mesmo
+  // em ondas; 120/min absorve picos sem bloquear. Bloqueia replay malicioso
+  // (token vazado já mitiga, mas defesa em profundidade).
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown";
+  const limited = rateLimitResponse(`webhook:asaas:${ip}`, {
+    maxRequests: 120,
+    windowMs: 60_000,
+  });
+  if (limited) {
+    log.warn("Rate limit excedido", { ip });
+    return limited;
+  }
+
   // Validar token do webhook (asaas-access-token header)
   const token = request.headers.get("asaas-access-token");
   if (!asaas.verifyWebhookToken(token)) {
@@ -218,7 +238,11 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
-    console.error("[ASAAS_WEBHOOK] erro ao processar", event.event, err);
+    log.error("Erro ao processar evento Asaas", {
+      eventType: event.event,
+      eventId: event.id,
+      error: err instanceof Error ? err.message : String(err),
+    });
     await prisma.billingEvent.update({
       where: { id: billingEvent.id },
       data: {

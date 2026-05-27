@@ -15,9 +15,9 @@ const nextConfig: NextConfig = {
     ],
   },
   async headers() {
-    // Content-Security-Policy em report-only por padrão (não bloqueia, só reporta).
-    // Para ativar enforce: trocar "Content-Security-Policy-Report-Only" por
-    // "Content-Security-Policy" após validar logs por alguns dias.
+    // Q5.3: CSP enforce em produção; report-only fora dela.
+    // Override: defina CSP_MODE=report-only no env pra forçar report-only mesmo
+    // em prod (ex.: voltar atrás se uma diretiva nova quebrar algo).
     const cspDirectives = [
       "default-src 'self'",
       "script-src 'self' 'unsafe-inline' 'unsafe-eval' https://us.i.posthog.com https://us-assets.i.posthog.com",
@@ -32,6 +32,13 @@ const nextConfig: NextConfig = {
       "upgrade-insecure-requests",
     ].join("; ");
 
+    const enforce =
+      process.env.CSP_MODE !== "report-only" &&
+      (process.env.VERCEL_ENV === "production" || process.env.NODE_ENV === "production");
+    const cspHeaderKey = enforce
+      ? "Content-Security-Policy"
+      : "Content-Security-Policy-Report-Only";
+
     return [
       {
         source: "/(.*)",
@@ -41,7 +48,7 @@ const nextConfig: NextConfig = {
           { key: "Referrer-Policy", value: "strict-origin-when-cross-origin" },
           { key: "Permissions-Policy", value: "camera=(), microphone=(), geolocation=()" },
           { key: "Strict-Transport-Security", value: "max-age=31536000; includeSubDomains" },
-          { key: "Content-Security-Policy-Report-Only", value: cspDirectives },
+          { key: cspHeaderKey, value: cspDirectives },
         ],
       },
     ];

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { captureException } from "@/lib/sentry";
 
 const log = logger.child({ module: "error-handler" });
 
@@ -169,6 +170,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
       message: error.message,
       meta: error.meta,
     });
+    void captureException(error, { source: "prisma", code: error.code });
     return NextResponse.json<ErrorResponse>(
       {
         error: {
@@ -187,6 +189,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
   // Error genérico do JavaScript
   if (error instanceof Error) {
     log.error("Unexpected error", { message: error.message, stack: error.stack });
+    void captureException(error, { source: "api" });
     return NextResponse.json<ErrorResponse>(
       {
         error: {
