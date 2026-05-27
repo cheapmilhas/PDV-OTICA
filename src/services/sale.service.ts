@@ -18,6 +18,7 @@ import {
   applyCommissionInTx,
   applyFinanceEntriesInTx,
   applyPostCommitSideEffects,
+  reverseCommissionForSaleInTx,
 } from "@/services/sale-side-effects.service";
 
 const log = logger.child({ service: "sale" });
@@ -630,6 +631,25 @@ export class SaleService {
             },
           });
 
+          // Q4.2: Reverter consumo FIFO — devolve quantidade aos InventoryLots
+          // de origem e apaga o registro de consumo (SaleItemLot). Mantém o
+          // custo histórico íntegro; a próxima venda volta a consumir o lote
+          // mais antigo (acquiredAt ASC).
+          const lotConsumptions = await tx.saleItemLot.findMany({
+            where: { saleItemId: item.id },
+          });
+          for (const c of lotConsumptions) {
+            await tx.inventoryLot.update({
+              where: { id: c.inventoryLotId },
+              data: { qtyRemaining: { increment: c.qtyConsumed } },
+            });
+          }
+          if (lotConsumptions.length > 0) {
+            await tx.saleItemLot.deleteMany({
+              where: { saleItemId: item.id },
+            });
+          }
+
           // Registrar movimentação de estorno
           await tx.stockMovement.create({
             data: {
@@ -688,16 +708,19 @@ export class SaleService {
         },
       });
 
-      // 5. Cancelar comissões pendentes
-      await tx.commission.updateMany({
-        where: {
-          saleId: id,
-          status: "PENDING",
-        },
-        data: {
-          status: "CANCELED",
-        },
+      // 5. Q4.1: Reverter comissões — PENDING/APPROVED viram CANCELED;
+      // PAID gera lançamento negativo no período atual (vendedor já recebeu).
+      const commissionResult = await reverseCommissionForSaleInTx(tx, {
+        saleId: id,
+        companyId: sale.companyId,
       });
+      if (commissionResult.compensated > 0) {
+        log.warn("Comissões PAID estornadas via lançamento negativo", {
+          saleId: id,
+          compensated: commissionResult.compensated,
+          reversed: commissionResult.reversed,
+        });
+      }
 
       // 6. Reverter lançamentos financeiros (FinanceEntry)
       // Deleta todos os lançamentos vinculados a esta venda e seus pagamentos

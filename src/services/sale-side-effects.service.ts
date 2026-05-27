@@ -405,6 +405,61 @@ export async function applyCommissionInTx(
   });
 }
 
+/**
+ * Reverte comissões de uma venda cancelada (Q4.1).
+ *
+ * Regras:
+ * - PENDING/APPROVED → marca como CANCELED (ainda não pagou ninguém).
+ * - PAID → mantém status PAID e cria lançamento negativo de compensação no
+ *   período atual; vendedor já recebeu, então debita do próximo fechamento.
+ * - CANCELED → ignora (já tratado em cancelamento anterior).
+ *
+ * Retorna contadores para o caller logar/auditar.
+ */
+export async function reverseCommissionForSaleInTx(
+  tx: Tx,
+  params: { saleId: string; companyId: string },
+): Promise<{ reversed: number; compensated: number }> {
+  const { saleId, companyId } = params;
+
+  const commissions = await tx.commission.findMany({
+    where: { saleId, companyId },
+  });
+
+  let reversed = 0;
+  let compensated = 0;
+  const now = new Date();
+
+  for (const c of commissions) {
+    if (c.status === "PENDING" || c.status === "APPROVED") {
+      await tx.commission.update({
+        where: { id: c.id },
+        data: { status: "CANCELED" },
+      });
+      reversed++;
+    } else if (c.status === "PAID") {
+      // Não desfaz pagamento histórico — gera lançamento negativo no período corrente.
+      await tx.commission.create({
+        data: {
+          companyId,
+          saleId,
+          userId: c.userId,
+          baseAmount: new Prisma.Decimal(0).minus(c.baseAmount),
+          percentage: c.percentage,
+          commissionAmount: new Prisma.Decimal(0).minus(c.commissionAmount),
+          status: "PENDING",
+          periodMonth: now.getMonth() + 1,
+          periodYear: now.getFullYear(),
+          notes: `Estorno de comissão paga (Sale ${saleId.slice(-8)} cancelada)`,
+        },
+      });
+      compensated++;
+    }
+  }
+
+  return { reversed, compensated };
+}
+
 // ============================================================================
 // Finance entries (DRE)
 // ============================================================================
