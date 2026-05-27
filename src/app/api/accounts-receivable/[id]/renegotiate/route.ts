@@ -58,11 +58,15 @@ export async function POST(
     const lastInstallmentAdjust =
       Math.round((input.newAmount - installmentValue * (input.installments - 1)) * 100) / 100;
 
+    const now = new Date();
     const created = await prisma.$transaction(async (tx) => {
+      // Q7.3 P2-9: rastreabilidade explícita via renegotiatedAt — antes
+      // só notes marcava, fácil perder em edição.
       await tx.accountReceivable.update({
         where: { id: original.id },
         data: {
           status: "RENEGOTIATED",
+          renegotiatedAt: now,
           notes: input.notes
             ? `${original.notes ?? ""}\n[Renegociada] ${input.notes}`.trim()
             : `${original.notes ?? ""}\n[Renegociada]`.trim(),
@@ -92,6 +96,9 @@ export async function POST(
             interestPercent: original.interestPercent,
             graceDays: original.graceDays,
             createdByUserId: session.user.id,
+            // Q7.3 P2-9: FK soft + valor original preservados na NOVA AR
+            renegotiatedFromId: original.id,
+            originalAmount: original.amount,
             notes: `Renegociação de ${original.id}`,
           },
         });

@@ -1637,6 +1637,9 @@ model AccountReceivable {
   graceDays           Int?                    @default(0)
   reversedAt          DateTime?
   reversedBy          String?
+  renegotiatedFromId  String?
+  renegotiatedAt      DateTime?
+  originalAmount      Decimal?                @db.Decimal(12, 2)
   createdByUserId     String?
   receivedByUserId    String?
   createdAt           DateTime                @default(now())
@@ -1654,6 +1657,7 @@ model AccountReceivable {
   @@index([customerId, companyId, status, dueDate])
   @@index([saleId])
   @@index([dueDate, status])
+  @@index([renegotiatedFromId])
 }
 
 model StockAdjustment {

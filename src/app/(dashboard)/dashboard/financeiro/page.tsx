@@ -33,6 +33,7 @@ import {
   Search,
   X,
   Undo2,
+  RefreshCw,
 } from "lucide-react";
 import { formatCurrency, formatDate } from "@/lib/utils";
 import { Pagination } from "@/components/shared/pagination";
@@ -43,6 +44,7 @@ import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { ModalReceberConta } from "@/components/financeiro/modal-receber-conta";
+import { ModalRenegociarConta } from "@/components/financeiro/modal-renegociar-conta";
 import { usePermissions } from "@/hooks/usePermissions";
 
 // Tipos
@@ -155,6 +157,10 @@ function FinanceiroPage() {
   const [showReceiveModal, setShowReceiveModal] = useState(false);
   const [receivingAccount, setReceivingAccount] = useState<AccountReceivable | null>(null);
   const [receivingLoading, setReceivingLoading] = useState(false);
+
+  // Q7.3 P2-9: estados pro modal de renegociação
+  const [showRenegotiateModal, setShowRenegotiateModal] = useState(false);
+  const [renegotiatingAccount, setRenegotiatingAccount] = useState<AccountReceivable | null>(null);
 
   // Buscar Contas a Pagar
   useEffect(() => {
@@ -1134,7 +1140,7 @@ function FinanceiroPage() {
                         </TableCell>
                         <TableCell className="text-right">
                           <div className="flex justify-end gap-2">
-                            {account.status === "PENDING" && hasPermission("accounts_receivable.manage") && (
+                            {(account.status === "PENDING" || account.status === "OVERDUE") && hasPermission("accounts_receivable.manage") && (
                               <>
                                 <Button
                                   size="sm"
@@ -1148,26 +1154,15 @@ function FinanceiroPage() {
                                 </Button>
                                 <Button
                                   size="sm"
-                                  variant="ghost"
-                                  onClick={() =>
-                                    handleCancelReceivable(account.id)
-                                  }
-                                >
-                                  <XCircle className="h-4 w-4" />
-                                </Button>
-                              </>
-                            )}
-                            {account.status === "OVERDUE" && hasPermission("accounts_receivable.manage") && (
-                              <>
-                                <Button
-                                  size="sm"
                                   variant="outline"
-                                  onClick={() =>
-                                    handleOpenReceiveModal(account)
-                                  }
+                                  className="text-orange-600 border-orange-300 hover:bg-orange-50"
+                                  onClick={() => {
+                                    setRenegotiatingAccount(account);
+                                    setShowRenegotiateModal(true);
+                                  }}
+                                  title="Renegociar"
                                 >
-                                  <CheckCircle className="h-4 w-4 mr-1" />
-                                  Receber
+                                  <RefreshCw className="h-4 w-4" />
                                 </Button>
                                 <Button
                                   size="sm"
@@ -1412,6 +1407,19 @@ function FinanceiroPage() {
         account={receivingAccount}
         onConfirm={handleConfirmReceive}
         loading={receivingLoading}
+      />
+
+      {/* Q7.3 P2-9: Modal Renegociar Conta a Receber */}
+      <ModalRenegociarConta
+        open={showRenegotiateModal}
+        account={renegotiatingAccount}
+        onClose={() => {
+          setShowRenegotiateModal(false);
+          setRenegotiatingAccount(null);
+        }}
+        onSuccess={() => {
+          fetchAccountsReceivable();
+        }}
       />
     </div>
   );
