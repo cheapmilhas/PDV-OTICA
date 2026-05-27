@@ -27,6 +27,7 @@ export const FEATURES = {
   RECURRING_EXPENSES: "recurring_expenses",
   CASHBACK: "cashback",
   GOALS: "goals",
+  INVENTORY_LOTS: "inventory_lots",
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -170,6 +171,13 @@ export const FEATURE_REGISTRY: Record<FeatureKey, FeatureMeta> = {
     pageMatchers: ["/dashboard/metas"],
     apiMatchers: ["/api/goals"],
     sidebarKey: "metas",
+  },
+  [FEATURES.INVENTORY_LOTS]: {
+    label: "Lotes de Estoque",
+    description: "Controle FIFO de lotes de estoque com custo histórico.",
+    pageMatchers: ["/dashboard/financeiro/lotes-estoque"],
+    apiMatchers: ["/api/inventory/lots"],
+    sidebarKey: "estoque-lotes",
   },
 };
 

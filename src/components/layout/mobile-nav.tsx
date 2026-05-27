@@ -58,7 +58,7 @@ const moreNav = [
   { icon: ListTree, label: "Plano Contas", href: "/dashboard/financeiro/plano-contas", permission: "financial.view", feature: "chart_of_accounts" },
   { icon: RotateCcw, label: "Devoluções", href: "/dashboard/financeiro/devolucoes", permission: "financial.view", feature: "sales_refunds" },
   { icon: RefreshCw, label: "Conciliação", href: "/dashboard/financeiro/conciliacao", permission: "financial.view", feature: "bank_reconciliation" },
-  { icon: Boxes, label: "Lotes Estoque", href: "/dashboard/financeiro/lotes-estoque", permission: "financial.view" },
+  { icon: Boxes, label: "Lotes Estoque", href: "/dashboard/financeiro/lotes-estoque", permission: "financial.view", feature: "inventory_lots" },
   { icon: PieChart, label: "BI Analítico", href: "/dashboard/financeiro/bi", permission: "financial.view", feature: "bi_analytics" },
   { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];

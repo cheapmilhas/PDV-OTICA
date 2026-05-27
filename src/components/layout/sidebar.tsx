@@ -156,7 +156,8 @@ const menuItems: MenuSection[] = [
         name: "Lotes de Estoque",
         href: "/dashboard/financeiro/lotes-estoque",
         icon: Boxes,
-        permission: "stock.view"
+        permission: "stock.view",
+        feature: "inventory_lots"
       },
       {
         name: "Caixa",
