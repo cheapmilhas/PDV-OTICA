@@ -55,6 +55,7 @@ import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
 import { useRouter } from "next/navigation";
 import { useBranchContext } from "@/hooks/use-branch-context";
 import { usePermissions } from "@/hooks/usePermissions";
+import { UpgradeRequiredBanner } from "@/components/plan/upgrade-required-banner";
 
 // Dashboard resiliente — todas as APIs com safeFetch
 export default function DashboardPage() {
@@ -200,6 +201,9 @@ export default function DashboardPage() {
 
   return (
     <div className="space-y-6">
+      {/* Banner exibido quando o gate de plano redireciona com ?upgrade-required */}
+      <UpgradeRequiredBanner />
+
       {/* Header com Hora */}
       <div className="flex items-center justify-between">
         <div>

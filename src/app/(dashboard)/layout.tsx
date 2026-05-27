@@ -1,5 +1,6 @@
 import { auth } from "@/auth";
 import { redirect } from "next/navigation";
+import { headers } from "next/headers";
 import { Sidebar } from "@/components/layout/sidebar";
 import { Header } from "@/components/layout/header";
 import { MobileNav } from "@/components/layout/mobile-nav";
@@ -9,6 +10,8 @@ import { SubscriptionBanner } from "@/components/subscription/subscription-banne
 import { SubscriptionBlocked } from "@/components/subscription/subscription-blocked";
 import { BranchProviderWrapper } from "@/components/providers/branch-provider-wrapper";
 import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
+import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
+import { findBlockedFeature } from "@/lib/plan-feature-catalog";
 
 export default async function DashboardLayout({
   children,
@@ -43,6 +46,42 @@ export default async function DashboardLayout({
         />
       </ThemeProvider>
     );
+  }
+
+  // Plan feature gating (Fase 4 do plano de feature gating).
+  // Bloqueia 13 funcionalidades do plano Básico, redireciona para /dashboard com toast.
+  // Kill switch DISABLE_PLAN_FEATURE_GATING desliga tudo.
+  if (
+    companyId &&
+    process.env.DISABLE_PLAN_FEATURE_GATING !== "true"
+  ) {
+    const headersList = await headers();
+    const currentPath = headersList.get("x-current-path") ?? "";
+
+    if (currentPath.startsWith("/dashboard")) {
+      try {
+        const { features } = await getCachedPlanFeatures(companyId);
+        const blocked = findBlockedFeature(currentPath, features);
+        if (blocked && currentPath !== "/dashboard") {
+          redirect(`/dashboard?upgrade-required=${blocked}`);
+        }
+      } catch (err) {
+        // Fail-open: erro de DB transitório não deve bloquear a UI inteira.
+        // (redirect dentro do try não cai aqui — usa NEXT_REDIRECT exception.)
+        if ((err as { digest?: string })?.digest?.startsWith("NEXT_REDIRECT")) {
+          throw err;
+        }
+        console.warn(
+          JSON.stringify({
+            level: "warn",
+            event: "plan_features_lookup_failed",
+            companyId,
+            path: currentPath,
+            error: err instanceof Error ? err.message : String(err),
+          }),
+        );
+      }
+    }
   }
 
   return (

@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 import { z } from "zod";
 import { AccountCategory } from "@prisma/client";
 
@@ -28,7 +29,7 @@ function calculateNextDueDate(dayOfMonth: number, frequency: string): Date {
   }
 }
 
-export async function PUT(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export const PUT = withPlanFeatureGuard(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -57,9 +58,9 @@ export async function PUT(request: Request, { params }: { params: Promise<{ id: 
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
 
-export async function DELETE(request: Request, { params }: { params: Promise<{ id: string }> }) {
+export const DELETE = withPlanFeatureGuard(async (request: Request, { params }: { params: Promise<{ id: string }> }) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -73,4 +74,4 @@ export async function DELETE(request: Request, { params }: { params: Promise<{ i
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 import { z } from "zod";
 
 const createTreatmentSchema = z.object({
@@ -16,12 +17,12 @@ const createTreatmentSchema = z.object({
  * GET /api/lens-treatments
  * Lista tratamentos de lentes
  */
-export async function GET(request: NextRequest) {
+export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
 
-    const { searchParams } = new URL(request.url);
+    const { searchParams } = new URL((request as NextRequest).url);
     const search = searchParams.get("search") || "";
     const active = searchParams.get("active");
 
@@ -53,13 +54,13 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
 
 /**
  * POST /api/lens-treatments
  * Cria novo tratamento
  */
-export async function POST(request: NextRequest) {
+export const POST = withPlanFeatureGuard(async (request: Request) => {
   try {
     await requirePermission("products.edit");
     const companyId = await getCompanyId();
@@ -102,4 +103,4 @@ export async function POST(request: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

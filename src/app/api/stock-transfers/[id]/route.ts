@@ -2,16 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 import { auth } from "@/auth";
 
 /**
  * POST /api/stock-transfers/[id]
  * Ações: approve, cancel
  */
-export async function POST(
+export const POST = withPlanFeatureGuard(async (
   request: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
     const session = await auth();
     if (!session?.user?.id) throw new Error("Não autenticado");
@@ -134,4 +135,4 @@ export async function POST(
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

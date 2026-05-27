@@ -3,16 +3,17 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function GET(
-  req: NextRequest,
+export const GET = withPlanFeatureGuard(async (
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
     const { id } = await params;
-    const searchParams = req.nextUrl.searchParams;
+    const searchParams = (req as NextRequest).nextUrl.searchParams;
 
     const page = parseInt(searchParams.get("page") || "1");
     const pageSize = parseInt(searchParams.get("pageSize") || "50");
@@ -55,4 +56,4 @@ export async function GET(
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

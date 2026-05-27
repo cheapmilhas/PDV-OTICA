@@ -2,14 +2,28 @@
 
 import { Lock } from "lucide-react";
 import { usePlanFeatures } from "@/hooks/usePlanFeatures";
+import { FEATURE_REGISTRY, type FeatureKey } from "@/lib/plan-feature-catalog";
 
 interface FeatureGateProps {
-  feature: string;
-  featureName: string;
+  /**
+   * Feature key. Aceita FeatureKey do catálogo (preferido) ou string legacy
+   * (ex: "goals", "crm") para retrocompatibilidade com chamadas existentes.
+   */
+  feature: FeatureKey | string;
+  /** Override do label. Quando ausente, lê de FEATURE_REGISTRY[feature].label. */
+  featureName?: string;
+  /** Renderiza algo customizado (ou null) quando bloqueado. Sobrepõe o card padrão. */
+  fallback?: React.ReactNode;
   children: React.ReactNode;
 }
 
-export function FeatureGate({ feature, featureName, children }: FeatureGateProps) {
+function resolveLabel(feature: string, override?: string): string {
+  if (override) return override;
+  const registryEntry = (FEATURE_REGISTRY as Record<string, { label: string }>)[feature];
+  return registryEntry?.label ?? feature;
+}
+
+export function FeatureGate({ feature, featureName, fallback, children }: FeatureGateProps) {
   const { loading, hasFeature } = usePlanFeatures();
 
   // Durante o carregamento, renderiza normalmente para evitar flash
@@ -20,6 +34,12 @@ export function FeatureGate({ feature, featureName, children }: FeatureGateProps
   if (hasFeature(feature)) {
     return <>{children}</>;
   }
+
+  if (fallback !== undefined) {
+    return <>{fallback}</>;
+  }
+
+  const label = resolveLabel(feature, featureName);
 
   return (
     <div className="flex min-h-[60vh] items-center justify-center p-8">
@@ -33,7 +53,7 @@ export function FeatureGate({ feature, featureName, children }: FeatureGateProps
           Recurso não disponível no seu plano
         </h2>
         <p className="mb-6 text-sm text-gray-400">
-          O recurso <span className="font-semibold text-gray-300">{featureName}</span> está disponível
+          O recurso <span className="font-semibold text-gray-300">{label}</span> está disponível
           no plano Profissional ou superior.
         </p>
         <a

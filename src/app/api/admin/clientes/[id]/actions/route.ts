@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
+import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
 
 export async function POST(
   request: Request,
@@ -120,6 +121,11 @@ export async function POST(
             },
           }),
         ]);
+
+        // Invalidar cache de plan features pra que a próxima request da empresa
+        // veja o novo plano (sem esperar TTL de 5min). Coerente com gate em layout
+        // e withPlanFeatureGuard que consomem o mesmo cache.
+        invalidatePlanFeaturesCache(companyId);
 
         await logActivity({ companyId, type: "PLAN_CHANGED", title: `Plano alterado: ${oldPlan.name} → ${newPlan.name}`, detail: { fromPlan: oldPlan.name, toPlan: newPlan.name }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Plano alterado: ${oldPlan.name} → ${newPlan.name}` });

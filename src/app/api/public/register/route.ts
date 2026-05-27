@@ -166,12 +166,11 @@ export async function POST(request: Request) {
         },
       });
 
-      // 5.1. Configurar módulo financeiro
-      try {
-        await setupCompanyFinance(tx, company.id, branch.id);
-      } catch (financeError) {
-        console.error("[FINANCE] Erro ao configurar módulo financeiro:", financeError);
-      }
+      // 5.1. Configurar módulo financeiro.
+      // Q4.4: erro propaga para rollback da transação inteira — empresa sem
+      // chartOfAccounts/FinanceAccount quebra venda/orçamento silenciosamente.
+      // Melhor falhar o cadastro do que entregar conta em estado inválido.
+      await setupCompanyFinance(tx, company.id, branch.id);
 
       // 6. Auditoria (actorId é FK para AdminUser, não User — usar null)
       await tx.globalAudit.create({

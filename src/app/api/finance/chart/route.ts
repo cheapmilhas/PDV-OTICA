@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse, createdResponse } from "@/lib/api-response";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function GET() {
+export const GET = withPlanFeatureGuard(async (_req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -30,9 +31,9 @@ export async function GET() {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
 
-export async function POST(req: NextRequest) {
+export const POST = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -59,4 +60,4 @@ export async function POST(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

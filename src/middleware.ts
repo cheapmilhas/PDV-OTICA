@@ -7,6 +7,20 @@ import { decode } from "next-auth/jwt";
 // Auth para rotas do PDV (Edge-safe)
 const pdvAuth = NextAuth(authConfig).auth;
 
+/**
+ * Propaga o pathname atual via header `x-current-path` no REQUEST,
+ * para que server components possam ler com `headers().get(...)`.
+ * (Usado pelo gate em (dashboard)/layout.tsx do feature gating.)
+ *
+ * Importante: setar no request, NÃO no response — request headers chegam ao
+ * RSC; response headers vão ao browser.
+ */
+function nextWithCurrentPath(request: NextRequest): NextResponse {
+  const requestHeaders = new Headers(request.headers);
+  requestHeaders.set("x-current-path", request.nextUrl.pathname);
+  return NextResponse.next({ request: { headers: requestHeaders } });
+}
+
 const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
 if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
 const JWT_SECRET = new TextEncoder().encode(authSecret);
@@ -43,7 +57,7 @@ export async function middleware(request: NextRequest) {
   if (pathname.startsWith("/admin") || pathname.startsWith("/api/admin")) {
     // Sempre permitir API de auth
     if (pathname.startsWith("/api/admin/auth")) {
-      return NextResponse.next();
+      return nextWithCurrentPath(request);
     }
 
     // Página de login: se já tem token válido, redirecionar para /admin
@@ -55,7 +69,7 @@ export async function middleware(request: NextRequest) {
           return NextResponse.redirect(new URL("/admin", request.url));
         }
       }
-      return NextResponse.next();
+      return nextWithCurrentPath(request);
     }
 
     // Verificar token admin
@@ -81,7 +95,7 @@ export async function middleware(request: NextRequest) {
       return response;
     }
 
-    return NextResponse.next();
+    return nextWithCurrentPath(request);
   }
 
   // Permitir rotas públicas (landing page, auth, etc.)
@@ -91,7 +105,7 @@ export async function middleware(request: NextRequest) {
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/public")
   ) {
-    return NextResponse.next();
+    return nextWithCurrentPath(request);
   }
 
   // Rotas /dashboard/** (PDV multi-tenant)
@@ -126,7 +140,7 @@ export async function middleware(request: NextRequest) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
 
-    return NextResponse.next();
+    return nextWithCurrentPath(request);
   }
 
   // Demais rotas → PDV auth

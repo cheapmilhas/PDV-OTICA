@@ -8,6 +8,7 @@ import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
 const stockMovementService = new StockMovementService();
 
@@ -21,7 +22,7 @@ const stockMovementService = new StockMovementService();
  *
  * Body: CreateTransferDTO
  */
-export async function POST(request: Request) {
+export const POST = withPlanFeatureGuard(async (request: Request) => {
   try {
     // Requer autenticação
     const session = await requireAuth();
@@ -55,4 +56,4 @@ export async function POST(request: Request) {
     console.error("Erro ao criar transferência:", error);
     return handleApiError(error);
   }
-}
+});

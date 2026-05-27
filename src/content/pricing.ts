@@ -1,3 +1,5 @@
+import { FEATURE_REGISTRY, FEATURES } from "@/lib/plan-feature-catalog";
+
 export interface PricingPlan {
   id: string;
   name: string;
@@ -12,30 +14,32 @@ export interface PricingPlan {
   ctaVariant: "primary" | "secondary" | "outline";
 }
 
+// Labels das 13 features gated, na ordem do catálogo. Single source of truth
+// para landing, admin e sistema.
+const GATED_FEATURE_LABELS = Object.values(FEATURES).map(
+  (key) => FEATURE_REGISTRY[key].label,
+);
+
 export const plans: PricingPlan[] = [
   {
     id: "essencial",
     name: "Essencial",
     description: "Perfeito para óticas que estão começando",
-    monthlyPrice: 149,
-    annualPrice: 119,
+    monthlyPrice: 149.9, // R$ 149,90 — alinha com plano 'basico' do banco (priceMonthly=14990)
+    annualPrice: 119.9,
     features: [
       "PDV e registro de vendas",
       "Cadastro de clientes",
       "Ordem de Serviço (O.S.)",
       "Controle de estoque básico",
-      "Caixa e fluxo de caixa",
+      "Caixa",
       "Relatórios básicos",
       "1 usuário",
       "Suporte via chat",
       "Acesso mobile",
     ],
-    notIncluded: [
-      "Emissão de NF-e / NFC-e",
-      "Múltiplas filiais",
-      "Integração com laboratório",
-      "Relatórios de BI",
-    ],
+    // 13 funcionalidades exclusivas dos planos pagos (do FEATURE_REGISTRY).
+    notIncluded: GATED_FEATURE_LABELS,
     cta: "Testar Grátis",
     ctaVariant: "secondary",
   },
@@ -55,11 +59,12 @@ export const plans: PricingPlan[] = [
       "Integração com laboratórios",
       "WhatsApp automático",
       "Campanhas de pós-venda",
-      "Relatórios avançados e DRE",
+      // 13 funcionalidades gated incluídas:
+      ...GATED_FEATURE_LABELS,
       "5 usuários",
       "Suporte prioritário",
     ],
-    notIncluded: ["Múltiplas filiais", "BI personalizado"],
+    notIncluded: ["Múltiplas filiais (ilimitadas)"],
     cta: "Testar Grátis",
     ctaVariant: "primary",
   },

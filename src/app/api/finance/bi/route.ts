@@ -3,14 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
 type Dimension = "brand" | "category" | "seller" | "paymentMethod" | "productType";
 
-export async function GET(req: NextRequest) {
+export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    const searchParams = req.nextUrl.searchParams;
+    const searchParams = (req as NextRequest).nextUrl.searchParams;
 
     const dimension = (searchParams.get("dimension") || "brand") as Dimension;
     const startDate = searchParams.get("startDate");
@@ -167,4 +168,4 @@ export async function GET(req: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

@@ -3,15 +3,16 @@ import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { DREService } from "@/services/reports/dre.service";
 import { parseISO } from "date-fns";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
 /**
  * GET /api/reports/financial/dre
  * Relatório DRE (Demonstrativo de Resultado do Exercício)
  */
-export async function GET(request: NextRequest) {
+export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
     const companyId = await getCompanyId();
-    const { searchParams } = request.nextUrl;
+    const { searchParams } = (request as NextRequest).nextUrl;
 
     // Parse date range (required)
     const startDateParam = searchParams.get("startDate");
@@ -34,4 +35,4 @@ export async function GET(request: NextRequest) {
   } catch (error) {
     return handleApiError(error);
   }
-}
+});

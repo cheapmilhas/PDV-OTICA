@@ -4,11 +4,12 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError, notFoundError, businessRuleError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { autoMatchBatch } from "@/services/reconciliation-match.service";
+import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
-export async function POST(
-  req: NextRequest,
+export const POST = withPlanFeatureGuard(async (
+  req: Request,
   { params }: { params: Promise<{ id: string }> }
-) {
+) => {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -30,4 +31,4 @@ export async function POST(
   } catch (error) {
     return handleApiError(error);
   }
-}
+});
