@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
 import { trackServer } from "@/lib/posthog-server";
@@ -6,6 +7,28 @@ import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ webhook: "asaas" });
+
+/**
+ * Q7.2 P1-7: HMAC opcional do payload. Defesa em profundidade — token
+ * bearer pode vazar de logs/proxy, HMAC valida que o payload veio da
+ * Asaas e não foi modificado. Configure ASAAS_WEBHOOK_HMAC_SECRET no
+ * painel Asaas + Vercel pra ativar. Sem ele, validação é skip (compat).
+ */
+function verifyAsaasHmac(rawBody: string, sigHeader: string | null): boolean {
+  const secret = process.env.ASAAS_WEBHOOK_HMAC_SECRET;
+  if (!secret) return true; // segredo opcional — backward compat
+  if (!sigHeader) return false;
+
+  const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
+  const got = sigHeader.replace(/^sha256=/, "").trim();
+
+  if (expected.length !== got.length) return false;
+  try {
+    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(got, "hex"));
+  } catch {
+    return false;
+  }
+}
 
 /**
  * Webhook do Asaas.
@@ -67,9 +90,19 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid token" }, { status: 401 });
   }
 
+  // Q7.2 P1-7: HMAC opcional. Lemos raw antes do JSON parse pra preservar bytes.
+  const rawBody = await request.text();
+  const signature =
+    request.headers.get("asaas-signature") ||
+    request.headers.get("x-asaas-signature");
+  if (!verifyAsaasHmac(rawBody, signature)) {
+    log.warn("HMAC inválido", { ip, hasSignature: !!signature });
+    return NextResponse.json({ error: "invalid signature" }, { status: 401 });
+  }
+
   let event: AsaasWebhookEvent;
   try {
-    event = (await request.json()) as AsaasWebhookEvent;
+    event = JSON.parse(rawBody) as AsaasWebhookEvent;
   } catch {
     return NextResponse.json({ error: "invalid json" }, { status: 400 });
   }

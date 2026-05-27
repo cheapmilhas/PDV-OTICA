@@ -1166,6 +1166,8 @@ model Sale {
   @@index([customerId, createdAt])
   @@index([sellerUserId, createdAt])
   @@index([agreementId])
+  @@index([status, completedAt])
+  @@index([companyId, completedAt])
 }
 
 model SaleItem {
@@ -1262,6 +1264,7 @@ model CardReceivable {
   @@index([expectedDate])
   @@index([status])
   @@index([salePaymentId])
+  @@index([saleId])
 }
 
 model CommissionRule {
@@ -1359,6 +1362,7 @@ model CashMovement {
   @@index([cashShiftId, createdAt])
   @@index([originType, originId])
   @@index([method, type])
+  @@index([salePaymentId])
 }
 
 model Warranty {
@@ -1647,6 +1651,7 @@ model AccountReceivable {
 
   @@index([companyId, status, dueDate])
   @@index([customerId, status])
+  @@index([customerId, companyId, status, dueDate])
   @@index([saleId])
   @@index([dueDate, status])
 }
@@ -1917,6 +1922,7 @@ model Reminder {
   @@index([type])
   @@index([status])
   @@index([scheduledFor])
+  @@index([status, scheduledFor])
 }
 
 model SalesGoal {
@@ -2368,6 +2374,7 @@ model BranchStock {
 
   @@unique([branchId, productId])
   @@index([productId])
+  @@index([branchId, quantity])
   @@map("branch_stocks")
 }
 
@@ -2460,6 +2467,7 @@ model EmailQueue {
   createdAt DateTime    @default(now())
 
   @@index([status])
+  @@index([status, createdAt])
   @@map("email_queue")
 }
 
@@ -2646,6 +2654,7 @@ model CustomerReminder {
   @@index([status])
   @@index([assignedToId])
   @@index([scheduledFor])
+  @@index([status, scheduledFor])
   @@map("customer_reminders")
 }
 
@@ -2808,6 +2817,7 @@ model FinanceEntry {
   @@index([companyId, entryDate])
   @@index([companyId, cashDate])
   @@index([companyId, type])
+  @@index([companyId, entryDate, type, side])
   @@index([debitAccountId])
   @@index([creditAccountId])
   @@index([financeAccountId])
@@ -2909,6 +2919,7 @@ model Refund {
   @@index([saleId])
   @@index([customerId])
   @@index([status])
+  @@index([branchId])
 }
 
 model RefundItem {
