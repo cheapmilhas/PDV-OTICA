@@ -2,7 +2,6 @@ import { NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { getSubscriptionInfo } from "@/lib/subscription";
-import { prisma } from "@/lib/prisma";
 import { FEATURES } from "@/lib/plan-feature-catalog";
 
 const LEGACY_FEATURES = ["crm", "goals", "campaigns", "cashback", "multi_branch", "reports_advanced"];
@@ -35,19 +34,9 @@ export async function GET() {
       });
     }
 
-    // Verificar se empresa tem accessEnabled (acesso total)
-    const company = await prisma.company.findUnique({
-      where: { id: companyId },
-      select: { accessEnabled: true },
-    });
-
-    if (company?.accessEnabled) {
-      return NextResponse.json({
-        features: allFeaturesEnabled(),
-        limits: unlimitedLimits,
-      });
-    }
-
+    // accessEnabled libera login (subscription.ts), NÃO bypassa feature gating.
+    // Cada plano é gateinhado pelas suas PlanFeatures; sem subscription, libera
+    // (caso dev/seed/onboarding intermediário) — coerente com requirePlanFeature.
     const info = await getSubscriptionInfo(companyId);
 
     if (!info) {
