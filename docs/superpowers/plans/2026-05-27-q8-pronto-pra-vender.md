@@ -28,7 +28,7 @@
 | Q8.2.4 Script auditoria histórica | ❌ FALTA | 2h |
 | Q8.2.5 Cash shift close lock | ❌ FALTA | 1h |
 | Q8.3.1 MFA admin (TOTP) | ❌ FALTA totalmente | 5h |
-| Q8.3.2 Rate limit em 48 rotas admin | ❌ FALTA totalmente | 4h |
+| Q8.3.2 Rate limit em 48 rotas admin | ❌ FALTA totalmente | 6-8h (revisão manual 48 handlers) |
 | Q8.3.3 Impersonation 1-sessão (schema OK, lógica não) | ⚠️ PARCIAL | 1h |
 | Q8.3.4 Audit log expandido | ⚠️ PARCIAL | 2h |
 | Q8.4.0 migration_lock.toml + drift confirm | ❌ FALTA | 1h |
@@ -41,7 +41,16 @@
 | Q8.5.3 Sentry ativo + alertas | ⚠️ PARCIAL | 1h |
 | Q8.99 Wrap-up | - | 2h |
 
-**Soma do gap:** ~47h. Realista 40-52h com buffer.
+**Soma do gap:** ~49-53h. Realista **44-58h** com buffer.
+
+**Privacy/gitignore:** scripts de audit (`scripts/audit-q8-data.ts`, `audit-finance-consistency.ts`) podem expor nomes de empresas/MRR em JSON. Adicionar ao `.gitignore`:
+```
+qa-artifacts/Q8-data-audit.json
+qa-artifacts/Q8-finance-audit.json
+qa-artifacts/Q8-cleanup-*.json
+qa-artifacts/Q8-dup-*.json
+```
+Manter `.md` (versão narrativa, sem dados sensíveis) commitados.
 
 **Super-cron consolidação** (§4.5 do spec) é necessária porque vamos adicionar `suspensionSweep` + `retryWebhooks` aos crons. Custo: ~1h adicional.
 
@@ -1035,9 +1044,17 @@ export async function POST(request: Request, { params }: { params: Promise<{ id:
         if (openToday) {
           targetShiftId = openToday.id;
         } else {
-          // Criar shift de ajuste
+          // Criar shift de ajuste — schema CashShift exige companyId, branchId, openedByUserId, openingFloatAmount
           const adj = await tx.cashShift.create({
-            data: { branchId: origShift!.branchId, status: "OPEN", openingAmount: 0, openedAt: new Date(), notes: "adjustment-q8" },
+            data: {
+              companyId,
+              branchId: origShift!.branchId,
+              status: "OPEN",
+              openingFloatAmount: 0,
+              openedByUserId: session.user.id,
+              openedAt: new Date(),
+              notes: "adjustment-q8-ar-reversal",
+            },
           });
           targetShiftId = adj.id;
         }
@@ -1552,18 +1569,50 @@ git commit -m "feat(q8.3.2): rate limit em /api/admin/companies/* (chunk 1)"
 ### Task 3.3: Impersonation 1-sessão ativa
 
 **Files:**
+- Modify: `prisma/schema.prisma` (adicionar campo `revokedAt` em ImpersonationSession)
+- Create: `prisma/migrations/20260528_q8_impersonation_revoked_at/migration.sql`
 - Modify: `src/app/api/admin/impersonate/[id]/route.ts`
-- Modify: `prisma/schema.prisma` (confirma campo revokedAt — já existe)
 
-- [ ] **Step 1: Adicionar revoke no handler**
+⚠️ **Correção:** O schema atual de `ImpersonationSession` (linha 2200) tem apenas `startedAt`, `endedAt`, `expiresAt`. NÃO existe `revokedAt`. Precisa adicionar.
+
+- [ ] **Step 0: Adicionar campo no schema**
+
+Em `prisma/schema.prisma` model ImpersonationSession:
+```prisma
+revokedAt   DateTime?
+revokedBy   String?     // adminUserId que revogou (pode ser o próprio, ao logout)
+@@index([adminUserId, revokedAt])  // index pra query "sessões ativas do admin X"
+```
+
+- [ ] **Step 0.5: Migration**
+
+```bash
+npx prisma migrate dev --name q8_impersonation_revoked_at --create-only
+```
+
+Editar SQL gerado:
+```sql
+ALTER TABLE "ImpersonationSession" ADD COLUMN IF NOT EXISTS "revokedAt" TIMESTAMP(3);
+ALTER TABLE "ImpersonationSession" ADD COLUMN IF NOT EXISTS "revokedBy" TEXT;
+CREATE INDEX IF NOT EXISTS "ImpersonationSession_adminUserId_revokedAt_idx" ON "ImpersonationSession"("adminUserId", "revokedAt");
+
+-- ROLLBACK:
+-- DROP INDEX "ImpersonationSession_adminUserId_revokedAt_idx";
+-- ALTER TABLE "ImpersonationSession" DROP COLUMN "revokedAt";
+-- ALTER TABLE "ImpersonationSession" DROP COLUMN "revokedBy";
+```
+
+Apply: `npx prisma migrate dev`
+
+- [ ] **Step 1: Adicionar revoke no handler de criação**
 
 ```typescript
-// Ao criar nova impersonation:
+// src/app/api/admin/impersonate/[id]/route.ts (no POST)
 await prisma.impersonationSession.updateMany({
   where: { adminUserId: admin.id, endedAt: null, revokedAt: null },
-  data: { revokedAt: new Date() },
+  data: { revokedAt: new Date(), revokedBy: admin.id },
 });
-// ... criar nova
+// ... criar nova sessão ...
 ```
 
 - [ ] **Step 2: Middleware valida revokedAt**
@@ -1571,7 +1620,9 @@ await prisma.impersonationSession.updateMany({
 Onde verifica sessão de impersonate:
 ```typescript
 const session = await prisma.impersonationSession.findUnique({ where: { id } });
-if (!session || session.revokedAt) return new Response("Session revoked", { status: 401 });
+if (!session || session.revokedAt || session.endedAt || session.expiresAt < new Date()) {
+  return new Response("Session inactive", { status: 401 });
+}
 ```
 
 - [ ] **Step 3: Teste**
@@ -1730,27 +1781,92 @@ git commit -m "feat(q8-cron): super-cron /api/cron/tick consolida 4 subtasks"
 - Create: `e2e/critical-flows.spec.ts`
 - Modify: `playwright.config.ts` (se precisar)
 
-- [ ] **Step 1: Spec dos 3 fluxos**
+- [ ] **Step 0: Criar helper de login pra reuso**
+
+```typescript
+// e2e/helpers/auth.ts
+import { Page } from "@playwright/test";
+
+export async function loginAsTestUser(page: Page, opts: { email?: string; password?: string } = {}) {
+  const email = opts.email ?? process.env.E2E_TEST_EMAIL ?? "e2e@pdvotica.local";
+  const password = opts.password ?? process.env.E2E_TEST_PASSWORD ?? "e2e-test-pass";
+  await page.goto("/login");
+  await page.getByLabel(/email/i).fill(email);
+  await page.getByLabel(/senha/i).fill(password);
+  await page.getByRole("button", { name: /entrar/i }).click();
+  await page.waitForURL(/\/dashboard/, { timeout: 10000 });
+}
+```
+
+```typescript
+// e2e/helpers/seed.ts
+// Garante que o tenant de teste E2E existe no DB. Roda 1x antes da suite via globalSetup.
+import { prisma } from "../../src/lib/prisma";
+import bcrypt from "bcryptjs";
+
+export async function ensureE2ETenant() {
+  const email = process.env.E2E_TEST_EMAIL ?? "e2e@pdvotica.local";
+  const existing = await prisma.user.findFirst({ where: { email } });
+  if (existing) return existing;
+
+  const company = await prisma.company.create({ data: { name: "E2E Test Co", accessEnabled: true, /* ... outros campos mínimos */ } });
+  const passwordHash = await bcrypt.hash(process.env.E2E_TEST_PASSWORD ?? "e2e-test-pass", 10);
+  return await prisma.user.create({ data: { email, passwordHash, companyId: company.id, role: "ADMIN" } });
+}
+```
+
+```typescript
+// playwright.config.ts (modificar)
+import { defineConfig } from "@playwright/test";
+export default defineConfig({
+  globalSetup: "./e2e/global-setup.ts",
+  // ... resto da config existente ...
+});
+```
+
+```typescript
+// e2e/global-setup.ts
+import { ensureE2ETenant } from "./helpers/seed";
+export default async function () { await ensureE2ETenant(); }
+```
+
+- [ ] **Step 1: Spec dos 3 fluxos (usa helpers acima)**
 
 ```typescript
 // e2e/critical-flows.spec.ts
 import { test, expect } from "@playwright/test";
+import { loginAsTestUser } from "./helpers/auth";
 
 test.describe("Q8.5.1 fluxos críticos", () => {
   test("F1: criar venda à vista e ver no caixa", async ({ page }) => {
-    await page.goto("/login");
-    // ... login ...
+    await loginAsTestUser(page);
     await page.goto("/dashboard/pdv");
-    // ... seleciona produto, paga em dinheiro, finaliza ...
+    // Selecionar 1 produto (assumir seed cria 1)
+    await page.getByPlaceholder(/buscar produto/i).fill("E2E-PRODUTO");
+    await page.getByText("E2E-PRODUTO").first().click();
+    await page.getByRole("button", { name: /finalizar/i }).click();
+    await page.getByLabel(/dinheiro/i).check();
+    await page.getByRole("button", { name: /confirmar/i }).click();
+    await expect(page.getByText(/Venda finalizada/i)).toBeVisible({ timeout: 10000 });
     await page.goto("/dashboard/caixa");
     await expect(page.getByText(/Total recebido/)).toBeVisible();
   });
 
-  test("F2: venda parcelada STORE_CREDIT 3x + fechar caixa", async ({ page }) => { /* ... */ });
+  test("F2: venda parcelada STORE_CREDIT 3x + fechar caixa", async ({ page }) => {
+    await loginAsTestUser(page);
+    // ... fluxo análogo: PDV → método CREDIÁRIO → 3 parcelas → fechar caixa
+  });
 
-  test("F3: receber parcela do crediário + ver no DRE", async ({ page }) => { /* ... */ });
+  test("F3: receber parcela do crediário + ver no DRE", async ({ page }) => {
+    await loginAsTestUser(page);
+    await page.goto("/dashboard/financeiro/contas-receber");
+    // Buscar a AR criada no F2, clicar receber, confirmar
+    // Navegar pra DRE e validar entrada
+  });
 });
 ```
+
+⚠️ **Pre-req**: rodar seed E2E uma vez (`npm run e2e -- --reporter=list` com env vars).
 
 - [ ] **Step 2: Rodar local pra validar fluxos**
 
@@ -1842,6 +1958,23 @@ Atualizar seções afetadas (fluxos de venda, financeiro, billing, admin).
 git add CHANGELOG.md BLUEPRINT_FUNCIONAL_PDV.md docs/Q8-retro.md
 git commit -m "docs(q8.99): CHANGELOG + Blueprint + retro de Q8"
 ```
+
+### Task 99.1.5: Re-rodar audits pra comparar antes/depois
+
+- [ ] **Step 1: Re-rodar audit de dados**
+
+```bash
+npx tsx scripts/audit-q8-data.ts > qa-artifacts/Q8-final/data-audit-after.json
+diff qa-artifacts/Q8-data-audit.json qa-artifacts/Q8-final/data-audit-after.json > qa-artifacts/Q8-final/data-audit-diff.txt
+```
+
+- [ ] **Step 2: Re-rodar audit financeiro**
+
+```bash
+npx tsx scripts/audit-finance-consistency.ts > qa-artifacts/Q8-final/finance-audit-after.json
+```
+
+- [ ] **Step 3: Documentar deltas** em `qa-artifacts/Q8-final/audit-deltas.md`
 
 ### Task 99.2: Validar DoD
 
@@ -1936,13 +2069,14 @@ Lista completa de migrations Q8:
 - `q8_finance_retry_abandoned` (Task 2.2)
 - `q8_sale_idempotency` (Task 2.3)
 - `q8_admin_mfa` (Task 3.1)
+- `q8_impersonation_revoked_at` (Task 3.3)
 - `q8_baseline_drift_recovery` (Task 4.1, evidence-based)
 - `q8_composite_uniques` (Task 4.2)
 
-Total: **9 migrations** Q8.
+Total: **10 migrations** Q8.
 
 ## Modelo de delivery
 
-- **Commits direto na main** (modelo do projeto). Cada Step termina em commit atômico.
-- Exceção: **Q8.4 inteiro** (mudanças destrutivas de schema) e **Q8.3.1** (MFA admin) — recomendo branch + PR pra ter deploy preview e Vercel rodar smoke E2E antes de merge. Modelo: `git checkout -b q8-4-schema`, push, abrir PR, conferir preview, merge.
-- Em caso de hotfix: commit direto na main, deploy automático.
+- **Default: commits direto na main** (modelo do projeto). Cada Step termina em commit atômico.
+- **Exceção branch+PR**: Q8.4 inteiro (mudanças destrutivas de schema) e Q8.3.1 (MFA admin). Pra essas, antes da primeira task: `git checkout -b q8-4-schema` (ou `q8-3-1-mfa`). Cada Step continua fazendo `git commit -m` normalmente — só não vai pra main. Ao terminar a fase: `git push -u origin <branch>`, abrir PR no GitHub, conferir Vercel preview, merge no GitHub UI (squash ou merge — sua preferência).
+- Em caso de hotfix mid-sprint: commit direto na main mesmo dentro de fase que use branch — combinar manualmente o rebase depois.
