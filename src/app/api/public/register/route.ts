@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { setupCompanyFinance } from "@/services/finance-setup.service";
+import { rateLimitResponse } from "@/lib/rate-limit";
 
 /**
  * POST /api/public/register
@@ -10,6 +11,12 @@ import { setupCompanyFinance } from "@/services/finance-setup.service";
  */
 export async function POST(request: Request) {
   try {
+    // SEGURANÇA: rate limit por IP para prevenir abuse de cadastro.
+    // 5 cadastros/IP/hora — endpoint público sem auth.
+    const ip = request.headers.get("x-forwarded-for")?.split(",")[0].trim() || "unknown";
+    const blocked = rateLimitResponse(`register:${ip}`, { maxRequests: 5, windowMs: 60 * 60 * 1000 });
+    if (blocked) return blocked;
+
     const body = await request.json();
 
     const { name, email, phone, password, companyName, document, planId } = body;

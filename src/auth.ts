@@ -4,6 +4,12 @@ import Credentials from "next-auth/providers/credentials";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
+import { checkRateLimit } from "@/lib/rate-limit";
+
+// SEGURANÇA: hash dummy bcrypt para comparar quando usuário não existe.
+// Sem isso, há timing leak: !user retorna ~0ms, user existente retorna ~80ms
+// (custo do bcrypt.compare). Atacante mede e enumera emails válidos.
+const DUMMY_HASH = "$2b$10$abcdefghijklmnopqrstuv0123456789012345678901234567890Yzab";
 
 const loginSchema = z.object({
   email: z.string().min(1), // Aceita login ou email
@@ -41,6 +47,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         try {
           const { email: login, password } = loginSchema.parse(credentials);
 
+          // SEGURANÇA: rate limit por chave de login. Sem IP confiável dentro do
+          // authorize callback do NextAuth, usamos o próprio login — limita
+          // tentativas por conta (ataque a uma conta específica).
+          const limit = checkRateLimit(`login:${login.toLowerCase()}`, {
+            maxRequests: 10,
+            windowMs: 5 * 60 * 1000,
+          });
+          if (!limit.allowed) {
+            console.warn(`Rate limit login excedido para ${login}`);
+            return null;
+          }
+
           // Buscar por email OU por nome (login)
           const user = await prisma.user.findFirst({
             where: {
@@ -64,6 +82,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           });
 
           if (!user || !user.passwordHash) {
+            // SEGURANÇA: bcrypt dummy mesmo sem user para igualar tempo de resposta.
+            // Senão atacante mede latência e enumera emails existentes.
+            await bcrypt.compare(password, DUMMY_HASH);
             return null;
           }
 

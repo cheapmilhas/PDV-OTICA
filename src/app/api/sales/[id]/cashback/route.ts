@@ -12,11 +12,13 @@ export async function GET(
     const companyId = await getCompanyId();
     const { id } = await params;
 
-    // Buscar movimentação de cashback gerada por esta venda
+    // Buscar movimentação de cashback gerada por esta venda.
+    // SEGURANÇA: filtrar via sale.companyId — sem isso, leak de dado financeiro entre tenants.
     const cashbackMovement = await prisma.cashbackMovement.findFirst({
       where: {
         saleId: id,
         type: "CREDIT",
+        sale: { companyId },
       },
       select: {
         id: true,

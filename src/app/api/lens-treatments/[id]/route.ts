@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePlanFeature } from "@/lib/plan-features";
+import { FEATURES } from "@/lib/plan-feature-catalog";
 import { z } from "zod";
 
 const updateTreatmentSchema = z.object({
@@ -23,6 +25,7 @@ export async function GET(
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, FEATURES.LENS_TREATMENTS);
     const { id } = await params;
 
     const treatment = await prisma.lensTreatment.findFirst({
