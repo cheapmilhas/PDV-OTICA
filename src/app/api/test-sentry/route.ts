@@ -9,35 +9,38 @@ import * as Sentry from "@sentry/nextjs";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-// Init inline como fallback — instrumentation.ts pode não ter rodado
-// dependendo de como Next 16 carrega o hook register() com Turbopack.
-// init() é idempotente: se já foi chamado pelo instrumentation, ignora.
-if (process.env.SENTRY_DSN && !Sentry.getClient()) {
-  Sentry.init({
-    dsn: process.env.SENTRY_DSN,
-    enabled: true,
-    sendDefaultPii: false,
-    tracesSampleRate: 0.1,
-  });
-  console.log("[test-sentry] Init inline acionado (instrumentation não rodou)");
-} else {
-  console.log("[test-sentry] Init prévio detectado — usando existente");
-}
-
 export async function GET() {
+  console.log("[test-sentry] handler entrou");
   console.log("[test-sentry] DSN presente?", !!process.env.SENTRY_DSN);
-  console.log("[test-sentry] Client ativo?", !!Sentry.getClient());
+
+  // Lazy init — instrumentation.ts não rodou em Next 16, init no top-level
+  // estava abortando o lambda antes do handler executar.
+  if (process.env.SENTRY_DSN && !Sentry.getClient()) {
+    Sentry.init({
+      dsn: process.env.SENTRY_DSN,
+      enabled: true,
+      sendDefaultPii: false,
+      tracesSampleRate: 0,
+    });
+    console.log("[test-sentry] init inline acionado");
+  } else {
+    console.log("[test-sentry] init previo detectado");
+  }
+
+  console.log("[test-sentry] client ativo?", !!Sentry.getClient());
 
   const err = new Error("Sentry test — delete me (rota /api/test-sentry)");
 
   const eventId = Sentry.captureException(err, {
     tags: { source: "test-sentry-route" },
-    extra: { ts: new Date().toISOString() },
   });
-  console.log("[test-sentry] eventId capturado:", eventId);
+  console.log("[test-sentry] eventId:", eventId);
 
   const flushed = await Sentry.flush(5000);
-  console.log("[test-sentry] flush retornou:", flushed);
+  console.log("[test-sentry] flush:", flushed);
 
-  throw err;
+  return NextResponse.json(
+    { ok: false, eventId, flushed },
+    { status: 500 },
+  );
 }
