@@ -4,26 +4,40 @@ import * as Sentry from "@sentry/nextjs";
 /**
  * TEMPORÁRIO — usado uma vez pra validar integração Sentry.
  * Remover depois que o primeiro erro aparecer no painel sentry.io.
- *
- * Como testar: GET https://SEU-DOMINIO/api/test-sentry
- * Esperado: 500 + erro "Sentry test — delete me" aparece em sentry.io Issues.
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
+// Init inline como fallback — instrumentation.ts pode não ter rodado
+// dependendo de como Next 16 carrega o hook register() com Turbopack.
+// init() é idempotente: se já foi chamado pelo instrumentation, ignora.
+if (process.env.SENTRY_DSN && !Sentry.getClient()) {
+  Sentry.init({
+    dsn: process.env.SENTRY_DSN,
+    enabled: true,
+    sendDefaultPii: false,
+    tracesSampleRate: 0.1,
+  });
+  console.log("[test-sentry] Init inline acionado (instrumentation não rodou)");
+} else {
+  console.log("[test-sentry] Init prévio detectado — usando existente");
+}
+
 export async function GET() {
+  console.log("[test-sentry] DSN presente?", !!process.env.SENTRY_DSN);
+  console.log("[test-sentry] Client ativo?", !!Sentry.getClient());
+
   const err = new Error("Sentry test — delete me (rota /api/test-sentry)");
 
-  // Captura manual + flush — fallback caso captureRequestError do
-  // instrumentation.ts não pegue (Edge runtime, throw fora de async, etc).
-  Sentry.captureException(err, {
+  const eventId = Sentry.captureException(err, {
     tags: { source: "test-sentry-route" },
     extra: { ts: new Date().toISOString() },
   });
+  console.log("[test-sentry] eventId capturado:", eventId);
 
-  // Aguarda envio antes do lambda morrer (serverless mata processo rápido).
-  await Sentry.flush(2000);
+  const flushed = await Sentry.flush(5000);
+  console.log("[test-sentry] flush retornou:", flushed);
 
   throw err;
 }
