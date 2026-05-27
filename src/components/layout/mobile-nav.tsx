@@ -31,6 +31,11 @@ import {
   Boxes,
   PieChart,
   TrendingUp,
+  Glasses,
+  Truck,
+  Store,
+  CreditCard,
+  CalendarClock,
 } from "lucide-react";
 
 const primaryNav = [
@@ -60,6 +65,12 @@ const moreNav = [
   { icon: RefreshCw, label: "Conciliação", href: "/dashboard/financeiro/conciliacao", permission: "financial.view", feature: "bank_reconciliation" },
   { icon: Boxes, label: "Lotes Estoque", href: "/dashboard/financeiro/lotes-estoque", permission: "financial.view", feature: "inventory_lots" },
   { icon: PieChart, label: "BI Analítico", href: "/dashboard/financeiro/bi", permission: "financial.view", feature: "bi_analytics" },
+  // Q7.4 P3-2: 5 features que faltavam no mobile-nav
+  { icon: Glasses, label: "Tratamentos", href: "/dashboard/tratamentos", permission: "settings.view", feature: "lens_treatments" },
+  { icon: Truck, label: "Transferências", href: "/dashboard/estoque/transferencias", permission: "stock.view", feature: "stock_transfers" },
+  { icon: Store, label: "Comp. Lojas", href: "/dashboard/relatorios/comparativo-lojas", permission: "reports.sales", feature: "branch_comparison" },
+  { icon: CreditCard, label: "Cartões", href: "/dashboard/financeiro/cartoes", permission: "financial.view", feature: "card_receivables" },
+  { icon: CalendarClock, label: "Desp. Recorrentes", href: "/dashboard/financeiro/despesas-recorrentes", permission: "financial.view", feature: "recurring_expenses" },
   { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];
 

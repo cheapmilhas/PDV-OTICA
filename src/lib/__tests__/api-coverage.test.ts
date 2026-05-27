@@ -28,12 +28,16 @@ const SAMPLES: Array<[keyof typeof FEATURES, string]> = [
   ["BI_ANALYTICS", "/api/finance/bi"],
   ["CARD_RECEIVABLES", "/api/finance/card-receivables"],
   ["RECURRING_EXPENSES", "/api/recurring-expenses"],
+  // Q7.4 P2-2: completar cobertura pras 16 features (faltavam 3).
+  ["CASHBACK", "/api/cashback/customer/abc123"],
+  ["GOALS", "/api/goals"],
+  ["INVENTORY_LOTS", "/api/inventory/lots"],
 ];
 
 const makeRequest = (path: string) => new Request(`http://localhost${path}`);
 const makeCtx = () => ({ params: Promise.resolve({}) });
 
-describe("Cobertura wrapper das 13 APIs", () => {
+describe("Cobertura wrapper das 16 APIs", () => {
   const originalEnv = process.env.DISABLE_PLAN_FEATURE_GATING;
 
   beforeEach(() => {
@@ -88,7 +92,7 @@ describe("Cobertura wrapper das 13 APIs", () => {
     },
   );
 
-  it("kill switch libera todas as 13 APIs sem consultar DB", async () => {
+  it("kill switch libera todas as 16 APIs sem consultar DB", async () => {
     process.env.DISABLE_PLAN_FEATURE_GATING = "true";
     const handler = vi.fn(async () => new Response("ok"));
     const wrapped = withPlanFeatureGuard(handler);

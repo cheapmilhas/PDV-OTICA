@@ -56,9 +56,11 @@ export function withPlanFeatureGuard<C extends RouteContext = RouteContext>(
     }
 
     let features: Record<string, boolean>;
+    let hasSubscription: boolean;
     try {
       const cached = await getCachedPlanFeatures(companyId);
       features = cached.features;
+      hasSubscription = cached.hasSubscription;
     } catch (err) {
       // Fail-open: indisponibilidade de DB transitória não deve bloquear UI inteira.
       console.warn(
@@ -70,6 +72,14 @@ export function withPlanFeatureGuard<C extends RouteContext = RouteContext>(
           error: err instanceof Error ? err.message : String(err),
         }),
       );
+      return handler(req, ctx);
+    }
+
+    // Q7.4 P2-3: padroniza com requirePlanFeature — sem subscription = libera.
+    // Empresa em onboarding/trial sem PlanFeatures cadastrados não deve ser
+    // bloqueada (não dá pra contratar sem testar). PlanFeatures vazias OU
+    // hasSubscription=false ambos disparam o "libera".
+    if (!hasSubscription) {
       return handler(req, ctx);
     }
 
