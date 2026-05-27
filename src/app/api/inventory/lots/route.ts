@@ -4,11 +4,14 @@ import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { requirePlanFeature } from "@/lib/plan-features";
+import { FEATURES } from "@/lib/plan-feature-catalog";
 
 export async function GET(req: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, FEATURES.INVENTORY_LOTS);
     const searchParams = req.nextUrl.searchParams;
 
     const page = parseInt(searchParams.get("page") || "1");
@@ -55,6 +58,7 @@ export async function POST(req: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+    await requirePlanFeature(companyId, FEATURES.INVENTORY_LOTS);
     const userId = await getUserId();
     const body = await req.json();
 

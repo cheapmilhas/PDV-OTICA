@@ -42,9 +42,10 @@ export async function GET(
       );
     }
 
-    // Buscar dados do cliente e última compra
-    const customer = await prisma.customer.findUnique({
-      where: { id: customerId },
+    // Buscar dados do cliente e última compra.
+    // SEGURANÇA: filtrar por companyId — sem isso, vaza customer entre tenants.
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, companyId },
       include: {
         sales: {
           where: { status: { not: "CANCELED" } },
@@ -75,8 +76,9 @@ export async function GET(
       : null;
 
     // Cashback agregado por cliente (soma branches). Q6.2.
+    // SEGURANÇA: filtrar por customer.companyId (CustomerCashback não tem companyId direto).
     const cashbackAgg = await prisma.customerCashback.aggregate({
-      where: { customerId },
+      where: { customerId, customer: { companyId } },
       _sum: { balance: true },
     });
     const cashbackBalance = Number(cashbackAgg._sum.balance || 0);

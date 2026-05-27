@@ -376,6 +376,7 @@ export const cashbackService = {
     const today = startOfDay(new Date());
 
     // Buscar movimentos expirados que ainda não foram marcados
+    // SEGURANÇA: filtrar por branchId via customerCashback — sem isso, expira a base inteira.
     const expiredMovements = await prisma.cashbackMovement.findMany({
       where: {
         type: "CREDIT",
@@ -383,6 +384,7 @@ export const cashbackService = {
           lte: today,
         },
         expired: false,
+        customerCashback: { branchId },
       },
       include: {
         customerCashback: true,
