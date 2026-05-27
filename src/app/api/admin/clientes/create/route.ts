@@ -239,12 +239,11 @@ export async function POST(request: Request) {
         },
       });
 
-      // 7.1. Configurar módulo financeiro
-      try {
-        await setupCompanyFinance(tx, company.id, branch?.id);
-      } catch (financeError) {
-        console.error("[FINANCE] Erro ao configurar módulo financeiro:", financeError);
-      }
+      // 7.1. Configurar módulo financeiro.
+      // Q4.4: erro AQUI propaga para rollback da transação inteira — admin
+      // refaz o cadastro em vez de ficar com company em estado inconsistente
+      // (sem chartOfAccounts/FinanceAccount, quebra venda/orçamento depois).
+      await setupCompanyFinance(tx, company.id, branch?.id);
 
       // 8. Criar Invite (mantém para fluxo de ativação por email)
       const inviteToken = randomBytes(32).toString("hex");
