@@ -50,7 +50,7 @@ async function verifyPdvSession(token: string, cookieName: string) {
   }
 }
 
-export async function middleware(request: NextRequest) {
+export async function proxy(request: NextRequest) {
   const { pathname } = request.nextUrl;
 
   // Rotas /admin/** e /api/admin/**

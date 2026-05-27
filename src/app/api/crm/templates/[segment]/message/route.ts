@@ -74,6 +74,13 @@ export async function GET(
       ? Math.floor((new Date().getTime() - lastSaleDate.getTime()) / (1000 * 60 * 60 * 24))
       : null;
 
+    // Cashback agregado por cliente (soma branches). Q6.2.
+    const cashbackAgg = await prisma.customerCashback.aggregate({
+      where: { customerId },
+      _sum: { balance: true },
+    });
+    const cashbackBalance = Number(cashbackAgg._sum.balance || 0);
+
     // Processar template
     const message = crmService.processTemplate(
       template.message,
@@ -84,7 +91,7 @@ export async function GET(
       {
         lastPurchaseDate: lastSaleDate,
         daysSinceLastPurchase,
-        cashbackBalance: 0, // TODO: buscar cashback real
+        cashbackBalance,
         lastPurchaseProduct: lastSale?.items[0]?.product?.name,
         lastPurchaseAmount: lastSale?.total ? Number(lastSale.total) : null,
       }

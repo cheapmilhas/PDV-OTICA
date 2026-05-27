@@ -64,10 +64,9 @@ export async function GET(req: NextRequest) {
           },
         },
         movements: {
-          where: {
-            type: "SALE_PAYMENT",
-          },
           select: {
+            type: true,
+            direction: true,
             amount: true,
           },
         },
@@ -79,10 +78,17 @@ export async function GET(req: NextRequest) {
 
     // Calcular totais para cada caixa
     const data = cashShifts.map((shift) => {
-      const totalSales = shift.movements.reduce(
-        (sum, mov) => sum + Number(mov.amount),
-        0
-      );
+      let totalSales = 0;
+      let totalExpenses = 0;
+      for (const mov of shift.movements) {
+        const amount = Number(mov.amount);
+        if (mov.type === "SALE_PAYMENT") {
+          totalSales += amount;
+        } else if (mov.direction === "OUT" && mov.type !== "CLOSING") {
+          // REFUND/WITHDRAWAL/ADJUSTMENT saindo do caixa = despesa do turno
+          totalExpenses += amount;
+        }
+      }
 
       return {
         id: shift.id,
@@ -98,7 +104,7 @@ export async function GET(req: NextRequest) {
           : null,
         difference: shift.differenceCash ? Number(shift.differenceCash) : null,
         totalSales,
-        totalExpenses: 0, // TODO: calcular despesas
+        totalExpenses,
         openedByUser: shift.openedByUser,
         closedByUser: shift.closedByUser,
         branch: shift.branch,

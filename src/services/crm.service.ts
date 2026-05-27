@@ -47,6 +47,16 @@ export async function generateReminders(companyId: string) {
     ])
   );
 
+  // Cashback agregado por cliente (soma branches). Q6.2.
+  const cashbacks = await prisma.customerCashback.groupBy({
+    by: ["customerId"],
+    where: { customerId: { in: customerIds } },
+    _sum: { balance: true },
+  });
+  const cashbackMap = new Map(
+    cashbacks.map((c) => [c.customerId, Number(c._sum.balance || 0)]),
+  );
+
   const reminders: any[] = [];
 
   for (const customer of customers) {
@@ -60,8 +70,7 @@ export async function generateReminders(companyId: string) {
     const totalPurchases = customerSaleTotals?.count ?? 0;
     const totalSpent = customerSaleTotals?.total ?? 0;
 
-    // TODO: Buscar cashback do cliente
-    const cashbackBalance = 0;
+    const cashbackBalance = cashbackMap.get(customer.id) ?? 0;
 
     // Dados comuns
     const baseData = {
