@@ -333,17 +333,36 @@ export async function applyCashbackUsageInTx(
 
   if (cashbackUsed <= 0) return;
 
-  const customerCashback = await tx.customerCashback.update({
+  // Q7.1 P1-5: race fix — antes era update direto (sem validar balance),
+  // permitindo balance negativo se 2 vendas paralelas usassem o mesmo
+  // saldo. updateMany conditional WHERE balance >= cashbackUsed garante
+  // que só uma das duas TX vence; a outra throw aborta a venda inteira.
+  const updateResult = await tx.customerCashback.updateMany({
     where: {
-      customerId_branchId: {
-        customerId,
-        branchId: sale.branchId,
-      },
+      customerId,
+      branchId: sale.branchId,
+      balance: { gte: cashbackUsed },
     },
     data: {
       balance: { decrement: cashbackUsed },
       totalUsed: { increment: cashbackUsed },
     },
+  });
+
+  if (updateResult.count === 0) {
+    throw new AppError(
+      ERROR_CODES.VALIDATION_ERROR,
+      `Saldo de cashback insuficiente ou alterado por outra operação. Recarregue o carrinho.`,
+      409,
+    );
+  }
+
+  // Re-fetch pra pegar o id do CustomerCashback (updateMany não retorna).
+  const customerCashback = await tx.customerCashback.findUniqueOrThrow({
+    where: {
+      customerId_branchId: { customerId, branchId: sale.branchId },
+    },
+    select: { id: true },
   });
 
   await tx.cashbackMovement.create({

@@ -392,27 +392,69 @@ export async function PATCH(request: Request) {
         );
       }
 
-      const reversed = await prisma.accountReceivable.update({
-        where: { id: reversal.id },
-        data: {
-          status: AccountReceivableStatus.PENDING,
-          receivedDate: null,
-          receivedAmount: null,
-          receivedByUserId: null,
-          fineAmount: 0,
-          interestAmount: 0,
-          discountAmount: 0,
-          reversedAt: new Date(),
-          reversedBy: userId,
-        },
-        include: {
-          customer: { select: { id: true, name: true, cpf: true, phone: true, email: true } },
-          sale: { select: { id: true, total: true, createdAt: true } },
-          branch: { select: { id: true, name: true, code: true } },
-          createdBy: { select: { id: true, name: true } },
-          receivedBy: { select: { id: true, name: true } },
-        },
-      });
+      // Q7.1 P0-5: estorno atômico — AR.status + CashMovement reverso na
+      // mesma transação. Antes só mudava status; o R$ continuava no shift
+      // gerando ghost cash no fechamento de caixa.
+      const reversed = await prisma.$transaction(async (tx) => {
+        // 1. Buscar o CashMovement IN original deste AR (criado quando
+        // foi marcado como RECEIVED, ver linha ~535 deste arquivo).
+        const originalMovement = await tx.cashMovement.findFirst({
+          where: {
+            originType: "AccountReceivable",
+            originId: reversal.id,
+            direction: "IN",
+          },
+          orderBy: { createdAt: "desc" },
+        });
+
+        // 2. Se existir movimento E shift continuar OPEN, cria estorno OUT.
+        // Se shift já fechou, não toca (estorno fora do ciclo de caixa —
+        // contador resolve via FinanceEntry compensatório no DRE).
+        if (originalMovement) {
+          const shift = await tx.cashShift.findUnique({
+            where: { id: originalMovement.cashShiftId },
+          });
+          if (shift?.status === "OPEN") {
+            await tx.cashMovement.create({
+              data: {
+                cashShiftId: originalMovement.cashShiftId,
+                branchId: originalMovement.branchId,
+                type: "REFUND",
+                direction: "OUT",
+                method: originalMovement.method,
+                amount: originalMovement.amount,
+                originType: "AccountReceivable",
+                originId: reversal.id,
+                note: `Estorno: ${existing.description}`,
+                createdByUserId: userId,
+              },
+            });
+          }
+        }
+
+        // 3. Reverter status do AR.
+        return tx.accountReceivable.update({
+          where: { id: reversal.id },
+          data: {
+            status: AccountReceivableStatus.PENDING,
+            receivedDate: null,
+            receivedAmount: null,
+            receivedByUserId: null,
+            fineAmount: 0,
+            interestAmount: 0,
+            discountAmount: 0,
+            reversedAt: new Date(),
+            reversedBy: userId,
+          },
+          include: {
+            customer: { select: { id: true, name: true, cpf: true, phone: true, email: true } },
+            sale: { select: { id: true, total: true, createdAt: true } },
+            branch: { select: { id: true, name: true, code: true } },
+            createdBy: { select: { id: true, name: true } },
+            receivedBy: { select: { id: true, name: true } },
+          },
+        });
+      }, { timeout: 30_000 });
 
       return NextResponse.json({
         ...reversed,

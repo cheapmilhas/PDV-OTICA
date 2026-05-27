@@ -153,9 +153,11 @@ export class CashService {
       );
     }
 
-    // Fechar turno
-    const closedShift = await prisma.cashShift.update({
-      where: { id: shiftId },
+    // Q7.1 P0-8: fecha turno com update condicional pra evitar race
+    // entre dois usuários clicando "fechar caixa" simultaneamente.
+    // updateMany retorna count=0 se outro processo já mudou status≠OPEN.
+    const updateResult = await prisma.cashShift.updateMany({
+      where: { id: shiftId, status: "OPEN" },
       data: {
         status: "CLOSED",
         closedByUserId: userId,
@@ -166,6 +168,19 @@ export class CashService {
         differenceJustification,
         notes: notes || shift.notes,
       },
+    });
+
+    if (updateResult.count === 0) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Turno já foi fechado por outro usuário. Recarregue a página.",
+        409,
+      );
+    }
+
+    // Re-fetch com movements (updateMany não suporta include).
+    const closedShift = await prisma.cashShift.findUniqueOrThrow({
+      where: { id: shiftId },
       include: {
         movements: {
           orderBy: { createdAt: "asc" },

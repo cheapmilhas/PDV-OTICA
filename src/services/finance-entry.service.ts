@@ -354,6 +354,26 @@ export async function generateSaleEntries(
     const faType = getFinanceAccountType(payment.method);
     const financeAccount = faType ? await getFinanceAccountByType(tx, companyId, faType) : null;
 
+    // Q7.1 P0-6: cashDate de CREDIT_CARD reflete D+settlementDays (default 30),
+    // não D+0 como antes. Cash flow estava projetando cartão como dinheiro
+    // imediato e distorcendo previsão de fluxo.
+    // settlementDate da própria SalePayment vence — vem do feeService.
+    const baseCashDate = payment.receivedAt ?? sale.completedAt ?? new Date();
+    let cashDate: Date | null;
+    if (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") {
+      cashDate = null; // crediário não entra no caixa
+    } else if (payment.method === "CREDIT_CARD") {
+      if (payment.settlementDate) {
+        cashDate = payment.settlementDate;
+      } else {
+        const d = new Date(baseCashDate);
+        d.setDate(d.getDate() + 30); // default settlement adquirente
+        cashDate = d;
+      }
+    } else {
+      cashDate = baseCashDate; // CASH/PIX/DEBIT_CARD = D+0
+    }
+
     await tx.financeEntry.upsert({
       where: {
         companyId_sourceType_sourceId_type_side: {
@@ -378,13 +398,14 @@ export async function generateSaleEntries(
         sourceId: payment.id,
         description: `Pagamento ${getPaymentLabel(payment.method)} - Venda #${saleId.substring(0, 8)}`,
         entryDate: payment.receivedAt ?? sale.completedAt ?? sale.createdAt,
-        // Crediário/Saldo a Receber não tem cashDate (dinheiro não entrou ainda)
-        cashDate: (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") ? null : (payment.receivedAt ?? sale.completedAt ?? new Date()),
+        cashDate,
       },
     });
 
-    // Atualizar saldo da conta financeira
-    if (financeAccount) {
+    // Q7.1 P0-7: balance de CARD_ACQUIRER NÃO incrementa na venda — só no
+    // settlement (job de reconciliação ou webhook adquirente). Antes ficava
+    // double-count: venda inflava balance + recebimento futuro inflava de novo.
+    if (financeAccount && faType !== "CARD_ACQUIRER") {
       await tx.financeAccount.update({
         where: { id: financeAccount.id },
         data: { balance: { increment: paymentAmount } },
