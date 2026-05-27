@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/tickets/[id]/messages" });
 
 const messageSchema = z.object({
   content: z.string().min(1, "Mensagem não pode estar vazia"),
@@ -43,7 +46,7 @@ export async function POST(
       data: message,
     });
   } catch (error) {
-    console.error("❌ Erro ao criar mensagem:", error);
+    log.error("Erro ao criar mensagem", { error: error instanceof Error ? error.message : String(error) });
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

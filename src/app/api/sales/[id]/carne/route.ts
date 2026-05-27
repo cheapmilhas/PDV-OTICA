@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { generateCarnePDF } from "@/lib/pdf-utils";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "sales/[id]/carne" });
 
 /**
  * GET /api/sales/[id]/carne
@@ -108,7 +111,7 @@ export async function GET(
       },
     });
   } catch (error) {
-    console.error("Erro ao gerar carnê:", error);
+    log.error("Erro ao gerar carnê", { error: error instanceof Error ? error.message : String(error) });
     return handleApiError(error);
   }
 }

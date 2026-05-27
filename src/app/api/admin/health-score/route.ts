@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { saveHealthScore } from "@/lib/health-score";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/health-score" });
 
 /**
  * POST /api/admin/health-score
@@ -57,7 +60,7 @@ export async function POST(request: Request) {
           await saveHealthScore(company.id);
           successCount++;
         } catch (error) {
-          console.error(`[HEALTH SCORE] Erro ao calcular para ${company.id}:`, error);
+          log.error("Erro ao calcular health score", { companyId: company.id, error: error instanceof Error ? error.message : String(error) });
           errorCount++;
         }
       }
@@ -80,7 +83,7 @@ export async function POST(request: Request) {
       });
     }
   } catch (error) {
-    console.error("[HEALTH SCORE] Erro:", error);
+    log.error("Erro ao recalcular health score", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Erro ao recalcular health score" },
       { status: 500 }

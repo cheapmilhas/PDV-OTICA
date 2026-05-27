@@ -5,6 +5,9 @@ import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers
 import { handleApiError } from "@/lib/error-handler";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "cash/shift/close" });
 
 /**
  * POST /api/cash/shift/close
@@ -53,11 +56,10 @@ export async function POST(request: Request) {
 
     return NextResponse.json(serializedShift, { status: 200 });
   } catch (error) {
-    console.error("❌ Erro ao fechar caixa:", error);
-    if (error instanceof Error) {
-      console.error("❌ Mensagem do erro:", error.message);
-      console.error("❌ Stack:", error.stack);
-    }
+    log.error("Erro ao fechar caixa", {
+      error: error instanceof Error ? error.message : String(error),
+      stack: error instanceof Error ? error.stack : undefined,
+    });
     return handleApiError(error);
   }
 }

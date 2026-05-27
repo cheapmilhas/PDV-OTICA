@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/faturas/create" });
 
 export async function POST(request: Request) {
   const admin = await getAdminSession();
@@ -83,7 +86,7 @@ export async function POST(request: Request) {
       },
     });
   } catch (error) {
-    console.error("[CREATE INVOICE] Erro:", error);
+    log.error("Erro ao criar fatura", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao criar fatura" }, { status: 500 });
   }
 }

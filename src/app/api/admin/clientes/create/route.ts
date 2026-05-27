@@ -7,6 +7,9 @@ import { setupCompanyFinance } from "@/services/finance-setup.service";
 import { logActivity } from "@/services/activity-log.service";
 import { createOnboardingChecklist, completeOnboardingStep } from "@/services/onboarding-checklist.service";
 import { ActorType } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/clientes/create" });
 
 function generateSlug(name: string): string {
   return name
@@ -353,7 +356,7 @@ export async function POST(request: Request) {
       adminEmail: result.user?.email || null,
     });
   } catch (error: any) {
-    console.error("[CREATE_CLIENT]", error);
+    log.error("Erro ao criar cliente", { error: error instanceof Error ? error.message : String(error) });
 
     // Tratar erro de unique constraint
     if (error.code === "P2002") {

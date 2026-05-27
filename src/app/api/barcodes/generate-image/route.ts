@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server"
 import bwipjs from "bwip-js"
 import QRCode from "qrcode"
+import { logger } from "@/lib/logger"
+
+const log = logger.child({ route: "barcodes/generate-image" })
 
 export async function POST(req: NextRequest) {
   try {
@@ -46,7 +49,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ image: base64Image })
   } catch (error) {
-    console.error("Erro ao gerar imagem do código:", error)
+    log.error("Erro ao gerar imagem do código", { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json(
       { error: "Erro ao gerar imagem do código" },
       { status: 500 }

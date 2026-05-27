@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { auth } from "@/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "data-management/count" });
 
 export async function GET() {
   try {
@@ -61,7 +64,7 @@ export async function GET() {
       stockAdjustments,
     });
   } catch (error) {
-    console.error("Error counting records:", error);
+    log.error("Erro ao contar registros", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: { code: "INTERNAL", message: "Erro ao contar registros." } },
       { status: 500 }

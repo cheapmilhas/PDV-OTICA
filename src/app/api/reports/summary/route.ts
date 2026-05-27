@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "reports/summary" });
 
 export async function GET(request: Request) {
   try {
@@ -111,7 +114,7 @@ export async function GET(request: Request) {
       }
     });
   } catch (error) {
-    console.error("Erro ao buscar resumo:", error);
+    log.error("Erro ao buscar resumo", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Erro ao buscar resumo" },
       { status: 500 }

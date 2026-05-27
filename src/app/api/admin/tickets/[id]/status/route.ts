@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/tickets/[id]/status" });
 
 const statusSchema = z.object({
   status: z.enum(["OPEN", "IN_PROGRESS", "WAITING_CUSTOMER", "RESOLVED", "CLOSED"]),
@@ -37,7 +40,7 @@ export async function PATCH(
       data: ticket,
     });
   } catch (error) {
-    console.error("❌ Erro ao atualizar status:", error);
+    log.error("Erro ao atualizar status", { error: error instanceof Error ? error.message : String(error) });
 
     if (error instanceof z.ZodError) {
       return NextResponse.json(

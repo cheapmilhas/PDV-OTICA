@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { AdminNotificationType } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "admin-notification" });
 
 interface CreateNotificationParams {
   adminId?: string; // null = broadcast para todos os admins
@@ -27,6 +30,6 @@ export async function createAdminNotification(params: CreateNotificationParams):
       },
     });
   } catch (error) {
-    console.error("[AdminNotification] Falha ao criar notificação:", error);
+    log.error("Falha ao criar notificação", { error: error instanceof Error ? error.message : String(error) });
   }
 }

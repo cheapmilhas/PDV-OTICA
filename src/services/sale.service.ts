@@ -480,22 +480,21 @@ export class SaleService {
         productsWithCost.map((p) => [p.id, p.costPrice == null ? null : Number(p.costPrice)]),
       );
 
-      // 3. Criar SaleItems
-      for (const item of items) {
+      // 3. Criar SaleItems via createMany (Q7.3 P2-5: 1 query em vez de N).
+      // Antes: N `tx.saleItem.create` sequenciais (N round-trips na TX).
+      // Agora: 1 round-trip via createMany — em vendas com 5+ itens reduz
+      // ~80% do tempo na fase de criação.
+      const saleItemsData = items.map((item) => {
         const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
         let itemCostPrice = 0;
         if (item.productId) {
           if (!costMap.has(item.productId)) {
-            // Produto referenciado no carrinho mas não existe no banco — abortar
-            // venda em vez de gravar margem inflada com custo zero.
             throw businessRuleError(
               `Produto ${item.productId} não encontrado ao calcular custo. Recarregue o carrinho.`,
             );
           }
           const cost = costMap.get(item.productId);
           if (cost == null) {
-            // costPrice NULL no banco: legado. Loga warning, mantém 0 para não
-            // travar venda, mas relatório de margem ficará impreciso até cadastrar custo.
             log.warn("Produto sem costPrice — margem ficará distorcida", {
               productId: item.productId,
               saleId: newSale.id,
@@ -504,18 +503,17 @@ export class SaleService {
             itemCostPrice = cost;
           }
         }
-        await tx.saleItem.create({
-          data: {
-            saleId: newSale.id,
-            productId: item.productId,
-            qty: item.qty,
-            unitPrice: item.unitPrice,
-            discount: item.discount || 0,
-            lineTotal: itemTotal,
-            costPrice: itemCostPrice,
-          },
-        });
-      }
+        return {
+          saleId: newSale.id,
+          productId: item.productId,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          discount: item.discount || 0,
+          lineTotal: itemTotal,
+          costPrice: itemCostPrice,
+        };
+      });
+      await tx.saleItem.createMany({ data: saleItemsData });
 
       // 4. Estoque atomic + StockMovement (helper)
       await applyStockDebitInTx(tx, {

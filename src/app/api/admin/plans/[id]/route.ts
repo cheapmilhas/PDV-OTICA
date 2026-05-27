@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/plans/[id]" });
 
 const updatePlanSchema = z.object({
   name: z.string().min(1).optional(),
@@ -82,7 +85,7 @@ export async function PATCH(
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
     }
-    console.error("[ADMIN-PLANS] Erro ao atualizar plano:", error);
+    log.error("Erro ao atualizar plano", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

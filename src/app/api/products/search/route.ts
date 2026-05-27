@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "products/search" });
 
 /**
  * GET /api/products/search
@@ -47,7 +50,7 @@ export async function GET(request: NextRequest) {
       data: products,
     });
   } catch (error) {
-    console.error("[API/products/search] Erro:", error);
+    log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
     return handleApiError(error);
   }
 }

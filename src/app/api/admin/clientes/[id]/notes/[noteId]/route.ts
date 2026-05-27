@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/clientes/[id]/notes/[noteId]" });
 
 /**
  * PATCH /api/admin/clientes/[id]/notes/[noteId]
@@ -32,7 +35,7 @@ export async function PATCH(
 
     return NextResponse.json(note);
   } catch (error) {
-    console.error("[NOTES] Erro ao atualizar:", error);
+    log.error("Erro ao atualizar", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao atualizar nota" }, { status: 500 });
   }
 }
@@ -59,7 +62,7 @@ export async function DELETE(
 
     return NextResponse.json({ success: true });
   } catch (error) {
-    console.error("[NOTES] Erro ao deletar:", error);
+    log.error("Erro ao deletar", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao deletar nota" }, { status: 500 });
   }
 }

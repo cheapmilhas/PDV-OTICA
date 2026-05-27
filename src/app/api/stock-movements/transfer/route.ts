@@ -9,6 +9,9 @@ import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "stock-movements/transfer" });
 
 const stockMovementService = new StockMovementService();
 
@@ -53,7 +56,7 @@ export const POST = withPlanFeatureGuard(async (request: Request) => {
     // Retorna 201 Created com as duas movimentações
     return createdResponse(result);
   } catch (error) {
-    console.error("Erro ao criar transferência:", error);
+    log.error("Erro ao criar transferência", { error: error instanceof Error ? error.message : String(error) });
     return handleApiError(error);
   }
 });

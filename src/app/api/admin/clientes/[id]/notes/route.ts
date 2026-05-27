@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/clientes/[id]/notes" });
 
 /**
  * GET /api/admin/clientes/[id]/notes
@@ -28,7 +31,7 @@ export async function GET(
 
     return NextResponse.json(notes);
   } catch (error) {
-    console.error("[NOTES] Erro ao buscar:", error);
+    log.error("Erro ao buscar", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao buscar notas" }, { status: 500 });
   }
 }
@@ -79,7 +82,7 @@ export async function POST(
 
     return NextResponse.json(note, { status: 201 });
   } catch (error) {
-    console.error("[NOTES] Erro ao criar:", error);
+    log.error("Erro ao criar", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao criar nota" }, { status: 500 });
   }
 }

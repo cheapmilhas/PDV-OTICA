@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { decode } from "next-auth/jwt";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "auth/impersonate-session" });
 
 /**
  * GET /api/auth/impersonate-session?token=...&sessionId=...
@@ -22,7 +25,7 @@ export async function GET(request: Request) {
 
   const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
   if (!authSecret) {
-    console.error("[IMPERSONATE] AUTH_SECRET ausente");
+    log.error("AUTH_SECRET ausente");
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
@@ -36,7 +39,7 @@ export async function GET(request: Request) {
       salt: "next-auth.session-token",
     });
   } catch (err) {
-    console.error("[IMPERSONATE] JWT decode falhou:", err);
+    log.error("JWT decode falhou", { error: err instanceof Error ? err.message : String(err) });
     return NextResponse.redirect(new URL("/login", request.url));
   }
 

@@ -1,4 +1,7 @@
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "onboarding-checklist" });
 
 // Steps padrão criados para toda nova empresa
 const DEFAULT_STEPS = [
@@ -32,7 +35,7 @@ export async function createOnboardingChecklist(companyId: string): Promise<void
       },
     });
   } catch (error) {
-    console.error("[OnboardingChecklist] Falha ao criar checklist:", error);
+    log.error("Falha ao criar checklist", { error: error instanceof Error ? error.message : String(error) });
   }
 }
 
@@ -88,6 +91,6 @@ export async function completeOnboardingStep(
       });
     }
   } catch (error) {
-    console.error("[OnboardingChecklist] Falha ao atualizar step:", error);
+    log.error("Falha ao atualizar step", { error: error instanceof Error ? error.message : String(error) });
   }
 }

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { addDays } from "date-fns";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "dashboard/metrics" });
 
 export async function GET(request: Request) {
   try {
@@ -292,7 +295,7 @@ export async function GET(request: Request) {
     const safeMetrics = JSON.parse(JSON.stringify(metrics, (_, v) => typeof v === 'bigint' ? Number(v) : v));
     return NextResponse.json({ metrics: safeMetrics });
   } catch (error: any) {
-    console.error("Erro ao buscar métricas:", error?.message, error?.stack);
+    log.error("Erro ao buscar métricas", { error: error?.message || String(error), stack: error?.stack });
     return NextResponse.json(
       { error: "Erro ao buscar métricas", details: error?.message || String(error) },
       { status: 500 }

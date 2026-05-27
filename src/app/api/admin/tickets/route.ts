@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/tickets" });
 
 /**
  * POST /api/admin/tickets
@@ -78,7 +81,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, ticket });
   } catch (error) {
-    console.error("[ADMIN-TICKETS] Erro:", error);
+    log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

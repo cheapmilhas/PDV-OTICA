@@ -23,6 +23,9 @@ import { atomicStockDebit } from "@/services/stock.service";
 import { cashbackService } from "@/services/cashback.service";
 import { processaSaleForCampaigns } from "@/services/product-campaign.service";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "sale-side-effects" });
 
 // ============================================================================
 // Tipos compartilhados
@@ -201,16 +204,12 @@ export async function applyPaymentsInTx(
         }
       } catch (feeError) {
         // Não bloqueia a venda — fee é informativo
-        console.error(
-          JSON.stringify({
-            level: "warn",
-            event: "card_fee_auto_calc_failed",
-            saleId: sale.id,
-            salePaymentId: salePayment.id,
-            method: payment.method,
-            error: feeError instanceof Error ? feeError.message : String(feeError),
-          })
-        );
+        log.warn("card_fee_auto_calc_failed", {
+          saleId: sale.id,
+          salePaymentId: salePayment.id,
+          method: payment.method,
+          error: feeError instanceof Error ? feeError.message : String(feeError),
+        });
       }
     }
 
@@ -511,16 +510,12 @@ export async function applyFinanceEntriesInTx(
     const errorStack =
       financeError instanceof Error ? financeError.stack : undefined;
 
-    console.error(
-      JSON.stringify({
-        level: "error",
-        event: "finance_entries_generation_failed",
-        saleId,
-        companyId,
-        error: errorMessage,
-        stack: errorStack,
-      })
-    );
+    log.error("finance_entries_generation_failed", {
+      saleId,
+      companyId,
+      error: errorMessage,
+      stack: errorStack,
+    });
 
     // Q7.1 P1-10: enfileira retry. Fora do tx atual (que pode rollback) —
     // usa prisma global garantindo persistência mesmo se a TX da venda
@@ -547,18 +542,14 @@ export async function applyFinanceEntriesInTx(
       });
     } catch (retryEnqueueError) {
       // Se nem o retry conseguir enfileirar, o log acima já cobriu.
-      console.error(
-        JSON.stringify({
-          level: "error",
-          event: "finance_entry_retry_enqueue_failed",
-          saleId,
-          companyId,
-          error:
-            retryEnqueueError instanceof Error
-              ? retryEnqueueError.message
-              : String(retryEnqueueError),
-        })
-      );
+      log.error("finance_entry_retry_enqueue_failed", {
+        saleId,
+        companyId,
+        error:
+          retryEnqueueError instanceof Error
+            ? retryEnqueueError.message
+            : String(retryEnqueueError),
+      });
     }
     // NÃO throw — comportamento documentado: venda completa, DRE será corrigido pelo cron.
   }
@@ -597,15 +588,11 @@ export async function applyPostCommitSideEffects(params: {
     try {
       await cashbackService.earnCashback(customerId, saleId, total, branchId, companyId);
     } catch (cashbackError) {
-      console.error(
-        JSON.stringify({
-          level: "warn",
-          event: "cashback_earn_failed",
-          saleId,
-          customerId,
-          error: cashbackError instanceof Error ? cashbackError.message : String(cashbackError),
-        })
-      );
+      log.warn("cashback_earn_failed", {
+        saleId,
+        customerId,
+        error: cashbackError instanceof Error ? cashbackError.message : String(cashbackError),
+      });
     }
   }
 
@@ -613,14 +600,10 @@ export async function applyPostCommitSideEffects(params: {
   try {
     await processaSaleForCampaigns(saleId, companyId);
   } catch (campaignError) {
-    console.error(
-      JSON.stringify({
-        level: "warn",
-        event: "process_campaigns_failed",
-        saleId,
-        error: campaignError instanceof Error ? campaignError.message : String(campaignError),
-      })
-    );
+    log.warn("process_campaigns_failed", {
+      saleId,
+      error: campaignError instanceof Error ? campaignError.message : String(campaignError),
+    });
   }
 
   // Lembrete pós-venda (POST_SALE_30_DAYS)
@@ -628,15 +611,11 @@ export async function applyPostCommitSideEffects(params: {
     try {
       await applyPostSaleReminder({ saleId, customerId, companyId, total });
     } catch (reminderError) {
-      console.error(
-        JSON.stringify({
-          level: "warn",
-          event: "post_sale_reminder_failed",
-          saleId,
-          customerId,
-          error: reminderError instanceof Error ? reminderError.message : String(reminderError),
-        })
-      );
+      log.warn("post_sale_reminder_failed", {
+        saleId,
+        customerId,
+        error: reminderError instanceof Error ? reminderError.message : String(reminderError),
+      });
     }
   }
 }

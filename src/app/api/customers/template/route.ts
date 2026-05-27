@@ -1,5 +1,8 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "customers/template" });
 
 /**
  * GET /api/customers/template
@@ -124,7 +127,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("Erro ao gerar template:", error);
+    log.error("Erro ao gerar template", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Erro ao gerar template" },
       { status: 500 }

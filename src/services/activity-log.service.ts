@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { ActivityType, ActorType } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "activity-log" });
 
 interface LogActivityParams {
   companyId: string;
@@ -30,6 +33,6 @@ export async function logActivity(params: LogActivityParams): Promise<void> {
     });
   } catch (error) {
     // Log silencioso — atividade não deve quebrar o fluxo principal
-    console.error("[ActivityLog] Falha ao registrar atividade:", error);
+    log.error("Falha ao registrar atividade", { error: error instanceof Error ? error.message : String(error) });
   }
 }

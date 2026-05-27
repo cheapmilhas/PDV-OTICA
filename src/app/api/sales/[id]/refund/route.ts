@@ -6,6 +6,9 @@ import { createdResponse } from "@/lib/api-response";
 import { generateRefundEntries } from "@/services/finance-entry.service";
 import { atomicStockCredit } from "@/services/stock.service";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "sales/[id]/refund" });
 
 export const POST = withPlanFeatureGuard(async (
   req: Request,
@@ -162,17 +165,13 @@ export const POST = withPlanFeatureGuard(async (
       try {
         await generateRefundEntries(tx as any, refund.id, companyId);
       } catch (financeError) {
-        console.error(
-          JSON.stringify({
-            level: "error",
-            event: "refund_finance_entries_generation_failed",
-            refundId: refund.id,
-            saleId,
-            companyId,
-            error: financeError instanceof Error ? financeError.message : String(financeError),
-            stack: financeError instanceof Error ? financeError.stack : undefined,
-          })
-        );
+        log.error("refund_finance_entries_generation_failed", {
+          refundId: refund.id,
+          saleId,
+          companyId,
+          error: financeError instanceof Error ? financeError.message : String(financeError),
+          stack: financeError instanceof Error ? financeError.stack : undefined,
+        });
       }
 
       // 6. Se devolução total, atualizar status da venda

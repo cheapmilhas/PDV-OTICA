@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "cash/debug" });
 
 /**
  * GET /api/cash/debug
@@ -117,7 +120,7 @@ export async function GET(request: Request) {
       { status: 200 }
     );
   } catch (error) {
-    console.error("❌ Erro no debug:", error);
+    log.error("Erro no debug", { error: error instanceof Error ? error.message : String(error) });
     return handleApiError(error);
   }
 }

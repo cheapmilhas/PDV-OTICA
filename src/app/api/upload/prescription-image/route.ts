@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { getSupabaseAdmin, PRESCRIPTION_IMAGES_BUCKET } from "@/lib/supabase";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "upload/prescription-image" });
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
 const ALLOWED_TYPES = ["image/jpeg", "image/png", "image/webp", "image/heic"];
@@ -59,7 +62,7 @@ export async function POST(request: NextRequest) {
       });
 
     if (uploadError) {
-      console.error("Supabase upload error:", uploadError);
+      log.error("Supabase upload error", { error: uploadError instanceof Error ? uploadError.message : String(uploadError) });
       return NextResponse.json(
         {
           error: {

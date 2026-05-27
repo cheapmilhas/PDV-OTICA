@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/networks" });
 
 /**
  * GET /api/admin/networks
@@ -101,7 +104,7 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ success: true, data: result }, { status: 201 });
   } catch (error) {
-    console.error("[ADMIN-NETWORKS] Erro:", error);
+    log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

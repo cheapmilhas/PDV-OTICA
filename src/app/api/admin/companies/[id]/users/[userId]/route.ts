@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/companies/[id]/users/[userId]" });
 
 type Params = { params: Promise<{ id: string; userId: string }> };
 
@@ -144,7 +147,7 @@ export async function PATCH(request: NextRequest, context: Params) {
       },
     });
   } catch (error: any) {
-    console.error("[UPDATE_USER]", error);
+    log.error("Erro ao atualizar usuário", { error: error instanceof Error ? error.message : String(error) });
     if (error.code === "P2002") {
       return NextResponse.json({ error: "Email já em uso" }, { status: 400 });
     }

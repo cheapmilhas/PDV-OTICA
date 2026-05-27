@@ -3,6 +3,9 @@ import bcrypt from "bcryptjs";
 import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/seed" });
 
 /**
  * POST /api/admin/seed
@@ -217,7 +220,7 @@ export async function POST() {
       }),
     });
   } catch (error) {
-    console.error("[ADMIN-SEED] Erro:", error);
+    log.error("Erro ao executar seed", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao executar seed" }, { status: 500 });
   }
 }

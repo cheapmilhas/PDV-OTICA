@@ -10,6 +10,9 @@ import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "stock-movements" });
 
 const stockMovementService = new StockMovementService();
 
@@ -90,7 +93,7 @@ export async function POST(request: Request) {
     // Retorna 201 Created
     return createdResponse(movement);
   } catch (error) {
-    console.error("Erro ao criar movimentação de estoque:", error);
+    log.error("Erro ao criar movimentação de estoque", { error: error instanceof Error ? error.message : String(error) });
     return handleApiError(error);
   }
 }

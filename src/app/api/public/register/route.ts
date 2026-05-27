@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { setupCompanyFinance } from "@/services/finance-setup.service";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "public/register" });
 
 /**
  * POST /api/public/register
@@ -206,7 +209,7 @@ export async function POST(request: Request) {
       email: result.user.email,
     });
   } catch (error: any) {
-    console.error("[REGISTER]", error);
+    log.error("Erro ao registrar", { error: error instanceof Error ? error.message : String(error) });
 
     // Tratar unique constraint
     if (error?.code === "P2002") {

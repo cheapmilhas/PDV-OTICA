@@ -4,6 +4,9 @@ import { getAdminSession } from "@/lib/admin-session";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/clientes/[id]/actions" });
 
 export async function POST(
   request: Request,
@@ -235,7 +238,7 @@ export async function POST(
         return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     }
   } catch (error) {
-    console.error("[ADMIN-ACTIONS] Erro:", error);
+    log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

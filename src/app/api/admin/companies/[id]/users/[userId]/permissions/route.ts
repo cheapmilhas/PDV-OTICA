@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/companies/[id]/users/[userId]/permissions" });
 
 type Params = { params: Promise<{ id: string; userId: string }> };
 
@@ -208,7 +211,7 @@ export async function PUT(request: NextRequest, context: Params) {
         : "Permissões atualizadas",
     });
   } catch (error) {
-    console.error("[ADMIN-PERMISSIONS]", error);
+    log.error("Erro ao atualizar permissões", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao atualizar permissões" }, { status: 500 });
   }
 }

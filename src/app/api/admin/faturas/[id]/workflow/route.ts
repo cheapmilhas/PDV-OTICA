@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/faturas/[id]/workflow" });
 
 export async function POST(
   request: Request,
@@ -145,7 +148,7 @@ export async function POST(
         return NextResponse.json({ error: "Ação inválida" }, { status: 400 });
     }
   } catch (error) {
-    console.error("[WORKFLOW] Erro:", error);
+    log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

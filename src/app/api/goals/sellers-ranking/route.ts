@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { requirePlanFeature } from "@/lib/plan-features";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "goals/sellers-ranking" });
 
 export async function GET() {
   try {
@@ -87,7 +90,7 @@ export async function GET() {
 
     return NextResponse.json({ data: rankingComPosicao });
   } catch (error) {
-    console.error("Erro ao buscar ranking de vendedores:", error);
+    log.error("Erro ao buscar ranking de vendedores", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Erro ao buscar ranking de vendedores" },
       { status: 500 }

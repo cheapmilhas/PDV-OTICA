@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { encode } from "next-auth/jwt";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/impersonate" });
 
 const impersonateSchema = z.object({
   companyId: z.string().min(1, "companyId é obrigatório"),
@@ -125,7 +128,7 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
     }
     const message = error instanceof Error ? error.message : String(error);
-    console.error("[ADMIN-IMPERSONATE] Erro:", message, error);
+    log.error("Erro", { error: message, stack: error instanceof Error ? error.stack : undefined });
     return NextResponse.json({ error: "Erro interno", details: message }, { status: 500 });
   }
 }

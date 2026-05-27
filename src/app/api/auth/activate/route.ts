@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "auth/activate" });
 
 export async function POST(request: Request) {
   const { token, password, acceptTerms } = await request.json();
@@ -114,7 +117,7 @@ export async function POST(request: Request) {
       userId: result.id,
     });
   } catch (error) {
-    console.error("[ACTIVATE]", error);
+    log.error("Erro ao ativar conta", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao ativar conta" }, { status: 500 });
   }
 }

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/export/faturas" });
 
 export async function GET() {
   const admin = await getAdminSession();
@@ -68,7 +71,7 @@ export async function GET() {
       },
     });
   } catch (error) {
-    console.error("❌ Erro ao gerar CSV de faturas:", error);
+    log.error("Erro ao gerar CSV de faturas", { error: error instanceof Error ? error.message : String(error) });
 
     return NextResponse.json(
       {

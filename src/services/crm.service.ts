@@ -1,5 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { CustomerSegment, ContactResult, CrmReminderStatus } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "crm" });
 
 // ============================================
 // GERAÇÃO DE LEMBRETES
@@ -199,7 +202,7 @@ export async function generateReminders(companyId: string) {
         created++;
       }
     } catch (error) {
-      console.error("Erro ao criar lembrete:", error);
+      log.error("Erro ao criar lembrete", { error: error instanceof Error ? error.message : String(error) });
     }
   }
 

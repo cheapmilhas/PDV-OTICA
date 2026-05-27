@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/companies/[id]/branches/[branchId]" });
 
 /**
  * PATCH /api/admin/companies/[id]/branches/[branchId]
@@ -80,7 +83,7 @@ export async function PATCH(
 
     return NextResponse.json({ success: true, data: updated });
   } catch (error) {
-    console.error("[ADMIN-BRANCHES] Erro ao atualizar filial:", error);
+    log.error("Erro ao atualizar filial", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

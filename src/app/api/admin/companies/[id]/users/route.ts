@@ -3,6 +3,9 @@ import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/companies/[id]/users" });
 
 /**
  * GET /api/admin/companies/[id]/users
@@ -219,7 +222,7 @@ export async function POST(
       },
     }, { status: 201 });
   } catch (error: any) {
-    console.error("[CREATE_USER]", error);
+    log.error("Erro ao criar usuário", { error: error instanceof Error ? error.message : String(error) });
     if (error.code === "P2002") {
       return NextResponse.json({ error: "Email já em uso" }, { status: 400 });
     }

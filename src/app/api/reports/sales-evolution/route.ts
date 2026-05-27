@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "reports/sales-evolution" });
 
 export async function GET(request: Request) {
   try {
@@ -64,7 +67,7 @@ export async function GET(request: Request) {
 
     return NextResponse.json({ data: monthsData });
   } catch (error) {
-    console.error("Erro ao buscar evolução de vendas:", error);
+    log.error("Erro ao buscar evolução de vendas", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Erro ao buscar evolução de vendas" },
       { status: 500 }

@@ -2,6 +2,9 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { auth } from "@/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "data-management/delete" });
 
 type Category =
   | "sales"
@@ -328,7 +331,7 @@ export async function POST(req: NextRequest) {
       category,
     });
   } catch (error) {
-    console.error("Error deleting data:", error);
+    log.error("Erro ao excluir dados", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: { code: "INTERNAL", message: "Erro ao excluir dados. Tente novamente." } },
       { status: 500 }

@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { auth } from "@/auth";
 import { ProductType } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "data-management/import/products" });
 
 interface ProductRow {
   name: string;
@@ -160,7 +163,7 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ imported, duplicates, errors, errorDetails });
   } catch (error) {
-    console.error("Error importing products:", error);
+    log.error("Erro ao importar produtos", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: { code: "INTERNAL", message: "Erro ao importar produtos." } },
       { status: 500 }

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "admin/companies/[id]/branches" });
 
 /**
  * GET /api/admin/companies/[id]/branches
@@ -122,7 +125,7 @@ export async function POST(
 
     return NextResponse.json({ success: true, data: branch }, { status: 201 });
   } catch (error) {
-    console.error("[ADMIN-BRANCHES] Erro ao criar filial:", error);
+    log.error("Erro ao criar filial", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
   }
 }

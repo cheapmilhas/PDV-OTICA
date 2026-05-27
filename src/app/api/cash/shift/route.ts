@@ -6,6 +6,9 @@ import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "cash/shift" });
 
 /**
  * GET /api/cash/shift
@@ -89,7 +92,7 @@ export async function POST(request: Request) {
 
     return createdResponse(serializedShift);
   } catch (error) {
-    console.error("❌ Erro ao abrir caixa:", error);
+    log.error("Erro ao abrir caixa", { error: error instanceof Error ? error.message : String(error) });
     return handleApiError(error);
   }
 }

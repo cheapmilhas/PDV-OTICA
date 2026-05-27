@@ -1,6 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "public/contact" });
 
 const contactSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -46,7 +49,7 @@ export async function POST(request: NextRequest) {
         { status: 400 }
       );
     }
-    console.error("[CONTACT-FORM] Erro:", error);
+    log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro ao enviar mensagem" }, { status: 500 });
   }
 }

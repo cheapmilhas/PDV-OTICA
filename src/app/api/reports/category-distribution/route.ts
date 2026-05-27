@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "reports/category-distribution" });
 
 export async function GET() {
   try {
@@ -69,7 +72,7 @@ export async function GET() {
 
     return NextResponse.json({ data });
   } catch (error) {
-    console.error("Erro ao buscar distribuição por categoria:", error);
+    log.error("Erro ao buscar distribuição por categoria", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json(
       { error: "Erro ao buscar distribuição por categoria" },
       { status: 500 }
