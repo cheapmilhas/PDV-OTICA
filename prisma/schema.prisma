@@ -157,6 +157,7 @@ model Company {
   doctors                 Doctor[]
   financeAccounts         FinanceAccount[]
   financeEntries          FinanceEntry[]
+  financeEntryRetries     FinanceEntryRetry[]
   frameMeasurements       FrameMeasurement[]
   globalAudits            GlobalAudit[]
   impersonations          ImpersonationSession[]
@@ -2811,6 +2812,35 @@ model FinanceEntry {
   @@index([creditAccountId])
   @@index([financeAccountId])
   @@index([sourceType, sourceId])
+}
+
+// Q7.1 P1-10: registra falhas de generateSaleEntries pra retry assíncrono.
+// Quando applyFinanceEntriesInTx catch um erro, cria registro aqui em vez
+// de só logar. Cron /api/cron/retry-finance-entries processa pendentes
+// com backoff exponencial (max 5 attempts).
+model FinanceEntryRetry {
+  id           String                  @id @default(cuid())
+  companyId    String
+  saleId       String
+  attempt      Int                     @default(0)
+  status       FinanceEntryRetryStatus @default(PENDING)
+  lastError    String?
+  nextRetryAt  DateTime                @default(now())
+  succeededAt  DateTime?
+  failedAt     DateTime?
+  createdAt    DateTime                @default(now())
+  updatedAt    DateTime                @updatedAt
+  company      Company                 @relation(fields: [companyId], references: [id])
+
+  @@unique([saleId])
+  @@index([status, nextRetryAt])
+  @@index([companyId, status])
+}
+
+enum FinanceEntryRetryStatus {
+  PENDING
+  SUCCESS
+  FAILED
 }
 
 model InventoryLot {

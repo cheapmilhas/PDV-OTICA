@@ -489,6 +489,10 @@ export async function reverseCommissionForSaleInTx(
  * Comportamento de erro: NÃO bloqueia a transação (decisão documentada — ver
  * comentário no caller). Mas LOGA estruturadamente para Sentry/Vercel pickup,
  * em vez de silently swallow.
+ *
+ * Q7.1 P1-10: além de logar, agora também enfileira retry assíncrono via
+ * FinanceEntryRetry. Cron /api/cron/retry-finance-entries reprocessa
+ * pendentes com backoff exponencial (max 5 tentativas).
  */
 export async function applyFinanceEntriesInTx(
   tx: Tx,
@@ -502,17 +506,61 @@ export async function applyFinanceEntriesInTx(
     const { generateSaleEntries } = await import("@/services/finance-entry.service");
     await generateSaleEntries(tx, saleId, companyId);
   } catch (financeError) {
+    const errorMessage =
+      financeError instanceof Error ? financeError.message : String(financeError);
+    const errorStack =
+      financeError instanceof Error ? financeError.stack : undefined;
+
     console.error(
       JSON.stringify({
         level: "error",
         event: "finance_entries_generation_failed",
         saleId,
         companyId,
-        error: financeError instanceof Error ? financeError.message : String(financeError),
-        stack: financeError instanceof Error ? financeError.stack : undefined,
+        error: errorMessage,
+        stack: errorStack,
       })
     );
-    // NÃO throw — comportamento documentado: venda completa, DRE precisa correção manual.
+
+    // Q7.1 P1-10: enfileira retry. Fora do tx atual (que pode rollback) —
+    // usa prisma global garantindo persistência mesmo se a TX da venda
+    // falhar depois. upsert por saleId (unique) evita duplicar retry se
+    // a venda for re-processada.
+    try {
+      const { prisma } = await import("@/lib/prisma");
+      await prisma.financeEntryRetry.upsert({
+        where: { saleId },
+        create: {
+          companyId,
+          saleId,
+          attempt: 0,
+          status: "PENDING",
+          lastError: errorMessage,
+          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000), // 5min depois
+        },
+        update: {
+          status: "PENDING",
+          attempt: { increment: 0 }, // mantém attempt; cron incrementa ao processar
+          lastError: errorMessage,
+          nextRetryAt: new Date(Date.now() + 5 * 60 * 1000),
+        },
+      });
+    } catch (retryEnqueueError) {
+      // Se nem o retry conseguir enfileirar, o log acima já cobriu.
+      console.error(
+        JSON.stringify({
+          level: "error",
+          event: "finance_entry_retry_enqueue_failed",
+          saleId,
+          companyId,
+          error:
+            retryEnqueueError instanceof Error
+              ? retryEnqueueError.message
+              : String(retryEnqueueError),
+        })
+      );
+    }
+    // NÃO throw — comportamento documentado: venda completa, DRE será corrigido pelo cron.
   }
 }
 
