@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Sale, SaleItem, SalePayment, Prisma } from "@prisma/client";
 import { logger } from "@/lib/logger";
-import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { notFoundError, AppError, ERROR_CODES, businessRuleError } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit } from "@/lib/installment-utils";
@@ -473,12 +473,36 @@ export class SaleService {
         where: { id: { in: productIds } },
         select: { id: true, costPrice: true },
       });
-      const costMap = new Map(productsWithCost.map((p) => [p.id, Number(p.costPrice)]));
+      // costPrice no schema é Decimal NÃO-nullable (default 0), mas defendemos
+      // contra registros legados ou cast errado mantendo null como sinal.
+      const costMap = new Map(
+        productsWithCost.map((p) => [p.id, p.costPrice == null ? null : Number(p.costPrice)]),
+      );
 
       // 3. Criar SaleItems
       for (const item of items) {
         const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
-        const itemCostPrice = item.productId ? (costMap.get(item.productId) || 0) : 0;
+        let itemCostPrice = 0;
+        if (item.productId) {
+          if (!costMap.has(item.productId)) {
+            // Produto referenciado no carrinho mas não existe no banco — abortar
+            // venda em vez de gravar margem inflada com custo zero.
+            throw businessRuleError(
+              `Produto ${item.productId} não encontrado ao calcular custo. Recarregue o carrinho.`,
+            );
+          }
+          const cost = costMap.get(item.productId);
+          if (cost == null) {
+            // costPrice NULL no banco: legado. Loga warning, mantém 0 para não
+            // travar venda, mas relatório de margem ficará impreciso até cadastrar custo.
+            log.warn("Produto sem costPrice — margem ficará distorcida", {
+              productId: item.productId,
+              saleId: newSale.id,
+            });
+          } else {
+            itemCostPrice = cost;
+          }
+        }
         await tx.saleItem.create({
           data: {
             saleId: newSale.id,

@@ -1,6 +1,9 @@
 import { NextResponse } from "next/server";
 import { ZodError } from "zod";
 import { Prisma } from "@prisma/client";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ module: "error-handler" });
 
 /**
  * Códigos de erro padronizados
@@ -161,7 +164,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
     // problemas críticos (ex.: timeout do $transaction). Sempre logamos a stack
     // server-side; o cliente vê código DATABASE_ERROR + detalhe com o código
     // Prisma real para diagnóstico.
-    console.error("[handleApiError] Prisma error:", {
+    log.error("Prisma error", {
       code: error.code,
       message: error.message,
       meta: error.meta,
@@ -183,7 +186,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
 
   // Error genérico do JavaScript
   if (error instanceof Error) {
-    console.error("Unexpected error:", error);
+    log.error("Unexpected error", { message: error.message, stack: error.stack });
     return NextResponse.json<ErrorResponse>(
       {
         error: {
@@ -198,7 +201,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
   }
 
   // Erro completamente desconhecido
-  console.error("Unknown error:", error);
+  log.error("Unknown error", { error: String(error) });
   return NextResponse.json<ErrorResponse>(
     {
       error: {

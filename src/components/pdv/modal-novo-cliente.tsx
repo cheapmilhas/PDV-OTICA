@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import toast from "react-hot-toast";
 import { UserPlus, Loader2 } from "lucide-react";
+import { LgpdConsentCheckbox, useConsentState } from "@/components/clientes/lgpd-consent-checkbox";
 
 interface ModalNovoClienteProps {
   open: boolean;
@@ -22,9 +23,16 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
     email: "",
     cpf: "",
   });
+  const [consent, setConsent] = useConsentState();
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    if (!consent.personalData) {
+      toast.error("É necessário aceitar o tratamento de dados pessoais (LGPD)");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -32,6 +40,7 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
       const customerData: any = {
         name: formData.name,
         phone: formData.phone.replace(/\D/g, ""), // Remover formatação
+        consent,
       };
 
       if (formData.email) {
@@ -66,6 +75,7 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
         email: "",
         cpf: "",
       });
+      setConsent({ personalData: false, healthData: false, marketing: false });
 
       onOpenChange(false);
     } catch (error: any) {
@@ -163,6 +173,8 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
               disabled={loading}
             />
           </div>
+
+          <LgpdConsentCheckbox value={consent} onChange={setConsent} required />
 
           <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
             <p className="font-medium">💡 Dica:</p>

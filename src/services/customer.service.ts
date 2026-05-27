@@ -10,7 +10,11 @@ import {
 } from "@/lib/error-handler";
 import { endOfLocalDay } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
+import { recordConsent, type ConsentScope } from "@/lib/lgpd";
+import { logger } from "@/lib/logger";
 import type { Customer } from "@prisma/client";
+
+const customerLog = logger.child({ service: "customer" });
 
 /**
  * Service de clientes
@@ -217,14 +221,40 @@ export class CustomerService {
       }
     }
 
+    // Separa consent do payload (não é campo do Customer; vira ConsentRecord).
+    const { consent, ...customerFields } = data;
+
     // Cria cliente
     const customer = await prisma.customer.create({
       data: {
-        ...data,
+        ...customerFields,
         companyId,
         ...(originBranchId && { originBranchId }),
       },
     });
+
+    // Registra consentimento granular se enviado pelo formulário.
+    // Falha não bloqueia a criação — apenas loga, igual padrão de ledger.
+    if (consent) {
+      const scopes: ConsentScope[] = [];
+      if (consent.personalData) scopes.push("personal_data");
+      if (consent.healthData) scopes.push("health_data");
+      if (consent.marketing) scopes.push("marketing");
+      if (scopes.length > 0) {
+        try {
+          await recordConsent({
+            customerId: customer.id,
+            companyId,
+            scopes,
+          });
+        } catch (err) {
+          customerLog.error("Falha ao registrar consent — cliente criado mesmo assim", {
+            customerId: customer.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+        }
+      }
+    }
 
     return customer;
   }

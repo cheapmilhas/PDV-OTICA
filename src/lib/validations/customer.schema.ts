@@ -116,6 +116,14 @@ export const createCustomerSchema = z.object({
   active: z.boolean()
     .optional()
     .default(true),
+
+  // Consentimento LGPD (granular). Opcional: quando vier, o service registra
+  // um ConsentRecord e marca lgpdConsentAt no Customer (ver src/lib/lgpd.ts).
+  consent: z.object({
+    personalData: z.boolean(),
+    healthData: z.boolean(),
+    marketing: z.boolean(),
+  }).optional(),
 });
 
 /**
