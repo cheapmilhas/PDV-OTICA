@@ -11,7 +11,7 @@ import { auth } from "@/auth";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
 
 /**
- * Para cada uma das 13 features, escolhemos UM path representativo
+ * Para cada uma das 16 features, escolhemos UM path representativo
  * (preferindo cobrir dynamic segments quando aplicável).
  */
 const SAMPLES: Array<[keyof typeof FEATURES, string]> = [

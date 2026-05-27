@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import bcrypt from "bcryptjs";
+import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 
@@ -19,11 +20,21 @@ export async function POST() {
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
 
+    // SEGURANÇA: defense-in-depth. Mesmo com SEED_ENABLED gate, só SUPER_ADMIN
+    // pode disparar — evita que admin comum reset senha do super admin.
+    if (session.role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
+    }
+
     const results: string[] = [];
 
     // ─── 1. Seed Admin User ─────────────────────────────────────────
     const adminEmail = "admin@pdvotica.com.br";
-    const adminPassword = "admin123";
+    // SEGURANÇA: senha NÃO mais hard-coded. Usa env var SEED_INITIAL_ADMIN_PASSWORD
+    // se setada; senão, gera senha aleatória e devolve no response (única vez).
+    const generatedPassword = crypto.randomBytes(16).toString("base64url");
+    const adminPassword = process.env.SEED_INITIAL_ADMIN_PASSWORD || generatedPassword;
+    const passwordSource = process.env.SEED_INITIAL_ADMIN_PASSWORD ? "env" : "generated";
 
     const existingAdmin = await prisma.adminUser.findUnique({ where: { email: adminEmail } });
 
@@ -33,7 +44,7 @@ export async function POST() {
         where: { email: adminEmail },
         data: { password: hash, active: true },
       });
-      results.push("Admin já existia — senha resetada para admin123");
+      results.push(`Admin já existia — senha resetada (fonte: ${passwordSource})`);
     } else {
       const hash = await bcrypt.hash(adminPassword, 10);
       await prisma.adminUser.create({
@@ -45,7 +56,7 @@ export async function POST() {
           active: true,
         },
       });
-      results.push("Admin criado com sucesso");
+      results.push(`Admin criado com sucesso (senha fonte: ${passwordSource})`);
     }
 
     // ─── 2. Seed Planos ─────────────────────────────────────────────
@@ -198,6 +209,12 @@ export async function POST() {
     return NextResponse.json({
       message: "Seed executado com sucesso",
       results,
+      // Senha gerada é exposta UMA VEZ pra quem rodou o seed.
+      // Se veio de env, não devolvemos.
+      ...(passwordSource === "generated" && {
+        generatedAdminPassword: adminPassword,
+        warning: "ANOTE a senha gerada — ela não será mostrada novamente.",
+      }),
     });
   } catch (error) {
     console.error("[ADMIN-SEED] Erro:", error);

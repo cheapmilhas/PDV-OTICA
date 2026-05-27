@@ -11,7 +11,7 @@
  *  4. Fail-open em erro de DB (log warn, segue ao handler)
  *  5. findBlockedFeature(path, features) → 403 com code PLAN_FEATURE_REQUIRED
  *
- * Aplicar em cada route.ts das 13 famílias de API gated:
+ * Aplicar em cada route.ts das 16 famílias de API gated:
  *   export const GET = withPlanFeatureGuard(async (req, { params }) => { ... });
  */
 import { NextResponse } from "next/server";

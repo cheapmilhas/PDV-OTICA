@@ -2,7 +2,7 @@
  * Variante do seed que SÓ atualiza planos pagos (NÃO mexe no Básico).
  *
  * Uso no Passo 6 do rollout (D-1 do go-live):
- *  - Garante que profissional/enterprise tenham 13 features = "true" no banco
+ *  - Garante que profissional/enterprise tenham 16 features = "true" no banco
  *    ANTES de fazermos o flip do Básico no Passo 7.
  *  - Isso elimina janela em que algum cliente pago pudesse ficar bloqueado por
  *    inexistência de PlanFeature explicito.

@@ -3,8 +3,8 @@
  *
  * Roda dentro de uma única $transaction:
  *  1. Atualiza preço do Básico: priceMonthly 14900 → 14990, priceYearly 149000 → 149900
- *  2. Garante 13 PlanFeature = "false" no Básico
- *  3. Garante 13 PlanFeature = "true" nos planos pagos (profissional, enterprise)
+ *  2. Garante 16 PlanFeature = "false" no Básico
+ *  3. Garante 16 PlanFeature = "true" nos planos pagos (profissional, enterprise)
  *
  * É 100% upsert — rodar 2x dá o mesmo estado final.
  *
@@ -35,7 +35,7 @@ async function main() {
       });
       console.log(`[seed] Básico: priceMonthly=14990, priceYearly=149900`);
 
-      // 2) 13 features = "false" no Básico
+      // 2) 16 features = "false" no Básico
       for (const key of Object.values(FEATURES)) {
         await tx.planFeature.upsert({
           where: { planId_key: { planId: basico.id, key } },
@@ -45,7 +45,7 @@ async function main() {
       }
       console.log(`[seed] Básico: ${Object.keys(FEATURES).length} features=false`);
 
-      // 3) 13 features = "true" em planos pagos
+      // 3) 16 features = "true" em planos pagos
       for (const slug of PAID_PLAN_SLUGS) {
         const plan = await tx.plan.findUnique({ where: { slug } });
         if (!plan) {

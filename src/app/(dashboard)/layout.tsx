@@ -49,7 +49,7 @@ export default async function DashboardLayout({
   }
 
   // Plan feature gating (Fase 4 do plano de feature gating).
-  // Bloqueia 13 funcionalidades do plano Básico, redireciona para /dashboard com toast.
+  // Bloqueia 16 funcionalidades do plano Básico, redireciona para /dashboard com toast.
   // Kill switch DISABLE_PLAN_FEATURE_GATING desliga tudo.
   if (
     companyId &&

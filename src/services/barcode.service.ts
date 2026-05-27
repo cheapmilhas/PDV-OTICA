@@ -362,12 +362,18 @@ export class BarcodeService {
   }
 
   /**
-   * Valida se um código está disponível
+   * Valida se um código está disponível DENTRO da empresa.
+   *
+   * Schema usa @@unique([productId, code]) — código pode repetir entre produtos
+   * de empresas diferentes. Filtrar por companyId garante isolamento multi-tenant
+   * (sem isso, empresa A não cadastra código já usado pela B → falso "código
+   * existe").
    */
-  async isCodeAvailable(code: string): Promise<boolean> {
+  async isCodeAvailable(code: string, companyId: string): Promise<boolean> {
     const existing = await prisma.productBarcode.findFirst({
       where: {
         code,
+        product: { companyId },
       },
     });
 

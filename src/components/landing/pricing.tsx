@@ -27,7 +27,7 @@ interface Plan {
 }
 
 // Labels legacy não cobertas pelo catálogo de plan-feature-catalog (que cobre
-// as 13 features novas gated). Mantidas aqui pra retrocompatibilidade.
+// as 16 features novas gated). Mantidas aqui pra retrocompatibilidade.
 const LEGACY_FEATURE_LABELS: Record<string, string> = {
   crm: "CRM Inteligente",
   goals: "Metas & Comissoes",

@@ -1,15 +1,20 @@
 import { NextResponse } from "next/server";
 import * as Sentry from "@sentry/nextjs";
+import { getAdminSession } from "@/lib/admin-session";
 
 /**
- * TEMPORÁRIO — usado uma vez pra validar integração Sentry.
- * Remover depois que o primeiro erro aparecer no painel sentry.io.
+ * Endpoint de diagnóstico Sentry. SOMENTE SUPER_ADMIN.
+ * Antes era público — qualquer um podia disparar exception fake e poluir Sentry.
  */
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
 export async function GET() {
+  const session = await getAdminSession();
+  if (!session || session.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Not found" }, { status: 404 });
+  }
   console.log("[test-sentry] handler entrou");
   console.log("[test-sentry] DSN presente?", !!process.env.SENTRY_DSN);
 

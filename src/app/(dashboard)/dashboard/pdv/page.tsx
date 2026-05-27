@@ -154,7 +154,7 @@ function PDVPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [carrinho.length, modalVendaOpen, modalClienteOpen]);
+  }, [carrinho.length, modalVendaOpen, modalClienteOpen, sellers.length, selectedSellerId]);
 
   // Carregar cliente do orçamento se houver quoteId
   useEffect(() => {

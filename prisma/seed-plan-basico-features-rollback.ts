@@ -1,7 +1,7 @@
 /**
  * Rollback do seed do plano Básico — reverte:
  *  - preço: 14990 → 14900 (priceMonthly), 149900 → 149000 (priceYearly)
- *  - 13 features no Básico: "false" → "true"
+ *  - 16 features no Básico: "false" → "true"
  *
  * NÃO reverte planos pagos (manter ativos é seguro mesmo após rollback).
  *
@@ -32,7 +32,7 @@ async function main() {
       });
       console.log("[rollback] Básico: priceMonthly=14900, priceYearly=149000");
 
-      // 2) 13 features = "true" no Básico
+      // 2) 16 features = "true" no Básico
       for (const key of Object.values(FEATURES)) {
         await tx.planFeature.upsert({
           where: { planId_key: { planId: basico.id, key } },
