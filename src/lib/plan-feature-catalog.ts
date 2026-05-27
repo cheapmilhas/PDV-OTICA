@@ -25,6 +25,8 @@ export const FEATURES = {
   BI_ANALYTICS: "bi_analytics",
   CARD_RECEIVABLES: "card_receivables",
   RECURRING_EXPENSES: "recurring_expenses",
+  CASHBACK: "cashback",
+  GOALS: "goals",
 } as const;
 
 export type FeatureKey = (typeof FEATURES)[keyof typeof FEATURES];
@@ -154,6 +156,20 @@ export const FEATURE_REGISTRY: Record<FeatureKey, FeatureMeta> = {
     pageMatchers: ["/dashboard/financeiro/despesas-recorrentes"],
     apiMatchers: ["/api/recurring-expenses"],
     sidebarKey: "financeiro-despesas",
+  },
+  [FEATURES.CASHBACK]: {
+    label: "Cashback",
+    description: "Programa de cashback para clientes.",
+    pageMatchers: ["/dashboard/cashback"],
+    apiMatchers: ["/api/cashback"],
+    sidebarKey: "cashback",
+  },
+  [FEATURES.GOALS]: {
+    label: "Metas",
+    description: "Metas de venda e comissão por vendedor/loja.",
+    pageMatchers: ["/dashboard/metas"],
+    apiMatchers: ["/api/goals"],
+    sidebarKey: "metas",
   },
 };
 

@@ -2,11 +2,11 @@ import { describe, it, expect } from "vitest";
 import { FEATURES, FEATURE_REGISTRY } from "@/lib/plan-feature-catalog";
 
 describe("FEATURES const", () => {
-  it("expõe 13 feature keys", () => {
-    expect(Object.keys(FEATURES)).toHaveLength(13);
+  it("expõe 15 feature keys", () => {
+    expect(Object.keys(FEATURES)).toHaveLength(15);
   });
 
-  it("contém as 13 keys esperadas com valores corretos", () => {
+  it("contém as 15 keys esperadas com valores corretos", () => {
     expect(FEATURES).toEqual({
       LENS_TREATMENTS: "lens_treatments",
       STOCK_TRANSFERS: "stock_transfers",
@@ -21,12 +21,14 @@ describe("FEATURES const", () => {
       BI_ANALYTICS: "bi_analytics",
       CARD_RECEIVABLES: "card_receivables",
       RECURRING_EXPENSES: "recurring_expenses",
+      CASHBACK: "cashback",
+      GOALS: "goals",
     });
   });
 });
 
 describe("FEATURE_REGISTRY", () => {
-  it("tem entrada para cada uma das 13 features", () => {
+  it("tem entrada para cada uma das features", () => {
     for (const key of Object.values(FEATURES)) {
       expect(FEATURE_REGISTRY[key]).toBeDefined();
       expect(FEATURE_REGISTRY[key].label).toBeTruthy();

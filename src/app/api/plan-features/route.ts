@@ -4,7 +4,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { getSubscriptionInfo } from "@/lib/subscription";
 import { FEATURES } from "@/lib/plan-feature-catalog";
 
-const LEGACY_FEATURES = ["crm", "goals", "campaigns", "cashback", "multi_branch", "reports_advanced"];
+const LEGACY_FEATURES = ["crm", "campaigns", "multi_branch", "reports_advanced"];
 const ALL_FEATURES = [...LEGACY_FEATURES, ...Object.values(FEATURES)];
 
 const allFeaturesEnabled = (): Record<string, string> =>
