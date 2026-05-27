@@ -42,6 +42,9 @@ yarn-error.log*
 # scripts ad-hoc de verificação manual (_prefixados)
 /scripts/_*
 
+# Sentry build plugin (gerado pelo @sentry/wizard, pode conter authToken)
+.env.sentry-build-plugin
+
 # vercel
 .vercel
 
