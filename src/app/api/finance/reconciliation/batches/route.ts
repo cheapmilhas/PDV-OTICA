@@ -4,6 +4,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse, createdResponse, paginatedResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
@@ -51,6 +52,11 @@ export const POST = withPlanFeatureGuard(async (req: Request) => {
 
     if (!source) {
       return handleApiError(new Error("source é obrigatório"));
+    }
+
+    // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
+    if (branchId) {
+      await validateBranchOwnership(branchId, companyId);
     }
 
     const batch = await prisma.reconciliationBatch.create({

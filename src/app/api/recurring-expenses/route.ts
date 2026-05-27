@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 import { z } from "zod";
 
 const createSchema = z.object({
@@ -71,6 +72,11 @@ export const POST = withPlanFeatureGuard(async (request: Request) => {
     const companyId = await getCompanyId();
     const body = await request.json();
     const data = createSchema.parse(body);
+
+    // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
+    if (data.branchId) {
+      await validateBranchOwnership(data.branchId, companyId);
+    }
 
     const nextDueDate = calculateNextDueDate(data.dayOfMonth, data.frequency);
 

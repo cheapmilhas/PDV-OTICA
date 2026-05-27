@@ -11,6 +11,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 /**
  * GET /api/sales
@@ -125,6 +126,9 @@ export async function POST(request: Request) {
     }
 
     const data = validation.data;
+
+    // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
+    await validateBranchOwnership(data.branchId, companyId);
 
     // Sanitiza dados (remove valores vazios)
     const sanitized = sanitizeSaleDTO(data) as CreateSaleDTO;

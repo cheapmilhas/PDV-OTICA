@@ -4,6 +4,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse, createdResponse } from "@/lib/api-response";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export const GET = withPlanFeatureGuard(async (_req: Request) => {
   try {
@@ -33,6 +34,11 @@ export const POST = withPlanFeatureGuard(async (req: Request) => {
 
     if (!name || !type) {
       return handleApiError(new Error("name e type são obrigatórios"));
+    }
+
+    // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
+    if (branchId) {
+      await validateBranchOwnership(branchId, companyId);
     }
 
     const account = await prisma.financeAccount.create({

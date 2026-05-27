@@ -4,6 +4,7 @@ import { getCompanyId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { requirePlanFeature } from "@/lib/plan-features";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 import { z } from "zod";
 import * as campaignService from "@/services/product-campaign.service";
 
@@ -117,6 +118,11 @@ export async function POST(request: NextRequest) {
     const body = await request.json();
 
     const validatedData = createCampaignSchema.parse(body);
+
+    // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
+    if (validatedData.branchId) {
+      await validateBranchOwnership(validatedData.branchId, companyId);
+    }
 
     const campaign = await campaignService.createCampaign({
       ...validatedData,

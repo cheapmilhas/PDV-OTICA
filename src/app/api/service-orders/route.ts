@@ -10,6 +10,7 @@ import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export async function GET(request: Request) {
   try {
@@ -44,6 +45,10 @@ export async function POST(request: Request) {
 
     const body = await request.json();
     const data = createServiceOrderSchema.parse(body);
+
+    // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
+    await validateBranchOwnership(data.branchId, companyId);
+
     const sanitized = sanitizeServiceOrderDTO(data) as CreateServiceOrderDTO;
 
     const order = await serviceOrderService.create(sanitized, companyId, userId);

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
 
@@ -47,6 +48,18 @@ export async function POST(req: NextRequest) {
         { error: { code: "BAD_REQUEST", message: "Nenhum cliente para importar." } },
         { status: 400 }
       );
+    }
+
+    // Segurança multi-tenant: validar todas as branchIds antes da importação
+    const uniqueBranchIds = Array.from(
+      new Set(
+        customers
+          .filter((c) => c.branchId && c.extraPhones && c.extraPhones.length > 0)
+          .map((c) => c.branchId)
+      )
+    );
+    for (const branchId of uniqueBranchIds) {
+      await validateBranchOwnership(branchId, companyId);
     }
 
     let imported = 0;
