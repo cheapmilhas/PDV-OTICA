@@ -589,7 +589,8 @@ function PDVPage() {
           const cashbackRes = await fetch(`/api/sales/${vendaId}/cashback`);
           if (cashbackRes.ok) {
             const cashbackData = await cashbackRes.json();
-            cashbackGerado = cashbackData.data?.amount || 0;
+            // Number() defensivo: amount pode vir como string (Decimal serializado).
+            cashbackGerado = Number(cashbackData.data?.amount) || 0;
           }
         } catch {
           // Cashback opcional — falha não bloqueia conclusão da venda.
@@ -605,13 +606,21 @@ function PDVPage() {
         return;
       }
 
-      // Toast de sucesso com cashback
-      if (cashbackGerado > 0) {
-        toast.success(
-          `✅ Venda finalizada!\n💰 Cliente ganhou R$ ${cashbackGerado.toFixed(2)} de cashback`,
-          { duration: 3000 }
-        );
-      } else {
+      // A partir daqui a venda JÁ ESTÁ SALVA (temos vendaId). Nada abaixo pode
+      // lançar para o catch principal — senão o usuário vê "erro" numa venda
+      // que foi concluída e tende a refazer, gerando duplicidade.
+      try {
+        // Toast de sucesso com cashback
+        if (cashbackGerado > 0) {
+          toast.success(
+            `✅ Venda finalizada!\n💰 Cliente ganhou R$ ${Number(cashbackGerado).toFixed(2)} de cashback`,
+            { duration: 3000 }
+          );
+        } else {
+          toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
+        }
+      } catch (postError) {
+        console.error("Pós-venda (não crítico):", postError);
         toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
       }
 

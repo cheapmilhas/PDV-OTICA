@@ -28,9 +28,16 @@ export async function GET(
       },
     });
 
+    // Prisma retorna Decimal em `amount`, que não serializa para number puro
+    // no JSON (vira string) — o que quebra `.toFixed()` no frontend.
+    // Normalizamos para number aqui.
+    const data = cashbackMovement
+      ? { ...cashbackMovement, amount: Number(cashbackMovement.amount) }
+      : null;
+
     return NextResponse.json({
       success: true,
-      data: cashbackMovement,
+      data,
     });
   } catch (error) {
     return handleApiError(error);
