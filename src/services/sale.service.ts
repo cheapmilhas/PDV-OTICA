@@ -891,6 +891,131 @@ export class SaleService {
   }
 
   /**
+   * Devolução TOTAL de uma venda (refund).
+   *
+   * Reusa toda a reversão robusta do cancel (estoque+FIFO, CardReceivable,
+   * AccountReceivable, CashMovement OUT, comissão, FinanceEntry, FinanceAccount,
+   * cashback ganho, lembrete, bônus de campanha) e ADICIONA o que faltava:
+   *  - status REFUNDED (não CANCELED)
+   *  - registro Refund + RefundItem (rastreabilidade + método de reembolso)
+   *  - estorno do cashback USADO pelo cliente (devolve saldo)
+   *  - cancelamento da OS vinculada (não vai pro laboratório)
+   *
+   * Decisão (Matheus 2026-05-30): a devolução é sempre TOTAL; troca = venda nova
+   * + entrada manual de estoque. Por isso reusamos o cancel.
+   */
+  async refundFull(
+    id: string,
+    companyId: string,
+    opts: { reason?: string; refundMethod?: string } = {}
+  ) {
+    const sale = await this.getById(id, companyId);
+
+    if (sale.status === "REFUNDED" || sale.status === "CANCELED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Esta venda já foi devolvida ou cancelada.",
+        400
+      );
+    }
+
+    const cashbackUsed = Number(sale.cashbackUsed ?? 0);
+
+    // Custo via FIFO (lotConsumptions) com fallback p/ costPrice. getById não
+    // traz lotConsumptions, então buscamos aqui.
+    const lots = await prisma.saleItemLot.findMany({
+      where: { saleItem: { saleId: id } },
+      select: { saleItemId: true, totalCost: true },
+    });
+    const costBySaleItem = new Map<string, number>();
+    for (const l of lots) {
+      costBySaleItem.set(l.saleItemId, (costBySaleItem.get(l.saleItemId) ?? 0) + Number(l.totalCost));
+    }
+
+    // Itens da devolução (total). discount é o total da linha → discount/qty = por unidade.
+    const refundItemsData = sale.items.map((it: any) => {
+      const unit = Number(it.unitPrice) - Number(it.discount || 0) / it.qty;
+      const refundAmount = Math.round(unit * it.qty * 100) / 100;
+      const costAmount = costBySaleItem.get(it.id) ?? Number(it.costPrice || 0) * it.qty;
+      return { saleItemId: it.id, qtyReturned: it.qty, refundAmount, costAmount };
+    });
+    const totalRefund = refundItemsData.reduce((s, r) => s + r.refundAmount, 0);
+    const totalCost = refundItemsData.reduce((s, r) => s + r.costAmount, 0);
+
+    // 1. Cria o registro Refund (PENDING) ANTES de reverter — garante rastro
+    // mesmo se algo falhar no meio (não há split-brain "revertido sem Refund").
+    const refund = await prisma.refund.create({
+      data: {
+        companyId,
+        branchId: sale.branchId,
+        saleId: id,
+        customerId: sale.customerId,
+        status: "PENDING",
+        reason: opts.reason || "Devolução",
+        totalRefund,
+        totalCost,
+        refundMethod: opts.refundMethod || "CASH",
+        items: { create: refundItemsData },
+      },
+    });
+
+    // 2. Reversão pesada: reusa o cancel (robustez já testada em produção).
+    await this.cancel(id, companyId, opts.reason || "Devolução");
+
+    // 3. Marca venda REFUNDED + Refund COMPLETED atomicamente.
+    await prisma.$transaction(async (tx) => {
+      await tx.sale.update({ where: { id }, data: { status: "REFUNDED" } });
+      await tx.refund.update({
+        where: { id: refund.id },
+        data: { status: "COMPLETED", completedAt: new Date() },
+      });
+    }, { timeout: 30_000 });
+
+    // 4. Devolver o cashback USADO pelo cliente (cancel só estorna o ganho).
+    // saldo + movimento numa transação para não deixar increment sem rastro.
+    if (sale.customerId && cashbackUsed > 0) {
+      try {
+        const cb = await prisma.customerCashback.findUnique({
+          where: { customerId_branchId: { customerId: sale.customerId, branchId: sale.branchId } },
+        });
+        if (cb) {
+          await prisma.$transaction(async (tx) => {
+            await tx.customerCashback.update({
+              where: { id: cb.id },
+              data: { balance: { increment: cashbackUsed } },
+            });
+            await tx.cashbackMovement.create({
+              data: {
+                customerCashbackId: cb.id,
+                type: "CREDIT",
+                amount: cashbackUsed,
+                saleId: id,
+                description: `Devolução cashback usado - venda #${id.substring(0, 8)}`,
+              },
+            });
+          });
+        }
+      } catch (e) {
+        log.error("Erro ao devolver cashback usado no refund", { saleId: id, err: String(e) });
+      }
+    }
+
+    // 5. Cancelar a OS vinculada (não deve seguir no laboratório).
+    if (sale.serviceOrderId) {
+      try {
+        await prisma.serviceOrder.updateMany({
+          where: { id: sale.serviceOrderId, companyId, status: { notIn: ["DELIVERED", "CANCELED"] } },
+          data: { status: "CANCELED", canceledAt: new Date() },
+        });
+      } catch (e) {
+        log.error("Erro ao cancelar OS vinculada no refund", { saleId: id, err: String(e) });
+      }
+    }
+
+    return this.getById(id, companyId, true);
+  }
+
+  /**
    * Reativa venda cancelada
    *
    * Reverte o cancelamento:
