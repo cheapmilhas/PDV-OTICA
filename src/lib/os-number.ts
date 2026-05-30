@@ -49,8 +49,8 @@ export function osDisplayNumber(os: OsNumberInput): string {
   // Garantia/retrabalho/erro médico: prefere o número da OS original.
   const baseNumber = os.originalOrder?.number ?? os.number ?? 0;
   const base = baseNumber > 0 ? pad(baseNumber) : os.id.slice(-6).toUpperCase();
-  // Sequência sempre presente: garantias antigas (criadas antes do warrantySeq)
-  // têm warrantySeq null — assumimos 1 para exibir #1234-G1 em vez de #1234-G.
-  const seq = os.warrantySeq && os.warrantySeq > 0 ? os.warrantySeq : 1;
+  // Regra de sequência: a 1ª da OS fica só com a letra (#1234-G); da 2ª em
+  // diante numera (#1234-G2, #1234-G3...). warrantySeq null/1 = primeira.
+  const seq = os.warrantySeq && os.warrantySeq >= 2 ? String(os.warrantySeq) : "";
   return `#${base}-${letter}${seq}`;
 }
