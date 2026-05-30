@@ -85,6 +85,26 @@ export type PaymentDTO = z.infer<typeof paymentSchema>;
  * Campos obrigatórios: customerId, branchId, items (array), payments (array)
  * Campos opcionais: discount, notes
  */
+/**
+ * Override de gerente/admin para autorizar negativas de regra de negócio
+ * (limite de crédito, inadimplência, estoque). O frontend valida a senha em
+ * /api/auth/verify-manager e envia o approvedByUserId retornado + os motivos.
+ * O backend re-valida que approvedByUserId é ADMIN/GERENTE da empresa antes
+ * de pular as checagens.
+ */
+export const OVERRIDABLE_CODES = [
+  "CREDIT_LIMIT_EXCEEDED",
+  "CUSTOMER_OVERDUE",
+  "INSUFFICIENT_STOCK",
+] as const;
+
+export const managerOverrideSchema = z.object({
+  approvedByUserId: z.string().min(1, "Autorizador é obrigatório"),
+  reasons: z.array(z.enum(OVERRIDABLE_CODES)).min(1, "Informe ao menos um motivo"),
+});
+
+export type ManagerOverrideDTO = z.infer<typeof managerOverrideSchema>;
+
 export const createSaleSchema = z.object({
   customerId: z.union([z.string().min(1), z.null()]).optional(),
   branchId: z.string().min(1, "ID da filial é obrigatório"),
@@ -103,6 +123,7 @@ export const createSaleSchema = z.object({
     .optional()
     .default(0),
   notes: z.string().max(500, "Observações muito longas (máx 500 caracteres)").optional(),
+  override: managerOverrideSchema.optional(),
 });
 
 export type CreateSaleDTO = z.infer<typeof createSaleSchema>;

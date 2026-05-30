@@ -60,7 +60,7 @@ export async function POST(
 
     // Parse e valida body
     const body = await request.json();
-    const { payments } = convertQuoteToSaleSchema.parse(body);
+    const { payments, override } = convertQuoteToSaleSchema.parse(body);
 
     // Converte orçamento em venda via service
     const result = await quoteService.convertToSale(
@@ -68,7 +68,8 @@ export async function POST(
       companyId,
       branchId,
       userId,
-      payments
+      payments,
+      override
     );
 
     // Serializa Decimals para number

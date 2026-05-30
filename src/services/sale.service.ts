@@ -9,6 +9,7 @@ import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
 import { processaSaleForCampaigns, reverseBonusForSale } from "@/services/product-campaign.service";
 import {
@@ -199,11 +200,19 @@ export class SaleService {
    * - Pelo menos 1 pagamento
    */
   async create(data: CreateSaleDTO, companyId: string, userId: string) {
-    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId, serviceOrderId } = data;
+    const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId, serviceOrderId, override } = data;
     const effectiveSellerId = sellerUserId || userId;
 
     // Validação de segurança: branchId deve pertencer à empresa do usuário
     await validateBranchOwnership(branchId, companyId);
+
+    // Se há override de gerente, re-validar no servidor que o autorizador é
+    // ADMIN/GERENTE da empresa (nunca confiar só no que o cliente enviou).
+    let overrideApproverName: string | null = null;
+    if (override) {
+      const { approverName } = await assertValidManagerOverride(override, companyId);
+      overrideApproverName = approverName;
+    }
 
     // Validação: pelo menos 1 item
     if (!items || items.length === 0) {
@@ -305,8 +314,13 @@ export class SaleService {
         );
       }
 
-      // Só valida estoque para produtos com controle de estoque ativo
-      if (product.stockControlled && product.stockQty < item.qty) {
+      // Só valida estoque para produtos com controle de estoque ativo.
+      // Gerente pode autorizar venda mesmo sem estoque (gera estoque negativo).
+      if (
+        product.stockControlled &&
+        product.stockQty < item.qty &&
+        !overrideAllows(override, "INSUFFICIENT_STOCK")
+      ) {
         throw new AppError(
           ERROR_CODES.INSUFFICIENT_STOCK,
           `Estoque insuficiente para ${product.name}. Disponível: ${product.stockQty}, Solicitado: ${item.qty}`,
@@ -349,13 +363,17 @@ export class SaleService {
           companyId
         );
         if (!creditCheck.approved) {
-          throw new AppError(
-            creditCheck.code === "CUSTOMER_OVERDUE"
-              ? ERROR_CODES.CUSTOMER_OVERDUE
-              : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
-            creditCheck.message || "Limite de crédito excedido",
-            400
-          );
+          const isOverdue = creditCheck.code === "CUSTOMER_OVERDUE";
+          const authorized = isOverdue
+            ? overrideAllows(override, "CUSTOMER_OVERDUE")
+            : overrideAllows(override, "CREDIT_LIMIT_EXCEEDED");
+          if (!authorized) {
+            throw new AppError(
+              isOverdue ? ERROR_CODES.CUSTOMER_OVERDUE : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
+              creditCheck.message || "Limite de crédito excedido",
+              400
+            );
+          }
         }
       }
     }
@@ -572,6 +590,31 @@ export class SaleService {
       // Em vendas novas (PDV direto), gera cashback normalmente.
       skipCashbackEarn: false,
     });
+
+    // Auditoria do override de gerente — rastreia quem autorizou e o quê.
+    if (override && overrideApproverName) {
+      await prisma.activityLog
+        .create({
+          data: {
+            companyId,
+            type: "DATA_UPDATED",
+            title: "Venda autorizada por gerente (override)",
+            detail: {
+              kind: "sale_manager_override",
+              saleId: sale.id,
+              approvedByUserId: override.approvedByUserId,
+              approverName: overrideApproverName,
+              reasons: override.reasons,
+              soldByUserId: userId,
+            },
+            actorId: override.approvedByUserId,
+            actorType: "CLIENT",
+          },
+        })
+        .catch((auditErr) => {
+          log.error("Falha ao gravar ActivityLog de override", { err: String(auditErr) });
+        });
+    }
 
     // Retornar venda completa
     return this.getById(sale.id, companyId);

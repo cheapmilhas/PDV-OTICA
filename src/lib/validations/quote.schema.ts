@@ -1,6 +1,6 @@
 import { z } from "zod";
 import { QuoteStatus, QuoteItemType } from "@prisma/client";
-import { paymentSchema, type PaymentDTO } from "./sale.schema";
+import { paymentSchema, managerOverrideSchema, type PaymentDTO } from "./sale.schema";
 
 /**
  * Schema para dados de prescrição do olho
@@ -120,6 +120,7 @@ export const convertQuoteToSaleSchema = z.object({
   payments: z
     .array(paymentSchema)
     .min(1, "Adicione pelo menos uma forma de pagamento"),
+  override: managerOverrideSchema.optional(),
 });
 
 export type ConvertQuoteToSaleDTO = z.infer<typeof convertQuoteToSaleSchema>;

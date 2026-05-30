@@ -15,6 +15,8 @@ import {
   calculateQuoteItemTotal,
 } from "@/lib/validations/quote.schema";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
+import type { ManagerOverrideDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit } from "@/lib/installment-utils";
 import {
   applyStockDebitInTx,
@@ -646,10 +648,18 @@ export class QuoteService {
     companyId: string,
     branchId: string,
     userId: string,
-    payments: PaymentDTO[]
+    payments: PaymentDTO[],
+    override?: ManagerOverrideDTO
   ) {
     // 0. Validação multi-tenant — branchId pertence à empresa do usuário?
     await validateBranchOwnership(branchId, companyId);
+
+    // Override de gerente: re-valida o autorizador no servidor.
+    let overrideApproverName: string | null = null;
+    if (override) {
+      const { approverName } = await assertValidManagerOverride(override, companyId);
+      overrideApproverName = approverName;
+    }
 
     // 1. Buscar orçamento com todos os dados
     const quote = await prisma.quote.findFirst({
@@ -760,7 +770,10 @@ export class QuoteService {
         );
       }
 
-      if (item.product.stockQty < item.qty) {
+      if (
+        item.product.stockQty < item.qty &&
+        !overrideAllows(override, "INSUFFICIENT_STOCK")
+      ) {
         throw new AppError(
           ERROR_CODES.INSUFFICIENT_STOCK,
           `Estoque insuficiente para ${item.product.name}. Disponível: ${item.product.stockQty}, Solicitado: ${item.qty}`,
@@ -808,13 +821,17 @@ export class QuoteService {
           companyId
         );
         if (!creditCheck.approved) {
-          throw new AppError(
-            creditCheck.code === "CUSTOMER_OVERDUE"
-              ? ERROR_CODES.CUSTOMER_OVERDUE
-              : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
-            creditCheck.message || "Limite de crédito excedido",
-            400
-          );
+          const isOverdue = creditCheck.code === "CUSTOMER_OVERDUE";
+          const authorized = isOverdue
+            ? overrideAllows(override, "CUSTOMER_OVERDUE")
+            : overrideAllows(override, "CREDIT_LIMIT_EXCEEDED");
+          if (!authorized) {
+            throw new AppError(
+              isOverdue ? ERROR_CODES.CUSTOMER_OVERDUE : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
+              creditCheck.message || "Limite de crédito excedido",
+              400
+            );
+          }
         }
       }
     }
@@ -957,6 +974,32 @@ export class QuoteService {
         // passa skipCashbackEarn=true para não dar cashback retroativo confuso ao cliente.
         skipCashbackEarn: false,
       });
+
+      // Auditoria do override de gerente na conversão.
+      if (override && overrideApproverName) {
+        await prisma.activityLog
+          .create({
+            data: {
+              companyId,
+              type: "DATA_UPDATED",
+              title: "Conversão de orçamento autorizada por gerente (override)",
+              detail: {
+                kind: "quote_convert_manager_override",
+                saleId: result.sale.id,
+                quoteId,
+                approvedByUserId: override.approvedByUserId,
+                approverName: overrideApproverName,
+                reasons: override.reasons,
+                convertedByUserId: userId,
+              },
+              actorId: override.approvedByUserId,
+              actorType: "CLIENT",
+            },
+          })
+          .catch(() => {
+            // Auditoria nunca bloqueia a conversão.
+          });
+      }
     }
 
     return result;

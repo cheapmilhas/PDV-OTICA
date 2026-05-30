@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2, CheckCircle2 } from "lucide-react";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
+import { ManagerApprovalModal } from "@/components/pdv/manager-approval-modal";
 import toast from "react-hot-toast";
 
 interface Payment {
@@ -13,6 +14,8 @@ interface Payment {
   amount: number;
   installments?: number;
 }
+
+const OVERRIDABLE_CODES = ["CREDIT_LIMIT_EXCEEDED", "CUSTOMER_OVERDUE", "INSUFFICIENT_STOCK"];
 
 interface ConvertQuoteButtonProps {
   quoteId: string;
@@ -43,6 +46,14 @@ export function ConvertQuoteButton({
   const [modalOpen, setModalOpen] = useState(false);
   const [converting, setConverting] = useState(false);
 
+  // Override de gerente para negativas autorizáveis.
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [pendingConversion, setPendingConversion] = useState<{
+    payments: Payment[];
+    reasons: string[];
+  } | null>(null);
+
   // Verificar se orçamento pode ser convertido
   const canConvert = () => {
     if (quoteStatus !== "APPROVED") {
@@ -71,7 +82,11 @@ export function ConvertQuoteButton({
     }
   };
 
-  const handleConfirmConversion = async (payments: Payment[]) => {
+  const handleConfirmConversion = async (
+    payments: Payment[],
+    _cashbackUsed?: number,
+    override?: { approvedByUserId: string; reasons: string[] }
+  ) => {
     setConverting(true);
 
     try {
@@ -84,21 +99,33 @@ export function ConvertQuoteButton({
             amount: p.amount,
             installments: p.installments || 1,
           })),
+          ...(override && { override }),
         }),
       });
 
       const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        // O backend retorna erro como { error: { code, message, details } }
-        // OU { error: "string" }. Extrair a mensagem real (antes virava
-        // "[object Object]" e escondia a causa, ex.: "Não há caixa aberto").
+        const code: string | undefined =
+          typeof data?.error === "object" ? data?.error?.code : undefined;
         const msg =
           (typeof data?.error === "string" && data.error) ||
           data?.error?.message ||
           data?.message ||
           `Erro ao converter orçamento (HTTP ${res.status})`;
-        throw new Error(msg);
+
+        // Negativa autorizável e ainda sem override → pedir senha do gerente.
+        if (code && OVERRIDABLE_CODES.includes(code) && !override) {
+          setPendingConversion({ payments, reasons: [code] });
+          setOverrideReason(msg);
+          setOverrideModalOpen(true);
+          setConverting(false);
+          return;
+        }
+
+        const err = new Error(msg) as Error & { code?: string };
+        err.code = code;
+        throw err;
       }
 
       // Sucesso!
@@ -126,10 +153,27 @@ export function ConvertQuoteButton({
       }
     } catch (error: any) {
       console.error("Erro ao converter orçamento:", error);
-      toast.error(error.message || "Erro ao converter orçamento");
+      const titulos: Record<string, string> = {
+        CREDIT_LIMIT_EXCEEDED: "🚫 Limite de crédito excedido",
+        CUSTOMER_OVERDUE: "🚫 Cliente inadimplente",
+        INSUFFICIENT_STOCK: "📦 Estoque insuficiente",
+      };
+      const t = error.code && titulos[error.code];
+      toast.error(t ? `${t}\n${error.message}` : error.message || "Erro ao converter orçamento", {
+        duration: t ? 7000 : 5000,
+      });
     } finally {
       setConverting(false);
     }
+  };
+
+  // Gerente autorizou — reenvia a conversão com o override.
+  const handleManagerApproved = (approvedByUserId: string) => {
+    if (!pendingConversion) return;
+    const { payments, reasons } = pendingConversion;
+    setPendingConversion(null);
+    setOverrideReason("");
+    void handleConfirmConversion(payments, undefined, { approvedByUserId, reasons });
   };
 
   // Não renderizar se não for APPROVED
@@ -164,6 +208,17 @@ export function ConvertQuoteButton({
         total={quoteTotal}
         onConfirm={handleConfirmConversion}
         loading={converting}
+      />
+
+      <ManagerApprovalModal
+        open={overrideModalOpen}
+        onClose={() => {
+          setOverrideModalOpen(false);
+          setPendingConversion(null);
+          setOverrideReason("");
+        }}
+        reason={overrideReason}
+        onApproved={handleManagerApproved}
       />
     </>
   );

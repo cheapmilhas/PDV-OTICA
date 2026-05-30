@@ -29,6 +29,7 @@ import {
 import { formatCurrency } from "@/lib/utils";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
 import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
+import { ManagerApprovalModal } from "@/components/pdv/manager-approval-modal";
 import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
 import { track } from "@/lib/analytics";
@@ -82,6 +83,16 @@ function PDVPage() {
   // Estados para dialog de carnê
   const [showCarneDialog, setShowCarneDialog] = useState(false);
   const [lastSaleId, setLastSaleId] = useState<string | null>(null);
+
+  // Override de gerente: quando uma venda é barrada por regra autorizável,
+  // guardamos o contexto e abrimos o modal de senha do gerente.
+  const [overrideModalOpen, setOverrideModalOpen] = useState(false);
+  const [overrideReason, setOverrideReason] = useState("");
+  const [pendingSale, setPendingSale] = useState<{
+    payments: any[];
+    cashbackUsed?: number;
+    reasons: string[];
+  } | null>(null);
 
   // Modal de editar preço/desconto
   const [editModalOpen, setEditModalOpen] = useState(false);
@@ -498,7 +509,11 @@ function PDVPage() {
   const total = subtotal - desconto;
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
-  const handleConfirmarVenda = async (payments: any[], cashbackUsed?: number) => {
+  const handleConfirmarVenda = async (
+    payments: any[],
+    cashbackUsed?: number,
+    override?: { approvedByUserId: string; reasons: string[] }
+  ) => {
     if (carrinho.length === 0) {
       toast.error("Carrinho vazio");
       return;
@@ -540,6 +555,7 @@ function PDVPage() {
         discount: desconto,
         cashbackUsed: cashbackUsed || 0,
         notes: clienteSelecionado ? `Cliente: ${clienteSelecionado.name}` : "Venda sem cliente",
+        ...(override && { override }),
       };
 
       const res = await fetch("/api/sales", {
@@ -637,11 +653,22 @@ function PDVPage() {
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
 
-      // Alertas específicos por tipo de negativa. Mensagem do backend já é
-      // clara; aqui escolhemos título/duração conforme o código.
       const code: string | undefined = error.code;
       const mensagem = error.message || "Erro ao finalizar venda. Tente novamente.";
 
+      const OVERRIDABLE = ["CREDIT_LIMIT_EXCEEDED", "CUSTOMER_OVERDUE", "INSUFFICIENT_STOCK"];
+
+      // Negativa autorizável + a venda ainda NÃO tinha override → abrir modal
+      // de autorização do gerente em vez de só bloquear.
+      if (code && OVERRIDABLE.includes(code) && !override) {
+        setPendingSale({ payments, cashbackUsed, reasons: [code] });
+        setOverrideReason(mensagem);
+        setOverrideModalOpen(true);
+        // Não mostra toast de erro — o modal assume.
+        return;
+      }
+
+      // Alertas específicos por tipo de negativa.
       const titulos: Record<string, string> = {
         CREDIT_LIMIT_EXCEEDED: "🚫 Limite de crédito excedido",
         CUSTOMER_OVERDUE: "🚫 Cliente inadimplente",
@@ -658,6 +685,18 @@ function PDVPage() {
     }
   };
 
+  // Gerente autorizou — reenvia a venda pendente com o override.
+  const handleManagerApproved = (approvedByUserId: string) => {
+    if (!pendingSale) return;
+    const { payments, cashbackUsed, reasons } = pendingSale;
+    setPendingSale(null);
+    setOverrideReason("");
+    void handleConfirmarVenda(payments, cashbackUsed, {
+      approvedByUserId,
+      reasons,
+    });
+  };
+
   return (
     <>
       <ModalFinalizarVenda
@@ -667,6 +706,16 @@ function PDVPage() {
         customerId={clienteSelecionado?.id}
         onConfirm={handleConfirmarVenda}
         loading={finalizingVenda}
+      />
+      <ManagerApprovalModal
+        open={overrideModalOpen}
+        onClose={() => {
+          setOverrideModalOpen(false);
+          setPendingSale(null);
+          setOverrideReason("");
+        }}
+        reason={overrideReason}
+        onApproved={handleManagerApproved}
       />
       <ModalNovoCliente
         open={modalClienteOpen}
