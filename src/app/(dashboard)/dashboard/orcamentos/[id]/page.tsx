@@ -182,9 +182,16 @@ function DetalhesOrcamentoPageContent() {
       });
 
       if (!res.ok) {
-        const error = await res.json();
+        const error = await res.json().catch(() => ({}));
         console.error("❌ Erro na resposta:", error);
-        throw new Error(error.message || "Erro ao atualizar status");
+        // Backend retorna { error: { message } } (handleApiError). Extrair a
+        // mensagem real em vez de "undefined"/toast vazio.
+        const msg =
+          (typeof error?.error === "string" && error.error) ||
+          error?.error?.message ||
+          error?.message ||
+          "Erro ao atualizar status";
+        throw new Error(msg);
       }
 
       toast.success(`Status atualizado para ${newStatus}`);

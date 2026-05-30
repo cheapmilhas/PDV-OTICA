@@ -702,17 +702,52 @@ export class QuoteService {
       }
     }
 
-    // 4. Validar se há caixa aberto
-    const openShift = await prisma.cashShift.findFirst({
+    // 4. Garantir caixa aberto — auto-abre se necessário (paridade com o PDV /
+    // sale.service.create, que também auto-abre). Antes lançava 400 e travava a
+    // conversão quando o caixa do dia não tinha sido aberto manualmente.
+    let openShift = await prisma.cashShift.findFirst({
       where: { branchId, status: "OPEN" },
     });
 
     if (!openShift) {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        "Não há caixa aberto. Abra o caixa antes de converter o orçamento em venda.",
-        400
-      );
+      const defaultRegister = await prisma.cashRegister.findFirst({
+        where: { branchId, active: true },
+        orderBy: { createdAt: "asc" },
+        select: { id: true },
+      });
+
+      openShift = await prisma.cashShift.create({
+        data: {
+          companyId,
+          branchId,
+          openedByUserId: userId,
+          openingFloatAmount: 0,
+          status: "OPEN",
+          openedAt: new Date(),
+          ...(defaultRegister && { cashRegisterId: defaultRegister.id }),
+        },
+      });
+
+      await prisma.activityLog
+        .create({
+          data: {
+            companyId,
+            type: "DATA_UPDATED",
+            title: "Turno de caixa auto-aberto",
+            detail: {
+              kind: "cash_shift_auto_opened",
+              shiftId: openShift.id,
+              branchId,
+              cashRegisterId: defaultRegister?.id ?? null,
+              triggeredBy: "quote.service.convertToSale",
+            },
+            actorId: userId,
+            actorType: "CLIENT",
+          },
+        })
+        .catch(() => {
+          // Auditoria nunca deve impedir a conversão.
+        });
     }
 
     // 5. Validar estoque de todos os itens

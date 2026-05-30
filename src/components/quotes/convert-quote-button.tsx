@@ -87,10 +87,18 @@ export function ConvertQuoteButton({
         }),
       });
 
-      const data = await res.json();
+      const data = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        throw new Error(data.error || "Erro ao converter orçamento");
+        // O backend retorna erro como { error: { code, message, details } }
+        // OU { error: "string" }. Extrair a mensagem real (antes virava
+        // "[object Object]" e escondia a causa, ex.: "Não há caixa aberto").
+        const msg =
+          (typeof data?.error === "string" && data.error) ||
+          data?.error?.message ||
+          data?.message ||
+          `Erro ao converter orçamento (HTTP ${res.status})`;
+        throw new Error(msg);
       }
 
       // Sucesso!
