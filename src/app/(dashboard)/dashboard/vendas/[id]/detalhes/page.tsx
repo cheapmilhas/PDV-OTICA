@@ -11,7 +11,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } f
 import { Label } from "@/components/ui/label";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
-import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, FileText, ExternalLink } from "lucide-react";
+import { ArrowLeft, Loader2, User, ShoppingCart, DollarSign, Calendar, AlertTriangle, Printer, Edit, MessageCircle, Gift, FileText, ExternalLink, ClipboardList } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
@@ -54,8 +54,14 @@ interface SaleDetails {
       name: string;
       sku: string;
       barcode?: string;
+      type?: string;
     };
   }>;
+  serviceOrder?: {
+    id: string;
+    number: number;
+    status: string;
+  } | null;
   payments: Array<{
     id: string;
     method: string;
@@ -79,6 +85,7 @@ export default function DetalhesVendaPage() {
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
   const [reactivating, setReactivating] = useState(false);
+  const [generatingOS, setGeneratingOS] = useState(false);
   const [editSellerOpen, setEditSellerOpen] = useState(false);
   const [users, setUsers] = useState<Array<{ id: string; name: string; email: string }>>([]);
   const [selectedSellerId, setSelectedSellerId] = useState("");
@@ -230,6 +237,28 @@ export default function DetalhesVendaPage() {
       toast.error(error.message);
     } finally {
       setReactivating(false);
+    }
+  };
+
+  const handleGerarOS = async () => {
+    setGeneratingOS(true);
+    try {
+      const res = await fetch(`/api/sales/${id}/create-service-order`, {
+        method: "POST",
+      });
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok) {
+        throw new Error(data?.error?.message || "Erro ao gerar Ordem de Serviço");
+      }
+      const osId = data?.data?.serviceOrderId;
+      toast.success(data?.data?.created ? "Ordem de Serviço gerada!" : "Ordem de Serviço já existente.");
+      if (osId) {
+        router.push(`/dashboard/ordens-servico/${osId}/detalhes`);
+      }
+    } catch (error: any) {
+      toast.error(error.message);
+    } finally {
+      setGeneratingOS(false);
     }
   };
 
@@ -399,6 +428,33 @@ export default function DetalhesVendaPage() {
           {sale.status !== "CANCELED" && sale.status !== "REFUNDED" ? (
             <>
               <Badge variant="default">Ativa</Badge>
+              {/* Ordem de Serviço: ver existente, ou gerar se a venda tem lente */}
+              {sale.serviceOrder ? (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  onClick={() => router.push(`/dashboard/ordens-servico/${sale.serviceOrder!.id}/detalhes`)}
+                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                >
+                  <ClipboardList className="h-4 w-4 mr-2" />
+                  Ver OS #{String(sale.serviceOrder.number).padStart(6, "0")}
+                </Button>
+              ) : (
+                sale.items.some((it) =>
+                  ["OPHTHALMIC_LENS", "CONTACT_LENS", "LENS_SERVICE"].includes(it.product?.type || "")
+                ) && (
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={handleGerarOS}
+                    disabled={generatingOS}
+                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                  >
+                    <ClipboardList className="h-4 w-4 mr-2" />
+                    {generatingOS ? "Gerando..." : "Gerar OS"}
+                  </Button>
+                )
+              )}
               {sale.customer?.phone && (
                 <Button
                   variant="outline"

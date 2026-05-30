@@ -180,6 +180,9 @@ export class SaleService {
         payments: {
           orderBy: { createdAt: "asc" },
         },
+        serviceOrder: {
+          select: { id: true, number: true, status: true },
+        },
       },
     });
 
@@ -614,6 +617,28 @@ export class SaleService {
         .catch((auditErr) => {
           log.error("Falha ao gravar ActivityLog de override", { err: String(auditErr) });
         });
+    }
+
+    // 10. Auto-gerar Ordem de Serviço se a venda tiver lente (pós-commit).
+    // NUNCA dentro da transação da venda — falha aqui não pode reverter a venda.
+    // Import dinâmico evita ciclo sale.service <-> service-order.service.
+    try {
+      const { serviceOrderService } = await import("@/services/service-order.service");
+      const osResult = await serviceOrderService.createFromSale(sale.id, companyId, userId);
+      if (osResult.created) {
+        log.info("OS gerada automaticamente da venda", { saleId: sale.id, serviceOrderId: osResult.serviceOrderId, number: osResult.number });
+      }
+    } catch (osError) {
+      // Venda já está concluída — a OS é side-effect. Falha não bloqueia a venda;
+      // o usuário pode gerar a OS manualmente depois pelo botão na venda.
+      // Venda de lente sem cliente (gating do PDV burlado) é caso esperado → warn,
+      // não error, para não poluir o monitoramento.
+      const isValidationError = osError instanceof AppError && osError.statusCode === 400;
+      if (isValidationError) {
+        log.warn("OS não gerada automaticamente", { saleId: sale.id, motivo: osError.message });
+      } else {
+        log.error("Falha ao gerar OS automática da venda", { saleId: sale.id, err: String(osError) });
+      }
     }
 
     // Retornar venda completa

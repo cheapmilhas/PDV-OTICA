@@ -41,7 +41,11 @@ interface Product {
   salePrice: number;
   stockQty: number;
   stockControlled: boolean;
+  type?: string;  // ProductType (ex.: OPHTHALMIC_LENS, CONTACT_LENS, LENS_SERVICE)
 }
+
+/** Tipos de produto que caracterizam uma lente (geram OS). */
+const LENS_PRODUCT_TYPES = ["OPHTHALMIC_LENS", "CONTACT_LENS", "LENS_SERVICE"];
 
 interface CartItem extends Product {
   quantity: number;
@@ -144,6 +148,13 @@ function PDVPage() {
             toast.error("Selecione um vendedor antes de finalizar");
             return;
           }
+          const temLente = carrinho.some(
+            (item) => item.type && LENS_PRODUCT_TYPES.includes(item.type)
+          );
+          if (temLente && !clienteSelecionado?.id) {
+            toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.");
+            return;
+          }
           setModalVendaOpen(true);
         }
       } else if (e.key === "F8") {
@@ -171,7 +182,9 @@ function PDVPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [carrinho.length, modalVendaOpen, modalClienteOpen, sellers.length, selectedSellerId]);
+    // carrinho (completo) e clienteSelecionado nas deps: o gate de lente+cliente
+    // do F4 lê esses valores — sem isso, stale closure burlava o gate.
+  }, [carrinho, modalVendaOpen, modalClienteOpen, sellers.length, selectedSellerId, clienteSelecionado]);
 
   // Carregar cliente do orçamento se houver quoteId
   useEffect(() => {
@@ -531,6 +544,11 @@ function PDVPage() {
   const total = Math.round((subtotal - desconto) * 100) / 100;
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
+  // Venda com lente gera Ordem de Serviço — e OS exige cliente vinculado.
+  const vendaTemLente = carrinho.some(
+    (item) => item.type && LENS_PRODUCT_TYPES.includes(item.type)
+  );
+
   const handleConfirmarVenda = async (
     payments: any[],
     cashbackUsed?: number,
@@ -538,6 +556,12 @@ function PDVPage() {
   ) => {
     if (carrinho.length === 0) {
       toast.error("Carrinho vazio");
+      return;
+    }
+
+    // Venda com lente exige cliente (a OS gerada precisa de cliente vinculado).
+    if (vendaTemLente && !clienteSelecionado?.id) {
+      toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.");
       return;
     }
 
@@ -617,6 +641,9 @@ function PDVPage() {
         throw new Error("A venda foi processada mas não retornou identificador. Verifique em /dashboard/vendas antes de refazer.");
       }
 
+      // OS gerada automaticamente (venda com lente) — avisar o usuário.
+      const osGerada = data?.data?.serviceOrder;
+
       track("first_sale", {
         saleId: vendaId,
         total: data.data.total,
@@ -664,6 +691,14 @@ function PDVPage() {
           );
         } else {
           toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
+        }
+        // Aviso da OS gerada (venda com lente) — orienta completar a receita.
+        if (osGerada?.number != null) {
+          const numeroOS = String(osGerada.number).padStart(6, "0");
+          toast(`OS #${numeroOS} criada — complete a receita na Ordem de Serviço.`, {
+            icon: "📋",
+            duration: 5000,
+          });
         }
       } catch (postError) {
         console.error("Pós-venda (não crítico):", postError);
@@ -1213,6 +1248,10 @@ function PDVPage() {
               onClick={() => {
                 if (sellers.length > 0 && !selectedSellerId) {
                   toast.error("Selecione um vendedor");
+                  return;
+                }
+                if (vendaTemLente && !clienteSelecionado?.id) {
+                  toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.");
                   return;
                 }
                 setModalVendaOpen(true);

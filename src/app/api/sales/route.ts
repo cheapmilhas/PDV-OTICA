@@ -154,6 +154,9 @@ export async function POST(request: Request) {
         ...payment,
         amount: Number(payment.amount),
       })),
+      // Explícito (além do ...sale) para o PDV avisar a OS gerada — sobrevive a
+      // futuras refatorações da serialização.
+      serviceOrder: (sale as any).serviceOrder ?? null,
     };
 
     // Retorna 201 Created

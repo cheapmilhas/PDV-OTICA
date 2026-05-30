@@ -264,6 +264,146 @@ export class ServiceOrderService {
     return this.getById(order.id, companyId, true);
   }
 
+  /** Tipos de produto que caracterizam uma lente (geram OS). */
+  static readonly LENS_PRODUCT_TYPES = ["OPHTHALMIC_LENS", "CONTACT_LENS", "LENS_SERVICE"];
+
+  /**
+   * Cria uma OS a partir de uma venda já existente (fluxo Venda → OS).
+   *
+   * - Só cria se a venda tiver ao menos 1 item de lente e um cliente vinculado.
+   * - Idempotente: se a venda já tem serviceOrderId, retorna a OS existente.
+   * - A OS NÃO carrega valores (unitPrice 0) — o laboratório não usa preço.
+   * - Status DRAFT, pendente de receita + impressão.
+   * - Vincula Sale.serviceOrderId.
+   *
+   * Deve ser chamado PÓS-COMMIT da venda (nunca dentro da transação da venda),
+   * em try/catch que não reverte a venda.
+   */
+  async createFromSale(
+    saleId: string,
+    companyId: string,
+    userId: string
+  ): Promise<{ created: boolean; serviceOrderId: string | null; number: number | null }> {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, companyId },
+      select: {
+        id: true,
+        customerId: true,
+        branchId: true,
+        serviceOrderId: true,
+        items: {
+          select: {
+            qty: true,
+            description: true,
+            product: { select: { id: true, name: true, type: true } },
+          },
+        },
+      },
+    });
+
+    if (!sale) {
+      throw notFoundError("Venda não encontrada");
+    }
+
+    // Idempotência: já tem OS vinculada.
+    if (sale.serviceOrderId) {
+      const existing = await prisma.serviceOrder.findUnique({
+        where: { id: sale.serviceOrderId },
+        select: { id: true, number: true },
+      });
+      return { created: false, serviceOrderId: existing?.id ?? sale.serviceOrderId, number: existing?.number ?? null };
+    }
+
+    // Filtra itens de lente.
+    const lensItems = sale.items.filter(
+      (it) => it.product?.type && ServiceOrderService.LENS_PRODUCT_TYPES.includes(it.product.type)
+    );
+
+    if (lensItems.length === 0) {
+      return { created: false, serviceOrderId: null, number: null };
+    }
+
+    if (!sale.customerId) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Venda com lente exige um cliente vinculado para gerar a Ordem de Serviço.",
+        400
+      );
+    }
+
+    const customerId = sale.customerId;
+    const branchId = sale.branchId;
+
+    try {
+    const order = await prisma.$transaction(async (tx) => {
+      const number = await this.getNextNumber(companyId, tx);
+
+      const newOrder = await tx.serviceOrder.create({
+        data: {
+          number,
+          companyId,
+          customerId,
+          branchId,
+          status: "DRAFT",
+          createdByUserId: userId,
+          notes: `Gerada automaticamente da venda #${sale.id.substring(0, 8)}`,
+        },
+      });
+
+      for (const it of lensItems) {
+        await tx.serviceOrderItem.create({
+          data: {
+            serviceOrderId: newOrder.id,
+            productId: it.product?.id || undefined,
+            description: it.description || it.product?.name || "Lente",
+            qty: it.qty,
+            unitPrice: 0, // OS não carrega valores — laboratório não usa preço.
+            discount: 0,
+            lineTotal: 0,
+          },
+        });
+      }
+
+      await tx.serviceOrderHistory.create({
+        data: {
+          serviceOrderId: newOrder.id,
+          action: "CREATED",
+          toStatus: "DRAFT",
+          note: `OS gerada automaticamente da venda #${sale.id.substring(0, 8)}`,
+          changedByUserId: userId,
+        },
+      });
+
+      // Vincula a venda à OS (FK fica na Sale, @unique).
+      await tx.sale.update({
+        where: { id: sale.id },
+        data: { serviceOrderId: newOrder.id },
+      });
+
+      return newOrder;
+    }, { timeout: 30_000 });
+
+    return { created: true, serviceOrderId: order.id, number: order.number };
+    } catch (err) {
+      // Race: a auto-criação (pós-venda) e o clique manual "Gerar OS" podem
+      // passar pela checagem de idempotência ao mesmo tempo. O @unique em
+      // Sale.serviceOrderId garante que só uma vença; a outra recebe P2002.
+      // Nesse caso, devolvemos a OS já criada como resultado idempotente.
+      if (err instanceof Prisma.PrismaClientKnownRequestError && err.code === "P2002") {
+        const refreshed = await prisma.sale.findUnique({
+          where: { id: saleId },
+          select: { serviceOrder: { select: { id: true, number: true } } },
+        });
+        return {
+          created: false,
+          serviceOrderId: refreshed?.serviceOrder?.id ?? null,
+          number: refreshed?.serviceOrder?.number ?? null,
+        };
+      }
+      throw err;
+    }
+  }
+
   /**
    * Atualiza OS (dados, itens, receita, laboratório)
    */
