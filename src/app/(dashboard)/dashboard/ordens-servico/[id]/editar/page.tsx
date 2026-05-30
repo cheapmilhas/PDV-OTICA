@@ -186,13 +186,32 @@ function EditarOrdemServicoContent() {
 
   // Deep-link ?focus=receita (vindo do aviso "Preencher receita"): abre a seção
   // de receita e rola até ela assim que a OS termina de carregar.
+  //
+  // IMPORTANTE: rolamos APENAS o container de conteúdo (#main-scroll), nunca via
+  // scrollIntoView — este último rola TODOS os ancestrais scrolláveis, incluindo
+  // o <nav> interno do sidebar (que tem overflow próprio), quebrando o layout.
   useEffect(() => {
     if (!fetching && focusReceita) {
       setShowPrescription(true);
-      const timer = setTimeout(() => {
-        document.getElementById("receita-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
-      }, 150);
-      return () => clearTimeout(timer);
+      // Double rAF: garante que a seção de receita recém-montada já entrou no
+      // layout antes de calcular a posição do scroll.
+      let raf2 = 0;
+      const raf1 = requestAnimationFrame(() => {
+        raf2 = requestAnimationFrame(() => {
+          const container = document.getElementById("main-scroll");
+          const target = document.getElementById("receita-section");
+          if (container && target) {
+            // getBoundingClientRect é robusto a qualquer offsetParent intermediário.
+            const delta = target.getBoundingClientRect().top - container.getBoundingClientRect().top;
+            const top = container.scrollTop + delta - 12;
+            container.scrollTo({ top: Math.max(0, top), behavior: "smooth" });
+          }
+        });
+      });
+      return () => {
+        cancelAnimationFrame(raf1);
+        if (raf2) cancelAnimationFrame(raf2);
+      };
     }
   }, [fetching, focusReceita]);
 
