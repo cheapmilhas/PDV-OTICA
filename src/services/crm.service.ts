@@ -230,7 +230,14 @@ export async function getReminders(
   const where: any = {
     companyId,
     ...(segment && { segment }),
-    ...(status && { status }),
+    // Sem status específico, mostrar apenas lembretes ATIVOS. Antes a lista
+    // exibia também CANCELLED/COMPLETED — por isso um lembrete de venda
+    // cancelada continuava aparecendo mesmo já marcado CANCELLED (a escrita
+    // estava correta; a leitura é que não filtrava). Os badges de contagem
+    // (getSegmentCounts) já filtram PENDING, daí a inconsistência observada.
+    ...(status
+      ? { status }
+      : { status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] } }),
     ...(assignedToId && { assignedToId }),
     ...(customerId && { customerId }),
     ...(search && {
