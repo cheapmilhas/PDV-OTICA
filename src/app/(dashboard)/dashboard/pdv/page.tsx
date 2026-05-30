@@ -550,9 +550,10 @@ function PDVPage() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
-        // Se houver detalhes de validação, mostra. O backend pode mandar
-        // details como { field, message } (handleApiError) ou { path, message }
-        // (issues cru do Zod) — suportamos ambos sem quebrar.
+        const code: string | undefined = error.error?.code;
+
+        // Monta a mensagem detalhada (suporta { field } e { path }).
+        let mensagem = error.error?.message || error.message || `Erro ao finalizar venda (HTTP ${res.status})`;
         if (Array.isArray(error.error?.details) && error.error.details.length > 0) {
           const details = error.error.details
             .map((d: any) => {
@@ -561,11 +562,14 @@ function PDVPage() {
             })
             .filter(Boolean)
             .join(", ");
-          if (details) {
-            throw new Error(`${error.error?.message || "Erro de validação"}: ${details}`);
+          if (details && !error.error?.code) {
+            mensagem = `${error.error?.message || "Erro de validação"}: ${details}`;
           }
         }
-        throw new Error(error.error?.message || error.message || `Erro ao finalizar venda (HTTP ${res.status})`);
+
+        const err = new Error(mensagem) as Error & { code?: string };
+        err.code = code;
+        throw err;
       }
 
       const data = await res.json();
@@ -633,9 +637,22 @@ function PDVPage() {
     } catch (error: any) {
       console.error("Erro ao finalizar venda:", error);
 
-      // Mensagem mais amigável
+      // Alertas específicos por tipo de negativa. Mensagem do backend já é
+      // clara; aqui escolhemos título/duração conforme o código.
+      const code: string | undefined = error.code;
       const mensagem = error.message || "Erro ao finalizar venda. Tente novamente.";
-      toast.error(mensagem, { duration: 5000 });
+
+      const titulos: Record<string, string> = {
+        CREDIT_LIMIT_EXCEEDED: "🚫 Limite de crédito excedido",
+        CUSTOMER_OVERDUE: "🚫 Cliente inadimplente",
+        INSUFFICIENT_STOCK: "📦 Estoque insuficiente",
+      };
+
+      if (code && titulos[code]) {
+        toast.error(`${titulos[code]}\n${mensagem}`, { duration: 7000 });
+      } else {
+        toast.error(mensagem, { duration: 5000 });
+      }
     } finally {
       setFinalizingVenda(false);
     }

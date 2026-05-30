@@ -18,6 +18,12 @@ export const ERROR_CODES = {
   BUSINESS_RULE_VIOLATION: "BUSINESS_RULE_VIOLATION",
   DATABASE_ERROR: "DATABASE_ERROR",
   INTERNAL_ERROR: "INTERNAL_ERROR",
+  // Negativas de PDV que podem ser autorizadas por um admin/gerente (override).
+  // O frontend usa estes códigos para exibir o alerta certo e oferecer a
+  // autorização do gerente. Ver Fase B (override com senha).
+  CREDIT_LIMIT_EXCEEDED: "CREDIT_LIMIT_EXCEEDED",
+  CUSTOMER_OVERDUE: "CUSTOMER_OVERDUE",
+  INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

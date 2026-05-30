@@ -308,7 +308,7 @@ export class SaleService {
       // Só valida estoque para produtos com controle de estoque ativo
       if (product.stockControlled && product.stockQty < item.qty) {
         throw new AppError(
-          ERROR_CODES.VALIDATION_ERROR,
+          ERROR_CODES.INSUFFICIENT_STOCK,
           `Estoque insuficiente para ${product.name}. Disponível: ${product.stockQty}, Solicitado: ${item.qty}`,
           400
         );
@@ -350,7 +350,9 @@ export class SaleService {
         );
         if (!creditCheck.approved) {
           throw new AppError(
-            ERROR_CODES.VALIDATION_ERROR,
+            creditCheck.code === "CUSTOMER_OVERDUE"
+              ? ERROR_CODES.CUSTOMER_OVERDUE
+              : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
             creditCheck.message || "Limite de crédito excedido",
             400
           );

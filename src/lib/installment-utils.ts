@@ -84,7 +84,7 @@ export async function validateCreditLimit(
   customerId: string,
   requestedAmount: number,
   companyId: string
-): Promise<{ approved: boolean; message?: string }> {
+): Promise<{ approved: boolean; message?: string; code?: "CREDIT_LIMIT_EXCEEDED" | "CUSTOMER_OVERDUE" }> {
   // Importação dinâmica para evitar ciclos
   const { prisma } = await import("@/lib/prisma");
 
@@ -160,6 +160,7 @@ export async function validateCreditLimit(
       );
       return {
         approved: false,
+        code: "CUSTOMER_OVERDUE",
         message: `Cliente possui débito vencido há ${daysOverdue} dias (${overdueReceivable.description}, R$ ${Number(
           overdueReceivable.amount
         ).toFixed(2)}). Regularize antes de nova compra a prazo.`,
@@ -183,6 +184,7 @@ export async function validateCreditLimit(
     const available = Math.max(0, effectiveLimit - totalOpen);
     return {
       approved: false,
+      code: "CREDIT_LIMIT_EXCEEDED",
       message: `Limite de crédito excedido. Limite: R$ ${effectiveLimit.toFixed(
         2
       )}. Em aberto: R$ ${totalOpen.toFixed(2)}. Disponível: R$ ${available.toFixed(
