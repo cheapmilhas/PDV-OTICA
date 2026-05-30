@@ -354,7 +354,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
 
   return (
     <aside
-      className="flex h-screen w-64 flex-col border-r shrink-0"
+      className="flex h-full w-64 flex-col border-r shrink-0"
       style={defaultSidebarStyle}
     >
       {/* Logo */}

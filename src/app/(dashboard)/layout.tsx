@@ -87,30 +87,36 @@ export default async function DashboardLayout({
   return (
     <ThemeProvider>
       <BranchProviderWrapper>
-        {/* Banner de aviso de assinatura (trial, past_due) */}
-        {subscriptionCheck && (
-          <SubscriptionBanner
-            status={subscriptionCheck.status}
-            message={subscriptionCheck.message}
-            daysLeft={subscriptionCheck.daysLeft}
-            daysOverdue={subscriptionCheck.daysOverdue}
-            readOnly={subscriptionCheck.readOnly}
-          />
-        )}
+        {/* Coluna que POSSUI a viewport: banner + shell dividem os 100vh.
+            Antes o shell era h-screen (100vh fixo) IRMÃO do banner — quando o
+            banner aparecia, a altura virava banner+100vh > tela, gerando uma
+            faixa branca rolável no fim de toda página do dashboard. */}
+        <div className="flex flex-col h-screen overflow-hidden bg-background">
+          {/* Banner de aviso de assinatura (trial, past_due) */}
+          {subscriptionCheck && (
+            <SubscriptionBanner
+              status={subscriptionCheck.status}
+              message={subscriptionCheck.message}
+              daysLeft={subscriptionCheck.daysLeft}
+              daysOverdue={subscriptionCheck.daysOverdue}
+              readOnly={subscriptionCheck.readOnly}
+            />
+          )}
 
-        <div className="flex h-screen overflow-hidden bg-background">
-          {/* Sidebar - esconde em mobile */}
-          <div className="hidden md:flex">
-            <Sidebar />
-          </div>
+          <div className="flex flex-1 min-h-0 overflow-hidden">
+            {/* Sidebar - esconde em mobile */}
+            <div className="hidden md:flex">
+              <Sidebar />
+            </div>
 
-          {/* Main content */}
-          <div className="flex flex-1 flex-col overflow-hidden w-full md:w-auto">
-            <Header />
-            {/* pb-16 em mobile para não sobrepor o bottom nav */}
-            <main id="main-scroll" className="flex-1 overflow-y-auto bg-background p-4 md:p-6 pb-20 md:pb-6">
-              {children}
-            </main>
+            {/* Main content */}
+            <div className="flex flex-1 flex-col overflow-hidden w-full md:w-auto">
+              <Header />
+              {/* pb-16 em mobile para não sobrepor o bottom nav */}
+              <main id="main-scroll" className="flex-1 overflow-y-auto bg-background p-4 md:p-6 pb-20 md:pb-6">
+                {children}
+              </main>
+            </div>
           </div>
         </div>
 
