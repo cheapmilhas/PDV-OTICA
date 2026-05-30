@@ -28,6 +28,7 @@ import {
   ChevronDown,
   Shield,
   RotateCcw,
+  FileText,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays } from "date-fns";
@@ -49,6 +50,7 @@ interface ServiceOrder {
   isRework: boolean;
   totalAmount?: number;
   createdAt: string;
+  hasPrescription?: boolean;
   customer: { id: string; name: string; cpf?: string; phone?: string };
   laboratory?: { id: string; name: string };
   sale?: { id: string } | null;
@@ -181,6 +183,9 @@ const KanbanCard = memo(function KanbanCard({
           )}
           {order.isRework && (
             <RotateCcw className="h-3.5 w-3.5 text-orange-500" />
+          )}
+          {order.hasPrescription === false && order.status !== "CANCELED" && (
+            <FileText className="h-3.5 w-3.5 text-amber-500" aria-label="Sem receita" />
           )}
           <GripVertical className="h-3.5 w-3.5 text-gray-400" />
         </div>

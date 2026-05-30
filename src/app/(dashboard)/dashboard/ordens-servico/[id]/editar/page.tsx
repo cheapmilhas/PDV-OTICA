@@ -10,7 +10,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Badge } from "@/components/ui/badge";
 import toast from "react-hot-toast";
 import { ArrowLeft, Trash2, Loader2, Plus, ChevronDown } from "lucide-react";
-import { useRouter, useParams } from "next/navigation";
+import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PrescriptionImageUpload, type OcrPrescriptionData } from "@/components/ordens-servico/prescription-image-upload";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -24,7 +24,9 @@ interface ServiceItem {
 function EditarOrdemServicoContent() {
   const router = useRouter();
   const params = useParams();
+  const searchParams = useSearchParams();
   const id = params.id as string;
+  const focusReceita = searchParams.get("focus") === "receita";
 
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
@@ -181,6 +183,18 @@ function EditarOrdemServicoContent() {
 
     fetchOrder();
   }, [id, router]);
+
+  // Deep-link ?focus=receita (vindo do aviso "Preencher receita"): abre a seção
+  // de receita e rola até ela assim que a OS termina de carregar.
+  useEffect(() => {
+    if (!fetching && focusReceita) {
+      setShowPrescription(true);
+      const timer = setTimeout(() => {
+        document.getElementById("receita-section")?.scrollIntoView({ behavior: "smooth", block: "start" });
+      }, 150);
+      return () => clearTimeout(timer);
+    }
+  }, [fetching, focusReceita]);
 
   const addItem = () => {
     setItems([...items, { description: "", qty: 1, observations: "" }]);
@@ -528,7 +542,7 @@ function EditarOrdemServicoContent() {
         </Card>
 
         {/* Receita / Prescrição */}
-        <Card className="mb-6">
+        <Card id="receita-section" className="mb-6">
           <CardHeader>
             <div className="flex items-center justify-between">
               <CardTitle>Receita / Prescrição</CardTitle>

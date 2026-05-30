@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Plus, CheckCircle2, Clock, Edit, Eye, Loader2, Search,
   XCircle, AlertCircle, Printer, Truck, AlertTriangle,
-  RotateCcw, Shield, Star, ShoppingCart,
+  RotateCcw, Shield, Star, ShoppingCart, FileText,
   LayoutList, Kanban,
 } from "lucide-react";
 import { KanbanBoard } from "@/components/ordens-servico/kanban-board";
@@ -40,6 +40,7 @@ interface ServiceOrder {
   isWarranty: boolean;
   isRework: boolean;
   createdAt: string;
+  hasPrescription?: boolean;
   customer: { id: string; name: string; cpf?: string; phone?: string };
   laboratory?: { id: string; name: string };
   sale?: { id: string } | null;
@@ -736,6 +737,11 @@ function OrdensServicoPage() {
                             {order.isRework && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
                                 <RotateCcw className="h-3 w-3" /> Retrabalho
+                              </span>
+                            )}
+                            {order.hasPrescription === false && order.status !== "CANCELED" && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-medium bg-amber-50 text-amber-700 border border-amber-200">
+                                <FileText className="h-3 w-3" /> Sem receita
                               </span>
                             )}
                           </div>

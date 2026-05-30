@@ -152,7 +152,7 @@ function PDVPage() {
             (item) => item.type && LENS_PRODUCT_TYPES.includes(item.type)
           );
           if (temLente && !clienteSelecionado?.id) {
-            toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.");
+            toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
             return;
           }
           setModalVendaOpen(true);
@@ -561,7 +561,7 @@ function PDVPage() {
 
     // Venda com lente exige cliente (a OS gerada precisa de cliente vinculado).
     if (vendaTemLente && !clienteSelecionado?.id) {
-      toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.");
+      toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
       return;
     }
 
@@ -1251,7 +1251,7 @@ function PDVPage() {
                   return;
                 }
                 if (vendaTemLente && !clienteSelecionado?.id) {
-                  toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.");
+                  toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
                   return;
                 }
                 setModalVendaOpen(true);

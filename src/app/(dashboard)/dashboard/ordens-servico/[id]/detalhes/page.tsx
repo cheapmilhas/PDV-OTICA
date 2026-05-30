@@ -282,6 +282,28 @@ function DetalhesOrdemServicoContent() {
         </Card>
       )}
 
+      {/* Receita pendente — OS sem receita preenchida */}
+      {!order.prescriptionData && !order.prescriptionImageUrl && order.status !== "CANCELED" && (
+        <Card className="border-amber-500 bg-amber-50">
+          <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
+            <div className="flex items-center gap-2">
+              <AlertTriangle className="h-5 w-5 text-amber-600 flex-shrink-0" />
+              <p className="text-sm text-amber-800">
+                Receita pendente — esta Ordem de Serviço ainda não tem a receita preenchida.
+              </p>
+            </div>
+            <Button
+              size="sm"
+              onClick={() => router.push(`/dashboard/ordens-servico/${id}/editar?focus=receita`)}
+              className="bg-amber-600 hover:bg-amber-700 text-white"
+            >
+              <Edit className="h-4 w-4 mr-2" />
+              Preencher receita
+            </Button>
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
         <Card>

@@ -119,7 +119,18 @@ export class ServiceOrderService {
 
     const pagination = createPaginationMeta(page, pageSize, total);
 
-    return { data, pagination };
+    // Flag computado para a UI sinalizar "Sem receita" sem trafegar o JSON
+    // inteiro de prescrição na listagem (pode ser grande). Substituímos
+    // prescriptionData pelo booleano hasPrescription.
+    const dataWithFlags = data.map((o) => {
+      const { prescriptionData, ...rest } = o;
+      return {
+        ...rest,
+        hasPrescription: !!prescriptionData || !!o.prescriptionImageUrl,
+      };
+    });
+
+    return { data: dataWithFlags, pagination };
   }
 
   /**
