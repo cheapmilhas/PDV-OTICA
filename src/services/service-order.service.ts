@@ -109,6 +109,9 @@ export class ServiceOrderService {
           sale: {
             select: { id: true },
           },
+          originalOrder: {
+            select: { number: true },
+          },
           _count: {
             select: { items: true },
           },
@@ -175,7 +178,12 @@ export class ServiceOrderService {
           select: { id: true, number: true, status: true },
         },
         reworkOrders: {
-          select: { id: true, number: true, status: true, isWarranty: true, isRework: true, createdAt: true },
+          select: {
+            id: true, number: true, status: true,
+            isWarranty: true, isRework: true, isMedicalError: true,
+            warrantySeq: true, createdAt: true,
+            originalOrder: { select: { number: true } },
+          },
         },
       },
     });
@@ -725,7 +733,16 @@ export class ServiceOrderService {
   }
 
   /**
-   * Cria OS de garantia ou retrabalho a partir de uma OS existente
+   * Cria OS de garantia, retrabalho ou erro médico a partir de uma OS existente.
+   *
+   * O `number` interno continua sequencial/único (não viola @@unique). A camada
+   * de exibição usa o número da OS ORIGINAL + letra + sequência:
+   *   garantia -> #1234-G1, #1234-G2;  retrabalho -> #1234-RT1;  erro médico -> #1234-M1.
+   * `warrantySeq` é calculado contando os filhos do mesmo tipo da OS original.
+   *
+   * Aceita `type` ("warranty" | "rework" | "medical_error"). Os booleanos
+   * isWarranty/isRework/isMedicalError são derivados de `type` (mantidos por
+   * compatibilidade com a UI existente).
    */
   async createWarranty(
     originalId: string,
@@ -733,8 +750,7 @@ export class ServiceOrderService {
     userId: string,
     branchId: string,
     options: {
-      isWarranty: boolean;
-      isRework: boolean;
+      type: "warranty" | "rework" | "medical_error";
       reason: string;
       copyData: boolean;
     }
@@ -744,13 +760,37 @@ export class ServiceOrderService {
     if (!["DELIVERED", "READY"].includes(original.status)) {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
-        "Só é possível criar garantia de OS já entregue ou pronta",
+        "Só é possível criar garantia/retrabalho de OS já entregue ou pronta",
         400
       );
     }
 
+    const isWarranty = options.type === "warranty";
+    const isRework = options.type === "rework";
+    const isMedicalError = options.type === "medical_error";
+    const tipoLabel = isMedicalError ? "ERRO MÉDICO" : isRework ? "RETRABALHO" : "GARANTIA";
+
     const order = await prisma.$transaction(async (tx) => {
       const number = await this.getNextNumber(companyId, tx);
+
+      // Lock na OS original para serializar criações concorrentes de garantia
+      // da mesma OS — sem isso, dois requests simultâneos contariam o mesmo
+      // valor e gerariam #1234-G1 duplicado (count é SELECT, não bloqueia).
+      await tx.$queryRaw`SELECT id FROM "ServiceOrder" WHERE id = ${originalId} FOR UPDATE`;
+
+      // Sequência de exibição por (original + tipo): conta filhos do mesmo
+      // tipo já existentes e soma 1. Protegido pelo FOR UPDATE acima.
+      const sameTypeCount = await tx.serviceOrder.count({
+        where: {
+          originalOrderId: originalId,
+          ...(isMedicalError
+            ? { isMedicalError: true }
+            : isRework
+            ? { isRework: true }
+            : { isWarranty: true }),
+        },
+      });
+      const warrantySeq = sameTypeCount + 1;
 
       const newOrder = await tx.serviceOrder.create({
         data: {
@@ -762,12 +802,15 @@ export class ServiceOrderService {
           status: "DRAFT",
           promisedDate: undefined,
           createdByUserId: userId,
-          notes: `${options.isWarranty ? "GARANTIA" : "RETRABALHO"}: ${options.reason}`,
+          notes: `${tipoLabel}: ${options.reason}`,
           prescriptionData: options.copyData ? (original.prescriptionData as any) : undefined,
-          isWarranty: options.isWarranty,
-          isRework: options.isRework,
-          warrantyReason: options.isWarranty ? options.reason : undefined,
-          reworkReason: options.isRework ? options.reason : undefined,
+          isWarranty,
+          isRework,
+          isMedicalError,
+          warrantyReason: isWarranty ? options.reason : undefined,
+          reworkReason: isRework ? options.reason : undefined,
+          medicalErrorReason: isMedicalError ? options.reason : undefined,
+          warrantySeq,
           originalOrderId: originalId,
         },
       });
@@ -794,9 +837,9 @@ export class ServiceOrderService {
           serviceOrderId: newOrder.id,
           action: "CREATED",
           toStatus: "DRAFT",
-          note: `${options.isWarranty ? "Garantia" : "Retrabalho"} da OS #${original.number}: ${options.reason}`,
+          note: `${tipoLabel} da OS #${original.number}: ${options.reason}`,
           changedByUserId: userId,
-          metadata: { originalOrderId: originalId, originalNumber: original.number },
+          metadata: { originalOrderId: originalId, originalNumber: original.number, warrantySeq },
         },
       });
 

@@ -1,6 +1,7 @@
 "use client";
 
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { osDisplayNumber } from "@/lib/os-number";
 import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -12,7 +13,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import {
   Plus, CheckCircle2, Clock, Edit, Eye, Loader2, Search,
   XCircle, AlertCircle, Printer, Truck, AlertTriangle,
-  RotateCcw, Shield, Star, ShoppingCart, FileText,
+  RotateCcw, Shield, Star, ShoppingCart, FileText, Stethoscope,
   LayoutList, Kanban,
 } from "lucide-react";
 import { KanbanBoard } from "@/components/ordens-servico/kanban-board";
@@ -39,6 +40,9 @@ interface ServiceOrder {
   delayDays?: number;
   isWarranty: boolean;
   isRework: boolean;
+  isMedicalError?: boolean;
+  warrantySeq?: number | null;
+  originalOrder?: { number?: number | null } | null;
   createdAt: string;
   hasPrescription?: boolean;
   customer: { id: string; name: string; cpf?: string; phone?: string };
@@ -87,14 +91,9 @@ function getDelayDays(promisedDate: string): number {
   return differenceInCalendarDays(new Date(), new Date(promisedDate));
 }
 
-// Formata número da OS: se 0 ou inexistente, mostra ID curto. Sufixo -G para garantia, -R para retrabalho
+// Número de exibição da OS (#1234-G1 etc.) — helper compartilhado com o kanban.
 function osNum(order: ServiceOrder): string {
-  const base = order.number && order.number > 0
-    ? `#${String(order.number).padStart(6, "0")}`
-    : `#${order.id.slice(-6).toUpperCase()}`;
-  if (order.isWarranty) return `${base}-G`;
-  if (order.isRework) return `${base}-R`;
-  return base;
+  return osDisplayNumber(order);
 }
 
 function StatusBadge({ status, delayed }: { status: string; delayed: boolean }) {
@@ -317,7 +316,7 @@ function ModalGarantia({ order, onClose, onSuccess }: {
   onSuccess: () => void;
 }) {
   const [loading, setLoading] = useState(false);
-  const [type, setType] = useState<"warranty" | "rework">("warranty");
+  const [type, setType] = useState<"warranty" | "rework" | "medical_error">("warranty");
   const [reason, setReason] = useState("");
   const [copyData, setCopyData] = useState(true);
 
@@ -328,19 +327,15 @@ function ModalGarantia({ order, onClose, onSuccess }: {
       const res = await fetch(`/api/service-orders/${order.id}/warranty`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          isWarranty: type === "warranty",
-          isRework: type === "rework",
-          reason,
-          copyData,
-        }),
+        body: JSON.stringify({ type, reason, copyData }),
       });
       if (!res.ok) {
         const err = await res.json();
         throw new Error(err.error?.message || "Erro ao criar OS");
       }
       const data = await res.json();
-      toast.success(`Nova OS #${String(data.data?.number || "").padStart(6, "0")} criada!`);
+      const novaOS = data.data ? osDisplayNumber(data.data) : "";
+      toast.success(`Nova OS ${novaOS} criada!`);
       onSuccess();
       onClose();
     } catch (e: any) {
@@ -355,7 +350,7 @@ function ModalGarantia({ order, onClose, onSuccess }: {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h2 className="text-xl font-bold mb-1 flex items-center gap-2">
           <Shield className="h-5 w-5 text-blue-500" />
-          Garantia / Retrabalho
+          Garantia / Retrabalho / Erro médico
         </h2>
         <p className="text-sm text-muted-foreground mb-4">
           Criar nova OS vinculada à OS #{String(order.number).padStart(6, "0")} — {order.customer.name}
@@ -364,20 +359,31 @@ function ModalGarantia({ order, onClose, onSuccess }: {
         <div className="space-y-3">
           <div>
             <Label>Tipo</Label>
-            <div className="flex gap-2 mt-1">
+            <div className="grid grid-cols-3 gap-2 mt-1">
               <button
                 onClick={() => setType("warranty")}
-                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${type === "warranty" ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 hover:bg-gray-50"}`}
+                className={`py-2 px-2 rounded-lg border text-sm font-medium transition-colors ${type === "warranty" ? "bg-blue-600 text-white border-blue-600" : "border-gray-300 hover:bg-gray-50"}`}
               >
                 🛡️ Garantia
               </button>
               <button
                 onClick={() => setType("rework")}
-                className={`flex-1 py-2 px-3 rounded-lg border text-sm font-medium transition-colors ${type === "rework" ? "bg-orange-600 text-white border-orange-600" : "border-gray-300 hover:bg-gray-50"}`}
+                className={`py-2 px-2 rounded-lg border text-sm font-medium transition-colors ${type === "rework" ? "bg-orange-600 text-white border-orange-600" : "border-gray-300 hover:bg-gray-50"}`}
               >
                 🔄 Retrabalho
               </button>
+              <button
+                onClick={() => setType("medical_error")}
+                className={`py-2 px-2 rounded-lg border text-sm font-medium transition-colors ${type === "medical_error" ? "bg-red-600 text-white border-red-600" : "border-gray-300 hover:bg-gray-50"}`}
+              >
+                🩺 Erro médico
+              </button>
             </div>
+            {type === "medical_error" && (
+              <p className="text-xs text-red-600 mt-1">
+                Erro médico: a receita poderá ser alterada e a OS reimpressa.
+              </p>
+            )}
           </div>
           <div>
             <Label>Motivo (obrigatório)</Label>
@@ -737,6 +743,11 @@ function OrdensServicoPage() {
                             {order.isRework && (
                               <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-orange-100 text-orange-700 border border-orange-300">
                                 <RotateCcw className="h-3 w-3" /> Retrabalho
+                              </span>
+                            )}
+                            {order.isMedicalError && (
+                              <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-bold bg-red-100 text-red-700 border border-red-300">
+                                <Stethoscope className="h-3 w-3" /> Erro médico
                               </span>
                             )}
                             {order.hasPrescription === false && order.status !== "CANCELED" && (

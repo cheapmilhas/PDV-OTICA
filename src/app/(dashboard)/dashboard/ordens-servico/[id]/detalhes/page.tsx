@@ -5,6 +5,7 @@ import { useRouter, useParams } from "next/navigation";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { osDisplayNumber } from "@/lib/os-number";
 import toast from "react-hot-toast";
 import { track } from "@/lib/analytics";
 import {
@@ -20,6 +21,7 @@ import {
   Shield,
   RotateCcw,
   ExternalLink,
+  Stethoscope,
 } from "lucide-react";
 import Link from "next/link";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -54,8 +56,11 @@ interface ServiceOrderDetails {
   delayDays?: number;
   isWarranty?: boolean;
   isRework?: boolean;
+  isMedicalError?: boolean;
   warrantyReason?: string | null;
   reworkReason?: string | null;
+  medicalErrorReason?: string | null;
+  warrantySeq?: number | null;
   status: string;
   customer: {
     id: string;
@@ -67,7 +72,7 @@ interface ServiceOrderDetails {
   laboratory?: { id: string; name: string };
   sale?: { id: string } | null;
   originalOrder?: { id: string; number: number; status: string };
-  reworkOrders?: Array<{ id: string; number: number; status: string; isWarranty: boolean; isRework: boolean }>;
+  reworkOrders?: Array<{ id: string; number: number; status: string; isWarranty: boolean; isRework: boolean; isMedicalError?: boolean; warrantySeq?: number | null; originalOrder?: { number?: number | null } | null }>;
   history?: Array<{
     id: string;
     action: string;
@@ -202,7 +207,7 @@ function DetalhesOrdemServicoContent() {
               <h1 className="text-3xl font-bold">Detalhes da OS</h1>
               {order.number && (
                 <span className="text-2xl font-black text-blue-600">
-                  #{String(order.number).padStart(6, "0")}
+                  {osDisplayNumber(order)}
                 </span>
               )}
             </div>
@@ -309,22 +314,24 @@ function DetalhesOrdemServicoContent() {
         </Card>
       )}
 
-      {/* Vínculo: esta OS é garantia/retrabalho de outra OS */}
-      {order.originalOrder && (order.isWarranty || order.isRework) && (
+      {/* Vínculo: esta OS é garantia/retrabalho/erro médico de outra OS */}
+      {order.originalOrder && (order.isWarranty || order.isRework || order.isMedicalError) && (
         <Card className="border-blue-300 bg-blue-50">
           <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
             <div className="flex items-center gap-2">
-              {order.isRework ? (
+              {order.isMedicalError ? (
+                <Stethoscope className="h-5 w-5 text-red-600 flex-shrink-0" />
+              ) : order.isRework ? (
                 <RotateCcw className="h-5 w-5 text-blue-600 flex-shrink-0" />
               ) : (
                 <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
               )}
               <div>
                 <p className="text-sm font-medium text-blue-900">
-                  {order.isRework ? "Retrabalho" : "Garantia"} da OS #{String(order.originalOrder.number).padStart(6, "0")}
+                  {order.isMedicalError ? "Erro médico" : order.isRework ? "Retrabalho" : "Garantia"} da OS #{String(order.originalOrder.number).padStart(6, "0")}
                 </p>
-                {(order.warrantyReason || order.reworkReason) && (
-                  <p className="text-xs text-blue-700">Motivo: {order.warrantyReason || order.reworkReason}</p>
+                {(order.warrantyReason || order.reworkReason || order.medicalErrorReason) && (
+                  <p className="text-xs text-blue-700">Motivo: {order.warrantyReason || order.reworkReason || order.medicalErrorReason}</p>
                 )}
               </div>
             </div>
@@ -334,6 +341,39 @@ function DetalhesOrdemServicoContent() {
             >
               Ver OS original <ExternalLink className="h-3.5 w-3.5" />
             </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Erro médico: orientar a corrigir a receita e reimprimir */}
+      {order.isMedicalError && order.status !== "CANCELED" && (
+        <Card className="border-red-400 bg-red-50">
+          <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
+            <div className="flex items-center gap-2">
+              <Stethoscope className="h-5 w-5 text-red-600 flex-shrink-0" />
+              <p className="text-sm text-red-800">
+                Erro médico — corrija a receita e reimprima a Ordem de Serviço para o laboratório.
+              </p>
+            </div>
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={() => router.push(`/dashboard/ordens-servico/${id}/editar?focus=receita`)}
+                className="bg-red-600 hover:bg-red-700 text-white"
+              >
+                <Edit className="h-4 w-4 mr-2" />
+                Corrigir receita
+              </Button>
+              <Button
+                size="sm"
+                variant="outline"
+                onClick={() => window.open(`/dashboard/ordens-servico/${id}/imprimir`, "_blank")}
+                className="border-red-400 text-red-700 hover:bg-red-100"
+              >
+                <Printer className="h-4 w-4 mr-2" />
+                Reimprimir
+              </Button>
+            </div>
           </CardContent>
         </Card>
       )}
@@ -352,8 +392,14 @@ function DetalhesOrdemServicoContent() {
                   href={`/dashboard/ordens-servico/${child.id}/detalhes`}
                   className="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
                 >
-                  {child.isRework ? <RotateCcw className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
-                  OS #{String(child.number).padStart(6, "0")}
+                  {child.isMedicalError ? (
+                    <Stethoscope className="h-3 w-3" />
+                  ) : child.isRework ? (
+                    <RotateCcw className="h-3 w-3" />
+                  ) : (
+                    <Shield className="h-3 w-3" />
+                  )}
+                  OS {osDisplayNumber(child)}
                   <ExternalLink className="h-3 w-3" />
                 </Link>
               ))}

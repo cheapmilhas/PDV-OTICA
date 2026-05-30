@@ -1,5 +1,6 @@
 "use client";
 
+import { osDisplayNumber } from "@/lib/os-number";
 import { useState, useCallback, useEffect, memo } from "react";
 import {
   DndContext,
@@ -29,6 +30,7 @@ import {
   Shield,
   RotateCcw,
   FileText,
+  Stethoscope,
 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { differenceInCalendarDays } from "date-fns";
@@ -48,6 +50,9 @@ interface ServiceOrder {
   delayDays?: number;
   isWarranty: boolean;
   isRework: boolean;
+  isMedicalError?: boolean;
+  warrantySeq?: number | null;
+  originalOrder?: { number?: number | null } | null;
   totalAmount?: number;
   createdAt: string;
   hasPrescription?: boolean;
@@ -135,12 +140,7 @@ function formatCurrency(value: number): string {
 }
 
 function osNum(order: ServiceOrder): string {
-  const base = order.number && order.number > 0
-    ? `#${String(order.number).padStart(6, "0")}`
-    : `#${order.id.slice(-6).toUpperCase()}`;
-  if (order.isWarranty) return `${base}-G`;
-  if (order.isRework) return `${base}-R`;
-  return base;
+  return osDisplayNumber(order);
 }
 
 function isValidTransition(from: string, to: string, isAdmin: boolean): boolean {
@@ -183,6 +183,9 @@ const KanbanCard = memo(function KanbanCard({
           )}
           {order.isRework && (
             <RotateCcw className="h-3.5 w-3.5 text-orange-500" />
+          )}
+          {order.isMedicalError && (
+            <Stethoscope className="h-3.5 w-3.5 text-red-500" aria-label="Erro médico" />
           )}
           {order.hasPrescription === false && order.status !== "CANCELED" && (
             <FileText className="h-3.5 w-3.5 text-amber-500" aria-label="Sem receita" />

@@ -872,8 +872,13 @@ model ServiceOrder {
   delayReason       String?
   isWarranty        Boolean               @default(false)
   isRework          Boolean               @default(false)
+  isMedicalError    Boolean               @default(false)
   warrantyReason    String?
   reworkReason      String?
+  medicalErrorReason String?
+  // Sequência de exibição por (OS original + tipo): G1, G2, RT1, M1...
+  // O number interno continua único/sequencial; isto é só p/ exibição #1234-G1.
+  warrantySeq       Int?
   originalOrderId   String?
   deliveredByUserId String?
   deliveryNotes     String?

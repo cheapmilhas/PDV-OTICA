@@ -3,6 +3,7 @@
 import { useState, useEffect, useRef } from "react";
 import { useParams } from "next/navigation";
 import { Button } from "@/components/ui/button";
+import { osDisplayNumber } from "@/lib/os-number";
 import toast from "react-hot-toast";
 import { Loader2, Printer, ArrowLeft } from "lucide-react";
 import { format } from "date-fns";
@@ -92,10 +93,10 @@ function ImprimirOrdemServicoContent() {
 
   if (!order) return null;
 
-  // OS number: use sequential if available, else last 6 chars of ID
-  const osNumber = order.number
-    ? String(order.number).padStart(6, "0")
-    : order.id.slice(-6).toUpperCase();
+  // Número de exibição (#1234-G1 para garantia/retrabalho/erro médico).
+  // osDisplayNumber já inclui o "#"; removemos para manter o layout existente
+  // que prefixa "OS Nº" manualmente onde necessário.
+  const osNumber = osDisplayNumber(order).replace(/^#/, "");
 
   const hasReceita = rx && (rx.od?.esf || rx.oe?.esf || rx.adicao);
   const hasAdd = rx && (rx.od?.add || rx.oe?.add || rx.adicao);

@@ -6,14 +6,20 @@ import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 
+// Aceita o novo `type` ("warranty" | "rework" | "medical_error") OU os
+// booleanos legados isWarranty/isRework (retrocompat). Deriva `type`.
 const warrantySchema = z.object({
-  isWarranty: z.boolean().default(false),
-  isRework: z.boolean().default(false),
+  type: z.enum(["warranty", "rework", "medical_error"]).optional(),
+  isWarranty: z.boolean().optional(),
+  isRework: z.boolean().optional(),
   reason: z.string().min(5, "Motivo obrigatório (mínimo 5 caracteres)").max(500),
   copyData: z.boolean().default(true),
+}).transform((d) => {
+  const type = d.type ?? (d.isRework ? "rework" : d.isWarranty ? "warranty" : undefined);
+  return { type, reason: d.reason, copyData: d.copyData };
 }).refine(
-  (d) => d.isWarranty || d.isRework,
-  { message: "Defina se é garantia ou retrabalho" }
+  (d) => !!d.type,
+  { message: "Defina o tipo: garantia, retrabalho ou erro médico" }
 );
 
 export async function POST(
@@ -36,7 +42,7 @@ export async function POST(
       companyId,
       userId,
       branchId,
-      options
+      { type: options.type!, reason: options.reason, copyData: options.copyData }
     );
 
     return createdResponse(order);
