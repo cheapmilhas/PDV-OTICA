@@ -722,7 +722,10 @@ function OrdensServicoPage() {
                 const canDeliver = order.status === "READY";
                 const canRevert = ["DELIVERED", "READY", "IN_PROGRESS", "SENT_TO_LAB"].includes(order.status);
                 const canWarranty = ["DELIVERED", "READY"].includes(order.status);
-                const canConvert = ["READY", "DELIVERED"].includes(order.status) && !order.sale;
+                // OS derivada (garantia/retrabalho/erro médico) é correção
+                // gratuita — não gera venda.
+                const isDerived = order.isWarranty || order.isRework || order.isMedicalError;
+                const canConvert = ["READY", "DELIVERED"].includes(order.status) && !order.sale && !isDerived;
                 const hasSale = !!order.sale;
 
                 return (

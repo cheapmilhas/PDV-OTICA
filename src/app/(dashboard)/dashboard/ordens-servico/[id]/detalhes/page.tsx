@@ -239,7 +239,8 @@ function DetalhesOrdemServicoContent() {
               Editar
             </Button>
           )}
-          {["READY", "DELIVERED"].includes(order.status) && !order.sale && (
+          {["READY", "DELIVERED"].includes(order.status) && !order.sale &&
+            !order.isWarranty && !order.isRework && !order.isMedicalError && (
             <Button
               size="sm"
               onClick={handleConvertToSale}

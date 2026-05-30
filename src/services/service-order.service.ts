@@ -976,6 +976,15 @@ export class ServiceOrderService {
       );
     }
 
+    // OS de garantia/retrabalho/erro médico é correção gratuita — não gera venda.
+    if (order.isWarranty || order.isRework || order.isMedicalError) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "OS de garantia/retrabalho/erro médico é uma correção gratuita e não gera venda.",
+        400
+      );
+    }
+
     if (order.items.length === 0) {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
