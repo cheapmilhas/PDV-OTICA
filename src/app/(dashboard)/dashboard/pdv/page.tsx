@@ -550,10 +550,20 @@ function PDVPage() {
 
       if (!res.ok) {
         const error = await res.json().catch(() => ({}));
-        // Se houver detalhes de validação, mostra
-        if (error.error?.details) {
-          const details = error.error.details.map((d: any) => `${d.path.join(".")}: ${d.message}`).join(", ");
-          throw new Error(`Erro de validação: ${details}`);
+        // Se houver detalhes de validação, mostra. O backend pode mandar
+        // details como { field, message } (handleApiError) ou { path, message }
+        // (issues cru do Zod) — suportamos ambos sem quebrar.
+        if (Array.isArray(error.error?.details) && error.error.details.length > 0) {
+          const details = error.error.details
+            .map((d: any) => {
+              const campo = d.field ?? (Array.isArray(d.path) ? d.path.join(".") : "");
+              return campo ? `${campo}: ${d.message}` : d.message;
+            })
+            .filter(Boolean)
+            .join(", ");
+          if (details) {
+            throw new Error(`${error.error?.message || "Erro de validação"}: ${details}`);
+          }
         }
         throw new Error(error.error?.message || error.message || `Erro ao finalizar venda (HTTP ${res.status})`);
       }

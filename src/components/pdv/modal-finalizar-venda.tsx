@@ -52,6 +52,34 @@ const defaultPaymentMethods = ALL_PAYMENT_METHODS.filter((m) =>
   DEFAULT_PAYMENT_METHOD_IDS.includes(m.id)
 );
 
+/**
+ * Converte um valor digitado (que pode usar vírgula decimal pt-BR) em número.
+ * Aceita "2400,00", "2400.00", "2.400,00" e retorna NaN se inválido.
+ */
+function parseAmount(raw: string): number {
+  if (!raw) return NaN;
+  // Remove separador de milhar "." quando há vírgula decimal; troca vírgula por ponto.
+  const normalized = raw.includes(",")
+    ? raw.replace(/\./g, "").replace(",", ".")
+    : raw;
+  return parseFloat(normalized);
+}
+
+/**
+ * Gera um ID único de forma resiliente. `crypto.randomUUID()` só existe em
+ * contexto seguro (HTTPS/localhost) — fora dele lança. Mantemos fallback.
+ */
+function generateId(): string {
+  if (typeof crypto !== "undefined" && typeof crypto.randomUUID === "function") {
+    try {
+      return crypto.randomUUID();
+    } catch {
+      // segue para o fallback
+    }
+  }
+  return `${Date.now()}-${Math.random().toString(36).slice(2)}`;
+}
+
 export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onConfirm, loading = false }: ModalFinalizarVendaProps) {
   const [paymentMethods, setPaymentMethods] = useState<PaymentMethodConfig[]>(defaultPaymentMethods);
   const [payments, setPayments] = useState<Payment[]>([]);
@@ -93,6 +121,12 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
             const filtered = ALL_PAYMENT_METHODS.filter((m) => enabledIds.includes(m.id));
             if (filtered.length > 0) {
               setPaymentMethods(filtered);
+              // Reconcilia seleção: se a forma selecionada não existe mais na
+              // lista carregada, limpa para não ficar um estado "fantasma"
+              // (botão sem destaque + pagamento que não adiciona).
+              setSelectedMethod((current) =>
+                current && !filtered.some((m) => m.id === current) ? "" : current
+              );
             }
           }
         })
@@ -127,50 +161,64 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   }, [open, customerId]);
 
   const addPayment = () => {
-    if (!selectedMethod || !amount || parseFloat(amount) <= 0) return;
-
-    // Se for crediário, abrir modal de configuração
-    if (selectedMethod === "STORE_CREDIT") {
-      setPendingCrediarioAmount(parseFloat(amount));
-      setModalCrediarioOpen(true);
-      return; // Não adiciona ainda
-    }
-
-    // Saldo a Receber: exige cliente vinculado (sem modal de parcelas)
-    if (selectedMethod === "BALANCE_DUE") {
-      if (!customerId) {
-        toast.error("Saldo a Receber exige um cliente vinculado");
+    try {
+      if (!selectedMethod) {
+        toast.error("Selecione uma forma de pagamento");
         return;
       }
+
+      const parsedAmount = parseAmount(amount);
+      if (!Number.isFinite(parsedAmount) || parsedAmount <= 0) {
+        toast.error("Informe um valor válido (ex.: 2400,00)");
+        return;
+      }
+
+      // Se for crediário, abrir modal de configuração
+      if (selectedMethod === "STORE_CREDIT") {
+        setPendingCrediarioAmount(parsedAmount);
+        setModalCrediarioOpen(true);
+        return; // Não adiciona ainda
+      }
+
+      // Saldo a Receber: exige cliente vinculado (sem modal de parcelas)
+      if (selectedMethod === "BALANCE_DUE") {
+        if (!customerId) {
+          toast.error("Saldo a Receber exige um cliente vinculado");
+          return;
+        }
+      }
+
+      const isCard = selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD";
+      const newPayment: Payment = {
+        id: generateId(),
+        method: selectedMethod,
+        amount: parsedAmount,
+        ...(selectedMethod === "CREDIT_CARD" && { installments: parseInt(installments) }),
+        ...(isCard && cardBrand && { cardBrand }),
+        ...(isCard && cardLastDigits && { cardLastDigits }),
+        ...(isCard && nsu && { nsu }),
+        ...(isCard && authorizationCode && { authorizationCode }),
+        ...(isCard && acquirer && { acquirer }),
+      };
+
+      setPayments([...payments, newPayment]);
+      setAmount("");
+      setInstallments("1");
+      setCardBrand("");
+      setCardLastDigits("");
+      setNsu("");
+      setAuthorizationCode("");
+      setAcquirer("");
+    } catch (error) {
+      console.error("Erro ao adicionar pagamento:", error);
+      toast.error("Não foi possível adicionar o pagamento. Tente novamente.");
     }
-
-    const isCard = selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD";
-    const newPayment: Payment = {
-      id: crypto.randomUUID(),
-      method: selectedMethod,
-      amount: parseFloat(amount),
-      ...(selectedMethod === "CREDIT_CARD" && { installments: parseInt(installments) }),
-      ...(isCard && cardBrand && { cardBrand }),
-      ...(isCard && cardLastDigits && { cardLastDigits }),
-      ...(isCard && nsu && { nsu }),
-      ...(isCard && authorizationCode && { authorizationCode }),
-      ...(isCard && acquirer && { acquirer }),
-    };
-
-    setPayments([...payments, newPayment]);
-    setAmount("");
-    setInstallments("1");
-    setCardBrand("");
-    setCardLastDigits("");
-    setNsu("");
-    setAuthorizationCode("");
-    setAcquirer("");
   };
 
   // Callback para quando confirmar crediário
   const handleConfirmarCrediario = (config: InstallmentConfig) => {
     const newPayment: Payment = {
-      id: crypto.randomUUID(),
+      id: generateId(),
       method: "STORE_CREDIT",
       amount: pendingCrediarioAmount,
       installmentConfig: config,
@@ -223,7 +271,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   };
 
   const quickFill = () => {
-    setAmount(remaining.toFixed(2));
+    // Preenche no padrão pt-BR (vírgula decimal); parseAmount normaliza na hora de adicionar.
+    setAmount(remaining.toFixed(2).replace(".", ","));
   };
 
   return (
@@ -344,11 +393,17 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                   <div className="flex gap-1">
                     <Input
                       id="amount"
-                      type="number"
-                      step="0.01"
+                      type="text"
+                      inputMode="decimal"
                       placeholder="0,00"
                       value={amount}
-                      onChange={(e) => setAmount(e.target.value)}
+                      onChange={(e) => setAmount(e.target.value.replace(/[^\d.,]/g, ""))}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") {
+                          e.preventDefault();
+                          addPayment();
+                        }
+                      }}
                       disabled={!selectedMethod}
                       className="h-7 text-xs"
                     />
@@ -421,7 +476,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                 </div>
               )}
 
-              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-7 text-xs">
+              <Button type="button" onClick={addPayment} disabled={!selectedMethod} className="w-full h-7 text-xs">
                 Adicionar Pagamento
               </Button>
             </div>
