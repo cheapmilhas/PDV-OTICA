@@ -17,6 +17,9 @@ import {
   Edit,
   Printer,
   ShoppingCart,
+  Shield,
+  RotateCcw,
+  ExternalLink,
 } from "lucide-react";
 import Link from "next/link";
 import { format, differenceInCalendarDays } from "date-fns";
@@ -51,6 +54,8 @@ interface ServiceOrderDetails {
   delayDays?: number;
   isWarranty?: boolean;
   isRework?: boolean;
+  warrantyReason?: string | null;
+  reworkReason?: string | null;
   status: string;
   customer: {
     id: string;
@@ -300,6 +305,59 @@ function DetalhesOrdemServicoContent() {
               <Edit className="h-4 w-4 mr-2" />
               Preencher receita
             </Button>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vínculo: esta OS é garantia/retrabalho de outra OS */}
+      {order.originalOrder && (order.isWarranty || order.isRework) && (
+        <Card className="border-blue-300 bg-blue-50">
+          <CardContent className="flex flex-wrap items-center justify-between gap-2 p-4">
+            <div className="flex items-center gap-2">
+              {order.isRework ? (
+                <RotateCcw className="h-5 w-5 text-blue-600 flex-shrink-0" />
+              ) : (
+                <Shield className="h-5 w-5 text-blue-600 flex-shrink-0" />
+              )}
+              <div>
+                <p className="text-sm font-medium text-blue-900">
+                  {order.isRework ? "Retrabalho" : "Garantia"} da OS #{String(order.originalOrder.number).padStart(6, "0")}
+                </p>
+                {(order.warrantyReason || order.reworkReason) && (
+                  <p className="text-xs text-blue-700">Motivo: {order.warrantyReason || order.reworkReason}</p>
+                )}
+              </div>
+            </div>
+            <Link
+              href={`/dashboard/ordens-servico/${order.originalOrder.id}/detalhes`}
+              className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline"
+            >
+              Ver OS original <ExternalLink className="h-3.5 w-3.5" />
+            </Link>
+          </CardContent>
+        </Card>
+      )}
+
+      {/* Vínculo: esta OS (original) possui garantias/retrabalhos */}
+      {order.reworkOrders && order.reworkOrders.length > 0 && (
+        <Card className="border-blue-300 bg-blue-50">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium text-blue-900 mb-2">
+              Esta OS possui {order.reworkOrders.length} garantia(s)/retrabalho(s):
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {order.reworkOrders.map((child) => (
+                <Link
+                  key={child.id}
+                  href={`/dashboard/ordens-servico/${child.id}/detalhes`}
+                  className="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
+                >
+                  {child.isRework ? <RotateCcw className="h-3 w-3" /> : <Shield className="h-3 w-3" />}
+                  OS #{String(child.number).padStart(6, "0")}
+                  <ExternalLink className="h-3 w-3" />
+                </Link>
+              ))}
+            </div>
           </CardContent>
         </Card>
       )}
