@@ -141,14 +141,23 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
     if (open && customerId) {
       setLoadingCashback(true);
       fetch(`/api/cashback/balance/${customerId}`)
-        .then((res) => res.json())
+        .then(async (res) => {
+          // 403 = plano da empresa não inclui cashback. Não é erro: apenas
+          // não exibimos a seção de cashback. Evita poluir o console.
+          if (res.status === 403) {
+            setCashbackBalance(0);
+            return null;
+          }
+          return res.json();
+        })
         .then((data) => {
-          if (data.success) {
-            setCashbackBalance(data.data.balance);
+          if (data?.success) {
+            setCashbackBalance(Number(data.data?.balance) || 0);
           }
         })
-        .catch((error) => {
-          console.error("Erro ao carregar cashback:", error);
+        .catch(() => {
+          // Cashback é opcional — falha de rede não bloqueia a venda.
+          setCashbackBalance(0);
         })
         .finally(() => {
           setLoadingCashback(false);
