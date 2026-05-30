@@ -170,9 +170,15 @@ export const createProductSchema = z.object({
 
 /**
  * Schema para atualização de produto
- * Todos os campos são opcionais
+ * Todos os campos são opcionais.
+ *
+ * stockControlled é sobrescrito para opcional SEM default: em update, omitir o
+ * campo deve manter o valor atual no banco — não re-ativar controle de estoque
+ * silenciosamente (o .default(true) herdado do create faria isso).
  */
-export const updateProductSchema = createProductSchema.partial();
+export const updateProductSchema = createProductSchema.partial().extend({
+  stockControlled: z.boolean().optional(),
+});
 
 /**
  * Schema para query params de listagem de produtos

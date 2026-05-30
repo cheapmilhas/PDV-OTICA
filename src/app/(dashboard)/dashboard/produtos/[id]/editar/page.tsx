@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
@@ -41,6 +42,7 @@ function EditarProdutoContent() {
     costPrice: "",
     marginPercent: "",
     // Estoque
+    stockControlled: true,
     stockQty: "",
     stockMin: "",
     stockMax: "",
@@ -95,6 +97,7 @@ function EditarProdutoContent() {
           salePrice: data.salePrice ? data.salePrice.toString() : "",
           costPrice: data.costPrice ? data.costPrice.toString() : "",
           marginPercent: data.marginPercent ? data.marginPercent.toString() : "",
+          stockControlled: data.stockControlled ?? true,
           stockQty: data.stockQty !== null ? data.stockQty.toString() : "",
           stockMin: data.stockMin ? data.stockMin.toString() : "",
           stockMax: data.stockMax ? data.stockMax.toString() : "",
@@ -134,6 +137,8 @@ function EditarProdutoContent() {
       if (formData.salePrice) sanitizedData.salePrice = parseFloat(formData.salePrice);
       if (formData.costPrice) sanitizedData.costPrice = parseFloat(formData.costPrice);
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
+      // stockControlled e boolean — sempre enviar (if (formData.x) descarta false).
+      sanitizedData.stockControlled = formData.stockControlled;
       if (formData.stockQty !== "") sanitizedData.stockQty = parseInt(formData.stockQty);
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
@@ -384,6 +389,23 @@ function EditarProdutoContent() {
             {/* Estoque */}
             <div>
               <h3 className="font-semibold mb-4">Estoque</h3>
+
+              <div className="flex items-center space-x-2 mb-4">
+                <Switch
+                  id="stockControlled"
+                  checked={formData.stockControlled}
+                  onCheckedChange={(checked) => setFormData({ ...formData, stockControlled: checked })}
+                />
+                <Label htmlFor="stockControlled" className="cursor-pointer">
+                  Controlar Estoque
+                </Label>
+                <span className="text-sm text-muted-foreground">
+                  {formData.stockControlled
+                    ? "(Não permitir vendas com estoque zero)"
+                    : "(Permite vendas independente do estoque)"}
+                </span>
+              </div>
+
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
                   <Label htmlFor="stockQty">Quantidade em Estoque</Label>
@@ -393,6 +415,7 @@ function EditarProdutoContent() {
                     min="0"
                     value={formData.stockQty}
                     onChange={(e) => setFormData({ ...formData, stockQty: e.target.value })}
+                    disabled={!formData.stockControlled}
                   />
                 </div>
 
@@ -404,6 +427,7 @@ function EditarProdutoContent() {
                     min="0"
                     value={formData.stockMin}
                     onChange={(e) => setFormData({ ...formData, stockMin: e.target.value })}
+                    disabled={!formData.stockControlled}
                   />
                 </div>
 
@@ -415,6 +439,7 @@ function EditarProdutoContent() {
                     min="0"
                     value={formData.stockMax}
                     onChange={(e) => setFormData({ ...formData, stockMax: e.target.value })}
+                    disabled={!formData.stockControlled}
                   />
                 </div>
               </div>

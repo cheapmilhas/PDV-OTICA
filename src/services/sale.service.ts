@@ -830,19 +830,28 @@ export class SaleService {
     }
 
     // 9. Cancelar lembrete pós-venda (se existir)
+    //
+    // BUG (caso Andrea, 2026-05-30): o lembrete ficava na tela após cancelar a
+    // venda. Causa: o cleanup só cancelava PENDING/SCHEDULED, mas a CRIAÇÃO
+    // considera "ativo" também IN_PROGRESS (sale-side-effects:649). Se um
+    // atendente já tinha "pego" o lembrete (→ IN_PROGRESS), ele ficava órfão.
+    // Agora cobrimos os 3 status e logamos falhas em vez de engolir.
     if (sale.customerId) {
       try {
-        await prisma.customerReminder.updateMany({
+        const result = await prisma.customerReminder.updateMany({
           where: {
             companyId,
             customerId: sale.customerId,
             segment: "POST_SALE_30_DAYS",
-            status: { in: ["PENDING", "SCHEDULED"] },
+            status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
           },
           data: { status: "CANCELLED" },
         });
-      } catch {
-        // Sem lembrete — ignora
+        if (result.count > 0) {
+          log.info("Lembrete pós-venda cancelado", { saleId: id, customerId: sale.customerId, count: result.count });
+        }
+      } catch (reminderError) {
+        log.error("Erro ao cancelar lembrete pós-venda", { saleId: id, err: String(reminderError) });
       }
     }
 

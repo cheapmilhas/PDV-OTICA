@@ -101,6 +101,10 @@ function PDVPage() {
   const [editModalValue, setEditModalValue] = useState("");
   const [editModalDiscountType, setEditModalDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
 
+  // Desconto no TOTAL da venda (separado dos descontos por item)
+  const [descontoVendaValor, setDescontoVendaValor] = useState("");
+  const [descontoVendaTipo, setDescontoVendaTipo] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+
   // Carregar vendedores (filtrados pela branch ativa)
   useEffect(() => {
     const branchParam = activeBranchId !== "ALL" ? `?branchId=${activeBranchId}` : "";
@@ -149,6 +153,8 @@ function PDVPage() {
           setClienteSelecionado(null);
           setBuscaCliente("");
           setSelectedSellerId("");
+          setDescontoVendaValor("");
+          setDescontoVendaTipo("FIXED");
           localStorage.removeItem("pdv-selected-seller");
           toast.success("Venda limpa");
         }
@@ -505,8 +511,24 @@ function PDVPage() {
   };
 
   const subtotal = calcularSubtotal();
-  const desconto = 0;
-  const total = subtotal - desconto;
+
+  // Desconto no total da venda: aceita R$ ou %. Normaliza vírgula decimal e
+  // limita ao intervalo [0, subtotal] para nunca gerar total negativo.
+  const calcularDescontoVenda = (): number => {
+    // Normaliza pt-BR: remove separador de milhar "." e troca vírgula decimal
+    // por ponto. "1.234,50" -> "1234.50". Se houver só vírgula, "50,00" -> "50.00".
+    const raw = descontoVendaValor.includes(",")
+      ? descontoVendaValor.replace(/\./g, "").replace(",", ".")
+      : descontoVendaValor;
+    const valor = parseFloat(raw);
+    if (!Number.isFinite(valor) || valor <= 0) return 0;
+    const bruto = descontoVendaTipo === "PERCENTAGE" ? (subtotal * valor) / 100 : valor;
+    const limitado = Math.min(Math.max(bruto, 0), subtotal);
+    return Math.round(limitado * 100) / 100;
+  };
+
+  const desconto = calcularDescontoVenda();
+  const total = Math.round((subtotal - desconto) * 100) / 100;
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
   const handleConfirmarVenda = async (
@@ -620,6 +642,10 @@ function PDVPage() {
       // Verificar se tem crediário e mostrar dialog para imprimir carnê
       const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
       if (hasCrediario) {
+        // Limpa o desconto da venda — senão fica pré-preenchido na próxima venda
+        // se o usuário não navegar para fora após o dialog do carnê.
+        setDescontoVendaValor("");
+        setDescontoVendaTipo("FIXED");
         setShowCarneDialog(true);
         setLastSaleId(vendaId);
         // Não redireciona ainda, espera o usuário decidir sobre o carnê
@@ -1137,6 +1163,44 @@ function PDVPage() {
               <span className="text-muted-foreground">Subtotal ({totalItens} itens)</span>
               <span>{formatCurrency(subtotal)}</span>
             </div>
+
+            {/* Desconto no total da venda */}
+            <div className="flex items-center gap-2">
+              <span className="text-sm text-muted-foreground flex-1">Desconto na venda</span>
+              <Input
+                type="text"
+                inputMode="decimal"
+                placeholder="0"
+                aria-label="Desconto na venda"
+                value={descontoVendaValor}
+                onChange={(e) => setDescontoVendaValor(e.target.value.replace(/[^\d.,]/g, ""))}
+                disabled={carrinho.length === 0}
+                className="h-8 w-24 text-sm text-right"
+              />
+              <div className="flex rounded-md border overflow-hidden">
+                <button
+                  type="button"
+                  onClick={() => setDescontoVendaTipo("FIXED")}
+                  className={`px-2 h-8 text-xs ${descontoVendaTipo === "FIXED" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                >
+                  R$
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setDescontoVendaTipo("PERCENTAGE")}
+                  className={`px-2 h-8 text-xs ${descontoVendaTipo === "PERCENTAGE" ? "bg-primary text-primary-foreground" : "bg-background"}`}
+                >
+                  %
+                </button>
+              </div>
+            </div>
+            {desconto > 0 && (
+              <div className="flex justify-between text-sm text-orange-600">
+                <span>Desconto aplicado</span>
+                <span>-{formatCurrency(desconto)}</span>
+              </div>
+            )}
+
             <Separator />
             <div className="flex justify-between text-lg font-bold">
               <span>Total</span>
