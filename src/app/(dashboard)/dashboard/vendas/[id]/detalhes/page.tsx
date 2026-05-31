@@ -216,7 +216,7 @@ export default function DetalhesVendaPage() {
   };
 
   const handleReactivate = async () => {
-    if (!confirm("Tem certeza que deseja reativar esta venda? O estoque será decrementado e os pagamentos serão registrados no caixa atual.")) {
+    if (!confirm("Tem certeza que deseja reativar esta venda? O estoque será decrementado e os pagamentos serão registrados no caixa atual. Atenção: o cashback que o cliente ganhou nesta venda NÃO é recreditado automaticamente, e só vendas à vista podem ser reativadas (vendas a prazo/cartão devem ser refeitas).")) {
       return;
     }
 

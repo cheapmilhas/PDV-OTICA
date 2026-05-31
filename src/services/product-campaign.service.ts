@@ -914,6 +914,46 @@ export async function reverseBonusForSale(saleId: string, companyId: string) {
   return { reversed: entries.length };
 }
 
+/**
+ * B4 (Grupo B): reativa os bônus de campanha de uma venda que foi cancelada.
+ *
+ * Espelho exato de reverseBonusForSale: pega os entries REVERSED desta venda,
+ * volta a PENDING e RE-incrementa o progresso do vendedor. Idempotente — só
+ * mexe nos que estão REVERSED.
+ *
+ * Antes, a reativação chamava processaSaleForCampaigns, cujo upsert encontrava
+ * o entry REVERSED e seguia o ramo update (no-op, não voltava o status), mas
+ * ainda incrementava o progresso → totalBonus inflado/duplicado.
+ */
+export async function reactivateBonusForSale(saleId: string, companyId: string) {
+  // Lê os entries REVERSED DENTRO da tx — evita que duas reativações
+  // concorrentes (retry/duplo-clique) leiam o mesmo conjunto e incrementem
+  // o progresso 2x. A 2ª tx relê e encontra 0 (já viraram PENDING).
+  const reactivated = await prisma.$transaction(async (tx) => {
+    const entries = await tx.campaignBonusEntry.findMany({
+      where: { saleId, companyId, status: "REVERSED" },
+    });
+    if (entries.length === 0) return 0;
+
+    await tx.campaignBonusEntry.updateMany({
+      where: { saleId, companyId, status: "REVERSED" },
+      data: { status: "PENDING", reversedAt: null },
+    });
+
+    for (const entry of entries) {
+      if (entry.sellerUserId) {
+        await tx.campaignSellerProgress.updateMany({
+          where: { campaignId: entry.campaignId, sellerUserId: entry.sellerUserId },
+          data: { totalBonus: { increment: entry.totalBonus } },
+        });
+      }
+    }
+    return entries.length;
+  }, { timeout: 30_000 });
+
+  return { reactivated };
+}
+
 // ============================================================================
 // PROGRESSO INCREMENTAL
 // ============================================================================

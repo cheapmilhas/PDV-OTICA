@@ -376,6 +376,96 @@ export async function applyCashbackUsageInTx(
   });
 }
 
+// Prefixos das descrições dos movimentos de ESTORNO (idempotência: se já
+// existe um movimento com este prefixo para a venda, não estorna de novo).
+const CASHBACK_REVERSAL_EARNED_PREFIX = "Estorno cashback ganho";
+const CASHBACK_REVERSAL_USED_PREFIX = "Devolução cashback usado";
+
+/**
+ * Estorna, de forma IDEMPOTENTE e DENTRO da transação, TODO o cashback de uma
+ * venda cancelada/devolvida:
+ *  - GANHO: reverte o CREDIT original (balance − , totalEarned −) + DEBIT de estorno.
+ *  - USADO: devolve ao cliente (balance + , totalUsed −) + CREDIT de devolução.
+ *
+ * B2/B3 (Grupo B): antes o cancel só estornava o ganho, fora de transação e
+ * sem idempotência — cancel→reativar→cancel duplicava o estorno (saldo
+ * negativo) e o cashback USADO nunca voltava pro cliente. Agora é tx + guard.
+ *
+ * A idempotência usa a existência de um cashbackMovement de estorno (por
+ * saleId + prefixo da descrição) como marca de "já estornado".
+ */
+export async function reverseCashbackForSaleInTx(
+  tx: Tx,
+  params: { saleId: string; cashbackUsed: number },
+): Promise<void> {
+  const { saleId, cashbackUsed } = params;
+
+  // 1. Estornar o cashback GANHO (CREDIT original da venda).
+  const earned = await tx.cashbackMovement.findFirst({
+    where: { saleId, type: "CREDIT", description: { not: { startsWith: CASHBACK_REVERSAL_USED_PREFIX } } },
+    orderBy: { createdAt: "asc" },
+  });
+  if (earned) {
+    const alreadyReversedEarned = await tx.cashbackMovement.findFirst({
+      where: { saleId, type: "DEBIT", description: { startsWith: CASHBACK_REVERSAL_EARNED_PREFIX } },
+    });
+    if (!alreadyReversedEarned) {
+      const amount = Number(earned.amount);
+      await tx.customerCashback.update({
+        where: { id: earned.customerCashbackId },
+        data: {
+          balance: { decrement: amount },
+          totalEarned: { decrement: amount },
+        },
+      });
+      await tx.cashbackMovement.create({
+        data: {
+          customerCashbackId: earned.customerCashbackId,
+          type: "DEBIT",
+          amount,
+          saleId,
+          description: `${CASHBACK_REVERSAL_EARNED_PREFIX} - venda #${saleId.slice(-8)}`,
+        },
+      });
+    }
+  }
+
+  // 2. Devolver o cashback USADO ao cliente (reverte o DEBIT de uso da venda).
+  if (cashbackUsed > 0) {
+    const used = await tx.cashbackMovement.findFirst({
+      where: { saleId, type: "DEBIT", description: { startsWith: "Cashback usado" } },
+      orderBy: { createdAt: "asc" },
+    });
+    if (used) {
+      const alreadyReturnedUsed = await tx.cashbackMovement.findFirst({
+        where: { saleId, type: "CREDIT", description: { startsWith: CASHBACK_REVERSAL_USED_PREFIX } },
+      });
+      if (!alreadyReturnedUsed) {
+        // Usa o valor REAL do movimento de uso (não o param cashbackUsed) —
+        // se sale.cashbackUsed divergir do que foi efetivamente debitado,
+        // reverter pelo param deixaria balance/totalUsed inconsistentes.
+        const usedAmount = Number(used.amount);
+        await tx.customerCashback.update({
+          where: { id: used.customerCashbackId },
+          data: {
+            balance: { increment: usedAmount },
+            totalUsed: { decrement: usedAmount },
+          },
+        });
+        await tx.cashbackMovement.create({
+          data: {
+            customerCashbackId: used.customerCashbackId,
+            type: "CREDIT",
+            amount: usedAmount,
+            saleId,
+            description: `${CASHBACK_REVERSAL_USED_PREFIX} - venda #${saleId.slice(-8)}`,
+          },
+        });
+      }
+    }
+  }
+}
+
 // ============================================================================
 // Commission
 // ============================================================================

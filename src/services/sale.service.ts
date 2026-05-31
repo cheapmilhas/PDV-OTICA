@@ -11,7 +11,7 @@ import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
-import { processaSaleForCampaigns, reverseBonusForSale } from "@/services/product-campaign.service";
+import { reverseBonusForSale, reactivateBonusForSale } from "@/services/product-campaign.service";
 import {
   applyStockDebitInTx,
   applyPaymentsInTx,
@@ -20,6 +20,7 @@ import {
   applyFinanceEntriesInTx,
   applyPostCommitSideEffects,
   reverseCommissionForSaleInTx,
+  reverseCashbackForSaleInTx,
 } from "@/services/sale-side-effects.service";
 import { getProductPrice } from "@/lib/product-price";
 import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
@@ -887,39 +888,26 @@ export class SaleService {
           }
         }
       }
-    }, { timeout: 30_000 });
 
-    // 8. Reverter cashback (se cliente ganhou)
-    if (sale.customerId) {
-      try {
-        const cashbackMovement = await prisma.cashbackMovement.findFirst({
-          where: { saleId: id, type: "CREDIT" },
-          include: { customerCashback: true },
+      // 8. B2/B3: Reverter TODO o cashback (ganho + usado) DENTRO da transação,
+      // de forma idempotente. Antes só o ganho era estornado, fora da tx e sem
+      // guard (cancel→reativar→cancel duplicava; o usado nunca voltava).
+      if (sale.customerId) {
+        await reverseCashbackForSaleInTx(tx, {
+          saleId: id,
+          cashbackUsed: Number(sale.cashbackUsed ?? 0),
         });
-        if (cashbackMovement) {
-          // Estornar o cashback ganho
-          await prisma.customerCashback.update({
-            where: { id: cashbackMovement.customerCashbackId },
-            data: {
-              balance: { decrement: Number(cashbackMovement.amount) },
-              totalEarned: { decrement: Number(cashbackMovement.amount) },
-            },
-          });
-          // Criar movimento de estorno
-          await prisma.cashbackMovement.create({
-            data: {
-              customerCashbackId: cashbackMovement.customerCashbackId,
-              type: "DEBIT",
-              amount: Number(cashbackMovement.amount),
-              saleId: id,
-              description: `Estorno cashback - Cancelamento venda #${id.substring(0, 8)}`,
-            },
-          });
-        }
-      } catch (cashbackError) {
-        log.error("Erro ao estornar cashback", { saleId: id, err: String(cashbackError) });
       }
-    }
+
+      // 8b. B5: Cancelar a OS auto-criada vinculada — não deve seguir no
+      // laboratório (produziria óculos de venda cancelada).
+      if (sale.serviceOrderId) {
+        await tx.serviceOrder.updateMany({
+          where: { id: sale.serviceOrderId, companyId, status: { notIn: ["DELIVERED", "CANCELED"] } },
+          data: { status: "CANCELED", canceledAt: new Date() },
+        });
+      }
+    }, { timeout: 30_000 });
 
     // 9. Cancelar lembrete pós-venda (se existir)
     //
@@ -986,8 +974,6 @@ export class SaleService {
       );
     }
 
-    const cashbackUsed = Number(sale.cashbackUsed ?? 0);
-
     // Custo via FIFO (lotConsumptions) com fallback p/ costPrice. getById não
     // traz lotConsumptions, então buscamos aqui.
     const lots = await prisma.saleItemLot.findMany({
@@ -1030,6 +1016,8 @@ export class SaleService {
     await this.cancel(id, companyId, opts.reason || "Devolução");
 
     // 3. Marca venda REFUNDED + Refund COMPLETED atomicamente.
+    // Obs: a devolução do cashback USADO e o cancelamento da OS vinculada
+    // já são feitos DENTRO do cancel() (B2/B5, idempotentes) — não repetir aqui.
     await prisma.$transaction(async (tx) => {
       await tx.sale.update({ where: { id }, data: { status: "REFUNDED" } });
       await tx.refund.update({
@@ -1037,47 +1025,6 @@ export class SaleService {
         data: { status: "COMPLETED", completedAt: new Date() },
       });
     }, { timeout: 30_000 });
-
-    // 4. Devolver o cashback USADO pelo cliente (cancel só estorna o ganho).
-    // saldo + movimento numa transação para não deixar increment sem rastro.
-    if (sale.customerId && cashbackUsed > 0) {
-      try {
-        const cb = await prisma.customerCashback.findUnique({
-          where: { customerId_branchId: { customerId: sale.customerId, branchId: sale.branchId } },
-        });
-        if (cb) {
-          await prisma.$transaction(async (tx) => {
-            await tx.customerCashback.update({
-              where: { id: cb.id },
-              data: { balance: { increment: cashbackUsed } },
-            });
-            await tx.cashbackMovement.create({
-              data: {
-                customerCashbackId: cb.id,
-                type: "CREDIT",
-                amount: cashbackUsed,
-                saleId: id,
-                description: `Devolução cashback usado - venda #${id.substring(0, 8)}`,
-              },
-            });
-          });
-        }
-      } catch (e) {
-        log.error("Erro ao devolver cashback usado no refund", { saleId: id, err: String(e) });
-      }
-    }
-
-    // 5. Cancelar a OS vinculada (não deve seguir no laboratório).
-    if (sale.serviceOrderId) {
-      try {
-        await prisma.serviceOrder.updateMany({
-          where: { id: sale.serviceOrderId, companyId, status: { notIn: ["DELIVERED", "CANCELED"] } },
-          data: { status: "CANCELED", canceledAt: new Date() },
-        });
-      } catch (e) {
-        log.error("Erro ao cancelar OS vinculada no refund", { saleId: id, err: String(e) });
-      }
-    }
 
     return this.getById(id, companyId, true);
   }
@@ -1099,6 +1046,31 @@ export class SaleService {
       throw new AppError(
         ERROR_CODES.VALIDATION_ERROR,
         "Apenas vendas canceladas podem ser reativadas",
+        400
+      );
+    }
+
+    // B1 (Grupo B): só reativa venda 100% à vista. O cancel() DELETA
+    // fisicamente CardReceivable e FinanceEntry e zera o AccountReceivable —
+    // a reativação não reconstrói esse estado, então uma venda a prazo
+    // (crediário, saldo a receber, cartão, boleto, cheque, convênio) reativada
+    // perderia as cobranças. Nesses casos, orienta-se refazer a venda.
+    //
+    // Allowlist (não blocklist): só CASH/PIX/DEBIT_CARD passam. Qualquer outro
+    // método (CREDIT_CARD, BOLETO, STORE_CREDIT, BALANCE_DUE, CHEQUE,
+    // AGREEMENT, OTHER) bloqueia — mais seguro contra métodos novos.
+    const methodsInCash: readonly string[] = METHODS_IN_CASH;
+    const hasReceivable = await prisma.accountReceivable.findFirst({
+      where: { saleId: id },
+      select: { id: true },
+    });
+    const hasNonCashMethod = sale.payments.some(
+      (p: any) => !methodsInCash.includes(p.method)
+    );
+    if (hasReceivable || hasNonCashMethod) {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Não é possível reativar uma venda a prazo (crediário, cartão, boleto, etc.), pois as parcelas e cobranças não são reconstruídas. Refaça a venda.",
         400
       );
     }
@@ -1212,12 +1184,15 @@ export class SaleService {
       });
     }, { timeout: 30_000 });
 
-    // 5. Reprocessar campanhas de bonificação (se aplicável - fora da transação principal)
+    // 5. B4: Reativar bônus de campanha — reverte o REVERSED→PENDING e
+    // re-incrementa o progresso UMA vez. Antes chamava processaSaleForCampaigns,
+    // que inflava o totalBonus do vendedor (entry REVERSED + progresso somado
+    // de novo → bônus duplicado).
     try {
-      await processaSaleForCampaigns(id, companyId);
+      await reactivateBonusForSale(id, companyId);
     } catch (campaignError) {
       // Falha em campanhas não deve impedir a reativação da venda
-      log.error("Erro ao reprocessar campanhas", { saleId: id, err: String(campaignError) });
+      log.error("Erro ao reativar bônus de campanhas", { saleId: id, err: String(campaignError) });
     }
 
     return this.getById(id, companyId, true);
