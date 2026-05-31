@@ -717,7 +717,13 @@ function PDVPage() {
       const code: string | undefined = error.code;
       const mensagem = error.message || "Erro ao finalizar venda. Tente novamente.";
 
-      const OVERRIDABLE = ["CREDIT_LIMIT_EXCEEDED", "CUSTOMER_OVERDUE", "INSUFFICIENT_STOCK"];
+      const OVERRIDABLE = [
+        "CREDIT_LIMIT_EXCEEDED",
+        "CUSTOMER_OVERDUE",
+        "INSUFFICIENT_STOCK",
+        "DISCOUNT_EXCEEDS_LIMIT",
+        "PRICE_BELOW_COST",
+      ];
 
       // Negativa autorizável + a venda ainda NÃO tinha override → abrir modal
       // de autorização do gerente em vez de só bloquear.
@@ -734,6 +740,8 @@ function PDVPage() {
         CREDIT_LIMIT_EXCEEDED: "🚫 Limite de crédito excedido",
         CUSTOMER_OVERDUE: "🚫 Cliente inadimplente",
         INSUFFICIENT_STOCK: "📦 Estoque insuficiente",
+        DISCOUNT_EXCEEDS_LIMIT: "🏷️ Desconto acima do limite",
+        PRICE_BELOW_COST: "💸 Preço abaixo do custo",
       };
 
       if (code && titulos[code]) {

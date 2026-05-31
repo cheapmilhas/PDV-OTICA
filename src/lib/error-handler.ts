@@ -24,6 +24,10 @@ export const ERROR_CODES = {
   CREDIT_LIMIT_EXCEEDED: "CREDIT_LIMIT_EXCEEDED",
   CUSTOMER_OVERDUE: "CUSTOMER_OVERDUE",
   INSUFFICIENT_STOCK: "INSUFFICIENT_STOCK",
+  // Grupo D: fraude de preço. Desconto acima do teto do papel do vendedor, ou
+  // venda abaixo do custo — ambos exigem override de gerente.
+  DISCOUNT_EXCEEDS_LIMIT: "DISCOUNT_EXCEEDS_LIMIT",
+  PRICE_BELOW_COST: "PRICE_BELOW_COST",
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

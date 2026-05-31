@@ -37,7 +37,12 @@ export async function assertValidManagerOverride(
 /** Conjunto de motivos autorizados, para checagem rápida no service. */
 export function overrideAllows(
   override: ManagerOverrideDTO | undefined,
-  reason: "CREDIT_LIMIT_EXCEEDED" | "CUSTOMER_OVERDUE" | "INSUFFICIENT_STOCK"
+  reason:
+    | "CREDIT_LIMIT_EXCEEDED"
+    | "CUSTOMER_OVERDUE"
+    | "INSUFFICIENT_STOCK"
+    | "DISCOUNT_EXCEEDS_LIMIT"
+    | "PRICE_BELOW_COST"
 ): boolean {
   return !!override?.reasons?.includes(reason);
 }

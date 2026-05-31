@@ -96,6 +96,8 @@ export const OVERRIDABLE_CODES = [
   "CREDIT_LIMIT_EXCEEDED",
   "CUSTOMER_OVERDUE",
   "INSUFFICIENT_STOCK",
+  "DISCOUNT_EXCEEDS_LIMIT",
+  "PRICE_BELOW_COST",
 ] as const;
 
 export const managerOverrideSchema = z.object({

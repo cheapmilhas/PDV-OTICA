@@ -6,17 +6,24 @@
  * Se null, usa o valor global do Product como fallback.
  */
 
+/**
+ * Aceita number, string, null/undefined ou Prisma.Decimal (que tem .toString()
+ * e é convertível via Number()). Tipar como Decimal-estrutural evita acoplar
+ * este helper ao @prisma/client.
+ */
+type PriceValue = number | string | { toString(): string } | null | undefined;
+
 interface ProductWithPrices {
-  costPrice?: number | string | null;
-  salePrice?: number | string | null;
-  promoPrice?: number | string | null;
+  costPrice?: PriceValue;
+  salePrice?: PriceValue;
+  promoPrice?: PriceValue;
 }
 
 interface BranchStockWithPrices {
-  costPrice?: number | string | null;
-  salePrice?: number | string | null;
-  promoPrice?: number | string | null;
-  marginPercent?: number | string | null;
+  costPrice?: PriceValue;
+  salePrice?: PriceValue;
+  promoPrice?: PriceValue;
+  marginPercent?: PriceValue;
 }
 
 export interface ResolvedPrice {

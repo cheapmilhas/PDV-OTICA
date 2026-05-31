@@ -18,6 +18,9 @@ import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import type { ManagerOverrideDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit } from "@/lib/installment-utils";
+import { getProductPrice } from "@/lib/product-price";
+import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
+import { SystemRuleService } from "@/services/system-rule.service";
 import {
   applyStockDebitInTx,
   applyPaymentsInTx,
@@ -25,6 +28,8 @@ import {
   applyFinanceEntriesInTx,
   applyPostCommitSideEffects,
 } from "@/services/sale-side-effects.service";
+
+const systemRuleService = new SystemRuleService();
 
 /**
  * Service para operações de Orçamentos
@@ -711,6 +716,38 @@ export class QuoteService {
         );
       }
     }
+
+    // 3.5. Grupo D: anti-fraude de preço também na conversão de orçamento.
+    // convertToSale cria a venda direto (não passa por sale.service.create),
+    // então sem isto seria um bypass das validações D1/D2 via orçamento.
+    const operator = await prisma.user.findFirst({
+      where: { id: userId, companyId },
+      select: { role: true },
+    });
+    const FALLBACK_MAX_DISCOUNT_PERCENT = 10; // teto conservador se regra ausente
+    const maxDiscountPercent = Number(
+      (await systemRuleService.get(
+        discountRuleKeyForRole(operator?.role),
+        companyId
+      )) ?? FALLBACK_MAX_DISCOUNT_PERCENT
+    );
+    assertSalePricing({
+      items: quote.items.map((qi) => {
+        const resolved = getProductPrice(qi.product ?? {});
+        return {
+          productId: qi.productId ?? "",
+          productName: qi.product?.name ?? "Produto",
+          qty: qi.qty,
+          unitPrice: Number(qi.unitPrice),
+          itemDiscount: Number(qi.discount),
+          referencePrice: resolved.promoPrice ?? resolved.salePrice,
+          costPrice: resolved.costPrice,
+        };
+      }),
+      saleDiscount: Number(quote.discountTotal ?? 0),
+      maxDiscountPercent,
+      override,
+    });
 
     // 4. Garantir caixa aberto — auto-abre se necessário (paridade com o PDV /
     // sale.service.create, que também auto-abre). Antes lançava 400 e travava a

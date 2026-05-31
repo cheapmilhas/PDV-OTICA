@@ -21,8 +21,13 @@ import {
   applyPostCommitSideEffects,
   reverseCommissionForSaleInTx,
 } from "@/services/sale-side-effects.service";
+import { getProductPrice } from "@/lib/product-price";
+import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
+import { SystemRuleService } from "@/services/system-rule.service";
 
 const log = logger.child({ service: "sale" });
+
+const systemRuleService = new SystemRuleService();
 
 /**
  * Service para operações de Vendas (PDV)
@@ -298,9 +303,28 @@ export class SaleService {
     const productIds = items.map((i) => i.productId);
     const products = await prisma.product.findMany({
       where: { id: { in: productIds } },
-      select: { id: true, name: true, stockQty: true, companyId: true, stockControlled: true },
+      select: {
+        id: true,
+        name: true,
+        stockQty: true,
+        companyId: true,
+        stockControlled: true,
+        // Grupo D: preços de referência para validar fraude de preço.
+        costPrice: true,
+        salePrice: true,
+        promoPrice: true,
+      },
     });
     const productById = new Map(products.map((p) => [p.id, p]));
+
+    // Override por filial (BranchStock pode ter preço próprio).
+    const branchStocks = await prisma.branchStock.findMany({
+      where: { branchId, productId: { in: productIds } },
+      select: { productId: true, costPrice: true, salePrice: true, promoPrice: true },
+    });
+    const branchStockByProduct = new Map(
+      branchStocks.map((bs) => [bs.productId, bs])
+    );
 
     for (const item of items) {
       const product = productById.get(item.productId);
@@ -331,6 +355,49 @@ export class SaleService {
         );
       }
     }
+
+    // Grupo D: anti-fraude de preço. Valida que nenhum item vende abaixo do
+    // custo nem excede o teto de desconto do papel do operador. Negativas são
+    // autorizáveis por gerente (mesmo fluxo de override).
+    const operator = await prisma.user.findFirst({
+      where: { id: userId, companyId },
+      select: { role: true },
+    });
+    const FALLBACK_MAX_DISCOUNT_PERCENT = 10; // teto conservador se regra ausente
+    const maxDiscountPercent = Number(
+      (await systemRuleService.get(
+        discountRuleKeyForRole(operator?.role),
+        companyId
+      )) ?? FALLBACK_MAX_DISCOUNT_PERCENT
+    );
+    assertSalePricing({
+      items: items.map((item) => {
+        const product = productById.get(item.productId)!;
+        const branchStock = branchStockByProduct.get(item.productId);
+        const resolved = getProductPrice(product, branchStock);
+        const referencePrice = resolved.promoPrice ?? resolved.salePrice;
+        if (referencePrice <= 0 && resolved.costPrice <= 0) {
+          log.warn("Produto sem preço/custo cadastrado — venda sem guarda de preço", {
+            productId: item.productId,
+            productName: product.name,
+            companyId,
+          });
+        }
+        return {
+          productId: item.productId,
+          productName: product.name,
+          qty: item.qty,
+          unitPrice: item.unitPrice,
+          itemDiscount: item.discount || 0,
+          // Referência = promo se houver, senão preço de venda.
+          referencePrice,
+          costPrice: resolved.costPrice,
+        };
+      }),
+      saleDiscount: discount,
+      maxDiscountPercent,
+      override,
+    });
 
     // Validar crediário e saldo a receber (cliente obrigatório + limite de crédito)
     //
