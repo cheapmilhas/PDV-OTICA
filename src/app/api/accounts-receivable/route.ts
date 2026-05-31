@@ -9,6 +9,7 @@ import { AccountReceivableStatus } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { calculatePenalties } from "@/lib/penalty-utils";
 import { reverseAccountReceivableCash } from "@/services/cash.service";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * Schema de validação para query params (GET)
@@ -465,6 +466,11 @@ export async function PATCH(request: Request) {
     }
 
     const data = updateAccountReceivableSchema.parse(body);
+
+    // F1/F2: receber/baixar AR é escrita financeira — bloqueia inadimplente.
+    // (O ramo de estorno acima NÃO passa por aqui, então estornos seguem
+    // permitidos mesmo com assinatura em atraso, para corrigir lançamentos.)
+    await requireWriteAccess(companyId);
 
     // Verificar se a conta existe e pertence à empresa
     const existing = await prisma.accountReceivable.findFirst({

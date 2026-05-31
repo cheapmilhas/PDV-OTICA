@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { requireWriteAccess } from "@/lib/subscription";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
 import { calculatePenalties } from "@/lib/penalty-utils";
@@ -43,6 +44,8 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    // F1/F2: receber AR é operação de escrita financeira — bloqueia inadimplente.
+    await requireWriteAccess(companyId);
     await requirePermission("accounts_receivable.manage");
     const userId = session.user.id;
 

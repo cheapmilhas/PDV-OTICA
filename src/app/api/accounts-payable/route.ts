@@ -7,6 +7,7 @@ import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountPayableStatus, AccountCategory } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { requireWriteAccess } from "@/lib/subscription";
 import {
   generateAccountPayableExpenseEntry,
   deleteAccountPayableExpenseEntry,
@@ -214,6 +215,8 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    // F1/F2: lançar despesa é escrita no ledger — bloqueia inadimplente.
+    await requireWriteAccess(companyId);
     await requirePermission("accounts_payable.manage");
     const userId = session.user.id;
 

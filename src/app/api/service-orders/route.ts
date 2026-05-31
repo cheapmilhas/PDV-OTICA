@@ -11,6 +11,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { requireWriteAccess } from "@/lib/subscription";
 
 export async function GET(request: Request) {
   try {
@@ -40,6 +41,8 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    // F1/F2: OS é dado operacional — bloqueia assinatura inadimplente.
+    await requireWriteAccess(companyId);
     await requirePermission("service_orders.create");
     const userId = session.user.id;
 

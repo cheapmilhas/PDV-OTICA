@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { SubscriptionStatus } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { AppError, ERROR_CODES } from "@/lib/error-handler";
 
 const log = logger.child({ module: "subscription" });
 
@@ -108,8 +109,10 @@ export async function checkSubscription(companyId: string): Promise<Subscription
     );
 
     if (daysLeft <= 0) {
-      await prisma.subscription.update({
-        where: { id: subscription.id },
+      // updateMany c/ status no where: idempotente sob concorrência (2 requests
+      // no mesmo instante não dão P2025; o 2º atualiza 0 linhas).
+      await prisma.subscription.updateMany({
+        where: { id: subscription.id, status: "TRIAL" },
         data: { status: "TRIAL_EXPIRED" },
       });
       return {
@@ -165,9 +168,9 @@ export async function checkSubscription(companyId: string): Promise<Subscription
       };
     }
 
-    // Grace period expirado → suspender
-    await prisma.subscription.update({
-      where: { id: subscription.id },
+    // Grace period expirado → suspender (updateMany idempotente sob concorrência)
+    await prisma.subscription.updateMany({
+      where: { id: subscription.id, status: "PAST_DUE" },
       data: { status: "SUSPENDED" },
     });
     return {
@@ -222,6 +225,33 @@ export async function checkSubscription(companyId: string): Promise<Subscription
 }
 
 /**
+ * F1/F2 (Grupo F): guard de ESCRITA. Bloqueia operações que criam dinheiro/dados
+ * (venda, OS, recebimento, cliente, produto) quando a assinatura não permite:
+ *  - !allowed → SUSPENDED / CANCELED / TRIAL_EXPIRED / empresa bloqueada / sem sub.
+ *  - readOnly → PAST_DUE no grace period (pode LER, não ESCREVER).
+ *
+ * Antes, o gating só existia no layout (frontend) — qualquer POST direto na API
+ * passava. Leitura (GET) NÃO usa este guard; só escrita.
+ *
+ * @throws AppError 403 SUBSCRIPTION_BLOCKED
+ */
+export async function requireWriteAccess(companyId: string): Promise<void> {
+  // Kill switch global coerente com o feature gating.
+  if (process.env.DISABLE_PLAN_FEATURE_GATING === "true") return;
+
+  const check = await checkSubscription(companyId);
+
+  if (!check.allowed || check.readOnly) {
+    throw new AppError(
+      ERROR_CODES.SUBSCRIPTION_BLOCKED,
+      check.message ||
+        "Sua assinatura não permite esta operação. Regularize o pagamento para continuar.",
+      403
+    );
+  }
+}
+
+/**
  * Retorna informações resumidas da assinatura para exibição.
  */
 export async function getSubscriptionInfo(companyId: string) {
@@ -233,6 +263,20 @@ export async function getSubscriptionInfo(companyId: string) {
 
   if (!subscription) return null;
 
+  // F3 (Grupo F): só expõe as features pagas se a assinatura está VIVA. Em
+  // CANCELED/SUSPENDED/TRIAL_EXPIRED as features somem (antes continuavam
+  // liberadas — empresa cancelada mantinha recursos do plano). Empresas em
+  // modo accessEnabled passam pelo bypass de checkSubscription/layout, não por
+  // aqui; o feature gating real é o requirePlanFeature.
+  const LIVE_STATUSES: SubscriptionStatus[] = ["TRIAL", "ACTIVE", "PAST_DUE"];
+  const isLive = LIVE_STATUSES.includes(subscription.status);
+  const features = isLive
+    ? subscription.plan.features.reduce(
+        (acc, f) => ({ ...acc, [f.key]: f.value }),
+        {} as Record<string, string>
+      )
+    : {};
+
   return {
     id: subscription.id,
     status: subscription.status,
@@ -241,10 +285,7 @@ export async function getSubscriptionInfo(companyId: string) {
     billingCycle: subscription.billingCycle,
     trialEndsAt: subscription.trialEndsAt,
     currentPeriodEnd: subscription.currentPeriodEnd,
-    features: subscription.plan.features.reduce(
-      (acc, f) => ({ ...acc, [f.key]: f.value }),
-      {} as Record<string, string>
-    ),
+    features,
     limits: {
       maxUsers: subscription.plan.maxUsers,
       maxBranches: subscription.plan.maxBranches,

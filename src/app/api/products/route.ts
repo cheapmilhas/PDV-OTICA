@@ -11,6 +11,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { checkPlanLimit } from "@/lib/plan-limits";
 import { getProductPrice } from "@/lib/product-price";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * GET /api/products
@@ -95,6 +96,8 @@ export async function POST(request: Request) {
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
+    // F1/F2: bloqueia cadastro com assinatura inadimplente/suspensa.
+    await requireWriteAccess(companyId);
     await requirePermission("products.create");
     await checkPlanLimit(companyId, "products");
 

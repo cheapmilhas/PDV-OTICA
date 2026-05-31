@@ -5,6 +5,7 @@ import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers
 import { handleApiError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * POST /api/quotes/[id]/convert
@@ -44,6 +45,8 @@ export async function POST(
 
     const { id } = await params;
     const companyId = await getCompanyId();
+    // F1/F2: conversão de orçamento gera venda — bloqueia assinatura inadimplente.
+    await requireWriteAccess(companyId);
     await requirePermission("quotes.convert");
     const userId = session.user.id;
 

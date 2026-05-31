@@ -5,6 +5,7 @@ import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * GET /api/quotes
@@ -85,6 +86,8 @@ export async function POST(request: Request) {
     }
 
     const companyId = await getCompanyId();
+    // F1/F2: criar orçamento é escrita de dado — bloqueia assinatura inadimplente.
+    await requireWriteAccess(companyId);
     await requirePermission("quotes.create");
     const userId = session.user.id;
     const branchId = await getBranchId();

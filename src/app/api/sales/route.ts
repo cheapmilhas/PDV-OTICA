@@ -12,6 +12,7 @@ import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * GET /api/sales
@@ -103,6 +104,8 @@ export async function POST(request: Request) {
     if (rlBlocked) return rlBlocked;
 
     const companyId = await getCompanyId();
+    // F1/F2: assinatura inadimplente/suspensa/expirada não cria venda.
+    await requireWriteAccess(companyId);
     await requirePermission("sales.create");
     const userId = session.user.id;
 

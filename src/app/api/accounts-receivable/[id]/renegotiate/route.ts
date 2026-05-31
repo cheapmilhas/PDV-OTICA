@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
+import { requireWriteAccess } from "@/lib/subscription";
 
 const log = logger.child({ route: "accounts-receivable/renegotiate" });
 
@@ -28,6 +29,8 @@ export async function POST(
   try {
     const session = await requireAuth();
     const companyId = await getCompanyId();
+    // F1/F2: renegociar muta o ledger de dívida — bloqueia inadimplente.
+    await requireWriteAccess(companyId);
     const { id } = await params;
     const body = await request.json();
     const input = renegotiateSchema.parse(body);

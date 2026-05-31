@@ -9,6 +9,7 @@ import {
 import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * GET /api/customers
@@ -55,6 +56,8 @@ export async function POST(request: Request) {
     // Requer autenticação
     await requireAuth();
     const companyId = await getCompanyId();
+    // F1/F2: bloqueia cadastro com assinatura inadimplente/suspensa.
+    await requireWriteAccess(companyId);
     await requirePermission("customers.create");
 
     // Parse e valida body

@@ -28,6 +28,9 @@ export const ERROR_CODES = {
   // venda abaixo do custo — ambos exigem override de gerente.
   DISCOUNT_EXCEEDS_LIMIT: "DISCOUNT_EXCEEDS_LIMIT",
   PRICE_BELOW_COST: "PRICE_BELOW_COST",
+  // Grupo F: assinatura inadimplente/suspensa/expirada bloqueia operações de
+  // escrita. O frontend usa o código para abrir o aviso de regularização.
+  SUBSCRIPTION_BLOCKED: "SUBSCRIPTION_BLOCKED",
 } as const;
 
 export type ErrorCode = (typeof ERROR_CODES)[keyof typeof ERROR_CODES];

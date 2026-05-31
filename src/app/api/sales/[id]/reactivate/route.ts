@@ -6,6 +6,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { Permission } from "@/lib/permissions";
 import { auth } from "@/auth";
+import { requireWriteAccess } from "@/lib/subscription";
 
 /**
  * POST /api/sales/[id]/reactivate
@@ -31,6 +32,8 @@ export async function POST(
     await requirePermission(Permission.SALES_CANCEL);
     const session = await auth();
     const companyId = await getCompanyId();
+    // F1/F2: reativar restaura venda + caixa + estoque — escrita; bloqueia inadimplente.
+    await requireWriteAccess(companyId);
     const userId = session?.user?.id!;
     const { id } = await params;
 
