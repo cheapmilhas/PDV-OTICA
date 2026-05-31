@@ -1,6 +1,13 @@
 import { addDays } from "date-fns";
 import { Prisma } from "@prisma/client";
 
+/**
+ * Métodos de pagamento que viram dívida do cliente (venda a prazo). Usado para
+ * validar o limite de crédito pela SOMA destes pagamentos (H2). Fonte única —
+ * ao adicionar um método a prazo novo, incluir aqui para não criar bypass.
+ */
+export const ON_CREDIT_METHODS = new Set(["STORE_CREDIT", "BALANCE_DUE"]);
+
 export interface InstallmentCalculation {
   installmentNumber: number;
   dueDate: Date;

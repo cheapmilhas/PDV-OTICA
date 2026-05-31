@@ -79,6 +79,15 @@ function PDVPage() {
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingCustomers, setLoadingCustomers] = useState(false);
   const [finalizingVenda, setFinalizingVenda] = useState(false);
+  // H11: trava SÍNCRONA contra duplo-submit. setState é assíncrono e no caminho
+  // de override o finally liberava finalizingVenda enquanto o modal de gerente
+  // abria → 2º clique criava venda duplicada. O ref impede reentrância na hora.
+  const submitLockRef = useRef(false);
+  // H11: sinaliza reenvio pós-aprovação em andamento. O ManagerApprovalModal
+  // chama onApproved() e logo onClose() em sequência — sem este flag o onClose
+  // apagaria o spinner no meio da chamada em voo. true = deixa o finally do
+  // reenvio cuidar do spinner; false (desistência) = onClose limpa tudo.
+  const resubmittingRef = useRef(false);
 
   // Vendedor
   const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
@@ -554,6 +563,10 @@ function PDVPage() {
     cashbackUsed?: number,
     override?: { approvedByUserId: string; reasons: string[] }
   ) => {
+    // H11: trava reentrante síncrona — bloqueia 2º submit imediato (duplo
+    // clique / Enter repetido) antes do React processar o setState.
+    if (submitLockRef.current) return;
+
     if (carrinho.length === 0) {
       toast.error("Carrinho vazio");
       return;
@@ -565,13 +578,17 @@ function PDVPage() {
       return;
     }
 
+    submitLockRef.current = true;
     setFinalizingVenda(true);
+
+    // H11: sinaliza que o fluxo entrou em autorização de gerente — nesse caso o
+    // finally NÃO libera a trava (o modal de override continua o controle).
+    let enteringOverride = false;
 
     try {
       // Verificar sessão
       if (!session?.user?.branchId) {
         toast.error("Sessão inválida. Faça login novamente.");
-        setFinalizingVenda(false);
         return;
       }
 
@@ -731,6 +748,10 @@ function PDVPage() {
         setPendingSale({ payments, cashbackUsed, reasons: [code] });
         setOverrideReason(mensagem);
         setOverrideModalOpen(true);
+        // H11: mantém a trava (não cai no finally que libera). O reenvio pós-
+        // autorização (handleManagerApproved) e o cancelamento do modal
+        // (onOpenChange=false) é que liberam submitLockRef.
+        enteringOverride = true;
         // Não mostra toast de erro — o modal assume.
         return;
       }
@@ -750,16 +771,29 @@ function PDVPage() {
         toast.error(mensagem, { duration: 5000 });
       }
     } finally {
-      setFinalizingVenda(false);
+      // H11: libera a trava SÓ se não entrou em fluxo de override. No override,
+      // handleManagerApproved (reenvio) ou o cancelamento do modal liberam.
+      if (!enteringOverride) {
+        submitLockRef.current = false;
+        resubmittingRef.current = false;
+        setFinalizingVenda(false);
+      }
     }
   };
 
   // Gerente autorizou — reenvia a venda pendente com o override.
+  // H11: libera a trava antes do reenvio para que handleConfirmarVenda possa
+  // readquiri-la (o guard reentrante barraria o reenvio se ainda travado).
   const handleManagerApproved = (approvedByUserId: string) => {
     if (!pendingSale) return;
     const { payments, cashbackUsed, reasons } = pendingSale;
     setPendingSale(null);
     setOverrideReason("");
+    // Marca reenvio em andamento ANTES de liberar a trava — o onClose do modal
+    // (que dispara logo após este onApproved) verá o flag e não apagará o
+    // spinner; o finally do reenvio o limpa ao terminar.
+    resubmittingRef.current = true;
+    submitLockRef.current = false;
     void handleConfirmarVenda(payments, cashbackUsed, {
       approvedByUserId,
       reasons,
@@ -779,9 +813,17 @@ function PDVPage() {
       <ManagerApprovalModal
         open={overrideModalOpen}
         onClose={() => {
+          // H11: fecha o modal. Se há reenvio pós-aprovação em andamento
+          // (resubmittingRef), NÃO mexe na trava/spinner — o finally do reenvio
+          // cuida. Caso contrário (desistência), libera tudo senão o botão
+          // Finalizar ficaria preso.
           setOverrideModalOpen(false);
-          setPendingSale(null);
           setOverrideReason("");
+          if (!resubmittingRef.current) {
+            setPendingSale(null);
+            submitLockRef.current = false;
+            setFinalizingVenda(false);
+          }
         }}
         reason={overrideReason}
         onApproved={handleManagerApproved}

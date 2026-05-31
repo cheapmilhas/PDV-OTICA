@@ -104,6 +104,27 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
   const [useCashback, setUseCashback] = useState(false);
   const [cashbackAmount, setCashbackAmount] = useState("");
 
+  // H12: reset ao FECHAR. Antes, payments só era limpo dentro de handleConfirm
+  // (venda concluída). Fechar o modal sem confirmar (ESC, clicar fora, X,
+  // cancelar override) deixava os pagamentos no estado e eles VAZAVAM para a
+  // próxima venda. Limpa tudo sempre que o modal fecha.
+  useEffect(() => {
+    if (!open) {
+      setPayments([]);
+      setAmount("");
+      setInstallments("1");
+      setSelectedMethod("");
+      setCardBrand("");
+      setCardLastDigits("");
+      setNsu("");
+      setAuthorizationCode("");
+      setAcquirer("");
+      setPendingCrediarioAmount(0);
+      setUseCashback(false);
+      setCashbackAmount("");
+    }
+  }, [open]);
+
   const cashbackUsed = useCashback ? parseFloat(cashbackAmount) || 0 : 0;
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   // Arredondar para 2 casas decimais para evitar erro de precisão de ponto flutuante

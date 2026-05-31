@@ -4,7 +4,7 @@ import { logger } from "@/lib/logger";
 import { notFoundError, AppError, ERROR_CODES, businessRuleError } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
-import { validateCreditLimit } from "@/lib/installment-utils";
+import { validateCreditLimit, ON_CREDIT_METHODS } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import { METHODS_IN_CASH } from "@/lib/payment-methods";
@@ -210,10 +210,28 @@ export class SaleService {
    */
   async create(data: CreateSaleDTO, companyId: string, userId: string) {
     const { customerId, branchId, items, payments, discount = 0, cashbackUsed = 0, notes, sellerUserId, serviceOrderId, override } = data;
-    const effectiveSellerId = sellerUserId || userId;
 
     // Validação de segurança: branchId deve pertencer à empresa do usuário
     await validateBranchOwnership(branchId, companyId);
+
+    // H10: sellerUserId vem do request. Sem validar, dá pra forjar comissão
+    // atribuindo a venda a qualquer userId (inclusive de OUTRA empresa). Só
+    // aceita se o vendedor pertence à mesma empresa; senão cai no userId logado.
+    let effectiveSellerId = userId;
+    if (sellerUserId && sellerUserId !== userId) {
+      const seller = await prisma.user.findFirst({
+        where: { id: sellerUserId, companyId },
+        select: { id: true },
+      });
+      if (!seller) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Vendedor inválido para esta empresa",
+          400,
+        );
+      }
+      effectiveSellerId = sellerUserId;
+    }
 
     // Se há override de gerente, re-validar no servidor que o autorizador é
     // ADMIN/GERENTE da empresa (nunca confiar só no que o cliente enviou).
@@ -221,6 +239,40 @@ export class SaleService {
     if (override) {
       const { approverName } = await assertValidManagerOverride(override, companyId);
       overrideApproverName = approverName;
+    }
+
+    // H5: serviceOrderId vem do request e era gravado cru. Sem validar, dá
+    // pra vincular a venda a uma OS de OUTRA empresa, já entregue/cancelada,
+    // ou de garantia (que não deve gerar cobrança). Valida empresa + status
+    // convertível antes de aceitar o vínculo.
+    if (serviceOrderId) {
+      // A FK serviceOrderId mora em Sale; em ServiceOrder a relação é o lado
+      // inverso `sale` (Sale?). Pra saber se a OS já tem venda, checa `sale`.
+      const linkedOrder = await prisma.serviceOrder.findFirst({
+        where: { id: serviceOrderId, companyId },
+        select: { id: true, status: true, sale: { select: { id: true } } },
+      });
+      if (!linkedOrder) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Ordem de serviço inválida para esta empresa",
+          400,
+        );
+      }
+      if (linkedOrder.sale) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Esta ordem de serviço já está vinculada a outra venda",
+          400,
+        );
+      }
+      if (["DELIVERED", "CANCELED"].includes(linkedOrder.status)) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Ordem de serviço entregue ou cancelada não pode gerar venda",
+          400,
+        );
+      }
     }
 
     // Validação: pelo menos 1 item
@@ -409,6 +461,7 @@ export class SaleService {
     //
     // Diferença: BALANCE_DUE é parcela única vinculada à entrega da OS, então
     // a checagem é a mesma de STORE_CREDIT (totalOpen + requested > limite).
+    // Validações por pagamento (estrutura/cliente obrigatório).
     for (const payment of payments) {
       if (payment.method === "STORE_CREDIT") {
         validateStoreCredit(payment, customerId);
@@ -422,29 +475,33 @@ export class SaleService {
           400
         );
       }
+    }
 
-      // Validar limite de crédito para vendas a prazo (STORE_CREDIT + BALANCE_DUE)
-      if (
-        (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") &&
-        customerId
-      ) {
-        const creditCheck = await validateCreditLimit(
-          customerId,
-          payment.amount,
-          companyId
-        );
-        if (!creditCheck.approved) {
-          const isOverdue = creditCheck.code === "CUSTOMER_OVERDUE";
-          const authorized = isOverdue
-            ? overrideAllows(override, "CUSTOMER_OVERDUE")
-            : overrideAllows(override, "CREDIT_LIMIT_EXCEEDED");
-          if (!authorized) {
-            throw new AppError(
-              isOverdue ? ERROR_CODES.CUSTOMER_OVERDUE : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
-              creditCheck.message || "Limite de crédito excedido",
-              400
-            );
-          }
+    // H2: limite de crédito validado pela SOMA dos pagamentos a prazo, não por
+    // pagamento isolado. Antes, 2 métodos a prazo (STORE_CREDIT + BALANCE_DUE)
+    // eram checados separadamente contra o mesmo totalOpen do banco → cada um
+    // passava abaixo do limite, mas a soma estourava. Agora agrega de uma vez.
+    const onCreditAmount = payments
+      .filter((p) => ON_CREDIT_METHODS.has(p.method))
+      .reduce((acc, p) => acc + p.amount, 0);
+
+    if (onCreditAmount > 0 && customerId) {
+      const creditCheck = await validateCreditLimit(
+        customerId,
+        onCreditAmount,
+        companyId
+      );
+      if (!creditCheck.approved) {
+        const isOverdue = creditCheck.code === "CUSTOMER_OVERDUE";
+        const authorized = isOverdue
+          ? overrideAllows(override, "CUSTOMER_OVERDUE")
+          : overrideAllows(override, "CREDIT_LIMIT_EXCEEDED");
+        if (!authorized) {
+          throw new AppError(
+            isOverdue ? ERROR_CODES.CUSTOMER_OVERDUE : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
+            creditCheck.message || "Limite de crédito excedido",
+            400
+          );
         }
       }
     }

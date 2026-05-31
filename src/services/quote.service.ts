@@ -17,7 +17,7 @@ import {
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import type { ManagerOverrideDTO } from "@/lib/validations/sale.schema";
-import { validateCreditLimit } from "@/lib/installment-utils";
+import { validateCreditLimit, ON_CREDIT_METHODS } from "@/lib/installment-utils";
 import { getProductPrice } from "@/lib/product-price";
 import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
 import { SystemRuleService } from "@/services/system-rule.service";
@@ -846,29 +846,32 @@ export class QuoteService {
           400
         );
       }
+    }
 
-      // Validar limite de crédito para vendas a prazo (STORE_CREDIT + BALANCE_DUE)
-      if (
-        (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") &&
-        quote.customerId
-      ) {
-        const creditCheck = await validateCreditLimit(
-          quote.customerId,
-          payment.amount,
-          companyId
-        );
-        if (!creditCheck.approved) {
-          const isOverdue = creditCheck.code === "CUSTOMER_OVERDUE";
-          const authorized = isOverdue
-            ? overrideAllows(override, "CUSTOMER_OVERDUE")
-            : overrideAllows(override, "CREDIT_LIMIT_EXCEEDED");
-          if (!authorized) {
-            throw new AppError(
-              isOverdue ? ERROR_CODES.CUSTOMER_OVERDUE : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
-              creditCheck.message || "Limite de crédito excedido",
-              400
-            );
-          }
+    // H2: limite de crédito pela SOMA dos pagamentos a prazo (mesma correção de
+    // sale.service.create). Por pagamento isolado, 2 métodos a prazo burlavam
+    // o limite (cada um < limite, soma > limite).
+    const onCreditAmount = payments
+      .filter((p) => ON_CREDIT_METHODS.has(p.method))
+      .reduce((acc, p) => acc + p.amount, 0);
+
+    if (onCreditAmount > 0 && quote.customerId) {
+      const creditCheck = await validateCreditLimit(
+        quote.customerId,
+        onCreditAmount,
+        companyId
+      );
+      if (!creditCheck.approved) {
+        const isOverdue = creditCheck.code === "CUSTOMER_OVERDUE";
+        const authorized = isOverdue
+          ? overrideAllows(override, "CUSTOMER_OVERDUE")
+          : overrideAllows(override, "CREDIT_LIMIT_EXCEEDED");
+        if (!authorized) {
+          throw new AppError(
+            isOverdue ? ERROR_CODES.CUSTOMER_OVERDUE : ERROR_CODES.CREDIT_LIMIT_EXCEEDED,
+            creditCheck.message || "Limite de crédito excedido",
+            400
+          );
         }
       }
     }
