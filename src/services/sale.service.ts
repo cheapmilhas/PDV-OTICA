@@ -607,10 +607,14 @@ export class SaleService {
       await tx.saleItem.createMany({ data: saleItemsData });
 
       // 4. Estoque atomic + StockMovement (helper)
+      // G1: se o gerente autorizou venda sem estoque (override INSUFFICIENT_STOCK),
+      // o débito permite estoque negativo — senão o débito atômico falharia e
+      // abortaria a venda, tornando o override inútil.
       await applyStockDebitInTx(tx, {
         sale: { id: newSale.id, branchId, companyId },
         items: items.map((i) => ({ productId: i.productId, qty: i.qty })),
         userId,
+        allowNegative: overrideAllows(override, "INSUFFICIENT_STOCK"),
       });
 
       // 5. SalePayments + auto-fee + CashMovement (filtrado) + AR + CR (helper)

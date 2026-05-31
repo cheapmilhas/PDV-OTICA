@@ -80,9 +80,11 @@ export async function applyStockDebitInTx(
     sale: Pick<Sale, "id" | "branchId" | "companyId">;
     items: Array<{ productId: string | null | undefined; qty: number }>;
     userId: string;
+    // G1: gerente autorizou venda sem estoque → permite débito negativo.
+    allowNegative?: boolean;
   }
 ): Promise<void> {
-  const { sale, items, userId } = params;
+  const { sale, items, userId, allowNegative = false } = params;
 
   for (const item of items) {
     if (!item.productId) continue;
@@ -92,7 +94,8 @@ export async function applyStockDebitInTx(
       item.qty,
       sale.companyId,
       tx,
-      sale.branchId
+      sale.branchId,
+      allowNegative
     );
 
     if (!stockResult.success) {

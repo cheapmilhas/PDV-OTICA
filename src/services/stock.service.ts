@@ -17,7 +17,12 @@ export async function atomicStockDebit(
   quantity: number,
   companyId: string,
   tx?: Prisma.TransactionClient,
-  branchId?: string | null
+  branchId?: string | null,
+  // G1 (Grupo G): quando um gerente autoriza venda sem estoque (override
+  // INSUFFICIENT_STOCK), o débito deve permitir estoque NEGATIVO. Sem isto, o
+  // débito atômico (quantity >= qty) falhava e abortava a venda — o override
+  // pulava só a pré-validação, mas o recurso nunca funcionava de fato.
+  allowNegative = false
 ): Promise<StockDebitResult> {
   const client = tx || prisma;
 
@@ -37,6 +42,39 @@ export async function atomicStockDebit(
 
   // Se branchId fornecido, usar BranchStock
   if (branchId) {
+    if (allowNegative) {
+      // Override de gerente: debita SEM o guard quantity>=qty (deixa negativo).
+      // upsert cobre o caso de não haver linha de BranchStock ainda.
+      // Nota: allowNegative é sale-wide (o override INSUFFICIENT_STOCK vale pra
+      // venda toda); itens com estoque suficiente também pulam o guard de race.
+      // Aceitável — o gerente já assumiu vender sem garantia de estoque.
+      // prevBranchQty é best-effort para auditoria (StockMovement), não guard:
+      // sob concorrência pode estar levemente defasado; o decrement é atômico.
+      const before = await client.branchStock.findUnique({
+        where: { branchId_productId: { branchId, productId } },
+        select: { quantity: true },
+      });
+      const prevBranchQty = before?.quantity ?? 0;
+      await client.branchStock.upsert({
+        where: { branchId_productId: { branchId, productId } },
+        create: { branchId, productId, quantity: -quantity },
+        update: { quantity: { decrement: quantity } },
+      });
+      await client.$executeRaw`
+        UPDATE "Product"
+        SET "stockQty" = "stockQty" - ${quantity},
+            "updatedAt" = NOW()
+        WHERE "id" = ${productId}
+          AND "companyId" = ${companyId}
+          AND "stockControlled" = true
+      `;
+      return {
+        success: true,
+        previousQty: prevBranchQty,
+        newQty: prevBranchQty - quantity,
+      };
+    }
+
     // Operação atômica: só debita se quantity >= solicitado (previne race condition)
     const updated = await client.branchStock.updateMany({
       where: {
@@ -80,15 +118,25 @@ export async function atomicStockDebit(
   }
 
   // Fallback: sem branchId, usar Product.stockQty diretamente (compatibilidade)
-  const result = await client.$executeRaw`
-    UPDATE "Product"
-    SET "stockQty" = "stockQty" - ${quantity},
-        "updatedAt" = NOW()
-    WHERE "id" = ${productId}
-      AND "companyId" = ${companyId}
-      AND "stockQty" >= ${quantity}
-      AND "stockControlled" = true
-  `;
+  // allowNegative remove o guard stockQty>=quantity (override de gerente).
+  const result = allowNegative
+    ? await client.$executeRaw`
+        UPDATE "Product"
+        SET "stockQty" = "stockQty" - ${quantity},
+            "updatedAt" = NOW()
+        WHERE "id" = ${productId}
+          AND "companyId" = ${companyId}
+          AND "stockControlled" = true
+      `
+    : await client.$executeRaw`
+        UPDATE "Product"
+        SET "stockQty" = "stockQty" - ${quantity},
+            "updatedAt" = NOW()
+        WHERE "id" = ${productId}
+          AND "companyId" = ${companyId}
+          AND "stockQty" >= ${quantity}
+          AND "stockControlled" = true
+      `;
 
   if (result === 0) {
     return {
