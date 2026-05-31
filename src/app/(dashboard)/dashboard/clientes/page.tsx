@@ -32,7 +32,7 @@ import { useRouter, useSearchParams } from "next/navigation";
 import toast from "react-hot-toast";
 
 function ClientesPage() {
-  const { hasPermission } = usePermissions();
+  const { hasPermission, isAdmin } = usePermissions();
   const router = useRouter();
   const searchParams = useSearchParams();
   const [clienteSelecionado, setClienteSelecionado] = useState<any>(null);
@@ -228,31 +228,36 @@ function ClientesPage() {
             <FileDown className="mr-2 h-4 w-4" />
             Baixar Template
           </Button>
-          <Button variant="outline" onClick={handleExport} disabled={exporting}>
-            {exporting ? (
-              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-            ) : (
-              <Download className="mr-2 h-4 w-4" />
-            )}
-            Exportar
-          </Button>
-          <Button variant="outline" disabled={importing} asChild>
-            <label className="cursor-pointer">
-              {importing ? (
+          {/* E3 (Grupo E): exportar/importar a base de PII é ADMIN-only. */}
+          {isAdmin && (
+            <Button variant="outline" onClick={handleExport} disabled={exporting}>
+              {exporting ? (
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
               ) : (
-                <Upload className="mr-2 h-4 w-4" />
+                <Download className="mr-2 h-4 w-4" />
               )}
-              Importar
-              <input
-                type="file"
-                accept=".xlsx,.xls"
-                onChange={handleImport}
-                className="hidden"
-                disabled={importing}
-              />
-            </label>
-          </Button>
+              Exportar
+            </Button>
+          )}
+          {isAdmin && (
+            <Button variant="outline" disabled={importing} asChild>
+              <label className="cursor-pointer">
+                {importing ? (
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                ) : (
+                  <Upload className="mr-2 h-4 w-4" />
+                )}
+                Importar
+                <input
+                  type="file"
+                  accept=".xlsx,.xls"
+                  onChange={handleImport}
+                  className="hidden"
+                  disabled={importing}
+                />
+              </label>
+            </Button>
+          )}
           <CanPermission permission="customers.create">
             <Button onClick={() => router.push("/dashboard/clientes/novo")}>
               <Plus className="mr-2 h-4 w-4" />

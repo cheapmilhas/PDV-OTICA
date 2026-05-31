@@ -6,7 +6,7 @@ import {
   type UpdateUserDTO,
 } from "@/lib/validations/user.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, forbiddenError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
@@ -42,7 +42,7 @@ export async function PUT(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const session = await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("users.edit");
     const { id } = await params;
@@ -50,6 +50,26 @@ export async function PUT(
     const body = await request.json();
     const data = updateUserSchema.parse(body);
     const sanitizedData = sanitizeUserDTO(data) as UpdateUserDTO;
+
+    // E1 (Grupo E): impedir escalação de privilégio. Um não-ADMIN não pode
+    // promover ninguém a ADMIN, nem editar um usuário que já é ADMIN (o que
+    // permitiria, por exemplo, trocar a senha de um ADMIN ou rebaixá-lo).
+    //
+    // Decisão (Matheus, 2026-05-30): GERENTE PODE gerenciar papéis dos perfis
+    // NÃO-ADMIN (criar/editar VENDEDOR/CAIXA/ATENDENTE/GERENTE) — ele toca o RH
+    // operacional da loja. O único papel reservado ao ADMIN é o próprio ADMIN.
+    if (session.user.role !== "ADMIN") {
+      if (sanitizedData.role === "ADMIN") {
+        throw forbiddenError("Apenas um ADMIN pode atribuir o perfil ADMIN");
+      }
+      const target = await prisma.user.findFirst({
+        where: { id, companyId },
+        select: { role: true },
+      });
+      if (target?.role === "ADMIN") {
+        throw forbiddenError("Apenas um ADMIN pode editar um usuário ADMIN");
+      }
+    }
 
     const user = await userService.update(
       id,
@@ -72,7 +92,7 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> }
 ) {
   try {
-    await requireAuth();
+    const session = await requireAuth();
     await requirePermission("users.edit");
     const companyId = await getCompanyId();
     const { id } = await params;
@@ -94,6 +114,12 @@ export async function PATCH(
         { error: { message: "Usuário não encontrado" } },
         { status: 404 }
       );
+    }
+
+    // E1 (Grupo E): um não-ADMIN não pode trocar a senha de um ADMIN
+    // (sequestro de conta privilegiada).
+    if (user.role === "ADMIN" && session.user.role !== "ADMIN") {
+      throw forbiddenError("Apenas um ADMIN pode alterar a senha de um usuário ADMIN");
     }
 
     const passwordHash = await bcrypt.hash(password, 10);

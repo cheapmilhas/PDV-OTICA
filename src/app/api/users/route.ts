@@ -6,7 +6,7 @@ import {
   type CreateUserDTO,
 } from "@/lib/validations/user.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, forbiddenError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { checkPlanLimit } from "@/lib/plan-limits";
 
@@ -44,13 +44,20 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    await requireAuth();
+    const session = await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("users.create");
     await checkPlanLimit(companyId, "users");
 
     const body = await request.json();
     const data = createUserSchema.parse(body) as CreateUserDTO;
+
+    // E1 (Grupo E): só ADMIN pode criar um usuário ADMIN. Sem isto, qualquer
+    // usuário com users.create (ex.: GERENTE) criava um ADMIN — escalação.
+    if (data.role === "ADMIN" && session.user.role !== "ADMIN") {
+      throw forbiddenError("Apenas um ADMIN pode criar usuários com perfil ADMIN");
+    }
+
     const user = await userService.create(data, companyId);
 
     return successResponse(user, 201);

@@ -1,22 +1,41 @@
 import { NextResponse } from "next/server";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requireAuth, requireRole } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/services/activity-log.service";
+import { ActorType } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { format } from "date-fns";
 
 /**
  * GET /api/customers/export
- * Exporta todos os clientes em formato Excel
+ * Exporta todos os clientes em formato Excel.
+ *
+ * E3 (Grupo E): exportação de PII (CPF/RG/endereço de toda a base) é
+ * ADMIN-only e SEMPRE auditada (LGPD). Antes não exigia auth/permissão nem
+ * gravava log — qualquer usuário baixava a base inteira sem rastro.
  */
 export async function GET() {
   try {
+    const session = await requireAuth();
+    await requireRole(["ADMIN"]);
     const companyId = await getCompanyId();
 
     // Buscar todos os clientes da empresa
     const customers = await prisma.customer.findMany({
       where: { companyId },
       orderBy: { name: "asc" },
+    });
+
+    // LGPD: registra quem exportou a base de PII e quantos registros.
+    await logActivity({
+      companyId,
+      type: "DATA_UPDATED",
+      title: "Exportou a base de clientes (XLSX com dados pessoais)",
+      detail: { count: customers.length, resource: "customers.export" },
+      actorId: session.user.id,
+      actorType: ActorType.ADMIN,
+      actorName: session.user.name ?? session.user.email ?? undefined,
     });
 
     // Preparar dados para exportação

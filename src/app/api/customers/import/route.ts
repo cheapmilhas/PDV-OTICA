@@ -1,18 +1,23 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
+import { getCompanyId, requireAuth, requireRole } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/services/activity-log.service";
+import { ActorType } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { parse, isValid } from "date-fns";
 
 /**
  * POST /api/customers/import
- * Importa clientes a partir de arquivo Excel
+ * Importa clientes a partir de arquivo Excel.
+ *
+ * E3 (Grupo E): import em massa de PII é ADMIN-only e auditado (LGPD).
  */
 export async function POST(request: NextRequest) {
   try {
+    const session = await requireAuth();
+    await requireRole(["ADMIN"]);
     const companyId = await getCompanyId();
-    await requirePermission("customers.create");
     const formData = await request.formData();
     const file = formData.get("file") as File;
 
@@ -202,6 +207,23 @@ export async function POST(request: NextRequest) {
         results.errors.push(`Linha ${rowNum}: ${error.message}`);
       }
     }
+
+    // LGPD: registra a importação em massa de PII.
+    await logActivity({
+      companyId,
+      type: "DATA_UPDATED",
+      title: "Importou clientes em massa (planilha)",
+      detail: {
+        processed: results.success,
+        created: results.created.length,
+        updated: results.updated.length,
+        errors: results.errors.length,
+        resource: "customers.import",
+      },
+      actorId: session.user.id,
+      actorType: ActorType.ADMIN,
+      actorName: session.user.name ?? session.user.email ?? undefined,
+    });
 
     return NextResponse.json({
       message: `Importação concluída: ${results.success} clientes processados`,

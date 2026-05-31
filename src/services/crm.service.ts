@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { CustomerSegment, ContactResult, CrmReminderStatus } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { notFoundError } from "@/lib/error-handler";
 
 const log = logger.child({ service: "crm" });
 
@@ -355,6 +356,28 @@ export async function registerContact(data: {
   saleId?: string;
   saleAmount?: number;
 }) {
+  // E2 (Grupo E): validar que o cliente pertence à empresa do chamador antes
+  // de criar o contato — sem isto, era possível registrar contato com
+  // customerId/reminderId de OUTRA empresa (write leak multi-tenant).
+  const customer = await prisma.customer.findFirst({
+    where: { id: data.customerId, companyId: data.companyId },
+    select: { id: true },
+  });
+  if (!customer) {
+    throw notFoundError("Cliente não encontrado");
+  }
+
+  // Se há reminderId, ele também precisa ser da mesma empresa.
+  if (data.reminderId) {
+    const reminder = await prisma.customerReminder.findFirst({
+      where: { id: data.reminderId, companyId: data.companyId },
+      select: { id: true },
+    });
+    if (!reminder) {
+      throw notFoundError("Lembrete não encontrado");
+    }
+  }
+
   const contact = await prisma.crmContact.create({
     data: {
       companyId: data.companyId,
@@ -374,10 +397,11 @@ export async function registerContact(data: {
     },
   });
 
-  // Atualizar status do lembrete
+  // Atualizar status do lembrete — scoped por companyId (updateMany não
+  // atravessa tenant; mesmo que o id existisse noutra empresa, count=0).
   if (data.reminderId) {
-    await prisma.customerReminder.update({
-      where: { id: data.reminderId },
+    await prisma.customerReminder.updateMany({
+      where: { id: data.reminderId, companyId: data.companyId },
       data: {
         status: data.scheduleFollowUp ? "SCHEDULED" : "COMPLETED",
         scheduledFor: data.followUpDate,

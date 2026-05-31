@@ -1,15 +1,19 @@
 import { NextResponse } from "next/server";
 import * as XLSX from "xlsx";
 import { logger } from "@/lib/logger";
+import { requireAuth } from "@/lib/auth-helpers";
+import { handleApiError } from "@/lib/error-handler";
 
 const log = logger.child({ route: "customers/template" });
 
 /**
  * GET /api/customers/template
- * Retorna um template/modelo de planilha para importação de clientes
+ * Retorna um template/modelo de planilha para importação de clientes.
+ * Exige autenticação (E3): antes era acessível sem login.
  */
 export async function GET() {
   try {
+    await requireAuth();
     // Dados de exemplo para o template
     const templateData = [
       {
@@ -128,9 +132,6 @@ export async function GET() {
     });
   } catch (error) {
     log.error("Erro ao gerar template", { error: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json(
-      { error: "Erro ao gerar template" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }
