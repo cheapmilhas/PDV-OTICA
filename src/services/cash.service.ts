@@ -327,3 +327,77 @@ export class CashService {
 }
 
 export const cashService = new CashService();
+
+/**
+ * Estorna, de forma IDEMPOTENTE, o caixa de um AccountReceivable.
+ *
+ * Soma todos os CashMovement IN deste AR por shift e subtrai os REFUND OUT
+ * já lançados. Para cada shift OPEN com saldo líquido > 0, cria um único
+ * REFUND OUT compensando exatamente o remanescente. Shifts já fechados não
+ * são tocados (estorno fora do ciclo de caixa — DRE resolve via FinanceEntry).
+ *
+ * Idempotente: chamar 2x não gera estorno em dobro (o 1º já zera o líquido).
+ * Cobre receive-multiple (vários IN) e ciclos receber→estornar→receber.
+ *
+ * DEVE ser chamado dentro de uma $transaction (recebe o tx client).
+ */
+export async function reverseAccountReceivableCash(
+  tx: Prisma.TransactionClient,
+  params: { accountReceivableId: string; description: string; userId: string },
+): Promise<void> {
+  const { accountReceivableId, description, userId } = params;
+
+  // Multi-tenant: CashMovement não tem companyId; o isolamento é garantido
+  // pelo caller, que valida AR.companyId antes de chamar. originId é cuid
+  // global, sem colisão entre empresas.
+  const movements = await tx.cashMovement.findMany({
+    where: { originType: "AccountReceivable", originId: accountReceivableId },
+  });
+
+  // Agrupar líquido (IN - OUT) por (shift + método). Chave inclui o método
+  // para que um pagamento CASH+PIX seja estornado como CASH OUT + PIX OUT
+  // (espelha o lado IN, que cria 1 movimento por método) — senão o relatório
+  // por forma de pagamento ficaria distorcido.
+  const netByKey = new Map<
+    string,
+    { cashShiftId: string; branchId: string; method: CashMovement["method"]; net: number }
+  >();
+  for (const mov of movements) {
+    const amount = Number(mov.amount);
+    const signed = mov.direction === "IN" ? amount : -amount;
+    const key = `${mov.cashShiftId}:${mov.method}`;
+    const prev = netByKey.get(key);
+    if (prev) {
+      prev.net = Math.round((prev.net + signed) * 100) / 100;
+    } else {
+      netByKey.set(key, {
+        cashShiftId: mov.cashShiftId,
+        branchId: mov.branchId,
+        method: mov.method,
+        net: signed,
+      });
+    }
+  }
+
+  for (const info of netByKey.values()) {
+    if (info.net < 0.01) continue; // nada a estornar (já compensado)
+
+    const shift = await tx.cashShift.findUnique({ where: { id: info.cashShiftId } });
+    if (shift?.status !== "OPEN") continue; // shift fechado — não toca
+
+    await tx.cashMovement.create({
+      data: {
+        cashShiftId: info.cashShiftId,
+        branchId: info.branchId,
+        type: "REFUND",
+        direction: "OUT",
+        method: info.method,
+        amount: info.net,
+        originType: "AccountReceivable",
+        originId: accountReceivableId,
+        note: `Estorno: ${description}`,
+        createdByUserId: userId,
+      },
+    });
+  }
+}

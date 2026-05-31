@@ -2,8 +2,9 @@ import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
+import { reverseAccountReceivableCash } from "@/services/cash.service";
 
 const log = logger.child({ route: "accounts-receivable/reverse-payment" });
 
@@ -18,8 +19,10 @@ const reverseSchema = z.object({
  * para status PENDING. Limpa receivedDate/receivedAmount/receivedByUserId
  * e grava reversedAt/reversedBy para auditoria.
  *
- * Não desfaz FinanceEntry — deixe esse passo manual (ou implementar em S6
- * quando refatorar finance-entry side-effects).
+ * C2: estorna também o caixa de forma atômica — busca o CashMovement IN
+ * original deste AR e cria um REFUND OUT compensatório se o shift ainda
+ * está OPEN. Antes só mudava o status, deixando o R$ no caixa (ghost cash).
+ * Mesma lógica do ramo PATCH action=reverse de ../route.ts.
  */
 export async function POST(
   request: Request,
@@ -53,18 +56,40 @@ export async function POST(
       );
     }
 
-    await prisma.accountReceivable.update({
-      where: { id: ar.id },
-      data: {
-        status: "PENDING",
-        receivedDate: null,
-        receivedAmount: null,
-        receivedByUserId: null,
-        reversedAt: new Date(),
-        reversedBy: session.user.id,
-        notes: `${ar.notes ?? ""}\n[Estorno ${new Date().toISOString()}] ${reason}`.trim(),
-      },
-    });
+    await prisma.$transaction(async (tx) => {
+      // Trava a linha e relê reversedAt/notes DENTRO da tx para fechar a janela
+      // de duplo estorno concorrente (o helper já é idempotente no caixa, mas
+      // isto evita duplo registro de auditoria / perda de notes).
+      const locked = await tx.$queryRaw<{ reversedAt: Date | null; notes: string | null }[]>`
+        SELECT "reversedAt", "notes" FROM "AccountReceivable"
+        WHERE id = ${ar.id} AND "companyId" = ${companyId}
+        FOR UPDATE
+      `;
+      if (locked[0]?.reversedAt) {
+        throw new AppError(ERROR_CODES.DUPLICATE, "Pagamento já foi estornado anteriormente", 409);
+      }
+
+      // Estorno idempotente do caixa (IN - OUT líquido por shift OPEN).
+      await reverseAccountReceivableCash(tx, {
+        accountReceivableId: ar.id,
+        description: ar.description,
+        userId: session.user.id,
+      });
+
+      // Reverter status do AR.
+      await tx.accountReceivable.update({
+        where: { id: ar.id },
+        data: {
+          status: "PENDING",
+          receivedDate: null,
+          receivedAmount: null,
+          receivedByUserId: null,
+          reversedAt: new Date(),
+          reversedBy: session.user.id,
+          notes: `${locked[0]?.notes ?? ""}\n[Estorno ${new Date().toISOString()}] ${reason}`.trim(),
+        },
+      });
+    }, { timeout: 30_000 });
 
     log.warn("Pagamento estornado", {
       arId: ar.id,

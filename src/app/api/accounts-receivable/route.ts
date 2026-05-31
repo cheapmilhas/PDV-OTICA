@@ -2,12 +2,13 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { calculatePenalties } from "@/lib/penalty-utils";
+import { reverseAccountReceivableCash } from "@/services/cash.service";
 
 /**
  * Schema de validação para query params (GET)
@@ -387,8 +388,18 @@ export async function PATCH(request: Request) {
 
       if (existing.status !== AccountReceivableStatus.RECEIVED) {
         return NextResponse.json(
-          { error: "Apenas contas recebidas podem ser estornadas" },
+          { error: { message: "Apenas contas recebidas podem ser estornadas" } },
           { status: 400 }
+        );
+      }
+
+      // C2: bloqueia duplo estorno (mesmo guard do POST /reverse-payment).
+      // Sem isto, ciclos receber→estornar→receber→estornar podiam estornar
+      // o caixa de novo. O helper já é idempotente, mas o guard corta cedo.
+      if (existing.reversedAt) {
+        return NextResponse.json(
+          { error: { message: "Pagamento já foi estornado anteriormente" } },
+          { status: 409 }
         );
       }
 
@@ -396,43 +407,27 @@ export async function PATCH(request: Request) {
       // mesma transação. Antes só mudava status; o R$ continuava no shift
       // gerando ghost cash no fechamento de caixa.
       const reversed = await prisma.$transaction(async (tx) => {
-        // 1. Buscar o CashMovement IN original deste AR (criado quando
-        // foi marcado como RECEIVED, ver linha ~535 deste arquivo).
-        const originalMovement = await tx.cashMovement.findFirst({
-          where: {
-            originType: "AccountReceivable",
-            originId: reversal.id,
-            direction: "IN",
-          },
-          orderBy: { createdAt: "desc" },
-        });
-
-        // 2. Se existir movimento E shift continuar OPEN, cria estorno OUT.
-        // Se shift já fechou, não toca (estorno fora do ciclo de caixa —
-        // contador resolve via FinanceEntry compensatório no DRE).
-        if (originalMovement) {
-          const shift = await tx.cashShift.findUnique({
-            where: { id: originalMovement.cashShiftId },
-          });
-          if (shift?.status === "OPEN") {
-            await tx.cashMovement.create({
-              data: {
-                cashShiftId: originalMovement.cashShiftId,
-                branchId: originalMovement.branchId,
-                type: "REFUND",
-                direction: "OUT",
-                method: originalMovement.method,
-                amount: originalMovement.amount,
-                originType: "AccountReceivable",
-                originId: reversal.id,
-                note: `Estorno: ${existing.description}`,
-                createdByUserId: userId,
-              },
-            });
-          }
+        // Trava a linha e relê reversedAt dentro da tx — fecha a janela de
+        // duplo estorno concorrente (idem POST /reverse-payment).
+        const locked = await tx.$queryRaw<{ reversedAt: Date | null }[]>`
+          SELECT "reversedAt" FROM "AccountReceivable"
+          WHERE id = ${reversal.id} AND "companyId" = ${companyId}
+          FOR UPDATE
+        `;
+        if (locked[0]?.reversedAt) {
+          throw new AppError(ERROR_CODES.DUPLICATE, "Pagamento já foi estornado anteriormente", 409);
         }
 
-        // 3. Reverter status do AR.
+        // Estorno idempotente do caixa (IN - OUT líquido por shift OPEN).
+        // Cobre AR com múltiplos IN (recebimento parcial); o findFirst antigo
+        // só revertia o último movimento.
+        await reverseAccountReceivableCash(tx, {
+          accountReceivableId: reversal.id,
+          description: existing.description,
+          userId,
+        });
+
+        // Reverter status do AR.
         return tx.accountReceivable.update({
           where: { id: reversal.id },
           data: {
@@ -483,6 +478,27 @@ export async function PATCH(request: Request) {
       return NextResponse.json(
         { error: "Conta a receber não encontrada" },
         { status: 404 }
+      );
+    }
+
+    // C1: guard de idempotência — duplo clique em "marcar recebida" criava
+    // um segundo CashMovement IN (ghost cash). Bloqueia qualquer tentativa de
+    // re-processar pagamento numa conta já RECEIVED (o paymentMethod abaixo é
+    // o que dispara o CashMovement IN, na linha ~565).
+    if (
+      existing.status === AccountReceivableStatus.RECEIVED &&
+      (data.status === AccountReceivableStatus.RECEIVED || data.paymentMethod)
+    ) {
+      return NextResponse.json(
+        { error: { message: "Esta conta já foi recebida" } },
+        { status: 409 }
+      );
+    }
+
+    if (existing.status === AccountReceivableStatus.CANCELED) {
+      return NextResponse.json(
+        { error: { message: "Esta conta está cancelada" } },
+        { status: 400 }
       );
     }
 

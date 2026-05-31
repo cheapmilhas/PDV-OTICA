@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
 import { calculatePenalties } from "@/lib/penalty-utils";
@@ -75,7 +75,7 @@ export async function POST(request: Request) {
     if (existing.status === AccountReceivableStatus.RECEIVED) {
       return NextResponse.json(
         { error: { message: "Esta conta já foi recebida" } },
-        { status: 400 }
+        { status: 409 }
       );
     }
 
@@ -98,41 +98,71 @@ export async function POST(request: Request) {
     // Total esperado = valor original + multa + juros - desconto
     const totalExpected = Math.round((originalAmount + fineAmount + interestAmount - discountAmount) * 100) / 100;
 
-    // Calcular total recebido
+    // Calcular total recebido nesta operação
     const totalReceived = data.payments.reduce((sum, p) => sum + p.amount, 0);
-
-    // Validar que não excede o total esperado (com tolerância)
-    if (totalReceived > totalExpected + 0.01) {
-      return NextResponse.json(
-        { error: { message: `Valor recebido (R$ ${totalReceived.toFixed(2)}) excede o total esperado (R$ ${totalExpected.toFixed(2)})` } },
-        { status: 400 }
-      );
-    }
-
-    // Determinar se é pagamento total (comparar com o total esperado)
-    const isFullPayment = Math.abs(totalReceived - totalExpected) < 0.01;
-    const newStatus = isFullPayment
-      ? AccountReceivableStatus.RECEIVED
-      : AccountReceivableStatus.PENDING;
 
     const receivedDate = data.receivedDate ? new Date(data.receivedDate) : new Date();
 
     // Usar transação para atualizar conta e criar movimentos no caixa
     const result = await prisma.$transaction(async (tx) => {
+      // C3: trava a linha do AR (SELECT FOR UPDATE) e relê receivedAmount
+      // DENTRO da transação. Antes a leitura era fora → duas chamadas parciais
+      // concorrentes (ou duplo-clique no botão) liam o mesmo saldo e ambas
+      // criavam CashMovement IN → ghost cash. Agora as parciais serializam.
+      const locked = await tx.$queryRaw<{ receivedAmount: string | null; status: string; notes: string | null }[]>`
+        SELECT "receivedAmount", "status", "notes" FROM "AccountReceivable"
+        WHERE id = ${data.accountId} AND "companyId" = ${companyId}
+        FOR UPDATE
+      `;
+      const lockedRow = locked[0];
+      if (!lockedRow) {
+        throw new AppError(ERROR_CODES.NOT_FOUND, "Conta a receber não encontrada", 404);
+      }
+      if (lockedRow.status === AccountReceivableStatus.RECEIVED) {
+        throw new AppError(ERROR_CODES.DUPLICATE, "Esta conta já foi recebida", 409);
+      }
+      if (lockedRow.status === AccountReceivableStatus.CANCELED) {
+        throw new AppError(ERROR_CODES.BUSINESS_RULE_VIOLATION, "Esta conta está cancelada", 400);
+      }
+
+      // Acumular sobre o que já havia sido pago em parciais anteriores. Antes
+      // receivedAmount era sobrescrito → cada parcial validava contra o total
+      // cheio, permitindo pagar o valor inteiro N vezes.
+      const alreadyReceived = Number(lockedRow.receivedAmount ?? 0);
+      const remaining = Math.round((totalExpected - alreadyReceived) * 100) / 100;
+
+      // Validar que não excede o saldo restante (com tolerância)
+      if (totalReceived > remaining + 0.01) {
+        throw new AppError(
+          ERROR_CODES.BUSINESS_RULE_VIOLATION,
+          `Valor recebido (R$ ${totalReceived.toFixed(2)}) excede o saldo restante (R$ ${remaining.toFixed(2)})`,
+          400
+        );
+      }
+
+      // Acumular o recebido e determinar se quita o esperado
+      const cumulativeReceived = Math.round((alreadyReceived + totalReceived) * 100) / 100;
+      const isFullPayment = cumulativeReceived >= totalExpected - 0.01;
+      const newStatus = isFullPayment
+        ? AccountReceivableStatus.RECEIVED
+        : AccountReceivableStatus.PENDING;
+
       // Atualizar conta a receber
       const updated = await tx.accountReceivable.update({
         where: { id: data.accountId },
         data: {
           status: newStatus,
-          receivedAmount: totalReceived,
+          receivedAmount: cumulativeReceived,
           receivedDate,
           receivedByUserId: userId,
           fineAmount,
           interestAmount,
           discountAmount,
-          // Guardar informação sobre múltiplos métodos de pagamento nas notas
-          notes: existing.notes
-            ? `${existing.notes}\n\nPagamento recebido: ${data.payments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(", ")}`
+          // Guardar info dos métodos de pagamento nas notas. Usa as notes
+          // travadas (lockedRow), não o `existing` lido fora da tx, para não
+          // sobrescrever a nota de uma parcial concorrente.
+          notes: lockedRow.notes
+            ? `${lockedRow.notes}\n\nPagamento recebido: ${data.payments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(", ")}`
             : `Pagamento recebido: ${data.payments.map(p => `${p.method}: R$ ${p.amount.toFixed(2)}`).join(", ")}`,
         },
         include: {
@@ -218,23 +248,25 @@ export async function POST(request: Request) {
         }
       }
 
-      return updated;
+      return { updated, isFullPayment, cumulativeReceived };
     }, { timeout: 30_000 });
+
+    const { updated: account, isFullPayment, cumulativeReceived } = result;
 
     // Serializar Decimals para number
     const serializedAccount = {
-      ...result,
-      amount: Number(result.amount),
-      receivedAmount: result.receivedAmount ? Number(result.receivedAmount) : null,
-      finePercent: Number(result.finePercent ?? 0),
-      fineAmount: Number(result.fineAmount ?? 0),
-      interestPercent: Number(result.interestPercent ?? 0),
-      interestAmount: Number(result.interestAmount ?? 0),
-      discountAmount: Number(result.discountAmount ?? 0),
-      sale: result.sale
+      ...account,
+      amount: Number(account.amount),
+      receivedAmount: account.receivedAmount ? Number(account.receivedAmount) : null,
+      finePercent: Number(account.finePercent ?? 0),
+      fineAmount: Number(account.fineAmount ?? 0),
+      interestPercent: Number(account.interestPercent ?? 0),
+      interestAmount: Number(account.interestAmount ?? 0),
+      discountAmount: Number(account.discountAmount ?? 0),
+      sale: account.sale
         ? {
-            ...result.sale,
-            total: Number(result.sale.total),
+            ...account.sale,
+            total: Number(account.sale.total),
           }
         : null,
     };
@@ -244,7 +276,7 @@ export async function POST(request: Request) {
       data: serializedAccount,
       message: isFullPayment
         ? "Conta recebida totalmente com sucesso!"
-        : `Recebimento parcial registrado. Restante: R$ ${(totalExpected - totalReceived).toFixed(2)}`,
+        : `Recebimento parcial registrado. Restante: R$ ${(totalExpected - cumulativeReceived).toFixed(2)}`,
     });
   } catch (error) {
     return handleApiError(error);
