@@ -18,7 +18,6 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
-import { FeatureGate } from "@/components/plan/feature-gate";
 import { Wallet, Users, TrendingUp, TrendingDown, Search, Settings } from "lucide-react";
 import Link from "next/link";
 
@@ -114,7 +113,6 @@ export default function CashbackPage() {
       permission="cashback.view"
       message="Você não tem permissão para acessar cashback. Entre em contato com o administrador do sistema."
     >
-      <FeatureGate feature="cashback" featureName="Cashback">
       <div className="space-y-6">
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -315,7 +313,6 @@ export default function CashbackPage() {
           </CardContent>
         </Card>
       </div>
-      </FeatureGate>
     </ProtectedRoute>
   );
 }

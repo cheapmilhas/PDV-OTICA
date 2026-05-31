@@ -175,8 +175,7 @@ const menuItems: MenuSection[] = [
         name: "Cashback",
         href: "/dashboard/cashback",
         icon: Wallet,
-        permission: "cashback.view",
-        feature: "cashback"
+        permission: "cashback.view"
       },
       {
         name: "Metas",

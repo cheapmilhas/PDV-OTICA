@@ -2,14 +2,12 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { cashbackService } from "@/services/cashback.service";
-import { requirePlanFeature } from "@/lib/plan-features";
 
 // GET - Buscar cashbacks que vão expirar
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
 
     const { searchParams } = new URL(request.url);
@@ -34,7 +32,6 @@ export async function POST(request: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
-    await requirePlanFeature(companyId, "cashback");
     const branchId = await getBranchId();
 
     const results = await cashbackService.processExpiredCashbacks(branchId);

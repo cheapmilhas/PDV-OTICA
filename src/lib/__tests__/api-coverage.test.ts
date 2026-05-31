@@ -11,7 +11,7 @@ import { auth } from "@/auth";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
 
 /**
- * Para cada uma das 16 features, escolhemos UM path representativo
+ * Para cada uma das 15 features, escolhemos UM path representativo
  * (preferindo cobrir dynamic segments quando aplicável).
  */
 const SAMPLES: Array<[keyof typeof FEATURES, string]> = [
@@ -28,8 +28,7 @@ const SAMPLES: Array<[keyof typeof FEATURES, string]> = [
   ["BI_ANALYTICS", "/api/finance/bi"],
   ["CARD_RECEIVABLES", "/api/finance/card-receivables"],
   ["RECURRING_EXPENSES", "/api/recurring-expenses"],
-  // Q7.4 P2-2: completar cobertura pras 16 features (faltavam 3).
-  ["CASHBACK", "/api/cashback/customer/abc123"],
+  // Q7.4 P2-2: completar cobertura das features.
   ["GOALS", "/api/goals"],
   ["INVENTORY_LOTS", "/api/inventory/lots"],
 ];
@@ -37,7 +36,7 @@ const SAMPLES: Array<[keyof typeof FEATURES, string]> = [
 const makeRequest = (path: string) => new Request(`http://localhost${path}`);
 const makeCtx = () => ({ params: Promise.resolve({}) });
 
-describe("Cobertura wrapper das 16 APIs", () => {
+describe("Cobertura wrapper das 15 APIs", () => {
   const originalEnv = process.env.DISABLE_PLAN_FEATURE_GATING;
 
   beforeEach(() => {
@@ -92,7 +91,7 @@ describe("Cobertura wrapper das 16 APIs", () => {
     },
   );
 
-  it("kill switch libera todas as 16 APIs sem consultar DB", async () => {
+  it("kill switch libera todas as 15 APIs sem consultar DB", async () => {
     process.env.DISABLE_PLAN_FEATURE_GATING = "true";
     const handler = vi.fn(async () => new Response("ok"));
     const wrapped = withPlanFeatureGuard(handler);
