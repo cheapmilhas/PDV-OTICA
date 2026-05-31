@@ -9,24 +9,48 @@ import { logger } from "@/lib/logger";
 const log = logger.child({ webhook: "asaas" });
 
 /**
- * Q7.2 P1-7: HMAC opcional do payload. Defesa em profundidade — token
- * bearer pode vazar de logs/proxy, HMAC valida que o payload veio da
- * Asaas e não foi modificado. Configure ASAAS_WEBHOOK_HMAC_SECRET no
- * painel Asaas + Vercel pra ativar. Sem ele, validação é skip (compat).
+ * H6: HMAC do payload — defesa em profundidade contra token bearer vazado
+ * (logs/proxy). Com o token comprometido, sem HMAC o atacante forja
+ * pagamentos/cancelamentos. Configure ASAAS_WEBHOOK_HMAC_SECRET no painel
+ * Asaas + Vercel.
+ *
+ * Política (fail-closed em produção):
+ *   - secret setado  → HMAC SEMPRE exigido (qualquer ambiente).
+ *   - secret ausente em produção → recusa, a menos que o kill-switch
+ *     ALLOW_UNSIGNED_ASAAS_WEBHOOK=1 esteja setado (escape hatch p/ rollout).
+ *   - secret ausente fora de produção → permitido (dev/preview).
+ *
+ * Retorna { ok, reason } para o caller logar o motivo da recusa.
  */
-function verifyAsaasHmac(rawBody: string, sigHeader: string | null): boolean {
+function verifyAsaasHmac(
+  rawBody: string,
+  sigHeader: string | null,
+): { ok: boolean; reason?: string } {
   const secret = process.env.ASAAS_WEBHOOK_HMAC_SECRET;
-  if (!secret) return true; // segredo opcional — backward compat
-  if (!sigHeader) return false;
+
+  if (!secret) {
+    const isProd = process.env.NODE_ENV === "production";
+    const bypass = process.env.ALLOW_UNSIGNED_ASAAS_WEBHOOK === "1";
+    if (isProd && !bypass) {
+      return { ok: false, reason: "hmac_secret_missing_in_prod" };
+    }
+    return { ok: true }; // dev/preview ou bypass explícito
+  }
+
+  if (!sigHeader) return { ok: false, reason: "signature_header_missing" };
 
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
   const got = sigHeader.replace(/^sha256=/, "").trim();
 
-  if (expected.length !== got.length) return false;
+  if (expected.length !== got.length) return { ok: false, reason: "length_mismatch" };
   try {
-    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(got, "hex"));
+    const match = timingSafeEqual(
+      Buffer.from(expected, "hex"),
+      Buffer.from(got, "hex"),
+    );
+    return match ? { ok: true } : { ok: false, reason: "signature_mismatch" };
   } catch {
-    return false;
+    return { ok: false, reason: "signature_decode_error" };
   }
 }
 
@@ -90,13 +114,15 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "invalid token" }, { status: 401 });
   }
 
-  // Q7.2 P1-7: HMAC opcional. Lemos raw antes do JSON parse pra preservar bytes.
+  // H6: HMAC obrigatório (fail-closed em prod). Lemos raw antes do JSON parse
+  // pra preservar bytes exatos assinados.
   const rawBody = await request.text();
   const signature =
     request.headers.get("asaas-signature") ||
     request.headers.get("x-asaas-signature");
-  if (!verifyAsaasHmac(rawBody, signature)) {
-    log.warn("HMAC inválido", { ip, hasSignature: !!signature });
+  const hmac = verifyAsaasHmac(rawBody, signature);
+  if (!hmac.ok) {
+    log.warn("HMAC inválido", { ip, hasSignature: !!signature, reason: hmac.reason });
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
@@ -170,9 +196,14 @@ export async function POST(request: Request) {
             data: {
               status: "ACTIVE",
               pastDueSince: null,
-              activatedAt: new Date(),
               currentPeriodStart: new Date(),
             },
+          });
+          // activatedAt = momento da PRIMEIRA ativação; não sobrescrever em
+          // reenvios (idempotência) — preserva a data real de ativação.
+          await prisma.subscription.updateMany({
+            where: { id: subscriptionDbId, activatedAt: null },
+            data: { activatedAt: new Date() },
           });
         }
         // Atualiza Invoice se existir
@@ -198,9 +229,18 @@ export async function POST(request: Request) {
 
       case "PAYMENT_OVERDUE": {
         if (subscriptionDbId) {
+          // H6/idempotência: NÃO sobrescrever pastDueSince num reenvio do
+          // mesmo OVERDUE — isso resetaria o relógio de dunning (suspensão/
+          // cancelamento contam dias desde pastDueSince). Só marca a primeira
+          // vez (updateMany com guard pastDueSince: null).
+          await prisma.subscription.updateMany({
+            where: { id: subscriptionDbId, pastDueSince: null },
+            data: { status: "PAST_DUE", pastDueSince: new Date() },
+          });
+          // Garante status PAST_DUE mesmo se pastDueSince já existia.
           await prisma.subscription.update({
             where: { id: subscriptionDbId },
-            data: { status: "PAST_DUE", pastDueSince: new Date() },
+            data: { status: "PAST_DUE" },
           });
         }
         if (event.payment?.id) {

@@ -17,12 +17,18 @@ const log = logger.child({ route: "cron/dunning" });
  *   { "crons": [{ "path": "/api/cron/dunning", "schedule": "0 8 * * *" }] }
  */
 export async function GET(request: Request) {
-  // Vercel Cron envia esse header
+  // H7: fail-CLOSED. Este cron CANCELA/SUSPENDE assinaturas — sem CRON_SECRET
+  // configurado, qualquer um pode disparar GET e suspender empresas em massa.
+  // Antes o guard só validava SE o secret existisse (fail-open). Agora a
+  // ausência do secret é erro de configuração e o endpoint fica trancado.
+  // Status 401 (não 503) para alinhar com mark-delayed e retry-finance-entries.
+  const cronSecret = process.env.CRON_SECRET;
   const authHeader = request.headers.get("authorization");
-  if (process.env.CRON_SECRET) {
-    if (authHeader !== `Bearer ${process.env.CRON_SECRET}`) {
-      return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
+  if (!cronSecret || authHeader !== `Bearer ${cronSecret}`) {
+    if (!cronSecret) {
+      log.error("CRON_SECRET não configurado — dunning recusado (fail-closed)");
     }
+    return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
 
   const now = new Date();

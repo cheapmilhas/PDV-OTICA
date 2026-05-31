@@ -103,7 +103,13 @@ export async function proxy(request: NextRequest) {
   if (
     publicRoutes.includes(pathname) ||
     pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/public")
+    pathname.startsWith("/api/public") ||
+    // Webhooks e crons NÃO usam cookie de sessão — têm auth própria:
+    // webhooks validam HMAC/token do provedor; crons validam CRON_SECRET
+    // (Bearer no header). Sem este bypass o middleware barra com 401 ANTES
+    // do handler e os webhooks (Asaas/Focus) + crons nunca executam.
+    pathname.startsWith("/api/webhooks/") ||
+    pathname.startsWith("/api/cron/")
   ) {
     return nextWithCurrentPath(request);
   }

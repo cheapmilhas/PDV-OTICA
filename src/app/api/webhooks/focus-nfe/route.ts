@@ -7,25 +7,43 @@ import { rateLimitResponse } from "@/lib/rate-limit";
 const log = logger.child({ route: "webhooks/focus-nfe" });
 
 /**
- * Valida assinatura HMAC-SHA256 enviada pelo Focus NFe.
- * Focus envia o header `X-Hub-Signature-256: sha256=<hex>` calculado sobre
- * o body raw com o segredo configurado em FOCUS_NFE_WEBHOOK_SECRET.
- * Se o segredo não estiver setado, validação é pulada (compat legacy).
+ * H8: Valida assinatura HMAC-SHA256 do Focus NFe. Focus envia o header
+ * `X-Hub-Signature-256: sha256=<hex>` calculado sobre o body raw com o
+ * segredo FOCUS_NFE_WEBHOOK_SECRET.
+ *
+ * Política (fail-closed): este webhook só roda quando FOCUS_NFE_TOKEN está
+ * setado (integração ativa). Logo, em integração ativa o HMAC é SEMPRE
+ * exigido — sem ele qualquer um falsifica fiscalStatus="AUTHORIZED". O
+ * kill-switch ALLOW_UNSIGNED_FOCUS_WEBHOOK=1 libera apenas durante rollout.
+ *
+ * Retorna { ok, reason } para o caller logar o motivo da recusa.
  */
-function verifyHmac(rawBody: string, signatureHeader: string | null): boolean {
+function verifyHmac(
+  rawBody: string,
+  signatureHeader: string | null,
+): { ok: boolean; reason?: string } {
   const secret = process.env.FOCUS_NFE_WEBHOOK_SECRET;
-  if (!secret) return true; // segredo opcional — backward compat
-  if (!signatureHeader) return false;
+
+  if (!secret) {
+    if (process.env.ALLOW_UNSIGNED_FOCUS_WEBHOOK === "1") return { ok: true };
+    return { ok: false, reason: "hmac_secret_missing" };
+  }
+
+  if (!signatureHeader) return { ok: false, reason: "signature_header_missing" };
 
   const expected = createHmac("sha256", secret).update(rawBody).digest("hex");
   const got = signatureHeader.replace(/^sha256=/, "").trim();
 
   // Comprimentos diferentes → bytes inválidos pro timingSafeEqual.
-  if (expected.length !== got.length) return false;
+  if (expected.length !== got.length) return { ok: false, reason: "length_mismatch" };
   try {
-    return timingSafeEqual(Buffer.from(expected, "hex"), Buffer.from(got, "hex"));
+    const match = timingSafeEqual(
+      Buffer.from(expected, "hex"),
+      Buffer.from(got, "hex"),
+    );
+    return match ? { ok: true } : { ok: false, reason: "signature_mismatch" };
   } catch {
-    return false;
+    return { ok: false, reason: "signature_decode_error" };
   }
 }
 
@@ -91,13 +109,14 @@ export async function POST(request: Request) {
     return limited;
   }
 
-  // Q5.2: HMAC opcional. Configure FOCUS_NFE_WEBHOOK_SECRET no painel Focus
-  // + Vercel pra ativar. Sem isso qualquer um podia falsificar mudança de
-  // fiscalStatus para "AUTHORIZED" mandando POST direto.
+  // H8: HMAC obrigatório com integração ativa. Configure FOCUS_NFE_WEBHOOK_SECRET
+  // no painel Focus + Vercel. Sem isso qualquer um falsifica fiscalStatus
+  // para "AUTHORIZED" mandando POST direto.
   const rawBody = await request.text();
   const signature = request.headers.get("x-hub-signature-256");
-  if (!verifyHmac(rawBody, signature)) {
-    log.warn("HMAC inválido", { ip, hasSignature: !!signature });
+  const hmac = verifyHmac(rawBody, signature);
+  if (!hmac.ok) {
+    log.warn("HMAC inválido", { ip, hasSignature: !!signature, reason: hmac.reason });
     return NextResponse.json({ error: "invalid signature" }, { status: 401 });
   }
 
@@ -117,12 +136,31 @@ export async function POST(request: Request) {
   try {
     const sale = await prisma.sale.findFirst({
       where: { fiscalRef: payload.ref } as any,
-      select: { id: true, companyId: true },
+      select: { id: true, companyId: true, fiscalStatus: true },
     });
 
     if (!sale) {
       log.warn("Webhook recebido para ref sem venda local", { ref: payload.ref });
       return new NextResponse(null, { status: 204 });
+    }
+
+    // H8: idempotência. Focus reenvia o mesmo webhook em retry/duplicata. Sem
+    // event-id próprio, usamos o estado terminal já gravado: se a nota já está
+    // AUTHORIZED ou CANCELED, um reenvio do MESMO status terminal é no-op
+    // (não reescreve fiscalEmittedAt/fiscalCanceledAt nem dispara efeito). Só
+    // deixamos passar quando o status muda de fato (ex.: AUTHORIZED→CANCELED).
+    // TERMINAL: estados sem progressão futura esperada. FAILED é excluído de
+    // PROPÓSITO — Focus pode re-autorizar depois de rejeição, então
+    // PENDING/FAILED→AUTHORIZED precisa continuar passando. NÃO adicionar
+    // FAILED aqui (quebraria re-autorização).
+    const TERMINAL = new Set(["AUTHORIZED", "CANCELED"]);
+    const currentStatus = sale.fiscalStatus as string;
+    if (TERMINAL.has(currentStatus) && currentStatus === mappedStatus) {
+      log.info("Webhook duplicado ignorado (idempotência)", {
+        saleId: sale.id,
+        status: mappedStatus,
+      });
+      return NextResponse.json({ ok: true, duplicate: true });
     }
 
     const updates: Record<string, unknown> = {
