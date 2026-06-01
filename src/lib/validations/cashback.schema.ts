@@ -37,8 +37,13 @@ export const adjustCashbackSchema = z.object({
   amount: z.coerce.number().refine((val) => val !== 0, {
     message: "Amount cannot be zero",
   }),
-  type: z.enum(["BONUS", "CORRECTION"]),
+  // ADJUSTMENT é o valor real do enum Prisma (CashbackMovementType). CORRECTION
+  // é aceito por retrocompat — o service mapeia qualquer não-BONUS p/ ADJUSTMENT.
+  type: z.enum(["BONUS", "ADJUSTMENT", "CORRECTION"]),
   description: z.string().min(3).max(200),
+}).refine((d) => !(d.type === "BONUS" && d.amount < 0), {
+  message: "Bônus não pode ser negativo (use ADJUSTMENT para débito).",
+  path: ["amount"],
 });
 
 export type AdjustCashbackDTO = z.infer<typeof adjustCashbackSchema>;

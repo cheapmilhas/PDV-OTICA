@@ -7,6 +7,8 @@ import type {
 } from "@/lib/validations/cashback.schema";
 import { addDays, isBefore, startOfDay, isSameDay } from "date-fns";
 import { Decimal } from "@prisma/client/runtime/library";
+import { Prisma } from "@prisma/client";
+import { AppError, ERROR_CODES } from "@/lib/error-handler";
 
 export const cashbackService = {
   /**
@@ -340,14 +342,30 @@ export const cashbackService = {
         });
       }
 
-      const newBalance = Number(customerCashback.balance) + amount;
+      // M9: piso 0. Um ajuste negativo maior que o saldo (ex: -100 sobre saldo
+      // 30) deixava o balance NEGATIVO. Limita o débito ao saldo disponível —
+      // o saldo nunca fica abaixo de zero. O movimento registra o valor REAL
+      // aplicado (não o solicitado) para o ledger bater com o saldo.
+      const currentBalance = Number(customerCashback.balance);
+      const newBalance = Math.max(0, currentBalance + amount);
+      const appliedAmount = newBalance - currentBalance; // = amount, salvo se houve clamp
+
+      // M9: ajuste sem efeito (débito sobre saldo já zero) → erro informativo
+      // em vez de gravar um movimento de R$ 0,00 que poluiria o ledger.
+      if (appliedAmount === 0) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Nenhum ajuste aplicado: o saldo de cashback já é zero.",
+          400,
+        );
+      }
 
       // Criar movimento
       const movement = await tx.cashbackMovement.create({
         data: {
           customerCashbackId: customerCashback.id,
           type: type === "BONUS" ? "BONUS" : "ADJUSTMENT",
-          amount: new Decimal(amount),
+          amount: new Decimal(appliedAmount),
           description,
         },
       });
@@ -357,9 +375,9 @@ export const cashbackService = {
         where: { id: customerCashback.id },
         data: {
           balance: new Decimal(newBalance),
-          ...(amount > 0 && {
+          ...(appliedAmount > 0 && {
             totalEarned: {
-              increment: new Decimal(amount),
+              increment: new Decimal(appliedAmount),
             },
           }),
         },
@@ -396,12 +414,24 @@ export const cashbackService = {
     for (const movement of expiredMovements) {
       try {
         await prisma.$transaction(async (tx) => {
-          // Criar movimento de expiração
+          // M5: piso 0. Decrementa só o que AINDA RESTA do saldo — se o cliente
+          // já usou parte do cashback que agora expira, decrementar o valor
+          // cheio do movimento deixaria o balance NEGATIVO. Relê o saldo dentro
+          // da tx e limita a expiração ao saldo disponível.
+          const cc = await tx.customerCashback.findUnique({
+            where: { id: movement.customerCashbackId },
+            select: { balance: true },
+          });
+          const currentBalance = Number(cc?.balance ?? 0);
+          const movementAmount = Number(movement.amount);
+          const expireAmount = Math.min(movementAmount, Math.max(0, currentBalance));
+
+          // Criar movimento de expiração (valor REAL expirado)
           await tx.cashbackMovement.create({
             data: {
               customerCashbackId: movement.customerCashbackId,
               type: "EXPIRED",
-              amount: new Decimal(-Number(movement.amount)),
+              amount: new Decimal(-expireAmount),
               description: `Expiração de cashback ganho em ${movement.createdAt.toLocaleDateString()}`,
             },
           });
@@ -412,26 +442,31 @@ export const cashbackService = {
             data: { expired: true },
           });
 
-          // Atualizar saldo
-          await tx.customerCashback.update({
-            where: { id: movement.customerCashbackId },
-            data: {
-              balance: {
-                decrement: new Decimal(Number(movement.amount)),
+          // Atualizar saldo. M5/race: set ABSOLUTO com piso (não decrement) —
+          // grava max(0, balance-expire) calculado do balance relido na MESMA
+          // tx SERIALIZABLE. Se uma venda usar cashback concorrentemente entre
+          // o read e o write, o isolamento SERIALIZABLE aborta esta tx (o cron
+          // reprocessa na próxima rodada) em vez de deixar saldo negativo.
+          if (expireAmount > 0) {
+            await tx.customerCashback.update({
+              where: { id: movement.customerCashbackId },
+              data: {
+                balance: new Decimal(Math.max(0, currentBalance - expireAmount)),
+                totalExpired: { increment: new Decimal(expireAmount) },
               },
-              totalExpired: {
-                increment: new Decimal(Number(movement.amount)),
-              },
-            },
-          });
+            });
+          }
 
           results.push({
             success: true,
             movementId: movement.id,
             customerId: movement.customerCashback.customerId,
-            amount: Number(movement.amount),
+            amount: expireAmount,
           });
-        }, { timeout: 30_000 });
+        }, {
+          timeout: 30_000,
+          isolationLevel: Prisma.TransactionIsolationLevel.Serializable,
+        });
       } catch (error) {
         results.push({
           success: false,
