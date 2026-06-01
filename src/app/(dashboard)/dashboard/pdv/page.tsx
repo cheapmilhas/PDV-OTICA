@@ -3,6 +3,7 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useState, useEffect, useRef, useCallback } from "react";
 import { useSession } from "next-auth/react";
+import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { useRouter, useSearchParams } from "next/navigation";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
@@ -90,6 +91,12 @@ function PDVPage() {
   // apagaria o spinner no meio da chamada em voo. true = deixa o finally do
   // reenvio cuidar do spinner; false (desistência) = onClose limpa tudo.
   const resubmittingRef = useRef(false);
+  // M16: guarda qual serviceOrderId já foi carregado p/ o carrinho (idempotência
+  // do /convert no useEffect — evita 2 chamadas para a mesma OS).
+  const loadedServiceOrderRef = useRef<string | null>(null);
+
+  // M17: avisa antes de sair com itens no carrinho (F5/fechar aba descartava).
+  useUnsavedChangesWarning(carrinho.length > 0);
 
   // Vendedor
   const [sellers, setSellers] = useState<Array<{ id: string; name: string }>>([]);
@@ -238,6 +245,12 @@ function PDVPage() {
     const loadServiceOrderData = async () => {
       if (!serviceOrderId) return;
 
+      // M16: idempotência no front — o useEffect podia disparar 2x (StrictMode/
+      // re-render) e chamar /convert duas vezes para a mesma OS. O ref garante
+      // uma única carga por serviceOrderId.
+      if (loadedServiceOrderRef.current === serviceOrderId) return;
+      loadedServiceOrderRef.current = serviceOrderId;
+
       try {
         // Usa o endpoint de conversão que já retorna itens com dados do produto
         const res = await fetch(`/api/service-orders/${serviceOrderId}/convert`, {
@@ -299,6 +312,10 @@ function PDVPage() {
 
   // Carregar produtos disponíveis
   useEffect(() => {
+    // M18: AbortController evita race de busca — uma resposta lenta de uma
+    // busca antiga ("ab") chegando depois da nova ("abc") sobrescreveria a
+    // lista com resultados errados. O cleanup aborta o fetch em voo.
+    const controller = new AbortController();
     const loadProducts = async () => {
       setLoadingProducts(true);
       try {
@@ -322,7 +339,7 @@ function PDVPage() {
           params.set("search", searchNormalized);
         }
 
-        const res = await fetch(`/api/products?${params}`);
+        const res = await fetch(`/api/products?${params}`, { signal: controller.signal });
         if (!res.ok) throw new Error("Erro ao carregar produtos");
 
         const data = await res.json();
@@ -347,10 +364,13 @@ function PDVPage() {
         });
         setProducts(productsWithBranchPrice);
       } catch (error) {
+        // Busca abortada (nova digitação) não é erro — só ignora.
+        if (error instanceof DOMException && error.name === "AbortError") return;
         console.error("Erro ao carregar produtos:", error);
         toast.error("Erro ao carregar produtos");
       } finally {
-        setLoadingProducts(false);
+        // Só desliga o loading se não foi abortada (a busca nova cuida do seu).
+        if (!controller.signal.aborted) setLoadingProducts(false);
       }
     };
 
@@ -358,11 +378,16 @@ function PDVPage() {
       loadProducts();
     }, 300);
 
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [buscaProduto, activeBranchId]);
 
   // Carregar clientes
   useEffect(() => {
+    // M18: AbortController contra race de busca (mesma lógica dos produtos).
+    const controller = new AbortController();
     const loadCustomers = async () => {
       if (!buscaCliente || buscaCliente.length < 2) {
         setCustomers([]);
@@ -376,15 +401,16 @@ function PDVPage() {
           pageSize: "5",
         });
 
-        const res = await fetch(`/api/customers?${params}`);
+        const res = await fetch(`/api/customers?${params}`, { signal: controller.signal });
         if (!res.ok) throw new Error("Erro ao carregar clientes");
 
         const data = await res.json();
         setCustomers(data.data || []);
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         console.error("Erro ao carregar clientes:", error);
       } finally {
-        setLoadingCustomers(false);
+        if (!controller.signal.aborted) setLoadingCustomers(false);
       }
     };
 
@@ -392,7 +418,10 @@ function PDVPage() {
       loadCustomers();
     }, 300);
 
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [buscaCliente]);
 
   const produtosDisponiveis = products.slice(0, 12);
@@ -702,6 +731,9 @@ function PDVPage() {
       // Verificar se tem crediário e mostrar dialog para imprimir carnê
       const hasCrediario = payments.some((p) => p.method === "STORE_CREDIT");
       if (hasCrediario) {
+        // M17: venda JÁ gravada — limpa o carrinho para remover o aviso de
+        // "mudanças não salvas" (beforeunload) antes do dialog do carnê.
+        setCarrinho([]);
         // Limpa o desconto da venda — senão fica pré-preenchido na próxima venda
         // se o usuário não navegar para fora após o dialog do carnê.
         setDescontoVendaValor("");
@@ -737,6 +769,11 @@ function PDVPage() {
         console.error("Pós-venda (não crítico):", postError);
         toast.success("✅ Venda finalizada com sucesso!", { duration: 2000 });
       }
+
+      // M17: venda JÁ gravada — limpa o carrinho ANTES do delay do redirect para
+      // remover o aviso de "mudanças não salvas" (um F5 nos 1.5s não dispara
+      // mais o beforeunload falso, já que a venda foi concluída).
+      setCarrinho([]);
 
       // Redirecionar via router (Next) em vez de window.location pra preservar
       // state e cache. router.refresh() força re-fetch da lista de vendas.

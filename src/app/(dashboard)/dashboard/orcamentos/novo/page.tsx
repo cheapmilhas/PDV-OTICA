@@ -19,6 +19,7 @@ import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Package, Search, X, Us
 import { formatCurrency } from "@/lib/utils";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
+import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { ProductSearch } from "@/components/quotes/product-search";
 
 interface Product {
@@ -70,6 +71,11 @@ function NovoOrcamentoPage() {
 
   // Itens
   const [items, setItems] = useState<QuoteItem[]>([]);
+
+  // M17: avisa antes de sair com o orçamento começado (item adicionado ou
+  // cliente informado) — F5/fechar aba descartava o trabalho sem aviso.
+  useUnsavedChangesWarning(items.length > 0 || !!customerName || !!customerId);
+
   const [showManualItem, setShowManualItem] = useState(false);
   const [newItemDescription, setNewItemDescription] = useState("");
   const [newItemQuantity, setNewItemQuantity] = useState(1);
@@ -114,19 +120,25 @@ function NovoOrcamentoPage() {
       return;
     }
     setSearchingCustomer(true);
+    // M18: AbortController contra race de busca (resposta antiga sobrescrevendo).
+    const controller = new AbortController();
     const timer = setTimeout(async () => {
       try {
-        const res = await fetch(`/api/customers?search=${encodeURIComponent(customerSearch)}&pageSize=5`);
+        const res = await fetch(`/api/customers?search=${encodeURIComponent(customerSearch)}&pageSize=5`, { signal: controller.signal });
         const data = await res.json();
         setCustomerResults(data.data || []);
         setShowCustomerResults(true);
-      } catch {
+      } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         setCustomerResults([]);
       } finally {
-        setSearchingCustomer(false);
+        if (!controller.signal.aborted) setSearchingCustomer(false);
       }
     }, 400);
-    return () => clearTimeout(timer);
+    return () => {
+      clearTimeout(timer);
+      controller.abort();
+    };
   }, [customerSearch]);
 
   const selectCustomer = (customer: CustomerResult) => {

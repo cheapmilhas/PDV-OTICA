@@ -11,6 +11,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import toast from "react-hot-toast";
 import { track } from "@/lib/analytics";
+import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
 import { ArrowLeft, Plus, Trash2, ChevronDown, Search } from "lucide-react";
 import Link from "next/link";
 import { format } from "date-fns";
@@ -141,6 +142,13 @@ function NovaOrdemServicoPageContent() {
     },
   ]);
 
+  // M17: avisa antes de sair com a OS começada (cliente selecionado ou algum
+  // item preenchido) — F5/fechar aba descartava o trabalho sem aviso.
+  const osIniciada =
+    !!selectedCustomer ||
+    items.some((it) => it.productId || it.description.trim());
+  useUnsavedChangesWarning(osIniciada);
+
   // Carregar dados iniciais
   useEffect(() => {
     const loadData = async () => {
@@ -196,43 +204,60 @@ function NovaOrdemServicoPageContent() {
       return;
     }
 
+    // M18: AbortController contra race de busca.
+    const controller = new AbortController();
     const searchCustomers = async () => {
       setLoadingCustomers(true);
       try {
-        const res = await fetch(`/api/customers?status=ativos&search=${searchCustomer}&pageSize=10`);
+        const res = await fetch(`/api/customers?status=ativos&search=${searchCustomer}&pageSize=10`, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           setCustomers(data.data || []);
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         console.error("Erro ao buscar clientes:", error);
       } finally {
-        setLoadingCustomers(false);
+        if (!controller.signal.aborted) setLoadingCustomers(false);
       }
     };
 
     const debounce = setTimeout(searchCustomers, 300);
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [searchCustomer]);
 
   // Buscar produtos conforme digitação
   useEffect(() => {
-    if (!searchProduct || searchProduct.length < 2) return;
+    if (!searchProduct || searchProduct.length < 2) {
+      // M18: limpa a lista quando a query encurta (espelha a busca de clientes)
+      // — senão produtos de uma busca antiga ficam listados.
+      setProducts([]);
+      return;
+    }
 
+    // M18: AbortController contra race de busca.
+    const controller = new AbortController();
     const loadProducts = async () => {
       try {
-        const res = await fetch(`/api/products?status=ativos&search=${searchProduct}&pageSize=50`);
+        const res = await fetch(`/api/products?status=ativos&search=${searchProduct}&pageSize=50`, { signal: controller.signal });
         if (res.ok) {
           const data = await res.json();
           setProducts(data.data || []);
         }
       } catch (error) {
+        if (error instanceof DOMException && error.name === "AbortError") return;
         console.error("Erro ao buscar produtos:", error);
       }
     };
 
     const debounce = setTimeout(loadProducts, 300);
-    return () => clearTimeout(debounce);
+    return () => {
+      clearTimeout(debounce);
+      controller.abort();
+    };
   }, [searchProduct]);
 
   const addItem = () => {
