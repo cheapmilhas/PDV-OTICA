@@ -763,38 +763,57 @@ export class QuoteService {
         select: { id: true },
       });
 
-      openShift = await prisma.cashShift.create({
-        data: {
-          companyId,
-          branchId,
-          openedByUserId: userId,
-          openingFloatAmount: 0,
-          status: "OPEN",
-          openedAt: new Date(),
-          ...(defaultRegister && { cashRegisterId: defaultRegister.id }),
-        },
-      });
-
-      await prisma.activityLog
-        .create({
+      try {
+        openShift = await prisma.cashShift.create({
           data: {
             companyId,
-            type: "DATA_UPDATED",
-            title: "Turno de caixa auto-aberto",
-            detail: {
-              kind: "cash_shift_auto_opened",
-              shiftId: openShift.id,
-              branchId,
-              cashRegisterId: defaultRegister?.id ?? null,
-              triggeredBy: "quote.service.convertToSale",
-            },
-            actorId: userId,
-            actorType: "CLIENT",
+            branchId,
+            openedByUserId: userId,
+            openingFloatAmount: 0,
+            status: "OPEN",
+            openedAt: new Date(),
+            ...(defaultRegister && { cashRegisterId: defaultRegister.id }),
           },
-        })
-        .catch(() => {
-          // Auditoria nunca deve impedir a conversão.
         });
+
+        // Auditoria SÓ quando este request realmente abriu o caixa — dentro do
+        // try, depois do create. No caminho P2002 (caixa aberto pelo
+        // concorrente) NÃO logamos, senão o audit teria 2 "auto-aberto" para o
+        // mesmo shiftId.
+        await prisma.activityLog
+          .create({
+            data: {
+              companyId,
+              type: "DATA_UPDATED",
+              title: "Turno de caixa auto-aberto",
+              detail: {
+                kind: "cash_shift_auto_opened",
+                shiftId: openShift.id,
+                branchId,
+                cashRegisterId: defaultRegister?.id ?? null,
+                triggeredBy: "quote.service.convertToSale",
+              },
+              actorId: userId,
+              actorType: "CLIENT",
+            },
+          })
+          .catch(() => {
+            // Auditoria nunca deve impedir a conversão.
+          });
+      } catch (autoOpenErr) {
+        // M1: corrida de auto-abertura (mesmo fix de sale.service.create). No
+        // P2002 do índice único parcial, o concorrente já abriu o caixa —
+        // rebusca e segue em vez de derrubar a conversão.
+        if (
+          autoOpenErr instanceof Prisma.PrismaClientKnownRequestError &&
+          autoOpenErr.code === "P2002"
+        ) {
+          openShift = await prisma.cashShift.findFirst({
+            where: { branchId, status: "OPEN" },
+          });
+        }
+        if (!openShift) throw autoOpenErr;
+      }
     }
 
     // 5. Validar estoque de todos os itens

@@ -568,20 +568,42 @@ export class SaleService {
             log.error("Falha ao gravar ActivityLog de auto-abertura", { err: String(auditErr) });
           });
       } catch (autoOpenErr) {
-        log.error("Falha na auto-abertura de CashShift", {
-          branchId,
-          userId,
-          error: autoOpenErr instanceof Error ? autoOpenErr.message : String(autoOpenErr),
-        });
-        // Re-lança para que o usuário veja a mensagem (antes a falha era silenciosa
-        // e a venda era criada sem CashMovement).
-        throw autoOpenErr instanceof AppError
-          ? autoOpenErr
-          : new AppError(
-              ERROR_CODES.INTERNAL_ERROR,
-              "Não foi possível abrir o caixa automaticamente para registrar a venda. Abra o caixa manualmente e tente novamente.",
-              500,
-            );
+        // M1: corrida de auto-abertura. Duas vendas simultâneas na mesma filial
+        // sem caixa: ambas passam o findFirst e tentam create; a 2ª viola o
+        // índice único parcial CashShift_branchId_open_unique (P2002) e a venda
+        // quebrava com 500. Aqui, no P2002, o concorrente JÁ criou o caixa —
+        // rebuscamos o shift OPEN e seguimos normalmente.
+        if (
+          autoOpenErr instanceof Prisma.PrismaClientKnownRequestError &&
+          autoOpenErr.code === "P2002"
+        ) {
+          openShift = await prisma.cashShift.findFirst({
+            where: { branchId, status: "OPEN" },
+          });
+          if (openShift) {
+            log.info("Auto-abertura: corrida resolvida, usando caixa do concorrente", {
+              branchId,
+              shiftId: openShift.id,
+            });
+          }
+        }
+
+        if (!openShift) {
+          log.error("Falha na auto-abertura de CashShift", {
+            branchId,
+            userId,
+            error: autoOpenErr instanceof Error ? autoOpenErr.message : String(autoOpenErr),
+          });
+          // Re-lança para que o usuário veja a mensagem (antes a falha era silenciosa
+          // e a venda era criada sem CashMovement).
+          throw autoOpenErr instanceof AppError
+            ? autoOpenErr
+            : new AppError(
+                ERROR_CODES.INTERNAL_ERROR,
+                "Não foi possível abrir o caixa automaticamente para registrar a venda. Abra o caixa manualmente e tente novamente.",
+                500,
+              );
+        }
       }
     }
 

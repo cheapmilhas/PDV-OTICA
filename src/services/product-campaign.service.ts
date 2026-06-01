@@ -516,6 +516,14 @@ async function checkBonusLimits(
 ): Promise<{ allowed: boolean; bonusAmount: number; reason?: string }> {
   let cappedBonus = proposedBonus;
 
+  // M6: o teto deve contar todo bônus COMPROMETIDO, não só APPROVED. Os entries
+  // nascem PENDING e só viram APPROVED depois — então checar só APPROVED
+  // ignorava todos os PENDING já gerados e o teto estourava (vazamento
+  // estrutural, não só corrida): vários PENDING acumulavam e ao aprovar
+  // ultrapassavam o limite. PENDING+APPROVED+PAID = compromisso real;
+  // REVERSED/EXPIRED não contam.
+  const COMMITTED: ("PENDING" | "APPROVED" | "PAID")[] = ["PENDING", "APPROVED", "PAID"];
+
   // 1. Limite por vendedor
   if (campaign.maxBonusPerSeller) {
     const sellerTotal = await prisma.campaignBonusEntry.aggregate({
@@ -523,7 +531,7 @@ async function checkBonusLimits(
         campaignId,
         companyId,
         sellerUserId,
-        status: "APPROVED",
+        status: { in: COMMITTED },
       },
       _sum: { totalBonus: true },
     });
@@ -549,7 +557,7 @@ async function checkBonusLimits(
         campaignId,
         companyId,
         branchId,
-        status: "APPROVED",
+        status: { in: COMMITTED },
       },
       _sum: { totalBonus: true },
     });
@@ -574,7 +582,7 @@ async function checkBonusLimits(
       where: {
         campaignId,
         companyId,
-        status: "APPROVED",
+        status: { in: COMMITTED },
       },
       _sum: { totalBonus: true },
     });
@@ -602,7 +610,7 @@ async function checkBonusLimits(
       where: {
         campaignId,
         companyId,
-        status: "APPROVED",
+        status: { in: COMMITTED },
         createdAt: {
           gte: startOfDay,
           lte: endOfDay,
@@ -771,7 +779,14 @@ export async function processaSaleForCampaigns(
 
     if (result.bonusAmount <= 0) continue;
 
-    // Verificar limites da campanha
+    // Verificar limites da campanha.
+    // M6: checkBonusLimits agora conta bônus COMPROMETIDO (PENDING+APPROVED+
+    // PAID), fechando o vazamento estrutural. Resta uma janela de corrida PURA
+    // (2 vendas exatamente simultâneas leem o mesmo agregado antes de qualquer
+    // uma gravar) que pode estourar o teto MARGINALMENTE. Decisão: aceitável —
+    // é teto de BÔNUS (não dinheiro de cliente) e exigir SELECT FOR UPDATE/lock
+    // por (campanha,vendedor,filial) aqui não compensa. NÃO remover o filtro
+    // COMMITTED achando que é over-engineering — ele é o que fecha 95% do bug.
     const limitCheck = await checkBonusLimits(
       campaign.id,
       companyId,
