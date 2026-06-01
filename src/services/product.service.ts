@@ -243,6 +243,11 @@ export class ProductService {
         brand: true,
         color: true,
         shape: true,
+        // M15: inclui preços/estoque por filial — sem isso a tela de edição não
+        // mostrava o override por filial (branchSalePrice/promoPrice/costPrice).
+        branchStocks: {
+          include: { branch: { select: { id: true, name: true } } },
+        },
       },
     });
 
@@ -250,7 +255,10 @@ export class ProductService {
       throw notFoundError("Produto não encontrado");
     }
 
-    return product;
+    // M15: branchStocks tem campos Decimal (costPrice/salePrice/promoPrice/
+    // marginPercent) que NextResponse.json não serializa (viram {} ou erro).
+    // Normaliza Decimal → number (padrão do projeto p/ Decimal serializável).
+    return JSON.parse(JSON.stringify(product));
   }
 
   /**

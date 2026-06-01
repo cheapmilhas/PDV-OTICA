@@ -97,7 +97,9 @@ export async function POST(req: NextRequest) {
             phone: row.phone,
             cpf: row.cpf,
             rg: row.rg,
-            email: row.email,
+            // M7: normaliza email (trim+lowercase; vazio→null) p/ casar com o
+            // índice único parcial Customer_companyId_email_unique.
+            email: row.email ? row.email.trim().toLowerCase() || null : null,
             birthDate: row.birthDate ? new Date(row.birthDate) : null,
             gender: row.gender,
             address: row.address,
@@ -132,9 +134,16 @@ export async function POST(req: NextRequest) {
         }
 
         imported++;
-      } catch (err) {
+      } catch (err: any) {
         errors++;
-        const msg = err instanceof Error ? err.message : "Unknown error";
+        // M7: P2002 (unique CPF/email) com mensagem amigável — não vaza o nome
+        // interno da constraint do Prisma na resposta.
+        const msg =
+          err?.code === "P2002"
+            ? "CPF, CNPJ ou email já pertence a outro cliente nesta empresa"
+            : err instanceof Error
+              ? err.message
+              : "Unknown error";
         if (errorDetails.length < 20) {
           errorDetails.push(`${row.name}: ${msg}`);
         }

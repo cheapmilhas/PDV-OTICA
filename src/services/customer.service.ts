@@ -17,6 +17,35 @@ import type { Customer } from "@prisma/client";
 const customerLog = logger.child({ service: "customer" });
 
 /**
+ * M7: normaliza email para o índice único parcial. Trim + minúsculo; vazio
+ * vira undefined (NULL no banco — não colide com outros NULLs, ao contrário de
+ * strings vazias). Retorna undefined quando não há email válido.
+ */
+function normalizeEmail(email?: string | null): string | undefined {
+  if (email == null) return undefined;
+  const trimmed = email.trim().toLowerCase();
+  return trimmed === "" ? undefined : trimmed;
+}
+
+/**
+ * M7: converte P2002 (corrida que escapou do findFirst) num duplicateError
+ * amigável, distinguindo email de CPF pelo nome do índice violado. Outros erros
+ * passam adiante intactos.
+ */
+function mapCustomerUniqueError(err: unknown): unknown {
+  const code = (err as { code?: string })?.code;
+  if (code !== "P2002") return err;
+  const target = String((err as { meta?: { target?: unknown } })?.meta?.target ?? "");
+  if (target.includes("email")) {
+    return duplicateError("Email já cadastrado nesta empresa", "email");
+  }
+  if (target.includes("cpf")) {
+    return duplicateError("CPF já cadastrado nesta empresa", "cpf");
+  }
+  return duplicateError("Registro duplicado", "customer");
+}
+
+/**
  * Service de clientes
  * Camada de business logic para operações de Customer
  */
@@ -193,6 +222,10 @@ export class CustomerService {
    * const customer = await customerService.create({ name: "João", cpf: "12345678901" }, "cm_001")
    */
   async create(data: CreateCustomerDTO, companyId: string, originBranchId?: string | null): Promise<Customer> {
+    // M7: normaliza email vazio/whitespace → undefined (vira NULL no banco; o
+    // índice único parcial Customer_companyId_email_unique trata só não-nulos).
+    data = { ...data, email: normalizeEmail(data.email) };
+
     // Validação: CPF duplicado (se fornecido)
     if (data.cpf) {
       const existing = await prisma.customer.findFirst({
@@ -207,12 +240,12 @@ export class CustomerService {
       }
     }
 
-    // Validação: Email duplicado (se fornecido)
+    // Validação: Email duplicado (case-insensitive, alinhado ao índice).
     if (data.email) {
       const existing = await prisma.customer.findFirst({
         where: {
           companyId,
-          email: data.email,
+          email: { equals: data.email, mode: "insensitive" },
         },
       });
 
@@ -224,14 +257,20 @@ export class CustomerService {
     // Separa consent do payload (não é campo do Customer; vira ConsentRecord).
     const { consent, ...customerFields } = data;
 
-    // Cria cliente
-    const customer = await prisma.customer.create({
-      data: {
-        ...customerFields,
-        companyId,
-        ...(originBranchId && { originBranchId }),
-      },
-    });
+    // Cria cliente. M7: o índice único de email pode disparar P2002 numa corrida
+    // que passe o findFirst acima — converte em erro amigável (não 500 cru).
+    let customer: Customer;
+    try {
+      customer = await prisma.customer.create({
+        data: {
+          ...customerFields,
+          companyId,
+          ...(originBranchId && { originBranchId }),
+        },
+      });
+    } catch (err) {
+      throw mapCustomerUniqueError(err);
+    }
 
     // Registra consentimento granular se enviado pelo formulário.
     // Falha não bloqueia a criação — apenas loga, igual padrão de ledger.
@@ -276,6 +315,14 @@ export class CustomerService {
     // Verifica se cliente existe e pertence à empresa
     await this.getById(id, companyId, true); // includeInactive=true para permitir editar inativos
 
+    // M7: normaliza email só se a chave veio no payload. "" → null (limpa/
+    // libera o email; undefined seria ignorado pelo Prisma). Mantemos o DTO
+    // intacto e aplicamos no payload do Prisma update mais abaixo.
+    const emailProvided = "email" in data;
+    const normalizedEmail: string | null = emailProvided
+      ? normalizeEmail(data.email) ?? null
+      : null;
+
     // Validação: CPF duplicado (se mudando CPF)
     if (data.cpf) {
       const existing = await prisma.customer.findFirst({
@@ -291,12 +338,12 @@ export class CustomerService {
       }
     }
 
-    // Validação: Email duplicado (se mudando email)
-    if (data.email) {
+    // Validação: Email duplicado (case-insensitive, alinhado ao índice).
+    if (normalizedEmail) {
       const existing = await prisma.customer.findFirst({
         where: {
           companyId,
-          email: data.email,
+          email: { equals: normalizedEmail, mode: "insensitive" },
           NOT: { id },
         },
       });
@@ -306,13 +353,21 @@ export class CustomerService {
       }
     }
 
-    // Atualiza cliente
-    const customer = await prisma.customer.update({
-      where: { id },
-      data,
-    });
-
-    return customer;
+    // Atualiza cliente. Remove email do DTO e injeta o normalizado só quando o
+    // payload trouxe email (senão Prisma ignora e o email atual permanece).
+    const { email: _omitEmail, ...rest } = data;
+    try {
+      const customer = await prisma.customer.update({
+        where: { id },
+        data: {
+          ...rest,
+          ...(emailProvided && { email: normalizedEmail }),
+        },
+      });
+      return customer;
+    } catch (err) {
+      throw mapCustomerUniqueError(err);
+    }
   }
 
   /**
