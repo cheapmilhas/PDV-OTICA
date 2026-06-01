@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ConfirmReasonDialog } from "@/components/ui/confirm-reason-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
@@ -31,6 +32,7 @@ function EditarOrdemServicoContent() {
   const [loading, setLoading] = useState(false);
   const [fetching, setFetching] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [order, setOrder] = useState<any>(null);
   const [laboratories, setLaboratories] = useState<any[]>([]);
 
@@ -379,16 +381,13 @@ function EditarOrdemServicoContent() {
     }
   };
 
-  const handleCancel = async () => {
-    if (!confirm("Tem certeza que deseja cancelar esta ordem de serviço?")) return;
-    const reason = prompt("Motivo do cancelamento (opcional):");
-
+  const handleCancel = async (reason: string) => {
     setCanceling(true);
     try {
       const res = await fetch(`/api/service-orders/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: reason || undefined }),
       });
 
       if (!res.ok) {
@@ -396,6 +395,7 @@ function EditarOrdemServicoContent() {
         throw new Error(error.error?.message || "Erro ao cancelar ordem de serviço");
       }
 
+      setCancelDialogOpen(false);
       toast.success("Ordem de serviço cancelada com sucesso!");
       router.push("/dashboard/ordens-servico");
     } catch (error: any) {
@@ -1211,7 +1211,7 @@ function EditarOrdemServicoContent() {
             <Button
               type="button"
               variant="destructive"
-              onClick={handleCancel}
+              onClick={() => setCancelDialogOpen(true)}
               disabled={canceling}
             >
               {canceling ? "Cancelando..." : "Cancelar Ordem"}
@@ -1219,6 +1219,19 @@ function EditarOrdemServicoContent() {
           )}
         </div>
       </form>
+
+      <ConfirmReasonDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        title="Cancelar ordem de serviço"
+        description="Esta ação cancela a OS. Não pode ser desfeita."
+        reasonLabel="Motivo do cancelamento (opcional)"
+        reasonPlaceholder="Ex.: cliente desistiu, erro no pedido..."
+        confirmLabel="Cancelar OS"
+        cancelLabel="Voltar"
+        loading={canceling}
+        onConfirm={handleCancel}
+      />
     </div>
   );
 }

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { ConfirmReasonDialog } from "@/components/ui/confirm-reason-dialog";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
 import { useSession } from "next-auth/react";
@@ -84,6 +85,7 @@ export default function DetalhesVendaPage() {
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [canceling, setCanceling] = useState(false);
+  const [cancelDialogOpen, setCancelDialogOpen] = useState(false);
   const [reactivating, setReactivating] = useState(false);
   const [generatingOS, setGeneratingOS] = useState(false);
   const [editSellerOpen, setEditSellerOpen] = useState(false);
@@ -156,19 +158,13 @@ export default function DetalhesVendaPage() {
     }
   }, [editSellerOpen]);
 
-  const handleCancel = async () => {
-    if (!confirm("Tem certeza que deseja cancelar esta venda? O estoque será estornado.")) {
-      return;
-    }
-
-    const reason = prompt("Motivo do cancelamento (opcional):");
-
+  const handleCancel = async (reason: string) => {
     setCanceling(true);
     try {
       const res = await fetch(`/api/sales/${id}`, {
         method: "DELETE",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ reason }),
+        body: JSON.stringify({ reason: reason || undefined }),
       });
 
       if (!res.ok) {
@@ -176,6 +172,7 @@ export default function DetalhesVendaPage() {
         throw new Error(error.error?.message || "Erro ao cancelar venda");
       }
 
+      setCancelDialogOpen(false);
       toast.success("Venda cancelada com sucesso!");
       router.push("/dashboard/vendas");
     } catch (error: any) {
@@ -497,7 +494,7 @@ export default function DetalhesVendaPage() {
                 <Button
                   variant="destructive"
                   size="sm"
-                  onClick={handleCancel}
+                  onClick={() => setCancelDialogOpen(true)}
                   disabled={canceling}
                 >
                   {canceling ? "Cancelando..." : "Cancelar Venda"}
@@ -819,6 +816,19 @@ export default function DetalhesVendaPage() {
         </Card>
       )}
       </div>
+
+      <ConfirmReasonDialog
+        open={cancelDialogOpen}
+        onOpenChange={setCancelDialogOpen}
+        title="Cancelar venda"
+        description="O estoque será estornado e os pagamentos revertidos. Esta ação não pode ser desfeita."
+        reasonLabel="Motivo do cancelamento (opcional)"
+        reasonPlaceholder="Ex.: cliente desistiu, erro no pedido..."
+        confirmLabel="Cancelar venda"
+        cancelLabel="Voltar"
+        loading={canceling}
+        onConfirm={handleCancel}
+      />
     </>
   );
 }
