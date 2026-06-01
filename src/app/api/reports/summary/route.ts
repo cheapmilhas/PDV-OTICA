@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
+import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
+import { subMonths } from "date-fns";
+import { handleApiError } from "@/lib/error-handler";
 
 const log = logger.child({ route: "reports/summary" });
 
@@ -13,13 +17,14 @@ export async function GET(request: Request) {
     }
 
     const { searchParams } = new URL(request.url);
-    const qBranchId = searchParams.get("branchId");
-    const branchFilter = qBranchId && qBranchId !== "ALL" ? { branchId: qBranchId } : {};
+    // M3: respeita o seletor de filial com guard de papel + validação de empresa.
+    const branchFilter = await resolveReportBranchFilter(searchParams);
 
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
-    const startOfLastMonth = new Date(today.getFullYear(), today.getMonth() - 1, 1);
-    const endOfLastMonth = new Date(today.getFullYear(), today.getMonth(), 0, 23, 59, 59);
+    // M2: limites de mês no fuso local (America/Sao_Paulo), não UTC do servidor.
+    const now = new Date();
+    const startOfMonth = startOfLocalMonth(now);
+    const startOfLastMonth = startOfLocalMonth(subMonths(now, 1));
+    const endOfLastMonth = endOfLocalMonth(subMonths(now, 1));
 
     // Vendas do mês atual
     const salesMonth = await prisma.sale.aggregate({
@@ -115,9 +120,7 @@ export async function GET(request: Request) {
     });
   } catch (error) {
     log.error("Erro ao buscar resumo", { error: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json(
-      { error: "Erro ao buscar resumo" },
-      { status: 500 }
-    );
+    // handleApiError preserva o status de AppError (ex: 403 do guard de filial).
+    return handleApiError(error);
   }
 }

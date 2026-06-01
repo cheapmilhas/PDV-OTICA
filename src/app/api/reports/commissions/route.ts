@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { getCompanyId } from "@/lib/auth-helpers";
+import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
 import { handleApiError } from "@/lib/error-handler";
 import { CommissionsService } from "@/services/reports/commissions.service";
 import { parseISO } from "date-fns";
@@ -24,14 +25,15 @@ export async function GET(request: NextRequest) {
       );
     }
 
-    const branchId = searchParams.get("branchId") || undefined;
+    // M3: resolve filial com guard de papel + validação de empresa. {} = ALL.
+    const branchFilter = await resolveReportBranchFilter(searchParams);
 
     const filters = {
       startDate: parseISO(startDate),
       endDate: parseISO(endDate),
       userId: searchParams.get("userId") || undefined,
       status: searchParams.get("status") || undefined,
-      branchId: branchId && branchId !== "ALL" ? branchId : undefined,
+      branchId: branchFilter.branchId,
     };
 
     // Validate date range (max 1 year)

@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
+import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
+import { startOfLocalMonth } from "@/lib/date-utils";
+import { handleApiError } from "@/lib/error-handler";
 
 const log = logger.child({ route: "reports/top-products" });
 
@@ -14,9 +17,9 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const limit = parseInt(searchParams.get("limit") || "10");
-
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    // M3: respeita seletor de filial. M2: mês no fuso local.
+    const branchFilter = await resolveReportBranchFilter(searchParams);
+    const startOfMonth = startOfLocalMonth(new Date());
 
     // Buscar produtos mais vendidos
     const topProducts = await prisma.saleItem.groupBy({
@@ -26,6 +29,7 @@ export async function GET(request: Request) {
           companyId: session.user.companyId,
           createdAt: { gte: startOfMonth },
           status: "COMPLETED",
+          ...branchFilter,
         }
       },
       _sum: {
@@ -63,9 +67,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ data });
   } catch (error) {
     log.error("Erro ao buscar top produtos", { error: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json(
-      { error: "Erro ao buscar top produtos" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

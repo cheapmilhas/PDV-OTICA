@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import { getLocalHour } from "@/lib/date-utils";
+import { getLocalHour, localBoundary, startOfLocalDay, endOfLocalDay, toLocalTime } from "@/lib/date-utils";
 import type {
   ProductReportQueryDTO,
   CustomerReportQueryDTO,
@@ -29,27 +29,34 @@ import {
 } from "date-fns";
 import { ptBR } from "date-fns/locale";
 
-// Helper para calcular período
+// Helper para calcular período.
+// M2: TODOS os limites são calculados no fuso America/Sao_Paulo e convertidos
+// para UTC (localBoundary). date-fns puro operava em UTC (fuso do servidor na
+// Vercel), deslocando "hoje/semana/mês" em 3h — vendas das 21h–23h59 (BRT)
+// caíam no período seguinte.
 function getDateRange(period: string, startDate?: Date, endDate?: Date) {
   const now = new Date();
 
   if (period === "custom" && startDate && endDate) {
-    return { start: startOfDay(startDate), end: endOfDay(endDate) };
+    return { start: startOfLocalDay(startDate), end: endOfLocalDay(endDate) };
   }
 
   switch (period) {
     case "today":
-      return { start: startOfDay(now), end: endOfDay(now) };
+      return { start: startOfLocalDay(now), end: endOfLocalDay(now) };
     case "week":
-      return { start: startOfWeek(now, { locale: ptBR }), end: endOfWeek(now, { locale: ptBR }) };
+      return {
+        start: localBoundary(now, startOfWeek, { locale: ptBR }),
+        end: localBoundary(now, endOfWeek, { locale: ptBR }),
+      };
     case "month":
-      return { start: startOfMonth(now), end: endOfMonth(now) };
+      return { start: localBoundary(now, startOfMonth), end: localBoundary(now, endOfMonth) };
     case "quarter":
-      return { start: startOfQuarter(now), end: endOfQuarter(now) };
+      return { start: localBoundary(now, startOfQuarter), end: localBoundary(now, endOfQuarter) };
     case "year":
-      return { start: startOfYear(now), end: endOfYear(now) };
+      return { start: localBoundary(now, startOfYear), end: localBoundary(now, endOfYear) };
     default:
-      return { start: startOfMonth(now), end: endOfMonth(now) };
+      return { start: localBoundary(now, startOfMonth), end: localBoundary(now, endOfMonth) };
   }
 }
 
@@ -401,22 +408,24 @@ export const reportsService = {
     for (const sale of sales) {
       let key: string | number;
 
+      // M2: agrupa pelo instante no fuso LOCAL — getDay/format em UTC jogavam
+      // venda de domingo 22h (BRT) no dia/semana errado.
+      const localCreated = toLocalTime(sale.createdAt);
       switch (query.groupBy) {
         case "hour":
-          // Usa hora local (America/Sao_Paulo) em vez de UTC
           key = getLocalHour(sale.createdAt);
           break;
         case "dayOfWeek":
-          key = getDay(sale.createdAt);
+          key = getDay(localCreated);
           break;
         case "day":
-          key = format(sale.createdAt, "yyyy-MM-dd");
+          key = format(localCreated, "yyyy-MM-dd");
           break;
         case "month":
-          key = format(sale.createdAt, "yyyy-MM");
+          key = format(localCreated, "yyyy-MM");
           break;
         default:
-          key = getDay(sale.createdAt);
+          key = getDay(localCreated);
       }
 
       const existing = groupedData.get(key);
@@ -706,37 +715,40 @@ export const reportsService = {
     // Determinar o período atual e anterior com base no parâmetro
     let startCurrent: Date, endCurrent: Date, startPrevious: Date, endPrevious: Date;
 
+    // M2: todos os limites no fuso local (America/Sao_Paulo) → UTC.
     switch (period) {
       case "today":
-        startCurrent = startOfDay(now);
-        endCurrent = endOfDay(now);
-        startPrevious = startOfDay(subDays(now, 1));
-        endPrevious = endOfDay(subDays(now, 1));
+        startCurrent = localBoundary(now, startOfDay);
+        endCurrent = localBoundary(now, endOfDay);
+        startPrevious = localBoundary(subDays(now, 1), startOfDay);
+        endPrevious = localBoundary(subDays(now, 1), endOfDay);
         break;
       case "week":
-        startCurrent = startOfWeek(now);
-        endCurrent = endOfWeek(now);
-        startPrevious = startOfWeek(subWeeks(now, 1));
-        endPrevious = endOfWeek(subWeeks(now, 1));
+        // M2-6: ptBR p/ alinhar com getDateRange (semana começa na mesma origem
+        // em todos os relatórios).
+        startCurrent = localBoundary(now, startOfWeek, { locale: ptBR });
+        endCurrent = localBoundary(now, endOfWeek, { locale: ptBR });
+        startPrevious = localBoundary(subWeeks(now, 1), startOfWeek, { locale: ptBR });
+        endPrevious = localBoundary(subWeeks(now, 1), endOfWeek, { locale: ptBR });
         break;
       case "quarter":
-        startCurrent = startOfQuarter(now);
-        endCurrent = endOfQuarter(now);
-        startPrevious = startOfQuarter(subQuarters(now, 1));
-        endPrevious = endOfQuarter(subQuarters(now, 1));
+        startCurrent = localBoundary(now, startOfQuarter);
+        endCurrent = localBoundary(now, endOfQuarter);
+        startPrevious = localBoundary(subQuarters(now, 1), startOfQuarter);
+        endPrevious = localBoundary(subQuarters(now, 1), endOfQuarter);
         break;
       case "year":
-        startCurrent = startOfYear(now);
-        endCurrent = endOfYear(now);
-        startPrevious = startOfYear(subYears(now, 1));
-        endPrevious = endOfYear(subYears(now, 1));
+        startCurrent = localBoundary(now, startOfYear);
+        endCurrent = localBoundary(now, endOfYear);
+        startPrevious = localBoundary(subYears(now, 1), startOfYear);
+        endPrevious = localBoundary(subYears(now, 1), endOfYear);
         break;
       case "month":
       default:
-        startCurrent = startOfMonth(now);
-        endCurrent = endOfMonth(now);
-        startPrevious = startOfMonth(subMonths(now, 1));
-        endPrevious = endOfMonth(subMonths(now, 1));
+        startCurrent = localBoundary(now, startOfMonth);
+        endCurrent = localBoundary(now, endOfMonth);
+        startPrevious = localBoundary(subMonths(now, 1), startOfMonth);
+        endPrevious = localBoundary(subMonths(now, 1), endOfMonth);
         break;
     }
 

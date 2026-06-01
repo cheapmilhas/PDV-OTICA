@@ -2,6 +2,10 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
+import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
+import { subMonths } from "date-fns";
+import { handleApiError } from "@/lib/error-handler";
 
 const log = logger.child({ route: "reports/sales-evolution" });
 
@@ -14,20 +18,25 @@ export async function GET(request: Request) {
 
     const { searchParams } = new URL(request.url);
     const months = parseInt(searchParams.get("months") || "6");
+    // M3: respeita seletor de filial.
+    const branchFilter = await resolveReportBranchFilter(searchParams);
 
     const today = new Date();
     const monthsData = [];
 
     // Buscar vendas dos últimos N meses
     for (let i = months - 1; i >= 0; i--) {
-      const startDate = new Date(today.getFullYear(), today.getMonth() - i, 1);
-      const endDate = new Date(today.getFullYear(), today.getMonth() - i + 1, 0, 23, 59, 59);
+      // M2: limites do mês no fuso local (não UTC do servidor).
+      const monthRef = subMonths(today, i);
+      const startDate = startOfLocalMonth(monthRef);
+      const endDate = endOfLocalMonth(monthRef);
 
       const sales = await prisma.sale.aggregate({
         where: {
           companyId: session.user.companyId,
           createdAt: { gte: startDate, lte: endDate },
           status: "COMPLETED",
+          ...branchFilter,
         },
         _sum: { total: true },
       });
@@ -39,6 +48,7 @@ export async function GET(request: Request) {
             companyId: session.user.companyId,
             createdAt: { gte: startDate, lte: endDate },
             status: "COMPLETED",
+            ...branchFilter,
           }
         },
         select: {
@@ -54,9 +64,10 @@ export async function GET(request: Request) {
         return acc + itemProfit;
       }, 0);
 
-      const monthName = startDate.toLocaleDateString('pt-BR', { month: 'short' })
-        .replace('.', '')
-        .charAt(0).toUpperCase() + startDate.toLocaleDateString('pt-BR', { month: 'short' }).slice(1, 3);
+      // Nome do mês a partir do instante de referência local (monthRef), com
+      // timeZone explícito p/ não cair no mês anterior na borda.
+      const shortMonth = monthRef.toLocaleDateString('pt-BR', { month: 'short', timeZone: 'America/Sao_Paulo' });
+      const monthName = shortMonth.replace('.', '').charAt(0).toUpperCase() + shortMonth.slice(1, 3);
 
       monthsData.push({
         mes: monthName,
@@ -68,9 +79,6 @@ export async function GET(request: Request) {
     return NextResponse.json({ data: monthsData });
   } catch (error) {
     log.error("Erro ao buscar evolução de vendas", { error: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json(
-      { error: "Erro ao buscar evolução de vendas" },
-      { status: 500 }
-    );
+    return handleApiError(error);
   }
 }

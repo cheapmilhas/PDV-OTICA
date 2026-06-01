@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { startOfLocalMonth, startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 /**
  * GET /api/reports/branch-comparison
@@ -17,9 +18,10 @@ export const GET = withPlanFeatureGuard(async (request: Request) => {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
 
+    // M2: limites no fuso local (America/Sao_Paulo), não UTC do servidor.
     const now = new Date();
-    const start = startDate ? new Date(startDate) : new Date(now.getFullYear(), now.getMonth(), 1);
-    const end = endDate ? new Date(endDate) : now;
+    const start = startDate ? startOfLocalDay(startDate) : startOfLocalMonth(now);
+    const end = endDate ? endOfLocalDay(endDate) : now;
 
     const branches = await prisma.branch.findMany({
       where: { companyId, active: true },

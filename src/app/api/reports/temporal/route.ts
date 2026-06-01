@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
-import { requireAuth, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth } from "@/lib/auth-helpers";
+import { resolveReportBranchId } from "@/lib/resolve-report-branch";
 import { handleApiError } from "@/lib/error-handler";
 import { reportsService } from "@/services/reports.service";
 import { temporalReportQuerySchema } from "@/lib/validations/reports.schema";
@@ -7,8 +8,8 @@ import { temporalReportQuerySchema } from "@/lib/validations/reports.schema";
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
-    const branchId = await getBranchId();
     const { searchParams } = new URL(request.url);
+    const branchId = await resolveReportBranchId(searchParams); // M3: respeita seletor
 
     const query = temporalReportQuerySchema.parse({
       startDate: searchParams.get("startDate") || undefined,

@@ -86,6 +86,24 @@ export function endOfLocalMonth(date?: Date): Date {
 }
 
 /**
+ * Aplica uma função de início/fim de período do date-fns NO FUSO LOCAL e
+ * devolve o instante em UTC (para filtros de relatório). date-fns puro opera no
+ * fuso do servidor (UTC na Vercel) — sem isso, "início do dia/semana/mês" sai
+ * deslocado 3h e vendas das 21h–23h59 (BRT) caem no período errado.
+ *
+ * Uso: localBoundary(now, startOfWeek) → 1º instante (UTC) da semana local.
+ */
+export function localBoundary(
+  date: Date,
+  fn: (d: Date, opts?: object) => Date,
+  opts?: object,
+): Date {
+  const local = toZonedTime(date, TIMEZONE);
+  const boundaryLocal = opts ? fn(local, opts) : fn(local);
+  return fromZonedTime(boundaryLocal, TIMEZONE);
+}
+
+/**
  * Extrai a hora no fuso local (para "Horário de Pico").
  * Ex: 2026-03-16T11:41:00Z → 8 (8h em São Paulo)
  */

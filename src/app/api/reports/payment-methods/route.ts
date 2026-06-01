@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
+import { startOfLocalMonth } from "@/lib/date-utils";
 
 const log = logger.child({ route: "reports/payment-methods" });
 
@@ -12,8 +13,8 @@ export async function GET() {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
     }
 
-    const today = new Date();
-    const startOfMonth = new Date(today.getFullYear(), today.getMonth(), 1);
+    // M2: início do mês no fuso local (America/Sao_Paulo), não UTC do servidor.
+    const startOfMonth = startOfLocalMonth(new Date());
 
     // Buscar pagamentos agrupados por método
     // Como Sale não tem campo paymentMethod, buscamos de SalePayment
