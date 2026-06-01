@@ -1,135 +1,158 @@
 # Prompt de QA — Claude no Chrome (PDV Ótica)
 
-Cole o bloco abaixo no Claude rodando no Chrome, depois de já estar logado com o login de teste em https://pdv-otica.vercel.app/dashboard
+> **Como usar:** o Claude no Chrome estoura o contexto se você colar tudo de uma vez (ele soma o DOM da página ao prompt a cada passo). Por isso o roteiro está quebrado em **4 blocos**. Faça assim:
+>
+> 1. Esteja logado com o login de teste em `https://pdv-otica.vercel.app/dashboard`.
+> 2. **Comece uma conversa NOVA no Claude do Chrome para cada bloco** (importante — não reaproveite a mesma conversa, senão o contexto acumula e trava).
+> 3. Cole o bloco, deixe ele rodar até o relatório, copie o relatório, e passe pro próximo bloco.
+> 4. Me cole os 4 relatórios aqui no final (ou um por vez).
 
 ---
 
-Você é um QA testando um PDV de ótica já aberto neste navegador (já estou logado). O objetivo é validar correções recentes de bugs. NÃO é um teste destrutivo, mas você VAI criar vendas/OS/orçamentos de teste — tudo bem, é ambiente de teste.
+## BLOCO 1 de 4 — PREÇO / CRÉDITO / VENDA
 
-REGRAS:
-- Trabalhe um teste por vez, na ordem. Para cada teste: execute os passos, observe a tela, e registre o RESULTADO (PASSOU / FALHOU / BLOQUEADO) + o que você viu.
-- Se um teste precisar de um dado que não existe (ex: produto em promoção, cliente com limite baixo), marque como BLOQUEADO e explique o que faltou — não invente.
-- Tire um print quando algo falhar.
-- NÃO mude configurações da empresa, não exclua dados existentes, não mexa em usuários.
-- Ao final, gere um RELATÓRIO no formato indicado no fim deste prompt.
+```
+Você é um QA testando um PDV de ótica já aberto neste Chrome (já estou logado). Valide as correções abaixo. É ambiente de teste — pode criar vendas de teste. NÃO mude config da empresa, NÃO exclua dados, NÃO mexa em usuários.
 
-O app fica em https://pdv-otica.vercel.app — as telas relevantes:
-- PDV: /dashboard/pdv
-- Vendas: /dashboard/vendas
-- Ordens de serviço: /dashboard/ordens-servico
-- Orçamentos: /dashboard/orcamentos
-- Cashback: /dashboard/cashback
-- Relatórios: /dashboard/relatorios
-- Estoque: /dashboard/estoque
+Para cada teste: execute os passos, observe a tela, registre RESULTADO (PASSOU / FALHOU / BLOQUEADO) + o que viu. Se faltar um dado (produto em promoção, cliente com limite baixo), marque BLOQUEADO e diga o que faltou — não invente. Tire print quando FALHAR. Trabalhe um teste por vez, na ordem.
 
-==================================================
-BLOCO 1 — PREÇO / CRÉDITO / VENDA (prioridade máxima)
-==================================================
+App: https://pdv-otica.vercel.app — PDV em /dashboard/pdv · Vendas em /dashboard/vendas · Clientes em /dashboard/clientes · Produtos em /dashboard/produtos
 
-T1 — Preço abaixo do custo deve bloquear
-1. Vá ao PDV. Adicione qualquer produto ao carrinho.
-2. Edite o preço unitário desse item para R$ 0,01.
-3. Adicione forma de pagamento cobrindo o total e clique Finalizar.
-ESPERADO (PASSA): aparece um aviso de "Preço abaixo do custo" e abre um modal pedindo SENHA de gerente (a venda NÃO conclui sozinha).
-FALHA: a venda é finalizada normalmente sem pedir senha.
+T1 — Preço abaixo do custo bloqueia
+1. PDV: adicione qualquer produto ao carrinho.
+2. Edite o preço unitário do item para R$ 0,01.
+3. Adicione pagamento cobrindo o total e clique Finalizar.
+PASSA: aparece aviso "Preço abaixo do custo" e abre modal pedindo SENHA de gerente (não conclui sozinha).
+FALHA: finaliza normalmente sem pedir senha.
 
 T2 — Limite de crédito com 2 métodos a prazo
-Pré-requisito: um cliente cujo limite de crédito seja baixo (ex.: R$ 500). Se não houver, abra /dashboard/clientes, edite um cliente e defina limite de crédito = 500. Se não for possível, marque BLOQUEADO.
-1. No PDV, selecione esse cliente. Monte uma venda de ~R$ 800.
-2. Divida o pagamento em DOIS métodos a prazo: metade em "Crediário" (STORE_CREDIT) e metade em "Saldo a Receber" (BALANCE_DUE).
+Pré: cliente com limite de crédito baixo (ex.: R$ 500). Se não houver, em /dashboard/clientes edite um cliente e defina limite = 500. Se impossível, BLOQUEADO.
+1. PDV: selecione esse cliente. Monte venda de ~R$ 800.
+2. Divida o pagamento em DOIS métodos a prazo: metade "Crediário" (STORE_CREDIT) + metade "Saldo a Receber" (BALANCE_DUE).
 3. Finalize.
-ESPERADO (PASSA): bloqueia por limite de crédito excedido (porque 800 > 500) e pede senha de gerente.
-FALHA: a venda passa sem bloquear (seria o bug — antes cada método passava por ser < 500 isolado).
+PASSA: bloqueia por limite excedido (800 > 500) e pede senha de gerente.
+FALHA: passa sem bloquear.
 
-T3 — Promoção abaixo do custo NÃO deve pedir senha
-Pré-requisito: um produto com preço PROMOCIONAL cadastrado ABAIXO do custo. Se não houver, em /dashboard/produtos edite um produto e defina um promoPrice menor que o custo. Se não for possível, marque BLOQUEADO.
-1. No PDV, adicione esse produto em promoção. NÃO edite o preço manualmente.
-2. Finalize a venda (pague o total).
-ESPERADO (PASSA): cobra o preço promocional e finaliza SEM pedir senha de gerente (a promoção cadastrada já é a autorização).
-FALHA: pede senha de gerente por "preço abaixo do custo".
+T3 — Promoção abaixo do custo NÃO pede senha
+Pré: produto com promoPrice cadastrado ABAIXO do custo. Se não houver, em /dashboard/produtos edite um produto e defina promoPrice < custo. Se impossível, BLOQUEADO.
+1. PDV: adicione esse produto em promoção. NÃO edite o preço manualmente.
+2. Finalize (pague o total).
+PASSA: cobra o preço promocional e finaliza SEM pedir senha.
+FALHA: pede senha por "preço abaixo do custo".
 
 T4 — Promoção aparece no card do PDV
-Pré-requisito: qualquer produto com promoPrice cadastrado abaixo do preço de venda.
-1. No PDV, busque esse produto na grade de produtos.
-ESPERADO (PASSA): o card mostra o preço cheio RISCADO e o preço promocional em destaque (vermelho). Ao adicionar ao carrinho, entra pelo preço promocional.
-FALHA: mostra só o preço cheio / cobra o preço cheio.
+Pré: qualquer produto com promoPrice < preço de venda.
+1. PDV: busque esse produto na grade.
+PASSA: card mostra preço cheio RISCADO + preço promocional em destaque (vermelho); ao adicionar, entra pelo preço promocional.
+FALHA: mostra/cobra só o preço cheio.
 
-T5 — Duplo-clique no override não duplica a venda
-1. Monte uma venda que dispare o modal de gerente (ex.: aplique um desconto acima do limite do seu perfil, ou use o cenário do T1).
-2. Quando o modal de senha de gerente abrir, tente clicar no botão "Finalizar" da venda novamente (atrás do modal), várias vezes.
-3. Cancele o modal de gerente.
-ESPERADO (PASSA): nenhuma venda duplicada é criada; o botão fica travado enquanto o modal está aberto. Confira em /dashboard/vendas que não há 2 vendas iguais.
+T5 — Duplo-clique no override não duplica venda
+1. Monte venda que dispare o modal de gerente (ex.: cenário do T1).
+2. Com o modal de senha aberto, tente clicar "Finalizar" da venda de novo (atrás do modal), várias vezes.
+3. Cancele o modal.
+PASSA: nenhuma venda duplicada; botão travado enquanto modal aberto. Confira em /dashboard/vendas que não há 2 vendas iguais.
 FALHA: aparecem 2 vendas idênticas.
 
 T6 — Pagamentos não vazam entre vendas
-1. No PDV, abra o modal de finalizar venda, adicione UMA forma de pagamento, mas FECHE o modal sem confirmar (tecla ESC ou clique fora).
+1. PDV: abra o modal de finalizar, adicione UMA forma de pagamento, FECHE sem confirmar (ESC ou clique fora).
 2. Reabra o modal de finalizar.
-ESPERADO (PASSA): o modal abre limpo, sem o pagamento que você tinha adicionado antes.
+PASSA: abre limpo, sem o pagamento anterior.
 FALHA: o pagamento anterior ainda está lá.
 
-==================================================
-BLOCO 2 — CASHBACK / DEVOLUÇÃO
-==================================================
+RELATÓRIO FINAL (gere exatamente assim):
+Uma linha por teste: "Tn — RESULTADO — o que viu"
+Resumo: Total / Passou / Falhou / Bloqueado. Para cada FALHOU: passo exato, o que esperava, o que aconteceu, mensagem/print. Para cada BLOQUEADO: o que faltou.
+Comece pelo T1.
+```
+
+---
+
+## BLOCO 2 de 4 — CASHBACK / DEVOLUÇÃO
+
+```
+Você é um QA testando um PDV de ótica já aberto neste Chrome (já estou logado). É ambiente de teste — pode criar vendas de teste. NÃO mude config da empresa, NÃO exclua dados, NÃO mexa em usuários.
+
+Para cada teste: execute, observe, registre RESULTADO (PASSOU / FALHOU / BLOQUEADO) + o que viu. Falta de dado = BLOQUEADO (diga o que faltou, não invente). Print ao FALHAR. Um teste por vez.
+
+App: https://pdv-otica.vercel.app — PDV /dashboard/pdv · Vendas /dashboard/vendas · Cashback /dashboard/cashback
 
 T7 — Devolução reverte tudo
-1. Faça uma venda à vista para um cliente (gera cashback). Anote o estoque do produto antes.
-2. Vá em /dashboard/vendas, abra os detalhes dessa venda e faça a devolução/estorno.
-ESPERADO (PASSA): a venda fica como devolvida; o estoque do produto volta ao valor anterior; o cashback ganho é estornado (confira em /dashboard/cashback que o saldo do cliente voltou).
+1. Faça uma venda À VISTA para um cliente (gera cashback). Anote o estoque do produto ANTES (veja em /dashboard/produtos ou /dashboard/estoque).
+2. Em /dashboard/vendas, abra os detalhes dessa venda e faça a devolução/estorno.
+PASSA: venda fica devolvida; estoque do produto volta ao valor anterior; cashback ganho é estornado (confira em /dashboard/cashback que o saldo do cliente voltou).
 FALHA: estoque não volta, ou cashback continua creditado.
 
 T8 — Ajuste de cashback não fica negativo
-Pré-requisito: um cliente com saldo de cashback pequeno e positivo (ex.: ~R$ 30). Em /dashboard/cashback ache um cliente com saldo; se nenhum tiver, ajuste para dar a ele um saldo pequeno primeiro.
-1. Faça um ajuste manual NEGATIVO maior que o saldo (ex.: −R$ 100 sobre saldo de R$ 30).
-ESPERADO (PASSA): o saldo vai para R$ 0 (não fica negativo). Se você tentar ajustar negativo de novo com saldo já em 0, aparece um aviso tipo "saldo já é zero".
-FALHA: o saldo fica negativo (ex.: −R$ 70).
+Pré: cliente com saldo de cashback pequeno e positivo (ex.: ~R$ 30). Em /dashboard/cashback ache um; se nenhum tiver, ajuste para dar a ele um saldo pequeno primeiro.
+1. Faça um ajuste manual NEGATIVO maior que o saldo (ex.: −R$ 100 sobre R$ 30).
+PASSA: saldo vai a R$ 0 (não negativo). Ajustar negativo de novo com saldo 0 → aviso tipo "saldo já é zero".
+FALHA: saldo fica negativo (ex.: −R$ 70).
 
-==================================================
-BLOCO 3 — ESTOQUE / ORDEM DE SERVIÇO
-==================================================
+RELATÓRIO FINAL (gere exatamente assim):
+Uma linha por teste: "Tn — RESULTADO — o que viu"
+Resumo: Total / Passou / Falhou / Bloqueado. Para cada FALHOU: passo, esperado, ocorrido, mensagem/print. Para cada BLOQUEADO: o que faltou.
+Comece pelo T7.
+```
+
+---
+
+## BLOCO 3 de 4 — ESTOQUE / ORDEM DE SERVIÇO
+
+```
+Você é um QA testando um PDV de ótica já aberto neste Chrome (já estou logado). É ambiente de teste. NÃO mude config da empresa, NÃO exclua dados, NÃO mexa em usuários.
+
+Para cada teste: execute, observe, registre RESULTADO (PASSOU / FALHOU / BLOQUEADO) + o que viu. Falta de dado = BLOQUEADO. Print ao FALHAR. Um teste por vez.
+
+App: https://pdv-otica.vercel.app — Estoque /dashboard/estoque · PDV /dashboard/pdv · Ordens de serviço /dashboard/ordens-servico
 
 T9 — Entrada de lote reflete no estoque da filial
-1. Em /dashboard/estoque, registre uma ENTRADA (lote) de um produto numa filial, com uma quantidade (ex.: 10).
-2. Vá ao PDV nessa mesma filial e busque o produto.
-ESPERADO (PASSA): o estoque do produto aumentou pela quantidade do lote e ele pode ser vendido normalmente.
-FALHA: o estoque não mudou na filial / produto continua zerado.
+1. Em /dashboard/estoque, registre uma ENTRADA (lote) de um produto numa filial, com quantidade (ex.: 10).
+2. Vá ao PDV NESSA MESMA filial e busque o produto.
+PASSA: estoque do produto aumentou pela quantidade do lote e pode ser vendido.
+FALHA: estoque não mudou na filial / produto continua zerado.
 
 T10 — Transição de status de OS respeita a ordem
-1. Em /dashboard/ordens-servico, abra (ou crie) uma OS que esteja em status "Rascunho" (DRAFT).
-2. Vá editar a OS e abra o seletor "Novo Status".
-ESPERADO (PASSA): o seletor mostra APENAS o status atual + o(s) próximo(s) válido(s) (ex.: "Aprovado"). NÃO aparece "Entregue" como opção a partir de Rascunho.
-FALHA: o seletor oferece "Entregue" (ou qualquer salto) diretamente de Rascunho.
+1. Em /dashboard/ordens-servico, abra (ou crie) uma OS em status "Rascunho" (DRAFT).
+2. Edite a OS e abra o seletor "Novo Status".
+PASSA: o seletor mostra APENAS o status atual + o(s) próximo(s) válido(s) (ex.: "Aprovado"). NÃO aparece "Entregue" a partir de Rascunho.
+FALHA: o seletor oferece "Entregue" (ou qualquer salto) direto de Rascunho.
 
-==================================================
-BLOCO 4 — RELATÓRIOS
-==================================================
+RELATÓRIO FINAL (gere exatamente assim):
+Uma linha por teste: "Tn — RESULTADO — o que viu"
+Resumo: Total / Passou / Falhou / Bloqueado. Para cada FALHOU: passo, esperado, ocorrido, mensagem/print. Para cada BLOQUEADO: o que faltou.
+Comece pelo T9.
+```
 
-T11 — Relatório respeita o seletor de filial (precisa ser ADMIN ou GERENTE; só funciona se a empresa tiver +1 filial)
+---
+
+## BLOCO 4 de 4 — RELATÓRIOS
+
+```
+Você é um QA testando um PDV de ótica já aberto neste Chrome (já estou logado). É ambiente de teste. NÃO mude config da empresa, NÃO exclua dados, NÃO mexa em usuários.
+
+Para cada teste: execute, observe, registre RESULTADO (PASSOU / FALHOU / BLOQUEADO) + o que viu. Falta de dado = BLOQUEADO. Print ao FALHAR. Um teste por vez.
+
+App: https://pdv-otica.vercel.app — Relatórios /dashboard/relatorios · PDV /dashboard/pdv
+
+T11 — Relatório respeita o seletor de filial (precisa ser ADMIN ou GERENTE; só vale se a empresa tiver +1 filial)
 1. Em /dashboard/relatorios, troque o seletor de filial para outra filial.
-ESPERADO (PASSA): os números do relatório mudam conforme a filial selecionada.
-Observação: se o seu login de teste for vendedor/caixa/atendente, ele NÃO deve conseguir trocar de filial (fica restrito à própria) — isso também é PASSA.
-Se a empresa só tiver 1 filial, marque BLOQUEADO.
+PASSA: os números mudam conforme a filial selecionada.
+Obs: se o login for vendedor/caixa/atendente, ele NÃO deve conseguir trocar de filial (fica restrito à própria) — isso também é PASSA.
+Se a empresa só tiver 1 filial, BLOQUEADO.
 
 T12 — Timezone correto (venda noturna cai no dia certo)
-Só dá para testar se for depois das 21h (horário de Brasília). Se for de dia, marque BLOQUEADO.
+Só dá pra testar depois das 21h (Brasília). Se for de dia, BLOQUEADO.
 1. Faça uma venda agora.
-2. Vá em /dashboard/relatorios e veja o relatório de "hoje".
-ESPERADO (PASSA): a venda aparece no dia de HOJE (não no dia seguinte).
+2. Em /dashboard/relatorios veja o relatório de "hoje".
+PASSA: a venda aparece HOJE (não no dia seguinte).
 
 T13 — Margem do BI não fica absurdamente negativa
-1. Em /dashboard/relatorios (ou financeiro/BI), veja o relatório por marca ou categoria.
-ESPERADO (PASSA): a margem dos produtos é um número plausível (positivo ou levemente negativo), não um valor absurdamente negativo causado por custo inflado.
+1. Em /dashboard/relatorios → "Rentabilidade por Produto" (ou BI por marca/categoria), veja a margem.
+PASSA: margem plausível (positiva ou levemente negativa), não um valor absurdamente negativo por custo inflado.
 FALHA: margem extremamente negativa que não bate com a realidade.
 
-==================================================
-RELATÓRIO FINAL — gere exatamente neste formato e me entregue
-==================================================
-
-Para cada teste, uma linha:
-Tn — RESULTADO — observação curta do que viu
-
-Depois, um resumo:
-- Total: X testes | Passou: X | Falhou: X | Bloqueado: X
-- Falhas (detalhe): para cada FALHOU, descreva o passo exato, o que esperava, o que aconteceu, e a mensagem de erro/print se houver.
-- Bloqueados: liste o que faltou para cada um.
-
-Comece pelo T1.
+RELATÓRIO FINAL (gere exatamente assim):
+Uma linha por teste: "Tn — RESULTADO — o que viu"
+Resumo: Total / Passou / Falhou / Bloqueado. Para cada FALHOU: passo, esperado, ocorrido, mensagem/print. Para cada BLOQUEADO: o que faltou.
+Comece pelo T11.
+```

@@ -87,11 +87,14 @@ export const createProductSchema = z.object({
   salePrice: z.coerce.number()
     .positive("Preço de venda deve ser maior que zero"),
 
+  // promoPrice: vazio/0 normaliza para null (não undefined) para que o update
+  // consiga REMOVER uma promoção existente — undefined faria o Prisma manter o
+  // valor antigo. No create, null é equivalente a não ter promoção.
   promoPrice: z.coerce.number()
     .positive("Preço promocional deve ser maior que zero")
     .optional()
     .or(z.literal(0))
-    .transform((val) => (val === 0 ? undefined : val)),
+    .transform((val) => (val === 0 || val === undefined ? null : val)),
 
   marginPercent: z.coerce.number()
     .min(0, "Margem não pode ser negativa")
@@ -274,7 +277,11 @@ export function sanitizeProductDTO(
   const sanitized: any = {};
 
   for (const [key, value] of Object.entries(data)) {
-    if (value === "" || value === null) {
+    // promoPrice: null é um sinal intencional ("remover promoção") e precisa
+    // chegar ao Prisma como null — não pode virar undefined como os demais campos.
+    if (key === "promoPrice") {
+      sanitized[key] = value === "" ? null : value;
+    } else if (value === "" || value === null) {
       sanitized[key] = undefined;
     } else {
       sanitized[key] = value;

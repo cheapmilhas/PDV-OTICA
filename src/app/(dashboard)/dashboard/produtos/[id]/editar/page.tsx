@@ -40,6 +40,7 @@ function EditarProdutoContent() {
     // Preços
     salePrice: "",
     costPrice: "",
+    promoPrice: "",
     marginPercent: "",
     // Estoque
     stockControlled: true,
@@ -96,6 +97,7 @@ function EditarProdutoContent() {
           frameMaterial: data.frameDetail?.material || "",
           salePrice: data.salePrice ? data.salePrice.toString() : "",
           costPrice: data.costPrice ? data.costPrice.toString() : "",
+          promoPrice: data.promoPrice ? data.promoPrice.toString() : "",
           marginPercent: data.marginPercent ? data.marginPercent.toString() : "",
           stockControlled: data.stockControlled ?? true,
           stockQty: data.stockQty !== null ? data.stockQty.toString() : "",
@@ -136,6 +138,8 @@ function EditarProdutoContent() {
       if (formData.barcode) sanitizedData.barcode = formData.barcode;
       if (formData.salePrice) sanitizedData.salePrice = parseFloat(formData.salePrice);
       if (formData.costPrice) sanitizedData.costPrice = parseFloat(formData.costPrice);
+      // promoPrice sempre enviado: valor preenchido define a promoção; vazio (0) a remove.
+      sanitizedData.promoPrice = formData.promoPrice ? parseFloat(formData.promoPrice) : 0;
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
       // stockControlled e boolean — sempre enviar (if (formData.x) descarta false).
       sanitizedData.stockControlled = formData.stockControlled;
@@ -343,7 +347,7 @@ function EditarProdutoContent() {
             {/* Preços */}
             <div>
               <h3 className="font-semibold mb-4">Precificação</h3>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="salePrice">
                     Preço de Venda (R$) <span className="text-red-500">*</span>
@@ -369,6 +373,22 @@ function EditarProdutoContent() {
                     value={formData.costPrice}
                     onChange={(e) => setFormData({ ...formData, costPrice: e.target.value })}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="promoPrice">Preço Promocional (R$)</Label>
+                  <Input
+                    id="promoPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Opcional"
+                    value={formData.promoPrice}
+                    onChange={(e) => setFormData({ ...formData, promoPrice: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Em vigor quando menor que o preço de venda. Deixe vazio para remover.
+                  </p>
                 </div>
 
                 <div className="space-y-2">

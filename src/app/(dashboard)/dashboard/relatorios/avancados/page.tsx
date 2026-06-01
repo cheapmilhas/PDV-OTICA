@@ -995,7 +995,24 @@ function TabRentabilidadeProduto() {
     );
   }
 
-  if (products.length === 0) return null;
+  // T13: antes retornava null quando não havia dados → a aba renderizava
+  // totalmente em branco (sem explicação) se não houvesse vendas no período.
+  // Agora mostra um empty state informativo.
+  if (products.length === 0) {
+    return (
+      <Card>
+        <CardContent className="flex flex-col items-center justify-center py-16 text-center">
+          <BarChart3 className="h-10 w-10 text-muted-foreground mb-3" />
+          <p className="font-medium">Sem dados de rentabilidade no período</p>
+          <p className="text-sm text-muted-foreground mt-1 max-w-md">
+            Não há vendas concluídas nos últimos 3 meses para calcular a
+            rentabilidade por tipo de produto. Registre vendas para ver a análise
+            de margem aqui.
+          </p>
+        </CardContent>
+      </Card>
+    );
+  }
 
   function getMarginBadge(marginPercent: number) {
     if (marginPercent > 50) {

@@ -38,6 +38,7 @@ function NovoProdutoPageContent() {
     // Preços
     salePrice: "",
     costPrice: "",
+    promoPrice: "",
     marginPercent: "",
     // Estoque
     stockControlled: true,
@@ -114,6 +115,7 @@ function NovoProdutoPageContent() {
       // Campos opcionais
       if (formData.barcode) sanitizedData.barcode = formData.barcode;
       if (formData.costPrice) sanitizedData.costPrice = parseFloat(formData.costPrice);
+      if (formData.promoPrice) sanitizedData.promoPrice = parseFloat(formData.promoPrice);
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
@@ -324,7 +326,7 @@ function NovoProdutoPageContent() {
             {/* Preços */}
             <div>
               <h3 className="font-semibold mb-4">Precificação</h3>
-              <div className="grid gap-4 md:grid-cols-3">
+              <div className="grid gap-4 md:grid-cols-4">
                 <div className="space-y-2">
                   <Label htmlFor="salePrice">
                     Preço de Venda (R$) <span className="text-red-500">*</span>
@@ -350,6 +352,22 @@ function NovoProdutoPageContent() {
                     value={formData.costPrice}
                     onChange={(e) => handlePriceChange("costPrice", e.target.value)}
                   />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="promoPrice">Preço Promocional (R$)</Label>
+                  <Input
+                    id="promoPrice"
+                    type="number"
+                    step="0.01"
+                    min="0"
+                    placeholder="Opcional"
+                    value={formData.promoPrice}
+                    onChange={(e) => setFormData({ ...formData, promoPrice: e.target.value })}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Em vigor quando menor que o preço de venda.
+                  </p>
                 </div>
 
                 <div className="space-y-2">
