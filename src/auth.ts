@@ -156,11 +156,60 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.branchId = user.branchId;
         token.companyId = user.companyId;
         token.networkId = user.networkId;
+        token.revalidatedAt = Date.now();
+        return token;
       }
 
       // Se for um update da sessão (ex: após signOut), resetar o token
       if (trigger === "update") {
         console.log("🔄 JWT callback - Update trigger");
+      }
+
+      // M12: revalida role/existência do usuário no banco periodicamente. A
+      // sessão dura 30 dias e o role vivia só no token — rebaixar/demitir não
+      // tinha efeito até relogar. Revalida a cada REVALIDATE_TTL_MS buscando o
+      // usuário fresco; se foi desativado/excluído, zera o token (força logout
+      // no próximo acesso). Não bate no banco a cada request (TTL curto).
+      const REVALIDATE_TTL_MS = 5 * 60 * 1000; // 5 min
+      const lastRevalidated = (token.revalidatedAt as number) || 0;
+      if (token.id && Date.now() - lastRevalidated > REVALIDATE_TTL_MS) {
+        try {
+          const fresh = await prisma.user.findUnique({
+            where: { id: token.id as string },
+            select: {
+              id: true,
+              role: true,
+              active: true,
+              name: true,
+              companyId: true,
+              company: { select: { networkId: true } },
+              branches: {
+                take: 1,
+                select: { branchId: true },
+              },
+            },
+          });
+
+          if (!fresh || fresh.active === false) {
+            // Usuário demitido/desativado/excluído → invalida o token.
+            return null;
+          }
+
+          // Aplica role/nome/empresa/filial frescos (rebaixar/promover/transferir
+          // passa a valer sem precisar relogar).
+          token.role = fresh.role;
+          token.name = fresh.name;
+          token.companyId = fresh.companyId;
+          token.networkId = fresh.company?.networkId ?? null;
+          if (fresh.branches[0]?.branchId) {
+            token.branchId = fresh.branches[0].branchId;
+          }
+          token.revalidatedAt = Date.now();
+        } catch (err) {
+          // Falha transitória de DB: NÃO desloga (evita falso logout em massa).
+          // Apenas adia a revalidação para a próxima passagem.
+          console.error("JWT revalidation falhou (não-fatal):", err);
+        }
       }
 
       return token;

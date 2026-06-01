@@ -22,7 +22,7 @@ const prescriptionDataSchema = z.object({
   adicao: z.string().optional(),
   tipoLente: z.string().optional(),
   material: z.string().optional(),
-  tratamentos: z.array(z.string()).optional(),
+  tratamentos: z.array(z.string().max(200)).max(50).optional(),
 }).optional();
 
 /**
@@ -52,7 +52,8 @@ export const createQuoteSchema = z.object({
   customerEmail: z.string().email("Email inválido").optional().or(z.literal("")),
 
   // Itens (obrigatório pelo menos 1)
-  items: z.array(quoteItemSchema).min(1, "Adicione pelo menos um item"),
+  // M11: .max() contra DoS por payload gigante.
+  items: z.array(quoteItemSchema).min(1, "Adicione pelo menos um item").max(200, "Orçamento excede o máximo de 200 itens"),
 
   // Descontos
   discountTotal: z.coerce.number().min(0, "Desconto não pode ser negativo").default(0),
@@ -119,7 +120,8 @@ export type CancelQuoteDTO = z.infer<typeof cancelQuoteSchema>;
 export const convertQuoteToSaleSchema = z.object({
   payments: z
     .array(paymentSchema)
-    .min(1, "Adicione pelo menos uma forma de pagamento"),
+    .min(1, "Adicione pelo menos uma forma de pagamento")
+    .max(20, "Conversão excede o máximo de 20 formas de pagamento"),
   override: managerOverrideSchema.optional(),
 });
 

@@ -102,7 +102,7 @@ export const OVERRIDABLE_CODES = [
 
 export const managerOverrideSchema = z.object({
   approvedByUserId: z.string().min(1, "Autorizador é obrigatório"),
-  reasons: z.array(z.enum(OVERRIDABLE_CODES)).min(1, "Informe ao menos um motivo"),
+  reasons: z.array(z.enum(OVERRIDABLE_CODES)).min(1, "Informe ao menos um motivo").max(5, "Máximo de 5 motivos"),
 });
 
 export type ManagerOverrideDTO = z.infer<typeof managerOverrideSchema>;
@@ -112,8 +112,16 @@ export const createSaleSchema = z.object({
   branchId: z.string().min(1, "ID da filial é obrigatório"),
   sellerUserId: z.string().optional(),
   serviceOrderId: z.string().optional(),
-  items: z.array(saleItemSchema).min(1, "Venda deve ter pelo menos 1 item"),
-  payments: z.array(paymentSchema).min(1, "Venda deve ter pelo menos 1 pagamento"),
+  // M11: .max() evita DoS (payload com dezenas de milhares de itens estourando
+  // a transação/memória). Limites generosos para uma venda real de ótica.
+  items: z
+    .array(saleItemSchema)
+    .min(1, "Venda deve ter pelo menos 1 item")
+    .max(200, "Venda excede o máximo de 200 itens"),
+  payments: z
+    .array(paymentSchema)
+    .min(1, "Venda deve ter pelo menos 1 pagamento")
+    .max(20, "Venda excede o máximo de 20 formas de pagamento"),
   discount: z.coerce
     .number()
     .min(0, "Desconto não pode ser negativo")

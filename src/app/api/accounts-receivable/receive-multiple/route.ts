@@ -18,7 +18,7 @@ const receiveMultiplePaymentsSchema = z.object({
       method: z.enum(["CASH", "PIX", "DEBIT_CARD", "CREDIT_CARD", "BANK_TRANSFER", "BANK_SLIP"]),
       amount: z.number().positive("Valor deve ser positivo"),
     })
-  ).min(1, "Adicione pelo menos uma forma de pagamento"),
+  ).min(1, "Adicione pelo menos uma forma de pagamento").max(20, "Máximo de 20 formas de pagamento"),
   receivedDate: z.string().datetime().optional(),
   discountAmount: z.number().min(0).optional().default(0),
   fineAmount: z.number().min(0).optional(),

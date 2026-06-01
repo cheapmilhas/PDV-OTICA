@@ -5,6 +5,7 @@ import { getCompanyId, requireAuth } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { escapeHtml } from "@/lib/escape-html";
 
 export async function GET(req: NextRequest) {
   try {
@@ -121,9 +122,9 @@ export async function GET(req: NextRequest) {
 </head>
 <body>
   <div class="header">
-    ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo" />` : ""}
+    ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="Logo" class="logo" />` : ""}
     <div class="header-text">
-      <h1>${companyName}</h1>
+      <h1>${escapeHtml(companyName)}</h1>
       <p>Relatório de Estoque — ${filterLabel} — ${format(new Date(), "dd/MM/yyyy HH:mm", { locale: ptBR })}</p>
     </div>
   </div>
@@ -150,9 +151,9 @@ export async function GET(req: NextRequest) {
         const rowClass = isZero ? "zero" : isLow ? "low" : "";
         const totalVal = qty * cost;
         return `<tr class="${rowClass}">
-          <td>${p.sku || "-"}</td>
-          <td>${p.name}</td>
-          <td>${p.categoryName || p.category?.name || "-"}</td>
+          <td>${escapeHtml(p.sku || "-")}</td>
+          <td>${escapeHtml(p.name)}</td>
+          <td>${escapeHtml(p.categoryName || p.category?.name || "-")}</td>
           <td class="number">${qty}</td>
           <td class="number">${min || "-"}</td>
           <td class="number">R$ ${cost.toFixed(2).replace(".", ",")}</td>
