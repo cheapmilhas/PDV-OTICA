@@ -418,6 +418,23 @@ function EditarOrdemServicoContent() {
     return labels[status] || status;
   };
 
+  // H1: transições válidas para frente (espelha a state machine do backend em
+  // service-order.service). DELIVERED fica de fora — entrega tem fluxo próprio
+  // (modal de entrega que registra quem entregou/avaliação). Mostra também o
+  // status atual como opção (no-op) para não esvaziar o select.
+  const FORWARD: Record<string, string[]> = {
+    DRAFT: ["APPROVED"],
+    APPROVED: ["SENT_TO_LAB", "IN_PROGRESS"],
+    SENT_TO_LAB: ["IN_PROGRESS", "READY"],
+    IN_PROGRESS: ["READY"],
+    READY: [],
+    DELIVERED: [],
+    CANCELED: [],
+  };
+  const statusOptions = order
+    ? [order.status, ...(FORWARD[order.status] || [])]
+    : [];
+
   if (fetching) {
     return (
       <div className="flex items-center justify-center h-[50vh]">
@@ -479,12 +496,13 @@ function EditarOrdemServicoContent() {
                     <SelectValue />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="DRAFT">Rascunho</SelectItem>
-                    <SelectItem value="APPROVED">Aprovado</SelectItem>
-                    <SelectItem value="SENT_TO_LAB">Enviado ao Laboratório</SelectItem>
-                    <SelectItem value="IN_PROGRESS">Em Produção</SelectItem>
-                    <SelectItem value="READY">Pronto para Retirada</SelectItem>
-                    <SelectItem value="DELIVERED">Entregue</SelectItem>
+                    {/* H1: só status alcançáveis a partir do atual (+ o próprio).
+                        Entrega é feita por fluxo dedicado, não por este select. */}
+                    {statusOptions.map((s) => (
+                      <SelectItem key={s} value={s}>
+                        {getStatusLabel(s)}
+                      </SelectItem>
+                    ))}
                   </SelectContent>
                 </Select>
               </div>

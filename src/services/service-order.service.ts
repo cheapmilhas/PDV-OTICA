@@ -8,6 +8,33 @@ import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } 
 import { getNextSequence } from "@/lib/counter";
 
 /**
+ * H1: máquina de estados das transições PARA FRENTE de uma OS.
+ *
+ * O updateStatus antes aceitava QUALQUER transição (DRAFT→DELIVERED direto,
+ * pulando aprovação/laboratório/pronto e sem deliveredByUserId). Aqui definimos
+ * o que cada status pode virar. Reversões (voltar etapa) passam por revert(),
+ * que tem sua própria tabela e exige motivo. CANCELED é permitido de quase
+ * todo estado ativo. DELIVERED/CANCELED são terminais (avançam só via revert).
+ *
+ * Nem toda OS passa por SENT_TO_LAB (serviço interno sem laboratório), por isso
+ * APPROVED e SENT_TO_LAB podem ir direto a IN_PROGRESS/READY. O que NÃO se
+ * permite é saltar para READY/DELIVERED sem percorrer a cadeia de produção.
+ */
+const FORWARD_TRANSITIONS: Record<ServiceOrderStatus, ServiceOrderStatus[]> = {
+  DRAFT: ["APPROVED"],
+  APPROVED: ["SENT_TO_LAB", "IN_PROGRESS"],
+  SENT_TO_LAB: ["IN_PROGRESS", "READY"],
+  IN_PROGRESS: ["READY"],
+  READY: ["DELIVERED"],
+  DELIVERED: [], // terminal — usar revert()
+  CANCELED: [], // terminal
+};
+// CANCELED NÃO entra no FORWARD: cancelar tem rota própria (cancel(), via
+// DELETE com guard ADMIN/GERENTE) que escreve canceledAt + motivo e reverte
+// efeitos colaterais. Permitir CANCELED por updateStatus pularia tudo isso e
+// burlaria o guard de role.
+
+/**
  * Service para operações de Ordens de Serviço
  *
  * Fluxo de status:
@@ -537,6 +564,31 @@ export class ServiceOrderService {
       );
     }
 
+    // H1: cancelamento NÃO passa por updateStatus — tem rota dedicada (cancel())
+    // que escreve canceledAt + motivo, reverte efeitos colaterais e exige role
+    // ADMIN/GERENTE. Aceitar CANCELED aqui pularia tudo isso + o guard de role.
+    if (status === "CANCELED") {
+      throw new AppError(
+        ERROR_CODES.VALIDATION_ERROR,
+        "Para cancelar a OS use a ação de cancelamento (exige autorização).",
+        400
+      );
+    }
+
+    // H1: valida a transição contra a máquina de estados. Sem isso, dava pra
+    // pular etapas (DRAFT→DELIVERED) burlando produção e rastreabilidade.
+    // No-op (mesmo status) é permitido p/ idempotência de clique repetido.
+    if (status !== existing.status) {
+      const allowed = FORWARD_TRANSITIONS[existing.status] || [];
+      if (!allowed.includes(status)) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          `Transição inválida: '${existing.status}' → '${status}'. Avance pela ordem correta (ou use 'reverter' para voltar etapas).`,
+          400
+        );
+      }
+    }
+
     const updateData: any = { status };
 
     // Registrar timestamps por etapa
@@ -544,6 +596,9 @@ export class ServiceOrderService {
     if (status === "READY") updateData.readyAt = new Date();
     if (status === "DELIVERED") {
       updateData.deliveredAt = new Date();
+      // H1: registra QUEM entregou (antes só deliver() registrava; via
+      // updateStatus a entrega ficava sem responsável). Mantém auditoria.
+      updateData.deliveredByUserId = userId;
       // Marcar como não atrasada se entregue
       updateData.isDelayed = false;
     }

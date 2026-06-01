@@ -132,25 +132,9 @@ export function calculateOrderTotal(items: ServiceOrderItemDTO[]): number {
   return 0;
 }
 
-/**
- * Helper para validar transição de status
- */
-export function validateStatusTransition(
-  currentStatus: ServiceOrderStatus,
-  newStatus: ServiceOrderStatus
-): boolean {
-  const transitions: Partial<Record<ServiceOrderStatus, ServiceOrderStatus[]>> = {
-    DRAFT: ["APPROVED", "CANCELED"],
-    APPROVED: ["SENT_TO_LAB", "CANCELED"],
-    SENT_TO_LAB: ["IN_PROGRESS", "CANCELED"],
-    IN_PROGRESS: ["READY", "CANCELED"],
-    READY: ["DELIVERED"],
-    DELIVERED: [], // Não pode mudar status depois de entregue
-    CANCELED: [],
-  };
-
-  return transitions[currentStatus]?.includes(newStatus) || false;
-}
+// H1: validateStatusTransition removido — era um fork DESATUALIZADO da máquina
+// de estados (faltava APPROVED→IN_PROGRESS e SENT_TO_LAB→READY). A fonte única
+// é FORWARD_TRANSITIONS em service-order.service.ts. Tinha zero call sites.
 
 /**
  * Helper para obter label do status em português
