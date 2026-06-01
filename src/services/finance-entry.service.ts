@@ -712,6 +712,103 @@ interface ManualExpenseData {
 /**
  * Cria um lançamento manual de despesa.
  */
+/**
+ * H15: garante a conta contábil "Receita Financeira / Juros" (3.1.03).
+ *
+ * O plano de contas padrão não tinha conta de receita financeira, então juros
+ * de renegociação/atraso não tinham onde ser lançados. Em vez de exigir uma
+ * migration de dados em todas as empresas, a conta é criada sob demanda
+ * (upsert) na primeira renegociação que precisar — auto-curável e idempotente.
+ */
+async function ensureFinancialRevenueAccount(
+  tx: TransactionClient,
+  companyId: string
+) {
+  const code = "3.1.03";
+
+  // Vincula ao pai "Receita Operacional" (3.1) se existir, senão fica solta.
+  const parent = await tx.chartOfAccounts.findUnique({
+    where: { companyId_code: { companyId, code: "3.1" } },
+  });
+
+  // upsert ATÔMICO (não findUnique-then-create) — sob renegociações
+  // concorrentes na 1ª vez de uma empresa, dois creates colidiriam em P2002
+  // e o lançamento seria descartado pelo catch não-fatal. update vazio = no-op.
+  return tx.chartOfAccounts.upsert({
+    where: { companyId_code: { companyId, code } },
+    update: {},
+    create: {
+      companyId,
+      code,
+      name: "Receita Financeira / Juros",
+      kind: "REVENUE",
+      ...(parent ? { parentId: parent.id } : {}),
+    },
+  });
+}
+
+/**
+ * H15: lança como receita financeira o JURO de uma renegociação de AR.
+ *
+ * A renegociação cria novas parcelas cujo total (newAmount) costuma ser maior
+ * que o saldo original (acréscimo de juros/multa). Esse ganho NÃO aparecia em
+ * lugar nenhum do ledger. Aqui registramos a diferença positiva como receita
+ * financeira (Débito: Contas a Receber 1.1.03; Crédito: Receita Financeira
+ * 3.1.03). Idempotente via @@unique(companyId, sourceType, sourceId, type, side).
+ *
+ * Retorna o id do lançamento, ou null se não houve juro (newAmount <= saldo).
+ *
+ * NOTA: o DRE atual é baseado em sale.total e ainda NÃO soma receitas
+ * financeiras do ledger — corrigir isso é dívida separada (ver memória H15).
+ */
+export async function generateRenegotiationInterestEntry(
+  tx: TransactionClient,
+  data: {
+    accountReceivableId: string;
+    originalAmount: number;
+    newAmount: number;
+    branchId?: string | null;
+    entryDate?: Date;
+  },
+  companyId: string
+): Promise<string | null> {
+  const interest =
+    Math.round((data.newAmount - data.originalAmount) * 100) / 100;
+  if (interest <= 0) return null; // sem juro a registrar
+
+  const contasAReceber = await getChartAccountByCode(tx, companyId, "1.1.03");
+  const receitaFinanceira = await ensureFinancialRevenueAccount(tx, companyId);
+
+  const entry = await tx.financeEntry.upsert({
+    where: {
+      companyId_sourceType_sourceId_type_side: {
+        companyId,
+        sourceType: "ARRenegotiation",
+        sourceId: data.accountReceivableId,
+        type: "OTHER",
+        side: "CREDIT",
+      },
+    },
+    update: { amount: interest },
+    create: {
+      companyId,
+      branchId: data.branchId ?? undefined,
+      type: "OTHER",
+      side: "CREDIT",
+      amount: interest,
+      debitAccountId: contasAReceber.id,
+      creditAccountId: receitaFinanceira.id,
+      sourceType: "ARRenegotiation",
+      sourceId: data.accountReceivableId,
+      description: `Juros de renegociação AR #${data.accountReceivableId.substring(0, 8)}`,
+      entryDate: data.entryDate ?? new Date(),
+      cashDate: null, // competência — caixa entra quando a parcela for paga
+    },
+  });
+
+  return entry.id;
+}
+
 export async function generateManualExpenseEntry(
   tx: TransactionClient,
   data: ManualExpenseData,

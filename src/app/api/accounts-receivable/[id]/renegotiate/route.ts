@@ -5,6 +5,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
 import { requireWriteAccess } from "@/lib/subscription";
+import { generateRenegotiationInterestEntry } from "@/services/finance-entry.service";
 
 const log = logger.child({ route: "accounts-receivable/renegotiate" });
 
@@ -110,6 +111,37 @@ export async function POST(
 
       return newARs;
     }, { timeout: 30_000 });
+
+    // H15: registra o juro da renegociação (newAmount - saldo original) como
+    // receita financeira no ledger. Antes a renegociação não gerava NENHUM
+    // lançamento contábil → o ganho de juros sumia. Roda FORA da transação
+    // principal (em tx própria): o lançamento contábil é secundário e não deve
+    // derrubar a renegociação já persistida. Idempotente via upsert, então um
+    // retry manual reproduz o mesmo resultado.
+    try {
+      await prisma.$transaction((tx) =>
+        generateRenegotiationInterestEntry(
+          tx,
+          {
+            accountReceivableId: original.id,
+            // Base do juro = saldo EM ABERTO (amount − já recebido), não o valor
+            // de face. Se houve recebimento parcial, comparar com amount cheio
+            // subestimaria (ou zeraria) o juro real sobre o saldo renegociado.
+            originalAmount:
+              Number(original.amount) - Number(original.receivedAmount ?? 0),
+            newAmount: input.newAmount,
+            branchId: original.branchId,
+            entryDate: now,
+          },
+          companyId,
+        ),
+      );
+    } catch (entryErr) {
+      log.error("Falha ao lançar juros de renegociação (não-fatal)", {
+        originalId: original.id,
+        err: entryErr instanceof Error ? entryErr.message : String(entryErr),
+      });
+    }
 
     log.info("Conta renegociada", {
       originalId: original.id,

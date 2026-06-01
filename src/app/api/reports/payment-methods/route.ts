@@ -20,6 +20,11 @@ export async function GET() {
     const paymentData = await prisma.salePayment.groupBy({
       by: ['method'],
       where: {
+        // H14: só pagamentos EFETIVAMENTE recebidos. Antes filtrava só pelo
+        // status da VENDA (COMPLETED) e somava qualquer SalePayment — incluindo
+        // PENDING (crediário/boleto a receber), VOIDED e REFUNDED — inflando o
+        // "recebido por método". RECEIVED é o único status com dinheiro no caixa.
+        status: "RECEIVED",
         sale: {
           companyId: session.user.companyId,
           createdAt: { gte: startOfMonth },
@@ -32,14 +37,18 @@ export async function GET() {
       _count: true,
     });
 
+    // Chaves devem bater com o enum PaymentMethod (BOLETO, não BANK_SLIP).
     const methodLabels: Record<string, string> = {
       CASH: "Dinheiro",
       DEBIT_CARD: "Débito",
       CREDIT_CARD: "Crédito",
       PIX: "PIX",
-      BANK_SLIP: "Boleto",
+      BOLETO: "Boleto",
       STORE_CREDIT: "Crediário",
       BALANCE_DUE: "Saldo a Receber",
+      CHEQUE: "Cheque",
+      AGREEMENT: "Convênio",
+      OTHER: "Outros",
     };
 
     const data = paymentData.map(item => ({

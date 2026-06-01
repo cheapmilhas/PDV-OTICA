@@ -1,4 +1,5 @@
 import { NextRequest } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
@@ -6,6 +7,63 @@ import { successResponse } from "@/lib/api-response";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 
 type Dimension = "brand" | "category" | "seller" | "paymentMethod" | "productType";
+
+interface ProductAgg {
+  productId: string;
+  revenue: number;
+  cost: number;
+  qty: number;
+  count: number;
+}
+
+/**
+ * H13: agrega itens de venda por produto com o CUSTO CORRETO.
+ *
+ * O groupBy do Prisma só faz _sum.costPrice (soma dos custos unitários de cada
+ * linha) e _sum.qty separadamente. Multiplicar SUM(costPrice)*SUM(qty) inflava
+ * o custo por ~N (nº de linhas do produto) → margem negativa falsa. O custo
+ * real é Σ(costPrice_linha × qty_linha), que só dá pra calcular no banco com
+ * uma expressão — groupBy não suporta. Usamos $queryRaw com filtro parametrizado.
+ */
+async function aggregateItemsByProduct(params: {
+  companyId: string;
+  startDate: string;
+  endDate: string;
+  branchId: string | null;
+}): Promise<ProductAgg[]> {
+  const { companyId, startDate, endDate, branchId } = params;
+  const branchFilter = branchId
+    ? Prisma.sql`AND s."branchId" = ${branchId}`
+    : Prisma.empty;
+
+  const rows = await prisma.$queryRaw<
+    Array<{ productId: string; revenue: number; cost: number; qty: number; count: bigint }>
+  >`
+    SELECT
+      si."productId"                         AS "productId",
+      COALESCE(SUM(si."lineTotal"), 0)       AS "revenue",
+      COALESCE(SUM(si."costPrice" * si."qty"), 0) AS "cost",
+      COALESCE(SUM(si."qty"), 0)             AS "qty",
+      COUNT(*)                               AS "count"
+    FROM "SaleItem" si
+    JOIN "Sale" s ON s."id" = si."saleId"
+    WHERE s."companyId" = ${companyId}
+      AND s."status" = 'COMPLETED'
+      AND s."completedAt" >= ${new Date(startDate)}
+      AND s."completedAt" <= ${new Date(endDate)}
+      AND si."productId" IS NOT NULL
+      ${branchFilter}
+    GROUP BY si."productId"
+  `;
+
+  return rows.map((r) => ({
+    productId: r.productId,
+    revenue: Number(r.revenue),
+    cost: Number(r.cost),
+    qty: Number(r.qty),
+    count: Number(r.count),
+  }));
+}
 
 export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
@@ -32,14 +90,9 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
     let data: any[] = [];
 
     if (dimension === "brand") {
-      const results = await prisma.saleItem.groupBy({
-        by: ["productId"],
-        where: { sale: saleWhere, productId: { not: null } },
-        _sum: { lineTotal: true, costPrice: true, qty: true },
-        _count: true,
-      });
+      const results = await aggregateItemsByProduct({ companyId, startDate, endDate, branchId });
 
-      const productIds = results.map((r) => r.productId!).filter(Boolean);
+      const productIds = results.map((r) => r.productId);
       const products = await prisma.product.findMany({
         where: { id: { in: productIds } },
         select: { id: true, brandId: true, brand: { select: { name: true } } },
@@ -51,10 +104,10 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
         const product = products.find((p) => p.id === r.productId);
         const brandName = product?.brand?.name || "Sem marca";
         const current = byBrand.get(brandName) || { name: brandName, revenue: 0, cost: 0, qty: 0, count: 0 };
-        current.revenue += Number(r._sum.lineTotal || 0);
-        current.cost += Number(r._sum.costPrice || 0) * (r._sum.qty || 0);
-        current.qty += r._sum.qty || 0;
-        current.count += r._count;
+        current.revenue += r.revenue;
+        current.cost += r.cost; // H13: custo já é Σ(costPrice*qty) por produto
+        current.qty += r.qty;
+        current.count += r.count;
         byBrand.set(brandName, current);
       }
 
@@ -62,14 +115,9 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
         .map((d) => ({ ...d, margin: d.revenue - d.cost }))
         .sort((a, b) => b.revenue - a.revenue);
     } else if (dimension === "category") {
-      const results = await prisma.saleItem.groupBy({
-        by: ["productId"],
-        where: { sale: saleWhere, productId: { not: null } },
-        _sum: { lineTotal: true, costPrice: true, qty: true },
-        _count: true,
-      });
+      const results = await aggregateItemsByProduct({ companyId, startDate, endDate, branchId });
 
-      const productIds = results.map((r) => r.productId!).filter(Boolean);
+      const productIds = results.map((r) => r.productId);
       const products = await prisma.product.findMany({
         where: { id: { in: productIds } },
         select: { id: true, categoryId: true, category: { select: { name: true } } },
@@ -81,10 +129,10 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
         const product = products.find((p) => p.id === r.productId);
         const categoryName = product?.category?.name || "Sem categoria";
         const current = byCategory.get(categoryName) || { name: categoryName, revenue: 0, cost: 0, qty: 0, count: 0 };
-        current.revenue += Number(r._sum.lineTotal || 0);
-        current.cost += Number(r._sum.costPrice || 0) * (r._sum.qty || 0);
-        current.qty += r._sum.qty || 0;
-        current.count += r._count;
+        current.revenue += r.revenue;
+        current.cost += r.cost; // H13: custo já é Σ(costPrice*qty) por produto
+        current.qty += r.qty;
+        current.count += r.count;
         byCategory.set(categoryName, current);
       }
 

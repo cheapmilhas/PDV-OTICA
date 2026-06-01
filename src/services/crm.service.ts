@@ -18,7 +18,11 @@ export async function generateReminders(companyId: string) {
     where: { companyId, active: true },
     include: {
       sales: {
-        where: { status: { not: "CANCELED" } },
+        // H16: só vendas COMPLETED contam para CRM. Antes era `not CANCELED`,
+        // que deixava passar REFUNDED (devolvida) e OPEN — inflando última
+        // compra e totalSpent (cliente que devolveu tudo virava VIP). REFUNDED
+        // não é receita realizada; OPEN não é venda fechada.
+        where: { status: "COMPLETED" },
         orderBy: { createdAt: "desc" },
         take: 1,
         include: {
@@ -38,7 +42,8 @@ export async function generateReminders(companyId: string) {
     by: ["customerId"],
     where: {
       customerId: { in: customerIds },
-      status: { not: "CANCELED" },
+      // H16: mesma regra — só COMPLETED soma no total gasto / contagem.
+      status: "COMPLETED",
     },
     _count: { _all: true },
     _sum: { total: true },
