@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
@@ -130,15 +131,24 @@ export default function ReportsPage() {
   const [temporal, setTemporal] = useState<TemporalReport | null>(null);
   const [optical, setOptical] = useState<OpticalReport | null>(null);
   const { toast } = useToast();
+  // T11/M3: lê o seletor global de filial (header). Sem isso a página nunca
+  // mandava ?branchId e trocar de filial não mudava os relatórios.
+  const { activeBranchId } = useBranchContext();
 
   useEffect(() => {
     loadData();
-  }, [period]);
+  }, [period, activeBranchId]);
 
   async function loadData() {
     setLoading(true);
     try {
       const params = new URLSearchParams({ period });
+      // "ALL" → consolidado (o backend resolve por papel); senão filtra a filial.
+      if (activeBranchId && activeBranchId !== "ALL") {
+        params.set("branchId", activeBranchId);
+      } else if (activeBranchId === "ALL") {
+        params.set("branchId", "ALL");
+      }
 
       const [dashRes, prodRes, custRes, tempRes, optRes] = await Promise.all([
         fetch(`/api/reports/dashboard?${params}`),

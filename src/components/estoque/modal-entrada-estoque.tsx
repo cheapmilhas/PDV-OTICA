@@ -10,6 +10,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Command, CommandEmpty, CommandGroup, CommandInput, CommandItem } from "@/components/ui/command";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { useToast } from "@/hooks/use-toast";
+import { useSession } from "next-auth/react";
+import { useBranchContext } from "@/hooks/use-branch-context";
 import { Plus, Loader2, Package, Check, ChevronsUpDown } from "lucide-react";
 import { cn } from "@/lib/utils";
 import { StockMovementType } from "@prisma/client";
@@ -25,6 +27,15 @@ interface ModalEntradaEstoqueProps {
 
 export function ModalEntradaEstoque({ open, onOpenChange, produto, onSuccess }: ModalEntradaEstoqueProps) {
   const { toast } = useToast();
+  const { data: session } = useSession();
+  const { activeBranchId } = useBranchContext();
+  // T9: filial onde a entrada será creditada. Usa a filial ativa no contexto
+  // (se não for "ALL") e cai na filial da sessão do usuário. Sem isso o estoque
+  // por filial (BranchStock) não era atualizado e a entrada não aparecia no PDV.
+  const targetBranchId =
+    activeBranchId && activeBranchId !== "ALL"
+      ? activeBranchId
+      : (session?.user as { branchId?: string } | undefined)?.branchId;
   const [loading, setLoading] = useState(false);
   const [loadingProducts, setLoadingProducts] = useState(false);
   const [loadingSuppliers, setLoadingSuppliers] = useState(false);
@@ -121,6 +132,19 @@ export function ModalEntradaEstoque({ open, onOpenChange, produto, onSuccess }: 
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // T9: sem filial resolvida (ADMIN em "Todas as Lojas" sem filial na sessão),
+    // a entrada não iria pro BranchStock e sumiria do PDV. Exige selecionar uma
+    // filial específica antes de registrar.
+    if (!targetBranchId) {
+      toast({
+        title: "Selecione uma filial",
+        description: 'Escolha uma loja específica (não "Todas as Lojas") para registrar a entrada de estoque.',
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -129,6 +153,7 @@ export function ModalEntradaEstoque({ open, onOpenChange, produto, onSuccess }: 
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           productId: formData.productId,
+          branchId: targetBranchId,
           type: formData.type,
           quantity: parseInt(formData.quantity),
           supplierId: formData.supplierId || undefined,

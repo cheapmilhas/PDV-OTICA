@@ -8,7 +8,8 @@ import {
   isStockIncrease,
   isStockDecrease,
 } from "@/lib/validations/stock-movement.schema";
-import { atomicStockDebit } from "@/services/stock.service";
+import { atomicStockDebit, atomicStockCredit } from "@/services/stock.service";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 import {
   notFoundError,
   businessRuleError,
@@ -186,6 +187,11 @@ export class StockMovementService {
       throw notFoundError("Produto não encontrado");
     }
 
+    // T9: valida que a filial pertence à empresa (anti-leak multi-tenant).
+    if (data.branchId) {
+      await validateBranchOwnership(data.branchId, companyId);
+    }
+
     // Verificar se fornecedor existe (se informado)
     if (data.supplierId) {
       const supplier = await prisma.supplier.findFirst({
@@ -207,19 +213,6 @@ export class StockMovementService {
           `Estoque insuficiente. Disponível: ${product.stockQty}, Solicitado: ${data.quantity}`
         );
       }
-    }
-
-    // Calcular nova quantidade de estoque
-    let newStockQty = product.stockQty;
-    if (isStockIncrease(data.type)) {
-      newStockQty += data.quantity;
-    } else if (isStockDecrease(data.type)) {
-      newStockQty -= data.quantity;
-    } else if (data.type === StockMovementType.ADJUSTMENT) {
-      // Para ajustes, a quantidade pode ser positiva (acréscimo) ou negativa (decréscimo)
-      // Mas no schema validamos que sempre seja positivo, então precisamos de lógica adicional
-      // Por enquanto, vamos considerar ajustes como entrada
-      newStockQty = data.quantity;
     }
 
     // Criar movimentação e atualizar estoque em transação
@@ -250,18 +243,45 @@ export class StockMovementService {
         },
       });
 
-      // Atualizar estoque do produto (se controlar estoque)
-      if (product.stockControlled && data.type !== StockMovementType.ADJUSTMENT) {
-        await tx.product.update({
-          where: { id: data.productId },
-          data: { stockQty: newStockQty },
-        });
-      } else if (data.type === StockMovementType.ADJUSTMENT) {
-        // Para ajustes, define o estoque para a quantidade especificada
-        await tx.product.update({
-          where: { id: data.productId },
-          data: { stockQty: data.quantity },
-        });
+      // Atualizar estoque. T9/H3: o estoque é por FILIAL (BranchStock) e o PDV
+      // lê de lá. Antes só Product.stockQty (cache global) era atualizado →
+      // a entrada não aparecia no PDV da loja. Agora, com branchId, usa
+      // atomicStockCredit/Debit (upsert no BranchStock + atualiza o cache).
+      const branchId = data.branchId || null;
+
+      if (data.type === StockMovementType.ADJUSTMENT) {
+        // Ajuste define o valor ABSOLUTO da filial. O cache Product.stockQty é a
+        // SOMA de todas as filiais — com branchId, recalcula da soma (setar o
+        // cache pro valor da filial só seria correto com 1 filial). Sem branchId
+        // (setup sem BranchStock), aplica o valor absoluto direto no cache.
+        if (branchId) {
+          await tx.branchStock.upsert({
+            where: { branchId_productId: { branchId, productId: data.productId } },
+            create: { branchId, productId: data.productId, quantity: data.quantity },
+            update: { quantity: data.quantity },
+          });
+          await tx.$executeRaw`
+            UPDATE "Product"
+            SET "stockQty" = (
+              SELECT COALESCE(SUM("quantity"), 0)
+              FROM "branch_stocks"
+              WHERE "product_id" = ${data.productId}
+            ),
+            "updatedAt" = NOW()
+            WHERE "id" = ${data.productId}
+          `;
+        } else {
+          await tx.product.update({
+            where: { id: data.productId },
+            data: { stockQty: data.quantity },
+          });
+        }
+      } else if (product.stockControlled) {
+        if (isStockIncrease(data.type)) {
+          await atomicStockCredit(data.productId, data.quantity, companyId, tx, branchId);
+        } else if (isStockDecrease(data.type)) {
+          await atomicStockDebit(data.productId, data.quantity, companyId, tx, branchId);
+        }
       }
 
       return createdMovement;

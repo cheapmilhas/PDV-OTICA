@@ -9,6 +9,10 @@ export const createStockMovementSchema = z.object({
     message: "Produto é obrigatório",
   }).min(1, "Produto é obrigatório"),
 
+  // Filial onde a movimentação ocorre — o estoque é por filial (BranchStock).
+  // Sem ela, a entrada só mexia no cache global e não aparecia no PDV da loja.
+  branchId: z.string().optional().or(z.literal("")),
+
   type: z.nativeEnum(StockMovementType, {
     message: "Tipo de movimentação é obrigatório",
   }),
