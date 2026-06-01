@@ -156,3 +156,26 @@ Uma linha por teste: "Tn — RESULTADO — o que viu"
 Resumo: Total / Passou / Falhou / Bloqueado. Para cada FALHOU: passo, esperado, ocorrido, mensagem/print. Para cada BLOQUEADO: o que faltou.
 Comece pelo T11.
 ```
+
+---
+
+## RETESTE — T12 (rodar APÓS 21h, horário de Brasília)
+
+> Só faz sentido depois das 21h BRT — antes disso a venda não cruza a meia-noite UTC e o teste não exercita o bug de timezone. Conversa nova no Claude do Chrome, já logado.
+
+```
+Você é um QA testando um PDV de ótica já aberto neste Chrome (já estou logado). É ambiente de teste — pode criar 1 venda de teste. NÃO mude config da empresa, NÃO exclua dados, NÃO mexa em usuários.
+
+Primeiro confirme o horário: me diga a hora atual em Brasília (America/Sao_Paulo). Se for ANTES das 21h, PARE e marque BLOQUEADO (ainda não dá pra testar). Se for 21h ou mais, prossiga.
+
+App: https://pdv-otica.vercel.app — PDV /dashboard/pdv · Relatórios /dashboard/relatorios
+
+T12 — Timezone: venda noturna cai no dia certo
+1. Anote a data de HOJE em Brasília (ex.: 01/06/2026).
+2. No PDV, faça uma venda simples à vista (qualquer produto, pagamento em Dinheiro cobrindo o total) e finalize.
+3. Vá em /dashboard/relatorios, período "Hoje" (e, se quiser confirmar, "Este Mês").
+PASSA: a venda que você acabou de fazer aparece no relatório de HOJE, com a data correta (não no dia seguinte).
+FALHA: a venda aparece no dia seguinte / some do "Hoje".
+
+RELATÓRIO: "T12 — RESULTADO — o que viu" (inclua a hora de Brasília que você confirmou e a data em que a venda apareceu no relatório). Se FALHOU, descreva data esperada vs. data exibida.
+```
