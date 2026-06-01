@@ -50,6 +50,10 @@ export async function POST(request: NextRequest) {
       errors: [] as string[],
       created: [] as string[],
       updated: [] as string[],
+      // H17: linhas sem CPF/CNPJ/Cliente ID são SEMPRE criadas como novo (nunca
+      // atualizam por nome). Contabilizamos p/ avisar o ADMIN — reimportar uma
+      // planilha legada sem identificadores duplica clientes.
+      withoutIdentifier: 0,
     };
 
     // Processar cada linha
@@ -143,27 +147,74 @@ export async function POST(request: NextRequest) {
           ? ativoRaw.toString().toLowerCase() === "sim" || ativoRaw === "1"
           : true;
 
-        // Verificar se cliente já existe (por CPF ou nome)
-        const whereConditions: any[] = [{ name: nome }];
-        if (cpf) {
-          whereConditions.push({ cpf });
-        }
-
-        const existingCustomer = await prisma.customer.findFirst({
-          where: {
-            companyId,
-            OR: whereConditions,
-          },
-        });
-
         // Determinar tipo de pessoa (PF ou PJ)
         const personType = cpf && cpf.length === 14 ? "PJ" : "PF";
+
+        // H17: casar SÓ por identificador único e confiável — NUNCA por nome.
+        // Antes o match era OR [{name}, {cpf}], então dois clientes homônimos
+        // ("Maria Silva") viravam o mesmo registro e o import SOBRESCREVIA os
+        // dados de uma com os da outra. Agora o match é HIERÁRQUICO (não OR
+        // plano, que poderia casar registros DIFERENTES por externalId vs cpf):
+        // tenta externalId → cpf → cnpj, parando no primeiro. Sem identificador
+        // na linha, CRIA novo (não arrisca sobrescrever cliente errado).
+        const externalId = externalIdRaw ? String(externalIdRaw) : null;
+        const cpfDigits = cpf && cpf.length === 11 ? cpf : null;
+        const cnpjDigits = cpf && cpf.length === 14 ? cpf : null;
+
+        let matchByExternalId: { id: string } | null = null;
+        let matchByDoc: { id: string } | null = null;
+
+        if (externalId) {
+          // externalId não tem unique constraint — guarda contra duplicatas.
+          const dupCount = await prisma.customer.count({
+            where: { companyId, externalId },
+          });
+          if (dupCount > 1) {
+            results.errors.push(
+              `Linha ${rowNum}: "Cliente ID" ${externalId} corresponde a ${dupCount} clientes — corrija as duplicatas antes de reimportar.`
+            );
+            continue;
+          }
+          matchByExternalId = await prisma.customer.findFirst({
+            where: { companyId, externalId },
+            select: { id: true },
+          });
+        }
+
+        if (cpfDigits) {
+          matchByDoc = await prisma.customer.findUnique({
+            where: { companyId_cpf: { companyId, cpf: cpfDigits } },
+            select: { id: true },
+          });
+        } else if (cnpjDigits) {
+          matchByDoc = await prisma.customer.findFirst({
+            where: { companyId, cnpj: cnpjDigits },
+            select: { id: true },
+          });
+        }
+
+        // Conflito de identidade cruzada: externalId aponta um cliente e o
+        // documento aponta OUTRO. Atualizar qualquer um corromperia dados —
+        // registra erro e pula (o ADMIN resolve manualmente).
+        if (
+          matchByExternalId &&
+          matchByDoc &&
+          matchByExternalId.id !== matchByDoc.id
+        ) {
+          results.errors.push(
+            `Linha ${rowNum}: conflito de identidade — "Cliente ID" pertence a um cliente e o CPF/CNPJ a outro. Corrija manualmente.`
+          );
+          continue;
+        }
+
+        // Prioridade: externalId, depois documento.
+        const existingCustomer = matchByExternalId ?? matchByDoc;
 
         const customerData = {
           name: nome,
           personType,
-          cpf: cpf && cpf.length === 11 ? cpf : null,
-          cnpj: cpf && cpf.length === 14 ? cpf : null,
+          cpf: cpfDigits,
+          cnpj: cnpjDigits,
           rg: rgRaw ? String(rgRaw) : null,
           phone,
           phone2,
@@ -180,7 +231,7 @@ export async function POST(request: NextRequest) {
           acceptsMarketing,
           referralSource: row["Fonte de Indicação"] || row["Origem do Cliente"] || null,
           notes: obsRaw ? String(obsRaw) : null,
-          externalId: externalIdRaw ? String(externalIdRaw) : null,
+          externalId,
           active,
         };
 
@@ -200,11 +251,21 @@ export async function POST(request: NextRequest) {
             },
           });
           results.created.push(nome);
+          // Linha sem identificador → sempre cria (avisa o ADMIN no fim).
+          if (!externalId && !cpfDigits && !cnpjDigits) {
+            results.withoutIdentifier++;
+          }
         }
 
         results.success++;
       } catch (error: any) {
-        results.errors.push(`Linha ${rowNum}: ${error.message}`);
+        // H17: P2002 (unique CPF) com mensagem amigável — não vaza nome interno
+        // da constraint do Prisma na resposta/auditoria.
+        const message =
+          error?.code === "P2002"
+            ? "CPF/CNPJ já pertence a outro cliente nesta empresa"
+            : error.message;
+        results.errors.push(`Linha ${rowNum}: ${message}`);
       }
     }
 
@@ -225,8 +286,13 @@ export async function POST(request: NextRequest) {
       actorName: session.user.name ?? session.user.email ?? undefined,
     });
 
+    const aviso =
+      results.withoutIdentifier > 0
+        ? ` (${results.withoutIdentifier} linha(s) sem CPF/CNPJ/Cliente ID foram criadas como NOVOS clientes — reimportar planilha sem identificador duplica cadastros)`
+        : "";
+
     return NextResponse.json({
-      message: `Importação concluída: ${results.success} clientes processados`,
+      message: `Importação concluída: ${results.success} clientes processados${aviso}`,
       results,
     });
   } catch (error) {
