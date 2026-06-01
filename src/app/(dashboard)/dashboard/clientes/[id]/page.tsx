@@ -199,6 +199,15 @@ function ClienteDetalhesPage() {
   const [receivables, setReceivables] = useState<any[]>([]);
   const [receivablesSummary, setReceivablesSummary] = useState<{ totalPending: number; totalReceived: number; count: number } | null>(null);
 
+  // T8: ajuste manual de cashback (backend já existia — POST /api/cashback/customer/[id]).
+  const [showCashbackAdjust, setShowCashbackAdjust] = useState(false);
+  const [cashbackAdjustSaving, setCashbackAdjustSaving] = useState(false);
+  const [cashbackAdjustForm, setCashbackAdjustForm] = useState({
+    direction: "credit" as "credit" | "debit",
+    amount: "",
+    description: "",
+  });
+
   // CRM state
   const [crmContacts, setCrmContacts] = useState<CrmContact[]>([]);
   const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
@@ -467,6 +476,103 @@ function ClienteDetalhesPage() {
       toast.error(err.message || "Erro ao registrar contato");
     } finally {
       setContactSaving(false);
+    }
+  };
+
+  // T8: recarrega apenas o cashback do cliente (saldo + histórico) após ajuste.
+  const refreshCashback = useCallback(async () => {
+    try {
+      const cashbackRes = await fetch(`/api/cashback/customer/${customerId}`);
+      if (!cashbackRes.ok) return;
+      const cashbackData = await cashbackRes.json();
+      const data = cashbackData.data;
+
+      const expiringMovements = (data.history || []).filter((m: any) => {
+        if (m.type !== "CREDIT" || m.expired || !m.expiresAt) return false;
+        const daysUntilExpiration = Math.ceil(
+          (new Date(m.expiresAt).getTime() - Date.now()) / (1000 * 60 * 60 * 24)
+        );
+        return daysUntilExpiration > 0 && daysUntilExpiration <= 30;
+      });
+      const expiringAmount = expiringMovements.reduce(
+        (sum: number, m: any) => sum + Number(m.amount),
+        0
+      );
+      const nextExpiration =
+        expiringMovements.length > 0
+          ? expiringMovements.sort(
+              (a: any, b: any) =>
+                new Date(a.expiresAt).getTime() - new Date(b.expiresAt).getTime()
+            )[0].expiresAt
+          : null;
+
+      const recentMovements = (data.history || [])
+        .sort(
+          (a: any, b: any) =>
+            new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime()
+        )
+        .slice(0, 20);
+
+      setCashbackMovements(recentMovements);
+      setStats((prev) =>
+        prev
+          ? {
+              ...prev,
+              cashback: {
+                balance: Number(data.customerCashback?.balance || 0),
+                totalEarned: Number(data.customerCashback?.totalEarned || 0),
+                totalUsed: Number(data.customerCashback?.totalUsed || 0),
+                totalExpired: Number(data.customerCashback?.totalExpired || 0),
+                expiringAmount,
+                expiringCount: expiringMovements.length,
+                nextExpirationDate: nextExpiration ? new Date(nextExpiration) : null,
+              },
+            }
+          : prev
+      );
+    } catch (err) {
+      console.error("Erro ao recarregar cashback:", err);
+    }
+  }, [customerId]);
+
+  // T8: aplica ajuste manual de cashback (crédito ou débito).
+  const handleAdjustCashback = async () => {
+    const parsed = parseFloat(cashbackAdjustForm.amount.replace(",", "."));
+    if (!parsed || parsed <= 0) {
+      toast.error("Informe um valor maior que zero");
+      return;
+    }
+    if (cashbackAdjustForm.description.trim().length < 3) {
+      toast.error("Descreva o motivo do ajuste (mínimo 3 caracteres)");
+      return;
+    }
+    // débito é valor negativo; crédito positivo. O backend (M9) aplica piso 0.
+    const signedAmount = cashbackAdjustForm.direction === "debit" ? -parsed : parsed;
+
+    setCashbackAdjustSaving(true);
+    try {
+      const res = await fetch(`/api/cashback/customer/${customerId}`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          amount: signedAmount,
+          type: "ADJUSTMENT",
+          description: cashbackAdjustForm.description.trim(),
+        }),
+      });
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        throw new Error(errData.error?.message || errData.message || "Erro ao ajustar cashback");
+      }
+      toast.success("Ajuste de cashback realizado");
+      setShowCashbackAdjust(false);
+      setCashbackAdjustForm({ direction: "credit", amount: "", description: "" });
+      // Recarrega saldo + histórico do cliente
+      await refreshCashback();
+    } catch (err: any) {
+      toast.error(err.message || "Erro ao ajustar cashback");
+    } finally {
+      setCashbackAdjustSaving(false);
     }
   };
 
@@ -968,10 +1074,21 @@ function ClienteDetalhesPage() {
             {/* Card: Resumo de Cashback */}
             <Card>
               <CardHeader>
-                <CardTitle className="flex items-center gap-2">
-                  <Wallet className="h-5 w-5" />
-                  Resumo de Cashback
-                </CardTitle>
+                <div className="flex items-center justify-between gap-2">
+                  <CardTitle className="flex items-center gap-2">
+                    <Wallet className="h-5 w-5" />
+                    Resumo de Cashback
+                  </CardTitle>
+                  {hasPermission("cashback.manage") && (
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => setShowCashbackAdjust(true)}
+                    >
+                      Ajustar saldo
+                    </Button>
+                  )}
+                </div>
               </CardHeader>
               <CardContent>
                 {!stats?.cashback ? (
@@ -1456,6 +1573,88 @@ function ClienteDetalhesPage() {
             <Button onClick={handleRegisterContact} disabled={contactSaving}>
               {contactSaving && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
               Registrar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* T8: Modal de ajuste manual de cashback */}
+      <Dialog open={showCashbackAdjust} onOpenChange={setShowCashbackAdjust}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>Ajustar saldo de cashback</DialogTitle>
+            <DialogDescription>
+              Crédito ou débito manual. O saldo nunca fica negativo: um débito
+              maior que o saldo zera o cashback.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-4 py-2">
+            <div className="space-y-2">
+              <Label>Tipo de ajuste</Label>
+              <div className="flex gap-2">
+                <Button
+                  type="button"
+                  variant={cashbackAdjustForm.direction === "credit" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setCashbackAdjustForm((f) => ({ ...f, direction: "credit" }))}
+                >
+                  Creditar (+)
+                </Button>
+                <Button
+                  type="button"
+                  variant={cashbackAdjustForm.direction === "debit" ? "default" : "outline"}
+                  className="flex-1"
+                  onClick={() => setCashbackAdjustForm((f) => ({ ...f, direction: "debit" }))}
+                >
+                  Debitar (−)
+                </Button>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cashbackAmount">Valor (R$)</Label>
+              <Input
+                id="cashbackAmount"
+                type="number"
+                step="0.01"
+                min="0"
+                placeholder="0,00"
+                value={cashbackAdjustForm.amount}
+                onChange={(e) =>
+                  setCashbackAdjustForm((f) => ({ ...f, amount: e.target.value }))
+                }
+              />
+              {stats?.cashback && (
+                <p className="text-xs text-muted-foreground">
+                  Saldo atual: {formatCurrency(stats.cashback.balance)}
+                </p>
+              )}
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="cashbackReason">Motivo</Label>
+              <Textarea
+                id="cashbackReason"
+                placeholder="Ex.: correção de cashback lançado a maior"
+                value={cashbackAdjustForm.description}
+                onChange={(e) =>
+                  setCashbackAdjustForm((f) => ({ ...f, description: e.target.value }))
+                }
+              />
+            </div>
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => setShowCashbackAdjust(false)}
+              disabled={cashbackAdjustSaving}
+            >
+              Cancelar
+            </Button>
+            <Button onClick={handleAdjustCashback} disabled={cashbackAdjustSaving}>
+              {cashbackAdjustSaving ? "Aplicando..." : "Aplicar ajuste"}
             </Button>
           </DialogFooter>
         </DialogContent>
