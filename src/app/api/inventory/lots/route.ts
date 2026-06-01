@@ -4,6 +4,7 @@ import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { validateBranchOwnership } from "@/lib/validate-branch";
+import { atomicStockCredit } from "@/services/stock.service";
 import { requirePlanFeature } from "@/lib/plan-features";
 import { FEATURES } from "@/lib/plan-feature-catalog";
 
@@ -89,13 +90,18 @@ export async function POST(req: NextRequest) {
         },
       });
 
-      // 2. Atualizar estoque do produto
+      // 2. Creditar estoque. H3: a entrada de lote SÓ incrementava
+      // Product.stockQty (cache global) e deixava BranchStock intacto — mas a
+      // venda debita do BranchStock da filial (atomicStockDebit). Resultado:
+      // estoque fantasma que entrava no lote mas a filial não conseguia vender.
+      // atomicStockCredit faz upsert no BranchStock E atualiza o cache do
+      // Product. Quando há branchId, credita na filial; senão só no cache.
+      await atomicStockCredit(productId, qtyIn, companyId, tx, branchId || null);
+
+      // Mantém custo médio simples no Product (atomicStockCredit não mexe nisso).
       await tx.product.update({
         where: { id: productId },
-        data: {
-          stockQty: { increment: qtyIn },
-          costPrice: unitCost, // Atualizar custo médio simples
-        },
+        data: { costPrice: unitCost },
       });
 
       // 3. Criar StockMovement

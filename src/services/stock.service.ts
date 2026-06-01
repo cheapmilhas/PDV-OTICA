@@ -197,14 +197,19 @@ export async function atomicStockCredit(
     };
   }
 
-  // Fallback: sem branchId
+  // Fallback: sem branchId. H3: o crédito (entrada de lote/devolução) NÃO
+  // filtra por stockControlled — registrar um lote é evento de entrada
+  // explícito e deve mover o cache mesmo p/ produto não-controlado, senão
+  // Product.stockQty diverge da soma de qtyRemaining dos lotes (e fica
+  // subestimado se o produto virar controlado depois). O débito mantém o
+  // guard stockControlled (não deduz do que não é rastreado) — assimetria
+  // intencional entre crédito e débito.
   await client.$executeRaw`
     UPDATE "Product"
     SET "stockQty" = "stockQty" + ${quantity},
         "updatedAt" = NOW()
     WHERE "id" = ${productId}
       AND "companyId" = ${companyId}
-      AND "stockControlled" = true
   `;
 
   const updated = await client.product.findUnique({

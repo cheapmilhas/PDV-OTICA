@@ -67,8 +67,21 @@ export function assertSalePricing(input: PriceGuardInput): void {
     const lineNet = lineGross - it.itemDiscount - saleDiscountShare;
     const unitNet = it.qty > 0 ? lineNet / it.qty : lineNet;
 
+    // H4: a promoção cadastrada JÁ É a autorização. Se o preço líquido unitário
+    // bate (dentro do EPSILON) com o preço de referência resolvido — ou seja, o
+    // caixa cobrou exatamente o promoPrice/salePrice cadastrado, SEM desconto
+    // extra — não exige override mesmo que a promo esteja abaixo do custo
+    // (liquidação). Quem cadastrou a promoção já assumiu o prejuízo. Desconto
+    // manual adicional abaixo do custo continua exigindo gerente.
+    const cobrandoPrecoCadastrado =
+      it.referencePrice > 0 && Math.abs(unitNet - it.referencePrice) < EPSILON;
+
     // PRICE_BELOW_COST: preço líquido unitário abaixo do custo.
-    if (it.costPrice > 0 && unitNet < it.costPrice - EPSILON) {
+    if (
+      it.costPrice > 0 &&
+      unitNet < it.costPrice - EPSILON &&
+      !cobrandoPrecoCadastrado
+    ) {
       if (!overrideAllows(override, "PRICE_BELOW_COST")) {
         throw new AppError(
           ERROR_CODES.PRICE_BELOW_COST,

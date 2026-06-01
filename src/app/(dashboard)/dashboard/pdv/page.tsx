@@ -38,7 +38,9 @@ interface Product {
   id: string;
   sku: string;
   name: string;
-  salePrice: number;
+  salePrice: number;        // preço EFETIVO de venda (já com promoção aplicada)
+  originalSalePrice?: number; // preço cheio antes da promoção (p/ UI riscada)
+  onPromotion?: boolean;    // true se salePrice veio de uma promoção válida
   stockQty: number;
   stockControlled: boolean;
   type?: string;  // ProductType (ex.: OPHTHALMIC_LENS, CONTACT_LENS, LENS_SERVICE)
@@ -324,11 +326,25 @@ function PDVPage() {
         if (!res.ok) throw new Error("Erro ao carregar produtos");
 
         const data = await res.json();
-        // Aplicar branchSalePrice quando disponível, senão usar salePrice global
-        const productsWithBranchPrice = (data.data || []).map((p: any) => ({
-          ...p,
-          salePrice: p.branchSalePrice ?? p.salePrice,
-        }));
+        // H4: resolve o preço EFETIVO considerando promoção por filial.
+        // Antes só aplicava branchSalePrice ?? salePrice e IGNORAVA o promoPrice
+        // → produto em promoção era vendido pelo preço cheio. Agora: preço de
+        // venda da filial = branchSalePrice ?? salePrice; promo da filial =
+        // branchPromoPrice ?? promoPrice. Se a promo é válida (> 0 e abaixo do
+        // preço de venda), ela vira o salePrice efetivo e guardamos o original
+        // para exibir riscado.
+        const productsWithBranchPrice = (data.data || []).map((p: any) => {
+          const venda = p.branchSalePrice ?? p.salePrice;
+          const promo = p.branchPromoPrice ?? p.promoPrice;
+          const promoValida =
+            promo != null && promo > 0 && promo < venda;
+          return {
+            ...p,
+            salePrice: promoValida ? promo : venda,
+            originalSalePrice: venda,
+            onPromotion: promoValida,
+          };
+        });
         setProducts(productsWithBranchPrice);
       } catch (error) {
         console.error("Erro ao carregar produtos:", error);
@@ -1019,9 +1035,21 @@ function PDVPage() {
                     <p className="line-clamp-1 text-left text-sm font-medium">
                       {produto.name}
                     </p>
-                    <p className="text-base font-bold">
-                      {formatCurrency(produto.salePrice)}
-                    </p>
+                    {/* H4: preço promocional destacado + preço cheio riscado */}
+                    {produto.onPromotion && produto.originalSalePrice != null ? (
+                      <div className="flex items-baseline gap-1.5">
+                        <span className="text-xs text-muted-foreground line-through">
+                          {formatCurrency(produto.originalSalePrice)}
+                        </span>
+                        <span className="text-base font-bold text-red-600">
+                          {formatCurrency(produto.salePrice)}
+                        </span>
+                      </div>
+                    ) : (
+                      <p className="text-base font-bold">
+                        {formatCurrency(produto.salePrice)}
+                      </p>
+                    )}
                   </Button>
                 ))}
               </div>

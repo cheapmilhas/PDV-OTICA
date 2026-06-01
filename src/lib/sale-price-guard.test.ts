@@ -115,6 +115,30 @@ describe("assertSalePricing", () => {
       })
     ).not.toThrow();
   });
+
+  it("H4: promoção ABAIXO do custo cobrada exatamente não exige override (liquidação)", () => {
+    // promoPrice cadastrado = 40, custo = 50 → abaixo do custo, mas o caixa
+    // cobrou exatamente o promo (referencePrice 40). Quem cadastrou autorizou.
+    expect(() =>
+      assertSalePricing({
+        items: [item({ unitPrice: 40, referencePrice: 40, costPrice: 50 })],
+        saleDiscount: 0,
+        maxDiscountPercent: 100,
+      })
+    ).not.toThrow();
+  });
+
+  it("H4: desconto manual EXTRA abaixo do promo (e do custo) ainda exige override", () => {
+    // promo 40 (refPrice), custo 50, mas o caixa deu mais R$5 de desconto →
+    // líquido 35 != referencePrice 40 → não é "preço cadastrado" → bloqueia.
+    expect(() =>
+      assertSalePricing({
+        items: [item({ unitPrice: 40, itemDiscount: 5, referencePrice: 40, costPrice: 50 })],
+        saleDiscount: 0,
+        maxDiscountPercent: 100,
+      })
+    ).toThrowError(/abaixo do custo/);
+  });
 });
 
 describe("discountRuleKeyForRole", () => {
