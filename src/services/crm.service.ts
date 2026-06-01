@@ -189,26 +189,41 @@ export async function generateReminders(companyId: string) {
     }
   }
 
-  // Inserir lembretes (upsert para evitar duplicados)
-  let created = 0;
-  for (const reminder of reminders) {
-    try {
-      // Verifica se já existe lembrete similar
-      const existing = await prisma.customerReminder.findFirst({
-        where: {
-          companyId: reminder.companyId,
-          customerId: reminder.customerId,
-          segment: reminder.segment,
-          status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
-        },
-      });
+  // M8: era N+1 (findFirst + create por lembrete) — com milhares de lembretes
+  // virava ~2N queries seriais e dava timeout. Agora: 1 query busca os ativos
+  // existentes, monta um Set de chaves (customerId|segment), filtra os novos e
+  // insere em LOTE (createMany). generateReminders roda p/ um único companyId,
+  // então a chave de dedup é (customerId, segment).
+  const existing = await prisma.customerReminder.findMany({
+    where: {
+      companyId,
+      status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
+    },
+    select: { customerId: true, segment: true },
+  });
+  const seen = new Set(existing.map((e) => `${e.customerId}|${e.segment}`));
 
-      if (!existing) {
-        await prisma.customerReminder.create({ data: reminder });
-        created++;
-      }
+  // Dedup interno também (o array pode ter o mesmo customer+segment 2x).
+  const toCreate: any[] = [];
+  for (const reminder of reminders) {
+    const key = `${reminder.customerId}|${reminder.segment}`;
+    if (seen.has(key)) continue;
+    seen.add(key);
+    toCreate.push(reminder);
+  }
+
+  let created = 0;
+  if (toCreate.length > 0) {
+    try {
+      const result = await prisma.customerReminder.createMany({
+        data: toCreate,
+        skipDuplicates: true,
+      });
+      created = result.count;
     } catch (error) {
-      log.error("Erro ao criar lembrete", { error: error instanceof Error ? error.message : String(error) });
+      log.error("Erro ao criar lembretes em lote", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     }
   }
 
