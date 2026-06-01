@@ -178,6 +178,7 @@ export class SaleService {
                 barcode: true,
                 type: true,
                 salePrice: true,
+                stockControlled: true,
               },
             },
           },
@@ -833,22 +834,31 @@ export class SaleService {
       // 2. Estornar estoque de cada item e registrar movimentação
       for (const item of sale.items) {
         if (item.productId) {
-          // Devolver ao BranchStock da filial da venda
-          await tx.branchStock.upsert({
-            where: { branchId_productId: { branchId: sale.branchId, productId: item.productId } },
-            create: { branchId: sale.branchId, productId: item.productId, quantity: item.qty },
-            update: { quantity: { increment: item.qty } },
-          });
+          // Simetria com o débito da venda: produto NÃO-controlado nunca baixou
+          // estoque na venda (atomicStockDebit pula !stockControlled), logo o
+          // cancelamento NÃO pode creditar — senão o saldo sobe acima do original
+          // (bug T7: estoque 34 → 35 após estornar uma venda de produto sem
+          // controle). Crédito de BranchStock + cache só ocorre se controlado.
+          const isStockControlled = item.product?.stockControlled ?? false;
 
-          // Atualizar cache Product.stockQty
-          await tx.product.update({
-            where: { id: item.productId },
-            data: {
-              stockQty: {
-                increment: item.qty,
+          if (isStockControlled) {
+            // Devolver ao BranchStock da filial da venda
+            await tx.branchStock.upsert({
+              where: { branchId_productId: { branchId: sale.branchId, productId: item.productId } },
+              create: { branchId: sale.branchId, productId: item.productId, quantity: item.qty },
+              update: { quantity: { increment: item.qty } },
+            });
+
+            // Atualizar cache Product.stockQty
+            await tx.product.update({
+              where: { id: item.productId },
+              data: {
+                stockQty: {
+                  increment: item.qty,
+                },
               },
-            },
-          });
+            });
+          }
 
           // Q4.2: Reverter consumo FIFO — devolve quantidade aos InventoryLots
           // de origem e apaga o registro de consumo (SaleItemLot). Mantém o
@@ -869,17 +879,21 @@ export class SaleService {
             });
           }
 
-          // Registrar movimentação de estorno
-          await tx.stockMovement.create({
-            data: {
-              companyId: sale.companyId,
-              branchId: sale.branchId,
-              productId: item.productId,
-              type: "CUSTOMER_RETURN",
-              quantity: item.qty, // Positivo = entrada de estoque
-              notes: `Estorno por cancelamento de venda #${id.substring(0, 8)}${reason ? ` - ${reason}` : ""}`,
-            },
-          });
+          // Registrar movimentação de estorno (só para item controlado: produto
+          // sem controle não teve saída física registrada na venda, então não
+          // há entrada a estornar — o StockMovement seguiria a mesma simetria).
+          if (isStockControlled) {
+            await tx.stockMovement.create({
+              data: {
+                companyId: sale.companyId,
+                branchId: sale.branchId,
+                productId: item.productId,
+                type: "CUSTOMER_RETURN",
+                quantity: item.qty, // Positivo = entrada de estoque
+                notes: `Estorno por cancelamento de venda #${id.substring(0, 8)}${reason ? ` - ${reason}` : ""}`,
+              },
+            });
+          }
         }
       }
 

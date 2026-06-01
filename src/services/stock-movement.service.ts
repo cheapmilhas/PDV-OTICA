@@ -222,6 +222,10 @@ export class StockMovementService {
         data: {
           companyId,
           productId: data.productId,
+          // T9: o branchId vinha sendo descartado aqui — o movimento gravava sem
+          // filial (coluna FILIAIS vazia no histórico) e o crédito não chegava
+          // ao BranchStock da loja. Agora persiste a filial da entrada.
+          branchId: data.branchId || undefined,
           type: data.type,
           quantity: data.quantity,
           supplierId: data.supplierId || undefined,
@@ -254,6 +258,9 @@ export class StockMovementService {
         // SOMA de todas as filiais — com branchId, recalcula da soma (setar o
         // cache pro valor da filial só seria correto com 1 filial). Sem branchId
         // (setup sem BranchStock), aplica o valor absoluto direto no cache.
+        // NÃO filtra stockControlled de propósito: ajuste é inventário físico
+        // (contagem) e deve refletir no saldo independente do flag — mesmo
+        // raciocínio das entradas (crédito não guarda; só o débito de venda guarda).
         if (branchId) {
           await tx.branchStock.upsert({
             where: { branchId_productId: { branchId, productId: data.productId } },
@@ -276,12 +283,18 @@ export class StockMovementService {
             data: { stockQty: data.quantity },
           });
         }
-      } else if (product.stockControlled) {
-        if (isStockIncrease(data.type)) {
-          await atomicStockCredit(data.productId, data.quantity, companyId, tx, branchId);
-        } else if (isStockDecrease(data.type)) {
-          await atomicStockDebit(data.productId, data.quantity, companyId, tx, branchId);
-        }
+      } else if (isStockIncrease(data.type)) {
+        // T9/H3: entrada de estoque é evento explícito e deve creditar o
+        // BranchStock + cache MESMO para produto não-controlado — senão a
+        // entrada some do PDV (bug: produto stockControlled=false, entrada de
+        // 10 un. registrava o movimento mas o saldo da filial seguia 0).
+        // atomicStockCredit já faz upsert no BranchStock quando há branchId e
+        // não filtra por stockControlled (assimetria intencional com o débito).
+        await atomicStockCredit(data.productId, data.quantity, companyId, tx, branchId);
+      } else if (isStockDecrease(data.type)) {
+        // Saída mantém o guard: atomicStockDebit pula produto não-controlado
+        // internamente (retorna sucesso sem debitar). Só registra o movimento.
+        await atomicStockDebit(data.productId, data.quantity, companyId, tx, branchId);
       }
 
       return createdMovement;
@@ -374,12 +387,19 @@ export class StockMovementService {
         },
       });
 
-      // Atualizar estoque do produto de forma atômica (deduzir da origem)
+      // Atualizar estoque de forma atômica: deduzir da origem E creditar no
+      // destino. Bug pré-existente (HIGH): a transferência só debitava a origem,
+      // nunca creditava o destino — o BranchStock da filial de destino seguia
+      // 0 e o produto não aparecia no PDV de lá. Como é transferência interna,
+      // o cache global Product.stockQty deve permanecer inalterado: o débito
+      // (−qty) e o crédito (+qty) no cache se cancelam. Ambos sob o guard
+      // stockControlled para manter a simetria com o resto do serviço.
       if (product.stockControlled) {
-        const transferResult = await atomicStockDebit(data.productId, data.quantity, companyId, tx, data.sourceBranchId);
-        if (!transferResult.success) {
-          throw new Error(transferResult.error || "Estoque insuficiente para transferência");
+        const debitResult = await atomicStockDebit(data.productId, data.quantity, companyId, tx, data.sourceBranchId);
+        if (!debitResult.success) {
+          throw new Error(debitResult.error || "Estoque insuficiente para transferência");
         }
+        await atomicStockCredit(data.productId, data.quantity, companyId, tx, data.targetBranchId);
       }
 
       return { transferOut, transferIn };
