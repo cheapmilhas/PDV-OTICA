@@ -63,7 +63,7 @@ export async function GET(request: Request) {
     httpOnly: true,
     sameSite: "lax",
     path: "/",
-    maxAge: 7200,
+    maxAge: 30 * 60, // 30 minutos — alinhado ao TTL da ImpersonationSession
     secure: isProduction,
   });
 

@@ -1,10 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { csvRow } from "@/lib/csv-safe";
 
 export async function GET() {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
 
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 
@@ -19,15 +23,15 @@ export async function GET() {
   });
 
   const rows = [
-    "data,acao,admin,empresa,detalhes",
+    csvRow(["data", "acao", "admin", "empresa", "detalhes"]),
     ...logs.map((l) =>
-      [
+      csvRow([
         new Date(l.createdAt).toISOString(),
         l.action,
-        `"${l.adminUser?.name ?? "Sistema"}"`,
-        `"${l.company?.name ?? ""}"`,
-        `"${JSON.stringify(l.metadata ?? {}).replace(/"/g, "'")}"`,
-      ].join(",")
+        l.adminUser?.name ?? "Sistema",
+        l.company?.name ?? "",
+        JSON.stringify(l.metadata ?? {}),
+      ])
     ),
   ].join("\n");
 

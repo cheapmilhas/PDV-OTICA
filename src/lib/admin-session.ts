@@ -1,6 +1,8 @@
 import { cookies } from "next/headers";
 import { jwtVerify } from "jose";
 import { redirect } from "next/navigation";
+import { prisma } from "@/lib/prisma";
+import { canAccessCompany } from "@/lib/admin-scope";
 
 const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
 if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
@@ -37,4 +39,24 @@ export async function requireAdminRole(allowedRoles: string[]): Promise<AdminPay
   const admin = await requireAdmin();
   if (!allowedRoles.includes(admin.role)) redirect("/admin?error=unauthorized");
   return admin;
+}
+
+/**
+ * Carrega o admin do banco (revalida active) e checa escopo para companyId.
+ * Retorna o admin se ok, ou null se não autorizado / inativo / fora de escopo.
+ */
+export async function requireCompanyScope(
+  adminId: string,
+  companyId: string
+): Promise<{ id: string; role: string } | null> {
+  const admin = await prisma.adminUser.findUnique({
+    where: { id: adminId },
+    select: { id: true, role: true, active: true, scopeAllCompanies: true, scopedCompanyIds: true },
+  });
+  if (!admin || !admin.active) return null;
+  // Revalida o papel do banco (fecha a janela de JWT desatualizado: admin
+  // rebaixado para SUPPORT/BILLING não impersona mesmo com cookie antigo).
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) return null;
+  if (!canAccessCompany(admin, companyId)) return null;
+  return { id: admin.id, role: admin.role };
 }
