@@ -48,7 +48,19 @@ export interface ErrorResponse {
     code: ErrorCode;
     message: string;
     details?: ErrorDetail[];
+    // Fase 4: id de correlação para erros inesperados (5xx). O cliente vê este
+    // id e, ao reportar, permite achar o log/Sentry exato na hora. Ausente em
+    // erros esperados (validação, 404, 409) que não precisam de rastreio.
+    errorId?: string;
   };
+}
+
+/**
+ * Gera um id curto de correlação de erro (Fase 4 — observabilidade).
+ * Ex.: "err_a1b2c3d4". Vai ao log, ao Sentry e à resposta — o mesmo id nos três.
+ */
+function newErrorId(): string {
+  return "err_" + crypto.randomUUID().replace(/-/g, "").slice(0, 8);
 }
 
 /**
@@ -178,12 +190,14 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
     // problemas críticos (ex.: timeout do $transaction). Sempre logamos a stack
     // server-side; o cliente vê código DATABASE_ERROR + detalhe com o código
     // Prisma real para diagnóstico.
+    const errorId = newErrorId();
     log.error("Prisma error", {
+      errorId,
       code: error.code,
       message: error.message,
       meta: error.meta,
     });
-    void captureException(error, { source: "prisma", code: error.code });
+    void captureException(error, { errorId, source: "prisma", code: error.code });
     return NextResponse.json<ErrorResponse>(
       {
         error: {
@@ -193,6 +207,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
               ? `${error.code}: ${error.message}`
               : "Erro de banco de dados ao processar sua requisição. Tente novamente em instantes.",
           details: [{ field: "prismaCode", message: error.code }],
+          errorId,
         },
       },
       { status }
@@ -201,8 +216,9 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
 
   // Error genérico do JavaScript
   if (error instanceof Error) {
-    log.error("Unexpected error", { message: error.message, stack: error.stack });
-    void captureException(error, { source: "api" });
+    const errorId = newErrorId();
+    log.error("Unexpected error", { errorId, message: error.message, stack: error.stack });
+    void captureException(error, { errorId, source: "api" });
     return NextResponse.json<ErrorResponse>(
       {
         error: {
@@ -210,6 +226,7 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
           message: process.env.NODE_ENV === "development"
             ? error.message
             : "Erro interno do servidor",
+          errorId,
         },
       },
       { status: 500 }
@@ -217,12 +234,15 @@ export function handleApiError(error: unknown): NextResponse<ErrorResponse> {
   }
 
   // Erro completamente desconhecido
-  log.error("Unknown error", { error: String(error) });
+  const errorId = newErrorId();
+  log.error("Unknown error", { errorId, error: String(error) });
+  void captureException(error, { errorId, source: "unknown" });
   return NextResponse.json<ErrorResponse>(
     {
       error: {
         code: ERROR_CODES.INTERNAL_ERROR,
         message: "Erro interno do servidor",
+        errorId,
       },
     },
     { status: 500 }
