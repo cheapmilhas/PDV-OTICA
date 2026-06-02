@@ -193,23 +193,35 @@ export function Header() {
     return () => clearInterval(interval);
   }, [session]);
 
+  const fetchPersistentNotifs = async () => {
+    try {
+      const res = await fetch("/api/notifications?limit=10");
+      if (res.ok) {
+        const data = await res.json();
+        return { notifs: data.notifications ?? [], unread: data.unreadCount ?? 0 };
+      }
+    } catch {
+      // Silencioso
+    }
+    return null;
+  };
+
   useEffect(() => {
     if (!session?.user) return;
-    const fetchPersistent = async () => {
-      try {
-        const res = await fetch("/api/notifications?limit=10");
-        if (res.ok) {
-          const data = await res.json();
-          setPersistentNotifs(data.notifications ?? []);
-          setPersistentUnread(data.unreadCount ?? 0);
-        }
-      } catch {
-        // Silencioso
+    let active = true;
+    const run = async () => {
+      const r = await fetchPersistentNotifs();
+      if (r && active) {
+        setPersistentNotifs(r.notifs);
+        setPersistentUnread(r.unread);
       }
     };
-    fetchPersistent();
-    const interval = setInterval(fetchPersistent, 60 * 1000);
-    return () => clearInterval(interval);
+    run();
+    const interval = setInterval(run, 60 * 1000);
+    return () => {
+      active = false;
+      clearInterval(interval);
+    };
   }, [session]);
 
   const markNotifRead = async (id: string, link: string | null) => {
@@ -230,6 +242,13 @@ export function Header() {
       await fetch("/api/notifications/read-all", { method: "PATCH" });
     } catch {
       // Silencioso
+    }
+    // Re-sincroniza com o servidor (a lista local é só os 10 primeiros; pode haver
+    // mais não-lidas além do limite — evita badge dessincronizado).
+    const r = await fetchPersistentNotifs();
+    if (r) {
+      setPersistentNotifs(r.notifs);
+      setPersistentUnread(r.unread);
     }
   };
 

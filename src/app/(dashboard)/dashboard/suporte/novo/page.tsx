@@ -50,7 +50,10 @@ function NovoChamadoContent() {
         throw new Error(err?.error?.message ?? err?.error ?? "Não foi possível abrir o chamado");
       }
       const data = await res.json();
-      toast({ title: "Chamado aberto", description: `Seu chamado #${data.ticket?.number} foi registrado.` });
+      if (!data.ticket?.id) {
+        throw new Error("Resposta inesperada do servidor");
+      }
+      toast({ title: "Chamado aberto", description: `Seu chamado #${data.ticket.number} foi registrado.` });
       router.push(`/dashboard/suporte/${data.ticket.id}`);
     } catch (error) {
       toast({

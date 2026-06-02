@@ -64,11 +64,43 @@ export async function computeSlaDeadline(
 
 /**
  * Gera um número sequencial de ticket. Tem corrida sob concorrência (count+1);
- * o caller deve tratar P2002 com retry (createTicketByClient já faz).
+ * por isso a criação roda dentro de withTicketNumberRetry (trata P2002).
  */
 async function nextTicketNumber(tx: Tx): Promise<string> {
   const count = await tx.supportTicket.count();
   return `TKT-${String(count + 1).padStart(5, "0")}`;
+}
+
+function isP2002(error: unknown): boolean {
+  return (
+    error instanceof Object &&
+    "code" in error &&
+    (error as { code?: string }).code === "P2002"
+  );
+}
+
+/**
+ * Executa uma criação de ticket com retry em caso de colisão do número
+ * sequencial (@unique). Compartilhado pelo caminho do cliente E do admin (H3).
+ */
+async function withTicketNumberRetry<T>(fn: () => Promise<T>): Promise<T> {
+  const MAX_RETRIES = 3;
+  let lastError: unknown;
+  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (error) {
+      if (isP2002(error) && attempt < MAX_RETRIES - 1) {
+        lastError = error;
+        continue;
+      }
+      throw error;
+    }
+  }
+  log.error("Falha ao criar ticket após retries", {
+    error: lastError instanceof Error ? lastError.message : String(lastError),
+  });
+  throw lastError;
 }
 
 interface CreateTicketByClientParams {
@@ -89,81 +121,134 @@ interface CreateTicketByClientParams {
 export async function createTicketByClient(
   params: CreateTicketByClientParams
 ): Promise<SupportTicket> {
-  const MAX_RETRIES = 3;
-  let lastError: unknown;
+  const ticket = await withTicketNumberRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const number = await nextTicketNumber(tx);
+      const slaDeadline = await computeSlaDeadline(params.priority, new Date(), tx);
 
-  for (let attempt = 0; attempt < MAX_RETRIES; attempt++) {
-    try {
-      const ticket = await prisma.$transaction(async (tx) => {
-        const now = new Date();
-        const number = await nextTicketNumber(tx);
-        const slaDeadline = await computeSlaDeadline(params.priority, now, tx);
-
-        const created = await tx.supportTicket.create({
-          data: {
-            companyId: params.companyId,
-            userId: params.userId,
-            number,
-            subject: params.subject,
-            description: params.description,
-            category: CLIENT_TICKET_CATEGORY,
-            priority: params.priority,
-            status: "OPEN",
-            slaDeadline,
-            messages: {
-              create: {
-                authorId: params.userId,
-                authorName: params.authorName,
-                authorType: "CLIENT",
-                message: params.description,
-                isInternal: false,
-              },
+      const created = await tx.supportTicket.create({
+        data: {
+          companyId: params.companyId,
+          userId: params.userId,
+          number,
+          subject: params.subject,
+          description: params.description,
+          category: CLIENT_TICKET_CATEGORY,
+          priority: params.priority,
+          status: "OPEN",
+          slaDeadline,
+          messages: {
+            create: {
+              authorId: params.userId,
+              authorName: params.authorName,
+              authorType: "CLIENT",
+              message: params.description,
+              isInternal: false,
             },
           },
-        });
-
-        await logActivity({
-          companyId: params.companyId,
-          type: ActivityType.TICKET_OPENED,
-          title: `Ticket #${number} aberto pelo cliente: ${params.subject}`,
-          actorId: params.userId,
-          actorType: ActorType.CLIENT,
-          actorName: params.authorName,
-        });
-
-        return created;
+        },
       });
 
-      // Notificação ao admin FORA da transação (pós-commit, fail-silent — H4).
-      // O enum AdminNotificationType só tem TICKET_URGENT para suporte; serve
-      // como "novo ticket" no sino do admin independente da prioridade.
-      await createAdminNotification({
-        type: AdminNotificationType.TICKET_URGENT,
-        title: `Novo ticket #${ticket.number}`,
-        message: `${params.authorName}: ${params.subject}`,
-        link: `/admin/suporte/tickets/${ticket.id}`,
-        metadata: { ticketId: ticket.id, number: ticket.number, companyId: params.companyId },
+      await logActivity({
+        companyId: params.companyId,
+        type: ActivityType.TICKET_OPENED,
+        title: `Ticket #${number} aberto pelo cliente: ${params.subject}`,
+        actorId: params.userId,
+        actorType: ActorType.CLIENT,
+        actorName: params.authorName,
       });
 
-      return ticket;
-    } catch (error) {
-      // P2002 = colisão do número sequencial (@unique). Rebusca e tenta de novo.
-      if (
-        error instanceof Object &&
-        "code" in error &&
-        (error as { code?: string }).code === "P2002" &&
-        attempt < MAX_RETRIES - 1
-      ) {
-        lastError = error;
-        continue;
-      }
-      throw error;
-    }
-  }
-  log.error("Falha ao criar ticket após retries", {
-    error: lastError instanceof Error ? lastError.message : String(lastError),
+      return created;
+    })
+  );
+
+  // Notificação ao admin FORA da transação (pós-commit, fail-silent — H4).
+  // O enum AdminNotificationType só tem TICKET_URGENT para suporte; serve
+  // como "novo ticket" no sino do admin independente da prioridade.
+  await createAdminNotification({
+    type: AdminNotificationType.TICKET_URGENT,
+    title: `Novo ticket #${ticket.number}`,
+    message: `${params.authorName}: ${params.subject}`,
+    link: `/admin/suporte/tickets/${ticket.id}`,
+    metadata: { ticketId: ticket.id, number: ticket.number, companyId: params.companyId },
   });
-  throw lastError;
+
+  return ticket;
+}
+
+interface CreateTicketByAdminParams {
+  companyId: string;
+  /** usuário da empresa ao qual o ticket fica vinculado (autor). */
+  userId: string;
+  subject: string;
+  description: string;
+  priority: TicketPriority;
+  assignedToId?: string;
+  admin: { id: string; name: string };
+}
+
+/**
+ * Admin abre um ticket para uma empresa. Cria ticket OPEN + 1ª mensagem (ADMIN,
+ * pública), seta slaDeadline. Mesmo retry de número do caminho do cliente (H3).
+ * Não notifica o admin (foi ele quem abriu); notifica o autor (cliente) pós-commit.
+ */
+export async function createTicketByAdmin(
+  params: CreateTicketByAdminParams
+): Promise<SupportTicket> {
+  const ticket = await withTicketNumberRetry(() =>
+    prisma.$transaction(async (tx) => {
+      const number = await nextTicketNumber(tx);
+      const slaDeadline = await computeSlaDeadline(params.priority, new Date(), tx);
+
+      const created = await tx.supportTicket.create({
+        data: {
+          companyId: params.companyId,
+          userId: params.userId,
+          number,
+          subject: params.subject,
+          description: params.description,
+          category: CLIENT_TICKET_CATEGORY,
+          priority: params.priority,
+          status: "OPEN",
+          slaDeadline,
+          ...(params.assignedToId ? { assignedToId: params.assignedToId } : {}),
+          messages: {
+            create: {
+              authorId: params.admin.id,
+              authorName: params.admin.name,
+              authorType: "ADMIN",
+              message: params.description,
+              isInternal: false,
+            },
+          },
+        },
+      });
+
+      await logActivity({
+        companyId: params.companyId,
+        type: ActivityType.TICKET_OPENED,
+        title: `Ticket #${number} aberto: ${params.subject}`,
+        actorId: params.admin.id,
+        actorType: ActorType.ADMIN,
+        actorName: params.admin.name,
+      });
+
+      return created;
+    })
+  );
+
+  // Cliente (autor) é notificado de que há um chamado aberto em nome dele.
+  await createCompanyNotification({
+    companyId: params.companyId,
+    userId: params.userId,
+    type: CompanyNotificationType.TICKET_STATUS,
+    title: `Chamado #${ticket.number} aberto pelo suporte`,
+    message: params.subject,
+    link: `/dashboard/suporte/${ticket.id}`,
+    metadata: { ticketId: ticket.id, number: ticket.number },
+  });
+
+  return ticket;
 }
 
 interface AddClientMessageParams {
@@ -204,6 +289,16 @@ export async function addClientMessage(params: AddClientMessageParams) {
         authorType: "CLIENT",
         message: params.message,
         isInternal: false,
+      },
+      // Projeta só o que o cliente pode ver (HIGH: nunca devolve isInternal/authorId
+      // na resposta da rota — espelha o select do GET detalhe).
+      select: {
+        id: true,
+        authorType: true,
+        authorName: true,
+        message: true,
+        attachments: true,
+        createdAt: true,
       },
     });
 
@@ -325,7 +420,8 @@ export async function updateTicketStatus(params: UpdateTicketStatusParams) {
       where: { id: ticket.id },
       data: {
         status: params.status,
-        ...(isTerminal && { resolvedAt: new Date() }),
+        // HIGH: terminal → carimba resolvedAt; reabertura → limpa (sem timestamp velho).
+        resolvedAt: isTerminal ? new Date() : null,
       },
     });
 
