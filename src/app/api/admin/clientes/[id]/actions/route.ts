@@ -230,6 +230,7 @@ export async function POST(
 
         const subscription = await prisma.subscription.findFirst({
           where: { companyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
+          include: { plan: true },
         });
         if (!subscription) return NextResponse.json({ error: "Assinatura ativa não encontrada" }, { status: 400 });
 
@@ -265,6 +266,50 @@ export async function POST(
             },
           }),
         ]);
+
+        if (subscription.asaasSubscriptionId) {
+          const value = planValueForCycle(subscription.plan, cycle);
+          try {
+            await asaas.subscriptions.update(
+              subscription.asaasSubscriptionId,
+              { value, cycle: cycle as "MONTHLY" | "YEARLY", updatePendingPayments: true },
+              `change-cycle:${subscription.id}:${cycle}:${value}`,
+            );
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            try {
+              await prisma.globalAudit.create({
+                data: {
+                  actorType: "ADMIN_USER",
+                  actorId: admin.id,
+                  companyId,
+                  action: "BILLING_SYNC_FAILED",
+                  metadata: {
+                    subscriptionId: subscription.id,
+                    asaasSubscriptionId: subscription.asaasSubscriptionId,
+                    context: "change_billing_cycle",
+                    newCycle: cycle,
+                    newValue: value,
+                    error: errMsg,
+                  },
+                },
+              });
+              await prisma.subscription.update({
+                where: { id: subscription.id },
+                data: { billingSyncPending: true },
+              });
+            } catch (recErr) {
+              log.error("Falha ao registrar billingSyncPending (change_billing_cycle)", {
+                subscriptionId: subscription.id,
+                error: recErr instanceof Error ? recErr.message : String(recErr),
+              });
+            }
+            log.error("Falha ao sincronizar ciclo no Asaas", {
+              subscriptionId: subscription.id,
+              error: errMsg,
+            });
+          }
+        }
 
         await logActivity({ companyId, type: "CYCLE_CHANGED", title: `Ciclo alterado para ${cycle === "MONTHLY" ? "Mensal" : "Anual"}`, detail: { fromCycle: oldCycle, toCycle: cycle }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Ciclo alterado para ${cycle === "MONTHLY" ? "Mensal" : "Anual"}` });
