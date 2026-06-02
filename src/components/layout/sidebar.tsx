@@ -35,6 +35,7 @@ import {
   PieChart,
   Shield,
   Lock,
+  LifeBuoy,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -308,6 +309,12 @@ const menuItems: MenuSection[] = [
         href: "/dashboard/usuarios",
         icon: Shield,
         permission: "users.view"
+      },
+      {
+        name: "Suporte",
+        href: "/dashboard/suporte",
+        icon: LifeBuoy,
+        // sem permission/feature: todo usuário pode pedir ajuda
       },
     ],
   },

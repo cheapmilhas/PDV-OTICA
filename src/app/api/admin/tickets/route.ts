@@ -1,11 +1,14 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
-import { logActivity } from "@/services/activity-log.service";
-import { ActorType } from "@prisma/client";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
+import { createTicketByAdmin } from "@/services/support.service";
+import { handleApiError } from "@/lib/error-handler";
+import type { TicketPriority } from "@prisma/client";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "admin/tickets" });
+
+const ADMIN_PRIORITIES: TicketPriority[] = ["LOW", "MEDIUM", "HIGH", "URGENT"];
 
 /**
  * POST /api/admin/tickets
@@ -17,11 +20,20 @@ export async function POST(request: Request) {
 
   try {
     const body = await request.json();
-    const { companyId, subject, description, priority = "MEDIUM", assignedToId } = body;
+    const { companyId, subject, description, assignedToId } = body;
+    const priority: TicketPriority = ADMIN_PRIORITIES.includes(body.priority)
+      ? body.priority
+      : "MEDIUM";
 
     if (!companyId?.trim()) return NextResponse.json({ error: "Empresa é obrigatória" }, { status: 400 });
     if (!subject?.trim()) return NextResponse.json({ error: "Assunto é obrigatório" }, { status: 400 });
     if (!description?.trim()) return NextResponse.json({ error: "Descrição é obrigatória" }, { status: 400 });
+
+    // C1: admin restrito só abre ticket para empresa dentro do seu escopo.
+    const scoped = await requireSupportScope(admin.id, companyId);
+    if (!scoped) {
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -31,42 +43,22 @@ export async function POST(request: Request) {
 
     // userId obrigatório no schema — usar o primeiro usuário ativo da empresa
     const userId = company.users[0]?.id;
-    if (!userId) return NextResponse.json({ error: "Empresa não tem usuários ativos para vincular ao ticket" }, { status: 400 });
+    if (!userId) {
+      return NextResponse.json(
+        { error: "Empresa não tem usuários ativos para vincular ao ticket" },
+        { status: 400 }
+      );
+    }
 
-    // Gerar número sequencial
-    const count = await prisma.supportTicket.count();
-    const number = `TKT-${String(count + 1).padStart(5, "0")}`;
-
-    const ticket = await prisma.supportTicket.create({
-      data: {
-        companyId,
-        userId,
-        number,
-        subject: subject.trim(),
-        description: description.trim(),
-        category: "SUPORTE",
-        priority,
-        status: "OPEN",
-        ...(assignedToId ? { assignedToId } : {}),
-        messages: {
-          create: {
-            authorId: admin.id,
-            authorName: admin.name,
-            authorType: "ADMIN",
-            message: description.trim(),
-            isInternal: false,
-          },
-        },
-      },
-    });
-
-    await logActivity({
+    // Cria via serviço (mesmo retry de número P2002 do caminho do cliente — H3).
+    const ticket = await createTicketByAdmin({
       companyId,
-      type: "TICKET_OPENED",
-      title: `Ticket #${number} aberto: ${subject}`,
-      actorId: admin.id,
-      actorType: ActorType.ADMIN,
-      actorName: admin.name,
+      userId,
+      subject: subject.trim(),
+      description: description.trim(),
+      priority,
+      assignedToId: assignedToId || undefined,
+      admin: { id: admin.id, name: admin.name },
     });
 
     await prisma.globalAudit.create({
@@ -75,13 +67,13 @@ export async function POST(request: Request) {
         actorId: admin.id,
         action: "TICKET_CREATED",
         companyId,
-        metadata: { ticketId: ticket.id, number, subject },
+        metadata: { ticketId: ticket.id, number: ticket.number, subject: subject.trim() },
       },
     });
 
     return NextResponse.json({ success: true, ticket });
   } catch (error) {
     log.error("Erro", { error: error instanceof Error ? error.message : String(error) });
-    return NextResponse.json({ error: "Erro interno" }, { status: 500 });
+    return handleApiError(error);
   }
 }

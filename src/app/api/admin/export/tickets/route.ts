@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv-safe";
 
@@ -8,11 +8,16 @@ export async function GET() {
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+  if (!["SUPER_ADMIN", "ADMIN", "SUPPORT"].includes(admin.role)) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
+  // M5: admin restrito só exporta tickets das empresas no seu escopo.
+  // null = sem restrição (SUPER_ADMIN ou scopeAllCompanies); [] = nenhuma.
+  const accessible = await getAccessibleCompanyIds(admin.id);
+
   const tickets = await prisma.supportTicket.findMany({
+    where: accessible === null ? undefined : { companyId: { in: accessible } },
     include: {
       company: { select: { tradeName: true } },
     },

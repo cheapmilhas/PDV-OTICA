@@ -1,6 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { updateTicketStatus } from "@/services/support.service";
+import { handleApiError } from "@/lib/error-handler";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 
@@ -20,49 +22,32 @@ export async function PATCH(
       return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
     }
     const { id } = await context.params;
-    const body = await request.json();
-    const { status } = statusSchema.parse(body);
+    const { status } = statusSchema.parse(await request.json());
 
-    const updateData: any = { status };
-
-    // Se estiver marcando como resolvido, adicionar timestamp
-    if (status === "RESOLVED" || status === "CLOSED") {
-      updateData.resolvedAt = new Date();
+    // C1: ticket deve existir E admin precisa de escopo na empresa dele.
+    const ticket = await prisma.supportTicket.findUnique({
+      where: { id },
+      select: { companyId: true },
+    });
+    if (!ticket) {
+      return NextResponse.json({ error: "Ticket não encontrado" }, { status: 404 });
+    }
+    const scoped = await requireSupportScope(admin.id, ticket.companyId);
+    if (!scoped) {
+      return NextResponse.json({ error: "Sem permissão para este ticket" }, { status: 403 });
     }
 
-    const ticket = await prisma.supportTicket.update({
-      where: { id },
-      data: updateData,
-    });
+    const updated = await updateTicketStatus({ ticketId: id, status });
 
-    return NextResponse.json({
-      success: true,
-      data: ticket,
-    });
+    return NextResponse.json({ success: true, data: updated });
   } catch (error) {
-    log.error("Erro ao atualizar status", { error: error instanceof Error ? error.message : String(error) });
-
     if (error instanceof z.ZodError) {
       return NextResponse.json(
-        {
-          error: {
-            code: "VALIDATION_ERROR",
-            message: "Status inválido",
-            details: error.issues,
-          },
-        },
+        { error: { code: "VALIDATION_ERROR", message: "Status inválido", details: error.issues } },
         { status: 400 }
       );
     }
-
-    return NextResponse.json(
-      {
-        error: {
-          code: "INTERNAL_ERROR",
-          message: "Erro ao atualizar status",
-        },
-      },
-      { status: 500 }
-    );
+    log.error("Erro ao atualizar status", { error: error instanceof Error ? error.message : String(error) });
+    return handleApiError(error);
   }
 }

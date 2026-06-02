@@ -183,6 +183,7 @@ model Company {
   subscriptions           Subscription[]
   suppliers               Supplier[]
   supportTickets          SupportTicket[]
+  companyNotifications    CompanyNotification[]
   systemRules             SystemRule[]
   domains                 TenantDomain[]
   usageMetrics            UsageMetric[]
@@ -331,6 +332,7 @@ model User {
   stockAdjustmentsCreated    StockAdjustment[]        @relation("AdjustmentCreator")
   stockMovements             StockMovement[]
   supportTickets             SupportTicket[]
+  companyNotifications       CompanyNotification[]
   company                    Company                  @relation(fields: [companyId], references: [id])
   branches                   UserBranch[]
   customPermissions          UserPermission[]         @relation("UserCustomPermissions")
@@ -3221,6 +3223,26 @@ model AdminNotification {
   @@map("admin_notifications")
 }
 
+model CompanyNotification {
+  id        String                  @id @default(cuid())
+  companyId String
+  userId    String? // null = broadcast para toda a empresa
+  type      CompanyNotificationType
+  title     String
+  message   String
+  link      String?
+  metadata  Json?
+  isRead    Boolean                 @default(false)
+  readAt    DateTime?
+  createdAt DateTime                @default(now())
+  company   Company                 @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  user      User?                   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, isRead, createdAt])
+  @@index([userId, isRead, createdAt])
+  @@map("company_notifications")
+}
+
 model SLAPolicy {
   id             String         @id @default(cuid())
   name           String
@@ -3926,6 +3948,13 @@ enum AdminNotificationType {
   NEW_COMPANY
   FIRST_SALE
   SLA_BREACH
+}
+
+enum CompanyNotificationType {
+  TICKET_REPLY
+  TICKET_STATUS
+  BILLING
+  SYSTEM
 }
 
 enum ReportType {
