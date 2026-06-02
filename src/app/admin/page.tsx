@@ -4,6 +4,8 @@ import { AlertTriangle, Building2, Clock, CreditCard, TrendingUp, DollarSign, Ac
 import Link from "next/link";
 import { HealthBadge } from "@/components/health-badge";
 import { RecalcHealthButton } from "./RecalcHealthButton";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
+import { computeTrend, formatTrend, type Trend } from "@/lib/admin-metrics";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -83,6 +85,32 @@ export default async function AdminDashboardPage() {
     }),
   ]);
 
+  // Fase B: tendências mês atual vs. mês anterior (fuso SP — lição M2).
+  const nowDate = new Date();
+  const curStart = startOfLocalMonth(nowDate);
+  const curEnd = endOfLocalMonth(nowDate);
+  const prevRef = new Date(curStart.getTime() - 1); // 1ms antes do início do mês atual = mês anterior
+  const prevStart = startOfLocalMonth(prevRef);
+  const prevEnd = endOfLocalMonth(prevRef);
+
+  const [
+    newCompaniesCur,
+    newCompaniesPrev,
+    revenueCur,
+    revenuePrev,
+  ] = await Promise.all([
+    prisma.company.count({ where: { createdAt: { gte: curStart, lte: curEnd } } }),
+    prisma.company.count({ where: { createdAt: { gte: prevStart, lte: prevEnd } } }),
+    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: curStart, lte: curEnd } }, _sum: { total: true } }),
+    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: prevStart, lte: prevEnd } }, _sum: { total: true } }),
+  ]);
+
+  const companiesTrend = computeTrend(newCompaniesCur, newCompaniesPrev);
+  const revenueTrend = computeTrend(
+    (revenueCur._sum?.total ?? 0) / 100,
+    (revenuePrev._sum?.total ?? 0) / 100
+  );
+
   const totalRevenueValue = ((totalRevenue._sum?.total) ?? 0) / 100;
   const mrrValue = activeSubs.reduce((acc, sub) => {
     const monthly = sub.billingCycle === "YEARLY" ? Math.round(sub.plan.priceYearly / 12) : sub.plan.priceMonthly;
@@ -109,7 +137,7 @@ export default async function AdminDashboardPage() {
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <KpiCard title="Total de Empresas" value={totalCompanies} icon={Building2} color="blue" />
+        <KpiCard title="Total de Empresas" value={totalCompanies} icon={Building2} color="blue" trend={companiesTrend} trendLabel="novas no mês" />
         <KpiCard title="Assinaturas Ativas" value={activeCount} icon={CreditCard} color="green" />
         <KpiCard
           title="MRR"
@@ -124,6 +152,8 @@ export default async function AdminDashboardPage() {
           hint="Soma das faturas pagas"
           icon={TrendingUp}
           color="teal"
+          trend={revenueTrend}
+          trendLabel="recebido no mês vs. anterior"
         />
       </div>
 
@@ -241,7 +271,7 @@ export default async function AdminDashboardPage() {
   );
 }
 
-function KpiCard({ title, value, icon: Icon, color, hint }: { title: string; value: string | number; icon: React.ElementType; color: string; hint?: string }) {
+function KpiCard({ title, value, icon: Icon, color, hint, trend, trendLabel }: { title: string; value: string | number; icon: React.ElementType; color: string; hint?: string; trend?: Trend; trendLabel?: string }) {
   const colors: Record<string, string> = {
     blue: "text-blue-400 bg-blue-900/20",
     green: "text-green-400 bg-green-900/20",
@@ -249,6 +279,8 @@ function KpiCard({ title, value, icon: Icon, color, hint }: { title: string; val
     purple: "text-purple-400 bg-purple-900/20",
     teal: "text-teal-400 bg-teal-900/20",
   };
+  const trendColor =
+    trend?.direction === "up" ? "text-green-400" : trend?.direction === "down" ? "text-red-400" : "text-gray-500";
   return (
     <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
       <div className="flex items-center justify-between mb-3">
@@ -261,6 +293,13 @@ function KpiCard({ title, value, icon: Icon, color, hint }: { title: string; val
         </div>
       </div>
       <p className={`text-2xl font-bold ${colors[color].split(" ")[0]}`}>{value}</p>
+      {trend && (
+        <p className={`text-xs mt-1.5 flex items-center gap-1 ${trendColor}`}>
+          <span>{trend.direction === "up" ? "▲" : trend.direction === "down" ? "▼" : "—"}</span>
+          <span>{formatTrend(trend)}</span>
+          {trendLabel && <span className="text-gray-600">· {trendLabel}</span>}
+        </p>
+      )}
     </div>
   );
 }
