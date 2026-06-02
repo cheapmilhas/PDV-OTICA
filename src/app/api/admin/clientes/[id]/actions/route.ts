@@ -5,6 +5,8 @@ import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
 import { logger } from "@/lib/logger";
+import { asaas } from "@/lib/asaas";
+import { planValueForCycle } from "@/lib/plan-pricing";
 
 const log = logger.child({ route: "admin/clientes/[id]/actions" });
 
@@ -129,6 +131,52 @@ export async function POST(
         // veja o novo plano (sem esperar TTL de 5min). Coerente com gate em layout
         // e withPlanFeatureGuard que consomem o mesmo cache.
         invalidatePlanFeaturesCache(companyId);
+
+        // Sincroniza o valor da assinatura recorrente no Asaas.
+        // Fail-soft: se o Asaas falhar, NÃO revertemos o acesso local —
+        // marcamos billingSyncPending para reconciliação posterior (F4).
+        if (subscription.asaasSubscriptionId) {
+          const value = planValueForCycle(newPlan, subscription.billingCycle);
+          try {
+            await asaas.subscriptions.update(
+              subscription.asaasSubscriptionId,
+              { value, updatePendingPayments: true },
+              `change-plan:${subscription.id}:${newPlan.id}:${value}`,
+            );
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            try {
+              await prisma.globalAudit.create({
+                data: {
+                  actorType: "ADMIN_USER",
+                  actorId: admin.id,
+                  companyId,
+                  action: "BILLING_SYNC_FAILED",
+                  metadata: {
+                    subscriptionId: subscription.id,
+                    asaasSubscriptionId: subscription.asaasSubscriptionId,
+                    context: "change_plan",
+                    newValue: value,
+                    error: errMsg,
+                  },
+                },
+              });
+              await prisma.subscription.update({
+                where: { id: subscription.id },
+                data: { billingSyncPending: true },
+              });
+            } catch (recErr) {
+              log.error("Falha ao registrar billingSyncPending (change_plan)", {
+                subscriptionId: subscription.id,
+                error: recErr instanceof Error ? recErr.message : String(recErr),
+              });
+            }
+            log.error("Falha ao sincronizar plano no Asaas", {
+              subscriptionId: subscription.id,
+              error: errMsg,
+            });
+          }
+        }
 
         await logActivity({ companyId, type: "PLAN_CHANGED", title: `Plano alterado: ${oldPlan.name} → ${newPlan.name}`, detail: { fromPlan: oldPlan.name, toPlan: newPlan.name }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Plano alterado: ${oldPlan.name} → ${newPlan.name}` });
