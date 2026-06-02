@@ -1,0 +1,13 @@
+# Pre-commit (Fase 3 — prevenção de bugs).
+# Roda ANTES de cada commit. Impede commitar código que quebra tipos ou testes.
+# Para pular em emergência: git commit --no-verify (use com parcimônia).
+
+echo "🔎 pre-commit: typecheck (tsc --noEmit)…"
+npx tsc --noEmit || {
+  echo "❌ Erros de tipo. Corrija antes de commitar (ou use --no-verify se for emergência)."
+  exit 1
+}
+
+# Testes relacionados aos arquivos staged (rápido — só o que o diff afeta).
+echo "🧪 pre-commit: testes relacionados aos arquivos alterados…"
+npx lint-staged

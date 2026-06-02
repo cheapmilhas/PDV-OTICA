@@ -11,8 +11,8 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  lint-and-test:
-    name: Lint, typecheck, test
+  quality-gate:
+    name: Typecheck + Test (bloqueante)
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -31,14 +31,17 @@ jobs:
           # postinstall roda `prisma generate` que precisa de DATABASE_URL para parsear o schema
           DATABASE_URL: "postgresql://placeholder:placeholder@placeholder:5432/placeholder"
 
-      - name: TypeScript type-check
+      # Gate 1: tipos. tsconfig strict — pega a maioria dos erros que importam.
+      - name: TypeScript type-check (bloqueante)
         run: npx tsc --noEmit
         env:
           DATABASE_URL: "postgresql://placeholder:placeholder@placeholder:5432/placeholder"
           AUTH_SECRET: "test_secret_min_32_chars_for_ci_only____"
           NEXTAUTH_SECRET: "test_secret_min_32_chars_for_ci_only____"
 
-      - name: Unit tests (Vitest)
+      # Gate 2: testes. AGORA BLOQUEANTE — um teste vermelho reprova o PR/push.
+      # São os testes de regressão que congelam as correções do dogfood (Fase 2).
+      - name: Unit tests (Vitest) — bloqueante
         run: npm test
         env:
           NODE_ENV: test
@@ -46,8 +49,9 @@ jobs:
           AUTH_SECRET: "test_secret_min_32_chars_for_ci_only____"
           NEXTAUTH_SECRET: "test_secret_min_32_chars_for_ci_only____"
 
-      - name: ESLint
-        run: npm run lint
-        continue-on-error: true
-        env:
-          DATABASE_URL: "postgresql://placeholder:placeholder@placeholder:5432/placeholder"
+      # NOTA: o passo de ESLint foi REMOVIDO temporariamente. O projeto usa
+      # .eslintrc.json (formato legado) mas tem ESLint v9 instalado, que exige
+      # flat config (eslint.config.mjs) — `next lint` (deprecado no Next 16)
+      # mascarava a falha e o CI usava continue-on-error (lint nunca bloqueava
+      # de verdade). DÍVIDA: migrar para flat config e religar como gate.
+      # Ver docs/superpowers/specs/2026-06-01-plano-prevencao-bugs.md (Fase 3).
