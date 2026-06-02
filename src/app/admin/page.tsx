@@ -161,7 +161,7 @@ export default async function AdminDashboardPage() {
       {(criticalHealthCount > 0 || atRiskHealthCount > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
           {criticalHealthCount > 0 && (
-            <Link href="/admin/clientes?health=CRITICAL" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
+            <Link href="/admin/saude?category=CRITICAL" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
               <Activity className="h-5 w-5 text-red-400 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-red-300">{criticalHealthCount} cliente{criticalHealthCount > 1 ? "s" : ""} em estado crítico</p>
@@ -170,7 +170,7 @@ export default async function AdminDashboardPage() {
             </Link>
           )}
           {atRiskHealthCount > 0 && (
-            <Link href="/admin/clientes?health=AT_RISK" className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20 hover:bg-yellow-900/30 transition-colors">
+            <Link href="/admin/saude?category=AT_RISK" className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20 hover:bg-yellow-900/30 transition-colors">
               <Activity className="h-5 w-5 text-yellow-400 flex-shrink-0" />
               <div>
                 <p className="text-sm font-medium text-yellow-300">{atRiskHealthCount} cliente{atRiskHealthCount > 1 ? "s" : ""} em risco</p>

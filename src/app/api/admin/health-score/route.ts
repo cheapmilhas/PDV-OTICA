@@ -20,6 +20,12 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { companyId } = body;
 
+    // Valida tipo: companyId, se presente, deve ser string não-vazia. Sem isto,
+    // companyId:true/123 passava o guard truthy e ia cru pro Prisma.
+    if (companyId !== undefined && (typeof companyId !== "string" || companyId.length === 0)) {
+      return NextResponse.json({ error: "companyId inválido" }, { status: 400 });
+    }
+
     if (companyId) {
       // Recalcular para uma empresa específica
       await saveHealthScore(companyId);

@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
   Settings, Package, UserCog, ScrollText, UserPlus, Ticket,
-  FileBarChart, UsersRound,
+  FileBarChart, UsersRound, Activity,
 } from "lucide-react";
 
 const menuItems = [
@@ -16,6 +16,7 @@ const menuItems = [
       { href: "/admin/clientes",          icon: Users,           label: "Clientes",         exact: false },
       { href: "/admin/clientes/novo",     icon: UserPlus,        label: "Novo Cliente",     exact: true },
       { href: "/admin/usuarios",          icon: UsersRound,      label: "Usuários",         exact: false },
+      { href: "/admin/saude",             icon: Activity,        label: "Saúde",            exact: false },
     ],
   },
   {
