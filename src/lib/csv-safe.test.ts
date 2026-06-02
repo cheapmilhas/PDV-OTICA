@@ -11,16 +11,21 @@ describe("csvCell", () => {
   it("mantém vírgula e quebra de linha dentro das aspas", () => {
     expect(csvCell("a,b\nc")).toBe('"a,b\nc"');
   });
-  it("neutraliza injeção de fórmula (= + - @)", () => {
+  it("neutraliza injeção de fórmula em STRINGS (= + - @)", () => {
     expect(csvCell("=SUM(A1)")).toBe(`"'=SUM(A1)"`);
     expect(csvCell("+1")).toBe(`"'+1"`);
-    expect(csvCell("-1")).toBe(`"'-1"`);
+    expect(csvCell("-1")).toBe(`"'-1"`); // string "-1" continua protegida
     expect(csvCell("@x")).toBe(`"'@x"`);
   });
-  it("trata null/undefined/number", () => {
+  it("trata null/undefined", () => {
     expect(csvCell(null)).toBe('""');
     expect(csvCell(undefined)).toBe('""');
-    expect(csvCell(42)).toBe('"42"');
+  });
+  it("emite NÚMEROS crus (sem aspas, sem prefixo) — preserva negativos/decimais no Excel", () => {
+    expect(csvCell(42)).toBe("42");
+    expect(csvCell(-5000)).toBe("-5000"); // valor monetário negativo permanece número
+    expect(csvCell(12.5)).toBe("12.5");
+    expect(csvCell(0)).toBe("0");
   });
 });
 

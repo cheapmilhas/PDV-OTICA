@@ -1,11 +1,10 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { encode } from "next-auth/jwt";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { rateLimitResponse } from "@/lib/rate-limit";
-import { requireCompanyScope } from "@/lib/admin-session";
 
 const log = logger.child({ route: "admin/impersonate" });
 

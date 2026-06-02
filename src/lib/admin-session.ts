@@ -54,6 +54,9 @@ export async function requireCompanyScope(
     select: { id: true, role: true, active: true, scopeAllCompanies: true, scopedCompanyIds: true },
   });
   if (!admin || !admin.active) return null;
+  // Revalida o papel do banco (fecha a janela de JWT desatualizado: admin
+  // rebaixado para SUPPORT/BILLING não impersona mesmo com cookie antigo).
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) return null;
   if (!canAccessCompany(admin, companyId)) return null;
   return { id: admin.id, role: admin.role };
 }
