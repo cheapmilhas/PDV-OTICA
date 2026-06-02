@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { csvRow } from "@/lib/csv-safe";
 
 export async function GET() {
   const admin = await getAdminSession();
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
   const companies = await prisma.company.findMany({
@@ -17,6 +21,7 @@ export async function GET() {
       },
     },
     orderBy: { createdAt: "desc" },
+    take: 5000,
   });
 
   const headers = [
@@ -35,8 +40,8 @@ export async function GET() {
 
   const rows = companies.map((c) => [
     c.id,
-    `"${c.tradeName || ""}"`,
-    `"${c.name || ""}"`,
+    c.tradeName || "",
+    c.name || "",
     c.cnpj || "",
     c.email || "",
     c.phone || "",
@@ -47,7 +52,7 @@ export async function GET() {
     new Date(c.createdAt).toLocaleDateString("pt-BR"),
   ]);
 
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const csv = [csvRow(headers), ...rows.map((r) => csvRow(r))].join("\n");
 
   return new NextResponse(csv, {
     headers: {

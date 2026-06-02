@@ -1,11 +1,15 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { csvRow } from "@/lib/csv-safe";
 
 export async function GET() {
   const admin = await getAdminSession();
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
   const tickets = await prisma.supportTicket.findMany({
@@ -13,6 +17,7 @@ export async function GET() {
       company: { select: { tradeName: true } },
     },
     orderBy: { createdAt: "desc" },
+    take: 5000,
   });
 
   const headers = [
@@ -28,8 +33,8 @@ export async function GET() {
 
   const rows = tickets.map((t) => [
     t.number,
-    `"${t.company.tradeName}"`,
-    `"${t.subject}"`,
+    t.company.tradeName,
+    t.subject,
     t.category,
     t.priority,
     t.status,
@@ -37,7 +42,7 @@ export async function GET() {
     new Date(t.updatedAt).toLocaleDateString("pt-BR"),
   ]);
 
-  const csv = [headers.join(","), ...rows.map((r) => r.join(","))].join("\n");
+  const csv = [csvRow(headers), ...rows.map((r) => csvRow(r))].join("\n");
 
   return new NextResponse(csv, {
     headers: {

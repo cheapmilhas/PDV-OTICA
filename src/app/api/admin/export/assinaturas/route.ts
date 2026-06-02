@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { csvRow } from "@/lib/csv-safe";
 
 const log = logger.child({ route: "admin/export/assinaturas" });
 
@@ -9,6 +10,9 @@ export async function GET() {
   const admin = await getAdminSession();
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  }
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 
   try {
@@ -27,6 +31,7 @@ export async function GET() {
         },
       },
       orderBy: { createdAt: "desc" },
+      take: 5000,
     });
 
     // Gerar CSV
@@ -59,8 +64,8 @@ export async function GET() {
     ]);
 
     const csv = [
-      headers.join(","),
-      ...rows.map((row) => row.map((cell) => `"${cell}"`).join(",")),
+      csvRow(headers),
+      ...rows.map((row) => csvRow(row)),
     ].join("\n");
 
     return new NextResponse(csv, {
