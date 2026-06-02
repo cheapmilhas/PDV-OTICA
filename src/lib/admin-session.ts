@@ -60,3 +60,37 @@ export async function requireCompanyScope(
   if (!canAccessCompany(admin, companyId)) return null;
   return { id: admin.id, role: admin.role };
 }
+
+/**
+ * Valida que o admin (revalidado no banco, active) pode acessar a empresa —
+ * SEM exigir papel ADMIN/SUPER_ADMIN. Usado no suporte, onde a role SUPPORT
+ * é legítima e não deve ser barrada (diferente de requireCompanyScope, que é
+ * para ações sensíveis como impersonate). Retorna o admin ou null.
+ */
+export async function requireSupportScope(
+  adminId: string,
+  companyId: string
+): Promise<{ id: string; role: string } | null> {
+  const admin = await prisma.adminUser.findUnique({
+    where: { id: adminId },
+    select: { id: true, role: true, active: true, scopeAllCompanies: true, scopedCompanyIds: true },
+  });
+  if (!admin || !admin.active) return null;
+  if (!canAccessCompany(admin, companyId)) return null;
+  return { id: admin.id, role: admin.role };
+}
+
+/**
+ * Lista os companyIds que o admin pode acessar para filtrar listagens/exports.
+ * Retorna null = sem restrição (SUPER_ADMIN ou scopeAllCompanies).
+ * Retorna [] = não acessa nenhuma. Caso contrário, a lista escopada.
+ */
+export async function getAccessibleCompanyIds(adminId: string): Promise<string[] | null> {
+  const admin = await prisma.adminUser.findUnique({
+    where: { id: adminId },
+    select: { role: true, active: true, scopeAllCompanies: true, scopedCompanyIds: true },
+  });
+  if (!admin || !admin.active) return [];
+  if (admin.role === "SUPER_ADMIN" || admin.scopeAllCompanies) return null;
+  return admin.scopedCompanyIds;
+}

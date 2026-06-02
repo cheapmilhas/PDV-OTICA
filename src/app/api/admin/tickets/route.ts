@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 import { logger } from "@/lib/logger";
@@ -22,6 +22,12 @@ export async function POST(request: Request) {
     if (!companyId?.trim()) return NextResponse.json({ error: "Empresa é obrigatória" }, { status: 400 });
     if (!subject?.trim()) return NextResponse.json({ error: "Assunto é obrigatório" }, { status: 400 });
     if (!description?.trim()) return NextResponse.json({ error: "Descrição é obrigatória" }, { status: 400 });
+
+    // C1: admin restrito só abre ticket para empresa dentro do seu escopo.
+    const scoped = await requireSupportScope(admin.id, companyId);
+    if (!scoped) {
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+    }
 
     const company = await prisma.company.findUnique({
       where: { id: companyId },
