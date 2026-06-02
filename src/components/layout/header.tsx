@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Bell, User, Building2, ChevronDown, LogOut, Loader2, Eye, EyeOff, AlertTriangle, Package, Clock, DollarSign } from "lucide-react";
+import { Bell, User, Building2, ChevronDown, LogOut, Loader2, Eye, EyeOff, AlertTriangle, Package, Clock, DollarSign, MessageSquare } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -42,7 +42,14 @@ export function Header() {
     shiftOpen: boolean;
     shiftHours: number;
   }>({ osDelayed: 0, osDelayedList: [], lowStock: 0, shiftOpen: false, shiftHours: 0 });
-  const notifCount = notifData.osDelayed + notifData.lowStock + (notifData.shiftOpen && notifData.shiftHours >= 12 ? 1 : 0);
+  const alertCount = notifData.osDelayed + notifData.lowStock + (notifData.shiftOpen && notifData.shiftHours >= 12 ? 1 : 0);
+
+  // Notificações persistentes (suporte/sistema) — model CompanyNotification.
+  const [persistentNotifs, setPersistentNotifs] = useState<
+    Array<{ id: string; type: string; title: string; message: string; link: string | null; isRead: boolean; createdAt: string }>
+  >([]);
+  const [persistentUnread, setPersistentUnread] = useState(0);
+  const notifCount = alertCount + persistentUnread;
   const [profileOpen, setProfileOpen] = useState(false);
   const [profileName, setProfileName] = useState("");
   const [currentPassword, setCurrentPassword] = useState("");
@@ -186,6 +193,46 @@ export function Header() {
     return () => clearInterval(interval);
   }, [session]);
 
+  useEffect(() => {
+    if (!session?.user) return;
+    const fetchPersistent = async () => {
+      try {
+        const res = await fetch("/api/notifications?limit=10");
+        if (res.ok) {
+          const data = await res.json();
+          setPersistentNotifs(data.notifications ?? []);
+          setPersistentUnread(data.unreadCount ?? 0);
+        }
+      } catch {
+        // Silencioso
+      }
+    };
+    fetchPersistent();
+    const interval = setInterval(fetchPersistent, 60 * 1000);
+    return () => clearInterval(interval);
+  }, [session]);
+
+  const markNotifRead = async (id: string, link: string | null) => {
+    setPersistentNotifs((prev) => prev.map((n) => (n.id === id ? { ...n, isRead: true } : n)));
+    setPersistentUnread((prev) => Math.max(0, prev - 1));
+    try {
+      await fetch(`/api/notifications/${id}/read`, { method: "PATCH" });
+    } catch {
+      // Silencioso — UI já atualizada de forma otimista
+    }
+    if (link) router.push(link);
+  };
+
+  const markAllNotifsRead = async () => {
+    setPersistentNotifs((prev) => prev.map((n) => ({ ...n, isRead: true })));
+    setPersistentUnread(0);
+    try {
+      await fetch("/api/notifications/read-all", { method: "PATCH" });
+    } catch {
+      // Silencioso
+    }
+  };
+
   return (
     <>
     <header className="flex h-[60px] items-center justify-between border-b bg-background/95 backdrop-blur-sm px-4 md:px-5 sticky top-0 z-30">
@@ -256,10 +303,20 @@ export function Header() {
             </Button>
           </PopoverTrigger>
           <PopoverContent align="end" className="w-80 p-0 shadow-elevated">
-            <div className="px-4 py-3 border-b">
-              <p className="text-sm font-semibold">Notificações</p>
-              {notifCount > 0 && (
-                <p className="text-xs text-muted-foreground mt-0.5">{notifCount} item{notifCount > 1 ? "s" : ""} pendente{notifCount > 1 ? "s" : ""}</p>
+            <div className="px-4 py-3 border-b flex items-center justify-between">
+              <div>
+                <p className="text-sm font-semibold">Notificações</p>
+                {notifCount > 0 && (
+                  <p className="text-xs text-muted-foreground mt-0.5">{notifCount} item{notifCount > 1 ? "s" : ""} pendente{notifCount > 1 ? "s" : ""}</p>
+                )}
+              </div>
+              {persistentUnread > 0 && (
+                <button
+                  className="text-xs text-primary hover:underline font-medium"
+                  onClick={markAllNotifsRead}
+                >
+                  Marcar lidas
+                </button>
               )}
             </div>
             <div className="max-h-72 overflow-y-auto">
@@ -270,6 +327,37 @@ export function Header() {
                 </div>
               ) : (
                 <div className="divide-y">
+                  {/* Seção: Notificações persistentes (suporte/sistema) */}
+                  {persistentNotifs.length > 0 && (
+                    <>
+                      <div className="px-4 py-1.5 bg-muted/30">
+                        <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Mensagens</p>
+                      </div>
+                      {persistentNotifs.map((n) => (
+                        <button
+                          key={n.id}
+                          className={`flex items-start gap-3 w-full px-4 py-3 text-left hover:bg-muted/50 transition-colors duration-150 ${n.isRead ? "" : "bg-primary/5"}`}
+                          onClick={() => markNotifRead(n.id, n.link)}
+                        >
+                          <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-full bg-primary/10">
+                            <MessageSquare className="h-3.5 w-3.5 text-primary" />
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className={`text-sm ${n.isRead ? "font-normal" : "font-medium"}`}>{n.title}</p>
+                            <p className="text-xs text-muted-foreground truncate">{n.message}</p>
+                          </div>
+                          {!n.isRead && <span className="mt-1.5 h-2 w-2 shrink-0 rounded-full bg-primary" />}
+                        </button>
+                      ))}
+                    </>
+                  )}
+
+                  {/* Seção: Alertas operacionais (efêmeros) */}
+                  {alertCount > 0 && (
+                    <div className="px-4 py-1.5 bg-muted/30">
+                      <p className="text-[10px] font-semibold uppercase tracking-wide text-muted-foreground">Alertas</p>
+                    </div>
+                  )}
                   {notifData.osDelayed > 0 && (
                     <>
                       <button
