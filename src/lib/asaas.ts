@@ -77,6 +77,17 @@ export interface AsaasSubscriptionInput {
   remoteIp?: string;
 }
 
+export interface AsaasSubscriptionUpdateInput {
+  value?: number;            // reais
+  cycle?: "MONTHLY" | "YEARLY";
+  nextDueDate?: string;      // YYYY-MM-DD
+  description?: string;
+}
+// Nota: o PUT /subscriptions/{id} do Asaas aplica o novo valor às cobranças
+// FUTURAS (próxima fatura em diante). Cobranças PENDENTES já geradas mantêm o
+// valor antigo — coerente com a decisão "novo valor vale na próxima fatura"
+// (sem proration retroativo).
+
 export interface AsaasSubscription {
   id: string;
   customer: string;
@@ -192,6 +203,17 @@ export const asaas = {
     },
     async get(id: string): Promise<AsaasSubscription> {
       return asaasFetch<AsaasSubscription>(`/subscriptions/${id}`);
+    },
+    async update(
+      id: string,
+      input: AsaasSubscriptionUpdateInput,
+      idempotencyKey?: string,
+    ): Promise<AsaasSubscription> {
+      return asaasFetch<AsaasSubscription>(`/subscriptions/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+        idempotencyKey,
+      });
     },
     async cancel(id: string): Promise<{ deleted: boolean; id: string }> {
       return asaasFetch<{ deleted: boolean; id: string }>(

@@ -2061,6 +2061,7 @@ model Subscription {
   discountPercent      Int?
   discountReason       String?
   discountExpiresAt    DateTime?
+  billingSyncPending   Boolean               @default(false)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   invoices             Invoice[]
