@@ -169,6 +169,13 @@ async function doCheckout(
 ): Promise<CheckoutResult> {
   const { input, companyId, plan, company, existingSub, request, userEmail } = ctx;
 
+  // Invariante: o handler barra subscription ACTIVE com 409 ANTES de chamar
+  // doCheckout. Se isso mudar no futuro, falhar ruidosamente em vez de rebaixar
+  // silenciosamente uma assinatura paga para TRIAL no upsert abaixo.
+  if (existingSub?.status === "ACTIVE") {
+    throw new Error("BUG: doCheckout chamada com subscription ACTIVE (deveria ter sido barrada com 409)");
+  }
+
   const value =
     input.billingCycle === "YEARLY" ? plan.priceYearly / 100 : plan.priceMonthly / 100;
 
@@ -239,15 +246,12 @@ async function doCheckout(
       asaasSubscriptionId: asaasSub.id,
     },
     update: {
+      // Reprocessamento de checkout (existingSub não-ACTIVE; ACTIVE já barrado
+      // por 409 + assertion no topo). Reaplica o estado inicial do método de pagamento.
       planId: plan.id,
-      // Não rebaixar uma assinatura já ACTIVE+paga para TRIAL ao reprocessar checkout.
-      ...(existingSub?.status === "ACTIVE"
-        ? {}
-        : {
-            status: initial.status,
-            activatedAt: initial.activatedAt,
-            trialEndsAt: initial.trialEndsAt,
-          }),
+      status: initial.status,
+      activatedAt: initial.activatedAt,
+      trialEndsAt: initial.trialEndsAt,
       billingCycle: input.billingCycle,
       currentPeriodStart: initial.currentPeriodStart,
       currentPeriodEnd: initial.currentPeriodEnd,

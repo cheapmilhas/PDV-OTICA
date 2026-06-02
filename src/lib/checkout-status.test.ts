@@ -23,6 +23,9 @@ describe("initialSubscriptionState", () => {
     const s = initialSubscriptionState({ billingType: "PIX", billingCycle: "MONTHLY", now, dueDate });
     expect(s.status).toBe("TRIAL");
     expect(s.activatedAt).toBeNull();
+    const expected = new Date(dueDate);
+    expected.setDate(expected.getDate() + 5);
+    expect(s.trialEndsAt).toEqual(expected);
   });
   it("currentPeriodEnd MENSAL = now + 1 mês", () => {
     const s = initialSubscriptionState({ billingType: "CREDIT_CARD", billingCycle: "MONTHLY", now, dueDate });
