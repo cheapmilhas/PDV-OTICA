@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
-import { saveHealthScore } from "@/lib/health-score";
+import { saveHealthScore, recalcAllActiveHealthScores } from "@/lib/health-score";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -39,45 +39,29 @@ export async function POST(request: Request) {
         message: "Health score recalculado",
       });
     } else {
-      // Recalcular para todas as empresas ativas
-      const companies = await prisma.company.findMany({
-        where: {
-          isBlocked: false,
-          subscriptions: {
-            some: {
-              status: { in: ["ACTIVE", "TRIAL", "PAST_DUE"] },
-            },
-          },
-        },
-        select: { id: true },
-      });
-
-      let successCount = 0;
-      let errorCount = 0;
-
-      for (const company of companies) {
-        try {
-          await saveHealthScore(company.id);
-          successCount++;
-        } catch (error) {
-          log.error("Erro ao calcular health score", { companyId: company.id, error: error instanceof Error ? error.message : String(error) });
-          errorCount++;
-        }
-      }
+      // Recalcular para todas as empresas ativas (fonte única compartilhada
+      // com o cron diário — recalcAllActiveHealthScores).
+      const { total, successCount, errorCount } = await recalcAllActiveHealthScores(
+        (companyId, error) =>
+          log.error("Erro ao calcular health score", {
+            companyId,
+            error: error instanceof Error ? error.message : String(error),
+          })
+      );
 
       await prisma.globalAudit.create({
         data: {
           actorType: "ADMIN_USER",
           actorId: admin.id,
           action: "HEALTH_SCORE_BATCH_RECALCULATED",
-          metadata: { total: companies.length, successCount, errorCount },
+          metadata: { total, successCount, errorCount },
         },
       });
 
       return NextResponse.json({
         success: true,
         message: `Health scores recalculados: ${successCount} sucesso, ${errorCount} erros`,
-        total: companies.length,
+        total,
         successCount,
         errorCount,
       });

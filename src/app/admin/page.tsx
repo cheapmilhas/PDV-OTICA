@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { AlertTriangle, Building2, Clock, CreditCard, TrendingUp, DollarSign, Activity, CheckCircle2, Bell } from "lucide-react";
 import Link from "next/link";
 import { HealthBadge } from "@/components/health-badge";
+import { RecalcHealthButton } from "./RecalcHealthButton";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -33,6 +34,7 @@ export default async function AdminDashboardPage() {
     criticalHealthCount,
     atRiskHealthCount,
     pendingInvoices,
+    lastHealthCalc,
   ] = await Promise.all([
     prisma.company.count(),
     prisma.subscription.count({ where: { status: "ACTIVE" } }),
@@ -73,6 +75,12 @@ export default async function AdminDashboardPage() {
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
+    // Fase A: data do health mais recente — mostra se os números de saúde estão frescos.
+    prisma.company.findFirst({
+      where: { healthUpdatedAt: { not: null } },
+      orderBy: { healthUpdatedAt: "desc" },
+      select: { healthUpdatedAt: true },
+    }),
   ]);
 
   const totalRevenueValue = ((totalRevenue._sum?.total) ?? 0) / 100;
@@ -84,9 +92,19 @@ export default async function AdminDashboardPage() {
   return (
     <div className="p-6 text-white">
       {/* Header */}
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Bem-vindo, {admin.name} · {admin.role}</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
+          <p className="text-sm text-gray-400 mt-0.5">Bem-vindo, {admin.name} · {admin.role}</p>
+        </div>
+        <div className="flex flex-col items-end gap-1">
+          <RecalcHealthButton />
+          <p className="text-xs text-gray-600">
+            {lastHealthCalc?.healthUpdatedAt
+              ? `Saúde atualizada em ${new Date(lastHealthCalc.healthUpdatedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}`
+              : "Saúde ainda não calculada — clique para recalcular"}
+          </p>
+        </div>
       </div>
 
       {/* KPIs */}

@@ -13,6 +13,44 @@ interface HealthScoreResult {
 }
 
 /**
+ * Pesos do score final por dimensão. Fonte única (usado no cálculo e nos testes).
+ */
+export const HEALTH_WEIGHTS = {
+  usage: 0.3,
+  billing: 0.35,
+  engagement: 0.25,
+  support: 0.1,
+} as const;
+
+/**
+ * Média ponderada das 4 dimensões → score 0-100 (lógica pura testável).
+ */
+export function weightedHealthScore(scores: {
+  usageScore: number;
+  billingScore: number;
+  engagementScore: number;
+  supportScore: number;
+}): number {
+  return Math.round(
+    scores.usageScore * HEALTH_WEIGHTS.usage +
+      scores.billingScore * HEALTH_WEIGHTS.billing +
+      scores.engagementScore * HEALTH_WEIGHTS.engagement +
+      scores.supportScore * HEALTH_WEIGHTS.support
+  );
+}
+
+/**
+ * Faixa de score → categoria (lógica pura testável):
+ * >=81 THRIVING · >=61 HEALTHY · >=41 AT_RISK · <41 CRITICAL.
+ */
+export function healthCategoryForScore(score: number): HealthCategory {
+  if (score >= 81) return HealthCategory.THRIVING;
+  if (score >= 61) return HealthCategory.HEALTHY;
+  if (score >= 41) return HealthCategory.AT_RISK;
+  return HealthCategory.CRITICAL;
+}
+
+/**
  * Calcula o Health Score de uma empresa
  * Algoritmo:
  * - Usage (30%): login recente, usuários ativos
@@ -197,24 +235,10 @@ export async function calculateHealthScore(companyId: string): Promise<HealthSco
   // ========================================
   // CÁLCULO FINAL
   // ========================================
-  const finalScore = Math.round(
-    usageScore * 0.3 +
-    billingScore * 0.35 +
-    engagementScore * 0.25 +
-    supportScore * 0.1
-  );
+  const finalScore = weightedHealthScore({ usageScore, billingScore, engagementScore, supportScore });
 
-  // Categoria baseada no score final
-  let category: HealthCategory;
-  if (finalScore >= 81) {
-    category = HealthCategory.THRIVING;
-  } else if (finalScore >= 61) {
-    category = HealthCategory.HEALTHY;
-  } else if (finalScore >= 41) {
-    category = HealthCategory.AT_RISK;
-  } else {
-    category = HealthCategory.CRITICAL;
-  }
+  // Categoria baseada no score final (lógica pura testada).
+  const category = healthCategoryForScore(finalScore);
 
   // Oportunidades baseadas no score
   if (finalScore < 60 && subscription?.status === "ACTIVE") {
@@ -266,4 +290,46 @@ export async function saveHealthScore(companyId: string): Promise<void> {
       healthUpdatedAt: new Date(),
     },
   });
+}
+
+export interface RecalcAllResult {
+  total: number;
+  successCount: number;
+  errorCount: number;
+}
+
+/**
+ * Recalcula o health score de TODAS as empresas ativas (ACTIVE/TRIAL/PAST_DUE,
+ * não bloqueadas). Resiliente: um erro numa empresa não aborta as demais.
+ *
+ * Fonte única usada pelo cron diário (api/cron/recalc-health) E pelo recálculo
+ * manual do admin (api/admin/health-score) — evita a lógica divergir.
+ *
+ * @param onError callback opcional para logar o erro de cada empresa.
+ */
+export async function recalcAllActiveHealthScores(
+  onError?: (companyId: string, error: unknown) => void
+): Promise<RecalcAllResult> {
+  const companies = await prisma.company.findMany({
+    where: {
+      isBlocked: false,
+      subscriptions: { some: { status: { in: ["ACTIVE", "TRIAL", "PAST_DUE"] } } },
+    },
+    select: { id: true },
+  });
+
+  let successCount = 0;
+  let errorCount = 0;
+
+  for (const company of companies) {
+    try {
+      await saveHealthScore(company.id);
+      successCount++;
+    } catch (error) {
+      onError?.(company.id, error);
+      errorCount++;
+    }
+  }
+
+  return { total: companies.length, successCount, errorCount };
 }
