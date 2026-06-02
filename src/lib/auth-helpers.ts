@@ -1,6 +1,7 @@
 import { auth } from "@/auth";
 import { UserRole } from "@prisma/client";
 import { unauthorizedError, forbiddenError } from "./error-handler";
+import { setTenantContext } from "./sentry";
 import type { Session } from "next-auth";
 
 /**
@@ -22,6 +23,20 @@ export async function requireAuth(): Promise<Session> {
 
   if (!session || !session.user) {
     throw unauthorizedError("Você precisa estar autenticado para acessar este recurso");
+  }
+
+  // Fase 4.1: anexa contexto multi-tenant ao Sentry. Como toda rota autenticada
+  // passa por aqui, qualquer erro capturado depois carrega qual cliente/usuário
+  // originou — sem precisar mudar os ~145 call-sites. No-op sem DSN; nunca quebra
+  // a autenticação se o Sentry falhar.
+  try {
+    setTenantContext({
+      companyId: session.user.companyId,
+      userId: session.user.id,
+      role: session.user.role,
+    });
+  } catch {
+    // contexto de observabilidade nunca pode derrubar a auth
   }
 
   return session;

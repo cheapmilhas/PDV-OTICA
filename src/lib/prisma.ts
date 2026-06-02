@@ -1,5 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import { registerAuditMiddleware } from "./prisma-audit-middleware";
+import { registerTenantGuard } from "./prisma-tenant-guard";
 
 const globalForPrisma = globalThis as unknown as { prisma: PrismaClient };
 
@@ -24,6 +25,7 @@ function createPrismaClient(): PrismaClient {
     log: process.env.NODE_ENV === "development" ? ["error", "warn"] : ["error"],
     ...(url && { datasources: { db: { url } } }),
   });
+  registerTenantGuard(client);
   registerAuditMiddleware(client);
   return client;
 }
