@@ -1,10 +1,11 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { Prisma } from "@prisma/client";
+import { Prisma, SubscriptionStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { asaas, AsaasError } from "@/lib/asaas";
 import { handleApiError } from "@/lib/error-handler";
+import { initialSubscriptionState } from "@/lib/checkout-status";
 
 const checkoutSchema = z.object({
   planId: z.string().min(1),
@@ -161,7 +162,7 @@ async function doCheckout(
     companyId: string;
     plan: { id: string; name: string; priceMonthly: number; priceYearly: number };
     company: { name: string; email: string | null; phone: string | null; cnpj: string | null };
-    existingSub: { id: string; asaasCustomerId: string | null } | null;
+    existingSub: { id: string; asaasCustomerId: string | null; status: SubscriptionStatus } | null;
     request: Request;
     userEmail: string | null;
   },
@@ -216,30 +217,40 @@ async function doCheckout(
 
   // 3. Persistir Subscription local
   const now = new Date();
-  const periodEnd = new Date(now);
-  if (input.billingCycle === "YEARLY") periodEnd.setFullYear(periodEnd.getFullYear() + 1);
-  else periodEnd.setMonth(periodEnd.getMonth() + 1);
+  const initial = initialSubscriptionState({
+    billingType: input.billingType,
+    billingCycle: input.billingCycle,
+    now,
+    dueDate: nextDueDate,
+  });
 
   const subscription = await tx.subscription.upsert({
     where: { id: existingSub?.id ?? "____new____" },
     create: {
       companyId,
       planId: plan.id,
-      status: "ACTIVE",
+      status: initial.status,
       billingCycle: input.billingCycle,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      activatedAt: now,
+      currentPeriodStart: initial.currentPeriodStart,
+      currentPeriodEnd: initial.currentPeriodEnd,
+      activatedAt: initial.activatedAt,
+      trialEndsAt: initial.trialEndsAt,
       asaasCustomerId,
       asaasSubscriptionId: asaasSub.id,
     },
     update: {
       planId: plan.id,
-      status: "ACTIVE",
+      // Não rebaixar uma assinatura já ACTIVE+paga para TRIAL ao reprocessar checkout.
+      ...(existingSub?.status === "ACTIVE"
+        ? {}
+        : {
+            status: initial.status,
+            activatedAt: initial.activatedAt,
+            trialEndsAt: initial.trialEndsAt,
+          }),
       billingCycle: input.billingCycle,
-      currentPeriodStart: now,
-      currentPeriodEnd: periodEnd,
-      activatedAt: now,
+      currentPeriodStart: initial.currentPeriodStart,
+      currentPeriodEnd: initial.currentPeriodEnd,
       asaasCustomerId,
       asaasSubscriptionId: asaasSub.id,
     },
