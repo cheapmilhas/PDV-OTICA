@@ -9,6 +9,7 @@ import { addDays, isBefore, startOfDay, isSameDay } from "date-fns";
 import { Decimal } from "@prisma/client/runtime/library";
 import { Prisma } from "@prisma/client";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
+import { applyCashbackAdjustment, expirableAmount } from "@/lib/cashback-math";
 
 export const cashbackService = {
   /**
@@ -342,13 +343,12 @@ export const cashbackService = {
         });
       }
 
-      // M9: piso 0. Um ajuste negativo maior que o saldo (ex: -100 sobre saldo
-      // 30) deixava o balance NEGATIVO. Limita o débito ao saldo disponível —
-      // o saldo nunca fica abaixo de zero. O movimento registra o valor REAL
+      // M9: piso 0. Lógica pura em applyCashbackAdjustment (testada): um ajuste
+      // negativo maior que o saldo (ex: -100 sobre 30) deixava o balance
+      // NEGATIVO. Limita ao saldo disponível; o movimento registra o valor REAL
       // aplicado (não o solicitado) para o ledger bater com o saldo.
       const currentBalance = Number(customerCashback.balance);
-      const newBalance = Math.max(0, currentBalance + amount);
-      const appliedAmount = newBalance - currentBalance; // = amount, salvo se houve clamp
+      const { newBalance, appliedAmount } = applyCashbackAdjustment(currentBalance, amount);
 
       // M9: ajuste sem efeito (débito sobre saldo já zero) → erro informativo
       // em vez de gravar um movimento de R$ 0,00 que poluiria o ledger.
@@ -424,7 +424,8 @@ export const cashbackService = {
           });
           const currentBalance = Number(cc?.balance ?? 0);
           const movementAmount = Number(movement.amount);
-          const expireAmount = Math.min(movementAmount, Math.max(0, currentBalance));
+          // M5: piso 0 via lógica pura testada (expirableAmount).
+          const expireAmount = expirableAmount(movementAmount, currentBalance);
 
           // Criar movimento de expiração (valor REAL expirado)
           await tx.cashbackMovement.create({

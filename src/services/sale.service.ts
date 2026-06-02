@@ -4,13 +4,14 @@ import { logger } from "@/lib/logger";
 import { notFoundError, AppError, ERROR_CODES, businessRuleError } from "@/lib/error-handler";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
-import { validateCreditLimit, ON_CREDIT_METHODS } from "@/lib/installment-utils";
+import { validateCreditLimit, sumOnCreditAmount } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
+import { shouldRestockOnCancel } from "@/lib/stock-operation";
 import { reverseBonusForSale, reactivateBonusForSale } from "@/services/product-campaign.service";
 import {
   applyStockDebitInTx,
@@ -482,9 +483,7 @@ export class SaleService {
     // pagamento isolado. Antes, 2 métodos a prazo (STORE_CREDIT + BALANCE_DUE)
     // eram checados separadamente contra o mesmo totalOpen do banco → cada um
     // passava abaixo do limite, mas a soma estourava. Agora agrega de uma vez.
-    const onCreditAmount = payments
-      .filter((p) => ON_CREDIT_METHODS.has(p.method))
-      .reduce((acc, p) => acc + p.amount, 0);
+    const onCreditAmount = sumOnCreditAmount(payments);
 
     if (onCreditAmount > 0 && customerId) {
       const creditCheck = await validateCreditLimit(
@@ -838,8 +837,8 @@ export class SaleService {
           // estoque na venda (atomicStockDebit pula !stockControlled), logo o
           // cancelamento NÃO pode creditar — senão o saldo sobe acima do original
           // (bug T7: estoque 34 → 35 após estornar uma venda de produto sem
-          // controle). Crédito de BranchStock + cache só ocorre se controlado.
-          const isStockControlled = item.product?.stockControlled ?? false;
+          // controle). Decisão em shouldRestockOnCancel (lógica pura testada).
+          const isStockControlled = shouldRestockOnCancel(item.product?.stockControlled ?? false);
 
           if (isStockControlled) {
             // Devolver ao BranchStock da filial da venda

@@ -8,6 +8,22 @@ import { Prisma } from "@prisma/client";
  */
 export const ON_CREDIT_METHODS = new Set(["STORE_CREDIT", "BALANCE_DUE"]);
 
+/**
+ * Soma o valor de TODOS os pagamentos a prazo de uma venda (H2).
+ *
+ * O bug H2: o limite de crédito era validado por pagamento ISOLADO, então
+ * STORE_CREDIT + BALANCE_DUE na mesma venda passavam cada um abaixo do limite
+ * mas a soma estourava. Esta função agrega de uma vez — é o valor único que
+ * deve ir a validateCreditLimit. Lógica pura, testável sem banco.
+ */
+export function sumOnCreditAmount(
+  payments: ReadonlyArray<{ method: string; amount: number }>
+): number {
+  return payments
+    .filter((p) => ON_CREDIT_METHODS.has(p.method))
+    .reduce((acc, p) => acc + p.amount, 0);
+}
+
 export interface InstallmentCalculation {
   installmentNumber: number;
   dueDate: Date;

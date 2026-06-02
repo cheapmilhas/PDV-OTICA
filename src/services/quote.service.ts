@@ -17,7 +17,7 @@ import {
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import type { ManagerOverrideDTO } from "@/lib/validations/sale.schema";
-import { validateCreditLimit, ON_CREDIT_METHODS } from "@/lib/installment-utils";
+import { validateCreditLimit, sumOnCreditAmount } from "@/lib/installment-utils";
 import { getProductPrice } from "@/lib/product-price";
 import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
 import { SystemRuleService } from "@/services/system-rule.service";
@@ -870,9 +870,7 @@ export class QuoteService {
     // H2: limite de crédito pela SOMA dos pagamentos a prazo (mesma correção de
     // sale.service.create). Por pagamento isolado, 2 métodos a prazo burlavam
     // o limite (cada um < limite, soma > limite).
-    const onCreditAmount = payments
-      .filter((p) => ON_CREDIT_METHODS.has(p.method))
-      .reduce((acc, p) => acc + p.amount, 0);
+    const onCreditAmount = sumOnCreditAmount(payments);
 
     if (onCreditAmount > 0 && quote.customerId) {
       const creditCheck = await validateCreditLimit(

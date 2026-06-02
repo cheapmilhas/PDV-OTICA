@@ -5,9 +5,9 @@ import type {
   StockMovementQuery,
 } from "@/lib/validations/stock-movement.schema";
 import {
-  isStockIncrease,
   isStockDecrease,
 } from "@/lib/validations/stock-movement.schema";
+import { resolveStockOperation } from "@/lib/stock-operation";
 import { atomicStockDebit, atomicStockCredit } from "@/services/stock.service";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import {
@@ -283,18 +283,24 @@ export class StockMovementService {
             data: { stockQty: data.quantity },
           });
         }
-      } else if (isStockIncrease(data.type)) {
-        // T9/H3: entrada de estoque é evento explícito e deve creditar o
-        // BranchStock + cache MESMO para produto não-controlado — senão a
-        // entrada some do PDV (bug: produto stockControlled=false, entrada de
-        // 10 un. registrava o movimento mas o saldo da filial seguia 0).
-        // atomicStockCredit já faz upsert no BranchStock quando há branchId e
-        // não filtra por stockControlled (assimetria intencional com o débito).
-        await atomicStockCredit(data.productId, data.quantity, companyId, tx, branchId);
-      } else if (isStockDecrease(data.type)) {
-        // Saída mantém o guard: atomicStockDebit pula produto não-controlado
-        // internamente (retorna sucesso sem debitar). Só registra o movimento.
-        await atomicStockDebit(data.productId, data.quantity, companyId, tx, branchId);
+      } else {
+        // NOTA: ADJUSTMENT já foi tratado no if ACIMA (valor absoluto) — não
+        // chega aqui. resolveStockOperation até sabe mapeá-lo para "set-absolute",
+        // mas o ajuste tem caminho próprio neste serviço; não remover o if acima.
+        // A decisão credita/debita/ignora vive em resolveStockOperation (lógica
+        // pura testada — onde os bugs T7/T9 moravam). Aqui só executamos.
+        // - credit: entrada explícita move o saldo mesmo p/ produto não-controlado
+        //   (T9/H3); atomicStockCredit não filtra stockControlled.
+        // - debit: saída só baixa produto controlado; atomicStockDebit pula o
+        //   resto internamente. resolveStockOperation já retorna "none" p/
+        //   produto não-controlado, então nem chamamos.
+        const op = resolveStockOperation({ type: data.type, stockControlled: product.stockControlled });
+        if (op === "credit") {
+          await atomicStockCredit(data.productId, data.quantity, companyId, tx, branchId);
+        } else if (op === "debit") {
+          await atomicStockDebit(data.productId, data.quantity, companyId, tx, branchId);
+        }
+        // op === "none": movimento registrado p/ auditoria, sem mexer no saldo.
       }
 
       return createdMovement;
