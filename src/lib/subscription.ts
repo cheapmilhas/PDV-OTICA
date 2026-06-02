@@ -5,6 +5,13 @@ import { AppError, ERROR_CODES } from "@/lib/error-handler";
 
 const log = logger.child({ module: "subscription" });
 
+/**
+ * Status de assinatura que mantêm as features do plano "vivas" (liberadas).
+ * Fora destes (SUSPENDED, CANCELED, TRIAL_EXPIRED) as features são zeradas.
+ * Exportado para caracterização em testes — não alterar sem revisar o gating.
+ */
+export const LIVE_STATUSES: SubscriptionStatus[] = ["TRIAL", "ACTIVE", "PAST_DUE"];
+
 export interface SubscriptionCheckResult {
   allowed: boolean;
   status: SubscriptionStatus | "NO_SUBSCRIPTION";
@@ -268,7 +275,6 @@ export async function getSubscriptionInfo(companyId: string) {
   // liberadas — empresa cancelada mantinha recursos do plano). Empresas em
   // modo accessEnabled passam pelo bypass de checkSubscription/layout, não por
   // aqui; o feature gating real é o requirePlanFeature.
-  const LIVE_STATUSES: SubscriptionStatus[] = ["TRIAL", "ACTIVE", "PAST_DUE"];
   const isLive = LIVE_STATUSES.includes(subscription.status);
   const features = isLive
     ? subscription.plan.features.reduce(
