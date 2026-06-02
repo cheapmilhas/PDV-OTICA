@@ -12,4 +12,8 @@ describe("planValueForCycle", () => {
   it("preserva centavos fracionários", () => {
     expect(planValueForCycle({ priceMonthly: 12990, priceYearly: 0 }, "MONTHLY")).toBe(129.9);
   });
+  it("lança se o preço do ciclo for zero ou negativo (evita zerar cobrança)", () => {
+    expect(() => planValueForCycle({ priceMonthly: 9900, priceYearly: 0 }, "YEARLY")).toThrow();
+    expect(() => planValueForCycle({ priceMonthly: -1, priceYearly: 9900 }, "MONTHLY")).toThrow();
+  });
 });

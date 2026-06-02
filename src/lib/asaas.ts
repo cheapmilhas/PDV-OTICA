@@ -82,9 +82,11 @@ export interface AsaasSubscriptionUpdateInput {
   cycle?: "MONTHLY" | "YEARLY";
   nextDueDate?: string;      // YYYY-MM-DD
   description?: string;
-  /** Se true, aplica o novo valor às cobranças PENDENTES já geradas (não só às futuras). */
-  updatePendingPayments?: boolean;
 }
+// Nota: o PUT /subscriptions/{id} do Asaas aplica o novo valor às cobranças
+// FUTURAS (próxima fatura em diante). Cobranças PENDENTES já geradas mantêm o
+// valor antigo — coerente com a decisão "novo valor vale na próxima fatura"
+// (sem proration retroativo).
 
 export interface AsaasSubscription {
   id: string;

@@ -140,8 +140,8 @@ export async function POST(
           try {
             await asaas.subscriptions.update(
               subscription.asaasSubscriptionId,
-              { value, updatePendingPayments: true },
-              `change-plan:${subscription.id}:${newPlan.id}:${value}`,
+              { value },
+              `change-plan:${subscription.id}:${newPlan.id}`,
             );
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
@@ -272,8 +272,8 @@ export async function POST(
           try {
             await asaas.subscriptions.update(
               subscription.asaasSubscriptionId,
-              { value, cycle: cycle as "MONTHLY" | "YEARLY", updatePendingPayments: true },
-              `change-cycle:${subscription.id}:${cycle}:${value}`,
+              { value, cycle: cycle as "MONTHLY" | "YEARLY" },
+              `change-cycle:${subscription.id}:${cycle}`,
             );
           } catch (err) {
             const errMsg = err instanceof Error ? err.message : String(err);
