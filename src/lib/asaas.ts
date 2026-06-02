@@ -77,6 +77,15 @@ export interface AsaasSubscriptionInput {
   remoteIp?: string;
 }
 
+export interface AsaasSubscriptionUpdateInput {
+  value?: number;            // reais
+  cycle?: "MONTHLY" | "YEARLY";
+  nextDueDate?: string;      // YYYY-MM-DD
+  description?: string;
+  /** Se true, aplica o novo valor às cobranças PENDENTES já geradas (não só às futuras). */
+  updatePendingPayments?: boolean;
+}
+
 export interface AsaasSubscription {
   id: string;
   customer: string;
@@ -192,6 +201,17 @@ export const asaas = {
     },
     async get(id: string): Promise<AsaasSubscription> {
       return asaasFetch<AsaasSubscription>(`/subscriptions/${id}`);
+    },
+    async update(
+      id: string,
+      input: AsaasSubscriptionUpdateInput,
+      idempotencyKey?: string,
+    ): Promise<AsaasSubscription> {
+      return asaasFetch<AsaasSubscription>(`/subscriptions/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+        idempotencyKey,
+      });
     },
     async cancel(id: string): Promise<{ deleted: boolean; id: string }> {
       return asaasFetch<{ deleted: boolean; id: string }>(
