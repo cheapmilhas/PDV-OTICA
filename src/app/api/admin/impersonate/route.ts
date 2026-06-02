@@ -4,8 +4,12 @@ import { getAdminSession } from "@/lib/admin-session";
 import { encode } from "next-auth/jwt";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
+import { rateLimitResponse } from "@/lib/rate-limit";
+import { requireCompanyScope } from "@/lib/admin-session";
 
 const log = logger.child({ route: "admin/impersonate" });
+
+const IMPERSONATION_TTL_MS = 30 * 60 * 1000; // 30 minutos
 
 const impersonateSchema = z.object({
   companyId: z.string().min(1, "companyId é obrigatório"),
@@ -24,9 +28,37 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sem permissão para impersonar" }, { status: 403 });
   }
 
+  const ip =
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown";
+  const limited = rateLimitResponse(`admin-impersonate:${admin.id}:${ip}`, {
+    maxRequests: 10,
+    windowMs: 15 * 60 * 1000,
+  });
+  if (limited) return limited;
+
   try {
     const body = await request.json();
     const { companyId, reason } = impersonateSchema.parse(body);
+
+    const scoped = await requireCompanyScope(admin.id, companyId);
+    if (!scoped) {
+      await prisma.globalAudit.create({
+        data: {
+          actorType: "ADMIN_USER",
+          actorId: admin.id,
+          companyId: null,
+          action: "IMPERSONATION_DENIED",
+          metadata: {
+            attemptedCompanyId: companyId,
+            reason: "fora de escopo ou admin inativo",
+            adminEmail: admin.email,
+          },
+        },
+      });
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+    }
 
     // Buscar empresa e seu primeiro usuário admin/owner
     const company = await prisma.company.findUnique({
@@ -56,7 +88,7 @@ export async function POST(request: Request) {
       );
     }
 
-    const expiresAt = new Date(Date.now() + 2 * 60 * 60 * 1000); // 2 horas
+    const expiresAt = new Date(Date.now() + IMPERSONATION_TTL_MS);
 
     // Criar sessão de impersonação
     const session = await prisma.impersonationSession.create({
