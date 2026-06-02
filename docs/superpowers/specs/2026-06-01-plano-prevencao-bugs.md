@@ -111,3 +111,10 @@ Esta é a parte transversal. As correções já feitas são multi-tenant-safe **
 4. **Sprint 4 (resto):** Fase 2 cashback/cash/quote + Fase 4 runbook + alertas.
 
 **Princípio permanente a partir de hoje:** todo bug corrigido nasce com um teste de regressão que falha antes do fix. Todo backend novo só fecha com UI + teste + checagem multi-tenant.
+
+---
+
+## Dívidas técnicas descobertas durante a execução
+
+- **ESLint quebrado (descoberto na Fase 3):** o projeto usa `.eslintrc.json` (formato legado) mas tem ESLint v9 instalado, que exige flat config (`eslint.config.mjs`). `next lint` (deprecado no Next 16) mascarava a falha, e o CI usava `continue-on-error: true` — então o lint NUNCA bloqueou de verdade. Além disso, `@typescript-eslint/*` e `eslint-plugin-react-hooks` não estão como deps diretas (vinham transitivamente). **Pendente:** migrar para flat config, instalar os plugins explicitamente, validar que pega os erros reais (provável onda de `any` a tratar — 605 ocorrências), e religar como gate no CI + lint-staged. Por ora o lint foi REMOVIDO do CI (honesto > fake gate). tsc strict cobre a maior parte.
+- **Testes de orquestração transacional (Fase 2):** a abordagem de lógica pura não cobre o que roda dentro do `$transaction` (idempotência C2 ghost cash, FIFO, sequência de writes). Exigiria banco de teste (testcontainers). Adiado conscientemente.
