@@ -19,6 +19,9 @@ import { Prisma } from "@prisma/client";
 export async function GET(request: NextRequest) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
 
   const { searchParams } = new URL(request.url);
   const action = searchParams.get("action");
