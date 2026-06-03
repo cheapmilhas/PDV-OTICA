@@ -3,6 +3,7 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Company, Customer, Sale, AccountReceivable } from "@prisma/client";
 import { saleDisplayNumber } from "@/lib/sale-number";
+import { isSafePdfLogo } from "@/lib/pdf-header";
 
 interface CarneData {
   sale: Sale & {
@@ -54,10 +55,27 @@ export function generateCarnePDF(data: CarneData): Buffer {
     doc.setFillColor(235, 235, 235);
     doc.rect(margin, y, blockWidth, 11, "F");
 
-    doc.setFontSize(10);
-    doc.setFont("helvetica", "bold");
-    doc.setTextColor(0);
-    doc.text(company.name, margin + 4, y + 7.5);
+    // Logo no cabeçalho do bloco (carnê = canhotos destacáveis, sem header único).
+    // Guard PNG/JPEG: WEBP/inválido cai no nome em texto sem derrubar o PDF.
+    let drewLogo = false;
+    if (isSafePdfLogo(data.logoUrl)) {
+      try {
+        const imgType =
+          data.logoUrl.includes("jpeg") || data.logoUrl.includes("jpg")
+            ? "JPEG"
+            : "PNG";
+        doc.addImage(data.logoUrl, imgType, margin + 4, y + 1.5, 18, 8);
+        drewLogo = true;
+      } catch {
+        drewLogo = false;
+      }
+    }
+    if (!drewLogo) {
+      doc.setFontSize(10);
+      doc.setFont("helvetica", "bold");
+      doc.setTextColor(0);
+      doc.text(company.name, margin + 4, y + 7.5);
+    }
 
     // Número da parcela (destaque no canto direito)
     doc.setFontSize(12);

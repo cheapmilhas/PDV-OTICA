@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { saleDisplayNumber } from "@/lib/sale-number";
+import { companyHeaderHtml } from "@/lib/pdf-header";
 
 /**
  * GET /api/accounts-receivable/sale/[saleId]/carne
@@ -33,6 +34,20 @@ export async function GET(
     if (!sale) {
       return NextResponse.json({ error: { message: "Venda não encontrada" } }, { status: 404 });
     }
+
+    // Logo/identidade vêm de CompanySettings (Company não tem logoUrl).
+    const settings = await prisma.companySettings.findUnique({
+      where: { companyId },
+      select: { logoUrl: true, displayName: true, cnpj: true, address: true, phone: true, email: true },
+    });
+    const headerHtml = companyHeaderHtml({
+      logoUrl: settings?.logoUrl,
+      companyName: settings?.displayName || sale.company.name,
+      cnpj: settings?.cnpj || sale.company.cnpj,
+      address: settings?.address,
+      phone: settings?.phone || sale.company.phone,
+      email: settings?.email,
+    });
 
     const installments = await prisma.accountReceivable.findMany({
       where: { saleId, companyId },
@@ -85,9 +100,9 @@ export async function GET(
 
 <!-- CAPA -->
 <div class="page">
+  ${headerHtml}
   <div class="header">
     <h1>Carnê de Pagamento</h1>
-    <div class="small">${sale.company.name} • CNPJ ${sale.company.cnpj ?? "—"}</div>
   </div>
 
   <div class="grid">
