@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,14 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowDownCircle, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
+const MOTIVO_LABELS: Record<string, string> = {
+  deposito_bancario: "Depósito Bancário",
+  pagamento_fornecedor: "Pagamento a Fornecedor",
+  despesa_operacional: "Despesa Operacional",
+  troco_excedente: "Excesso de Troco",
+  outros: "Outros",
+};
+
 interface ModalSangriaProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -18,6 +27,7 @@ interface ModalSangriaProps {
 
 export function ModalSangria({ open, onOpenChange }: ModalSangriaProps) {
   const { toast } = useToast();
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     valor: "",
@@ -27,25 +37,58 @@ export function ModalSangria({ open, onOpenChange }: ModalSangriaProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const amount = Number(formData.valor);
+    if (!amount || amount <= 0) {
+      toast({
+        title: "Valor inválido",
+        description: "Informe um valor maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
-    // Simular sangria
-    setTimeout(() => {
+    try {
+      const motivoLabel = MOTIVO_LABELS[formData.motivo] ?? formData.motivo;
+      const note = formData.observacoes
+        ? `${motivoLabel} — ${formData.observacoes}`
+        : motivoLabel;
+
+      const res = await fetch("/api/cash/movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "WITHDRAWAL", amount, method: "CASH", note }),
+      });
+
+      const json: { error?: { message?: string } } = await res.json();
+
+      if (!res.ok) {
+        toast({
+          title: "Erro ao registrar sangria",
+          description: json?.error?.message ?? "Tente novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Sangria registrada!",
-        description: `${formatCurrency(Number(formData.valor))} retirado do caixa.`,
+        description: `${formatCurrency(amount)} retirado do caixa.`,
       });
 
-      // Limpar formulário
-      setFormData({
-        valor: "",
-        motivo: "deposito_bancario",
-        observacoes: "",
-      });
-
-      setLoading(false);
+      setFormData({ valor: "", motivo: "deposito_bancario", observacoes: "" });
       onOpenChange(false);
-    }, 1000);
+    } catch {
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -68,7 +111,7 @@ export function ModalSangria({ open, onOpenChange }: ModalSangriaProps) {
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Operador:</span>
-                <span className="font-medium">Carlos Vendedor</span>
+                <span className="font-medium">{session?.user?.name ?? "Operador"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Data/Hora:</span>
