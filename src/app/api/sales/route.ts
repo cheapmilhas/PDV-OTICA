@@ -157,8 +157,14 @@ export async function POST(request: Request) {
     const data = validation.data;
 
     // Q8.2.3: idempotência server-side. Se o cliente enviar Idempotency-Key e
-    // repetir o POST (duplo-clique / retry de rede), retornamos a venda já criada
-    // em vez de duplicar. Hash do payload detecta reuso indevido da mesma key.
+    // repetir o POST, retornamos a venda já criada em vez de duplicar. Hash do
+    // payload detecta reuso indevido da mesma key.
+    // ESCOPO: cobre retry SEQUENCIAL (clique → resposta/timeout → repete), que é
+    // o caso comum (retry de rede, F5 do navegador). Duplo-POST exatamente
+    // SIMULTÂNEO (antes de qualquer um gravar) ainda pode escapar a checagem sem
+    // lock e criar 2 vendas — esse caso é coberto pelo submitLockRef no front (H11).
+    // Reforço futuro p/ blindar o servidor: advisory lock por (companyId,key)
+    // como no checkout (M14) — não feito aqui p/ não segurar conexão na tx de venda.
     const idempKey = request.headers.get("idempotency-key")?.trim() || null;
     let payloadHash: string | null = null;
     if (idempKey) {
