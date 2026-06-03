@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { missingMessageTemplates } from "@/lib/settings-templates";
 import { z } from "zod";
 
 const companySettingsSchema = z.object({
@@ -46,6 +47,18 @@ export async function GET(request: NextRequest) {
           pdfFooterText: "Obrigado pela preferência!",
           defaultQuoteValidDays: 15,
         },
+      });
+    }
+
+    // Backfill de templates de mensagem legados (drift de schema): esta página
+    // de configurações é justamente onde o lojista edita os templates, então
+    // precisa receber os defaults igual ao settingsService.get(). Idempotente:
+    // só preenche null/vazio, num único update.
+    const templatePatch = missingMessageTemplates(settings);
+    if (Object.keys(templatePatch).length > 0) {
+      settings = await prisma.companySettings.update({
+        where: { companyId },
+        data: templatePatch,
       });
     }
 
