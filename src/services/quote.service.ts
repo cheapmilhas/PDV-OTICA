@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { getNextSequence } from "@/lib/counter";
 import { Prisma, QuoteStatus } from "@prisma/client";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { PaymentDTO, validateStoreCredit } from "@/lib/validations/sale.schema";
@@ -901,10 +902,15 @@ export class QuoteService {
 
     // 9. Criar venda em transação (usa helpers compartilhados — paridade com sale.create)
     const result = await prisma.$transaction(async (tx) => {
+      // 9.0. Número sequencial de venda por empresa (mesma chave "sale" do
+      // caminho sale.create — atômico via Counter).
+      const number = await getNextSequence(companyId, "sale", tx);
+
       // 9.1. Criar Sale
       const sale = await tx.sale.create({
         data: {
           companyId,
+          number,
           customerId: quote.customerId,
           branchId,
           sellerUserId: userId,
