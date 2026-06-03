@@ -640,7 +640,8 @@ export async function generateAccountPayableExpenseEntry(
   amount: number,
   description: string,
   paidDate: Date,
-  branchId?: string | null
+  branchId?: string | null,
+  financeAccountId?: string | null
 ): Promise<void> {
   const expenseCode = getCategoryExpenseAccountCode(category);
   const expenseAccount = await getChartAccountByCode(tx, companyId, expenseCode);
@@ -656,7 +657,12 @@ export async function generateAccountPayableExpenseEntry(
         side: "DEBIT",
       },
     },
-    update: { amount, entryDate: paidDate, cashDate: paidDate },
+    update: {
+      amount,
+      entryDate: paidDate,
+      cashDate: paidDate,
+      financeAccountId: financeAccountId ?? undefined,
+    },
     create: {
       companyId,
       branchId: branchId ?? undefined,
@@ -665,6 +671,7 @@ export async function generateAccountPayableExpenseEntry(
       amount,
       debitAccountId: expenseAccount.id,
       creditAccountId: contasAPagar.id,
+      financeAccountId: financeAccountId ?? undefined,
       sourceType: "AccountPayable",
       sourceId: accountPayableId,
       description: description,
@@ -682,7 +689,7 @@ export async function deleteAccountPayableExpenseEntry(
   accountPayableId: string,
   companyId: string
 ): Promise<void> {
-  await tx.financeEntry.deleteMany({
+  const entry = await tx.financeEntry.findFirst({
     where: {
       companyId,
       sourceType: "AccountPayable",
@@ -690,6 +697,20 @@ export async function deleteAccountPayableExpenseEntry(
       type: "EXPENSE",
     },
   });
+
+  if (!entry) return;
+
+  // Re-credita o saldo SOMENTE se a conta foi paga no código novo (gravou financeAccountId).
+  // Contas pagas no código antigo têm financeAccountId null e nunca decrementaram saldo —
+  // re-creditá-las inflaria o saldo com dinheiro que nunca saiu.
+  if (entry.financeAccountId) {
+    await tx.financeAccount.update({
+      where: { id: entry.financeAccountId },
+      data: { balance: { increment: Number(entry.amount) } },
+    });
+  }
+
+  await tx.financeEntry.delete({ where: { id: entry.id } });
 }
 
 // ============================================================
