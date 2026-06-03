@@ -115,78 +115,71 @@ export class CashService {
   ): Promise<CashShift> {
     const { closingDeclaredCash, differenceJustification, notes } = data;
 
-    // Buscar turno
-    const shift = await prisma.cashShift.findFirst({
-      where: {
-        id: shiftId,
-        companyId,
-        status: "OPEN",
-      },
-      include: {
-        movements: true,
-      },
-    });
+    // Q8.2.5: fecha o turno DENTRO de uma transação com SELECT ... FOR UPDATE no
+    // shift. Antes, o valor esperado era calculado FORA de qualquer lock — uma
+    // venda concorrente entre o cálculo e o update deixava closingExpectedCash
+    // defasado (diferença falsa, operador obrigado a justificar). Agora: trava o
+    // shift, RELÊ os movimentos já protegido, recalcula e fecha — a venda
+    // concorrente ou espera o lock, ou já aparece na releitura.
+    const closedShift = await prisma.$transaction(async (tx) => {
+      // Lock de linha: serializa fechamentos concorrentes do MESMO shift e
+      // bloqueia até esta tx terminar. Filtra por companyId (multi-tenant).
+      const locked = await tx.$queryRaw<{ id: string; status: string; notes: string | null }[]>`
+        SELECT id, status, notes FROM "CashShift"
+        WHERE id = ${shiftId} AND "companyId" = ${companyId}
+        FOR UPDATE
+      `;
+      if (!locked[0]) {
+        throw notFoundError("Turno de caixa não encontrado");
+      }
+      if (locked[0].status !== "OPEN") {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          "Turno já foi fechado por outro usuário. Recarregue a página.",
+          409,
+        );
+      }
 
-    if (!shift) {
-      throw notFoundError("Turno de caixa não encontrado ou já fechado");
-    }
+      // Relê movimentos DEPOIS do lock — pega qualquer venda que acabou de entrar.
+      const movements = await tx.cashMovement.findMany({ where: { cashShiftId: shiftId } });
+      const cashMovements = movements.filter((m) => m.method === "CASH");
+      const totalIn = cashMovements
+        .filter((m) => m.direction === "IN")
+        .reduce((sum, m) => sum + Number(m.amount), 0);
+      const totalOut = cashMovements
+        .filter((m) => m.direction === "OUT")
+        .reduce((sum, m) => sum + Number(m.amount), 0);
+      const closingExpectedCash = totalIn - totalOut;
+      const differenceCash = closingDeclaredCash - closingExpectedCash;
 
-    // Calcular valor esperado
-    const cashMovements = shift.movements.filter((m) => m.method === "CASH");
-    const totalIn = cashMovements
-      .filter((m) => m.direction === "IN")
-      .reduce((sum, m) => sum + Number(m.amount), 0);
-    const totalOut = cashMovements
-      .filter((m) => m.direction === "OUT")
-      .reduce((sum, m) => sum + Number(m.amount), 0);
-    const closingExpectedCash = totalIn - totalOut;
+      // Validar justificativa se há diferença (com o valor já protegido pelo lock).
+      if (Math.abs(differenceCash) > 0.01 && !differenceJustification) {
+        throw new AppError(
+          ERROR_CODES.VALIDATION_ERROR,
+          `Há uma diferença de R$ ${differenceCash.toFixed(2)}. Informe a justificativa.`,
+          400,
+        );
+      }
 
-    // Calcular diferença
-    const differenceCash = closingDeclaredCash - closingExpectedCash;
-
-    // Validar justificativa se há diferença
-    if (Math.abs(differenceCash) > 0.01 && !differenceJustification) {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        `Há uma diferença de R$ ${differenceCash.toFixed(2)}. Informe a justificativa.`,
-        400
-      );
-    }
-
-    // Q7.1 P0-8: fecha turno com update condicional pra evitar race
-    // entre dois usuários clicando "fechar caixa" simultaneamente.
-    // updateMany retorna count=0 se outro processo já mudou status≠OPEN.
-    const updateResult = await prisma.cashShift.updateMany({
-      where: { id: shiftId, status: "OPEN" },
-      data: {
-        status: "CLOSED",
-        closedByUserId: userId,
-        closedAt: new Date(),
-        closingDeclaredCash,
-        closingExpectedCash,
-        differenceCash,
-        differenceJustification,
-        notes: notes || shift.notes,
-      },
-    });
-
-    if (updateResult.count === 0) {
-      throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
-        "Turno já foi fechado por outro usuário. Recarregue a página.",
-        409,
-      );
-    }
-
-    // Re-fetch com movements (updateMany não suporta include).
-    const closedShift = await prisma.cashShift.findUniqueOrThrow({
-      where: { id: shiftId },
-      include: {
-        movements: {
-          orderBy: { createdAt: "asc" },
+      await tx.cashShift.update({
+        where: { id: shiftId },
+        data: {
+          status: "CLOSED",
+          closedByUserId: userId,
+          closedAt: new Date(),
+          closingDeclaredCash,
+          closingExpectedCash,
+          differenceCash,
+          differenceJustification,
+          notes: notes || locked[0].notes,
         },
-      },
-    });
+      });
+
+      return tx.cashShift.findUniqueOrThrow({
+        where: { id: shiftId },
+        include: { movements: { orderBy: { createdAt: "asc" } } },
+      });
+    }, { timeout: 30_000 });
 
     return closedShift;
   }
