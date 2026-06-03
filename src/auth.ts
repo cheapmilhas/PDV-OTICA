@@ -59,13 +59,18 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null;
           }
 
-          // Buscar por email OU por nome (login)
-          const user = await prisma.user.findFirst({
+          // Q8.4: email passou a ser único POR EMPRESA (@@unique([companyId,email])),
+          // então o mesmo email/login pode existir em mais de uma empresa (dono com
+          // 2 lojas, funcionário em 2 óticas-cliente). Buscamos TODOS os candidatos
+          // e validamos a senha contra cada um, de forma DETERMINÍSTICA (ordem por
+          // createdAt), entrando no primeiro que bater. Para email único (99% dos
+          // casos) o comportamento é idêntico ao anterior.
+          const emailCandidate = login.includes("@")
+            ? login
+            : `${login.toLowerCase()}@login`;
+          const users = await prisma.user.findMany({
             where: {
-              OR: [
-                { email: login },
-                { email: login.includes("@") ? login : `${login.toLowerCase()}@login` },
-              ],
+              OR: [{ email: login }, { email: emailCandidate }],
             },
             include: {
               company: true,
@@ -79,22 +84,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 },
               },
             },
+            orderBy: { createdAt: "asc" },
           });
 
-          if (!user || !user.passwordHash) {
-            // SEGURANÇA: bcrypt dummy mesmo sem user para igualar tempo de resposta.
-            // Senão atacante mede latência e enumera emails existentes.
-            await bcrypt.compare(password, DUMMY_HASH);
-            return null;
+          // Valida a senha contra cada candidato; entra no primeiro que bater.
+          let user: (typeof users)[number] | null = null;
+          for (const candidate of users) {
+            if (!candidate.passwordHash) continue;
+            if (await bcrypt.compare(password, candidate.passwordHash)) {
+              user = candidate;
+              break;
+            }
           }
 
-          const isPasswordValid = await bcrypt.compare(
-            password,
-            user.passwordHash
-          );
-
-          if (!isPasswordValid) {
-            console.log(`❌ Senha inválida para ${login}`);
+          if (!user) {
+            // SEGURANÇA: bcrypt dummy mesmo sem match para igualar o tempo de
+            // resposta (senão atacante mede latência e enumera emails). Só roda
+            // quando NENHUM candidato bateu — inclui o caso de zero candidatos.
+            await bcrypt.compare(password, DUMMY_HASH);
+            console.log(`❌ Login inválido para ${login}`);
             return null;
           }
 
