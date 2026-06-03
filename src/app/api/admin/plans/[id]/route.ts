@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { propagatePlanLimits } from "@/services/plan-propagation.service";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 
@@ -71,16 +72,37 @@ export async function PATCH(
       });
     });
 
+    // Propaga limites para as empresas cujo plano efetivo é este (fora da tx — M4).
+    // Só quando algum limite mudou; preço NÃO é retroativo (não toca subscriptions/Asaas).
+    let propagatedCompanies = 0;
+    const limitsChanged =
+      planData.maxUsers !== undefined ||
+      planData.maxBranches !== undefined ||
+      planData.maxProducts !== undefined;
+    if (limitsChanged) {
+      propagatedCompanies = await propagatePlanLimits(id, {
+        maxUsers: plan.maxUsers,
+        maxBranches: plan.maxBranches,
+        maxProducts: plan.maxProducts,
+      });
+    }
+
     await prisma.globalAudit.create({
       data: {
         actorType: "ADMIN_USER",
         actorId: admin.id,
         action: "PLAN_UPDATED",
-        metadata: { planId: id, planName: plan.name, changes: Object.keys(data), adminEmail: admin.email },
+        metadata: {
+          planId: id,
+          planName: plan.name,
+          changes: Object.keys(data),
+          propagatedCompanies,
+          adminEmail: admin.email,
+        },
       },
     });
 
-    return NextResponse.json({ data: plan });
+    return NextResponse.json({ data: plan, propagatedCompanies });
   } catch (error) {
     if (error instanceof z.ZodError) {
       return NextResponse.json({ error: "Dados inválidos", details: error.issues }, { status: 400 });
