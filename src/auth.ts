@@ -172,12 +172,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // se foi encerrada (endedAt) ou expirou (expiresAt), invalida o token
       // (return null → próximo acesso cai pra login). Janela curta porque é
       // sensível e a sessão é curta; falha transitória de DB NÃO desloga.
-      const impersonation = (token as any).impersonation as
-        | { sessionId?: string }
-        | undefined;
+      const impersonation = token.impersonation;
       if (impersonation?.sessionId) {
         const IMP_REVALIDATE_TTL_MS = 60 * 1000; // 1 min
-        const lastImpCheck = (token as any).impRevalidatedAt as number | undefined;
+        const lastImpCheck = token.impRevalidatedAt;
         if (!lastImpCheck || Date.now() - lastImpCheck > IMP_REVALIDATE_TTL_MS) {
           try {
             const imp = await prisma.impersonationSession.findUnique({
@@ -188,7 +186,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               // Sessão encerrada/expirada/inexistente → revoga de verdade.
               return null;
             }
-            (token as any).impRevalidatedAt = Date.now();
+            token.impRevalidatedAt = Date.now();
           } catch (err) {
             // Falha transitória de DB: não desloga (evita falso logout).
             console.error("Revalidação de impersonação falhou (não-fatal):", err);
