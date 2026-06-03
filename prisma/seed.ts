@@ -312,6 +312,7 @@ async function main() {
   const venda1 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      number: 1,
       branchId: branch.id,
       customerId: clientes[0].id,
       sellerUserId: vendedor.id,
@@ -347,6 +348,7 @@ async function main() {
   const venda2 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      number: 2,
       branchId: branch.id,
       customerId: clientes[1].id,
       sellerUserId: vendedor.id,
@@ -381,6 +383,7 @@ async function main() {
   const venda3 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      number: 3,
       branchId: branch.id,
       customerId: clientes[2].id,
       sellerUserId: admin.id,
