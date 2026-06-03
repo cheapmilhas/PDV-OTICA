@@ -809,6 +809,92 @@ export async function generateRenegotiationInterestEntry(
   return entry.id;
 }
 
+/**
+ * Garante a conta de Deduções de Receita "Devoluções e Estornos" (3.2.01).
+ * Existe no plano de contas padrão (finance-setup), mas empresas criadas antes
+ * dessa conta entrar no setup podem não tê-la — upsert atômico evita quebrar o
+ * estorno (e evita P2002 em estornos concorrentes na 1ª vez da empresa).
+ */
+async function ensureDeductionAccount(tx: TransactionClient, companyId: string) {
+  const code = "3.2.01";
+  const parent = await tx.chartOfAccounts.findUnique({
+    where: { companyId_code: { companyId, code: "3.2" } },
+  });
+  return tx.chartOfAccounts.upsert({
+    where: { companyId_code: { companyId, code } },
+    update: {},
+    create: {
+      companyId,
+      code,
+      name: "Devoluções e Estornos",
+      kind: "REVENUE",
+      ...(parent ? { parentId: parent.id } : {}),
+    },
+  });
+}
+
+/**
+ * Q8.2.1: lança o ESTORNO de uma conta a receber recebida no ledger.
+ *
+ * Quando um recebimento de AR é estornado, o caixa já é revertido
+ * (reverseAccountReceivableCash), mas nenhum lançamento contábil era criado — o
+ * estorno sumia do ledger. Aqui registramos a dedução de receita:
+ *   Débito: Devoluções e Estornos (3.2.01)   ← reduz a receita
+ *   Crédito: Contas a Receber (1.1.03)        ← a AR volta a ficar em aberto
+ * Idempotente via @@unique(companyId, sourceType, sourceId, type, side).
+ *
+ * NOTA: o DRE atual soma sale.total e ainda NÃO lê o ledger (dívida H15), então
+ * este lançamento mantém o ledger correto mas ainda não muda o DRE — corrigir o
+ * DRE para somar FinanceEntry é a sprint separada "DRE sobre ledger".
+ *
+ * Retorna o id do lançamento, ou null se amount <= 0.
+ */
+export async function generateARReversalEntry(
+  tx: TransactionClient,
+  data: {
+    accountReceivableId: string;
+    amount: number;
+    branchId?: string | null;
+    entryDate?: Date;
+  },
+  companyId: string
+): Promise<string | null> {
+  const amount = Math.round(data.amount * 100) / 100;
+  if (amount <= 0) return null;
+
+  const contasAReceber = await getChartAccountByCode(tx, companyId, "1.1.03");
+  const devolucoes = await ensureDeductionAccount(tx, companyId);
+
+  const entry = await tx.financeEntry.upsert({
+    where: {
+      companyId_sourceType_sourceId_type_side: {
+        companyId,
+        sourceType: "ARReversal",
+        sourceId: data.accountReceivableId,
+        type: "REFUND",
+        side: "DEBIT",
+      },
+    },
+    update: { amount },
+    create: {
+      companyId,
+      branchId: data.branchId ?? undefined,
+      type: "REFUND",
+      side: "DEBIT",
+      amount,
+      debitAccountId: devolucoes.id,
+      creditAccountId: contasAReceber.id,
+      sourceType: "ARReversal",
+      sourceId: data.accountReceivableId,
+      description: `Estorno de recebimento AR #${data.accountReceivableId.substring(0, 8)}`,
+      entryDate: data.entryDate ?? new Date(),
+      cashDate: data.entryDate ?? new Date(), // saída de caixa acompanha o estorno
+    },
+  });
+
+  return entry.id;
+}
+
 export async function generateManualExpenseEntry(
   tx: TransactionClient,
   data: ManualExpenseData,

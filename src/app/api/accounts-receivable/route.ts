@@ -9,6 +9,7 @@ import { AccountReceivableStatus } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { calculatePenalties } from "@/lib/penalty-utils";
 import { reverseAccountReceivableCash } from "@/services/cash.service";
+import { generateARReversalEntry } from "@/services/finance-entry.service";
 import { requireWriteAccess } from "@/lib/subscription";
 
 /**
@@ -427,6 +428,18 @@ export async function PATCH(request: Request) {
           description: existing.description,
           userId,
         });
+
+        // Q8.2.1: lançamento contábil do estorno (Débito Devoluções / Crédito
+        // Contas a Receber). Idempotente. Mesmo lançamento do POST /reverse-payment.
+        await generateARReversalEntry(
+          tx,
+          {
+            accountReceivableId: reversal.id,
+            amount: Number(existing.receivedAmount ?? existing.amount),
+            branchId: existing.branchId,
+          },
+          companyId,
+        );
 
         // Reverter status do AR.
         return tx.accountReceivable.update({

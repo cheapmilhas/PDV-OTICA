@@ -5,6 +5,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
 import { reverseAccountReceivableCash } from "@/services/cash.service";
+import { generateARReversalEntry } from "@/services/finance-entry.service";
 
 const log = logger.child({ route: "accounts-receivable/reverse-payment" });
 
@@ -75,6 +76,19 @@ export async function POST(
         description: ar.description,
         userId: session.user.id,
       });
+
+      // Q8.2.1: lançamento contábil do estorno (Débito Devoluções / Crédito
+      // Contas a Receber). Idempotente; ledger fica correto mesmo que o DRE
+      // ainda não o leia (dívida H15). Usa o valor recebido antes de zerá-lo.
+      await generateARReversalEntry(
+        tx,
+        {
+          accountReceivableId: ar.id,
+          amount: Number(ar.receivedAmount ?? ar.amount),
+          branchId: ar.branchId,
+        },
+        companyId,
+      );
 
       // Reverter status do AR.
       await tx.accountReceivable.update({
