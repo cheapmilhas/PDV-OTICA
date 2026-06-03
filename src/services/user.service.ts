@@ -136,11 +136,15 @@ export class UserService {
     // Hash da senha
     const passwordHash = await bcrypt.hash(data.password, 10);
 
-    // Cria usuário (remove password do data e adiciona passwordHash)
+    // Cria usuário (remove password do data e adiciona passwordHash).
+    // Normaliza email p/ minúsculas: o índice único é lower(email) e o login é
+    // case-insensitive — armazenar consistente evita "criei com maiúscula e não
+    // consigo logar com minúscula".
     const { password, ...userData } = data;
     const user = await prisma.user.create({
       data: {
         ...userData,
+        email: data.email.toLowerCase().trim(),
         passwordHash,
         companyId,
       },
@@ -202,6 +206,10 @@ export class UserService {
         ...rest,
         passwordHash: await bcrypt.hash(password, 10),
       };
+    }
+    // Normaliza email p/ minúsculas (consistente com create + índice lower(email)).
+    if (updateData.email) {
+      updateData.email = String(updateData.email).toLowerCase().trim();
     }
 
     // Atualiza

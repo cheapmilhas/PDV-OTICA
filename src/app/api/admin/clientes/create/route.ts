@@ -69,9 +69,13 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Campos obrigatórios não preenchidos" }, { status: 400 });
   }
 
-  // Se adminEmail fornecido, verificar duplicidade
+  // Se adminEmail fornecido, verificar duplicidade.
+  // NOTA (Q8.4): checagem GLOBAL é INTENCIONAL aqui — este fluxo provisiona uma
+  // ÓTICA NOVA (super-admin) e seu owner; ainda não há companyId. Mesmo com email
+  // único por-empresa, bloquear reuso global de email do owner na criação evita
+  // ambiguidade (qual conta seria dona da nova empresa). Igual ao /public/register.
   if (adminEmail) {
-    const existingUserEmail = await prisma.user.findFirst({ where: { email: adminEmail.toLowerCase().trim() } });
+    const existingUserEmail = await prisma.user.findFirst({ where: { email: { equals: adminEmail.toLowerCase().trim(), mode: "insensitive" } } });
     if (existingUserEmail) {
       return NextResponse.json({ error: "Email do administrador já está em uso por outro usuário" }, { status: 400 });
     }

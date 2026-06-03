@@ -142,8 +142,14 @@ export async function POST(
     );
   }
 
-  // Verificar email duplicado
-  const existingUser = await prisma.user.findFirst({ where: { email: email.toLowerCase().trim() } });
+  // Verificar email duplicado DENTRO da empresa (Q8.4: email é único por-empresa,
+  // não global — o mesmo email pode existir em outra ótica).
+  const existingUser = await prisma.user.findFirst({
+    where: {
+      companyId,
+      email: { equals: email.toLowerCase().trim(), mode: "insensitive" },
+    },
+  });
   if (existingUser) {
     return NextResponse.json({ error: "Este email já está em uso" }, { status: 400 });
   }

@@ -6,10 +6,12 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-// SEGURANÇA: hash dummy bcrypt para comparar quando usuário não existe.
-// Sem isso, há timing leak: !user retorna ~0ms, user existente retorna ~80ms
-// (custo do bcrypt.compare). Atacante mede e enumera emails válidos.
-const DUMMY_HASH = "$2b$10$abcdefghijklmnopqrstuv0123456789012345678901234567890Yzab";
+// SEGURANÇA: hash dummy bcrypt VÁLIDO (60 chars, cost 10) para comparar quando
+// não há candidato. Sem isso há timing leak: !user retorna ~0ms, user existente
+// ~90ms (custo real do bcrypt) → atacante mede e enumera emails. ATENÇÃO: precisa
+// ser um hash bcrypt válido — um valor malformado faz o bcrypt.compare retornar
+// em ~0ms (curto-circuito), o que ANULA a defesa. Gerado com bcrypt.hashSync.
+const DUMMY_HASH = "$2b$10$b7JEb6u1artchYz6H9f56eNIqganC3hhPmUNQYTkNbqU/aMc1T.XS";
 
 const loginSchema = z.object({
   email: z.string().min(1), // Aceita login ou email
@@ -70,7 +72,13 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             : `${login.toLowerCase()}@login`;
           const users = await prisma.user.findMany({
             where: {
-              OR: [{ email: login }, { email: emailCandidate }],
+              // case-insensitive: o índice único é lower(email), então o login
+              // precisa casar "Joao@x.com" com "joao@x.com" (senão o usuário
+              // criado com maiúsculas nunca loga).
+              OR: [
+                { email: { equals: login, mode: "insensitive" } },
+                { email: { equals: emailCandidate, mode: "insensitive" } },
+              ],
             },
             include: {
               company: true,
