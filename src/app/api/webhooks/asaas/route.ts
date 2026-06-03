@@ -5,6 +5,7 @@ import { asaas } from "@/lib/asaas";
 import { trackServer } from "@/lib/posthog-server";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { captureMessage } from "@/lib/sentry";
 
 const log = logger.child({ webhook: "asaas" });
 
@@ -315,17 +316,29 @@ export async function POST(request: Request) {
 
     return NextResponse.json({ ok: true });
   } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
     log.error("Erro ao processar evento Asaas", {
       eventType: event.event,
       eventId: event.id,
-      error: err instanceof Error ? err.message : String(err),
+      error: errMsg,
     });
     await prisma.billingEvent.update({
       where: { id: billingEvent.id },
       data: {
-        error: err instanceof Error ? err.message : String(err),
+        error: errMsg,
+        lastErrorAt: new Date(), // Q8.1.2: quando falhou pela última vez
       },
     });
+    // Q8.1.2: alerta o time quando um webhook persiste falhando. O upsert acima
+    // já incrementou retryCount (retorna o valor PÓS-incremento). Dispara só na
+    // TRANSIÇÃO exata (=== 3), não em todo reenvio acima do limiar — senão o Asaas
+    // reenviando de hora em hora geraria 1 alerta/hora indefinidamente (spam/cota).
+    if (billingEvent.retryCount === 3) {
+      captureMessage(`Webhook Asaas ${event.id} falhou ${billingEvent.retryCount}x`, {
+        level: "warning",
+        extra: { eventType: event.event, eventId: event.id, companyId, error: errMsg },
+      });
+    }
     // 500 para Asaas reenviar
     return NextResponse.json({ error: "processing failed" }, { status: 500 });
   }

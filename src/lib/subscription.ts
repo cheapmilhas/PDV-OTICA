@@ -31,6 +31,27 @@ export interface SubscriptionCheckResult {
 export async function checkSubscription(companyId: string): Promise<SubscriptionCheckResult> {
   log.debug("Verificando companyId", { companyId });
 
+  // Q8.1.1 — Kill-switch de emergência: destrava TODOS os tenants de uma vez
+  // (ex.: cobrança/webhook quebrado em massa não deve trancar clientes pagantes).
+  if (process.env.ENFORCE_SUSPENSION === "false") {
+    return {
+      allowed: true,
+      status: "ACTIVE",
+      readOnly: false,
+      message: "ENFORCE_SUSPENSION=false (suspensão desabilitada globalmente).",
+    };
+  }
+
+  // Q8.1.1 — Whitelist de bypass: libera tenants específicos (CSV de companyIds)
+  // sem desabilitar a suspensão para todos. Útil para destravar 1 cliente pontual.
+  const bypassIds = (process.env.SUBSCRIPTION_BYPASS_COMPANY_IDS ?? "")
+    .split(",")
+    .map((s) => s.trim())
+    .filter(Boolean);
+  if (bypassIds.includes(companyId)) {
+    return { allowed: true, status: "ACTIVE", readOnly: false, message: "BYPASS_LIST" };
+  }
+
   // Verificar se empresa tem acesso habilitado (bypass para dev/teste)
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -157,34 +178,22 @@ export async function checkSubscription(companyId: string): Promise<Subscription
     };
   }
 
-  // PAST_DUE
+  // PAST_DUE — Q8.1.1: acesso de LEITURA (readOnly) enquanto inadimplente. A
+  // SUSPENSÃO (PAST_DUE→SUSPENDED) é EXCLUSIVA do cron de dunning (F5), que avisa
+  // o cliente em 3/7/14 dias ANTES de suspender. checkSubscription NÃO suspende
+  // mais sozinho — antes ele trancava aos 7d sem aviso (quebrava a régua F5 e
+  // suspendia antes de comunicar). Agora só decide acesso; quem muda status é o cron.
   if (subscription.status === "PAST_DUE") {
     const pastDueSince = subscription.pastDueSince ?? subscription.currentPeriodEnd ?? now;
     const daysOverdue = Math.ceil(
       (now.getTime() - pastDueSince.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    if (daysOverdue <= 7) {
-      return {
-        allowed: true,
-        status: "PAST_DUE",
-        readOnly: true,
-        message: `Pagamento pendente há ${daysOverdue} dia${daysOverdue > 1 ? "s" : ""}. Regularize para continuar usando todas as funções.`,
-        daysOverdue,
-        planName,
-      };
-    }
-
-    // Grace period expirado → suspender (updateMany idempotente sob concorrência)
-    await prisma.subscription.updateMany({
-      where: { id: subscription.id, status: "PAST_DUE" },
-      data: { status: "SUSPENDED" },
-    });
     return {
-      allowed: false,
-      status: "SUSPENDED",
-      readOnly: false,
-      message: "Sua assinatura foi suspensa por falta de pagamento. Regularize para voltar a usar o sistema.",
+      allowed: true,
+      status: "PAST_DUE",
+      readOnly: true,
+      message: `Pagamento pendente há ${daysOverdue} dia${daysOverdue > 1 ? "s" : ""}. Regularize para continuar usando todas as funções.`,
       daysOverdue,
       planName,
     };
