@@ -14,7 +14,7 @@ import { formatCurrency } from "@/lib/utils";
 
 const MOTIVO_LABELS: Record<string, string> = {
   troco: "Reposição de Troco",
-  saque: "Saque Bancário",
+  // "saque" removido — Saque Bancário é motivo de sangria, não de reforço
   correcao: "Correção de Caixa",
   outros: "Outros",
 };
@@ -74,7 +74,7 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
 
       toast({
         title: "Reforço registrado!",
-        description: `R$ ${amount.toFixed(2)} adicionado ao caixa.`,
+        description: `${formatCurrency(amount)} adicionado ao caixa.`,
       });
 
       setFormData({ valor: "", motivo: "troco", observacoes: "" });
@@ -158,7 +158,6 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="troco">Reposição de Troco</SelectItem>
-                <SelectItem value="saque">Saque Bancário</SelectItem>
                 <SelectItem value="correcao">Correção de Caixa</SelectItem>
                 <SelectItem value="outros">Outros</SelectItem>
               </SelectContent>
