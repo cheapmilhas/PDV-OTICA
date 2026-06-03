@@ -22,10 +22,24 @@ export interface CompanyHeaderData {
   email?: string | null;
 }
 
-/** Aceita apenas data:image/png|jpg|jpeg (o que o jsPDF.addImage suporta com segurança). */
+/**
+ * Aceita apenas data:image/png|jpg|jpeg em base64 (o que o jsPDF.addImage
+ * suporta com segurança). Ancorado no fim e exigindo `;base64,<base64>` — assim
+ * um valor malicioso (ex.: com aspas/handlers) NÃO passa.
+ */
 export function isSafePdfLogo(logoUrl?: string | null): logoUrl is string {
   if (!logoUrl) return false;
-  return /^data:image\/(png|jpe?g)/i.test(logoUrl);
+  return /^data:image\/(png|jpe?g);base64,[A-Za-z0-9+/=]+$/i.test(logoUrl);
+}
+
+/**
+ * Para o renderizador HTML: aceita data:image/<qq>;base64,<base64puro> (inclui
+ * webp, que o navegador renderiza em <img>). O charset base64 puro garante que
+ * o valor não contém aspas/`<`/`>` — impossível quebrar o atributo src (anti-XSS).
+ */
+function isSafeHtmlLogo(logoUrl?: string | null): logoUrl is string {
+  if (!logoUrl) return false;
+  return /^data:image\/[a-z+]+;base64,[A-Za-z0-9+/=]+$/i.test(logoUrl);
 }
 
 /**
@@ -89,6 +103,9 @@ export function drawPdfHeader(
   doc.setDrawColor(200);
   doc.line(15, lineY, pageWidth - 15, lineY);
 
+  // Restaura estado neutro (cor de traço preta) para o conteúdo seguinte.
+  doc.setDrawColor(0);
+
   return lineY + 10;
 }
 
@@ -107,10 +124,13 @@ function escapeHtml(s: string): string {
  */
 export function companyHeaderHtml(data: CompanyHeaderData): string {
   const name = escapeHtml(data.companyName || "Empresa");
-  const isImg = !!data.logoUrl && /^data:image\//i.test(data.logoUrl);
+  // Só interpola no src um data-URL base64 PURO (sem aspas/`<`/`>`): impede
+  // quebra do atributo e injeção de handlers (XSS). Qualquer valor fora desse
+  // formato cai no nome em texto.
+  const safeLogo = isSafeHtmlLogo(data.logoUrl) ? data.logoUrl : null;
 
-  const left = isImg
-    ? `<img src="${data.logoUrl}" alt="${name}" style="max-width:160px;max-height:64px;object-fit:contain;object-position:left" />`
+  const left = safeLogo
+    ? `<img src="${safeLogo}" alt="${name}" style="max-width:160px;max-height:64px;object-fit:contain;object-position:left" />`
     : `<div style="font-size:22px;font-weight:700;color:#374151">${name}</div>`;
 
   const info: string[] = [`<div style="font-size:15px;font-weight:700">${name}</div>`];

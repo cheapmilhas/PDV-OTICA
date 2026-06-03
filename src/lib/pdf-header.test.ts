@@ -38,4 +38,23 @@ describe("companyHeaderHtml", () => {
     expect(html).not.toContain("<script>");
     expect(html).toContain("&lt;script&gt;");
   });
+
+  it("NÃO interpola logoUrl malicioso no src (anti-XSS de atributo)", () => {
+    const html = companyHeaderHtml({
+      companyName: "Safe",
+      // valor que tenta quebrar o atributo src e injetar onload
+      logoUrl: 'data:image/png;base64,AA" onload="alert(1)',
+    });
+    expect(html).not.toContain("onload");
+    expect(html).not.toContain("<img"); // rejeitado → cai no nome em texto
+    expect(html).toContain("Safe");
+  });
+
+  it("aceita data-URL base64 puro no src", () => {
+    const html = companyHeaderHtml({
+      companyName: "Safe",
+      logoUrl: "data:image/png;base64,AAAABBBBCCCC==",
+    });
+    expect(html).toContain('<img src="data:image/png;base64,AAAABBBBCCCC=="');
+  });
 });

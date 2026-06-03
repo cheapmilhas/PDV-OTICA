@@ -40,14 +40,20 @@ export async function GET(
       where: { companyId },
       select: { logoUrl: true, displayName: true, cnpj: true, address: true, phone: true, email: true },
     });
+    const displayName = settings?.displayName || sale.company.name;
     const headerHtml = companyHeaderHtml({
       logoUrl: settings?.logoUrl,
-      companyName: settings?.displayName || sale.company.name,
+      companyName: displayName,
       cnpj: settings?.cnpj || sale.company.cnpj,
       address: settings?.address,
       phone: settings?.phone || sale.company.phone,
       email: settings?.email,
     });
+    // Escapa o nome para uso direto em HTML nas páginas por-parcela (anti-XSS).
+    const displayNameHtml = displayName
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
 
     const installments = await prisma.accountReceivable.findMany({
       where: { saleId, companyId },
@@ -163,7 +169,7 @@ ${installments
     (inst) => `
   <div class="page">
     <div class="header">
-      <h1>${sale.company.name}</h1>
+      <h1>${displayNameHtml}</h1>
       <div class="small">Comprovante de Parcela</div>
     </div>
 
