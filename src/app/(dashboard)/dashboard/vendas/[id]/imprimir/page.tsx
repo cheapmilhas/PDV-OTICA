@@ -283,7 +283,7 @@ function ImprimirVendaContent() {
             </div>
           ) : (
             <h1 className="text-3xl font-bold mb-2">
-              {companySettings?.displayName || "PDV Ótica"}
+              {companySettings?.displayName || "Empresa"}
             </h1>
           )}
           <p className="text-gray-600">Comprovante de Venda</p>

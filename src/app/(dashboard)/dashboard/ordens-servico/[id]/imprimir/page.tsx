@@ -136,7 +136,7 @@ function ImprimirOrdemServicoContent() {
               />
             ) : (
               <h1 className="text-xl font-black text-gray-900 uppercase tracking-wide">
-                {companySettings?.displayName || "PDV Ótica"}
+                {companySettings?.displayName || "Empresa"}
               </h1>
             )}
           </div>

@@ -8,12 +8,15 @@ import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PrintHeader } from "@/components/print/print-header";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 function RelatorioFechamentoCaixaContent() {
   const params = useParams();
   const shiftId = params.id as string;
   const [shift, setShift] = useState<any>(null);
   const [loading, setLoading] = useState(true);
+  const { settings } = useCompanySettings();
 
   useEffect(() => {
     const fetchShift = async () => {
@@ -96,6 +99,16 @@ function RelatorioFechamentoCaixaContent() {
 
       {/* Relatório */}
       <div className="max-w-4xl mx-auto">
+        <PrintHeader
+          logoUrl={settings?.logoUrl}
+          companyName={settings?.displayName || undefined}
+          cnpj={settings?.cnpj || undefined}
+          address={settings?.address || undefined}
+          city={settings?.city || undefined}
+          state={settings?.state || undefined}
+          phone={settings?.phone || undefined}
+          email={settings?.email || undefined}
+        />
         <div className="text-center mb-8">
           <h1 className="text-3xl font-bold mb-2">Relatório de Fechamento de Caixa</h1>
           <p className="text-muted-foreground">
