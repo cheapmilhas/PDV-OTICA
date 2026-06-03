@@ -31,6 +31,7 @@ import toast from "react-hot-toast";
 import { Pagination } from "@/components/shared/pagination";
 import { EmptyState } from "@/components/shared/empty-state";
 import { usePermissions } from "@/hooks/usePermissions";
+import { ModalFornecedorRapido } from "@/components/estoque/modal-fornecedor-rapido";
 
 interface Supplier {
   id: string;
@@ -66,6 +67,7 @@ function FornecedoresPage() {
   const [editForm, setEditForm] = useState<Partial<Supplier>>({});
   const [importing, setImporting] = useState(false);
   const [exporting, setExporting] = useState(false);
+  const [novoFornecedorOpen, setNovoFornecedorOpen] = useState(false);
 
   // Buscar fornecedores da API
   useEffect(() => {
@@ -358,7 +360,7 @@ function FornecedoresPage() {
             </Button>
           )}
           {hasPermission("suppliers.manage") && (
-            <Button onClick={() => toast("Em desenvolvimento")}>
+            <Button onClick={() => setNovoFornecedorOpen(true)}>
               <Plus className="mr-2 h-4 w-4" />
               Novo Fornecedor
             </Button>
@@ -581,6 +583,13 @@ function FornecedoresPage() {
           showInfo
         />
       )}
+
+      {/* Modal Novo Fornecedor */}
+      <ModalFornecedorRapido
+        open={novoFornecedorOpen}
+        onOpenChange={setNovoFornecedorOpen}
+        onSuccess={fetchSuppliers}
+      />
 
       {/* Modal de Detalhes */}
       <Dialog open={detailsDialogOpen} onOpenChange={setDetailsDialogOpen}>
