@@ -210,6 +210,9 @@ export class ServiceOrderService {
             id: true, number: true, status: true,
             isWarranty: true, isRework: true, isMedicalError: true,
             warrantySeq: true, createdAt: true,
+            // Campos para o histórico/timeline (prazo + motivo + datas).
+            promisedDate: true, deliveredAt: true, isDelayed: true, delayDays: true,
+            warrantyReason: true, reworkReason: true, medicalErrorReason: true,
             originalOrder: { select: { number: true } },
           },
         },
