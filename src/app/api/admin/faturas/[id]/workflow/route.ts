@@ -71,6 +71,7 @@ export async function POST(
             data: {
               status: "ACTIVE",
               pastDueSince: null,
+              lastDunningStage: null, // F5: zera régua na recuperação
             },
           });
         }

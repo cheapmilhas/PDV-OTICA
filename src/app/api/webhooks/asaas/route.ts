@@ -196,6 +196,7 @@ export async function POST(request: Request) {
             data: {
               status: "ACTIVE",
               pastDueSince: null,
+              lastDunningStage: null, // F5: recuperou → zera a régua p/ próxima inadimplência avisar do zero
               currentPeriodStart: new Date(),
             },
           });

@@ -37,10 +37,14 @@ interface CreateCompanyNotificationParams {
  *
  * IMPORTANTE: chame SEMPRE após o commit da transação que gera o evento — nunca
  * dentro da $transaction (uma falha de notificação não pode causar rollback do ticket).
+ *
+ * Retorna `true` se a notificação foi criada, `false` se falhou (fail-silent — não
+ * lança). O dunning (F5) usa o retorno para só avançar o estágio quando notificou
+ * de fato (não pular aviso). Quem não liga para o resultado pode ignorar.
  */
 export async function createCompanyNotification(
   params: CreateCompanyNotificationParams
-): Promise<void> {
+): Promise<boolean> {
   try {
     await prisma.companyNotification.create({
       data: {
@@ -53,11 +57,13 @@ export async function createCompanyNotification(
         ...(params.metadata && { metadata: JSON.parse(JSON.stringify(params.metadata)) }),
       },
     });
+    return true;
   } catch (error) {
     log.error("Falha ao criar notificação do cliente", {
       error: error instanceof Error ? error.message : String(error),
       companyId: params.companyId,
       type: params.type,
     });
+    return false;
   }
 }
