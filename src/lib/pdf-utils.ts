@@ -2,6 +2,7 @@ import jsPDF from "jspdf";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import type { Company, Customer, Sale, AccountReceivable } from "@prisma/client";
+import { saleDisplayNumber } from "@/lib/sale-number";
 
 interface CarneData {
   sale: Sale & {
@@ -79,7 +80,7 @@ export function generateCarnePDF(data: CarneData): Buffer {
       doc.text(`CPF: ${sale.customer.cpf}`, margin + 4, ly + 5);
       ly += 5;
     }
-    doc.text(`Venda: #${sale.id.substring(0, 8).toUpperCase()}`, margin + 4, ly + 5);
+    doc.text(`Venda: ${saleDisplayNumber(sale)}`, margin + 4, ly + 5);
     doc.text(
       `Emissão: ${format(new Date(sale.createdAt), "dd/MM/yyyy", { locale: ptBR })}`,
       margin + 4,

@@ -1,6 +1,5 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
@@ -48,7 +47,6 @@ const createCategorySchema = z.object({
  */
 export async function POST(request: Request) {
   try {
-    await auth();
     await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("products.create");

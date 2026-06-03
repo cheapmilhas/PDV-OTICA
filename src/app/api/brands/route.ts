@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { z } from "zod";
-import { auth } from "@/auth";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
@@ -64,7 +64,6 @@ function slugCode(name: string): string {
  */
 export async function POST(request: Request) {
   try {
-    await auth();
     await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("products.create");
@@ -72,38 +71,58 @@ export async function POST(request: Request) {
     const body = await request.json();
     const { name } = createBrandSchema.parse(body);
 
-    // Anti-duplicado por nome (case-insensitive) dentro da empresa.
-    const existing = await prisma.brand.findFirst({
-      where: { companyId, name: { equals: name, mode: "insensitive" } },
-      select: { id: true, name: true },
-    });
-    if (existing) {
-      throw new AppError(
-        ERROR_CODES.DUPLICATE,
-        "Já existe uma marca com esse nome",
-        409
-      );
-    }
-
-    // Gera code único por empresa (até 20 tentativas com sufixo).
+    // Brand NÃO tem @@unique([companyId, name]) (só em code), então a checagem
+    // de nome é feita dentro de uma transação para reduzir a janela TOCTOU; em
+    // corrida residual o P2002 do code dá o erro amigável. Category, por ter o
+    // unique de nome, não precisa disto.
     const baseCode = slugCode(name);
-    let code = baseCode;
-    for (let i = 1; i <= 20; i++) {
-      const clash = await prisma.brand.findFirst({
-        where: { companyId, code },
+
+    const brand = await prisma.$transaction(async (tx) => {
+      // Anti-duplicado por nome (case-insensitive) dentro da empresa.
+      const existing = await tx.brand.findFirst({
+        where: { companyId, name: { equals: name, mode: "insensitive" } },
         select: { id: true },
       });
-      if (!clash) break;
-      code = `${baseCode}-${i}`;
-    }
+      if (existing) {
+        throw new AppError(
+          ERROR_CODES.DUPLICATE,
+          "Já existe uma marca com esse nome",
+          409
+        );
+      }
 
-    const brand = await prisma.brand.create({
-      data: { companyId, name, code, active: true },
-      select: { id: true, name: true },
+      // Gera code único por empresa (até 20 tentativas com sufixo).
+      let code = baseCode;
+      for (let i = 1; i <= 20; i++) {
+        const clash = await tx.brand.findFirst({
+          where: { companyId, code },
+          select: { id: true },
+        });
+        if (!clash) break;
+        code = `${baseCode}-${i}`;
+      }
+
+      return tx.brand.create({
+        data: { companyId, name, code, active: true },
+        select: { id: true, name: true },
+      });
     });
 
     return createdResponse(brand);
   } catch (error) {
+    // P2002 (code duplicado em corrida concorrente) → mensagem amigável.
+    if (
+      error instanceof Prisma.PrismaClientKnownRequestError &&
+      error.code === "P2002"
+    ) {
+      return handleApiError(
+        new AppError(
+          ERROR_CODES.DUPLICATE,
+          "Já existe uma marca com esse nome",
+          409
+        )
+      );
+    }
     return handleApiError(error);
   }
 }
