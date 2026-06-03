@@ -692,6 +692,9 @@ function FinanceiroPage() {
                     <SelectItem value="PENDING">Pendente</SelectItem>
                     <SelectItem value="PAID">Pago</SelectItem>
                     <SelectItem value="OVERDUE">Vencido</SelectItem>
+                    {/* Contas a PAGAR (despesa/fornecedor) está fora do escopo
+                        da F3 "cancelados por papel" — essa decisão do dono cobre
+                        vendas/OS/parcelas a receber. Mantém aberto a todos. */}
                     <SelectItem value="CANCELED">Cancelado</SelectItem>
                   </SelectContent>
                 </Select>
