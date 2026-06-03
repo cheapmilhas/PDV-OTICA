@@ -282,9 +282,9 @@ if (didTransition && financeAccountId) {
 }
 ```
 
-- [ ] **Step 3: Remover o `catch {}` silencioso** (linhas ~392-394) — deixar o erro propagar (rollback da transação).
+- [ ] **Step 3: Remover AMBOS os `catch {}` silenciosos** — o do pagamento (~392-394) E o da reversão (~405-407). Os dois engolem falha de saldo (corrupção). Deixar o erro propagar (rollback da transação).
 
-- [ ] **Step 4: Na reversão (PAID→PENDING)**, chamar a `deleteAccountPayableExpenseEntry(tx, ...)` reescrita na F2.2.
+- [ ] **Step 4: Na reversão (PAID→PENDING)**, chamar a `deleteAccountPayableExpenseEntry(tx, ...)` reescrita na F2.2 (que re-credita condicional).
 
 - [ ] **Step 5: Verificar tsc**
 
@@ -457,15 +457,16 @@ describe("saleDisplayNumber", () => {
   it("formata número sequencial com 6 dígitos", () => {
     expect(saleDisplayNumber({ id: "cuid1", number: 123 })).toBe("#000123");
   });
-  it("cai no fallback do cuid quando number é null", () => {
-    expect(saleDisplayNumber({ id: "cmopsjhmXYZ", number: null })).toBe("#PSJHMXYZ".toUpperCase().slice(-8) === saleDisplayNumber({ id: "cmopsjhmXYZ", number: null }).slice(1) ? saleDisplayNumber({ id: "cmopsjhmXYZ", number: null }) : "#" + "cmopsjhmXYZ".slice(-8).toUpperCase());
+  it("cai no fallback (últimos 8 do id, maiúsculo) quando number é null", () => {
+    expect(saleDisplayNumber({ id: "cmopsjhmXYZ", number: null })).toBe("#PSJHMXYZ");
   });
-  it("fallback quando number é 0", () => {
-    expect(saleDisplayNumber({ id: "abcdef12345", number: 0 })).toBe("#" + "abcdef12345".slice(-8).toUpperCase());
+  it("fallback (#DEF12345) quando number é 0", () => {
+    // "abcdef12345" (11 chars) → slice(-8) = "def12345" → maiúsculo → "#DEF12345"
+    expect(saleDisplayNumber({ id: "abcdef12345", number: 0 })).toBe("#DEF12345");
   });
 });
 ```
-> Nota: simplificar a asserção do fallback no momento da escrita — o ponto é: `number>0` → `#000123`; senão `#` + últimos 8 do id em maiúsculo.
+> Asserções com literais fixos (sem expressões auto-referentes). 2ª: `"cmopsjhmXYZ".slice(-8)` = `"psjhmXYZ"` → `"#PSJHMXYZ"`. 3ª: `"abcdef12345".slice(-8)` = `"def12345"` → `"#DEF12345"`. Cobrem: number>0 → `#000123`; number null/0 → fallback cuid maiúsculo.
 
 - [ ] **Step 2: Rodar o teste e ver falhar**
 
@@ -503,74 +504,106 @@ git add src/lib/sale-number.ts src/lib/sale-number.test.ts
 git commit -m "feat(lib): helper saleDisplayNumber (#000123 com fallback cuid) + testes"
 ```
 
-### Task F4.4: Patchar os DOIS caminhos de criação de venda (coluna ainda nullable)
+> 🛑 **ORDEM DE DEPLOY (resolve o blocker da revisão).** Como migrations são MANUAIS e código+banco NÃO são atômicos, a sequência segura é em **DUAS migrations** com o código no meio. NÃO colapsar em uma só, NÃO deployar "juntos". A ordem real é:
+> 1. **Migration A** (`sale_number_nullable`): só `ADD COLUMN number INTEGER` (nullable). Schema: `number Int?`. Aplicar em prod ANTES do código.
+> 2. **Código F4.4** (numerar nos 2 caminhos): só escreve em coluna que já existe (nullable). Deployar.
+> 3. **Migration B** (`sale_number_tighten`): backfill + seed counter + SET NOT NULL + unique. Schema: `number Int` + `@@unique`. Aplicar DEPOIS do código já estar numerando (não há mais inserts com number null).
+> Assim nunca existe uma janela onde o código escreve numa coluna inexistente, nem onde o NOT NULL pega um insert sem número.
+
+### Task F4.4a: Migration A — adicionar coluna nullable
+
+**Files:**
+- Modify: `prisma/schema.prisma` (Sale: `number Int?`, SEM unique ainda, SEM default)
+- Create: `prisma/migrations/<timestamp>_sale_number_nullable/migration.sql`
+
+- [ ] **Step 1: Editar schema** — adicionar `number Int?` ao model Sale (nullable, sem `@@unique`, sem default).
+
+- [ ] **Step 2: Gerar migration only-create** e escrever o SQL mínimo:
+
+Run: `npx prisma migrate dev --create-only --name sale_number_nullable`
+
+```sql
+ALTER TABLE "Sale" ADD COLUMN "number" INTEGER;
+```
+
+- [ ] **Step 3: Aplicar em banco de teste**, `prisma generate`, confirmar `tsc`.
+
+Run: `npm run migrate:deploy` (banco de teste)
+Expected: sucesso.
+
+- [ ] **Step 4: Commit**
+
+```bash
+git add prisma/schema.prisma prisma/migrations
+git commit -m "feat(db): Sale.number nullable (migration A — coluna apenas, sem constraint)"
+```
+
+### Task F4.4b: Patchar os DOIS caminhos de criação de venda
 
 **Files:**
 - Modify: `src/services/sale.service.ts:625` (create)
 - Modify: `src/services/quote.service.ts:905` (convertToSale)
-- Reference: `src/lib/counter.ts:20` (`getNextSequence`)
-
-> ⚠️ Este passo vai antes da migration de NOT NULL. A coluna `Sale.number` ainda não existe no banco neste ponto — então primeiro adicionamos a coluna NULLABLE via schema+migration mínima, OU fazemos a Task F4.5 (migration completa) ANTES e o código depois. **Decisão (mais segura para deploy manual): ver ordem no CHECKPOINT.** Para desenvolvimento local, aplicar a migration F4.5 primeiro num banco de teste, depois validar este código.
+- Reference: `src/lib/counter.ts:20` (`getNextSequence(companyId, key, tx?)` — assinatura confirmada)
 
 - [ ] **Step 1: Em `sale.service.ts` create**, dentro da `$transaction` existente, antes do `tx.sale.create`, obter `const number = await getNextSequence(companyId, "sale", tx)` e passar `number` no `data` do create.
 
 - [ ] **Step 2: Em `quote.service.ts` convertToSale** (linha ~905), idem: `getNextSequence(companyId, "sale", tx)` e incluir `number` no `tx.sale.create`.
 
-- [ ] **Step 3: tsc** + **Commit**
+- [ ] **Step 3: tsc** (passa porque a coluna é `number Int?` opcional no client) + **Commit**
 
 ```bash
 git add src/services/sale.service.ts src/services/quote.service.ts
 git commit -m "feat(vendas): numerar venda via getNextSequence nos DOIS caminhos (create + convertToSale)"
 ```
 
-### Task F4.5: Migration Sale.number (coluna + backfill + counter + NOT NULL + unique)
+### Task F4.5: Migration B — backfill + counter + NOT NULL + unique
 
 **Files:**
-- Modify: `prisma/schema.prisma` (Sale model — adicionar `number Int` + `@@unique([companyId, number])`, SEM `@default`)
-- Create: `prisma/migrations/<timestamp>_sale_number/migration.sql`
+- Modify: `prisma/schema.prisma` (Sale: trocar `number Int?` → `number Int` + `@@unique([companyId, number])`, sem default)
+- Create: `prisma/migrations/<timestamp>_sale_number_tighten/migration.sql`
 
-- [ ] **Step 1: Editar schema** — adicionar ao model Sale: `number Int` e `@@unique([companyId, number])`. (Sem default.)
+- [ ] **Step 1: Editar schema** — `number Int` (não-nullable) + `@@unique([companyId, number])`.
 
-- [ ] **Step 2: Gerar a migration** mas NÃO deixar o Prisma autogerar o ALTER NOT NULL direto. Criar `migration.sql` manual com a sequência segura (tudo num arquivo, atômico):
+- [ ] **Step 2: Gerar migration only-create** e escrever o SQL manual (Prisma não deve autogerar o NOT NULL sobre tabela populada):
+
+Run: `npx prisma migrate dev --create-only --name sale_number_tighten`
 
 ```sql
--- 1. coluna nullable
-ALTER TABLE "Sale" ADD COLUMN "number" INTEGER;
-
--- 2. backfill determinístico por empresa (tiebreaker em id; inclui soft-deleted)
+-- backfill determinístico por empresa (tiebreaker em id; inclui soft-deleted)
 WITH ranked AS (
   SELECT id, ROW_NUMBER() OVER (
     PARTITION BY "companyId" ORDER BY "createdAt" ASC, "id" ASC
   ) AS rn
-  FROM "Sale"
+  FROM "Sale" WHERE "number" IS NULL
 )
-UPDATE "Sale" s SET "number" = ranked.rn FROM ranked WHERE s.id = ranked.id;
+UPDATE "Sale" s SET "number" = ranked.rn + COALESCE(
+  (SELECT MAX("number") FROM "Sale" x WHERE x."companyId" = s."companyId"), 0
+) FROM ranked WHERE s.id = ranked.id;
 
--- 3. seed do Counter key 'sale' no MAX por empresa
+-- seed/atualiza Counter key 'sale' no MAX por empresa
 INSERT INTO "Counter" ("id","companyId","key","value")
 SELECT gen_random_uuid()::text, "companyId", 'sale', MAX("number")
 FROM "Sale" GROUP BY "companyId"
-ON CONFLICT ("companyId","key") DO UPDATE SET "value" = EXCLUDED."value";
+ON CONFLICT ("companyId","key") DO UPDATE SET "value" = GREATEST("Counter"."value", EXCLUDED."value");
 
--- 4. NOT NULL
+-- NOT NULL
 ALTER TABLE "Sale" ALTER COLUMN "number" SET NOT NULL;
 
--- 5. unique
+-- unique
 CREATE UNIQUE INDEX "Sale_companyId_number_key" ON "Sale"("companyId","number");
 ```
+> Nota: o backfill numera só linhas com `number IS NULL` e soma ao MAX existente da empresa — assim convive com as vendas que o código F4.4b já numerou entre as duas migrations, sem colisão. O `GREATEST` no counter evita rebaixar o valor.
 
-- [ ] **Step 3: Aplicar em banco de TESTE primeiro** (cópia), validar que backfill numerou sem colisão e o counter ficou no MAX.
+- [ ] **Step 3: Aplicar em banco de teste**, validar backfill sem colisão e counter no MAX. `prisma generate` + `tsc`.
 
-Run: `npm run migrate:deploy` (no banco de teste)
+Run: `npm run migrate:deploy` (banco de teste)
 Expected: sucesso, sem erro de NOT NULL/unique.
 
-- [ ] **Step 4: Rodar `prisma generate`** e confirmar `tsc`.
-
-- [ ] **Step 5: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
 git add prisma/schema.prisma prisma/migrations
-git commit -m "feat(db): Sale.number sequencial — migration coluna+backfill+counter+notnull+unique (sem default)"
+git commit -m "feat(db): Sale.number tighten (migration B — backfill+counter+notnull+unique, sem default)"
 ```
 
 ### Task F4.6: Trocar exibição do cuid pelo helper
@@ -603,7 +636,7 @@ git commit -am "refactor(vendas): exibir #000123 via saleDisplayNumber em listas
 - [ ] tsc + test + build verdes
 - [ ] **Migration testada em cópia do banco** antes de prod (backfill sem colisão, counter no MAX).
 - [ ] **Smoke:** criar venda nova → recebe `#000NNN`; converter orçamento com lente → cria venda SEM erro (P2002/NOT NULL) e numerada; venda legada exibe fallback sem quebrar. Criar Marca/Categoria inline. PDF não mostra mais "000000".
-- [ ] **Ordem de deploy em prod:** deploy do código (F4.3/F4.4/F4.6 com coluna ainda inexistente NÃO — ver nota) → na prática: aplicar migration via `npm run migrate:deploy` e deploy do código juntos numa janela controlada, código que numera só vai ao ar com a coluna já existente. Validar em staging.
+- [ ] **Ordem de deploy em prod (3 passos, NÃO juntos):** (1) `migrate:deploy` da Migration A (coluna nullable) → (2) deploy do código F4.4b/F4.6 (numera + exibe) → (3) `migrate:deploy` da Migration B (backfill+NOT NULL+unique). Validar cada passo em staging. Nunca aplicar B antes do código estar numerando.
 - [ ] Aprovação do dono antes de F5.
 
 ---
