@@ -2150,6 +2150,7 @@ model BillingEvent {
   payload         Json
   processedAt     DateTime?
   error           String?
+  lastErrorAt     DateTime?
   retryCount      Int       @default(0)
   createdAt       DateTime  @default(now())
   company         Company?  @relation(fields: [companyId], references: [id])
