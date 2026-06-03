@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -75,6 +76,7 @@ const PAYMENT_METHOD_LABELS: Record<string, string> = {
 };
 
 function RelatorioVendasPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [startDate, setStartDate] = useState<Date>(new Date(new Date().getFullYear(), new Date().getMonth(), 1));
   const [endDate, setEndDate] = useState<Date>(new Date());
   const [data, setData] = useState<ReportData | null>(null);
@@ -108,6 +110,7 @@ function RelatorioVendasPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Relatório de Vendas",
       subtitle: "Vendas Consolidadas",
       period: { start: startDate, end: endDate },

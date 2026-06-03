@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -69,6 +70,7 @@ interface ReportData {
 }
 
 function RelatorioDREPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -82,6 +84,7 @@ function RelatorioDREPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "DRE Gerencial",
       subtitle: "Demonstrativo de Resultado do Exercício",
       period: { start: startDate, end: endDate },

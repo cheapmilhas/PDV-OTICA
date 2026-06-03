@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import {
@@ -196,6 +197,7 @@ function getRowColorByAge(ageRange: string): string {
 // ---- Main Component ----
 
 function BIPageContent() {
+  const { companyHeader } = useCompanySettings();
   // Date range: last 30 days default
   const [startDate, setStartDate] = useState<Date>(subDays(new Date(), 30));
   const [endDate, setEndDate] = useState<Date>(new Date());
@@ -348,6 +350,7 @@ function BIPageContent() {
     if (!biData) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Análise de Negócio (BI)",
       subtitle: `Dimensão: ${DIMENSION_TABS.find((t) => t.value === activeDimension)?.label}`,
       period: { start: startDate, end: endDate },

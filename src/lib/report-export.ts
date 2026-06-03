@@ -2,6 +2,7 @@
 
 import { format } from "date-fns";
 import { formatCurrency } from "@/lib/utils";
+import { drawPdfHeader, type CompanyHeaderData } from "@/lib/pdf-header";
 
 interface PDFColumn {
   header: string;
@@ -14,6 +15,9 @@ interface PDFExportOptions {
   title: string;
   subtitle?: string;
   period?: { start: Date; end: Date };
+  /** Cabeçalho da empresa no topo (logo+nome+CNPJ). Opcional — sem ele o PDF
+   *  mantém o layout antigo (só título), para não quebrar callers existentes. */
+  company?: CompanyHeaderData;
   sections: Array<{
     title: string;
     columns: PDFColumn[];
@@ -44,13 +48,19 @@ export async function exportToPDF(options: PDFExportOptions) {
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
 
-  // Header
+  // Cabeçalho da empresa (logo+nome+CNPJ) quando fornecido; empurra o título p/ baixo.
+  const headerOffset = options.company ? drawPdfHeader(doc, options.company) - 15 : 0;
+
+  // Título do relatório
+  const titleY = 18 + headerOffset;
   doc.setFontSize(16);
-  doc.text(options.title, pageWidth / 2, 18, { align: "center" });
+  doc.setFont("helvetica", "bold");
+  doc.text(options.title, pageWidth / 2, titleY, { align: "center" });
+  doc.setFont("helvetica", "normal");
 
   if (options.subtitle) {
     doc.setFontSize(10);
-    doc.text(options.subtitle, pageWidth / 2, 25, { align: "center" });
+    doc.text(options.subtitle, pageWidth / 2, titleY + 7, { align: "center" });
   }
 
   if (options.period) {
@@ -58,12 +68,14 @@ export async function exportToPDF(options: PDFExportOptions) {
     doc.text(
       `Período: ${format(options.period.start, "dd/MM/yyyy")} a ${format(options.period.end, "dd/MM/yyyy")}`,
       pageWidth / 2,
-      options.subtitle ? 31 : 25,
+      titleY + (options.subtitle ? 13 : 7),
       { align: "center" }
     );
   }
 
-  let startY = options.period ? (options.subtitle ? 38 : 32) : (options.subtitle ? 32 : 25);
+  let startY =
+    headerOffset +
+    (options.period ? (options.subtitle ? 38 : 32) : options.subtitle ? 32 : 25);
 
   // Sections
   for (const section of options.sections) {
