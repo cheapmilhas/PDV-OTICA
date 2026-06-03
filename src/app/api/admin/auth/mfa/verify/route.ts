@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin-session";
+import { getAdminSession } from "@/lib/admin-session";
 import { verifyTotp, generateRecoveryCodes, hashRecoveryCode } from "@/lib/totp";
 import { handleApiError } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
@@ -19,7 +19,10 @@ const verifySchema = z.object({ token: z.string().min(6).max(8) });
  */
 export async function POST(request: Request) {
   try {
-    const session = await requireAdmin();
+    const session = await getAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
     const { token } = verifySchema.parse(await request.json());
 
     const admin = await prisma.adminUser.findUnique({

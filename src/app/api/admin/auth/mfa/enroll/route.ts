@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import QRCode from "qrcode";
 import { prisma } from "@/lib/prisma";
-import { requireAdmin } from "@/lib/admin-session";
+import { getAdminSession } from "@/lib/admin-session";
 import { generateMfaSecret } from "@/lib/totp";
 import { handleApiError } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
@@ -21,7 +21,10 @@ const log = logger.child({ route: "admin/auth/mfa/enroll" });
  */
 export async function POST() {
   try {
-    const session = await requireAdmin();
+    const session = await getAdminSession();
+    if (!session) {
+      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+    }
 
     const admin = await prisma.adminUser.findUnique({
       where: { id: session.id },
