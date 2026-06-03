@@ -110,7 +110,7 @@ interface Filters {
 }
 
 function FinanceiroPage() {
-  const { hasPermission } = usePermissions();
+  const { hasPermission, canSeeCanceled } = usePermissions();
   // Estados para Contas a Pagar
   const [accountsPayable, setAccountsPayable] = useState<AccountPayable[]>([]);
   const [payableLoading, setPayableLoading] = useState(true);
@@ -1017,7 +1017,10 @@ function FinanceiroPage() {
                     <SelectItem value="PENDING">Pendente</SelectItem>
                     <SelectItem value="RECEIVED">Recebido</SelectItem>
                     <SelectItem value="OVERDUE">Vencido</SelectItem>
-                    <SelectItem value="CANCELED">Cancelado</SelectItem>
+                    {/* Cancelados só para admin/gerente (servidor também gateia) */}
+                    {canSeeCanceled && (
+                      <SelectItem value="CANCELED">Cancelado</SelectItem>
+                    )}
                   </SelectContent>
                 </Select>
                 <Input
