@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { DEFAULT_MESSAGES } from "@/lib/default-messages";
+import { missingMessageTemplates } from "@/lib/settings-templates";
 import type { CompanySettingsDTO } from "@/lib/validations/settings.schema";
 
 export const settingsService = {
@@ -22,6 +23,19 @@ export const settingsService = {
           messageBirthday: DEFAULT_MESSAGES.birthday,
           defaultQuoteValidDays: 15,
         },
+      });
+      return settings;
+    }
+
+    // Backfill de templates legados (drift de schema): registros criados antes
+    // das colunas de mensagem existirem ficaram com NULL e travavam os botões
+    // de WhatsApp (Agradecer/Orçamento/Lembrete/Aniversário). Preenche só o que
+    // falta, num único update — idempotente (após o 1º GET o patch fica vazio).
+    const patch = missingMessageTemplates(settings);
+    if (Object.keys(patch).length > 0) {
+      settings = await prisma.companySettings.update({
+        where: { companyId },
+        data: patch,
       });
     }
 
