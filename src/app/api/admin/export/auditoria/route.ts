@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { csvRow } from "@/lib/csv-safe";
+import { adminRateLimit } from "@/lib/rate-limit";
 
-export async function GET() {
+export async function GET(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
+
+  const limited = adminRateLimit("admin-export-auditoria", admin.id, request);
+  if (limited) return limited;
 
   const since = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000);
 

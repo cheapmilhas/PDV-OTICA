@@ -43,6 +43,38 @@ export function checkRateLimit(
 }
 
 /**
+ * Extrai o IP do cliente dos headers (x-forwarded-for / x-real-ip).
+ */
+export function clientIp(request: Request): string {
+  return (
+    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
+    request.headers.get("x-real-ip") ||
+    "unknown"
+  );
+}
+
+/**
+ * Rate-limit padrão para rotas administrativas sensíveis (exports,
+ * reset-password, seed, fim de impersonação, MFA enroll/verify). Chaveia por
+ * `<scope>:<adminId>:<ip>` para não punir um admin pelo IP de outro.
+ *
+ * Defaults conservadores (30 req / 5 min) — suficiente para uso humano normal,
+ * mas barra scripts/abuso. Sobrescreva `config` se a rota precisar de outro.
+ *
+ * NOTA: o limiter é in-memory por instância serverless (reseta no cold start),
+ * então é proteção contra burst, não contra ataque distribuído. Para isso seria
+ * preciso um store compartilhado (Redis/Upstash) — dívida conhecida.
+ */
+export function adminRateLimit(
+  scope: string,
+  adminId: string,
+  request: Request,
+  config: RateLimitConfig = { maxRequests: 30, windowMs: 5 * 60 * 1000 }
+): Response | null {
+  return rateLimitResponse(`${scope}:${adminId}:${clientIp(request)}`, config);
+}
+
+/**
  * Helper para usar em API routes do Next.js.
  * Retorna null se permitido, ou Response com 429 se bloqueado.
  */

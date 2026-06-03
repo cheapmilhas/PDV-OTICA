@@ -165,6 +165,37 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         console.log("🔄 JWT callback - Update trigger");
       }
 
+      // Q8.3: revogação REAL de impersonação. O token de impersonação é
+      // hand-encoded com a claim `impersonation.sessionId` e antes só expirava
+      // pelo TTL do JWT (30min) — encerrar/expirar a sessão no banco era
+      // cosmético. Aqui revalidamos a ImpersonationSession a cada passagem:
+      // se foi encerrada (endedAt) ou expirou (expiresAt), invalida o token
+      // (return null → próximo acesso cai pra login). Janela curta porque é
+      // sensível e a sessão é curta; falha transitória de DB NÃO desloga.
+      const impersonation = (token as any).impersonation as
+        | { sessionId?: string }
+        | undefined;
+      if (impersonation?.sessionId) {
+        const IMP_REVALIDATE_TTL_MS = 60 * 1000; // 1 min
+        const lastImpCheck = (token as any).impRevalidatedAt as number | undefined;
+        if (!lastImpCheck || Date.now() - lastImpCheck > IMP_REVALIDATE_TTL_MS) {
+          try {
+            const imp = await prisma.impersonationSession.findUnique({
+              where: { id: impersonation.sessionId },
+              select: { endedAt: true, expiresAt: true },
+            });
+            if (!imp || imp.endedAt !== null || imp.expiresAt.getTime() < Date.now()) {
+              // Sessão encerrada/expirada/inexistente → revoga de verdade.
+              return null;
+            }
+            (token as any).impRevalidatedAt = Date.now();
+          } catch (err) {
+            // Falha transitória de DB: não desloga (evita falso logout).
+            console.error("Revalidação de impersonação falhou (não-fatal):", err);
+          }
+        }
+      }
+
       // M12: revalida role/existência do usuário no banco periodicamente. A
       // sessão dura 30 dias e o role vivia só no token — rebaixar/demitir não
       // tinha efeito até relogar. Revalida a cada REVALIDATE_TTL_MS buscando o

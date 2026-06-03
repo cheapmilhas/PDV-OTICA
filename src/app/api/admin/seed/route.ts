@@ -4,6 +4,7 @@ import crypto from "node:crypto";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
+import { adminRateLimit } from "@/lib/rate-limit";
 
 const log = logger.child({ route: "admin/seed" });
 
@@ -12,7 +13,7 @@ const log = logger.child({ route: "admin/seed" });
  * Seeds: admin user, planos, subscription da empresa existente, fix onboarding.
  * Requer autenticação admin.
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     if (process.env.SEED_ENABLED !== "1") {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
@@ -28,6 +29,9 @@ export async function POST() {
     if (session.role !== "SUPER_ADMIN") {
       return NextResponse.json({ error: "Permissão insuficiente" }, { status: 403 });
     }
+
+    const limited = adminRateLimit("admin-seed", session.id, request);
+    if (limited) return limited;
 
     const results: string[] = [];
 

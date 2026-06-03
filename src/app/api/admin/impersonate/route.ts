@@ -89,6 +89,15 @@ export async function POST(request: Request) {
 
     const expiresAt = new Date(Date.now() + IMPERSONATION_TTL_MS);
 
+    // Q8.3: encerra sessões de impersonação ANTERIORES ainda abertas deste admin
+    // antes de abrir a nova. Junto com a revogação no jwt callback (auth.ts),
+    // garante que só a sessão mais recente fica válida (tokens antigos viram
+    // inválidos no próximo acesso, não esperam o TTL de 30min).
+    await prisma.impersonationSession.updateMany({
+      where: { adminUserId: admin.id, endedAt: null },
+      data: { endedAt: new Date() },
+    });
+
     // Criar sessão de impersonação
     const session = await prisma.impersonationSession.create({
       data: {
