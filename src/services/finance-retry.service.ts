@@ -8,7 +8,8 @@
  * 4. Cada call: busca PENDING com nextRetryAt <= now, max 50, tenta gerar.
  * 5. Sucesso → status=SUCCESS, succeededAt=now.
  * 6. Falha → incrementa attempt, calcula próximo retry com backoff exponencial.
- * 7. Após max 5 attempts → status=FAILED, alerta no Sentry pra ação manual.
+ * 7. Após max 5 attempts → status=ABANDONED (Q8.2.2: esgotou o backoff, requer
+ *    correção manual — distinto de um FAILED genérico), alerta no Sentry.
  */
 
 import { prisma } from "@/lib/prisma";
@@ -81,7 +82,7 @@ export async function processRetries(): Promise<ProcessRetriesResult> {
         await prisma.financeEntryRetry.update({
           where: { id: retry.id },
           data: {
-            status: "FAILED",
+            status: "ABANDONED",
             attempt: newAttempt,
             failedAt: new Date(),
             lastError: errorMessage,

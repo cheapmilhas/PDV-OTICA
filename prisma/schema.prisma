@@ -2870,6 +2870,7 @@ enum FinanceEntryRetryStatus {
   PENDING
   SUCCESS
   FAILED
+  ABANDONED // Q8.2.2: esgotou as tentativas automáticas (backoff completo) — requer correção manual
 }
 
 model InventoryLot {
