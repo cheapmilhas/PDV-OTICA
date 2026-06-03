@@ -2064,6 +2064,8 @@ model Subscription {
   discountReason       String?
   discountExpiresAt    DateTime?
   billingSyncPending   Boolean               @default(false)
+  expectedAsaasValue   Int? // centavos: valor esperado no Asaas (gravado em falha de sync; usado pela reconciliação F4)
+  expectedAsaasCycle   BillingCycle? // ciclo esperado no Asaas (só quando o ciclo mudou)
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   invoices             Invoice[]

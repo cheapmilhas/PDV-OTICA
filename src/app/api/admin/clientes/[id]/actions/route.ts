@@ -163,7 +163,13 @@ export async function POST(
               });
               await prisma.subscription.update({
                 where: { id: subscription.id },
-                data: { billingSyncPending: true },
+                data: {
+                  billingSyncPending: true,
+                  // Esperado materializado p/ reconciliação (F4): centavos, sem desconto
+                  // (é o que foi enviado ao Asaas). change_plan não muda o ciclo.
+                  expectedAsaasValue: Math.round(value * 100),
+                  expectedAsaasCycle: null,
+                },
               });
             } catch (recErr) {
               log.error("Falha ao registrar billingSyncPending (change_plan)", {
@@ -296,7 +302,13 @@ export async function POST(
               });
               await prisma.subscription.update({
                 where: { id: subscription.id },
-                data: { billingSyncPending: true },
+                data: {
+                  billingSyncPending: true,
+                  // Esperado materializado p/ reconciliação (F4): value+cycle (o ciclo
+                  // mudou aqui). Centavos, sem desconto (o que foi enviado ao Asaas).
+                  expectedAsaasValue: Math.round(value * 100),
+                  expectedAsaasCycle: cycle as "MONTHLY" | "YEARLY",
+                },
               });
             } catch (recErr) {
               log.error("Falha ao registrar billingSyncPending (change_billing_cycle)", {
