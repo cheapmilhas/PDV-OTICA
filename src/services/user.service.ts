@@ -120,10 +120,12 @@ export class UserService {
    * Cria novo usuário
    */
   async create(data: CreateUserDTO, companyId: string) {
-    // Verifica duplicação de email
+    // Q8.4: duplicação de email é checada DENTRO da empresa (email é único
+    // por-empresa agora, não global — mesmo email pode existir em outra ótica).
     const existing = await prisma.user.findFirst({
       where: {
-        email: data.email,
+        companyId,
+        email: { equals: data.email, mode: "insensitive" },
       },
     });
 
@@ -177,11 +179,12 @@ export class UserService {
     // Verifica se existe
     await this.getById(id, companyId, true);
 
-    // Verifica duplicação de email (se estiver alterando)
+    // Verifica duplicação de email (se estiver alterando) — DENTRO da empresa.
     if (data.email) {
       const existing = await prisma.user.findFirst({
         where: {
-          email: data.email,
+          companyId,
+          email: { equals: data.email, mode: "insensitive" },
           id: { not: id },
         },
       });

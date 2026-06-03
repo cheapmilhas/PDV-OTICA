@@ -45,24 +45,33 @@ async function main() {
   // 3. Criar User (senha: admin123)
   const passwordHash = await bcrypt.hash("admin123", 10);
 
-  const user = await prisma.user.upsert({
-    where: { email: "admin@pdvotica.com" },
-    update: {
-      passwordHash, // Atualiza a senha se o usuário já existe
-      name: "Admin Mock",
-      role: "ADMIN",
-      active: true,
-    },
-    create: {
-      id: "mock-user-id",
-      companyId: company.id,
-      name: "Admin Mock",
-      email: "admin@pdvotica.com",
-      passwordHash,
-      role: "ADMIN",
-      active: true,
-    },
+  // email deixou de ser @unique global (Q8.4) → não dá pra upsert por email.
+  // Busca por (companyId,email) e cria/atualiza por id.
+  const existing = await prisma.user.findFirst({
+    where: { companyId: company.id, email: "admin@pdvotica.com" },
+    select: { id: true },
   });
+  const user = existing
+    ? await prisma.user.update({
+        where: { id: existing.id },
+        data: {
+          passwordHash, // Atualiza a senha se o usuário já existe
+          name: "Admin Mock",
+          role: "ADMIN",
+          active: true,
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          id: "mock-user-id",
+          companyId: company.id,
+          name: "Admin Mock",
+          email: "admin@pdvotica.com",
+          passwordHash,
+          role: "ADMIN",
+          active: true,
+        },
+      });
 
   console.log("✅ User created:", user.name);
 

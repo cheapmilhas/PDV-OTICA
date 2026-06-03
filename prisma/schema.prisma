@@ -292,7 +292,13 @@ model User {
   id                         String                   @id @default(cuid())
   companyId                  String
   name                       String
-  email                      String                   @unique
+  // Q8.4: único POR EMPRESA (não global) — permite o mesmo email/login em
+  // empresas diferentes (dono com 2 lojas, funcionário em 2 óticas). A unicidade
+  // real é um índice ÚNICO case-insensitive (companyId, lower(email)) criado via
+  // migration manual (mesmo padrão de Customer M7) — NÃO declarado como @@unique
+  // aqui de propósito, senão o Prisma esperaria um índice case-sensitive e
+  // acusaria drift. Aplicação trata P2002 na criação; login em src/auth.ts.
+  email                      String
   passwordHash               String
   role                       UserRole
   active                     Boolean                  @default(true)
@@ -344,6 +350,7 @@ model User {
   transfersApproved          StockTransfer[]          @relation("TransferApprover")
   transfersRequested         StockTransfer[]          @relation("TransferRequester")
 
+  @@index([companyId, email])
   @@index([companyId, role])
   @@index([companyId, name])
 }
