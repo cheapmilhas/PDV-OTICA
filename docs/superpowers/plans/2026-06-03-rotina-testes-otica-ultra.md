@@ -569,16 +569,17 @@ git commit -m "feat(vendas): numerar venda via getNextSequence nos DOIS caminhos
 Run: `npx prisma migrate dev --create-only --name sale_number_tighten`
 
 ```sql
--- backfill determinístico por empresa (tiebreaker em id; inclui soft-deleted)
+-- RENUMERA TODAS as linhas por createdAt (cronologia correta: #1 = venda mais antiga).
+-- Inclui as poucas vendas já numeradas pelo código entre as 2 migrations — elas são
+-- reescritas para a posição cronológica certa. Como o unique ainda NÃO existe neste ponto,
+-- a reescrita em massa não colide. Tiebreaker em id; inclui soft-deleted.
 WITH ranked AS (
   SELECT id, ROW_NUMBER() OVER (
     PARTITION BY "companyId" ORDER BY "createdAt" ASC, "id" ASC
   ) AS rn
-  FROM "Sale" WHERE "number" IS NULL
+  FROM "Sale"
 )
-UPDATE "Sale" s SET "number" = ranked.rn + COALESCE(
-  (SELECT MAX("number") FROM "Sale" x WHERE x."companyId" = s."companyId"), 0
-) FROM ranked WHERE s.id = ranked.id;
+UPDATE "Sale" s SET "number" = ranked.rn FROM ranked WHERE s.id = ranked.id;
 
 -- seed/atualiza Counter key 'sale' no MAX por empresa
 INSERT INTO "Counter" ("id","companyId","key","value")
@@ -589,10 +590,10 @@ ON CONFLICT ("companyId","key") DO UPDATE SET "value" = GREATEST("Counter"."valu
 -- NOT NULL
 ALTER TABLE "Sale" ALTER COLUMN "number" SET NOT NULL;
 
--- unique
+-- unique (criado DEPOIS da renumeração em massa)
 CREATE UNIQUE INDEX "Sale_companyId_number_key" ON "Sale"("companyId","number");
 ```
-> Nota: o backfill numera só linhas com `number IS NULL` e soma ao MAX existente da empresa — assim convive com as vendas que o código F4.4b já numerou entre as duas migrations, sem colisão. O `GREATEST` no counter evita rebaixar o valor.
+> Nota: renumera TODAS as linhas por `createdAt` (não só as NULL) para preservar a cronologia — venda #1 é a mais antiga da empresa. As pouquíssimas vendas numeradas pelo código na janela de deploy são reescritas para a posição certa; seguro porque o índice unique só é criado APÓS o UPDATE em massa. `GREATEST` no counter garante que o próximo número continue do topo.
 
 - [ ] **Step 3: Aplicar em banco de teste**, validar backfill sem colisão e counter no MAX. `prisma generate` + `tsc`.
 
