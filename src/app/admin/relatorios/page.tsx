@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity } from "lucide-react";
 import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
+import { ReconcileBillingButton } from "./ReconcileBillingButton";
 
 export default async function RelatoriosPage() {
   await requireAdmin();
@@ -57,9 +58,12 @@ export default async function RelatoriosPage() {
 
   return (
     <div className="p-6 text-white">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Relatórios</h1>
-        <p className="text-gray-400">Gere relatórios e exporte dados do sistema</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Relatórios</h1>
+          <p className="text-gray-400">Gere relatórios e exporte dados do sistema</p>
+        </div>
+        <ReconcileBillingButton />
       </div>
 
       {/* KPIs */}
