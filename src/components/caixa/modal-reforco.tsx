@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -11,6 +12,13 @@ import { useToast } from "@/hooks/use-toast";
 import { ArrowUpCircle, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 
+const MOTIVO_LABELS: Record<string, string> = {
+  troco: "Reposição de Troco",
+  saque: "Saque Bancário",
+  correcao: "Correção de Caixa",
+  outros: "Outros",
+};
+
 interface ModalReforcoProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
@@ -18,6 +26,7 @@ interface ModalReforcoProps {
 
 export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
   const { toast } = useToast();
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     valor: "",
@@ -27,25 +36,58 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    const amount = Number(formData.valor);
+    if (!amount || amount <= 0) {
+      toast({
+        title: "Valor inválido",
+        description: "Informe um valor maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
-    // Simular reforço
-    setTimeout(() => {
+    try {
+      const motivoLabel = MOTIVO_LABELS[formData.motivo] ?? formData.motivo;
+      const note = formData.observacoes
+        ? `${motivoLabel} — ${formData.observacoes}`
+        : motivoLabel;
+
+      const res = await fetch("/api/cash/movements", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ type: "SUPPLY", amount, method: "CASH", note }),
+      });
+
+      const json: { error?: { message?: string } } = await res.json();
+
+      if (!res.ok) {
+        toast({
+          title: "Erro ao registrar reforço",
+          description: json?.error?.message ?? "Tente novamente.",
+          variant: "destructive",
+        });
+        return;
+      }
+
       toast({
         title: "Reforço registrado!",
-        description: `${formatCurrency(Number(formData.valor))} adicionado ao caixa.`,
+        description: `R$ ${amount.toFixed(2)} adicionado ao caixa.`,
       });
 
-      // Limpar formulário
-      setFormData({
-        valor: "",
-        motivo: "troco",
-        observacoes: "",
-      });
-
-      setLoading(false);
+      setFormData({ valor: "", motivo: "troco", observacoes: "" });
       onOpenChange(false);
-    }, 1000);
+    } catch {
+      toast({
+        title: "Erro de conexão",
+        description: "Não foi possível conectar ao servidor. Tente novamente.",
+        variant: "destructive",
+      });
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
@@ -68,7 +110,7 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Operador:</span>
-                <span className="font-medium">Carlos Vendedor</span>
+                <span className="font-medium">{session?.user?.name ?? "Operador"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Data/Hora:</span>
