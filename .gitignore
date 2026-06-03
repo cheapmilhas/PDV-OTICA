@@ -62,3 +62,6 @@ next-env.d.ts
 
 # Brainstorming visual companion (não versionar)
 .superpowers/
+
+# Lock de scheduled tasks (por-sessão, não versionar)
+.claude/scheduled_tasks.lock
