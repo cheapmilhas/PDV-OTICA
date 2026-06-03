@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useMemo, useCallback, useRef, useEffect } from "react";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -65,6 +66,7 @@ interface SaleCustomer {
 
 interface Sale {
   id: string;
+  number?: number | null;
   total: number;
   completedAt: string;
   customer: SaleCustomer | null;
@@ -416,7 +418,7 @@ function DevolucoesPageContent() {
                   >
                     <div className="min-w-0 flex-1">
                       <p className="font-medium truncate">
-                        Venda #{sale.id.slice(-8).toUpperCase()}
+                        Venda {saleDisplayNumber(sale)}
                       </p>
                       <p className="text-xs text-muted-foreground truncate">
                         {sale.customer?.name || "Cliente não identificado"}
@@ -465,7 +467,7 @@ function DevolucoesPageContent() {
               <div className="flex items-center justify-between">
                 <CardTitle className="flex items-center gap-2">
                   <ShoppingBag className="h-5 w-5" />
-                  Venda #{selectedSale.id.slice(-8).toUpperCase()}
+                  Venda {saleDisplayNumber(selectedSale)}
                 </CardTitle>
                 <Button
                   variant="ghost"
@@ -482,9 +484,9 @@ function DevolucoesPageContent() {
             <CardContent>
               <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 md:grid-cols-4">
                 <div>
-                  <p className="text-sm text-muted-foreground">ID</p>
+                  <p className="text-sm text-muted-foreground">Venda</p>
                   <p className="font-medium">
-                    {selectedSale.id.slice(-8).toUpperCase()}
+                    {saleDisplayNumber(selectedSale)}
                   </p>
                 </div>
                 <div>
@@ -732,7 +734,7 @@ function DevolucoesPageContent() {
             <div className="flex justify-between">
               <span className="text-muted-foreground">Venda</span>
               <span className="font-medium">
-                #{selectedSale?.id.slice(-8).toUpperCase()}
+                {selectedSale ? saleDisplayNumber(selectedSale) : ""}
               </span>
             </div>
             <div className="flex justify-between">

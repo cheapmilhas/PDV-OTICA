@@ -703,7 +703,7 @@ export class SaleService {
 
       // 5. SalePayments + auto-fee + CashMovement (filtrado) + AR + CR (helper)
       await applyPaymentsInTx(tx, {
-        sale: { id: newSale.id, branchId, companyId },
+        sale: { id: newSale.id, number: newSale.number, branchId, companyId },
         payments,
         userId,
         openShiftId: openShift.id,

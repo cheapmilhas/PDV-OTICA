@@ -950,7 +950,7 @@ export class QuoteService {
 
       // 9.4. SalePayments + auto-fee + CashMovement (filtrado IN_CASH) + AR + CR (helper)
       await applyPaymentsInTx(tx, {
-        sale: { id: sale.id, branchId, companyId },
+        sale: { id: sale.id, number: sale.number, branchId, companyId },
         payments,
         userId,
         openShiftId: openShift.id,

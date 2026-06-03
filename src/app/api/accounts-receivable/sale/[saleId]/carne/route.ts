@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { saleDisplayNumber } from "@/lib/sale-number";
 
 /**
  * GET /api/accounts-receivable/sale/[saleId]/carne
@@ -56,7 +57,7 @@ export async function GET(
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Carnê — Venda ${sale.id.slice(0, 8)}</title>
+<title>Carnê — Venda ${saleDisplayNumber(sale)}</title>
 <style>
   @page { size: A4; margin: 12mm; }
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #1a1a1a; font-size: 13px; }
@@ -98,7 +99,7 @@ export async function GET(
     </div>
     <div>
       <div class="label">Venda</div>
-      <div class="value">#${sale.id.slice(0, 8)}</div>
+      <div class="value">${saleDisplayNumber(sale)}</div>
       <div class="small">Filial: ${sale.branch.name}</div>
     </div>
   </div>
@@ -175,7 +176,7 @@ ${installments
       </div>
 
       <div style="margin-top:16px">
-        <div class="barra">Venda #${sale.id.slice(0, 8)} — Parcela ${inst.installmentNumber}/${inst.totalInstallments}</div>
+        <div class="barra">Venda ${saleDisplayNumber(sale)} — Parcela ${inst.installmentNumber}/${inst.totalInstallments}</div>
       </div>
 
       <p class="small" style="margin-top:16px">

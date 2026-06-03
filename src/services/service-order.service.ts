@@ -6,6 +6,7 @@ import { dateOnlyToUTC } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } from "@/lib/validations/service-order.schema";
 import { getNextSequence } from "@/lib/counter";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import { resolveRootOrderId } from "@/lib/os-root";
 
 /**
@@ -338,6 +339,7 @@ export class ServiceOrderService {
       where: { id: saleId, companyId },
       select: {
         id: true,
+        number: true,
         customerId: true,
         branchId: true,
         serviceOrderId: true,
@@ -396,7 +398,7 @@ export class ServiceOrderService {
           branchId,
           status: "DRAFT",
           createdByUserId: userId,
-          notes: `Gerada automaticamente da venda #${sale.id.substring(0, 8)}`,
+          notes: `Gerada automaticamente da venda ${saleDisplayNumber(sale)}`,
         },
       });
 
@@ -419,7 +421,7 @@ export class ServiceOrderService {
           serviceOrderId: newOrder.id,
           action: "CREATED",
           toStatus: "DRAFT",
-          note: `OS gerada automaticamente da venda #${sale.id.substring(0, 8)}`,
+          note: `OS gerada automaticamente da venda ${saleDisplayNumber(sale)}`,
           changedByUserId: userId,
         },
       });

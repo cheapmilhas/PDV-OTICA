@@ -1,6 +1,7 @@
 import { jwtVerify } from "jose";
 import { notFound } from "next/navigation";
 import { prisma } from "@/lib/prisma";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
@@ -102,7 +103,7 @@ export default async function ReceiptPage({
           <div>
             <h2 className="text-lg font-semibold">Recibo de venda</h2>
             <p className="text-sm text-slate-600">
-              Nº {sale.id.slice(-8).toUpperCase()} · Emitido em {issuedAt}
+              {saleDisplayNumber(sale)} · Emitido em {issuedAt}
             </p>
           </div>
           {sale.customer && (

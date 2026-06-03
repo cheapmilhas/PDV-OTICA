@@ -18,6 +18,7 @@ import { Prisma, type PaymentMethod, type Sale, type SalePayment } from "@prisma
 import { addDays } from "date-fns";
 import { calculateInstallments } from "@/lib/installment-utils";
 import { dateOnlyToUTC } from "@/lib/date-utils";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { atomicStockDebit } from "@/services/stock.service";
 import { cashbackService } from "@/services/cashback.service";
@@ -145,7 +146,7 @@ export interface ApplyPaymentsResult {
 export async function applyPaymentsInTx(
   tx: Tx,
   params: {
-    sale: Pick<Sale, "id" | "branchId" | "companyId">;
+    sale: Pick<Sale, "id" | "branchId" | "companyId" | "number">;
     payments: PaymentInput[];
     userId: string;
     openShiftId: string;
@@ -230,7 +231,7 @@ export async function applyPaymentsInTx(
           originId: salePayment.id,
           salePaymentId: salePayment.id,
           createdByUserId: userId,
-          note: note || `Venda #${sale.id.substring(0, 8)}`,
+          note: note || `Venda ${saleDisplayNumber(sale)}`,
         },
       });
     }
@@ -250,7 +251,7 @@ export async function applyPaymentsInTx(
             companyId: sale.companyId,
             customerId,
             saleId: sale.id,
-            description: `Parcela ${inst.installmentNumber}/${installments.length} - Venda #${sale.id.substring(0, 8)}`,
+            description: `Parcela ${inst.installmentNumber}/${installments.length} - Venda ${saleDisplayNumber(sale)}`,
             amount: inst.amount,
             dueDate: inst.dueDate,
             installmentNumber: inst.installmentNumber,
@@ -273,7 +274,7 @@ export async function applyPaymentsInTx(
           companyId: sale.companyId,
           customerId,
           saleId: sale.id,
-          description: `Saldo a Receber - Venda #${sale.id.substring(0, 8)} - Pagamento na entrega`,
+          description: `Saldo a Receber - Venda ${saleDisplayNumber(sale)} - Pagamento na entrega`,
           amount: payment.amount,
           dueDate,
           installmentNumber: 1,
