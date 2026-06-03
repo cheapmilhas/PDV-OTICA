@@ -13,6 +13,32 @@ import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { requireWriteAccess } from "@/lib/subscription";
+import { prisma } from "@/lib/prisma";
+import { hashPayload } from "@/lib/idempotency";
+
+/** Serializa Decimals de uma venda (com itens e pagamentos) para number. */
+function serializeSale(sale: Awaited<ReturnType<typeof saleService.create>>) {
+  return {
+    ...sale,
+    subtotal: Number(sale.subtotal),
+    discountTotal: Number(sale.discountTotal),
+    total: Number(sale.total),
+    agreementDiscount: sale.agreementDiscount ? Number(sale.agreementDiscount) : null,
+    items: sale.items.map((item: any) => ({
+      ...item,
+      unitPrice: Number(item.unitPrice),
+      discount: Number(item.discount),
+      lineTotal: Number(item.lineTotal),
+      costPrice: Number(item.costPrice),
+    })),
+    payments: sale.payments.map((payment: any) => ({
+      ...payment,
+      amount: Number(payment.amount),
+    })),
+    // Explícito (além do ...sale) para o PDV avisar a OS gerada.
+    serviceOrder: (sale as any).serviceOrder ?? null,
+  };
+}
 
 /**
  * GET /api/sales
@@ -130,6 +156,37 @@ export async function POST(request: Request) {
 
     const data = validation.data;
 
+    // Q8.2.3: idempotência server-side. Se o cliente enviar Idempotency-Key e
+    // repetir o POST (duplo-clique / retry de rede), retornamos a venda já criada
+    // em vez de duplicar. Hash do payload detecta reuso indevido da mesma key.
+    const idempKey = request.headers.get("idempotency-key")?.trim() || null;
+    let payloadHash: string | null = null;
+    if (idempKey) {
+      payloadHash = hashPayload(data);
+      const existingIdem = await prisma.saleIdempotency.findUnique({
+        where: { companyId_key: { companyId, key: idempKey } },
+      });
+      if (existingIdem) {
+        if (existingIdem.payloadHash !== payloadHash) {
+          return NextResponse.json(
+            {
+              success: false,
+              error: {
+                code: "IDEMPOTENCY_KEY_CONFLICT",
+                message: "Idempotency-Key reutilizada com payload diferente.",
+              },
+            },
+            { status: 422 },
+          );
+        }
+        const existingSale = await saleService.getById(existingIdem.saleId, companyId);
+        if (existingSale) {
+          return createdResponse(serializeSale(existingSale));
+        }
+        // Venda referenciada sumiu (improvável): segue e recria abaixo.
+      }
+    }
+
     // Segurança multi-tenant: branchId deve pertencer à empresa do usuário
     await validateBranchOwnership(data.branchId, companyId);
 
@@ -139,31 +196,25 @@ export async function POST(request: Request) {
     // Cria venda via service (transação: venda + itens + pagamentos + estoque)
     const sale = await saleService.create(sanitized, companyId, userId);
 
-    // Serializa Decimals para number
-    const serializedSale = {
-      ...sale,
-      subtotal: Number(sale.subtotal),
-      discountTotal: Number(sale.discountTotal),
-      total: Number(sale.total),
-      agreementDiscount: sale.agreementDiscount ? Number(sale.agreementDiscount) : null,
-      items: sale.items.map((item: any) => ({
-        ...item,
-        unitPrice: Number(item.unitPrice),
-        discount: Number(item.discount),
-        lineTotal: Number(item.lineTotal),
-        costPrice: Number(item.costPrice),
-      })),
-      payments: sale.payments.map((payment: any) => ({
-        ...payment,
-        amount: Number(payment.amount),
-      })),
-      // Explícito (além do ...sale) para o PDV avisar a OS gerada — sobrevive a
-      // futuras refatorações da serialização.
-      serviceOrder: (sale as any).serviceOrder ?? null,
-    };
+    // Q8.2.3: registra a chave de idempotência (best-effort). Race de duplo POST
+    // simultâneo: o @@unique(companyId,key) faz a 2ª gravação falhar (P2002) — a
+    // venda já foi criada por este request, então ignoramos o erro do registro.
+    if (idempKey && payloadHash) {
+      await prisma.saleIdempotency
+        .create({
+          data: {
+            companyId,
+            key: idempKey,
+            saleId: sale.id,
+            payloadHash,
+            expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
+          },
+        })
+        .catch(() => {});
+    }
 
     // Retorna 201 Created
-    return createdResponse(serializedSale);
+    return createdResponse(serializeSale(sale));
   } catch (error) {
     return handleApiError(error);
   }

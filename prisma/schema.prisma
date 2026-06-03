@@ -1168,6 +1168,7 @@ model Sale {
   reservations         StockReservation[]
   warranties           Warranty[]
   cardReceivables      CardReceivable[]
+  idempotencyKeys      SaleIdempotency[]
 
   @@index([companyId, branchId, createdAt])
   @@index([customerId, createdAt])
@@ -1175,6 +1176,23 @@ model Sale {
   @@index([agreementId])
   @@index([status, completedAt])
   @@index([companyId, completedAt])
+}
+
+/// Q8.2.3: idempotência server-side de POST /api/sales. Um Idempotency-Key
+/// repetido (duplo-clique / retry de rede) retorna a venda já criada em vez de
+/// duplicar. payloadHash detecta reuso indevido da mesma key com payload diferente.
+model SaleIdempotency {
+  id          String   @id @default(cuid())
+  companyId   String
+  key         String
+  saleId      String
+  payloadHash String
+  createdAt   DateTime @default(now())
+  expiresAt   DateTime
+  sale        Sale     @relation(fields: [saleId], references: [id])
+
+  @@unique([companyId, key])
+  @@index([expiresAt])
 }
 
 model SaleItem {
