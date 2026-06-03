@@ -1119,6 +1119,9 @@ model QuoteItem {
 model Sale {
   id                   String               @id @default(cuid())
   companyId            String
+  // Número sequencial de exibição por empresa (#000123). Nullable na Migration A;
+  // backfill + NOT NULL + @@unique([companyId, number]) vêm na Migration B.
+  number               Int?
   branchId             String
   customerId           String?
   serviceOrderId       String?              @unique
