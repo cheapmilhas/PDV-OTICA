@@ -11,7 +11,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@
 import { Switch } from "@/components/ui/switch";
 import { SupplierSelect } from "@/components/supplier-select";
 import toast from "react-hot-toast";
-import { ArrowLeft } from "lucide-react";
+import { ArrowLeft, Plus } from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
 import Link from "next/link";
 import { calculateMargin } from "@/lib/validations/product.schema";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -21,6 +28,11 @@ function NovoProdutoPageContent() {
   const [loading, setLoading] = useState(false);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
+  // Criação inline de Marca/Categoria (padrão SupplierSelect, versão só-nome).
+  const [quickCreate, setQuickCreate] = useState<null | "brand" | "category">(null);
+  const [quickName, setQuickName] = useState("");
+  const [quickSaving, setQuickSaving] = useState(false);
 
   const [formData, setFormData] = useState({
     type: "",
@@ -80,6 +92,50 @@ function NovoProdutoPageContent() {
     };
     loadData();
   }, []);
+
+  // Cria Marca ou Categoria por nome, anexa à lista e já seleciona no form.
+  const handleQuickCreate = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const kind = quickCreate;
+    const name = quickName.trim();
+    if (!kind || !name) return;
+
+    setQuickSaving(true);
+    try {
+      const url = kind === "brand" ? "/api/brands" : "/api/categories";
+      const res = await fetch(url, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ name }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => ({}));
+        throw new Error(err.error?.message || "Erro ao criar");
+      }
+      const { data: created } = await res.json();
+
+      if (kind === "brand") {
+        setBrands((prev) =>
+          [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+        );
+        setFormData((prev) => ({ ...prev, brandId: created.id }));
+        toast.success(`Marca ${created.name} criada`);
+      } else {
+        setCategories((prev) =>
+          [...prev, created].sort((a, b) => a.name.localeCompare(b.name))
+        );
+        setFormData((prev) => ({ ...prev, categoryId: created.id }));
+        toast.success(`Categoria ${created.name} criada`);
+      }
+
+      setQuickCreate(null);
+      setQuickName("");
+    } catch (error: any) {
+      toast.error(error.message || "Erro ao criar");
+    } finally {
+      setQuickSaving(false);
+    }
+  };
 
   // Handler para atualizar preços (calcula margem automaticamente)
   const handlePriceChange = (field: "salePrice" | "costPrice", value: string) => {
@@ -248,7 +304,22 @@ function NovoProdutoPageContent() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="brandId">Marca</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="brandId">Marca</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setQuickName("");
+                      setQuickCreate("brand");
+                    }}
+                    className="h-6 px-2 text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Nova
+                  </Button>
+                </div>
                 <Select
                   value={formData.brandId}
                   onValueChange={(value) => setFormData({ ...formData, brandId: value })}
@@ -267,7 +338,22 @@ function NovoProdutoPageContent() {
               </div>
 
               <div className="space-y-2">
-                <Label htmlFor="categoryId">Categoria</Label>
+                <div className="flex items-center gap-2">
+                  <Label htmlFor="categoryId">Categoria</Label>
+                  <Button
+                    type="button"
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      setQuickName("");
+                      setQuickCreate("category");
+                    }}
+                    className="h-6 px-2 text-xs"
+                  >
+                    <Plus className="h-3 w-3 mr-1" />
+                    Nova
+                  </Button>
+                </div>
                 <Select
                   value={formData.categoryId}
                   onValueChange={(value) => setFormData({ ...formData, categoryId: value })}
@@ -587,6 +673,57 @@ function NovoProdutoPageContent() {
           </CardContent>
         </Card>
       </form>
+
+      {/* Dialog de criação inline de Marca/Categoria (padrão SupplierSelect) */}
+      <Dialog
+        open={quickCreate !== null}
+        onOpenChange={(open) => {
+          if (!open) {
+            setQuickCreate(null);
+            setQuickName("");
+          }
+        }}
+      >
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>
+              {quickCreate === "brand" ? "Nova Marca" : "Nova Categoria"}
+            </DialogTitle>
+          </DialogHeader>
+          <form onSubmit={handleQuickCreate}>
+            <div className="space-y-2">
+              <Label htmlFor="quick-name">
+                Nome <span className="text-red-500">*</span>
+              </Label>
+              <Input
+                id="quick-name"
+                autoFocus
+                required
+                value={quickName}
+                onChange={(e) => setQuickName(e.target.value)}
+                placeholder={
+                  quickCreate === "brand" ? "Ex: Ray-Ban" : "Ex: Armações"
+                }
+              />
+            </div>
+            <DialogFooter className="mt-6">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => {
+                  setQuickCreate(null);
+                  setQuickName("");
+                }}
+              >
+                Cancelar
+              </Button>
+              <Button type="submit" disabled={quickSaving || !quickName.trim()}>
+                {quickSaving ? "Salvando..." : "Salvar"}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
