@@ -4,6 +4,10 @@ import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "cron/reconcile-billing" });
 
+// O loop faz 1 chamada HTTP ao Asaas por subscription (sequencial). maxDuration alto
+// + limite por execução conservador evitam timeout; o que sobrar processa no próximo cron.
+export const maxDuration = 60;
+
 /**
  * GET /api/cron/reconcile-billing
  *
@@ -25,7 +29,9 @@ export async function GET(request: Request) {
   }
 
   try {
-    const summary = await reconcilePendingBilling({ limit: 200 });
+    // Limite conservador por execução (1 HTTP/item, sequencial) — o resto fica para
+    // o próximo cron. Idempotente, então reprocessar não causa dano.
+    const summary = await reconcilePendingBilling({ limit: 80 });
     log.info("Reconciliação concluída", { ...summary });
     return NextResponse.json({ success: true, ...summary });
   } catch (error) {

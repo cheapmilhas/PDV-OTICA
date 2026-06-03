@@ -1,8 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
-
-/** Status de assinatura "viva" — espelha plan-limits.ts (enforcement). */
-export const LIVE_SUBSCRIPTION_STATUSES = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
+import { LIVE_STATUSES } from "@/lib/subscription";
 
 /** Subscription mínima para decidir o "plano efetivo" de uma empresa. */
 export interface SubForEffectivePlan {
@@ -52,8 +50,21 @@ export async function propagatePlanLimits(
   planId: string,
   limits: { maxUsers: number; maxBranches: number; maxProducts: number }
 ): Promise<number> {
+  // Carrega as subscriptions vivas das EMPRESAS que têm alguma viva neste plano —
+  // precisamos de TODAS as vivas dessas empresas (não só as do plano) para decidir
+  // qual é a mais recente. Filtro por companyId mantém O(N_empresas_do_plano).
+  const companyIdsInPlan = (
+    await prisma.subscription.findMany({
+      where: { planId, status: { in: LIVE_STATUSES } },
+      select: { companyId: true },
+      distinct: ["companyId"],
+    })
+  ).map((s) => s.companyId);
+
+  if (companyIdsInPlan.length === 0) return 0;
+
   const liveSubs = await prisma.subscription.findMany({
-    where: { status: { in: [...LIVE_SUBSCRIPTION_STATUSES] } },
+    where: { companyId: { in: companyIdsInPlan }, status: { in: LIVE_STATUSES } },
     select: { companyId: true, planId: true, createdAt: true },
   });
 

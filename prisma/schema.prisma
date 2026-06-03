@@ -2076,6 +2076,7 @@ model Subscription {
   @@index([companyId, status])
   @@index([status])
   @@index([currentPeriodEnd])
+  @@index([billingSyncPending])
 }
 
 model Invoice {

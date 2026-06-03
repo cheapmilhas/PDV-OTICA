@@ -136,8 +136,11 @@ export async function POST(
         // Fail-soft: se o Asaas falhar, NÃO revertemos o acesso local —
         // marcamos billingSyncPending para reconciliação posterior (F4).
         if (subscription.asaasSubscriptionId) {
-          const value = planValueForCycle(newPlan, subscription.billingCycle);
+          // value calculado DENTRO do try: se planValueForCycle lançar (ex. preço 0),
+          // cai no fail-soft (marca billingSyncPending) em vez de 500 com DB já commitado.
+          let value = 0;
           try {
+            value = planValueForCycle(newPlan, subscription.billingCycle);
             await asaas.subscriptions.update(
               subscription.asaasSubscriptionId,
               { value },
@@ -274,8 +277,10 @@ export async function POST(
         ]);
 
         if (subscription.asaasSubscriptionId) {
-          const value = planValueForCycle(subscription.plan, cycle);
+          // value DENTRO do try (ver change_plan): erro de pricing → fail-soft, não 500.
+          let value = 0;
           try {
+            value = planValueForCycle(subscription.plan, cycle);
             await asaas.subscriptions.update(
               subscription.asaasSubscriptionId,
               { value, cycle: cycle as "MONTHLY" | "YEARLY" },

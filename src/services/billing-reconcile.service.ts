@@ -86,6 +86,18 @@ export async function reconcilePendingBilling(opts: { limit?: number } = {}): Pr
           data: { billingSyncPending: false, expectedAsaasValue: null, expectedAsaasCycle: null },
         });
         summary.cleared++;
+        await prisma.globalAudit.create({
+          data: {
+            actorType: "SYSTEM",
+            action: "BILLING_RECONCILE_CLEARED",
+            companyId: sub.companyId,
+            metadata: {
+              subscriptionId: sub.id,
+              asaasValue: asaasSub.value,
+              asaasCycle: asaasSub.cycle,
+            },
+          },
+        }).catch(() => {});
       } else {
         summary.kept++;
         await prisma.globalAudit.create({
