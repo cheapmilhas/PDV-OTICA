@@ -5,6 +5,8 @@ import { useState } from "react";
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [mfaToken, setMfaToken] = useState("");
+  const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -17,12 +19,19 @@ export default function AdminLoginPage() {
       const res = await fetch("/api/admin/auth/login", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ email, password }),
+        body: JSON.stringify({ email, password, mfaToken: mfaToken || undefined }),
       });
 
       const data = await res.json();
 
       if (!res.ok) {
+        // Q8.3.1: backend pede o 2º fator — revela o campo do código na mesma tela.
+        if (data.mfaRequired) {
+          setMfaRequired(true);
+          // Só mostra erro se o usuário JÁ tinha digitado um código (código errado).
+          setError(mfaToken ? data.error || "Código de verificação inválido" : "");
+          return;
+        }
         setError(data.error || "Email ou senha inválidos");
         return;
       }
@@ -84,6 +93,28 @@ export default function AdminLoginPage() {
               />
             </div>
 
+            {mfaRequired && (
+              <div>
+                <label className="block text-sm font-medium text-gray-300 mb-1">
+                  Código de verificação
+                </label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoComplete="one-time-code"
+                  value={mfaToken}
+                  onChange={(e) => setMfaToken(e.target.value)}
+                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white tracking-widest text-center placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  placeholder="000000"
+                  autoFocus
+                  disabled={loading}
+                />
+                <p className="text-gray-500 text-xs mt-1">
+                  Digite o código do seu app autenticador (ou um código de recuperação).
+                </p>
+              </div>
+            )}
+
             {error && (
               <div className="p-3 bg-red-900/50 border border-red-800 rounded-lg text-red-400 text-sm">
                 {error}
@@ -95,7 +126,7 @@ export default function AdminLoginPage() {
               disabled={loading}
               className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
             >
-              {loading ? "Entrando..." : "Entrar"}
+              {loading ? "Entrando..." : mfaRequired ? "Verificar" : "Entrar"}
             </button>
           </div>
         </form>

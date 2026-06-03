@@ -5,6 +5,7 @@ import { SignJWT } from "jose";
 import { cookies, headers } from "next/headers";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { verifyTotp, matchRecoveryCode } from "@/lib/totp";
 
 const log = logger.child({ route: "admin/auth/login" });
 
@@ -26,7 +27,7 @@ export async function POST(request: Request) {
     });
     if (limited) return limited;
 
-    const { email, password } = await request.json();
+    const { email, password, mfaToken } = await request.json();
 
     if (!email || !password) {
       return NextResponse.json(
@@ -65,6 +66,59 @@ export async function POST(request: Request) {
         { error: "Email ou senha inválidos" },
         { status: 401 }
       );
+    }
+
+    // Q8.3.1: segundo fator (TOTP). Só exige se o admin ativou o MFA e o
+    // kill-switch de emergência não está ligado. Senha já validada acima.
+    const mfaDisabled = process.env.DISABLE_ADMIN_MFA === "true";
+    if (admin.mfaEnabled && admin.mfaSecret && !mfaDisabled) {
+      const submitted = typeof mfaToken === "string" ? mfaToken.trim() : "";
+      if (!submitted) {
+        // Sinaliza ao front que falta o 2º fator — NÃO emite cookie ainda.
+        return NextResponse.json({ mfaRequired: true }, { status: 401 });
+      }
+
+      // Rate-limit dedicado ao passo MFA (anti força-bruta do código 6 dígitos).
+      const mfaLimited = rateLimitResponse(`admin-mfa:${admin.id}`, {
+        maxRequests: 5,
+        windowMs: 15 * 60 * 1000,
+      });
+      if (mfaLimited) return mfaLimited;
+
+      const totpOk = verifyTotp(admin.mfaSecret, submitted);
+      let recoveryUsed = false;
+
+      if (!totpOk) {
+        // Tenta como código de recuperação (uso único).
+        const matchedHash = admin.mfaRecoveryCodes.find((h) =>
+          matchRecoveryCode(submitted, h),
+        );
+        if (matchedHash) {
+          recoveryUsed = true;
+          // Consome o código usado (remove o hash da lista).
+          await prisma.adminUser.update({
+            where: { id: admin.id },
+            data: {
+              mfaRecoveryCodes: admin.mfaRecoveryCodes.filter((h) => h !== matchedHash),
+            },
+          });
+          await prisma.globalAudit
+            .create({
+              data: {
+                actorType: "ADMIN",
+                actorId: admin.id,
+                action: "MFA_RECOVERY_CODE_USED",
+                metadata: { remaining: admin.mfaRecoveryCodes.length - 1 },
+              },
+            })
+            .catch(() => {});
+        } else {
+          log.warn("Código MFA inválido no login", { email });
+          return NextResponse.json({ error: "Código de verificação inválido", mfaRequired: true }, { status: 401 });
+        }
+      }
+
+      log.info("MFA verificado no login", { email, viaRecovery: recoveryUsed });
     }
 
     // Atualizar último login

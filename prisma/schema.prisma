@@ -2222,6 +2222,9 @@ model AdminUser {
   scopeAllCompanies   Boolean                @default(true)
   scopedCompanyIds    String[]               @default([])
   lastLoginAt     DateTime?
+  mfaSecret         String?              // Q8.3.1: segredo TOTP (null = MFA não cadastrado)
+  mfaEnabled        Boolean              @default(false) // só true após confirmar o 1º código
+  mfaRecoveryCodes  String[]             @default([]) // hashes dos códigos de recuperação (uso único)
   createdAt       DateTime               @default(now())
   updatedAt       DateTime               @updatedAt
   auditLogs       GlobalAudit[]
