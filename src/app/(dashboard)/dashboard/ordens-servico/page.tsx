@@ -137,7 +137,7 @@ function ModalEntrega({ order, onClose, onSuccess }: {
         const err = await res.json();
         throw new Error(err.error?.message || "Erro ao entregar OS");
       }
-      toast.success(`OS #${String(order.number).padStart(6, "0")} entregue com sucesso!`);
+      toast.success(`OS ${osDisplayNumber(order)} entregue com sucesso!`);
       onSuccess();
       onClose();
     } catch (e: any) {
@@ -152,7 +152,7 @@ function ModalEntrega({ order, onClose, onSuccess }: {
       <div className="bg-white rounded-xl shadow-2xl w-full max-w-md p-6">
         <h2 className="text-xl font-bold mb-1">Confirmar Entrega</h2>
         <p className="text-sm text-muted-foreground mb-4">
-          OS #{String(order.number).padStart(6, "0")} — {order.customer.name}
+          OS {osDisplayNumber(order)} — {order.customer.name}
         </p>
 
         <div className="bg-gray-50 rounded-lg p-3 mb-4 text-sm space-y-1">
@@ -268,7 +268,7 @@ function ModalReverter({ order, onClose, onSuccess }: {
           <strong>Atenção:</strong> Esta ação requer permissão de ADMIN/GERENTE. A reversão será registrada no histórico.
         </div>
         <p className="text-sm text-muted-foreground mb-4">
-          OS #{String(order.number).padStart(6, "0")} — Status atual: <strong>{STATUS_LABEL[order.status]}</strong>
+          OS {osDisplayNumber(order)} — Status atual: <strong>{STATUS_LABEL[order.status]}</strong>
         </p>
 
         <div className="space-y-3">
@@ -353,7 +353,7 @@ function ModalGarantia({ order, onClose, onSuccess }: {
           Garantia / Retrabalho / Erro médico
         </h2>
         <p className="text-sm text-muted-foreground mb-4">
-          Criar nova OS vinculada à OS #{String(order.number).padStart(6, "0")} — {order.customer.name}
+          Criar nova OS vinculada à OS {osDisplayNumber(order)} — {order.customer.name}
         </p>
 
         <div className="space-y-3">

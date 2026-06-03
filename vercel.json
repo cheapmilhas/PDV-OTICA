@@ -16,6 +16,10 @@
     {
       "path": "/api/cron/recalc-health",
       "schedule": "0 5 * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-billing",
+      "schedule": "0 6 * * *"
     }
   ]
 }

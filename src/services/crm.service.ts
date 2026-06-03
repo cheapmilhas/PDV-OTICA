@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CustomerSegment, ContactResult, CrmReminderStatus } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { notFoundError } from "@/lib/error-handler";
+import { classifyCustomerSegments, TIME_BASED_SEGMENTS } from "@/lib/crm-segments";
 
 const log = logger.child({ service: "crm" });
 
@@ -67,6 +68,12 @@ export async function generateReminders(companyId: string) {
   );
 
   const reminders: any[] = [];
+  // Clientes em mês de aniversário neste ciclo: seus lembretes ativos de
+  // pós-venda/inatividade precisam ser CANCELADOS para liberar o índice único
+  // parcial (companyId,customerId,segment WHERE status ativo). Sem isso, o
+  // POST_SALE antigo ficaria PENDING preso e o skipDuplicates impediria o
+  // cliente de voltar à aba Pós-Venda quando o mês de aniversário passasse.
+  const birthdayCustomerIds: string[] = [];
 
   for (const customer of customers) {
     const lastSale = customer.sales[0];
@@ -96,97 +103,64 @@ export async function generateReminders(companyId: string) {
       generatedAt: today,
     };
 
-    // === ANIVERSÁRIO ===
-    if (customer.birthDate) {
-      const birthday = new Date(customer.birthDate);
-      if (birthday.getMonth() === today.getMonth()) {
-        reminders.push({
-          ...baseData,
-          segment: "BIRTHDAY" as CustomerSegment,
-          priority: 100,
-          expiresAt: new Date(today.getFullYear(), today.getMonth() + 1, 0),
-        });
-      }
-    }
+    // Aniversário tem PRIORIDADE: no mês de aniversário, o cliente recebe só
+    // BIRTHDAY (+VIP); os segmentos de pós-venda/inatividade são pulados.
+    // Antes BIRTHDAY/VIP eram `if` solto e a inatividade `else if` interno —
+    // então um aniversariante 30-90d sem comprar caía em BIRTHDAY *e*
+    // POST_SALE_30_DAYS, aparecendo nas duas abas (bug). A regra de exclusão
+    // vive em classifyCustomerSegments (pura/testada).
+    const isBirthdayMonth = customer.birthDate
+      ? new Date(customer.birthDate).getMonth() === today.getMonth()
+      : false;
+    if (isBirthdayMonth) birthdayCustomerIds.push(customer.id);
 
-    // === SEGMENTOS POR TEMPO SEM COMPRAR ===
-    if (daysSinceLastPurchase !== null) {
-      // Pós-venda 30 dias
-      if (
-        daysSinceLastPurchase >= settings.postSaleDays2 &&
-        daysSinceLastPurchase < settings.postSaleDays3
-      ) {
-        reminders.push({
-          ...baseData,
-          segment: "POST_SALE_30_DAYS" as CustomerSegment,
-          priority: 80,
-        });
+    const assignments = classifyCustomerSegments(
+      {
+        isBirthdayMonth,
+        daysSinceLastPurchase,
+        totalPurchases,
+        totalSpent: Number(totalSpent),
+      },
+      {
+        postSaleDays2: settings.postSaleDays2,
+        postSaleDays3: settings.postSaleDays3,
+        inactiveDays6Months: settings.inactiveDays6Months,
+        inactiveDays1Year: settings.inactiveDays1Year,
+        inactiveDays2Years: settings.inactiveDays2Years,
+        inactiveDays3Years: settings.inactiveDays3Years,
+        vipMinPurchases: settings.vipMinPurchases,
+        vipMinTotalSpent: Number(settings.vipMinTotalSpent),
       }
-      // Pós-venda 90 dias
-      else if (
-        daysSinceLastPurchase >= settings.postSaleDays3 &&
-        daysSinceLastPurchase < settings.inactiveDays6Months
-      ) {
-        reminders.push({
-          ...baseData,
-          segment: "POST_SALE_90_DAYS" as CustomerSegment,
-          priority: 70,
-        });
-      }
-      // 6 meses
-      else if (
-        daysSinceLastPurchase >= settings.inactiveDays6Months &&
-        daysSinceLastPurchase < settings.inactiveDays1Year
-      ) {
-        reminders.push({
-          ...baseData,
-          segment: "INACTIVE_6_MONTHS" as CustomerSegment,
-          priority: 60,
-        });
-      }
-      // 1 ano
-      else if (
-        daysSinceLastPurchase >= settings.inactiveDays1Year &&
-        daysSinceLastPurchase < settings.inactiveDays2Years
-      ) {
-        reminders.push({
-          ...baseData,
-          segment: "INACTIVE_1_YEAR" as CustomerSegment,
-          priority: 50,
-        });
-      }
-      // 2 anos
-      else if (
-        daysSinceLastPurchase >= settings.inactiveDays2Years &&
-        daysSinceLastPurchase < settings.inactiveDays3Years
-      ) {
-        reminders.push({
-          ...baseData,
-          segment: "INACTIVE_2_YEARS" as CustomerSegment,
-          priority: 40,
-        });
-      }
-      // 3+ anos
-      else if (daysSinceLastPurchase >= settings.inactiveDays3Years) {
-        reminders.push({
-          ...baseData,
-          segment: "INACTIVE_3_YEARS" as CustomerSegment,
-          priority: 30,
-        });
-      }
-    }
+    );
 
-    // === VIP ===
-    if (
-      totalPurchases >= settings.vipMinPurchases &&
-      totalSpent >= Number(settings.vipMinTotalSpent)
-    ) {
+    for (const { segment, priority } of assignments) {
       reminders.push({
         ...baseData,
-        segment: "VIP_CUSTOMER" as CustomerSegment,
-        priority: 90,
+        segment,
+        priority,
+        // BIRTHDAY expira no fim do mês corrente; demais sem expiração.
+        ...(segment === "BIRTHDAY"
+          ? { expiresAt: new Date(today.getFullYear(), today.getMonth() + 1, 0) }
+          : {}),
       });
     }
+  }
+
+  // Aniversário tem prioridade: cancela os lembretes ATIVOS de pós-venda/
+  // inatividade dos aniversariantes deste ciclo. Libera o índice único parcial
+  // para que (a) eles não apareçam na aba Pós-Venda durante o mês e (b) quando
+  // o mês passar, o POST_SALE possa ser recriado (sem registro ativo travando
+  // o skipDuplicates). VIP e BIRTHDAY não são tocados.
+  if (birthdayCustomerIds.length > 0) {
+    await prisma.customerReminder.updateMany({
+      where: {
+        companyId,
+        customerId: { in: birthdayCustomerIds },
+        segment: { in: [...TIME_BASED_SEGMENTS] },
+        status: { in: ["PENDING", "IN_PROGRESS", "SCHEDULED"] },
+      },
+      data: { status: "CANCELLED" },
+    });
   }
 
   // M8: era N+1 (findFirst + create por lembrete) — com milhares de lembretes

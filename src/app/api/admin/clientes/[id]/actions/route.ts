@@ -136,8 +136,11 @@ export async function POST(
         // Fail-soft: se o Asaas falhar, NÃO revertemos o acesso local —
         // marcamos billingSyncPending para reconciliação posterior (F4).
         if (subscription.asaasSubscriptionId) {
-          const value = planValueForCycle(newPlan, subscription.billingCycle);
+          // value calculado DENTRO do try: se planValueForCycle lançar (ex. preço 0),
+          // cai no fail-soft (marca billingSyncPending) em vez de 500 com DB já commitado.
+          let value = 0;
           try {
+            value = planValueForCycle(newPlan, subscription.billingCycle);
             await asaas.subscriptions.update(
               subscription.asaasSubscriptionId,
               { value },
@@ -163,7 +166,13 @@ export async function POST(
               });
               await prisma.subscription.update({
                 where: { id: subscription.id },
-                data: { billingSyncPending: true },
+                data: {
+                  billingSyncPending: true,
+                  // Esperado materializado p/ reconciliação (F4): centavos, sem desconto
+                  // (é o que foi enviado ao Asaas). change_plan não muda o ciclo.
+                  expectedAsaasValue: Math.round(value * 100),
+                  expectedAsaasCycle: null,
+                },
               });
             } catch (recErr) {
               log.error("Falha ao registrar billingSyncPending (change_plan)", {
@@ -268,8 +277,10 @@ export async function POST(
         ]);
 
         if (subscription.asaasSubscriptionId) {
-          const value = planValueForCycle(subscription.plan, cycle);
+          // value DENTRO do try (ver change_plan): erro de pricing → fail-soft, não 500.
+          let value = 0;
           try {
+            value = planValueForCycle(subscription.plan, cycle);
             await asaas.subscriptions.update(
               subscription.asaasSubscriptionId,
               { value, cycle: cycle as "MONTHLY" | "YEARLY" },
@@ -296,7 +307,13 @@ export async function POST(
               });
               await prisma.subscription.update({
                 where: { id: subscription.id },
-                data: { billingSyncPending: true },
+                data: {
+                  billingSyncPending: true,
+                  // Esperado materializado p/ reconciliação (F4): value+cycle (o ciclo
+                  // mudou aqui). Centavos, sem desconto (o que foi enviado ao Asaas).
+                  expectedAsaasValue: Math.round(value * 100),
+                  expectedAsaasCycle: cycle as "MONTHLY" | "YEARLY",
+                },
               });
             } catch (recErr) {
               log.error("Falha ao registrar billingSyncPending (change_billing_cycle)", {

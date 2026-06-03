@@ -2,6 +2,8 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity } from "lucide-react";
+import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
+import { ReconcileBillingButton } from "./ReconcileBillingButton";
 
 export default async function RelatoriosPage() {
   await requireAdmin();
@@ -14,6 +16,8 @@ export default async function RelatoriosPage() {
     trialSubscriptions,
     canceledThisMonth,
     ticketsThisMonth,
+    activeAtMonthStart,
+    mrrData,
   ] = await Promise.all([
     prisma.subscription.count({ where: { status: "ACTIVE" } }),
     prisma.subscription.count({ where: { status: "TRIAL" } }),
@@ -21,25 +25,45 @@ export default async function RelatoriosPage() {
       where: { status: "CANCELED", canceledAt: { gte: startOfMonth } },
     }),
     prisma.supportTicket.count({ where: { createdAt: { gte: startOfMonth } } }),
+    // Base inicial do mês (ESTIMATIVA — status atual ≠ status passado): assinaturas
+    // ativadas antes do início do mês e ainda não canceladas naquele momento.
+    prisma.subscription.count({
+      where: {
+        activatedAt: { lt: startOfMonth },
+        OR: [{ canceledAt: null }, { canceledAt: { gte: startOfMonth } }],
+      },
+    }),
+    // MRR: precisa do plano (preços) + ciclo/desconto da subscription.
+    prisma.subscription.findMany({
+      where: { status: "ACTIVE" },
+      include: { plan: { select: { priceMonthly: true, priceYearly: true } } },
+    }),
   ]);
 
-  // MRR Estimado
-  const mrrData = await prisma.subscription.findMany({
-    where: { status: "ACTIVE" },
-    include: { plan: true },
-  });
+  // MRR com desconto vigente + ciclo normalizado (helper puro, em centavos).
+  const subsForMrr: SubscriptionForMRR[] = mrrData.map((s) => ({
+    priceMonthly: s.plan.priceMonthly,
+    priceYearly: s.plan.priceYearly,
+    billingCycle: s.billingCycle,
+    discountPercent: s.discountPercent,
+    discountExpiresAt: s.discountExpiresAt,
+  }));
+  const mrrEstimado = computeMRR(subsForMrr, now);
 
-  const mrrEstimado = mrrData.reduce((sum, sub) => {
-    const price = sub.plan.priceMonthly;
-    const discount = sub.discountPercent ? price * (sub.discountPercent / 100) : 0;
-    return sum + (price - discount);
-  }, 0);
+  const churnRate = computeChurnRate({
+    canceledInPeriod: canceledThisMonth,
+    activeAtPeriodStart: activeAtMonthStart,
+  });
+  const churnPct = (churnRate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
   return (
     <div className="p-6 text-white">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Relatórios</h1>
-        <p className="text-gray-400">Gere relatórios e exporte dados do sistema</p>
+      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
+        <div>
+          <h1 className="text-2xl font-bold">Relatórios</h1>
+          <p className="text-gray-400">Gere relatórios e exporte dados do sistema</p>
+        </div>
+        <ReconcileBillingButton />
       </div>
 
       {/* KPIs */}
@@ -56,8 +80,11 @@ export default async function RelatoriosPage() {
           <p className="text-xs text-gray-500">+ {trialSubscriptions} em trial</p>
         </div>
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-          <p className="text-gray-400 text-sm">Churn (Mês)</p>
-          <p className="text-2xl font-bold text-red-400">{canceledThisMonth}</p>
+          <p className="text-gray-400 text-sm">Churn (Mês) <span className="text-gray-600">· est.</span></p>
+          <p className="text-2xl font-bold text-red-400">{churnPct}%</p>
+          <p className="text-xs text-gray-500">
+            {canceledThisMonth} cancelada{canceledThisMonth === 1 ? "" : "s"} de {activeAtMonthStart} ativas
+          </p>
         </div>
         <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
           <p className="text-gray-400 text-sm">Tickets (Mês)</p>

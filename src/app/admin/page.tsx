@@ -5,7 +5,7 @@ import Link from "next/link";
 import { HealthBadge } from "@/components/health-badge";
 import { RecalcHealthButton } from "./RecalcHealthButton";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
-import { computeTrend, formatTrend, type Trend } from "@/lib/admin-metrics";
+import { computeTrend, formatTrend, computeMRR, type Trend, type SubscriptionForMRR } from "@/lib/admin-metrics";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -112,10 +112,15 @@ export default async function AdminDashboardPage() {
   );
 
   const totalRevenueValue = ((totalRevenue._sum?.total) ?? 0) / 100;
-  const mrrValue = activeSubs.reduce((acc, sub) => {
-    const monthly = sub.billingCycle === "YEARLY" ? Math.round(sub.plan.priceYearly / 12) : sub.plan.priceMonthly;
-    return acc + monthly;
-  }, 0) / 100;
+  // MRR com desconto vigente + ciclo normalizado (helper puro, centavos → reais).
+  const subsForMrr: SubscriptionForMRR[] = activeSubs.map((sub) => ({
+    priceMonthly: sub.plan.priceMonthly,
+    priceYearly: sub.plan.priceYearly,
+    billingCycle: sub.billingCycle,
+    discountPercent: sub.discountPercent,
+    discountExpiresAt: sub.discountExpiresAt,
+  }));
+  const mrrValue = computeMRR(subsForMrr, nowDate) / 100;
 
   return (
     <div className="p-6 text-white">

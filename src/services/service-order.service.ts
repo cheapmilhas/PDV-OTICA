@@ -6,6 +6,7 @@ import { dateOnlyToUTC } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } from "@/lib/validations/service-order.schema";
 import { getNextSequence } from "@/lib/counter";
+import { resolveRootOrderId } from "@/lib/os-root";
 
 /**
  * H1: máquina de estados das transições PARA FRENTE de uma OS.
@@ -209,6 +210,9 @@ export class ServiceOrderService {
             id: true, number: true, status: true,
             isWarranty: true, isRework: true, isMedicalError: true,
             warrantySeq: true, createdAt: true,
+            // Campos para o histórico/timeline (prazo + motivo + datas).
+            promisedDate: true, deliveredAt: true, isDelayed: true, delayDays: true,
+            warrantyReason: true, reworkReason: true, medicalErrorReason: true,
             originalOrder: { select: { number: true } },
           },
         },
@@ -825,19 +829,24 @@ export class ServiceOrderService {
     const isMedicalError = options.type === "medical_error";
     const tipoLabel = isMedicalError ? "ERRO MÉDICO" : isRework ? "RETRABALHO" : "GARANTIA";
 
+    // Toda derivação aponta à OS-RAIZ (não ao pai imediato), p/ compartilharem
+    // o número-base: #000015, #000015-RT, #000015-G. Criar garantia a partir de
+    // um retrabalho herdaria o número do retrabalho se apontasse ao pai.
+    const rootId = resolveRootOrderId(original);
+
     const order = await prisma.$transaction(async (tx) => {
       const number = await this.getNextNumber(companyId, tx);
 
-      // Lock na OS original para serializar criações concorrentes de garantia
-      // da mesma OS — sem isso, dois requests simultâneos contariam o mesmo
-      // valor e gerariam #1234-G1 duplicado (count é SELECT, não bloqueia).
-      await tx.$queryRaw`SELECT id FROM "ServiceOrder" WHERE id = ${originalId} FOR UPDATE`;
+      // Lock na OS-RAIZ para serializar criações concorrentes de derivação da
+      // mesma família — sem isso, dois requests simultâneos contariam o mesmo
+      // valor e gerariam #000015-G2 duplicado (count é SELECT, não bloqueia).
+      await tx.$queryRaw`SELECT id FROM "ServiceOrder" WHERE id = ${rootId} FOR UPDATE`;
 
-      // Sequência de exibição por (original + tipo): conta filhos do mesmo
-      // tipo já existentes e soma 1. Protegido pelo FOR UPDATE acima.
+      // Sequência de exibição por (RAIZ + tipo): conta derivações do mesmo tipo
+      // já existentes sob a raiz e soma 1. Protegido pelo FOR UPDATE acima.
       const sameTypeCount = await tx.serviceOrder.count({
         where: {
-          originalOrderId: originalId,
+          originalOrderId: rootId,
           ...(isMedicalError
             ? { isMedicalError: true }
             : isRework
@@ -866,7 +875,7 @@ export class ServiceOrderService {
           reworkReason: isRework ? options.reason : undefined,
           medicalErrorReason: isMedicalError ? options.reason : undefined,
           warrantySeq,
-          originalOrderId: originalId,
+          originalOrderId: rootId,
         },
       });
 
@@ -894,7 +903,9 @@ export class ServiceOrderService {
           toStatus: "DRAFT",
           note: `${tipoLabel} da OS #${original.number}: ${options.reason}`,
           changedByUserId: userId,
-          metadata: { originalOrderId: originalId, originalNumber: original.number, warrantySeq },
+          // originalOrderId reflete o FK REAL gravado (a RAIZ); immediateParentId
+          // preserva de qual OS a derivação foi criada (pai imediato, p/ trilha).
+          metadata: { originalOrderId: rootId, immediateParentId: originalId, originalNumber: original.number, warrantySeq },
         },
       });
 

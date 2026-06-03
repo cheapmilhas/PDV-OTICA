@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { osDisplayNumber } from "@/lib/os-number";
+import { OsHistoryTimeline } from "@/components/ordens-servico/os-history-timeline";
 import toast from "react-hot-toast";
 import { track } from "@/lib/analytics";
 import {
@@ -72,7 +73,7 @@ interface ServiceOrderDetails {
   laboratory?: { id: string; name: string };
   sale?: { id: string } | null;
   originalOrder?: { id: string; number: number; status: string };
-  reworkOrders?: Array<{ id: string; number: number; status: string; isWarranty: boolean; isRework: boolean; isMedicalError?: boolean; warrantySeq?: number | null; originalOrder?: { number?: number | null } | null }>;
+  reworkOrders?: Array<{ id: string; number: number; status: string; isWarranty: boolean; isRework: boolean; isMedicalError?: boolean; warrantySeq?: number | null; createdAt: string; promisedDate?: string | null; deliveredAt?: string | null; isDelayed?: boolean | null; delayDays?: number | null; warrantyReason?: string | null; reworkReason?: string | null; medicalErrorReason?: string | null; originalOrder?: { number?: number | null } | null }>;
   history?: Array<{
     id: string;
     action: string;
@@ -340,7 +341,7 @@ function DetalhesOrdemServicoContent() {
               href={`/dashboard/ordens-servico/${order.originalOrder.id}/detalhes`}
               className="inline-flex items-center gap-1 text-sm font-medium text-blue-700 hover:underline"
             >
-              Ver OS original <ExternalLink className="h-3.5 w-3.5" />
+              Ver histórico completo <ExternalLink className="h-3.5 w-3.5" />
             </Link>
           </CardContent>
         </Card>
@@ -379,35 +380,8 @@ function DetalhesOrdemServicoContent() {
         </Card>
       )}
 
-      {/* Vínculo: esta OS (original) possui garantias/retrabalhos */}
-      {order.reworkOrders && order.reworkOrders.length > 0 && (
-        <Card className="border-blue-300 bg-blue-50">
-          <CardContent className="p-4">
-            <p className="text-sm font-medium text-blue-900 mb-2">
-              Esta OS possui {order.reworkOrders.length} garantia(s)/retrabalho(s):
-            </p>
-            <div className="flex flex-wrap gap-2">
-              {order.reworkOrders.map((child) => (
-                <Link
-                  key={child.id}
-                  href={`/dashboard/ordens-servico/${child.id}/detalhes`}
-                  className="inline-flex items-center gap-1 rounded border border-blue-300 bg-white px-2 py-1 text-xs font-medium text-blue-700 hover:bg-blue-100"
-                >
-                  {child.isMedicalError ? (
-                    <Stethoscope className="h-3 w-3" />
-                  ) : child.isRework ? (
-                    <RotateCcw className="h-3 w-3" />
-                  ) : (
-                    <Shield className="h-3 w-3" />
-                  )}
-                  OS {osDisplayNumber(child)}
-                  <ExternalLink className="h-3 w-3" />
-                </Link>
-              ))}
-            </div>
-          </CardContent>
-        </Card>
-      )}
+      {/* Histórico (linha do tempo) — só na OS-raiz, mostra todas as derivações */}
+      <OsHistoryTimeline order={order} />
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3">
