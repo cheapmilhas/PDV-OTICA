@@ -196,6 +196,7 @@ export async function POST(request: Request) {
             data: {
               status: "ACTIVE",
               pastDueSince: null,
+              lastDunningStage: null, // F5: recuperou → zera a régua p/ próxima inadimplência avisar do zero
               currentPeriodStart: new Date(),
             },
           });
@@ -237,9 +238,12 @@ export async function POST(request: Request) {
             where: { id: subscriptionDbId, pastDueSince: null },
             data: { status: "PAST_DUE", pastDueSince: new Date() },
           });
-          // Garante status PAST_DUE mesmo se pastDueSince já existia.
-          await prisma.subscription.update({
-            where: { id: subscriptionDbId },
+          // Garante status PAST_DUE mesmo se pastDueSince já existia — MAS sem
+          // RETROCEDER: um reenvio de OVERDUE não pode rebaixar quem o cron de
+          // dunning já suspendeu/cancelou (senão o cron re-suspende e duplica a
+          // notificação ao admin a cada reenvio). updateMany com guard de status.
+          await prisma.subscription.updateMany({
+            where: { id: subscriptionDbId, status: { notIn: ["SUSPENDED", "CANCELED"] } },
             data: { status: "PAST_DUE" },
           });
         }

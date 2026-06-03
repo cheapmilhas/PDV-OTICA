@@ -2066,6 +2066,7 @@ model Subscription {
   billingSyncPending   Boolean               @default(false)
   expectedAsaasValue   Int? // centavos: valor esperado no Asaas (gravado em falha de sync; usado pela reconciliação F4)
   expectedAsaasCycle   BillingCycle? // ciclo esperado no Asaas (só quando o ciclo mudou)
+  lastDunningStage     Int? // F5: último marco de aviso de inadimplência dado (3/7/14); null = nenhum. Zerado na recuperação.
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   invoices             Invoice[]

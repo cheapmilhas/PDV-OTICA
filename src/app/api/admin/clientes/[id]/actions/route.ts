@@ -52,7 +52,7 @@ export async function POST(
         if (!subscription) return NextResponse.json({ error: "Assinatura suspensa não encontrada" }, { status: 400 });
         await prisma.subscription.update({
           where: { id: subscription.id },
-          data: { status: "ACTIVE", pastDueSince: null },
+          data: { status: "ACTIVE", pastDueSince: null, lastDunningStage: null }, // F5: zera régua na recuperação
         });
         await prisma.globalAudit.create({
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "SUBSCRIPTION_REACTIVATED", metadata: { subscriptionId: subscription.id } },
