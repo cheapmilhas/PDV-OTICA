@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -17,6 +18,7 @@ interface ModalAberturaCaixaProps {
 
 export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaProps) {
   const { toast } = useToast();
+  const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
     valorAbertura: "200.00",
@@ -71,7 +73,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <Unlock className="h-5 w-5" />
@@ -89,7 +91,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
             <div className="space-y-1 text-sm">
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Operador:</span>
-                <span className="font-medium">Carlos Vendedor</span>
+                <span className="font-medium">{session?.user?.name ?? "Operador"}</span>
               </div>
               <div className="flex justify-between">
                 <span className="text-muted-foreground">Data/Hora:</span>
