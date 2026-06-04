@@ -40,9 +40,10 @@ interface ComprovanteMovimentacaoProps {
     } | null;
   };
   companyName?: string;
+  logoUrl?: string;
 }
 
-export function ComprovanteMovimentacao({ movement, companyName = "PDV Ótica" }: ComprovanteMovimentacaoProps) {
+export function ComprovanteMovimentacao({ movement, companyName = "Empresa", logoUrl }: ComprovanteMovimentacaoProps) {
   const formatDate = (dateString: string) => {
     const date = new Date(dateString);
     return date.toLocaleString("pt-BR", {
@@ -80,6 +81,14 @@ export function ComprovanteMovimentacao({ movement, companyName = "PDV Ótica" }
     <div className="w-[210mm] min-h-[297mm] bg-white p-8 mx-auto" style={{ fontFamily: 'Arial, sans-serif' }}>
       {/* Cabeçalho */}
       <div className="text-center border-b-2 border-gray-800 pb-4 mb-6">
+        {logoUrl ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
+            src={logoUrl}
+            alt={companyName}
+            className="mx-auto mb-2 h-16 object-contain"
+          />
+        ) : null}
         <h1 className="text-2xl font-bold text-gray-800">{companyName}</h1>
         <p className="text-sm text-gray-600 mt-1">Comprovante de Movimentação de Estoque</p>
       </div>

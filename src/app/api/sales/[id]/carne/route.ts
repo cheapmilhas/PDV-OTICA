@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { generateCarnePDF } from "@/lib/pdf-utils";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "sales/[id]/carne" });
@@ -101,7 +102,7 @@ export async function GET(
     });
 
     // Retornar PDF
-    const filename = `carne_venda_${sale.id.substring(0, 8)}.pdf`;
+    const filename = `carne_venda_${saleDisplayNumber(sale).replace("#", "")}.pdf`;
     return new NextResponse(new Uint8Array(pdfBuffer), {
       status: 200,
       headers: {

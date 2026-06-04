@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -95,6 +96,7 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 function RelatorioHistoricoCaixasPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [startDate, setStartDate] = useState<Date>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
@@ -165,6 +167,7 @@ function RelatorioHistoricoCaixasPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Histórico de Caixas",
       period: { start: startDate, end: endDate },
       sections: [

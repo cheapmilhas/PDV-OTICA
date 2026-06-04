@@ -5,6 +5,7 @@ import { getAdminSession } from "@/lib/admin-session";
 import { generateMfaSecret } from "@/lib/totp";
 import { handleApiError } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
+import { adminRateLimit } from "@/lib/rate-limit";
 
 const log = logger.child({ route: "admin/auth/mfa/enroll" });
 
@@ -19,12 +20,15 @@ const log = logger.child({ route: "admin/auth/mfa/enroll" });
  * sobrescreve o pendente (enquanto não confirmado). Não permite re-enroll se o
  * MFA já está ATIVO (evita trocar segredo sem reautenticar).
  */
-export async function POST() {
+export async function POST(request: Request) {
   try {
     const session = await getAdminSession();
     if (!session) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+
+    const limited = adminRateLimit("admin-mfa-enroll", session.id, request);
+    if (limited) return limited;
 
     const admin = await prisma.adminUser.findUnique({
       where: { id: session.id },

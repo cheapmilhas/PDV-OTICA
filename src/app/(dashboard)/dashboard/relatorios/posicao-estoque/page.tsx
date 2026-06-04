@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -125,6 +126,7 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
 };
 
 function RelatorioPosicaoEstoquePageContent() {
+  const { companyHeader } = useCompanySettings();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -208,6 +210,7 @@ function RelatorioPosicaoEstoquePageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Posição de Estoque",
       subtitle: `Total: ${data.summary.totalProducts} produtos | Valor: ${formatCurrency(data.summary.totalStockValue)} | OK: ${data.summary.productsOK} | Baixo: ${data.summary.productsLow} | Zerado: ${data.summary.productsOut}`,
       sections: [

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { getCompanyId, requireAuth } from "@/lib/auth-helpers";
+import { getCompanyId, requireAuth, canSeeCanceled } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 
 export async function GET(
@@ -25,11 +26,20 @@ export async function GET(
       );
     }
 
+    // Decisão do dono (Rotina de Testes Óticas Ultra): admin/gerente vê OS
+    // canceladas (com badge); vendedor não. Filtro ESCALAR no where.status.
+    // NOTA: o _count/totalOrders em laboratories/route.ts NÃO é filtrado de
+    // propósito — esconder cancelados de lá distorceria a taxa de sucesso do lab.
+    const where: Prisma.ServiceOrderWhereInput = {
+      laboratoryId,
+      companyId,
+    };
+    if (!(await canSeeCanceled())) {
+      where.status = { not: "CANCELED" };
+    }
+
     const orders = await prisma.serviceOrder.findMany({
-      where: {
-        laboratoryId,
-        companyId,
-      },
+      where,
       select: {
         id: true,
         number: true,

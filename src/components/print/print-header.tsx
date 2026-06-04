@@ -1,5 +1,3 @@
-import Image from "next/image";
-
 interface PrintHeaderProps {
   logoUrl?: string | null;
   companyName?: string;
@@ -16,11 +14,14 @@ interface PrintHeaderProps {
  *
  * - Logo à esquerda (se houver)
  * - Informações da empresa à direita
- * - Usado em: Vendas, Orçamentos, Ordens de Serviço
+ * - Usado em: Vendas, Orçamentos, Ordens de Serviço, Relatório de Caixa
+ *
+ * Usa <img> nativo (não next/image): data-URLs e impressão via window.print()
+ * renderizam de forma mais previsível do que o componente otimizado.
  */
 export function PrintHeader({
   logoUrl,
-  companyName = "PDV Ótica",
+  companyName = "Empresa",
   cnpj,
   address,
   city,
@@ -33,12 +34,11 @@ export function PrintHeader({
       {/* Logo */}
       <div className="flex-shrink-0 w-32 h-20 relative">
         {logoUrl ? (
-          <Image
+          // eslint-disable-next-line @next/next/no-img-element
+          <img
             src={logoUrl}
             alt="Logo da Empresa"
-            fill
-            className="object-contain object-left"
-            priority
+            className="h-full w-full object-contain object-left"
           />
         ) : (
           <div className="flex items-center h-full">

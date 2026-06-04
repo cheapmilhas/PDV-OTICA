@@ -61,11 +61,27 @@ export function useCompanySettings() {
     fetchSettings();
   }, [fetchSettings]);
 
+  // Dados prontos para o cabeçalho de PDFs/relatórios (drawPdfHeader / exportToPDF).
+  // null enquanto carrega ou sem settings — exportToPDF então mantém o layout antigo.
+  const companyHeader = settings
+    ? {
+        logoUrl: settings.logoUrl,
+        companyName: settings.displayName || "Empresa",
+        cnpj: settings.cnpj,
+        address: [settings.address, settings.city, settings.state]
+          .filter(Boolean)
+          .join(", ") || null,
+        phone: settings.phone,
+        email: settings.email,
+      }
+    : undefined;
+
   return {
     settings,
     logoUrl: settings?.logoUrl,
     primaryColor: settings?.primaryColor,
     displayName: settings?.displayName,
+    companyHeader,
     isLoading,
     error,
     refetch: fetchSettings,

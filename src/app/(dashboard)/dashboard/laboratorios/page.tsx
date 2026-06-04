@@ -802,9 +802,10 @@ function LaboratoriosPage() {
                                   os.status === "SENT_TO_LAB" ? "bg-purple-100 text-purple-700" :
                                   os.status === "IN_PROGRESS" ? "bg-yellow-100 text-yellow-700" :
                                   os.status === "READY" ? "bg-blue-100 text-blue-700" :
+                                  os.status === "CANCELED" ? "bg-red-100 text-red-700" :
                                   "bg-gray-100 text-gray-700"
                                 }`}>
-                                  {os.status === "SENT_TO_LAB" ? "No Lab" : os.status === "IN_PROGRESS" ? "Em Produção" : os.status === "READY" ? "Pronta" : os.status === "DELIVERED" ? "Entregue" : os.status}
+                                  {os.status === "SENT_TO_LAB" ? "No Lab" : os.status === "IN_PROGRESS" ? "Em Produção" : os.status === "READY" ? "Pronta" : os.status === "DELIVERED" ? "Entregue" : os.status === "CANCELED" ? "CANCELADO" : os.status}
                                 </span>
                               </div>
                             </div>

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -92,6 +93,7 @@ interface Supplier {
 const COLORS = ["#0088FE", "#00C49F", "#FFBB28", "#FF8042", "#8884d8"];
 
 function RelatorioContasPagarPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(false);
 
@@ -157,6 +159,7 @@ function RelatorioContasPagarPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Contas a Pagar",
       subtitle: overdueOnly ? "Apenas vencidos" : undefined,
       sections: [

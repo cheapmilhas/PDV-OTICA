@@ -49,6 +49,7 @@ const updateAccountPayableSchema = z.object({
   status: z.nativeEnum(AccountPayableStatus),
   paidAmount: z.number().positive().optional(),
   paidDate: z.string().datetime().optional(),
+  financeAccountId: z.string().optional(),
 });
 
 /**
@@ -324,91 +325,159 @@ export async function PATCH(request: Request) {
       );
     }
 
-    // Preparar dados de atualização
-    const updateData: any = {
-      status: data.status,
-    };
+    // Include compartilhado para serialização da resposta
+    const accountInclude = {
+      supplier: {
+        select: {
+          id: true,
+          name: true,
+          tradeName: true,
+          cnpj: true,
+        },
+      },
+      branch: {
+        select: {
+          id: true,
+          name: true,
+          code: true,
+        },
+      },
+      createdBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+      paidBy: {
+        select: {
+          id: true,
+          name: true,
+        },
+      },
+    } as const;
 
-    // Se estiver marcando como PAGA, adicionar campos de pagamento
-    if (data.status === AccountPayableStatus.PAID) {
-      updateData.paidAmount = data.paidAmount || existing.amount;
-      updateData.paidDate = data.paidDate
-        ? new Date(data.paidDate)
-        : new Date();
-      updateData.paidByUserId = userId;
-    }
+    // Classificar a transição solicitada:
+    // (a) pagamento: PENDING/OVERDUE -> PAID
+    // (b) reversão: PAID -> PENDING/OVERDUE
+    // (c) outras mudanças de status / edição
+    const isPaymentTransition =
+      data.status === AccountPayableStatus.PAID &&
+      (existing.status === AccountPayableStatus.PENDING ||
+        existing.status === AccountPayableStatus.OVERDUE);
+
+    const isReversal =
+      existing.status === AccountPayableStatus.PAID &&
+      (data.status === AccountPayableStatus.PENDING ||
+        data.status === AccountPayableStatus.OVERDUE);
 
     // Atualizar conta a pagar e gerar/remover lançamento financeiro dentro de uma transaction
     const accountPayable = await prisma.$transaction(async (tx) => {
+      if (isPaymentTransition) {
+        // Valor pago: usado de forma IDÊNTICA no débito do saldo e no lançamento
+        const paidAmount = data.paidAmount ?? Number(existing.amount);
+        const paidDate = data.paidDate ? new Date(data.paidDate) : new Date();
+
+        // Transição atômica exatamente-1x: só vira PAID se ainda estava
+        // PENDING/OVERDUE. Sob retry/duplo-clique/concorrência, apenas a
+        // primeira chamada conta == 1; as demais não debitam de novo.
+        const flipped = await tx.accountPayable.updateMany({
+          where: {
+            id: data.id,
+            companyId,
+            status: {
+              in: [AccountPayableStatus.PENDING, AccountPayableStatus.OVERDUE],
+            },
+          },
+          data: {
+            status: AccountPayableStatus.PAID,
+            paidAmount,
+            paidDate,
+            paidByUserId: userId,
+          },
+        });
+
+        const didPayTransition = flipped.count === 1;
+
+        if (didPayTransition) {
+          if (data.financeAccountId) {
+            // Validar que a conta financeira pertence à empresa
+            const acc = await tx.financeAccount.findFirst({
+              where: { id: data.financeAccountId, companyId },
+            });
+            if (!acc) {
+              throw new Error("Conta financeira inválida");
+            }
+
+            // Debitar o saldo da conta escolhida (exatamente uma vez)
+            await tx.financeAccount.update({
+              where: { id: acc.id },
+              data: { balance: { decrement: paidAmount } },
+            });
+
+            await generateAccountPayableExpenseEntry(
+              tx,
+              data.id,
+              companyId,
+              existing.category,
+              paidAmount,
+              `Pagamento: ${existing.description}`,
+              paidDate,
+              existing.branchId,
+              acc.id
+            );
+          } else {
+            // Sem conta escolhida: cria o lançamento mas NÃO debita saldo
+            // (retrocompat com callers que não selecionam conta).
+            await generateAccountPayableExpenseEntry(
+              tx,
+              data.id,
+              companyId,
+              existing.category,
+              paidAmount,
+              `Pagamento: ${existing.description}`,
+              paidDate,
+              existing.branchId,
+              null
+            );
+          }
+        }
+
+        const updated = await tx.accountPayable.findUnique({
+          where: { id: data.id },
+          include: accountInclude,
+        });
+        return updated;
+      }
+
+      if (isReversal) {
+        const updated = await tx.accountPayable.update({
+          where: { id: data.id },
+          data: { status: data.status },
+          include: accountInclude,
+        });
+
+        // Remove o lançamento EXPENSE e re-credita o saldo se ele tinha
+        // financeAccountId registrado. Sem catch silencioso: erro reverte tudo.
+        await deleteAccountPayableExpenseEntry(tx, data.id, companyId);
+
+        return updated;
+      }
+
+      // (c) Outras mudanças de status / edição — sem efeito no ledger
       const updated = await tx.accountPayable.update({
         where: { id: data.id },
-        data: updateData,
-        include: {
-          supplier: {
-            select: {
-              id: true,
-              name: true,
-              tradeName: true,
-              cnpj: true,
-            },
-          },
-          branch: {
-            select: {
-              id: true,
-              name: true,
-              code: true,
-            },
-          },
-          createdBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-          paidBy: {
-            select: {
-              id: true,
-              name: true,
-            },
-          },
-        },
+        data: { status: data.status },
+        include: accountInclude,
       });
-
-      // Gerar lançamento EXPENSE ao marcar como PAID
-      if (data.status === AccountPayableStatus.PAID) {
-        const paidAmount = Number(updated.paidAmount ?? updated.amount);
-        const paidDate = updated.paidDate ?? new Date();
-        try {
-          await generateAccountPayableExpenseEntry(
-            tx,
-            updated.id,
-            companyId,
-            updated.category,
-            paidAmount,
-            `Pagamento: ${updated.description}`,
-            paidDate,
-            updated.branchId
-          );
-        } catch {
-          // Falha no lançamento financeiro não impede o pagamento
-        }
-      }
-
-      // Remover lançamento EXPENSE ao reverter pagamento (PENDING/OVERDUE)
-      if (
-        existing.status === AccountPayableStatus.PAID &&
-        (data.status === AccountPayableStatus.PENDING ||
-          data.status === AccountPayableStatus.OVERDUE)
-      ) {
-        try {
-          await deleteAccountPayableExpenseEntry(tx, data.id, companyId);
-        } catch {
-          // Falha na remoção do lançamento não impede a reversão
-        }
-      }
-
       return updated;
     });
+
+    if (!accountPayable) {
+      return NextResponse.json(
+        { error: "Conta a pagar não encontrada" },
+        { status: 404 }
+      );
+    }
 
     // Serializar Decimals para number
     const serializedAccount = {

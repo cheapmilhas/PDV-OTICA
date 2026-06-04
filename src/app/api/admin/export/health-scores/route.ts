@@ -2,13 +2,17 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { csvRow } from "@/lib/csv-safe";
+import { adminRateLimit } from "@/lib/rate-limit";
 
-export async function GET() {
+export async function GET(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
+
+  const limited = adminRateLimit("admin-export-health-scores", admin.id, request);
+  if (limited) return limited;
 
   const scores = await prisma.healthScore.findMany({
     orderBy: { calculatedAt: "desc" },

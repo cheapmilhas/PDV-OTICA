@@ -4,6 +4,7 @@ import { getCompanyId, requireAuth } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { saleDisplayNumber } from "@/lib/sale-number";
 
 function getPaymentMethodLabel(method?: string): string {
   const labels: Record<string, string> = {
@@ -30,7 +31,7 @@ export async function GET(
       where: { id, companyId },
       include: {
         customer: { select: { name: true, cpf: true } },
-        sale: { select: { id: true } },
+        sale: { select: { id: true, number: true } },
         receivedBy: { select: { name: true } },
       },
     });
@@ -123,7 +124,7 @@ export async function GET(
     ${receivable.sale?.id ? `
     <div class="row">
       <span class="label">Ref. Venda:</span>
-      <span class="value">${receivable.sale.id.substring(0, 8).toUpperCase()}</span>
+      <span class="value">${saleDisplayNumber(receivable.sale)}</span>
     </div>` : ""}
     <div class="row">
       <span class="label">Descrição:</span>

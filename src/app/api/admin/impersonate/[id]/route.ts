@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { adminRateLimit } from "@/lib/rate-limit";
 
 /**
  * DELETE /api/admin/impersonate/[id]
@@ -12,6 +13,9 @@ export async function DELETE(
 ) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const limited = adminRateLimit("admin-impersonate-end", admin.id, request);
+  if (limited) return limited;
 
   const { id } = await params;
 

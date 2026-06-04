@@ -85,5 +85,9 @@ export function usePermissions() {
     hasAnyPermission,
     isLoading: loading,
     isAdmin: session?.user?.role === "ADMIN",
+    // Quem pode VER registros cancelados (vendas/OS/parcelas). Espelha o
+    // helper de server canSeeCanceled() — valores Prisma "ADMIN"/"GERENTE".
+    canSeeCanceled:
+      session?.user?.role === "ADMIN" || session?.user?.role === "GERENTE",
   };
 }

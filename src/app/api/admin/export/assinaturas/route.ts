@@ -3,10 +3,11 @@ import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { csvRow } from "@/lib/csv-safe";
+import { adminRateLimit } from "@/lib/rate-limit";
 
 const log = logger.child({ route: "admin/export/assinaturas" });
 
-export async function GET() {
+export async function GET(request: Request) {
   const admin = await getAdminSession();
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
@@ -14,6 +15,9 @@ export async function GET() {
   if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
+
+  const limited = adminRateLimit("admin-export-assinaturas", admin.id, request);
+  if (limited) return limited;
 
   try {
     const subscriptions = await prisma.subscription.findMany({

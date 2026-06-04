@@ -6,10 +6,12 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/rate-limit";
 
-// SEGURANÇA: hash dummy bcrypt para comparar quando usuário não existe.
-// Sem isso, há timing leak: !user retorna ~0ms, user existente retorna ~80ms
-// (custo do bcrypt.compare). Atacante mede e enumera emails válidos.
-const DUMMY_HASH = "$2b$10$abcdefghijklmnopqrstuv0123456789012345678901234567890Yzab";
+// SEGURANÇA: hash dummy bcrypt VÁLIDO (60 chars, cost 10) para comparar quando
+// não há candidato. Sem isso há timing leak: !user retorna ~0ms, user existente
+// ~90ms (custo real do bcrypt) → atacante mede e enumera emails. ATENÇÃO: precisa
+// ser um hash bcrypt válido — um valor malformado faz o bcrypt.compare retornar
+// em ~0ms (curto-circuito), o que ANULA a defesa. Gerado com bcrypt.hashSync.
+const DUMMY_HASH = "$2b$10$b7JEb6u1artchYz6H9f56eNIqganC3hhPmUNQYTkNbqU/aMc1T.XS";
 
 const loginSchema = z.object({
   email: z.string().min(1), // Aceita login ou email
@@ -59,12 +61,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null;
           }
 
-          // Buscar por email OU por nome (login)
-          const user = await prisma.user.findFirst({
+          // Q8.4: email passou a ser único POR EMPRESA (@@unique([companyId,email])),
+          // então o mesmo email/login pode existir em mais de uma empresa (dono com
+          // 2 lojas, funcionário em 2 óticas-cliente). Buscamos TODOS os candidatos
+          // e validamos a senha contra cada um, de forma DETERMINÍSTICA (ordem por
+          // createdAt), entrando no primeiro que bater. Para email único (99% dos
+          // casos) o comportamento é idêntico ao anterior.
+          const emailCandidate = login.includes("@")
+            ? login
+            : `${login.toLowerCase()}@login`;
+          const users = await prisma.user.findMany({
             where: {
+              // case-insensitive: o índice único é lower(email), então o login
+              // precisa casar "Joao@x.com" com "joao@x.com" (senão o usuário
+              // criado com maiúsculas nunca loga).
               OR: [
-                { email: login },
-                { email: login.includes("@") ? login : `${login.toLowerCase()}@login` },
+                { email: { equals: login, mode: "insensitive" } },
+                { email: { equals: emailCandidate, mode: "insensitive" } },
               ],
             },
             include: {
@@ -79,22 +92,25 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 },
               },
             },
+            orderBy: { createdAt: "asc" },
           });
 
-          if (!user || !user.passwordHash) {
-            // SEGURANÇA: bcrypt dummy mesmo sem user para igualar tempo de resposta.
-            // Senão atacante mede latência e enumera emails existentes.
-            await bcrypt.compare(password, DUMMY_HASH);
-            return null;
+          // Valida a senha contra cada candidato; entra no primeiro que bater.
+          let user: (typeof users)[number] | null = null;
+          for (const candidate of users) {
+            if (!candidate.passwordHash) continue;
+            if (await bcrypt.compare(password, candidate.passwordHash)) {
+              user = candidate;
+              break;
+            }
           }
 
-          const isPasswordValid = await bcrypt.compare(
-            password,
-            user.passwordHash
-          );
-
-          if (!isPasswordValid) {
-            console.log(`❌ Senha inválida para ${login}`);
+          if (!user) {
+            // SEGURANÇA: bcrypt dummy mesmo sem match para igualar o tempo de
+            // resposta (senão atacante mede latência e enumera emails). Só roda
+            // quando NENHUM candidato bateu — inclui o caso de zero candidatos.
+            await bcrypt.compare(password, DUMMY_HASH);
+            console.log(`❌ Login inválido para ${login}`);
             return null;
           }
 
@@ -163,6 +179,35 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Se for um update da sessão (ex: após signOut), resetar o token
       if (trigger === "update") {
         console.log("🔄 JWT callback - Update trigger");
+      }
+
+      // Q8.3: revogação REAL de impersonação. O token de impersonação é
+      // hand-encoded com a claim `impersonation.sessionId` e antes só expirava
+      // pelo TTL do JWT (30min) — encerrar/expirar a sessão no banco era
+      // cosmético. Aqui revalidamos a ImpersonationSession a cada passagem:
+      // se foi encerrada (endedAt) ou expirou (expiresAt), invalida o token
+      // (return null → próximo acesso cai pra login). Janela curta porque é
+      // sensível e a sessão é curta; falha transitória de DB NÃO desloga.
+      const impersonation = token.impersonation;
+      if (impersonation?.sessionId) {
+        const IMP_REVALIDATE_TTL_MS = 60 * 1000; // 1 min
+        const lastImpCheck = token.impRevalidatedAt;
+        if (!lastImpCheck || Date.now() - lastImpCheck > IMP_REVALIDATE_TTL_MS) {
+          try {
+            const imp = await prisma.impersonationSession.findUnique({
+              where: { id: impersonation.sessionId },
+              select: { endedAt: true, expiresAt: true },
+            });
+            if (!imp || imp.endedAt !== null || imp.expiresAt.getTime() < Date.now()) {
+              // Sessão encerrada/expirada/inexistente → revoga de verdade.
+              return null;
+            }
+            token.impRevalidatedAt = Date.now();
+          } catch (err) {
+            // Falha transitória de DB: não desloga (evita falso logout).
+            console.error("Revalidação de impersonação falhou (não-fatal):", err);
+          }
+        }
       }
 
       // M12: revalida role/existência do usuário no banco periodicamente. A

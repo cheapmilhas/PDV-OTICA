@@ -11,6 +11,7 @@ import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
+import { getNextSequence } from "@/lib/counter";
 import { shouldRestockOnCancel } from "@/lib/stock-operation";
 import { reverseBonusForSale, reactivateBonusForSale } from "@/services/product-campaign.service";
 import {
@@ -621,10 +622,14 @@ export class SaleService {
     // default 5s sob latência alta (Neon US-East), causando P2028 e rollback
     // silencioso da venda. Mantido até que finance-entries saia da transação.
     const sale = await prisma.$transaction(async (tx) => {
+      // 0. Número sequencial de venda por empresa (atômico via Counter key "sale").
+      const number = await getNextSequence(companyId, "sale", tx);
+
       // 1. Criar venda
       const newSale = await tx.sale.create({
         data: {
           companyId,
+          number,
           customerId,
           branchId,
           sellerUserId: effectiveSellerId,
@@ -698,7 +703,7 @@ export class SaleService {
 
       // 5. SalePayments + auto-fee + CashMovement (filtrado) + AR + CR (helper)
       await applyPaymentsInTx(tx, {
-        sale: { id: newSale.id, branchId, companyId },
+        sale: { id: newSale.id, number: newSale.number, branchId, companyId },
         payments,
         userId,
         openShiftId: openShift.id,

@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
@@ -110,6 +111,7 @@ const PRODUCT_TYPE_LABELS: Record<string, string> = {
 };
 
 function RelatorioProdutosVendidosPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [startDate, setStartDate] = useState<Date>(
     new Date(new Date().getFullYear(), new Date().getMonth(), 1)
   );
@@ -200,6 +202,7 @@ function RelatorioProdutosVendidosPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Produtos Vendidos (Top Sellers)",
       subtitle: `Total: ${data.summary.totalProducts} produtos | Receita: ${formatCurrency(data.summary.totalRevenue)} | Custo: ${formatCurrency(data.summary.totalCost)} | Margem Média: ${data.summary.averageMargin.toFixed(2)}%`,
       period: { start: startDate, end: endDate },

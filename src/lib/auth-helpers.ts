@@ -198,6 +198,20 @@ export async function isAdminOrManager(): Promise<boolean> {
 }
 
 /**
+ * Helper para verificar se o usuário pode VER registros cancelados
+ * (vendas/OS/parcelas com status CANCELED).
+ *
+ * Decisão do dono (Rotina de Testes Óticas Ultra, 2026-06-03):
+ * admin/gerente VÊ cancelados (com badge "CANCELADO"); vendedor NÃO vê.
+ *
+ * Usa os valores de role do Prisma ("ADMIN"/"GERENTE") — NUNCA "MANAGER"/"SELLER",
+ * que tornariam o gate um no-op silencioso.
+ */
+export async function canSeeCanceled(): Promise<boolean> {
+  return checkPermission(["ADMIN", "GERENTE"]);
+}
+
+/**
  * Requer que o usuário tenha uma permissão específica (do sistema de permissões)
  * Wrapper para compatibilidade - redireciona para auth-permissions.ts
  */

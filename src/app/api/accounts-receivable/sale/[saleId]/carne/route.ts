@@ -2,6 +2,8 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { saleDisplayNumber } from "@/lib/sale-number";
+import { companyHeaderHtml } from "@/lib/pdf-header";
 
 /**
  * GET /api/accounts-receivable/sale/[saleId]/carne
@@ -33,6 +35,26 @@ export async function GET(
       return NextResponse.json({ error: { message: "Venda não encontrada" } }, { status: 404 });
     }
 
+    // Logo/identidade vêm de CompanySettings (Company não tem logoUrl).
+    const settings = await prisma.companySettings.findUnique({
+      where: { companyId },
+      select: { logoUrl: true, displayName: true, cnpj: true, address: true, phone: true, email: true },
+    });
+    const displayName = settings?.displayName || sale.company.name;
+    const headerHtml = companyHeaderHtml({
+      logoUrl: settings?.logoUrl,
+      companyName: displayName,
+      cnpj: settings?.cnpj || sale.company.cnpj,
+      address: settings?.address,
+      phone: settings?.phone || sale.company.phone,
+      email: settings?.email,
+    });
+    // Escapa o nome para uso direto em HTML nas páginas por-parcela (anti-XSS).
+    const displayNameHtml = displayName
+      .replace(/&/g, "&amp;")
+      .replace(/</g, "&lt;")
+      .replace(/>/g, "&gt;");
+
     const installments = await prisma.accountReceivable.findMany({
       where: { saleId, companyId },
       orderBy: [{ installmentNumber: "asc" }, { dueDate: "asc" }],
@@ -56,7 +78,7 @@ export async function GET(
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Carnê — Venda ${sale.id.slice(0, 8)}</title>
+<title>Carnê — Venda ${saleDisplayNumber(sale)}</title>
 <style>
   @page { size: A4; margin: 12mm; }
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #1a1a1a; font-size: 13px; }
@@ -84,9 +106,9 @@ export async function GET(
 
 <!-- CAPA -->
 <div class="page">
+  ${headerHtml}
   <div class="header">
     <h1>Carnê de Pagamento</h1>
-    <div class="small">${sale.company.name} • CNPJ ${sale.company.cnpj ?? "—"}</div>
   </div>
 
   <div class="grid">
@@ -98,7 +120,7 @@ export async function GET(
     </div>
     <div>
       <div class="label">Venda</div>
-      <div class="value">#${sale.id.slice(0, 8)}</div>
+      <div class="value">${saleDisplayNumber(sale)}</div>
       <div class="small">Filial: ${sale.branch.name}</div>
     </div>
   </div>
@@ -147,7 +169,7 @@ ${installments
     (inst) => `
   <div class="page">
     <div class="header">
-      <h1>${sale.company.name}</h1>
+      <h1>${displayNameHtml}</h1>
       <div class="small">Comprovante de Parcela</div>
     </div>
 
@@ -175,7 +197,7 @@ ${installments
       </div>
 
       <div style="margin-top:16px">
-        <div class="barra">Venda #${sale.id.slice(0, 8)} — Parcela ${inst.installmentNumber}/${inst.totalInstallments}</div>
+        <div class="barra">Venda ${saleDisplayNumber(sale)} — Parcela ${inst.installmentNumber}/${inst.totalInstallments}</div>
       </div>
 
       <p class="small" style="margin-top:16px">

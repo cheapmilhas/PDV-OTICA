@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission, canSeeCanceled } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
@@ -106,9 +106,22 @@ export async function GET(request: Request) {
       ...branchFilter,
     };
 
+    // Decisão do dono (Rotina de Testes Óticas Ultra): vendedor NÃO vê
+    // parcelas de venda cancelada; admin/gerente vê tudo.
+    const showCanceled = await canSeeCanceled();
+
     // Filtro de status
     if (query.status && query.status !== "ALL") {
-      where.status = query.status;
+      // Vendedor não pode pedir explicitamente CANCELED — gate no server,
+      // não só na UI. Trata como se não tivesse filtro de status.
+      if (query.status === "CANCELED" && !showCanceled) {
+        where.status = { not: "CANCELED" };
+      } else {
+        where.status = query.status;
+      }
+    } else if (!showCanceled) {
+      // Sem status explícito ("ALL"): vendedor não vê cancelados.
+      where.status = { not: "CANCELED" };
     }
 
     // Filtro de busca (descrição ou cliente)

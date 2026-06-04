@@ -2,6 +2,7 @@
 
 import { useState, useEffect } from "react";
 import { useRouter, useParams, useSearchParams } from "next/navigation";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import { Button } from "@/components/ui/button";
 import toast from "react-hot-toast";
 import { Printer, ArrowLeft, Loader2, Download } from "lucide-react";
@@ -13,6 +14,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface SaleDetails {
   id: string;
+  number?: number | null;
   createdAt: string;
   subtotal: number;
   discountTotal: number;
@@ -281,7 +283,7 @@ function ImprimirVendaContent() {
             </div>
           ) : (
             <h1 className="text-3xl font-bold mb-2">
-              {companySettings?.displayName || "PDV Ótica"}
+              {companySettings?.displayName || "Empresa"}
             </h1>
           )}
           <p className="text-gray-600">Comprovante de Venda</p>
@@ -291,7 +293,7 @@ function ImprimirVendaContent() {
         <div className="grid grid-cols-2 gap-4 mb-6 text-sm">
           <div>
             <p className="font-semibold text-gray-700">Venda Nº:</p>
-            <p className="text-gray-900">{sale.id.substring(0, 8).toUpperCase()}</p>
+            <p className="text-gray-900">{saleDisplayNumber(sale)}</p>
           </div>
           <div className="text-right">
             <p className="font-semibold text-gray-700">Data/Hora:</p>

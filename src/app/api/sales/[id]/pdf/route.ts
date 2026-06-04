@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId, requireAuth } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { saleDisplayNumber } from "@/lib/sale-number";
 import jsPDF from "jspdf";
 import autoTable from "jspdf-autotable";
 import { format } from "date-fns";
@@ -101,10 +102,11 @@ export async function GET(
     doc.text("COMPROVANTE DE VENDA", pageWidth / 2, y, { align: "center" });
     y += 7;
 
-    const saleNumber = String((sale as any).number || "").padStart(6, "0");
     doc.setFontSize(10);
     doc.setFont("helvetica", "normal");
-    doc.text(`Venda #${saleNumber}`, pageWidth / 2, y, { align: "center" });
+    doc.text(`Venda ${saleDisplayNumber(sale)}`, pageWidth / 2, y, {
+      align: "center",
+    });
     y += 5;
     doc.text(
       format(new Date(sale.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }),
@@ -210,7 +212,7 @@ export async function GET(
     return new NextResponse(pdfBuffer, {
       headers: {
         "Content-Type": "application/pdf",
-        "Content-Disposition": `inline; filename="venda-${saleNumber}.pdf"`,
+        "Content-Disposition": `inline; filename="venda-${saleDisplayNumber(sale).replace("#", "")}.pdf"`,
       },
     });
   } catch (error) {

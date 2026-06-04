@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Printer, X } from "lucide-react";
 import { ComprovanteMovimentacao } from "./comprovante-movimentacao";
 import { StockMovementType } from "@prisma/client";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 
 interface ModalImprimirMovimentacaoProps {
   open: boolean;
@@ -48,6 +49,7 @@ interface ModalImprimirMovimentacaoProps {
 
 export function ModalImprimirMovimentacao({ open, onOpenChange, movement }: ModalImprimirMovimentacaoProps) {
   const printRef = useRef<HTMLDivElement>(null);
+  const { displayName, logoUrl } = useCompanySettings();
 
   const handlePrint = () => {
     if (!printRef.current) return;
@@ -111,7 +113,11 @@ export function ModalImprimirMovimentacao({ open, onOpenChange, movement }: Moda
         </DialogHeader>
 
         <div ref={printRef} className="overflow-auto">
-          <ComprovanteMovimentacao movement={movement} />
+          <ComprovanteMovimentacao
+            movement={movement}
+            companyName={displayName || undefined}
+            logoUrl={logoUrl || undefined}
+          />
         </div>
 
         <div className="flex justify-end gap-2 mt-4">

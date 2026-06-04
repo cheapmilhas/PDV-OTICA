@@ -312,6 +312,7 @@ async function main() {
   const venda1 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      number: 1,
       branchId: branch.id,
       customerId: clientes[0].id,
       sellerUserId: vendedor.id,
@@ -347,6 +348,7 @@ async function main() {
   const venda2 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      number: 2,
       branchId: branch.id,
       customerId: clientes[1].id,
       sellerUserId: vendedor.id,
@@ -381,6 +383,7 @@ async function main() {
   const venda3 = await prisma.sale.create({
     data: {
       companyId: company.id,
+      number: 3,
       branchId: branch.id,
       customerId: clientes[2].id,
       sellerUserId: admin.id,
@@ -417,6 +420,15 @@ async function main() {
         ],
       },
     },
+  });
+
+  // Counter da chave "sale" no MAX dos números semeados (3), para que o próximo
+  // getNextSequence comece em 4 e não colida com as vendas #1/#2/#3 já criadas
+  // (@@unique([companyId, number])). Espelha o seed da Migration B (prod).
+  await prisma.counter.upsert({
+    where: { companyId_key: { companyId: company.id, key: 'sale' } },
+    create: { companyId: company.id, key: 'sale', value: 3 },
+    update: { value: 3 },
   });
 
   // Configurar módulo financeiro

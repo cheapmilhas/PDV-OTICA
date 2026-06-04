@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { adminRateLimit } from "@/lib/rate-limit";
 
 const resetSchema = z.object({
   newPassword: z.string().min(8, "Senha deve ter no mínimo 8 caracteres").optional(),
@@ -20,6 +21,9 @@ export async function POST(
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+
+  const limited = adminRateLimit("admin-reset-password", admin.id, request);
+  if (limited) return limited;
 
   const { id: companyId, userId } = await context.params;
 

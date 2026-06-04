@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, useMemo } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -66,6 +67,7 @@ interface Branch {
 }
 
 function FluxoCaixaPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [data, setData] = useState<CashFlowEntry[]>([]);
   const [loading, setLoading] = useState(false);
   const [accounts, setAccounts] = useState<FinanceAccount[]>([]);
@@ -170,6 +172,7 @@ function FluxoCaixaPageContent() {
     if (!data || data.length === 0) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "Fluxo de Caixa",
       subtitle: "Movimentação financeira no período",
       period: { start: startDate, end: endDate },

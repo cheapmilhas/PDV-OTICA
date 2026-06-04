@@ -4,7 +4,7 @@ import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { encode } from "next-auth/jwt";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
-import { rateLimitResponse } from "@/lib/rate-limit";
+import { rateLimitResponse, clientIp } from "@/lib/rate-limit";
 
 const log = logger.child({ route: "admin/impersonate" });
 
@@ -27,11 +27,7 @@ export async function POST(request: Request) {
     return NextResponse.json({ error: "Sem permissão para impersonar" }, { status: 403 });
   }
 
-  const ip =
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown";
-  const limited = rateLimitResponse(`admin-impersonate:${admin.id}:${ip}`, {
+  const limited = rateLimitResponse(`admin-impersonate:${admin.id}:${clientIp(request)}`, {
     maxRequests: 10,
     windowMs: 15 * 60 * 1000,
   });
@@ -89,16 +85,26 @@ export async function POST(request: Request) {
 
     const expiresAt = new Date(Date.now() + IMPERSONATION_TTL_MS);
 
-    // Criar sessão de impersonação
-    const session = await prisma.impersonationSession.create({
-      data: {
-        adminUserId: admin.id,
-        companyId,
-        reason,
-        expiresAt,
-        ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
-        userAgent: request.headers.get("user-agent") || null,
-      },
+    // Q8.3: encerra sessões de impersonação ANTERIORES ainda abertas deste admin
+    // e cria a nova ATOMICAMENTE. Junto com a revogação no jwt callback
+    // (auth.ts), garante que só a sessão mais recente fica válida (tokens antigos
+    // viram inválidos no próximo acesso, sem esperar o TTL de 30min). A transação
+    // evita o estado parcial "fechei as antigas mas a nova falhou".
+    const session = await prisma.$transaction(async (tx) => {
+      await tx.impersonationSession.updateMany({
+        where: { adminUserId: admin.id, endedAt: null },
+        data: { endedAt: new Date() },
+      });
+      return tx.impersonationSession.create({
+        data: {
+          adminUserId: admin.id,
+          companyId,
+          reason,
+          expiresAt,
+          ipAddress: request.headers.get("x-forwarded-for") || request.headers.get("x-real-ip") || null,
+          userAgent: request.headers.get("user-agent") || null,
+        },
+      });
     });
 
     // Montar payload com TODOS os campos que o callback jwt do auth.ts adiciona

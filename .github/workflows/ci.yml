@@ -16,6 +16,23 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    # Postgres efêmero p/ o drift check do Prisma (Gate 3). Não guarda dados —
+    # serve só de shadow DB para `prisma migrate diff` replayar as migrations.
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: ci
+          POSTGRES_PASSWORD: ci
+          POSTGRES_DB: ci_shadow
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U ci"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
       - uses: actions/checkout@v4
 
@@ -48,6 +65,30 @@ jobs:
           DATABASE_URL: "postgresql://placeholder:placeholder@placeholder:5432/placeholder"
           AUTH_SECRET: "test_secret_min_32_chars_for_ci_only____"
           NEXTAUTH_SECRET: "test_secret_min_32_chars_for_ci_only____"
+
+      # Gate 3: DRIFT de schema (Q8.4). Detecta quando prisma/schema.prisma e as
+      # migrations divergiram — ex.: alguém alterou o schema sem gerar a migration
+      # correspondente (ou vice-versa). Replaya as migrations no Postgres efêmero
+      # (service container) e compara com o datamodel do schema; --exit-code
+      # retorna !=0 se houver diferença.
+      #
+      # ADVISORY (continue-on-error) POR ORA: índices FUNCIONAIS criados só no SQL
+      # (ex.: User_companyId_email_unique e Customer_companyId_email_unique, ambos
+      # com lower(email)) NÃO são representáveis como @@unique no schema, então o
+      # diff os reporta como "diferença" — é esperado, não é drift real. Mantido
+      # informativo até filtrarmos esses índices conhecidos. Ainda assim aponta
+      # divergências reais nos logs. DÍVIDA: tornar bloqueante com allowlist.
+      - name: Prisma schema drift check (advisory)
+        continue-on-error: true
+        run: |
+          npx prisma migrate diff \
+            --from-migrations prisma/migrations \
+            --to-schema-datamodel prisma/schema.prisma \
+            --shadow-database-url "$SHADOW_DATABASE_URL" \
+            --exit-code
+        env:
+          # Banco efêmero do service container acima (replay das migrations).
+          SHADOW_DATABASE_URL: "postgresql://ci:ci@localhost:5432/ci_shadow"
 
       # NOTA: o passo de ESLint foi REMOVIDO temporariamente. O projeto usa
       # .eslintrc.json (formato legado) mas tem ESLint v9 instalado, que exige

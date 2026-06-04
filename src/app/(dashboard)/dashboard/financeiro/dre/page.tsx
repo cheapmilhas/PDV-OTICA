@@ -1,6 +1,7 @@
 "use client";
 
 import { useState, useEffect, Fragment } from "react";
+import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -127,6 +128,7 @@ function isSummaryLine(code: string): boolean {
 }
 
 function DREDinamicoPageContent() {
+  const { companyHeader } = useCompanySettings();
   const [data, setData] = useState<DREData | null>(null);
   const [loading, setLoading] = useState(false);
   const [branches, setBranches] = useState<Branch[]>([]);
@@ -248,6 +250,7 @@ function DREDinamicoPageContent() {
     if (!data) return;
     const { exportToPDF } = await import("@/lib/report-export");
     await exportToPDF({
+      company: companyHeader,
       title: "DRE Dinâmica (Ledger)",
       subtitle: "Demonstrativo de Resultado do Exercício",
       period: { start: startDate, end: endDate },

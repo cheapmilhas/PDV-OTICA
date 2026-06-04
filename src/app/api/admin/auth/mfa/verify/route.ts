@@ -5,6 +5,7 @@ import { getAdminSession } from "@/lib/admin-session";
 import { verifyTotp, generateRecoveryCodes, hashRecoveryCode } from "@/lib/totp";
 import { handleApiError } from "@/lib/error-handler";
 import { logger } from "@/lib/logger";
+import { adminRateLimit } from "@/lib/rate-limit";
 
 const log = logger.child({ route: "admin/auth/mfa/verify" });
 
@@ -23,6 +24,10 @@ export async function POST(request: Request) {
     if (!session) {
       return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
     }
+
+    const limited = adminRateLimit("admin-mfa-verify", session.id, request);
+    if (limited) return limited;
+
     const { token } = verifySchema.parse(await request.json());
 
     const admin = await prisma.adminUser.findUnique({
