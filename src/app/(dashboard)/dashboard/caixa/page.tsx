@@ -142,8 +142,8 @@ function CaixaPage() {
   const getMethodLabel = (method: string) => {
     const labels: Record<string, string> = {
       CASH: "Dinheiro",
-      CREDIT_CARD: "Credito",
-      DEBIT_CARD: "Debito",
+      CREDIT_CARD: "Crédito",
+      DEBIT_CARD: "Débito",
       PIX: "PIX",
       BOLETO: "Boleto",
       STORE_CREDIT: "Crediário",
