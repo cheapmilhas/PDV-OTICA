@@ -108,6 +108,9 @@ export async function POST(
           lineTotal: Number(item.lineTotal || item.total),
         })),
       },
+      // Resultado da auto-geração de OS — a UI usa para avisar quando a OS NÃO
+      // nasceu (ex: lente sem cliente): created:false + reason. null = sem OS aplicável.
+      serviceOrder: result.serviceOrder ?? null,
     };
 
     // Retorna 201 Created

@@ -142,6 +142,16 @@ export function ConvertQuoteButton({
         { duration: 5000 }
       );
 
+      // Aviso quando a OS automática NÃO nasceu mas era esperada (ex: orçamento de
+      // lente sem cliente vinculado). Sem isto a falha era silenciosa — o vendedor
+      // achava que a OS tinha sido criada. reason vem da API (createFromSale).
+      if (data.serviceOrder && data.serviceOrder.created === false && data.serviceOrder.reason) {
+        toast(
+          `Venda criada, mas a Ordem de Serviço não foi gerada automaticamente: ${data.serviceOrder.reason} Você pode gerá-la manualmente na tela da venda.`,
+          { icon: "⚠️", duration: 8000 }
+        );
+      }
+
       setModalOpen(false);
 
       // Redirecionar para a venda criada

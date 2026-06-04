@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { logger } from "@/lib/logger";
 import { getNextSequence } from "@/lib/counter";
 import { Prisma, QuoteStatus } from "@prisma/client";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
@@ -40,6 +41,8 @@ const systemRuleService = new SystemRuleService();
  * - Conversão de orçamento em venda (B1)
  * - Validações de negócio (status, validade, estoque, pagamentos)
  */
+const log = logger.child({ service: "quote" });
+
 export class QuoteService {
   /**
    * Lista orçamentos com paginação, busca e filtros
@@ -1024,6 +1027,10 @@ export class QuoteService {
       timeout: 30_000,
     });
 
+    // Resultado da auto-geração de OS (anexado ao retorno p/ a UI avisar).
+    // null = venda não criada; created:false + reason = OS não nasceu (ex: lente sem cliente).
+    let serviceOrder: { created: boolean; serviceOrderId: string | null; number: number | null; reason: string | null } | null = null;
+
     // 10. Side-effects pós-commit (cashback ganho + campanhas + lembrete) — helper
     if (result.sale) {
       await applyPostCommitSideEffects({
@@ -1063,9 +1070,36 @@ export class QuoteService {
             // Auditoria nunca bloqueia a conversão.
           });
       }
+
+      // 11. Auto-gerar Ordem de Serviço se a venda convertida tiver lente (pós-commit).
+      // Paridade com sale.service.create — sem isto, converter um orçamento com
+      // lente não gerava a OS automática (só a venda direta gerava). Falha aqui
+      // não reverte a conversão; o usuário pode gerar a OS manualmente depois.
+      // Import dinâmico evita ciclo quote.service <-> service-order.service.
+      //
+      // serviceOrder é anexado ao retorno para a UI poder avisar quando a OS NÃO
+      // nasceu (ex: orçamento de lente sem cliente vinculado, ou item avulso sem
+      // produto) — sem isto, a falha era silenciosa e o usuário não sabia.
+      try {
+        const { serviceOrderService } = await import("@/services/service-order.service");
+        const osResult = await serviceOrderService.createFromSale(result.sale.id, companyId, userId);
+        serviceOrder = { created: osResult.created, serviceOrderId: osResult.serviceOrderId, number: osResult.number, reason: null };
+        if (osResult.created) {
+          log.info("OS gerada automaticamente da conversão de orçamento", { saleId: result.sale.id, quoteId, serviceOrderId: osResult.serviceOrderId, number: osResult.number });
+        }
+      } catch (osError) {
+        const isValidationError = osError instanceof AppError && osError.statusCode === 400;
+        const reason = osError instanceof AppError ? osError.message : "Erro ao gerar a Ordem de Serviço.";
+        serviceOrder = { created: false, serviceOrderId: null, number: null, reason };
+        if (isValidationError) {
+          log.warn("OS não gerada automaticamente da conversão", { saleId: result.sale.id, motivo: osError.message });
+        } else {
+          log.error("Falha ao gerar OS automática da conversão", { saleId: result.sale.id, err: String(osError) });
+        }
+      }
     }
 
-    return result;
+    return { ...result, serviceOrder };
   }
 }
 
