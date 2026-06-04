@@ -488,6 +488,16 @@ html {
   }
 }
 
+/* Acessibilidade + segurança de LCP: quem prefere menos movimento (ou se o JS
+   de animação não rodar) vê o conteúdo da landing imediatamente, sem ficar preso
+   em opacity:0 das variantes do framer-motion. */
+@media (prefers-reduced-motion: reduce) {
+  .landing-scope * {
+    animation-duration: 0.001ms !important;
+    transition-duration: 0.001ms !important;
+  }
+}
+
 /* Inline CSS variable overrides for landing components */
 /* These shadow the Tailwind CSS variables so that landing-specific var(--background) etc. work */
 /* Applied via the .landing-scope class on the layout wrapper */
