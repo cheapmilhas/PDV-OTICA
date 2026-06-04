@@ -434,6 +434,7 @@ function UsuariosPage() {
                   <SelectValue placeholder="Selecione o cargo" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
@@ -495,6 +496,7 @@ function UsuariosPage() {
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="VENDEDOR">Vendedor</SelectItem>
                   <SelectItem value="GERENTE">Gerente</SelectItem>
                   <SelectItem value="CAIXA">Caixa</SelectItem>
                   <SelectItem value="ATENDENTE">Atendente</SelectItem>
