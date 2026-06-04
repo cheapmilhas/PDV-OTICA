@@ -65,11 +65,11 @@ export function Security() {
             className="font-heading font-bold text-foreground tracking-tight"
             style={{ fontSize: "var(--text-h1)" }}
           >
-            Seus dados.{" "}
-            <GradientText>Protegidos de verdade.</GradientText>
+            Seus dados seguros —{" "}
+            <GradientText>e sempre com você.</GradientText>
           </h2>
           <p className="mt-4 text-muted text-lg max-w-xl mx-auto">
-            Segurança e conformidade para você dormir tranquilo enquanto sua ótica funciona.
+            Sua ótica na nuvem, com backup automático e proteção de ponta a ponta.
           </p>
         </motion.div>
 

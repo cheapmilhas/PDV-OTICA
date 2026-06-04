@@ -57,13 +57,13 @@ export function PricingSection() {
               color: "var(--lp-foreground)",
             }}
           >
-            Transparentes.{" "}
+            Preço claro,{" "}
             <span style={{ color: "var(--lp-muted)", fontWeight: 400 }}>
-              Sem surpresas.
+              do tamanho da sua ótica.
             </span>
           </h2>
           <p style={{ color: "var(--lp-muted)", fontSize: "1rem", lineHeight: 1.6 }}>
-            Sem letras miúdas. Cancele quando quiser.
+            Comece grátis. Sem taxa de implantação, sem fidelidade. Cancele quando quiser.
           </p>
         </motion.div>
 
@@ -78,8 +78,8 @@ export function PricingSection() {
           <div
             className="inline-flex items-center rounded-xl p-1 relative"
             style={{
-              background: "rgba(255,255,255,0.04)",
-              border: "1px solid rgba(255,255,255,0.08)",
+              background: "var(--lp-background)",
+              border: "1px solid var(--lp-border)",
             }}
           >
             {/* Animated active indicator */}
@@ -89,8 +89,9 @@ export function PricingSection() {
               transition={{ type: "spring", stiffness: 380, damping: 30 }}
               style={{
                 width: "calc(50% - 4px)",
-                background: "rgba(255,255,255,0.08)",
-                border: "1px solid rgba(255,255,255,0.10)",
+                background: "var(--lp-surface)",
+                border: "1px solid var(--lp-border-hover)",
+                boxShadow: "0 1px 3px rgba(10,31,68,0.08)",
               }}
             />
             <button
@@ -109,8 +110,8 @@ export function PricingSection() {
               <span
                 className="text-xs font-bold px-2 py-0.5 rounded-full"
                 style={{
-                  background: "rgba(16,185,129,0.15)",
-                  border: "1px solid rgba(16,185,129,0.25)",
+                  background: "rgba(22,163,74,0.12)",
+                  border: "1px solid rgba(22,163,74,0.25)",
                   color: "var(--brand-success)",
                 }}
               >
@@ -146,16 +147,16 @@ export function PricingSection() {
                   isHighlighted
                     ? {
                         background:
-                          "linear-gradient(160deg, rgba(99,102,241,0.08) 0%, rgba(14,165,233,0.04) 100%)",
-                        border: "1px solid rgba(99,102,241,0.35)",
+                          "linear-gradient(160deg, rgba(46,107,255,0.07) 0%, rgba(34,195,230,0.04) 100%)",
+                        border: "1px solid rgba(46,107,255,0.35)",
                         boxShadow:
-                          "0 0 0 1px rgba(99,102,241,0.15), 0 12px 48px rgba(99,102,241,0.18), 0 4px 12px rgba(99,102,241,0.10)",
+                          "0 0 0 1px rgba(46,107,255,0.12), 0 12px 48px rgba(46,107,255,0.16), 0 4px 12px rgba(10,31,68,0.08)",
                         paddingTop: "2.5rem",
                         paddingBottom: "2.5rem",
                       }
                     : {
-                        background: "rgba(255,255,255,0.02)",
-                        border: "1px solid rgba(255,255,255,0.07)",
+                        background: "var(--lp-background)",
+                        border: "1px solid var(--lp-border)",
                       }
                 }
               >
@@ -165,9 +166,9 @@ export function PricingSection() {
                     <span
                       className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-bold tracking-wide"
                       style={{
-                        background: "linear-gradient(135deg, #6366F1, #7C3AED)",
+                        background: "var(--gradient-brand-vivid)",
                         color: "white",
-                        boxShadow: "0 2px 12px rgba(99,102,241,0.4)",
+                        boxShadow: "0 2px 12px var(--brand-glow)",
                       }}
                     >
                       <Rocket className="h-3 w-3" />
@@ -182,11 +183,11 @@ export function PricingSection() {
                     className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
                     style={{
                       background: isHighlighted
-                        ? "rgba(99,102,241,0.15)"
-                        : "rgba(255,255,255,0.05)",
+                        ? "var(--brand-tint)"
+                        : "var(--lp-surface)",
                       border: isHighlighted
-                        ? "1px solid rgba(99,102,241,0.25)"
-                        : "1px solid rgba(255,255,255,0.08)",
+                        ? "1px solid rgba(46,107,255,0.25)"
+                        : "1px solid var(--lp-border)",
                     }}
                   >
                     <Icon
@@ -262,13 +263,13 @@ export function PricingSection() {
                     style={
                       isHighlighted
                         ? {
-                            background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
+                            background: "var(--gradient-brand-vivid)",
                             color: "white",
-                            boxShadow: "0 4px 20px rgba(99,102,241,0.35)",
+                            boxShadow: "0 4px 20px var(--brand-glow)",
                           }
                         : {
-                            background: "rgba(255,255,255,0.06)",
-                            border: "1px solid rgba(255,255,255,0.10)",
+                            background: "var(--lp-surface)",
+                            border: "1px solid var(--lp-border-hover)",
                             color: "var(--lp-foreground)",
                           }
                     }
@@ -281,7 +282,7 @@ export function PricingSection() {
                 {/* Divider */}
                 <div
                   className="w-full h-px mb-6"
-                  style={{ background: "rgba(255,255,255,0.06)" }}
+                  style={{ background: "var(--lp-border)" }}
                 />
 
                 {/* Feature list */}
@@ -292,8 +293,8 @@ export function PricingSection() {
                         className="mt-0.5 h-4 w-4 rounded-full flex items-center justify-center flex-shrink-0"
                         style={{
                           background: isHighlighted
-                            ? "rgba(99,102,241,0.15)"
-                            : "rgba(16,185,129,0.12)",
+                            ? "var(--brand-tint)"
+                            : "rgba(22,163,74,0.12)",
                         }}
                       >
                         <Check
@@ -322,7 +323,7 @@ export function PricingSection() {
           className="text-center text-sm mt-10"
           style={{ color: "var(--lp-subtle)" }}
         >
-          14 dias grátis em todos os planos. Sem cartão de crédito. Cancele quando quiser.
+          Comece grátis. Sem cartão de crédito, sem taxa de implantação e sem fidelidade.
         </p>
       </div>
     </section>

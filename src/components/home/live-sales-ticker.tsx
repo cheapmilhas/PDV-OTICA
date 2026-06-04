@@ -16,12 +16,12 @@ interface Sale {
 
 const SALES: Sale[] = [
   { id: "OS-0841", customer: "Marina S.", item: "Grau + Armação Silhouette", value: "R$ 890,00", payment: "Cartão 3x", status: "done", color: "#10B981" },
-  { id: "OS-0842", customer: "Pedro A.", item: "Lente Transitions + Anti-reflexo", value: "R$ 1.240,00", payment: "PIX", status: "lab", color: "#6366F1" },
+  { id: "OS-0842", customer: "Pedro A.", item: "Lente Transitions + Anti-reflexo", value: "R$ 1.240,00", payment: "PIX", status: "lab", color: "#2E6BFF" },
   { id: "OS-0843", customer: "Carla M.", item: "Óculos de Sol Ray-Ban RB3025", value: "R$ 670,00", payment: "Dinheiro", status: "done", color: "#10B981" },
-  { id: "OS-0844", customer: "Rafael T.", item: "Lente Multifocal Varilux X", value: "R$ 1.890,00", payment: "Cartão 6x", status: "lab", color: "#6366F1" },
+  { id: "OS-0844", customer: "Rafael T.", item: "Lente Multifocal Varilux X", value: "R$ 1.890,00", payment: "Cartão 6x", status: "lab", color: "#2E6BFF" },
   { id: "OS-0845", customer: "Beatriz N.", item: "Armação Infantil + Lente CR-39", value: "R$ 420,00", payment: "PIX", status: "done", color: "#10B981" },
   { id: "OS-0846", customer: "Lucas F.", item: "Lente Photochromic Blue-cut", value: "R$ 750,00", payment: "Cartão 2x", status: "pending", color: "#F59E0B" },
-  { id: "OS-0847", customer: "Amanda C.", item: "Exame + Armação Miu Miu", value: "R$ 2.100,00", payment: "Cartão 12x", status: "lab", color: "#6366F1" },
+  { id: "OS-0847", customer: "Amanda C.", item: "Exame + Armação Miu Miu", value: "R$ 2.100,00", payment: "Cartão 12x", status: "lab", color: "#2E6BFF" },
   { id: "OS-0848", customer: "João P.", item: "Lente de Contato Anual", value: "R$ 580,00", payment: "PIX", status: "done", color: "#10B981" },
 ];
 
@@ -48,7 +48,7 @@ function SaleRow({ sale, index }: { sale: Sale; index: number }) {
         marginBottom: "8px",
       }}
     >
-      <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#6366F1", fontWeight: 700, minWidth: "68px" }}>
+      <span style={{ fontFamily: "monospace", fontSize: "11px", color: "#2E6BFF", fontWeight: 700, minWidth: "68px" }}>
         {sale.id}
       </span>
       <span style={{ fontSize: "12px", color: "#F2F2F7", fontWeight: 600, minWidth: "80px", overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>
@@ -180,8 +180,8 @@ function PDVAnimation() {
               flex: 1,
               padding: "8px 12px",
               borderRadius: "8px",
-              background: "rgba(99,102,241,0.06)",
-              border: "1px solid rgba(99,102,241,0.12)",
+              background: "rgba(46,107,255,0.06)",
+              border: "1px solid rgba(46,107,255,0.12)",
             }}
           >
             <div style={{ fontSize: "10px", color: "#8888A0", marginBottom: "2px", textTransform: "uppercase", letterSpacing: "0.06em" }}>
@@ -213,7 +213,7 @@ export function LiveSalesTicker() {
         className="absolute inset-0 pointer-events-none"
         style={{
           background:
-            "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(99,102,241,0.06) 0%, transparent 70%)",
+            "radial-gradient(ellipse 60% 50% at 50% 50%, rgba(46,107,255,0.06) 0%, transparent 70%)",
         }}
       />
 
@@ -267,7 +267,7 @@ export function LiveSalesTicker() {
             className="absolute -inset-px rounded-2xl pointer-events-none"
             style={{
               background:
-                "linear-gradient(135deg, rgba(99,102,241,0.25) 0%, rgba(14,165,233,0.12) 50%, rgba(16,185,129,0.15) 100%)",
+                "linear-gradient(135deg, rgba(46,107,255,0.25) 0%, rgba(34,195,230,0.12) 50%, rgba(16,185,129,0.15) 100%)",
               borderRadius: "17px",
             }}
           />
@@ -278,7 +278,7 @@ export function LiveSalesTicker() {
               overflow: "hidden",
               position: "relative",
               boxShadow:
-                "0 0 0 1px rgba(99,102,241,0.18), 0 24px 64px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3)",
+                "0 0 0 1px rgba(46,107,255,0.18), 0 24px 64px rgba(0,0,0,0.5), 0 4px 12px rgba(0,0,0,0.3)",
             }}
           >
             <div
@@ -307,7 +307,7 @@ export function LiveSalesTicker() {
                   maxWidth: "200px",
                 }}
               >
-                pdvotica.com.br/pdv
+                vis.app.br/pdv
               </div>
             </div>
 

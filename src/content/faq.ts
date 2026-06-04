@@ -5,53 +5,43 @@ export interface FaqItem {
 
 export const faqItems: FaqItem[] = [
   {
+    question: "Vou conseguir trazer os dados que já tenho (clientes, produtos)?",
+    answer:
+      "Sim. Você pode importar seus cadastros, e nossa equipe ajuda na migração para você não começar do zero — sem interrupção da sua operação.",
+  },
+  {
+    question: "É difícil de usar? Minha equipe vai aprender?",
+    answer:
+      "O Vis foi feito para quem não é de tecnologia. A maioria aprende o básico no mesmo dia. E você tem suporte sempre que precisar.",
+  },
+  {
+    question: "Fico preso a algum contrato?",
+    answer:
+      "Não. Sem fidelidade e sem multa. Você paga por mês e cancela quando quiser.",
+  },
+  {
     question: "Preciso instalar algo no computador?",
     answer:
-      "Não. O PDV Ótica é 100% na nuvem. Basta um navegador (Chrome, Firefox, Safari) e internet para acessar de qualquer computador, tablet ou celular.",
+      "Não. O Vis é 100% na nuvem. Basta um navegador (Chrome, Firefox, Safari) e internet para acessar de qualquer computador, tablet ou celular.",
   },
   {
-    question: "Funciona no celular e tablet?",
+    question: "Funciona no celular e no tablet?",
     answer:
-      "Sim! O sistema é totalmente responsivo e funciona em qualquer dispositivo. Você pode registrar vendas, consultar estoque e acompanhar relatórios pelo celular.",
+      "Sim. O sistema funciona em qualquer dispositivo com internet. Você pode registrar vendas, consultar estoque e acompanhar a ótica pelo celular.",
   },
   {
-    question: "Posso migrar meus dados de outro sistema?",
+    question: "Como funciona o suporte?",
     answer:
-      "Com certeza. Nossa equipe de implantação auxilia a importação dos seus dados via planilha, CSV ou diretamente do sistema anterior. A migração é feita sem perda de dados e sem interrupção da sua operação.",
+      "Suporte humano por WhatsApp. Você fala com gente de verdade, sem ficar preso em robô, em horário comercial.",
   },
   {
-    question: "Como funciona o suporte técnico?",
+    question: "Serve para mais de uma loja?",
     answer:
-      "O suporte está disponível via WhatsApp, chat e e-mail em horário comercial. Respondemos em menos de 2 horas em dias úteis. Os planos Pro e Rede incluem suporte prioritário com tempo de resposta ainda mais rápido.",
-  },
-  {
-    question: "O sistema emite nota fiscal?",
-    answer:
-      "Sim. O PDV Ótica emite NF-e (nota fiscal eletrônica) e NFC-e (nota fiscal ao consumidor) com certificado digital integrado. Há suporte a SAT (SP), MFe (CE) e outros módulos fiscais regionais.",
-  },
-  {
-    question: "Funciona para mais de uma loja?",
-    answer:
-      "Sim. O plano Rede suporta múltiplas filiais com controle de estoque por loja, transferências entre unidades, visão consolidada e relatórios por filial ou rede.",
+      "Sim. O Vis é multi-loja e multi-CNPJ: você gerencia todas as unidades na mesma conta e compara o desempenho de cada uma.",
   },
   {
     question: "Meus dados ficam seguros?",
     answer:
-      "Totalmente. Os dados são armazenados em servidores com criptografia AES-256, backup automático diário e acesso via SSL/TLS. Estamos em conformidade com a LGPD e as melhores práticas de segurança da informação.",
-  },
-  {
-    question: "O que acontece se a internet cair?",
-    answer:
-      "O sistema possui um modo offline básico que permite registrar vendas e consultar dados locais. Quando a conexão voltar, tudo é sincronizado automaticamente com a nuvem.",
-  },
-  {
-    question: "Tem contrato de fidelidade?",
-    answer:
-      "Não há fidelidade. Você pode cancelar a qualquer momento, sem multas. No plano anual você tem desconto, mas pode pedir reembolso proporcional nos primeiros 30 dias.",
-  },
-  {
-    question: "Quanto tempo leva para começar a usar?",
-    answer:
-      "A configuração básica leva em torno de 30 minutos. Com a ajuda da nossa equipe de implantação, sua ótica pode estar em plena operação no PDV Ótica em até 7 dias, incluindo treinamento da equipe.",
+      "Sim. Os dados ficam na nuvem com conexão criptografada e backup automático, em conformidade com a LGPD. Você é dono dos seus dados e pode exportá-los quando quiser.",
   },
 ];

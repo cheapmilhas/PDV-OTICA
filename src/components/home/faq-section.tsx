@@ -6,12 +6,14 @@ import { Plus, Minus } from "lucide-react";
 import { faqItems } from "@/content/faq";
 import { GradientText } from "@/components/ui/gradient-text";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
+import { JsonLd, buildFaqJsonLd } from "@/components/seo/json-ld";
 
 export function FaqSection() {
   const [open, setOpen] = useState<number | null>(null);
 
   return (
     <section className="section-padding bg-[var(--surface)]">
+      <JsonLd data={buildFaqJsonLd(faqItems)} />
       <div className="container-custom">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -24,11 +26,11 @@ export function FaqSection() {
             className="font-heading font-bold text-foreground tracking-tight"
             style={{ fontSize: "var(--text-h1)" }}
           >
-            Perguntas{" "}
-            <GradientText>frequentes.</GradientText>
+            Perguntas que todo{" "}
+            <GradientText>dono de ótica faz.</GradientText>
           </h2>
           <p className="mt-4 text-muted text-lg max-w-xl mx-auto">
-            Tudo que você precisa saber antes de começar.
+            Tudo o que você precisa saber antes de começar.
           </p>
         </motion.div>
 

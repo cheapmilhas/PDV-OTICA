@@ -17,8 +17,8 @@ export function FinalCta() {
           viewport={viewportConfig}
           className="relative rounded-2xl overflow-hidden"
           style={{
-            background: "rgba(99,102,241,0.06)",
-            border: "1px solid rgba(99,102,241,0.18)",
+            background: "var(--brand-tint)",
+            border: "1px solid var(--lp-border)",
           }}
         >
           {/* Subtle radial light — not a loud gradient */}
@@ -26,7 +26,7 @@ export function FinalCta() {
             className="absolute inset-0 pointer-events-none"
             style={{
               background:
-                "radial-gradient(ellipse 70% 80% at 50% 0%, rgba(99,102,241,0.10) 0%, transparent 70%)",
+                "radial-gradient(ellipse 70% 80% at 50% 0%, rgba(46,107,255,0.12) 0%, transparent 70%)",
             }}
           />
           {/* Noise texture */}
@@ -57,10 +57,10 @@ export function FinalCta() {
                 color: "var(--lp-foreground)",
               }}
             >
-              Pronto para transformar
+              Sua ótica merece
               <br />
               <span style={{ color: "var(--lp-muted)", fontWeight: 400, fontStyle: "italic" }}>
-                a gestão da sua ótica?
+                uma gestão clara.
               </span>
             </motion.h2>
             <motion.p
@@ -68,9 +68,8 @@ export function FinalCta() {
               className="text-base mb-10 max-w-md mx-auto"
               style={{ color: "var(--lp-muted)", lineHeight: 1.65 }}
             >
-              Comece grátis. Sem cartão. Sem compromisso.
-              <br />
-              14 dias para testar tudo.
+              Saia do papel e das planilhas hoje. Comece grátis e veja, em
+              minutos, como é ter tudo sob controle.
             </motion.p>
 
             <motion.div
@@ -86,12 +85,12 @@ export function FinalCta() {
                   href={REGISTER_URL}
                   className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white group"
                   style={{
-                    background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
-                    boxShadow: "0 4px 24px rgba(99,102,241,0.35)",
+                    background: "var(--gradient-brand-vivid)",
+                    boxShadow: "0 6px 24px var(--brand-glow)",
                     minHeight: "52px",
                   }}
                 >
-                  Testar Grátis por 14 dias
+                  Começar grátis
                   <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Link>
               </motion.div>
@@ -107,12 +106,12 @@ export function FinalCta() {
                   className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-semibold transition-colors cursor-pointer"
                   style={{
                     minHeight: "52px",
-                    background: "rgba(255,255,255,0.05)",
-                    border: "1px solid rgba(255,255,255,0.10)",
+                    background: "var(--lp-surface)",
+                    border: "1px solid var(--lp-border-hover)",
                     color: "var(--lp-foreground)",
                   }}
                 >
-                  <MessageCircle className="h-4 w-4" />
+                  <MessageCircle className="h-4 w-4" style={{ color: "var(--brand-primary)" }} />
                   Falar com consultor
                 </a>
               </motion.div>
@@ -123,7 +122,7 @@ export function FinalCta() {
               className="text-xs mt-6"
               style={{ color: "var(--lp-subtle)" }}
             >
-              Mais de 500 óticas já usam o PDV Ótica
+              Sem cartão de crédito. Sem fidelidade. Suporte humano de verdade.
             </motion.p>
           </div>
         </motion.div>

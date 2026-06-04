@@ -34,16 +34,16 @@ export function Testimonials() {
               color: "var(--lp-foreground)",
             }}
           >
-            Quem usa,{" "}
+            Donos de ótica que{" "}
             <span style={{ color: "var(--lp-muted)", fontWeight: 400, fontStyle: "italic" }}>
-              aprova.
+              saíram da planilha.
             </span>
           </h2>
           <p
             className="mt-3 max-w-md"
             style={{ color: "var(--lp-muted)", fontSize: "1rem", lineHeight: 1.65 }}
           >
-            Óticas de todo o Brasil já transformaram sua gestão com o PDV Ótica.
+            Histórias de quem trocou o caderno e o Excel pela gestão clara do Vis.
           </p>
         </motion.div>
 
@@ -64,16 +64,16 @@ export function Testimonials() {
               }}
               className="relative rounded-2xl p-6 flex flex-col transition-all duration-300 cursor-default"
               style={{
-                background: "rgba(255,255,255,0.025)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--lp-background)",
+                border: "1px solid var(--lp-border)",
               }}
               onMouseEnter={(e) => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.12)";
-                (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.04)";
+                (e.currentTarget as HTMLDivElement).style.borderColor = "var(--lp-border-hover)";
+                (e.currentTarget as HTMLDivElement).style.boxShadow = "0 8px 24px rgba(10,31,68,0.08)";
               }}
               onMouseLeave={(e) => {
-                (e.currentTarget as HTMLDivElement).style.borderColor = "rgba(255,255,255,0.07)";
-                (e.currentTarget as HTMLDivElement).style.background = "rgba(255,255,255,0.025)";
+                (e.currentTarget as HTMLDivElement).style.borderColor = "var(--lp-border)";
+                (e.currentTarget as HTMLDivElement).style.boxShadow = "none";
               }}
             >
               {/* Large decorative quote — human touch at low opacity */}
@@ -82,7 +82,7 @@ export function Testimonials() {
                 style={{
                   fontSize: "6rem",
                   lineHeight: 1,
-                  color: "rgba(99,102,241,0.06)",
+                  color: "rgba(46,107,255,0.07)",
                   fontStyle: "normal",
                 }}
               >
@@ -110,8 +110,8 @@ export function Testimonials() {
                 <div
                   className="h-9 w-9 rounded-full flex items-center justify-center text-sm font-bold flex-shrink-0"
                   style={{
-                    background: "rgba(99,102,241,0.12)",
-                    border: "1px solid rgba(99,102,241,0.20)",
+                    background: "var(--brand-tint)",
+                    border: "1px solid rgba(46,107,255,0.20)",
                     color: "var(--brand-primary)",
                   }}
                 >

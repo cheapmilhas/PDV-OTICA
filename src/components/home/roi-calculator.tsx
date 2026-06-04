@@ -83,7 +83,7 @@ export function RoiCalculator() {
             <GradientText>sem um sistema?</GradientText>
           </h2>
           <p className="mt-4 text-muted text-lg max-w-xl mx-auto">
-            Calcule o quanto você pode economizar e ganhar com o PDV Ótica.
+            Calcule o quanto você pode economizar e ganhar com o Vis.
           </p>
         </motion.div>
 
