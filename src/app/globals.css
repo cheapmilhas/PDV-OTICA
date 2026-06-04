@@ -2,42 +2,52 @@
 @tailwind components;
 @tailwind utilities;
 
-/* ===== LANDING PAGE — Custom CSS Properties ===== */
-/* These are used by landing components and are separate from the Shadcn HSL system */
+/* ===== LANDING PAGE — Design System "Vis" ===== */
+/* Tema CLARO por padrão (branco dominante, azul/ciano/navy).
+   Estas vars são usadas só pelos componentes da landing (.landing-scope)
+   e são independentes do sistema Shadcn HSL do dashboard. */
 :root {
-  /* Landing dark theme (default) — medium dark, not OLED black */
-  --lp-background: #111116;
-  --lp-surface: #18181F;
-  --lp-surface-hover: #22222C;
-  --lp-foreground: #F2F2F7;
-  --lp-muted: #8888A0;
-  --lp-subtle: #55556A;
-  --lp-border: rgba(255, 255, 255, 0.08);
-  --lp-border-hover: rgba(255, 255, 255, 0.15);
+  /* Vis — tema claro (default da landing) */
+  --lp-background: #F5F7FA;
+  --lp-surface: #FFFFFF;
+  --lp-surface-hover: #EEF2F6;
+  --lp-foreground: #0A1F44; /* navy — texto principal */
+  --lp-muted: #475569;
+  --lp-subtle: #94A3B8;
+  --lp-border: rgba(14, 42, 71, 0.08);
+  --lp-border-hover: rgba(14, 42, 71, 0.16);
 
-  /* Landing brand colors */
-  --brand-primary: #6366F1;
-  --brand-hover: #7C7FF5;
-  --brand-accent: #0EA5E9;
-  --brand-success: #10B981;
+  /* Marca Vis */
+  --brand-navy: #0A1F44;
+  --brand-primary: #2E6BFF; /* azul Vis — ações */
+  --brand-hover: #1F54E0;
+  --brand-accent: #22C3E6; /* ciano — realce raro */
+  --brand-tint: #E6EEFF; /* azul tint — fundos suaves */
+  --brand-success: #16A34A;
   --brand-warning: #F59E0B;
-  --brand-glow: rgba(99, 102, 241, 0.18);
+  --brand-glow: rgba(46, 107, 255, 0.18);
+
+  /* Gradientes de marca — usar só em acentos */
+  --gradient-brand: linear-gradient(135deg, #0E2A47 0%, #2E6BFF 55%, #22C3E6 100%);
+  --gradient-brand-vivid: linear-gradient(135deg, #2E6BFF 0%, #22C3E6 100%);
+  --gradient-brand-wash: linear-gradient(180deg, #FFFFFF 0%, #F2F8FE 100%);
 
   /* Typography scale */
-  --text-hero: clamp(2.6rem, 5.5vw, 5rem);
-  --text-h1: clamp(2rem, 3.5vw, 3.2rem);
-  --text-h2: clamp(1.5rem, 2.5vw, 2.2rem);
+  --text-hero: clamp(2.75rem, 5.5vw, 4.5rem);
+  --text-h1: clamp(2rem, 3.5vw, 3rem);
+  --text-h2: clamp(1.5rem, 2.5vw, 2.125rem);
 }
 
-.light {
-  --lp-background: #F7F7FA;
-  --lp-surface: #FFFFFF;
-  --lp-surface-hover: #F0F0F5;
-  --lp-foreground: #0A0A14;
-  --lp-muted: #52525E;
-  --lp-subtle: #9090A0;
-  --lp-border: rgba(0, 0, 0, 0.07);
-  --lp-border-hover: rgba(0, 0, 0, 0.13);
+/* Variante escura opcional da landing (não é o default da marca Vis) */
+.landing-dark {
+  --lp-background: #0A1426;
+  --lp-surface: #0E1B33;
+  --lp-surface-hover: #16264A;
+  --lp-foreground: #F2F6FC;
+  --lp-muted: #94A3B8;
+  --lp-subtle: #64748B;
+  --lp-border: rgba(255, 255, 255, 0.08);
+  --lp-border-hover: rgba(255, 255, 255, 0.15);
 }
 
 @layer base {
@@ -396,15 +406,15 @@ html {
 
   /* ── Backgrounds ── */
   .bg-gradient-hero {
-    /* Subtle off-black to dark-indigo — atmosphere without cliché */
+    /* Vis — wash claro com leve brilho azul/ciano no topo */
     background: radial-gradient(
       ellipse 80% 50% at 50% -10%,
-      rgba(99, 102, 241, 0.12) 0%,
+      rgba(46, 107, 255, 0.10) 0%,
       transparent 70%
     ),
     radial-gradient(
       ellipse 50% 40% at 85% 60%,
-      rgba(14, 165, 233, 0.06) 0%,
+      rgba(34, 195, 230, 0.07) 0%,
       transparent 60%
     ),
     var(--lp-background);
@@ -425,34 +435,36 @@ html {
 
   /* ── Dot Pattern ── */
   .bg-dots {
-    background-image: radial-gradient(circle, rgba(255, 255, 255, 0.035) 1px, transparent 1px);
+    /* navy sutil sobre fundo claro Vis */
+    background-image: radial-gradient(circle, rgba(10, 31, 68, 0.05) 1px, transparent 1px);
     background-size: 28px 28px;
   }
 
   /* ── Glass Effects ── */
   .glass {
-    background: rgba(8, 8, 14, 0.82);
+    /* navbar Vis — branco translúcido */
+    background: rgba(255, 255, 255, 0.80);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
   }
   .glass-light {
-    background: rgba(247, 247, 250, 0.88);
+    background: rgba(245, 247, 250, 0.88);
     backdrop-filter: blur(16px) saturate(180%);
     -webkit-backdrop-filter: blur(16px) saturate(180%);
   }
 
   /* ── Glow Border ── */
   .glow-border {
-    border: 1px solid rgba(99, 102, 241, 0.35);
-    box-shadow: 0 0 24px rgba(99, 102, 241, 0.12), inset 0 1px 0 rgba(255,255,255,0.04);
+    border: 1px solid rgba(46, 107, 255, 0.30);
+    box-shadow: 0 0 24px rgba(46, 107, 255, 0.10), inset 0 1px 0 rgba(255,255,255,0.50);
   }
 
   /* ── Shadow Glow for highlighted card ── */
   .shadow-glow {
     box-shadow:
-      0 0 0 1px rgba(99, 102, 241, 0.3),
-      0 8px 32px rgba(99, 102, 241, 0.18),
-      0 2px 8px rgba(99, 102, 241, 0.10);
+      0 0 0 1px rgba(46, 107, 255, 0.28),
+      0 8px 32px rgba(46, 107, 255, 0.16),
+      0 2px 8px rgba(46, 107, 255, 0.10);
   }
 
   /* ── Layout ── */

@@ -1,0 +1,23 @@
+# Vis
+
+> Vis é um sistema de gestão para óticas (SaaS, web) com PDV, controle de estoque
+> de armações e lentes, ordem de serviço de lentes ligada a laboratórios, financeiro
+> completo (contas a pagar/receber, DRE, fluxo de caixa, fechamento de caixa), CRM,
+> cashback e relatórios. Público: donos e gerentes de óticas no Brasil.
+> Tagline: "A gestão clara da sua ótica." Lema: Visão. Clareza. Confiança.
+> Planos a partir de R$149,90/mês. Comece grátis, sem cartão e sem fidelidade.
+
+## Páginas principais
+- [Início](https://vis.app.br): visão geral do sistema de gestão para óticas
+- [Preços](https://vis.app.br/precos): planos a partir de R$149,90/mês, sem fidelidade
+- [Contato](https://vis.app.br/contato): demonstração e suporte
+
+## Funcionalidades
+- PDV (ponto de venda) para ótica, com desconto e venda rápida no balcão
+- Ordem de serviço (OS) de lentes ligada a laboratórios (próprios ou parceiros)
+- Controle de estoque de armações e lentes
+- Financeiro: contas a pagar/receber, DRE, fluxo de caixa, fechamento de caixa
+- CRM e cashback para fidelizar clientes
+- Multi-loja e multi-CNPJ
+- Permissões por cargo (vendedor, caixa, gerente)
+- Garantia e retrabalho de OS com numeração rastreável

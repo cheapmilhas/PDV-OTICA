@@ -6,6 +6,12 @@ import { Toaster } from "@/components/ui/toaster";
 import { SessionProvider } from "@/components/providers/session-provider";
 import { PostHogProvider } from "@/components/providers/posthog-provider";
 import { PostHogIdentify } from "@/components/providers/posthog-identify";
+import {
+  JsonLd,
+  organizationJsonLd,
+  softwareApplicationJsonLd,
+} from "@/components/seo/json-ld";
+import { SITE_URL } from "@/lib/constants";
 
 // Plus Jakarta Sans — geometric, contemporary, avoids "AI template" associations
 const jakartaSans = Plus_Jakarta_Sans({
@@ -18,39 +24,43 @@ const jakartaSans = Plus_Jakarta_Sans({
 export const viewport: Viewport = {
   width: "device-width",
   initialScale: 1,
-  themeColor: "#faf9f7",
+  themeColor: "#2E6BFF",
 };
 
 export const metadata: Metadata = {
+  metadataBase: new URL(SITE_URL),
   title: {
-    default: "PDV Ótica — Sistema de Gestão para Óticas",
-    template: "%s | PDV Ótica",
+    default: "Vis — Sistema de Gestão para Óticas (PDV, OS e Financeiro)",
+    template: "%s | Vis",
   },
   description:
-    "Sistema completo para gestão de óticas: PDV, estoque, financeiro, CRM, relatórios e muito mais. Teste grátis por 14 dias.",
+    "Vis é o sistema de gestão para óticas: PDV, ordens de serviço de lentes, estoque, financeiro e CRM num só lugar. Comece grátis, sem cartão e sem fidelidade.",
   keywords: [
     "sistema para ótica",
-    "PDV ótica",
-    "gestão de ótica",
-    "software para ótica",
-    "sistema de vendas para ótica",
+    "software de gestão para ótica",
+    "PDV para ótica",
     "controle de estoque ótica",
-    "ponto de venda ótica",
+    "ordem de serviço ótica",
+    "sistema de vendas para ótica",
+    "programa para ótica",
   ],
+  applicationName: "Vis",
+  authors: [{ name: "Vis" }],
+  alternates: { canonical: "/" },
   openGraph: {
-    title: "PDV Ótica — Sistema de Gestão para Óticas",
+    title: "Vis — Sistema de Gestão para Óticas",
     description:
-      "Sistema completo para gestão de óticas. PDV, estoque, financeiro, CRM e muito mais. Teste grátis por 14 dias.",
-    url: "https://pdv-otica.vercel.app",
-    siteName: "PDV Ótica",
+      "PDV, ordens de serviço de lentes, estoque, financeiro e CRM para sua ótica num só sistema. Comece grátis.",
+    url: SITE_URL,
+    siteName: "Vis",
     type: "website",
     locale: "pt_BR",
   },
   twitter: {
     card: "summary_large_image",
-    title: "PDV Ótica — Sistema de Gestão para Óticas",
+    title: "Vis — Sistema de Gestão para Óticas",
     description:
-      "Sistema completo para gestão de óticas. Teste grátis por 14 dias.",
+      "PDV, OS de lentes, estoque, financeiro e CRM para óticas. Comece grátis.",
   },
   robots: {
     index: true,
@@ -66,26 +76,8 @@ export default function RootLayout({
   return (
     <html lang="pt-BR">
       <head>
-        <script
-          type="application/ld+json"
-          dangerouslySetInnerHTML={{
-            __html: JSON.stringify({
-              "@context": "https://schema.org",
-              "@type": "SoftwareApplication",
-              name: "PDV Ótica",
-              applicationCategory: "BusinessApplication",
-              operatingSystem: "Web",
-              offers: {
-                "@type": "AggregateOffer",
-                lowPrice: "149.90",
-                highPrice: "499.90",
-                priceCurrency: "BRL",
-              },
-              description:
-                "Sistema completo de gestão para óticas — PDV, estoque, financeiro, CRM e muito mais.",
-            }),
-          }}
-        />
+        <JsonLd data={organizationJsonLd} />
+        <JsonLd data={softwareApplicationJsonLd} />
       </head>
       <body className={`${jakartaSans.variable} font-sans`}>
         <Suspense fallback={null}>

@@ -9,6 +9,6 @@ export default function robots(): MetadataRoute.Robots {
         disallow: ["/dashboard", "/admin", "/api", "/login", "/impersonate", "/force-logout"],
       },
     ],
-    sitemap: "https://pdv-otica.vercel.app/sitemap.xml",
+    sitemap: "https://vis.app.br/sitemap.xml",
   };
 }
