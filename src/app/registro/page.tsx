@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import Link from "next/link";
+import Image from "next/image";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -13,7 +14,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
-import { Glasses, Loader2, ArrowLeft, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
+import { Loader2, ArrowLeft, ArrowRight, Check, Eye, EyeOff } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 import { track } from "@/lib/analytics";
 
@@ -183,11 +184,15 @@ export default function RegistroPage() {
       <div className="w-full max-w-lg">
         {/* Logo */}
         <div className="mb-6 text-center">
-          <Link href="/" className="inline-flex items-center gap-2">
-            <div className="flex h-10 w-10 items-center justify-center rounded-full bg-primary">
-              <Glasses className="h-5 w-5 text-primary-foreground" />
-            </div>
-            <span className="text-xl font-bold">PDV Ótica</span>
+          <Link href="/" className="inline-flex items-center justify-center">
+            <Image
+              src="/vis-logo.png"
+              alt="Vis"
+              width={120}
+              height={40}
+              priority
+              style={{ height: 40, width: "auto" }}
+            />
           </Link>
         </div>
 
@@ -396,12 +401,21 @@ export default function RegistroPage() {
               )}
 
               {step < 2 ? (
-                <Button onClick={handleNext}>
+                <Button
+                  onClick={handleNext}
+                  className="text-white hover:opacity-95"
+                  style={{ background: "linear-gradient(135deg, #2E6BFF 0%, #22C3E6 100%)" }}
+                >
                   Próximo
                   <ArrowRight className="ml-2 h-4 w-4" />
                 </Button>
               ) : (
-                <Button onClick={handleSubmit} disabled={isLoading}>
+                <Button
+                  onClick={handleSubmit}
+                  disabled={isLoading}
+                  className="text-white hover:opacity-95"
+                  style={{ background: "linear-gradient(135deg, #2E6BFF 0%, #22C3E6 100%)" }}
+                >
                   {isLoading && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                   Criar Conta Grátis
                 </Button>

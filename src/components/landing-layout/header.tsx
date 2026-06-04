@@ -40,7 +40,7 @@ export function Header() {
         <div className="flex h-16 items-center justify-between">
           {/* Logo */}
           <Link href="/" className="group" aria-label="Vis — início">
-            <VisLogo size={32} className="transition-transform duration-200 group-hover:scale-[1.03]" />
+            <VisLogo height={30} priority className="transition-transform duration-200 group-hover:scale-[1.03]" />
           </Link>
 
           {/* Desktop Nav */}

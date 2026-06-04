@@ -91,7 +91,8 @@ const features = [
 export function FeaturesBento() {
   return (
     <section
-      className="section-padding relative overflow-hidden"
+      id="funcionalidades"
+      className="section-padding relative overflow-hidden scroll-mt-20"
       style={{ background: "var(--lp-background)" }}
     >
       {/* Subtle radial glow */}

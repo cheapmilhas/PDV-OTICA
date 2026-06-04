@@ -11,7 +11,7 @@ export function Footer() {
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
             <Link href="/" className="mb-4 inline-flex" aria-label="Vis — início">
-              <VisLogo size={32} />
+              <VisLogo height={32} />
             </Link>
             <p className="text-sm text-muted leading-relaxed mb-1">
               A gestão clara da sua ótica.

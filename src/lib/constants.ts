@@ -15,35 +15,30 @@ export const SITE_DESCRIPTION =
   "A gestão clara da sua ótica. Vendas, ordens de serviço de lentes, estoque e financeiro num sistema simples, feito para óticas modernas. Comece grátis.";
 
 export const NAV_LINKS = [
-  { label: "Funcionalidades", href: "/funcionalidades" },
+  { label: "Funcionalidades", href: "/#funcionalidades" },
   { label: "Planos", href: "/precos" },
-  { label: "Blog", href: "/blog" },
   { label: "Contato", href: "/contato" },
 ];
 
 export const FOOTER_LINKS = {
   produto: [
-    { label: "Funcionalidades", href: "/funcionalidades" },
+    { label: "Funcionalidades", href: "/#funcionalidades" },
     { label: "Planos e Preços", href: "/precos" },
-    { label: "Migração", href: "/migracao" },
-    { label: "Integrações", href: "/funcionalidades#integracoes" },
+    { label: "Comece grátis", href: REGISTER_URL },
+    { label: "Falar com consultor", href: WHATSAPP_URL },
   ],
   empresa: [
-    { label: "Sobre nós", href: "/sobre" },
-    { label: "Blog", href: "/blog" },
     { label: "Contato", href: "/contato" },
-    { label: "Carreiras", href: "/carreiras" },
+    { label: "Entrar", href: LOGIN_URL },
+    { label: "Comece grátis", href: REGISTER_URL },
   ],
   recursos: [
-    { label: "Documentação", href: "/docs" },
     { label: "Suporte", href: "/contato" },
-    { label: "Status do sistema", href: "https://status.vis.app.br" },
-    { label: "Atualizações", href: "/blog" },
+    { label: "Falar no WhatsApp", href: WHATSAPP_URL },
   ],
   legal: [
     { label: "Política de Privacidade", href: "/privacidade" },
     { label: "Termos de Uso", href: "/termos" },
     { label: "LGPD", href: "/privacidade#lgpd" },
-    { label: "Cookies", href: "/privacidade#cookies" },
   ],
 };
