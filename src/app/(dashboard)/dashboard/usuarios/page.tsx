@@ -37,6 +37,18 @@ import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/permissions/can";
 import { usePermissions } from "@/hooks/usePermissions";
 
+/**
+ * Extrai a mensagem de erro mais útil da resposta da API.
+ * Erros de validação (Zod) trazem o motivo real em `error.details[].message`
+ * (ex.: "Senha deve ter no mínimo 8 caracteres"); o `error.message` é genérico
+ * ("Dados inválidos"). Priorizamos os details para o usuário saber o que corrigir.
+ */
+function extractApiErrorMessage(err: any, fallback: string): string {
+  const detailMsg = err?.error?.details?.[0]?.message;
+  if (detailMsg) return detailMsg;
+  return err?.error?.message || fallback;
+}
+
 interface UserType {
   id: string;
   name: string;
@@ -117,6 +129,10 @@ function UsuariosPage() {
       toast.error("Preencha nome, login, senha e cargo");
       return;
     }
+    if (form.password.length < 8) {
+      toast.error("A senha deve ter no mínimo 8 caracteres");
+      return;
+    }
 
     setSaving(true);
     try {
@@ -140,7 +156,7 @@ function UsuariosPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || "Erro ao criar usuário");
+        throw new Error(extractApiErrorMessage(err, "Erro ao criar usuário"));
       }
 
       toast.success("Usuário criado com sucesso!");
@@ -181,7 +197,7 @@ function UsuariosPage() {
 
       if (!res.ok) {
         const err = await res.json().catch(() => ({}));
-        throw new Error(err?.error?.message || "Erro ao atualizar");
+        throw new Error(extractApiErrorMessage(err, "Erro ao atualizar"));
       }
 
       toast.success("Usuário atualizado!");
@@ -423,8 +439,9 @@ function UsuariosPage() {
                 type="password"
                 value={form.password}
                 onChange={(e) => setForm({ ...form, password: e.target.value })}
-                placeholder="Mínimo 6 caracteres"
+                placeholder="Mínimo 8 caracteres"
               />
+              <p className="text-xs text-muted-foreground">A senha deve ter no mínimo 8 caracteres.</p>
             </div>
 
             <div className="space-y-2">
