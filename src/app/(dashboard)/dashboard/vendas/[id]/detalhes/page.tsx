@@ -20,9 +20,11 @@ import { hasPermission as hasRolePermission, Permission } from "@/lib/permission
 import { usePermissions } from "@/hooks/usePermissions";
 import { replaceMessageVariables, openWhatsAppWithMessage } from "@/lib/default-messages";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
+import { saleDisplayNumber } from "@/lib/sale-number";
 
 interface SaleDetails {
   id: string;
+  number?: number | null;
   createdAt: string;
   subtotal: number;
   discountTotal: number;
@@ -413,7 +415,9 @@ export default function DetalhesVendaPage() {
             Voltar
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">Detalhes da Venda</h1>
+            <h1 className="text-3xl font-bold">
+              Venda {saleDisplayNumber(sale)}
+            </h1>
             <p className="text-muted-foreground">
               {format(new Date(sale.createdAt), "dd/MM/yyyy 'às' HH:mm", {
                 locale: ptBR,

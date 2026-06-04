@@ -67,7 +67,7 @@ function ImprimirVendaContent() {
   const [sale, setSale] = useState<SaleDetails | null>(null);
   const [loading, setLoading] = useState(true);
   const [downloading, setDownloading] = useState(false);
-  const [companySettings, setCompanySettings] = useState<{ logoUrl?: string; displayName?: string } | null>(null);
+  const [companySettings, setCompanySettings] = useState<{ logoUrl?: string; displayName?: string; cnpj?: string; phone?: string } | null>(null);
 
   // Debug: Log quando componente monta
   useEffect(() => {
@@ -270,9 +270,9 @@ function ImprimirVendaContent() {
 
       {/* Conteúdo para Impressão */}
       <div className="print-container max-w-[210mm] mx-auto bg-white p-8">
-        {/* Cabeçalho */}
+        {/* Cabeçalho — logo + nome + CNPJ juntos (não um-ou-outro) */}
         <div className="border-b-2 border-gray-800 pb-4 mb-6 text-center">
-          {companySettings?.logoUrl ? (
+          {companySettings?.logoUrl && (
             <div className="flex justify-center mb-2">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img
@@ -281,12 +281,17 @@ function ImprimirVendaContent() {
                 className="h-16 w-auto max-w-[200px] object-contain"
               />
             </div>
-          ) : (
-            <h1 className="text-3xl font-bold mb-2">
-              {companySettings?.displayName || "Empresa"}
-            </h1>
           )}
-          <p className="text-gray-600">Comprovante de Venda</p>
+          <h1 className="text-2xl font-bold mb-1">
+            {companySettings?.displayName || "Empresa"}
+          </h1>
+          {companySettings?.cnpj && (
+            <p className="text-gray-600 text-sm">CNPJ: {companySettings.cnpj}</p>
+          )}
+          {companySettings?.phone && (
+            <p className="text-gray-600 text-sm">Tel: {companySettings.phone}</p>
+          )}
+          <p className="text-gray-600 mt-1">Comprovante de Venda</p>
         </div>
 
         {/* Informações da Venda */}
