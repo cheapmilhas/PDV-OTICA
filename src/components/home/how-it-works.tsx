@@ -8,24 +8,24 @@ const steps = [
   {
     number: "01",
     icon: UserPlus,
-    accentColor: "#6366F1",
-    title: "Crie sua conta",
-    description: "Cadastro simples em menos de 5 minutos. Sem cartão, sem burocracia.",
+    accentColor: "#2E6BFF",
+    title: "Crie sua conta grátis",
+    description: "Cadastro em minutos, direto no site. Sem cartão, sem compromisso.",
   },
   {
     number: "02",
     icon: Settings,
-    accentColor: "#0EA5E9",
+    accentColor: "#22C3E6",
     title: "Configure sua ótica",
     description:
-      "Importe seu estoque, cadastre produtos e configure sua equipe com a ajuda do nosso time.",
+      "Cadastre lojas, produtos e usuários. Precisa de ajuda? A gente migra seus dados com você.",
   },
   {
     number: "03",
     icon: TrendingUp,
-    accentColor: "#10B981",
-    title: "Comece a vender",
-    description: "Em até 7 dias sua ótica está em plena operação. Com treinamento incluído.",
+    accentColor: "#16A34A",
+    title: "Venda e registre OS",
+    description: "Sua equipe usa no balcão no mesmo dia — a tela é simples e direta.",
   },
 ];
 
@@ -58,16 +58,16 @@ export function HowItWorks() {
               color: "var(--lp-foreground)",
             }}
           >
-            Simples de{" "}
+            Sair do papel é{" "}
             <span style={{ color: "var(--lp-muted)", fontWeight: 400, fontStyle: "italic" }}>
-              começar.
+              mais simples do que você imagina.
             </span>
           </h2>
           <p
             className="mt-3 max-w-md"
             style={{ color: "var(--lp-muted)", fontSize: "1rem", lineHeight: 1.65 }}
           >
-            Três passos para transformar a gestão da sua ótica.
+            Em um dia sua ótica já pode estar rodando no Vis.
           </p>
         </motion.div>
 
@@ -86,7 +86,7 @@ export function HowItWorks() {
               right: "calc(16.666% + 20px)",
               height: "1px",
               background:
-                "linear-gradient(90deg, rgba(99,102,241,0.22) 0%, rgba(14,165,233,0.18) 50%, rgba(16,185,129,0.18) 100%)",
+                "linear-gradient(90deg, rgba(46,107,255,0.25) 0%, rgba(34,195,230,0.20) 50%, rgba(22,163,74,0.18) 100%)",
             }}
           />
 

@@ -11,24 +11,24 @@ const steps = [
     color: "text-brand-primary",
     bg: "bg-brand-primary/10",
     step: "01",
-    title: "Envie a O.S.",
-    description: "Com um clique, envie a ordem de serviço diretamente ao laboratório parceiro.",
+    title: "Venda de lente vira OS",
+    description: "Ao vender uma lente, a ordem de serviço é criada automaticamente. Nada se perde.",
   },
   {
     icon: ArrowRight,
     color: "text-brand-accent",
     bg: "bg-brand-accent/10",
     step: "02",
-    title: "Acompanhe em tempo real",
-    description: "Veja o status do pedido em cada etapa — do envio até a conclusão no laboratório.",
+    title: "Status e prazo sempre visíveis",
+    description: "Veja em que laboratório está cada lente, o prazo prometido e a etapa atual.",
   },
   {
     icon: Bell,
     color: "text-brand-success",
     bg: "bg-brand-success/10",
     step: "03",
-    title: "Cliente notificado",
-    description: "Quando o óculos ficar pronto, o cliente recebe aviso automático no WhatsApp.",
+    title: "Garantia e retrabalho ligados",
+    description: "Quando algo dá errado, garantia e retrabalho ficam ligados à OS original, com o número certo.",
   },
 ];
 
@@ -52,17 +52,19 @@ export function LabIntegration() {
               className="font-heading font-bold text-foreground tracking-tight mb-4"
               style={{ fontSize: "var(--text-h2)" }}
             >
-              Conectado com{" "}
-              <GradientText>seu laboratório.</GradientText>
+              A parte mais difícil da ótica, finalmente{" "}
+              <GradientText>organizada: a lente.</GradientText>
             </h2>
             <p className="text-muted text-base leading-relaxed mb-8">
-              Acompanhe cada pedido de lente do envio até a entrega, sem precisar ligar
-              para ninguém. Seu laboratório recebe tudo automaticamente.
+              A venda de uma lente já gera a ordem de serviço automaticamente.
+              Você acompanha o status, o prazo prometido e o laboratório
+              responsável — interno ou terceirizado. Quando o cliente ligar
+              perguntando da lente, você não vai mais dizer “deixa eu verificar”.
             </p>
 
             <div className="flex items-center gap-3 text-sm text-muted mb-6">
               <CheckCircle className="h-4 w-4 text-brand-success shrink-0" />
-              <span>Integrado com os principais laboratórios do Brasil</span>
+              <span>Garantia e retrabalho ligados à OS original, com numeração rastreável</span>
             </div>
 
             {/* Lab logos */}
@@ -79,8 +81,8 @@ export function LabIntegration() {
                   key={lab}
                   className="inline-flex items-center rounded-lg px-3 py-1.5 text-xs font-semibold"
                   style={{
-                    background: "rgba(255,255,255,0.04)",
-                    border: "1px solid rgba(255,255,255,0.08)",
+                    background: "var(--lp-background)",
+                    border: "1px solid var(--lp-border)",
                     color: "var(--lp-muted)",
                   }}
                 >

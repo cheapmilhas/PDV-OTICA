@@ -16,74 +16,74 @@ import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 const features = [
   {
     icon: ShoppingCart,
-    accentColor: "#6366F1",
-    title: "PDV e Vendas",
+    accentColor: "#2E6BFF",
+    title: "Venda mais rápida no balcão",
     description:
-      "Feche uma venda em segundos. O.S. gerada automaticamente com logo da ótica, desconto com limite por vendedor e cliente sai com recibo no WhatsApp na hora.",
-    tags: ["Venda em segundos", "Sem erro de desconto", "Recibo automático"],
+      "Feche a venda em poucos cliques, aplique desconto e atenda o próximo cliente sem fila. A venda de lente já gera a OS sozinha.",
+    tags: ["Venda em segundos", "Desconto com limite", "OS automática"],
     span: "2" as const,
   },
   {
     icon: DollarSign,
-    accentColor: "#10B981",
-    title: "Financeiro",
+    accentColor: "#16A34A",
+    title: "O financeiro da ótica resolvido",
     description:
-      "Saiba exatamente se sua ótica está dando lucro — hoje, esse mês, esse ano. DRE, fluxo de caixa e comissões calculadas automaticamente. Sem planilha, sem contador manual.",
-    tags: ["Lucro em tempo real", "DRE automático", "Comissão calculada"],
+      "Contas a pagar, a receber, fluxo de caixa e DRE prontos para você saber se o mês fechou no azul — sem montar planilha de madrugada.",
+    tags: ["Lucro real", "DRE pronto", "Fechamento de caixa"],
     span: "2" as const,
   },
   {
-    icon: Users,
-    accentColor: "#0EA5E9",
-    title: "Clientes e Receituários",
+    icon: FlaskConical,
+    accentColor: "#22C3E6",
+    title: "Cada OS de lente sob controle",
     description:
-      "Nunca perca um cliente por receita vencida. Alerta automático antes do prazo e histórico completo de compras e receitas em um clique.",
-    tags: ["Alerta de vencimento", "Histórico completo", "Recompra fácil"],
+      "Saiba o prazo, o status e o laboratório de cada serviço — e nunca mais esqueça uma lente no caminho.",
+    tags: ["Prazo visível", "Laboratório certo", "Nada se perde"],
+    span: "1" as const,
+  },
+  {
+    icon: Users,
+    accentColor: "#2E6BFF",
+    title: "Clientes que voltam",
+    description:
+      "Histórico, receita e contato de cada cliente à mão, para você atender melhor e vender de novo.",
+    tags: ["Histórico completo", "Receita à mão", "Recompra fácil"],
     span: "1" as const,
   },
   {
     icon: Package,
     accentColor: "#F59E0B",
-    title: "Estoque",
+    title: "Estoque que bate com a realidade",
     description:
-      "Nunca mais perca venda por falta de produto. Alerta antes de zerar, entrada de nota por XML sem digitar nada e controle de todas as filiais numa tela só.",
-    tags: ["Alerta antes de zerar", "XML sem digitação", "Multi-loja"],
-    span: "1" as const,
-  },
-  {
-    icon: FlaskConical,
-    accentColor: "#6366F1",
-    title: "Laboratório",
-    description:
-      "Pare de ligar para saber se o óculos ficou pronto. Envie a O.S. ao laboratório com um clique e o cliente recebe aviso no WhatsApp automaticamente quando estiver pronto.",
-    tags: ["Sem ligação para lab", "Status automático", "Cliente avisado"],
+      "Saiba o que tem, o que falta e o que está parado na prateleira — sem contar armação na mão.",
+    tags: ["Alerta de baixa", "Armações e lentes", "Multi-loja"],
     span: "1" as const,
   },
   {
     icon: FileText,
-    accentColor: "#0EA5E9",
-    title: "Fiscal",
+    accentColor: "#0A1F44",
+    title: "Cada um no seu papel",
     description:
-      "Emita NF-e, NFC-e e SAT sem sair do sistema. Nunca mais digitar nota fiscal na mão — tudo vai automático para o contador.",
-    tags: ["NF-e sem esforço", "Contador automático", "SAT integrado"],
+      "Vendedor, caixa e gerente com acessos próprios — mais segurança e menos confusão no dia a dia.",
+    tags: ["Acesso por cargo", "Mais segurança", "Caixa rastreável"],
     span: "1" as const,
   },
   {
     icon: MessageSquare,
-    accentColor: "#10B981",
-    title: "Pós-venda",
+    accentColor: "#16A34A",
+    title: "Cashback que traz o cliente",
     description:
-      "Traga o cliente de volta sem precisar ligar. WhatsApp automático no aniversário, quando a receita vencer e em campanhas de fidelização — tudo no piloto.",
-    tags: ["Cliente volta sozinho", "WhatsApp automático", "Sem trabalho extra"],
+      "Recompense quem compra e dê um motivo a mais para o cliente escolher a sua ótica de novo.",
+    tags: ["Fideliza", "Cliente volta", "Sem trabalho extra"],
     span: "1" as const,
   },
   {
     icon: BarChart3,
-    accentColor: "#F59E0B",
-    title: "Relatórios e BI",
+    accentColor: "#22C3E6",
+    title: "Relatórios que ajudam a decidir",
     description:
-      "Tome decisões com dados, não com feeling. Veja qual vendedor performa mais, qual produto gira menos e onde está a inadimplência — em tempo real.",
-    tags: ["Decisão com dados", "Por vendedor", "Inadimplência visível"],
+      "Veja qual vendedor performa mais, qual produto gira menos e onde está a inadimplência — em tempo real.",
+    tags: ["Por vendedor", "Giro de produto", "Inadimplência"],
     span: "1" as const,
   },
 ];
@@ -101,7 +101,7 @@ export function FeaturesBento() {
           width: "600px",
           height: "300px",
           background:
-            "radial-gradient(ellipse, rgba(99,102,241,0.06) 0%, transparent 70%)",
+            "radial-gradient(ellipse, rgba(46,107,255,0.07) 0%, transparent 70%)",
         }}
       />
 
@@ -128,16 +128,17 @@ export function FeaturesBento() {
               color: "var(--lp-foreground)",
             }}
           >
-            Tudo que sua ótica precisa.{" "}
+            Tudo o que sua ótica precisa.{" "}
             <span style={{ color: "var(--lp-muted)", fontWeight: 400, fontStyle: "italic" }}>
-              Num só lugar.
+              Nada que você não vai usar.
             </span>
           </h2>
           <p
             className="mt-4 max-w-xl mx-auto"
             style={{ color: "var(--lp-muted)", fontSize: "1rem", lineHeight: 1.65 }}
           >
-            Módulos completos que trabalham juntos para você não precisar de nenhum outro sistema.
+            Recursos pensados para o balcão, o caixa e a gerência — não para um
+            manual de TI.
           </p>
         </motion.div>
 
@@ -163,19 +164,17 @@ export function FeaturesBento() {
                 .filter(Boolean)
                 .join(" ")}
               style={{
-                background: "rgba(255,255,255,0.025)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--lp-surface)",
+                border: "1px solid var(--lp-border)",
               }}
               onMouseEnter={(e) => {
                 const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = `${f.accentColor}35`;
-                el.style.background = `rgba(255,255,255,0.04)`;
-                el.style.boxShadow = `0 8px 32px rgba(0,0,0,0.2), 0 0 0 1px ${f.accentColor}15`;
+                el.style.borderColor = `${f.accentColor}40`;
+                el.style.boxShadow = `0 8px 28px rgba(10,31,68,0.10), 0 0 0 1px ${f.accentColor}18`;
               }}
               onMouseLeave={(e) => {
                 const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "rgba(255,255,255,0.07)";
-                el.style.background = "rgba(255,255,255,0.025)";
+                el.style.borderColor = "var(--lp-border)";
                 el.style.boxShadow = "none";
               }}
             >
@@ -210,9 +209,9 @@ export function FeaturesBento() {
                     key={tag}
                     className="text-xs px-2 py-0.5 rounded-full"
                     style={{
-                      border: "1px solid rgba(255,255,255,0.08)",
-                      color: "var(--lp-subtle)",
-                      background: "rgba(255,255,255,0.03)",
+                      border: "1px solid var(--lp-border)",
+                      color: "var(--lp-muted)",
+                      background: "var(--lp-background)",
                     }}
                   >
                     {tag}

@@ -1,7 +1,7 @@
 "use client";
 
 import { motion } from "framer-motion";
-import { Store, Building2, Link2, ShoppingBag } from "lucide-react";
+import { Store, Building2, FlaskConical } from "lucide-react";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 import { GradientText } from "@/components/ui/gradient-text";
 
@@ -10,41 +10,31 @@ const profiles = [
     icon: Store,
     color: "text-brand-primary",
     bg: "bg-brand-primary/10",
-    title: "Ótica Independente",
-    headline: "Controle tudo sem complicação",
+    title: "Ótica independente",
+    headline: "Saia do apaga-incêndio",
     description:
-      "Sistema completo para quem gerencia sozinho. PDV, estoque, caixa e pós-venda num único lugar fácil de usar.",
+      "Você faz um pouco de tudo. O Vis organiza venda, OS, estoque e dinheiro num lugar só, para você voltar a vender.",
     tag: "1 loja",
   },
   {
     icon: Building2,
     color: "text-brand-accent",
     bg: "bg-brand-accent/10",
-    title: "Rede de Óticas",
-    headline: "Todas as lojas, um só painel",
+    title: "Rede com várias lojas",
+    headline: "Todas as unidades num painel",
     description:
-      "Gerencie estoque, vendas e resultados de cada filial com visão consolidada da rede inteira.",
-    tag: "2-10 lojas",
+      "Multi-loja e multi-CNPJ na mesma conta. Veja o desempenho de cada loja e o todo, sem abrir cinco arquivos.",
+    tag: "Multi-loja",
   },
   {
-    icon: Link2,
+    icon: FlaskConical,
     color: "text-brand-success",
     bg: "bg-brand-success/10",
-    title: "Franquias",
-    headline: "Padronize e escale",
+    title: "Ótica com laboratório",
+    headline: "Cada lente no prazo certo",
     description:
-      "Operações uniformes em todas as unidades, com relatórios por franqueado e controle central.",
-    tag: "Franquias",
-  },
-  {
-    icon: ShoppingBag,
-    color: "text-brand-warning",
-    bg: "bg-brand-warning/10",
-    title: "Ótica Online + Física",
-    headline: "Integre seus canais",
-    description:
-      "E-commerce e loja física sincronizados. Estoque único, clientes unificados, vendas em qualquer canal.",
-    tag: "Omnichannel",
+      "Acompanhe cada OS até o laboratório — interno ou terceirizado — e saiba o prazo real de cada serviço.",
+    tag: "Próprio ou parceiro",
   },
 ];
 
@@ -63,11 +53,12 @@ export function TargetAudience() {
             className="font-heading font-bold text-foreground tracking-tight"
             style={{ fontSize: "var(--text-h1)" }}
           >
-            Para todo tipo de{" "}
-            <GradientText>ótica.</GradientText>
+            Feito para óticas{" "}
+            <GradientText>de verdade.</GradientText>
           </h2>
           <p className="mt-4 text-muted text-lg max-w-xl mx-auto">
-            Seja você dono de uma loja ou de uma rede, o PDV Ótica se adapta à sua realidade.
+            Uma loja só ou uma rede inteira, com laboratório próprio ou
+            parceiros. O Vis se adapta ao seu jeito.
           </p>
         </motion.div>
 
@@ -76,7 +67,7 @@ export function TargetAudience() {
           initial="hidden"
           whileInView="visible"
           viewport={viewportConfig}
-          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5"
+          className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-5"
         >
           {profiles.map((p) => (
             <motion.div

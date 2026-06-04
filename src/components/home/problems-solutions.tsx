@@ -7,24 +7,24 @@ import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 const items = [
   {
     icon: FileSpreadsheet,
-    accentColor: "#F59E0B",
-    problem: "Cansado de planilhas e anotações em papel?",
+    accentColor: "#2E6BFF",
+    problem: "A OS da lente está num bloquinho?",
     solution:
-      "O PDV Ótica centraliza tudo: vendas, clientes, estoque e financeiro num só lugar. Sem planilha, sem caos.",
+      "Toda OS tem status, prazo e laboratório na tela. Quando o cliente liga perguntando da lente, você responde na hora.",
   },
   {
     icon: TrendingDown,
-    accentColor: "#6366F1",
-    problem: "Não sabe se sua ótica está dando lucro?",
+    accentColor: "#22C3E6",
+    problem: "Não sabe se a ótica deu lucro de verdade?",
     solution:
-      "DRE, fluxo de caixa e dashboard em tempo real mostram exatamente como está sua operação — por dia, semana ou mês.",
+      "DRE, fluxo de caixa e fechamento de caixa prontos. No fim do mês você sabe se fechou no azul — sem montar planilha.",
   },
   {
     icon: UserX,
-    accentColor: "#0EA5E9",
-    problem: "Clientes compram uma vez e nunca mais voltam?",
+    accentColor: "#16A34A",
+    problem: "Cliente compra uma vez e some?",
     solution:
-      "WhatsApp automático para receitas vencendo, aniversários e campanhas de fidelização. Seu cliente sempre lembrando de você.",
+      "Histórico, receita e cashback de cada cliente à mão. Você atende melhor, fideliza e vende de novo.",
   },
 ];
 
@@ -41,11 +41,23 @@ export function ProblemsSolutions() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={viewportConfig}
           transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
-          className="text-xs font-bold uppercase tracking-widest mb-10"
+          className="text-xs font-bold uppercase tracking-widest mb-3"
           style={{ color: "var(--brand-primary)", letterSpacing: "0.15em" }}
         >
           Problemas que resolvemos
         </motion.p>
+
+        <motion.h2
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportConfig}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="font-heading font-bold tracking-tight mb-10 max-w-2xl"
+          style={{ fontSize: "var(--text-h2)", color: "var(--lp-foreground)" }}
+        >
+          Gerir ótica no caderno e no Excel custa caro — só que você não vê o
+          preço.
+        </motion.h2>
 
         <motion.div
           variants={staggerContainer}
@@ -60,18 +72,20 @@ export function ProblemsSolutions() {
               variants={fadeInUp}
               className="group rounded-2xl p-6 transition-all duration-300 cursor-default"
               style={{
-                background: "rgba(255,255,255,0.025)",
-                border: "1px solid rgba(255,255,255,0.07)",
+                background: "var(--lp-background)",
+                border: "1px solid var(--lp-border)",
               }}
               onMouseEnter={(e) => {
                 const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = `${item.accentColor}30`;
-                el.style.background = "rgba(255,255,255,0.04)";
+                el.style.borderColor = `${item.accentColor}40`;
+                el.style.background = "var(--lp-surface)";
+                el.style.boxShadow = "0 8px 24px rgba(10,31,68,0.08)";
               }}
               onMouseLeave={(e) => {
                 const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "rgba(255,255,255,0.07)";
-                el.style.background = "rgba(255,255,255,0.025)";
+                el.style.borderColor = "var(--lp-border)";
+                el.style.background = "var(--lp-background)";
+                el.style.boxShadow = "none";
               }}
             >
               <div
@@ -95,6 +109,18 @@ export function ProblemsSolutions() {
             </motion.div>
           ))}
         </motion.div>
+
+        <motion.p
+          initial={{ opacity: 0, y: 16 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={viewportConfig}
+          transition={{ duration: 0.5, ease: [0.22, 1, 0.36, 1] }}
+          className="mt-10 text-base font-medium"
+          style={{ color: "var(--lp-foreground)" }}
+        >
+          Você abriu uma ótica para cuidar de clientes. Não para caçar
+          informação.
+        </motion.p>
       </div>
     </section>
   );
