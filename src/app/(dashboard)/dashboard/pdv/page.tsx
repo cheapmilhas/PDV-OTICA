@@ -149,49 +149,59 @@ function PDVPage() {
   // Refs para atalhos
   const searchInputRef = useRef<HTMLInputElement>(null);
 
+  // Ações dos atalhos F2/F3/F4/F8 — extraídas para serem chamadas tanto pelas
+  // teclas quanto pelos botões do topo (antes os botões eram só decorativos).
+  const acaoF2Busca = useCallback(() => {
+    searchInputRef.current?.focus();
+  }, []);
+
+  const acaoF3Cliente = useCallback(() => {
+    if (!modalClienteOpen) setModalClienteOpen(true);
+  }, [modalClienteOpen]);
+
+  const acaoF4Finalizar = useCallback(() => {
+    if (carrinho.length === 0 || modalVendaOpen) return;
+    if (sellers.length > 0 && !selectedSellerId) {
+      toast.error("Selecione um vendedor antes de finalizar");
+      return;
+    }
+    const temLente = carrinho.some(
+      (item) => item.type && LENS_PRODUCT_TYPES.includes(item.type)
+    );
+    if (temLente && !clienteSelecionado?.id) {
+      toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
+      return;
+    }
+    setModalVendaOpen(true);
+  }, [carrinho, modalVendaOpen, sellers.length, selectedSellerId, clienteSelecionado]);
+
+  const acaoF8Limpar = useCallback(() => {
+    if (carrinho.length === 0) return;
+    setCarrinho([]);
+    setClienteSelecionado(null);
+    setBuscaCliente("");
+    setDescontoVendaValor("");
+    setDescontoVendaTipo("FIXED");
+    // Mantém o vendedor selecionado (e o localStorage) para a próxima venda —
+    // numa loja com vendas em sequência, reselecionar a cada limpeza é atrito.
+    toast.success("Venda limpa");
+  }, [carrinho.length]);
+
   // Atalhos de teclado globais
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
-      // Não ativar atalhos se estiver em input/textarea (exceto F-keys)
-      const target = e.target as HTMLElement;
-      const isInInput = target.tagName === "INPUT" || target.tagName === "TEXTAREA";
-
       if (e.key === "F2") {
         e.preventDefault();
-        searchInputRef.current?.focus();
+        acaoF2Busca();
       } else if (e.key === "F4") {
         e.preventDefault();
-        if (carrinho.length > 0 && !modalVendaOpen) {
-          if (sellers.length > 0 && !selectedSellerId) {
-            toast.error("Selecione um vendedor antes de finalizar");
-            return;
-          }
-          const temLente = carrinho.some(
-            (item) => item.type && LENS_PRODUCT_TYPES.includes(item.type)
-          );
-          if (temLente && !clienteSelecionado?.id) {
-            toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
-            return;
-          }
-          setModalVendaOpen(true);
-        }
+        acaoF4Finalizar();
       } else if (e.key === "F8") {
         e.preventDefault();
-        if (carrinho.length > 0) {
-          setCarrinho([]);
-          setClienteSelecionado(null);
-          setBuscaCliente("");
-          setSelectedSellerId("");
-          setDescontoVendaValor("");
-          setDescontoVendaTipo("FIXED");
-          localStorage.removeItem("pdv-selected-seller");
-          toast.success("Venda limpa");
-        }
+        acaoF8Limpar();
       } else if (e.key === "F3") {
         e.preventDefault();
-        if (!modalClienteOpen) {
-          setModalClienteOpen(true);
-        }
+        acaoF3Cliente();
       } else if (e.key === "Escape") {
         if (modalVendaOpen) setModalVendaOpen(false);
         if (modalClienteOpen) setModalClienteOpen(false);
@@ -200,9 +210,7 @@ function PDVPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-    // carrinho (completo) e clienteSelecionado nas deps: o gate de lente+cliente
-    // do F4 lê esses valores — sem isso, stale closure burlava o gate.
-  }, [carrinho, modalVendaOpen, modalClienteOpen, sellers.length, selectedSellerId, clienteSelecionado]);
+  }, [acaoF2Busca, acaoF3Cliente, acaoF4Finalizar, acaoF8Limpar, modalVendaOpen, modalClienteOpen]);
 
   // Carregar cliente do orçamento se houver quoteId
   useEffect(() => {
@@ -1001,10 +1009,42 @@ function PDVPage() {
           </Badge>
         </div>
         <div className="flex gap-1 text-xs">
-          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F2 Busca</Badge>
-          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F3 Cliente</Badge>
-          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F4 Finalizar</Badge>
-          <Badge variant="secondary" className="text-xs hidden md:inline-flex">F8 Limpar</Badge>
+          <Badge
+            variant="secondary"
+            role="button"
+            tabIndex={0}
+            onClick={acaoF2Busca}
+            className="text-xs hidden md:inline-flex cursor-pointer hover:bg-secondary/80"
+          >
+            F2 Busca
+          </Badge>
+          <Badge
+            variant="secondary"
+            role="button"
+            tabIndex={0}
+            onClick={acaoF3Cliente}
+            className="text-xs hidden md:inline-flex cursor-pointer hover:bg-secondary/80"
+          >
+            F3 Cliente
+          </Badge>
+          <Badge
+            variant="secondary"
+            role="button"
+            tabIndex={0}
+            onClick={acaoF4Finalizar}
+            className="text-xs hidden md:inline-flex cursor-pointer hover:bg-secondary/80"
+          >
+            F4 Finalizar
+          </Badge>
+          <Badge
+            variant="secondary"
+            role="button"
+            tabIndex={0}
+            onClick={acaoF8Limpar}
+            className="text-xs hidden md:inline-flex cursor-pointer hover:bg-secondary/80"
+          >
+            F8 Limpar
+          </Badge>
         </div>
       </div>
 
@@ -1065,9 +1105,15 @@ function PDVPage() {
                       <span className="font-mono text-xs text-muted-foreground">
                         {produto.sku}
                       </span>
-                      <Badge variant={produto.stockQty > 10 ? "secondary" : produto.stockQty > 0 ? "outline" : "destructive"} className="text-xs">
-                        {produto.stockQty}
-                      </Badge>
+                      {produto.stockControlled ? (
+                        <Badge variant={produto.stockQty > 10 ? "secondary" : produto.stockQty > 0 ? "outline" : "destructive"} className="text-xs">
+                          {produto.stockQty}
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-xs" title="Sem controle de estoque">
+                          ∞
+                        </Badge>
+                      )}
                     </div>
                     <p className="line-clamp-1 text-left text-sm font-medium">
                       {produto.name}
