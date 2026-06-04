@@ -23,9 +23,9 @@ export function AnnouncementBar() {
     <div
       className="relative z-50 py-2.5 px-4 text-center text-xs font-medium"
       style={{
-        background: "rgba(99,102,241,0.07)",
-        borderBottom: "1px solid rgba(99,102,241,0.14)",
-        color: "rgba(248,248,252,0.70)",
+        background: "var(--brand-tint)",
+        borderBottom: "1px solid var(--lp-border)",
+        color: "var(--lp-muted)",
       }}
     >
       <div className="flex items-center justify-center gap-2">
@@ -33,18 +33,18 @@ export function AnnouncementBar() {
           className="inline-block h-1.5 w-1.5 rounded-full flex-shrink-0"
           style={{
             background: "var(--brand-primary)",
-            boxShadow: "0 0 6px rgba(99,102,241,0.7)",
+            boxShadow: "0 0 6px var(--brand-glow)",
           }}
         />
         <span>
-          <strong style={{ color: "var(--lp-foreground)" }}>Lançamento:</strong>{" "}
-          30% OFF nos primeiros 3 meses —{" "}
+          <strong style={{ color: "var(--lp-foreground)" }}>Novo:</strong>{" "}
+          o Vis já está no ar. Comece grátis hoje, sem cartão —{" "}
           <Link
             href="/precos"
             className="underline underline-offset-2 hover:no-underline transition-colors"
             style={{ color: "var(--brand-primary)" }}
           >
-            Ver planos
+            ver planos
           </Link>
         </span>
       </div>

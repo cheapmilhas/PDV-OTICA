@@ -2,58 +2,35 @@
 
 import { motion } from "framer-motion";
 import Link from "next/link";
-import { ArrowRight, Play, Star, Sparkles } from "lucide-react";
-import { Button } from "@/components/ui/button";
+import { ArrowRight, MessageCircle, Check, Sparkles } from "lucide-react";
 import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
 import { fadeInUp, staggerContainer, scaleIn } from "@/lib/animations";
 
-// Easing for premium feel
-const EASE_EXPO = [0.22, 1, 0.36, 1];
+const HERO_BULLETS = [
+  "Cada OS de lente, do pedido ao laboratório à entrega",
+  "Saiba quanto entrou, saiu e sobrou — sem planilha",
+  "Cada cargo no seu papel: vendedor, caixa e gerente",
+  "Funciona no computador, tablet ou celular",
+];
 
 export function Hero() {
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden pt-20 pb-16">
-      {/* ── Atmospheric background — no white, no gradient text ── */}
+      {/* ── Wash claro Vis ── */}
       <div className="absolute inset-0 bg-gradient-hero pointer-events-none" />
-
-      {/* Dot grid — understated, not screaming */}
       <div className="absolute inset-0 bg-dots pointer-events-none" />
 
-      {/* Noise texture overlay — organic grain that breaks "AI flatness" */}
-      <div
-        className="absolute inset-0 pointer-events-none opacity-30"
-        style={{
-          backgroundImage: `url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.75' numOctaves='4' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='200' height='200' filter='url(%23n)' opacity='0.08'/%3E%3C/svg%3E")`,
-          backgroundRepeat: "repeat",
-          backgroundSize: "200px 200px",
-        }}
-      />
-
-      {/* Radial glow — off-center, subtle depth */}
+      {/* Glow azul/ciano sutil no topo */}
       <div
         className="absolute pointer-events-none"
         style={{
-          top: "-5%",
+          top: "-8%",
           left: "50%",
           transform: "translateX(-50%)",
-          width: "700px",
-          height: "500px",
+          width: "760px",
+          height: "520px",
           background:
-            "radial-gradient(ellipse, rgba(99,102,241,0.10) 0%, rgba(14,165,233,0.04) 50%, transparent 75%)",
-          filter: "blur(1px)",
-        }}
-      />
-
-      {/* Second accent glow — creates asymmetry */}
-      <div
-        className="absolute pointer-events-none hidden lg:block"
-        style={{
-          bottom: "15%",
-          right: "8%",
-          width: "320px",
-          height: "320px",
-          background:
-            "radial-gradient(circle, rgba(16,185,129,0.06) 0%, transparent 70%)",
+            "radial-gradient(ellipse, rgba(46,107,255,0.12) 0%, rgba(34,195,230,0.06) 50%, transparent 75%)",
           filter: "blur(2px)",
         }}
       />
@@ -65,7 +42,7 @@ export function Hero() {
           animate="visible"
           className="flex flex-col items-center text-center max-w-4xl mx-auto"
         >
-          {/* ── Badge/Pill — with a real spring bounce ── */}
+          {/* ── Eyebrow ── */}
           <motion.div
             initial={{ opacity: 0, scale: 0.82, y: -8 }}
             animate={{ opacity: 1, scale: 1, y: 0 }}
@@ -75,51 +52,39 @@ export function Hero() {
             <span
               className="inline-flex items-center gap-2 rounded-full border px-4 py-1.5 text-xs font-semibold tracking-wide"
               style={{
-                borderColor: "rgba(99,102,241,0.28)",
-                background: "rgba(99,102,241,0.07)",
-                color: "#a5b4fc",
-                backdropFilter: "blur(8px)",
+                borderColor: "var(--lp-border)",
+                background: "var(--brand-tint)",
+                color: "var(--brand-primary)",
               }}
             >
-              <Sparkles className="h-3 w-3 flex-shrink-0" style={{ color: "#818cf8" }} />
-              Novo: Dashboard com BI em tempo real
-              <ArrowRight className="h-3 w-3 flex-shrink-0 opacity-70" />
+              <Sparkles className="h-3 w-3 flex-shrink-0" />
+              O sistema simples para óticas modernas
             </span>
           </motion.div>
 
-          {/* ── Headline — NO gradient text ── */}
-          {/* Instead: solid white + brand teal keyword with italic weight contrast */}
+          {/* ── Headline ── */}
           <motion.h1
             variants={fadeInUp}
             className="font-heading font-extrabold tracking-tight mb-5"
             style={{
               fontSize: "var(--text-hero)",
-              lineHeight: 1.08,
+              lineHeight: 1.05,
               letterSpacing: "-0.03em",
               color: "var(--lp-foreground)",
             }}
           >
-            Sua ótica no{" "}
+            A gestão{" "}
             <span
               style={{
-                color: "var(--brand-primary)",
-                fontStyle: "italic",
-                fontWeight: 800,
+                background: "var(--gradient-brand-vivid)",
+                WebkitBackgroundClip: "text",
+                backgroundClip: "text",
+                color: "transparent",
               }}
             >
-              controle.
-            </span>
-            <br />
-            Suas vendas no{" "}
-            <span
-              style={{
-                color: "var(--brand-accent)",
-                fontStyle: "italic",
-                fontWeight: 800,
-              }}
-            >
-              piloto.
-            </span>
+              clara
+            </span>{" "}
+            da sua ótica.
           </motion.h1>
 
           {/* Subtitle */}
@@ -128,21 +93,21 @@ export function Hero() {
             style={{
               fontSize: "1.125rem",
               color: "var(--lp-muted)",
-              maxWidth: "34rem",
+              maxWidth: "38rem",
               lineHeight: 1.65,
               marginBottom: "2rem",
             }}
           >
-            O sistema completo que simplifica a gestão da sua ótica — do caixa ao
-            pós-venda. Fácil de usar, rápido de aprender.
+            Vendas, ordens de serviço de lentes, estoque e financeiro num só
+            lugar. O Vis tira sua ótica das planilhas e do papel — e coloca tudo
+            sob controle, do balcão ao laboratório.
           </motion.p>
 
-          {/* ── CTAs ── */}
+          {/* ── CTAs duplos ── */}
           <motion.div
             variants={fadeInUp}
-            className="flex flex-col sm:flex-row gap-3 mb-10 w-full sm:w-auto"
+            className="flex flex-col sm:flex-row gap-3 mb-5 w-full sm:w-auto"
           >
-            {/* Primary CTA — gradient + glow, arrow that slides on hover */}
             <motion.div
               whileHover={{ scale: 1.03, y: -2 }}
               whileTap={{ scale: 0.97 }}
@@ -150,22 +115,19 @@ export function Hero() {
             >
               <Link
                 href={REGISTER_URL}
-                className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white group"
+                className="inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-sm font-bold text-white group w-full"
                 style={{
-                  background: "linear-gradient(135deg, #6366F1 0%, #7C3AED 100%)",
-                  boxShadow: "0 4px 24px rgba(99,102,241,0.35), 0 1px 3px rgba(0,0,0,0.2)",
+                  background: "var(--gradient-brand-vivid)",
+                  boxShadow: "0 6px 24px var(--brand-glow), 0 1px 3px rgba(10,31,68,0.1)",
                   minHeight: "52px",
                   fontSize: "0.9375rem",
                 }}
               >
-                Testar Grátis por 14 dias
-                <ArrowRight
-                  className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1"
-                />
+                Começar grátis
+                <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-1" />
               </Link>
             </motion.div>
 
-            {/* Secondary CTA */}
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -175,55 +137,62 @@ export function Hero() {
                 href={WHATSAPP_URL}
                 target="_blank"
                 rel="noopener noreferrer"
-                className="inline-flex items-center gap-2 rounded-xl px-7 py-3.5 text-sm font-semibold transition-colors"
+                className="inline-flex items-center justify-center gap-2 rounded-xl px-7 py-3.5 text-sm font-semibold transition-colors w-full"
                 style={{
                   minHeight: "52px",
                   fontSize: "0.9375rem",
-                  background: "rgba(255,255,255,0.05)",
-                  border: "1px solid rgba(255,255,255,0.1)",
+                  background: "var(--lp-surface)",
+                  border: "1px solid var(--lp-border-hover)",
                   color: "var(--lp-foreground)",
-                  backdropFilter: "blur(8px)",
                 }}
               >
-                <Play className="h-4 w-4" />
+                <MessageCircle className="h-4 w-4" style={{ color: "var(--brand-primary)" }} />
                 Falar com consultor
               </a>
             </motion.div>
           </motion.div>
 
-          {/* Social proof */}
-          <motion.div
+          {/* Microcopy */}
+          <motion.p
             variants={fadeInUp}
-            className="flex flex-col sm:flex-row items-center gap-3 mb-12"
-            style={{ fontSize: "0.8125rem", color: "var(--lp-muted)" }}
+            className="mb-9"
+            style={{ fontSize: "0.8125rem", color: "var(--lp-subtle)" }}
           >
-            <div className="flex items-center gap-1.5">
-              <div className="flex">
-                {[...Array(5)].map((_, i) => (
-                  <Star key={i} className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
-                ))}
-              </div>
-              <span className="font-semibold" style={{ color: "var(--lp-foreground)" }}>4.9</span>
-              <span>no Google</span>
-            </div>
-            <span className="hidden sm:block opacity-30">·</span>
-            <span className="font-semibold" style={{ color: "var(--lp-foreground)" }}>+500 óticas</span>
-            <span className="hidden sm:block opacity-30">·</span>
-            <span>Sem cartão de crédito</span>
-            <span className="hidden sm:block opacity-30">·</span>
-            <span>Cancele quando quiser</span>
-          </motion.div>
+            Sem cartão de crédito. Configuração em minutos. Cancele quando quiser.
+          </motion.p>
 
-          {/* ── Dashboard Mockup ── */}
+          {/* Bullets de prova */}
+          <motion.ul
+            variants={fadeInUp}
+            className="grid grid-cols-1 sm:grid-cols-2 gap-x-8 gap-y-2.5 mb-12 text-left max-w-2xl"
+          >
+            {HERO_BULLETS.map((b) => (
+              <li
+                key={b}
+                className="flex items-start gap-2.5 text-sm"
+                style={{ color: "var(--lp-muted)" }}
+              >
+                <span
+                  className="flex h-5 w-5 flex-shrink-0 items-center justify-center rounded-full mt-0.5"
+                  style={{ background: "var(--brand-tint)" }}
+                >
+                  <Check className="h-3 w-3" style={{ color: "var(--brand-primary)" }} />
+                </span>
+                {b}
+              </li>
+            ))}
+          </motion.ul>
+
+          {/* ── Dashboard Mockup (claro Vis) ── */}
           <motion.div variants={scaleIn} className="w-full max-w-5xl">
             <div className="relative">
-              {/* Ambient glow behind the frame */}
+              {/* Ambient glow */}
               <div
                 className="absolute -inset-px rounded-3xl pointer-events-none"
                 style={{
                   background:
-                    "linear-gradient(135deg, rgba(99,102,241,0.15) 0%, rgba(14,165,233,0.08) 50%, rgba(16,185,129,0.06) 100%)",
-                  filter: "blur(1px)",
+                    "linear-gradient(135deg, rgba(46,107,255,0.18) 0%, rgba(34,195,230,0.10) 100%)",
+                  filter: "blur(2px)",
                 }}
               />
 
@@ -231,10 +200,10 @@ export function Hero() {
               <div
                 className="relative rounded-2xl overflow-hidden"
                 style={{
-                  border: "1px solid rgba(255,255,255,0.10)",
+                  border: "1px solid var(--lp-border)",
                   background: "var(--lp-surface)",
                   boxShadow:
-                    "0 32px 80px rgba(0,0,0,0.5), 0 8px 24px rgba(0,0,0,0.3), inset 0 1px 0 rgba(255,255,255,0.06)",
+                    "0 32px 80px rgba(10,31,68,0.18), 0 8px 24px rgba(10,31,68,0.10)",
                 }}
               >
                 {/* Browser chrome */}
@@ -242,23 +211,20 @@ export function Hero() {
                   className="flex items-center gap-2 px-4 py-3 border-b"
                   style={{
                     background: "var(--lp-surface-hover)",
-                    borderColor: "rgba(255,255,255,0.06)",
+                    borderColor: "var(--lp-border)",
                   }}
                 >
                   <div className="flex gap-1.5">
-                    <div className="h-3 w-3 rounded-full bg-red-400/60" />
-                    <div className="h-3 w-3 rounded-full bg-yellow-400/60" />
-                    <div className="h-3 w-3 rounded-full bg-green-400/60" />
+                    <div className="h-3 w-3 rounded-full" style={{ background: "#FF5F57" }} />
+                    <div className="h-3 w-3 rounded-full" style={{ background: "#FEBC2E" }} />
+                    <div className="h-3 w-3 rounded-full" style={{ background: "#28C840" }} />
                   </div>
                   <div className="flex-1 mx-4">
                     <div
                       className="rounded-md px-3 py-1 text-xs text-center"
-                      style={{
-                        background: "rgba(255,255,255,0.04)",
-                        color: "var(--lp-subtle)",
-                      }}
+                      style={{ background: "var(--lp-background)", color: "var(--lp-subtle)" }}
                     >
-                      app.pdvotica.com.br/dashboard
+                      vis.app.br/dashboard
                     </div>
                   </div>
                 </div>
@@ -271,23 +237,20 @@ export function Hero() {
                   {/* Top stats */}
                   <div className="grid grid-cols-2 md:grid-cols-4 gap-3 mb-4">
                     {[
-                      { label: "Vendas hoje", value: "R$ 4.280", color: "text-brand-success", delta: "↑ 12%" },
-                      { label: "O.S. abertas", value: "23", color: "text-brand-primary", delta: "5 prontas" },
-                      { label: "Estoque baixo", value: "7 itens", color: "text-brand-warning", delta: "Atenção" },
-                      { label: "Meta do mês", value: "68%", color: "text-brand-accent", delta: "R$ 32k / 47k" },
+                      { label: "Vendas hoje", value: "R$ 4.280", color: "var(--brand-success)", delta: "↑ 12%" },
+                      { label: "OS abertas", value: "23", color: "var(--brand-primary)", delta: "5 prontas" },
+                      { label: "Estoque baixo", value: "7 itens", color: "var(--brand-warning)", delta: "Atenção" },
+                      { label: "Meta do mês", value: "68%", color: "var(--brand-accent)", delta: "R$ 32k / 47k" },
                     ].map((stat) => (
                       <div
                         key={stat.label}
                         className="rounded-xl p-3 md:p-4"
-                        style={{
-                          border: "1px solid rgba(255,255,255,0.06)",
-                          background: "var(--lp-surface)",
-                        }}
+                        style={{ border: "1px solid var(--lp-border)", background: "var(--lp-surface)" }}
                       >
                         <p className="text-xs mb-1" style={{ color: "var(--lp-muted)" }}>
                           {stat.label}
                         </p>
-                        <p className={`font-heading font-bold text-lg md:text-xl ${stat.color}`}>
+                        <p className="font-heading font-bold text-lg md:text-xl" style={{ color: stat.color }}>
                           {stat.value}
                         </p>
                         <p className="text-xs mt-0.5" style={{ color: "var(--lp-subtle)" }}>
@@ -300,23 +263,17 @@ export function Hero() {
                   {/* Chart */}
                   <div
                     className="rounded-xl p-4 mb-3 hidden md:block"
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      background: "var(--lp-surface)",
-                    }}
+                    style={{ border: "1px solid var(--lp-border)", background: "var(--lp-surface)" }}
                   >
                     <div className="flex items-center justify-between mb-3">
-                      <p
-                        className="text-sm font-medium"
-                        style={{ color: "var(--lp-foreground)" }}
-                      >
+                      <p className="text-sm font-medium" style={{ color: "var(--lp-foreground)" }}>
                         Vendas — últimos 7 dias
                       </p>
                       <span
                         className="text-xs px-2 py-0.5 rounded-full font-medium"
                         style={{
-                          background: "rgba(16,185,129,0.12)",
-                          border: "1px solid rgba(16,185,129,0.20)",
+                          background: "rgba(22,163,74,0.10)",
+                          border: "1px solid rgba(22,163,74,0.20)",
                           color: "var(--brand-success)",
                         }}
                       >
@@ -332,19 +289,15 @@ export function Hero() {
                             height: `${h}%`,
                             background:
                               i === 5
-                                ? "linear-gradient(to top, #6366F1, #818CF8)"
-                                : "rgba(99,102,241,0.18)",
+                                ? "var(--gradient-brand-vivid)"
+                                : "rgba(46,107,255,0.16)",
                           }}
                         />
                       ))}
                     </div>
                     <div className="flex justify-between mt-2">
                       {["Seg", "Ter", "Qua", "Qui", "Sex", "Sáb", "Dom"].map((d) => (
-                        <p
-                          key={d}
-                          className="flex-1 text-center text-xs"
-                          style={{ color: "var(--lp-subtle)" }}
-                        >
+                        <p key={d} className="flex-1 text-center text-xs" style={{ color: "var(--lp-subtle)" }}>
                           {d}
                         </p>
                       ))}
@@ -354,36 +307,22 @@ export function Hero() {
                   {/* Recent OS */}
                   <div
                     className="rounded-xl p-4 hidden md:block"
-                    style={{
-                      border: "1px solid rgba(255,255,255,0.06)",
-                      background: "var(--lp-surface)",
-                    }}
+                    style={{ border: "1px solid var(--lp-border)", background: "var(--lp-surface)" }}
                   >
-                    <p
-                      className="text-sm font-medium mb-3"
-                      style={{ color: "var(--lp-foreground)" }}
-                    >
-                      Últimas Ordens de Serviço
+                    <p className="text-sm font-medium mb-3" style={{ color: "var(--lp-foreground)" }}>
+                      Últimas ordens de serviço
                     </p>
                     <div className="space-y-2">
                       {[
-                        { os: "OS #1247", client: "Maria Santos", status: "Pronto", bg: "rgba(16,185,129,0.10)", color: "var(--brand-success)" },
-                        { os: "OS #1246", client: "João Almeida", status: "No lab", bg: "rgba(14,165,233,0.10)", color: "var(--brand-accent)" },
-                        { os: "OS #1245", client: "Ana Lima", status: "Em andamento", bg: "rgba(245,158,11,0.10)", color: "var(--brand-warning)" },
+                        { os: "OS #1247", client: "Maria Santos", status: "Pronto", bg: "rgba(22,163,74,0.10)", color: "var(--brand-success)" },
+                        { os: "OS #1246", client: "João Almeida", status: "No laboratório", bg: "rgba(46,107,255,0.10)", color: "var(--brand-primary)" },
+                        { os: "OS #1245", client: "Ana Lima", status: "Em andamento", bg: "rgba(245,158,11,0.12)", color: "var(--brand-warning)" },
                       ].map((item) => (
-                        <div
-                          key={item.os}
-                          className="flex items-center justify-between text-sm"
-                        >
-                          <span
-                            className="font-medium"
-                            style={{ color: "var(--lp-muted)" }}
-                          >
+                        <div key={item.os} className="flex items-center justify-between text-sm">
+                          <span className="font-medium" style={{ color: "var(--lp-muted)" }}>
                             {item.os}
                           </span>
-                          <span style={{ color: "var(--lp-foreground)" }}>
-                            {item.client}
-                          </span>
+                          <span style={{ color: "var(--lp-foreground)" }}>{item.client}</span>
                           <span
                             className="text-xs px-2 py-0.5 rounded-full font-medium"
                             style={{ background: item.bg, color: item.color }}
@@ -397,13 +336,12 @@ export function Hero() {
                 </div>
               </div>
 
-              {/* Glow reflection below */}
+              {/* Reflexo */}
               <div
                 className="absolute -bottom-10 left-1/2 -translate-x-1/2 w-3/4 h-16 pointer-events-none"
                 style={{
-                  background:
-                    "radial-gradient(ellipse, rgba(99,102,241,0.25) 0%, transparent 70%)",
-                  filter: "blur(24px)",
+                  background: "radial-gradient(ellipse, rgba(46,107,255,0.22) 0%, transparent 70%)",
+                  filter: "blur(28px)",
                 }}
               />
             </div>

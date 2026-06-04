@@ -1,6 +1,6 @@
 import Link from "next/link";
-import { Eye } from "lucide-react";
 import { FOOTER_LINKS, WHATSAPP_URL } from "@/lib/constants";
+import { VisLogo } from "./vis-logo";
 
 export function Footer() {
   return (
@@ -10,26 +10,18 @@ export function Footer() {
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5 lg:gap-12">
           {/* Brand */}
           <div className="col-span-2 md:col-span-1">
-            <Link href="/" className="flex items-center gap-2.5 mb-4">
-              <div
-                className="flex h-8 w-8 items-center justify-center rounded-lg"
-                style={{
-                  background: "linear-gradient(135deg, #6366F1, #7C3AED)",
-                  boxShadow: "0 2px 10px rgba(99,102,241,0.30)",
-                }}
-              >
-                <Eye className="h-4 w-4 text-white" />
-              </div>
-              <span className="font-heading font-bold text-lg" style={{ color: "var(--lp-foreground)" }}>
-                PDV <span style={{ color: "var(--brand-primary)" }}>Ótica</span>
-              </span>
+            <Link href="/" className="mb-4 inline-flex" aria-label="Vis — início">
+              <VisLogo size={32} />
             </Link>
-            <p className="text-sm text-muted leading-relaxed mb-4">
-              O sistema de gestão feito para óticas que querem crescer.
+            <p className="text-sm text-muted leading-relaxed mb-1">
+              A gestão clara da sua ótica.
+            </p>
+            <p className="text-xs text-subtle leading-relaxed mb-4">
+              Visão. Clareza. Confiança.
             </p>
             <div className="flex items-center gap-3">
               <a
-                href="https://instagram.com/pdvotica"
+                href="https://instagram.com/vis.app.br"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 rounded-lg text-subtle hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
@@ -53,7 +45,7 @@ export function Footer() {
                 </svg>
               </a>
               <a
-                href="https://youtube.com/@pdvotica"
+                href="https://youtube.com/@vis.app.br"
                 target="_blank"
                 rel="noopener noreferrer"
                 className="p-2 rounded-lg text-subtle hover:text-foreground hover:bg-[var(--surface-hover)] transition-colors"
@@ -134,8 +126,8 @@ export function Footer() {
 
         {/* Bottom */}
         <div className="mt-12 pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-subtle">
-          <p>© 2026 PDV Ótica — Todos os direitos reservados</p>
-          <p>Feito com ♥ no Ceará</p>
+          <p>© 2026 Vis — Todos os direitos reservados</p>
+          <p>Feito para óticas brasileiras 🇧🇷</p>
         </div>
       </div>
     </footer>
