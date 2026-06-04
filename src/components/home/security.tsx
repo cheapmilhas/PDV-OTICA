@@ -3,6 +3,7 @@
 import { motion } from "framer-motion";
 import { Lock, Cloud, BookOpen, Key, FileCheck, Activity } from "lucide-react";
 import { GradientText } from "@/components/ui/gradient-text";
+import { SectionHeading } from "@/components/home/section-heading";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 
 const items = [
@@ -59,18 +60,17 @@ export function Security() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={viewportConfig}
           transition={{ duration: 0.5 }}
-          className="text-center mb-12"
         >
-          <h2
-            className="font-heading font-bold text-foreground tracking-tight"
-            style={{ fontSize: "var(--text-h1)" }}
-          >
-            Seus dados seguros —{" "}
-            <GradientText>e sempre com você.</GradientText>
-          </h2>
-          <p className="mt-4 text-muted text-lg max-w-xl mx-auto">
-            Sua ótica na nuvem, com backup automático e proteção de ponta a ponta.
-          </p>
+          <SectionHeading
+            eyebrow="Segurança & confiança"
+            title={
+              <>
+                Seus dados seguros —{" "}
+                <GradientText>e sempre com você.</GradientText>
+              </>
+            }
+            subtitle="Sua ótica na nuvem, com backup automático e proteção de ponta a ponta."
+          />
         </motion.div>
 
         <motion.div
@@ -84,7 +84,7 @@ export function Security() {
             <motion.div
               key={item.title}
               variants={fadeInUp}
-              className="flex gap-4 rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-5 hover:border-[var(--border-hover)] transition-colors"
+              className="vis-card flex gap-4 p-5"
             >
               <div className={`shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl ${item.bg}`}>
                 <item.icon className={`h-5 w-5 ${item.color}`} />

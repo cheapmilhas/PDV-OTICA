@@ -11,6 +11,7 @@ import {
   MessageSquare,
   BarChart3,
 } from "lucide-react";
+import { SectionHeading } from "@/components/home/section-heading";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 
 const features = [
@@ -112,35 +113,19 @@ export function FeaturesBento() {
           whileInView={{ opacity: 1, y: 0 }}
           viewport={viewportConfig}
           transition={{ duration: 0.65, ease: [0.22, 1, 0.36, 1] }}
-          className="text-center mb-14"
         >
-          <p
-            className="text-xs font-bold uppercase tracking-widest mb-3"
-            style={{ color: "var(--brand-primary)", letterSpacing: "0.15em" }}
-          >
-            Funcionalidades
-          </p>
-          <h2
-            className="font-heading font-extrabold tracking-tight"
-            style={{
-              fontSize: "var(--text-h1)",
-              lineHeight: 1.1,
-              letterSpacing: "-0.025em",
-              color: "var(--lp-foreground)",
-            }}
-          >
-            Tudo o que sua ótica precisa.{" "}
-            <span style={{ color: "var(--lp-muted)", fontWeight: 400, fontStyle: "italic" }}>
-              Nada que você não vai usar.
-            </span>
-          </h2>
-          <p
-            className="mt-4 max-w-xl mx-auto"
-            style={{ color: "var(--lp-muted)", fontSize: "1rem", lineHeight: 1.65 }}
-          >
-            Recursos pensados para o balcão, o caixa e a gerência — não para um
-            manual de TI.
-          </p>
+          <SectionHeading
+            eyebrow="Funcionalidades"
+            title={
+              <>
+                Tudo o que sua ótica precisa.{" "}
+                <span style={{ color: "var(--lp-muted)", fontWeight: 400, fontStyle: "italic" }}>
+                  Nada que você não vai usar.
+                </span>
+              </>
+            }
+            subtitle="Recursos pensados para o balcão, o caixa e a gerência — não para um manual de TI."
+          />
         </motion.div>
 
         <motion.div
@@ -154,30 +139,12 @@ export function FeaturesBento() {
             <motion.div
               key={f.title}
               variants={fadeInUp}
-              whileHover={{
-                y: -5,
-                transition: { duration: 0.25, ease: [0.25, 1, 0.5, 1] },
-              }}
               className={[
-                "relative rounded-2xl p-5 transition-all duration-300 group cursor-default",
+                "vis-card relative p-5 group cursor-default",
                 f.span === "2" ? "md:col-span-2" : "",
               ]
                 .filter(Boolean)
                 .join(" ")}
-              style={{
-                background: "var(--lp-surface)",
-                border: "1px solid var(--lp-border)",
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = `${f.accentColor}40`;
-                el.style.boxShadow = `0 8px 28px rgba(10,31,68,0.10), 0 0 0 1px ${f.accentColor}18`;
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "var(--lp-border)";
-                el.style.boxShadow = "none";
-              }}
             >
               {/* Icon */}
               <div

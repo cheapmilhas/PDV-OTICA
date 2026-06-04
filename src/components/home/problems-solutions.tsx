@@ -70,23 +70,7 @@ export function ProblemsSolutions() {
             <motion.div
               key={item.problem}
               variants={fadeInUp}
-              className="group rounded-2xl p-6 transition-all duration-300 cursor-default"
-              style={{
-                background: "var(--lp-background)",
-                border: "1px solid var(--lp-border)",
-              }}
-              onMouseEnter={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = `${item.accentColor}40`;
-                el.style.background = "var(--lp-surface)";
-                el.style.boxShadow = "0 8px 24px rgba(10,31,68,0.08)";
-              }}
-              onMouseLeave={(e) => {
-                const el = e.currentTarget as HTMLDivElement;
-                el.style.borderColor = "var(--lp-border)";
-                el.style.background = "var(--lp-background)";
-                el.style.boxShadow = "none";
-              }}
+              className="vis-card group cursor-default"
             >
               <div
                 className="inline-flex h-10 w-10 items-center justify-center rounded-xl mb-5 transition-transform duration-300 group-hover:scale-110"
