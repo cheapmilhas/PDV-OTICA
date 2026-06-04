@@ -171,6 +171,12 @@ function UsuariosPage() {
 
   async function handleSaveEdit() {
     if (!selectedUser) return;
+    // Senha é opcional na edição (só muda se preenchida), mas se preenchida
+    // precisa respeitar o mínimo de 8 — mesma regra do servidor.
+    if (form.password && form.password.length < 8) {
+      toast.error("A senha deve ter no mínimo 8 caracteres");
+      return;
+    }
 
     setSaving(true);
     try {
