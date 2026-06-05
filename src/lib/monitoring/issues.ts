@@ -1,4 +1,5 @@
 import type { SystemPulse } from "./system-pulse";
+import type { SystemTrends } from "./system-trends";
 import type { HealthCategory, SubscriptionStatus } from "@prisma/client";
 
 export type IssueSeverity = "critical" | "warning" | "info";
@@ -151,4 +152,33 @@ export function detectCompanyIssues(c: ProblemCompany, now: Date): Issue[] {
   }
 
   return issues;
+}
+
+export interface IssueInput {
+  pulse: SystemPulse;
+  trends: SystemTrends;
+  problemCompanies: ProblemCompany[];
+}
+
+const SEVERITY_RANK: Record<IssueSeverity, number> = { critical: 0, warning: 1, info: 2 };
+const CATEGORY_RANK: Record<IssueCategory, number> = { system: 0, client: 1 };
+
+export function sortIssues(issues: Issue[]): Issue[] {
+  return [...issues].sort((a, b) => {
+    if (SEVERITY_RANK[a.severity] !== SEVERITY_RANK[b.severity]) {
+      return SEVERITY_RANK[a.severity] - SEVERITY_RANK[b.severity];
+    }
+    return CATEGORY_RANK[a.category] - CATEGORY_RANK[b.category];
+  });
+}
+
+export function detectIssues(input: IssueInput, now: Date = new Date()): Issue[] {
+  const issues: Issue[] = [];
+  issues.push(...detectSystemIssues(input.pulse));
+  const errorIssue = detectErrorRateIssue(input.pulse);
+  if (errorIssue) issues.push(errorIssue);
+  for (const c of input.problemCompanies) {
+    issues.push(...detectCompanyIssues(c, now));
+  }
+  return sortIssues(issues);
 }

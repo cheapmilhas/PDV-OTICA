@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectSystemIssues, detectErrorRateIssue, detectCompanyIssues, type ProblemCompany } from "./issues";
+import { detectSystemIssues, detectErrorRateIssue, detectCompanyIssues, detectIssues, sortIssues, type ProblemCompany } from "./issues";
 import type { SystemPulse } from "./system-pulse";
 
 function pulse(over: Partial<SystemPulse> = {}): SystemPulse {
@@ -117,5 +117,25 @@ describe("detectCompanyIssues", () => {
     const ids = issues.map((i) => i.id);
     expect(ids).toContain("suspended:c1");
     expect(ids).toContain("health_critical:c1");
+  });
+});
+
+describe("detectIssues + ordenação", () => {
+  it("combina sistema + clientes", () => {
+    const issues = detectIssues({
+      pulse: pulse({ db: { status: "degraded", latencyMs: 900 }, status: "degraded" }),
+      trends: {} as any,
+      problemCompanies: [company({ subscriptionStatus: "SUSPENDED" })],
+    }, NOW);
+    expect(issues.length).toBe(2);
+  });
+  it("ordena critical → warning → info; system antes de client no empate", () => {
+    const sorted = sortIssues([
+      { id: "a", severity: "info", category: "client", title: "", explanation: "" },
+      { id: "b", severity: "critical", category: "client", title: "", explanation: "" },
+      { id: "c", severity: "warning", category: "client", title: "", explanation: "" },
+      { id: "d", severity: "warning", category: "system", title: "", explanation: "" },
+    ]);
+    expect(sorted.map((i) => i.id)).toEqual(["b", "d", "c", "a"]);
   });
 });
