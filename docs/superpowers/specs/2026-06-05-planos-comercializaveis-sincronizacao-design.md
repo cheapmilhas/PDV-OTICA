@@ -122,7 +122,9 @@ Cada plano retorna:
 - `trialDays` — Int (já retornado)
 - `maxUsers`, `maxBranches`, `maxProducts`, `isFeatured`, `features: {key,value}[]`
 
-> **Regra de conversão (única):** o banco/contrato é sempre **centavos (Int)**. A conversão para reais acontece **só na borda de exibição**, via helper único `planValueForCycle`/`formatCurrency` em `src/lib/plan-pricing.ts`. Nenhum consumidor recebe reais da API. Isso elimina o bug de shape entre `content/pricing.ts` (float reais) e `Plan` (Int centavos).
+> **Regra de conversão (única, cadeia exata):** o banco/contrato é sempre **centavos (Int)**. A exibição faz, na borda: **1)** centavos→reais via `planValueForCycle` de `src/lib/plan-pricing.ts` (ou `cents/100`); **2)** formatação via `formatCurrency` de **`@/lib/utils`** (que recebe **reais**, não centavos). NUNCA passar centavos direto a `formatCurrency` (renderiza "R$ 14.990,00"). Nenhum consumidor recebe reais da API.
+>
+> **Cuidado — preço ausente/zero:** `planValueForCycle` **lança** se preço ≤ 0. Planos `COMING_SOON` sem preço (Profissional/Rede) e o ciclo anual quando `priceYearly=0` **não devem** chamar o helper — o card pula a conversão e mostra só "Em breve" (sem valor). Tratar antes de converter.
 
 **Regra `status` × `isActive` (decisão tomada — issue do review):**
 - Planos `COMING_SOON` são criados com **`isActive: true`** (para não sumirem) e diferenciados pelo campo `status`.
@@ -156,7 +158,7 @@ Cada plano retorna:
 | Local | Arquivo | Hoje | Depois |
 |---|---|---|---|
 | **Home + /precos (seção preços)** | `src/components/home/pricing-section.tsx` ← `src/content/pricing.ts` | **HARDCODED (client)** | fetch `/api/public/plans` no client; converter centavos→reais via `plan-pricing.ts`; renderizar selo "Em breve" por `status` |
-| **Tabela comparativa** | `src/components/pages/pricing-page.tsx` | HARDCODED | ler de `/api/public/plans` |
+| **Tabela comparativa (`PricingPage`)** | `src/components/pages/pricing-page.tsx` | HARDCODED, **mas órfão** (ninguém importa — confirmado por grep) | **NÃO migrar; remover** (dead code) OU, se o plano decidir reaproveitá-la, migrar p/ API. A comparação visível em `/precos` é o próprio `PricingSection`. |
 | **JSON-LD de /precos** | `src/app/(landing)/precos/page.tsx` + `src/components/seo/json-ld.tsx` (`buildProductJsonLd`) | HARDCODED (recebe `plans` estático) | tornar a página Server Component que busca via `fetch(... {next:{tags:['public-plans']}})`; só planos com preço viram `Offer` |
 | **JSON-LD global** | `src/app/layout.tsx:80` (`softwareApplicationJsonLd`, preço `"149.90"`) | HARDCODED (estático, todas as páginas) | derivar preço do plano `ACTIVE` em destaque via Server fetch taggeado; se múltiplos, usar o menor preço ativo |
 | Registro/trial | `src/app/registro/page.tsx` | já dinâmico | filtrar só `status === "ACTIVE"`; remover fallback `\|\| 14` |
@@ -183,10 +185,10 @@ Cada plano retorna:
 ### 6.7 Dados/Seed dos 4 planos
 
 - Definir UM conjunto único de valores e aplicar via seed/migration de dados:
-  - Básico R$149,90 (14990¢) `ACTIVE`
-  - Básico+NF R$189,90 (18990¢) `COMING_SOON`
-  - Profissional `COMING_SOON` (preço a definir com o dono)
-  - Rede `COMING_SOON`
+  - Básico R$149,90 (`priceMonthly: 14990`) `ACTIVE` — definir também `priceYearly` explícito (>0), pois `planValueForCycle("YEARLY")` lança se 0 e o fluxo Asaas usa anual.
+  - Básico+NF R$189,90 (`priceMonthly: 18990`) `COMING_SOON` — `priceYearly` opcional (não é vendável ainda).
+  - Profissional `COMING_SOON` — sem preço definido (`priceMonthly: 0`); UI mostra "Em breve" sem valor; sem `Offer` no JSON-LD; nunca converter via helper.
+  - Rede `COMING_SOON` — idem Profissional.
 - Cada plano recebe `highlightFeatures` da seção 5.
 - **Fonte de dados única (decisão — não "alinhar 3 seeds"):**
   - O **banco** é a fonte. O seed canônico passa a ser **um só** (`prisma/seed-plans.ts` OU `/api/admin/seed` — escolher um no plano e remover/deprecar o outro).
