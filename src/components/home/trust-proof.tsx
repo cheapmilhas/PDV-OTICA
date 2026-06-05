@@ -144,11 +144,11 @@ export function TrustProof() {
                 className="shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl"
                 style={
                   b.highlight
-                    ? { background: "rgba(34, 195, 230, 0.12)", color: "var(--brand-accent)" }
+                    ? { background: "color-mix(in srgb, var(--brand-accent) 12%, transparent)", color: "var(--brand-accent)" }
                     : { background: "var(--brand-tint)", color: "var(--brand-primary)" }
                 }
               >
-                <b.icon className="h-5 w-5" />
+                <b.icon className="h-5 w-5" aria-hidden />
               </div>
               <div>
                 <h3 className="font-semibold text-foreground text-sm mb-1">{b.title}</h3>
@@ -169,7 +169,7 @@ export function TrustProof() {
           {guarantees.map((g, i) => (
             <span key={g} className="inline-flex items-center gap-2">
               {i > 0 && <span className="text-[var(--border-hover)]" aria-hidden>·</span>}
-              <Check className="h-4 w-4 shrink-0" style={{ color: "var(--brand-success)" }} />
+              <Check className="h-4 w-4 shrink-0" style={{ color: "var(--brand-success)" }} aria-hidden />
               {g}
             </span>
           ))}
