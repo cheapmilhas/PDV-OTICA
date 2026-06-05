@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CashShift, CashMovement, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import type { OpenShiftDTO, CloseShiftDTO, CashMovementDTO } from "@/lib/validations/cash.schema";
+import { computeCashBalance, withdrawalExceedsCash } from "@/lib/finance-validation";
 
 /**
  * Service para operações de Caixa
@@ -219,7 +220,56 @@ export class CashService {
     // Determinar direção
     const direction = type === "SUPPLY" ? "IN" : "OUT";
 
-    // Criar movimento
+    // A4: sangria (WITHDRAWAL) em dinheiro não pode exceder o saldo em dinheiro
+    // do turno (mesmo cálculo do fechamento: CASH IN - CASH OUT, incluindo o
+    // fundo de troco de abertura). Faz dentro de tx com lock no shift p/ não
+    // permitir duas sangrias concorrentes furarem o saldo.
+    if (type === "WITHDRAWAL" && method === "CASH") {
+      return prisma.$transaction(async (tx) => {
+        // Lock do shift serializa sangrias concorrentes do mesmo turno
+        await tx.$queryRaw`
+          SELECT id FROM "CashShift"
+          WHERE id = ${openShift.id} AND "companyId" = ${companyId}
+          FOR UPDATE
+        `;
+
+        const cashMovements = await tx.cashMovement.findMany({
+          where: { cashShiftId: openShift.id, method: "CASH" },
+          select: { direction: true, amount: true },
+        });
+        const saldoCash = computeCashBalance(
+          cashMovements.map((m) => ({
+            direction: m.direction as "IN" | "OUT",
+            amount: Number(m.amount),
+          }))
+        );
+
+        if (withdrawalExceedsCash(amount, saldoCash)) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            `Sangria de R$ ${amount.toFixed(2)} excede o saldo em dinheiro do caixa (R$ ${saldoCash.toFixed(2)}).`,
+            400
+          );
+        }
+
+        return tx.cashMovement.create({
+          data: {
+            cashShiftId: openShift.id,
+            branchId,
+            type,
+            direction,
+            method,
+            amount,
+            originType: "MANUAL",
+            originId: openShift.id,
+            createdByUserId: userId,
+            note,
+          },
+        });
+      });
+    }
+
+    // Suprimento ou movimento não-CASH: cria direto
     const movement = await prisma.cashMovement.create({
       data: {
         cashShiftId: openShift.id,

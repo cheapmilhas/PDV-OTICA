@@ -112,14 +112,21 @@ export class DREService {
       // 7. EBITDA (Lucro antes de juros, impostos, depreciação e amortização)
       const ebitda = grossProfit - operatingExpenses;
 
-      // 8. RESULTADO FINANCEIRO - Diferença entre receitas e despesas financeiras
-      // Considerando taxas de cartão e outras taxas financeiras
-      const financialExpenses = sales.reduce((sum, sale) => {
-        // Simulação de despesas financeiras (pode ser ajustado conforme necessidade)
-        const cardSales = Number(sale.total);
-        const estimatedFees = cardSales * 0.03; // 3% de taxa média
-        return sum + estimatedFees;
-      }, 0);
+      // 8. RESULTADO FINANCEIRO - Despesas financeiras (taxas de cartão).
+      // A8: antes aplicava 3% fixo sobre TODAS as vendas (errado: vendas em
+      // dinheiro/PIX não têm taxa, e a taxa real varia). Agora lê a taxa REAL
+      // do ledger (FinanceEntry CARD_FEE) — mesma fonte do DRE dinâmico, então
+      // os dois relatórios passam a bater.
+      const cardFeeAgg = await prisma.financeEntry.aggregate({
+        where: {
+          companyId,
+          type: "CARD_FEE",
+          side: "DEBIT",
+          entryDate: { gte: monthStart, lte: monthEnd },
+        },
+        _sum: { amount: true },
+      });
+      const financialExpenses = Number(cardFeeAgg._sum.amount || 0);
 
       const financialResult = -financialExpenses;
 

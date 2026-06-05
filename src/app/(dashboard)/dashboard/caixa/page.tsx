@@ -346,20 +346,27 @@ function CaixaPage() {
             </Link>
             {caixaStatus.aberto ? (
               <>
-                <Button
-                  variant="outline"
-                  onClick={() => setModalSangriaOpen(true)}
-                >
-                  <ArrowDownCircle className="mr-2 h-4 w-4" />
-                  Sangria
-                </Button>
-                <Button
-                  variant="outline"
-                  onClick={() => setModalReforcoOpen(true)}
-                >
-                  <ArrowUpCircle className="mr-2 h-4 w-4" />
-                  Reforço
-                </Button>
+                {/* A3: sangria/reforço exigem cash_shift.open (mesma permissão
+                    do POST /api/cash/movements). Antes o botão aparecia p/ quem
+                    só tinha .view e dava 403 ao clicar. */}
+                {hasPermission("cash_shift.open") && (
+                  <>
+                    <Button
+                      variant="outline"
+                      onClick={() => setModalSangriaOpen(true)}
+                    >
+                      <ArrowDownCircle className="mr-2 h-4 w-4" />
+                      Sangria
+                    </Button>
+                    <Button
+                      variant="outline"
+                      onClick={() => setModalReforcoOpen(true)}
+                    >
+                      <ArrowUpCircle className="mr-2 h-4 w-4" />
+                      Reforço
+                    </Button>
+                  </>
+                )}
                 {hasPermission("cash_shift.close") && (
                   <Button
                     variant="destructive"

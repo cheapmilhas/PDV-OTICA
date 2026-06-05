@@ -3,6 +3,7 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { paymentExceedsPayable } from "@/lib/finance-validation";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountPayableStatus, AccountCategory } from "@prisma/client";
@@ -376,6 +377,16 @@ export async function PATCH(request: Request) {
         // Valor pago: usado de forma IDÊNTICA no débito do saldo e no lançamento
         const paidAmount = data.paidAmount ?? Number(existing.amount);
         const paidDate = data.paidDate ? new Date(data.paidDate) : new Date();
+
+        // A5: não permitir pagar mais que o valor da conta (evita saldo negativo
+        // arbitrário na conta financeira e lançamento de despesa inflado).
+        if (paymentExceedsPayable(paidAmount, Number(existing.amount))) {
+          throw new AppError(
+            ERROR_CODES.VALIDATION_ERROR,
+            `Valor pago (R$ ${paidAmount.toFixed(2)}) não pode exceder o valor da conta (R$ ${Number(existing.amount).toFixed(2)}).`,
+            400
+          );
+        }
 
         // Transição atômica exatamente-1x: só vira PAID se ainda estava
         // PENDING/OVERDUE. Sob retry/duplo-clique/concorrência, apenas a

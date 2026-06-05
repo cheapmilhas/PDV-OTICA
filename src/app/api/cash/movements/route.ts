@@ -45,7 +45,10 @@ export async function GET(request: Request) {
  */
 export async function POST(request: Request) {
   try {
-    const session = await requirePermission("cash_shift.view");
+    // Sangria/suprimento é operação de quem OPERA o caixa (CASHIER tem
+    // cash_shift.open), não de quem só visualiza (SELLER só tem cash_shift.view).
+    // Antes era .view — permitia vendedor mexer no caixa. (A3)
+    const session = await requirePermission("cash_shift.open");
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
     const userId = session.user.id;
