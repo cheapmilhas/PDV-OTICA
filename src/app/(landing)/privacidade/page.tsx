@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function PrivacidadePage() {
   return (
-    <article className="container-custom py-16 md:py-24 prose prose-neutral max-w-3xl">
+    <article className="container-custom py-16 md:py-24 prose-vis max-w-3xl">
       <h1>Política de Privacidade</h1>
       <p>
         <strong>Última atualização:</strong> 25 de maio de 2026
@@ -97,7 +97,7 @@ export default function PrivacidadePage() {
         prazo legal aplicável (até 5 anos).
       </p>
 
-      <h2>8. Direitos do titular (Art. 18 LGPD)</h2>
+      <h2 id="lgpd">8. Direitos do titular (Art. 18 LGPD)</h2>
       <p>
         O titular dos dados pode solicitar: confirmação de tratamento, acesso, correção,
         anonimização, portabilidade, eliminação, informação sobre compartilhamento e

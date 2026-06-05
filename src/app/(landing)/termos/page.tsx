@@ -7,7 +7,7 @@ export const metadata: Metadata = {
 
 export default function TermosPage() {
   return (
-    <article className="container-custom py-16 md:py-24 prose prose-neutral max-w-3xl">
+    <article className="container-custom py-16 md:py-24 prose-vis max-w-3xl">
       <h1>Termos de Uso</h1>
       <p>
         <strong>Última atualização:</strong> 25 de maio de 2026

@@ -502,6 +502,23 @@ html {
   }
 }
 
+/* ── Prose (conteúdo longo: artigos do blog, privacidade, termos) ──
+   Classe custom — substitui o plugin @tailwindcss/typography (não instalado). */
+@layer components {
+  .prose-vis { color: var(--lp-foreground); }
+  .prose-vis p { font-size: 1.0625rem; line-height: 1.75; color: var(--lp-muted); margin-bottom: 1.25rem; }
+  .prose-vis h2 { font-family: var(--font-heading, inherit); font-weight: 700; font-size: var(--text-h2); color: var(--lp-foreground); margin-top: 3rem; margin-bottom: 1rem; letter-spacing: -0.02em; }
+  .prose-vis h3 { font-weight: 600; font-size: 1.25rem; color: var(--lp-foreground); margin-top: 2rem; margin-bottom: 0.75rem; }
+  .prose-vis ul { margin: 1rem 0 1.5rem; padding-left: 1.25rem; list-style: disc; }
+  .prose-vis ol { margin: 1rem 0 1.5rem; padding-left: 1.25rem; list-style: decimal; }
+  .prose-vis li { color: var(--lp-muted); line-height: 1.7; margin-bottom: 0.5rem; }
+  .prose-vis a { color: var(--brand-primary); text-decoration: underline; text-underline-offset: 2px; }
+  .prose-vis strong { color: var(--lp-foreground); font-weight: 600; }
+  .prose-vis blockquote { border-left: 4px solid var(--brand-primary); padding-left: 1.25rem; font-style: italic; color: var(--lp-muted); margin: 1.5rem 0; }
+  .prose-vis img { border-radius: 0.75rem; margin: 2rem 0; }
+  .prose-vis code { background: var(--lp-surface-hover); border-radius: 4px; padding: 2px 6px; font-size: 0.875rem; }
+}
+
 /* Acessibilidade + segurança de LCP: quem prefere menos movimento (ou se o JS
    de animação não rodar) vê o conteúdo da landing imediatamente, sem ficar preso
    em opacity:0 das variantes do framer-motion. */
