@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { evaluateAlerts, DEFAULT_ALERT_RULES, type AlertMetrics } from "./alert-rules";
+import { evaluateAlerts, alertMetricsFromPulse, DEFAULT_ALERT_RULES, type AlertMetrics } from "./alert-rules";
+import type { SystemPulse } from "./system-pulse";
 
 function metrics(over: Partial<AlertMetrics> = {}): AlertMetrics {
   return {
@@ -46,5 +47,21 @@ describe("evaluateAlerts", () => {
   it("pode disparar múltiplos alertas de uma vez", () => {
     const fired = evaluateAlerts(metrics({ dbStatus: "down", errorRatePct: 10, reqCount: 100 }), DEFAULT_ALERT_RULES);
     expect(fired.length).toBeGreaterThanOrEqual(2);
+  });
+});
+
+describe("alertMetricsFromPulse", () => {
+  it("projeta o pulso nas métricas de alerta", () => {
+    const pulse = {
+      status: "degraded", db: { status: "down", latencyMs: null },
+      uptimeS: 10, version: "x", timestamp: "t",
+      reqCount: 42, errorCount: 5, errorRatePct: 12,
+      p50Ms: 100, p95Ms: 3000, slowQueries: 0,
+      cacheHits: 0, cacheMisses: 0, cacheHitRatePct: null,
+      memoryRssMb: 100, memoryHeapUsedMb: 60,
+    } as SystemPulse;
+    expect(alertMetricsFromPulse(pulse)).toEqual({
+      dbStatus: "down", errorRatePct: 12, reqCount: 42, p95Ms: 3000,
+    });
   });
 });

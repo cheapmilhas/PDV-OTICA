@@ -6,12 +6,23 @@
 // Limiares em constantes (não editáveis pela UI — YAGNI), alinhados ao detector de
 // issues: erro >5%, p95 >2000ms, db down.
 import type { HealthStatus } from "@/lib/observability/health";
+import type { SystemPulse } from "./system-pulse";
 
 export interface AlertMetrics {
   dbStatus: HealthStatus;
   errorRatePct: number;
   reqCount: number;
   p95Ms: number | null;
+}
+
+/** Projeta o pulso do sistema nas métricas que as regras avaliam (puro). */
+export function alertMetricsFromPulse(pulse: SystemPulse): AlertMetrics {
+  return {
+    dbStatus: pulse.db.status,
+    errorRatePct: pulse.errorRatePct,
+    reqCount: pulse.reqCount,
+    p95Ms: pulse.p95Ms,
+  };
 }
 
 export type AlertLevel = "warning" | "error";

@@ -11,6 +11,8 @@ import { getSystemTrends } from "@/lib/monitoring/system-trends";
 import { getClientHealthSnapshot } from "@/lib/monitoring/client-health-snapshot";
 import { getProblemCompanies } from "@/lib/monitoring/problem-companies";
 import { detectIssues } from "@/lib/monitoring/issues";
+import { evaluateAlerts, alertMetricsFromPulse } from "@/lib/monitoring/alert-rules";
+import { captureMessage } from "@/lib/sentry";
 
 export const dynamic = "force-dynamic";
 
@@ -29,6 +31,21 @@ export async function GET() {
     ]);
 
     const issues = detectIssues({ pulse, trends, problemCompanies });
+
+    // Alertas: avalia o pulso contra os limiares e notifica via Sentry quando algo
+    // dispara. Best-effort — uma falha aqui NÃO derruba o cockpit. (Sentry é no-op
+    // se SENTRY_DSN não estiver setado, então é seguro chamar sempre.)
+    try {
+      const fired = evaluateAlerts(alertMetricsFromPulse(pulse));
+      for (const alert of fired) {
+        captureMessage(`[monitoramento] ${alert.message}`, {
+          level: alert.level,
+          extra: { alertId: alert.id, version: pulse.version },
+        });
+      }
+    } catch {
+      // alertas são best-effort; nunca quebram a resposta do cockpit.
+    }
 
     return NextResponse.json({ data: { pulse, trends, clientHealth, issues } });
   } catch (error) {
