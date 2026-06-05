@@ -3,6 +3,9 @@ import { Check, X } from "lucide-react";
 import { SectionHeading } from "@/components/home/section-heading";
 import { FinalCta } from "@/components/home/final-cta";
 import { ComparisonTable } from "@/components/funcionalidades/comparison-table";
+import { JsonLd, buildBreadcrumbJsonLd } from "@/components/seo/json-ld";
+import { Breadcrumb } from "@/components/seo/breadcrumb";
+import { SITE_URL } from "@/lib/constants";
 
 const TITLE = "Vis vs Planilha: Sistema para Ótica ou Excel?";
 const DESCRIPTION =
@@ -39,9 +42,21 @@ const solucoes = [
 export default function VisVsPlanilhaPage() {
   return (
     <>
+      <JsonLd
+        data={buildBreadcrumbJsonLd([
+          { name: "Início", url: SITE_URL },
+          { name: "Vis vs Planilha", url: `${SITE_URL}/vis-vs-planilha` },
+        ])}
+      />
       {/* Hero curto */}
-      <section className="pt-32 pb-12">
+      <section className="pt-28 pb-12">
         <div className="container-custom">
+          <Breadcrumb
+            items={[
+              { name: "Início", href: "/" },
+              { name: "Vis vs Planilha" },
+            ]}
+          />
           <SectionHeading
             eyebrow="Comparativo"
             title="Planilha ou Vis? Veja a diferença na sua ótica."

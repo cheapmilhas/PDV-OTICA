@@ -91,3 +91,85 @@ export function buildBreadcrumbJsonLd(
     })),
   };
 }
+
+interface BlogPostingInput {
+  slug: string;
+  title: string;
+  description: string;
+  date: string;
+  author: string;
+}
+
+export function buildBlogPostingJsonLd(
+  post: BlogPostingInput
+): Record<string, unknown> {
+  const publisher = {
+    "@type": "Organization",
+    name: "Vis",
+    logo: {
+      "@type": "ImageObject",
+      url: `${SITE_URL}/logo.png`,
+    },
+  };
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "BlogPosting",
+    headline: post.title,
+    description: post.description,
+    image: `${SITE_URL}/opengraph-image`,
+    datePublished: post.date,
+    dateModified: post.date,
+    author: {
+      "@type": "Organization",
+      name: "Vis",
+      url: SITE_URL,
+    },
+    publisher,
+    mainEntityOfPage: {
+      "@type": "WebPage",
+      "@id": `${SITE_URL}/blog/${post.slug}`,
+    },
+  };
+}
+
+interface ProductOfferInput {
+  name: string;
+  price: number;
+}
+
+export function buildProductJsonLd(
+  offers: ProductOfferInput[]
+): Record<string, unknown> {
+  const prices = offers.map((o) => o.price);
+  const lowPrice = Math.min(...prices);
+  const highPrice = Math.max(...prices);
+
+  return {
+    "@context": "https://schema.org",
+    "@type": "Product",
+    name: "Vis — Sistema de Gestão para Óticas",
+    description:
+      "Sistema de gestão para óticas com PDV, ordem de serviço de lentes, controle de estoque, financeiro e CRM. Planos para óticas de todos os tamanhos.",
+    brand: {
+      "@type": "Brand",
+      name: "Vis",
+    },
+    offers: {
+      "@type": "AggregateOffer",
+      priceCurrency: "BRL",
+      lowPrice: lowPrice.toFixed(2),
+      highPrice: highPrice.toFixed(2),
+      offerCount: offers.length,
+      url: `${SITE_URL}/precos`,
+      offers: offers.map((o) => ({
+        "@type": "Offer",
+        name: o.name,
+        price: o.price.toFixed(2),
+        priceCurrency: "BRL",
+        url: `${SITE_URL}/precos`,
+        availability: "https://schema.org/InStock",
+      })),
+    },
+  };
+}

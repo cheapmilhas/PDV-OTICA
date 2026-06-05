@@ -3,7 +3,13 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { blogSlugs, getPost } from "@/content/blog";
-import { REGISTER_URL } from "@/lib/constants";
+import { REGISTER_URL, SITE_URL } from "@/lib/constants";
+import {
+  JsonLd,
+  buildBreadcrumbJsonLd,
+  buildBlogPostingJsonLd,
+} from "@/components/seo/json-ld";
+import { Breadcrumb } from "@/components/seo/breadcrumb";
 
 const dateFmt = new Intl.DateTimeFormat("pt-BR", {
   day: "numeric",
@@ -71,10 +77,25 @@ export default async function BlogArticlePage({
     .filter((p): p is NonNullable<typeof p> => Boolean(p));
 
   return (
-    <article className="section-padding pt-32">
+    <article className="section-padding pt-28">
+      <JsonLd
+        data={buildBreadcrumbJsonLd([
+          { name: "Início", url: SITE_URL },
+          { name: "Blog", url: `${SITE_URL}/blog` },
+          { name: post.title, url: `${SITE_URL}/blog/${slug}` },
+        ])}
+      />
+      <JsonLd data={buildBlogPostingJsonLd(post)} />
       <div className="container-custom">
         {/* Coluna de leitura */}
         <div className="mx-auto max-w-[680px]">
+          <Breadcrumb
+            items={[
+              { name: "Início", href: "/" },
+              { name: "Blog", href: "/blog" },
+              { name: post.category },
+            ]}
+          />
           {/* Cabeçalho */}
           <header className="mb-10">
             <div className="mb-4">

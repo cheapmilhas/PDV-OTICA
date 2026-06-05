@@ -9,8 +9,24 @@
 
 ## Páginas principais
 - [Início](https://vis.app.br): visão geral do sistema de gestão para óticas
+- [Funcionalidades](https://vis.app.br/funcionalidades): hub com todas as funcionalidades do Vis
 - [Preços](https://vis.app.br/precos): planos a partir de R$149,90/mês, sem fidelidade
+- [Vis vs Planilha](https://vis.app.br/vis-vs-planilha): por que sair do Excel/caderno e usar um sistema de ótica
+- [Blog](https://vis.app.br/blog): conteúdo sobre gestão de óticas
 - [Contato](https://vis.app.br/contato): demonstração e suporte
+
+## Páginas de funcionalidades
+- [PDV para ótica](https://vis.app.br/funcionalidades/pdv-para-otica): frente de caixa rápida, desconto com limite, cashback e fechamento de caixa
+- [Ordem de serviço de lentes](https://vis.app.br/funcionalidades/ordem-de-servico-otica): OS do pedido à entrega, status, prazo, laboratório e garantia rastreável
+- [Controle de estoque](https://vis.app.br/funcionalidades/controle-de-estoque-otica): armações e lentes, multi-filial, alerta de baixa e código de barras
+- [Gestão financeira](https://vis.app.br/funcionalidades/gestao-financeira-otica): contas a pagar/receber, DRE, fluxo de caixa e conciliação por CSV
+- [Leitura de receita por IA](https://vis.app.br/funcionalidades/leitura-de-receita-ia): fotografe a receita e a IA extrai grau, eixo e DNP
+
+## Blog (artigos)
+- [Como gerir uma ótica](https://vis.app.br/blog/como-gerir-uma-otica): guia completo de gestão de óticas
+- [Controle de OS de lentes](https://vis.app.br/blog/controle-de-os-de-lentes): como organizar as ordens de serviço de lentes
+- [Como aumentar vendas na ótica](https://vis.app.br/blog/como-aumentar-vendas-otica): estratégias de venda no balcão e pós-venda
+- [Gestão financeira de ótica (guia)](https://vis.app.br/blog/gestao-financeira-otica-guia): guia financeiro para donos de ótica
 
 ## Funcionalidades
 - PDV (ponto de venda) para ótica, com desconto e venda rápida no balcão
@@ -21,3 +37,10 @@
 - Multi-loja e multi-CNPJ
 - Permissões por cargo (vendedor, caixa, gerente)
 - Garantia e retrabalho de OS com numeração rastreável
+
+## O que o Vis NÃO faz
+- Não emite NF-e nem NFC-e (nota fiscal eletrônica não é emitida pelo Vis).
+- O WhatsApp é manual: o sistema abre o aplicativo com um texto pronto para envio; não envia mensagens automaticamente.
+- Não há integração eletrônica que envie o pedido ao laboratório: o Vis apenas cadastra e acompanha a OS e o laboratório responsável.
+- Não é app nativo: o Vis é web e funciona pelo navegador (não há app na App Store/Google Play).
+- Não funciona offline: é necessário conexão com a internet para usar o sistema.

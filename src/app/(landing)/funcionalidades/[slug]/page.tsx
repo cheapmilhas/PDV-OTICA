@@ -2,6 +2,9 @@ import type { Metadata } from "next";
 import { notFound } from "next/navigation";
 import { featureSlugs, getFeature } from "@/content/features";
 import { FeaturePageView } from "@/components/funcionalidades/feature-page";
+import { JsonLd, buildBreadcrumbJsonLd } from "@/components/seo/json-ld";
+import { Breadcrumb } from "@/components/seo/breadcrumb";
+import { SITE_URL } from "@/lib/constants";
 
 interface FeatureSeo {
   title: string;
@@ -76,5 +79,25 @@ export default async function FeatureSlugPage({
   const f = getFeature(slug);
   if (!f) notFound();
 
-  return <FeaturePageView data={f} />;
+  const breadcrumb = [
+    { name: "Início", url: SITE_URL },
+    { name: "Funcionalidades", url: `${SITE_URL}/funcionalidades` },
+    { name: f.name, url: `${SITE_URL}/funcionalidades/${slug}` },
+  ];
+
+  return (
+    <>
+      <JsonLd data={buildBreadcrumbJsonLd(breadcrumb)} />
+      <div className="container-custom pt-28">
+        <Breadcrumb
+          items={[
+            { name: "Início", href: "/" },
+            { name: "Funcionalidades", href: "/funcionalidades" },
+            { name: f.name },
+          ]}
+        />
+      </div>
+      <FeaturePageView data={f} />
+    </>
+  );
 }
