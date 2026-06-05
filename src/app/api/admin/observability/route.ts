@@ -9,6 +9,8 @@ import { handleApiError } from "@/lib/error-handler";
 import { getSystemPulse } from "@/lib/monitoring/system-pulse";
 import { getSystemTrends } from "@/lib/monitoring/system-trends";
 import { getClientHealthSnapshot } from "@/lib/monitoring/client-health-snapshot";
+import { getProblemCompanies } from "@/lib/monitoring/problem-companies";
+import { detectIssues } from "@/lib/monitoring/issues";
 
 export const dynamic = "force-dynamic";
 
@@ -16,14 +18,19 @@ export async function GET() {
   try {
     await requireAdminAuth();
 
-    // Em paralelo: pulso (toca DB), tendências (lê MetricSample) e saúde da base.
-    const [pulse, trends, clientHealth] = await Promise.all([
+    // Em paralelo: pulso (toca DB), tendências (lê MetricSample), saúde da base e
+    // empresas problemáticas. getProblemCompanies é best-effort — se falhar, segue
+    // com lista vazia (não derruba o cockpit; mesmo princípio do getSystemTrends).
+    const [pulse, trends, clientHealth, problemCompanies] = await Promise.all([
       getSystemPulse(),
       getSystemTrends(),
       getClientHealthSnapshot(),
+      getProblemCompanies().catch(() => []),
     ]);
 
-    return NextResponse.json({ data: { pulse, trends, clientHealth } });
+    const issues = detectIssues({ pulse, trends, problemCompanies });
+
+    return NextResponse.json({ data: { pulse, trends, clientHealth, issues } });
   } catch (error) {
     return handleApiError(error);
   }
