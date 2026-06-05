@@ -27,6 +27,30 @@ function createPrismaClient(): PrismaClient {
   });
   registerTenantGuard(client);
   registerAuditMiddleware(client);
+
+  const SLOW_QUERY_MS = Number(process.env.SLOW_QUERY_MS ?? 200);
+  const queryLogEnabled = process.env.PRISMA_QUERY_LOG === "1";
+
+  if (queryLogEnabled) {
+    client.$use(async (params, next) => {
+      const start = performance.now();
+      const result = await next(params);
+      const durationMs = performance.now() - start;
+      if (durationMs >= SLOW_QUERY_MS) {
+        const { metrics } = await import("./observability/metrics");
+        const { logger } = await import("./logger");
+        metrics.recordSlowQuery();
+        logger.child({ module: "prisma" }).warn("slow query", {
+          model: params.model,
+          action: params.action,
+          durationMs: Math.round(durationMs),
+          // NUNCA logar params.args (PII)
+        });
+      }
+      return result;
+    });
+  }
+
   return client;
 }
 
