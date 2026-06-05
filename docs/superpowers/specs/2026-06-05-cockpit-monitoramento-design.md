@@ -16,7 +16,7 @@ Isto atende as 10 regras de DevOps de monitoramento/debugging levantadas pelo do
 1. Request ID único por endpoint → espinha de rastreabilidade.
 2. Stack trace completo + texto → já existe (logger + Sentry), mantido.
 3. Log estruturado JSON → já existe (`src/lib/logger.ts`), mantido.
-4. Health check com status detalhado → `/api/health` + pulso na aba.
+4. Health check com status detalhado → **novo** `/api/health` + pulso na aba. (Hoje só há a string `"api/health"` numa allowlist em `src/lib/with-plan-feature.ts` — a rota em si ainda não existe.)
 5. Query logging com tempo → slow-query log + métrica.
 6. Cache hit/miss tracking → contadores nos caches existentes.
 7. Métricas de performance (tempo/memória/CPU) → pulso + tendências.
@@ -33,11 +33,14 @@ Isto atende as 10 regras de DevOps de monitoramento/debugging levantadas pelo do
 - **Página de saúde do cliente:** `src/app/admin/saude/page.tsx` (filtros por categoria) + `HealthBadge`.
 - **Ações de cliente já implementadas:** `src/app/api/admin/clientes/[id]/actions` + `company-actions.tsx` — block/unblock, reactivate, extend_trial, change_plan, change_billing_cycle, cancel_subscription, impersonate, delete. **UX crua (`prompt()`/`alert()`) — será substituída.**
 - **Auth admin:** `requireAdminAuth()`, `requireAdminRole(roles)`, `getAdminSession()` em `src/lib/admin-auth-helpers.ts` / `admin-session.ts`. Enum `AdminRole = { SUPER_ADMIN, ADMIN, SUPPORT, BILLING }`.
-- **Auditoria existente:** `model AuditLog` é **multi-tenant** (`companyId` obrigatório, relação com User/Branch) — auditoria DENTRO do PDV do cliente. **NÃO serve** para ações do super-admin. Precisamos de tabela separada `AdminActionLog` (chave `adminId`, não `userId` de empresa).
+- **Auditoria existente (DOIS sistemas, ambos company-scoped):**
+  - `model AuditLog` — multi-tenant (`companyId` obrigatório, relação com User/Branch) — auditoria DENTRO do PDV do cliente.
+  - `model ActivityLog` (`companyId` NOT NULL, `type: ActivityType`, `actorType: ActorType`, `actorName`) — alimenta o **timeline do cliente** em `/admin/clientes/[id]`. A rota de ações atual **já chama** `logActivity(...)` (`src/services/activity-log.service.ts`) em block/unblock/reactivate/extend_trial/change_plan/cancel_subscription.
+  - **Nenhum dos dois serve para ações de super-admin sem empresa-alvo** (ambos exigem `companyId`), nem captura campos admin-cêntricos (adminId, riskLevel, reason, requestId, result). Por isso uma tabela separada `AdminActionLog`. **Decisão de reconciliação (ver §8): `AdminActionLog` SUPLEMENTA, não substitui, o `logActivity`** — quando a ação tem empresa-alvo, ambos são gravados (ActivityLog mantém o timeline do cliente funcionando; AdminActionLog é a trilha admin-cêntrica). Ações sem empresa (ex.: ações de sistema) gravam só `AdminActionLog`.
 - **Prisma:** `src/lib/prisma.ts` com tenant-guard + audit middleware; `PRISMA_CONNECTION_LIMIT` para serverless.
 - **Proxy/middleware Edge:** `src/proxy.ts` injeta `x-current-path`; ponto de injeção do Request ID.
 - **Caches:** `src/lib/plan-features-cache.ts` (LRU 500/5min) e `src/lib/idempotency.ts`.
-- **Crons existentes** (`vercel.json`): dunning, retry-finance-entries, mark-delayed, recalc-health, reconcile-billing. Plano Vercel Hobby → 1 cron/dia por slot; novo cron de métricas deve respeitar limites do plano.
+- **Crons existentes** (`vercel.json`): dunning, retry-finance-entries, mark-delayed, recalc-health, reconcile-billing — **todos diários**. **Plano Vercel Hobby limita cron à frequência diária** (não permite `*/5`). Isso é uma restrição dura que molda a coleta de tendências (ver §5/§8 — NÃO usamos cron de 5 min).
 
 ## 3. Decisões de design (travadas no brainstorming)
 
@@ -46,7 +49,7 @@ Isto atende as 10 regras de DevOps de monitoramento/debugging levantadas pelo do
 | Escopo da aba | **Painel central unificado** Sistema + Clientes |
 | Layout | **Cockpit**: faixa de status no topo + 2 colunas (Sistema \| Clientes) |
 | Motor de ações | **Registry tipado** (blueprint declarativo: Zod schema + riskLevel + execute + auditoria) |
-| Métricas de sistema | **Híbrido**: pulso ao vivo (on-demand) + tendências (tabela `MetricSample` via cron) |
+| Métricas de sistema | **Híbrido**: pulso ao vivo (on-demand) + tendências persistidas via **flush write-on-request** (NÃO cron de 5 min — ver §5/§8) |
 | Conteúdo clientes | Risco prioritário + MRR em risco + Inadimplência + Engajamento/adoção |
 | Fluxo de ação | **Modal gerado pelo schema**, dentro do cockpit |
 | Guarda de risco | **Motivo obrigatório + digitar nome p/ confirmar (high) + auditoria sempre** |
@@ -87,6 +90,7 @@ Quatro camadas isoladas, cada uma com responsabilidade única:
    - `page.tsx` (server component) + componentes client para polling do pulso e modais.
    - `<ActionModal blueprint>` — gera campos a partir do `schema` Zod. Zero campos hardcoded por ação.
    - item novo no `admin-nav.tsx` (ícone `Gauge`/`Activity`, label "Monitoramento" — distinto de "Saúde" que é health-score de cliente).
+   - **Nota de naming:** a rota é `monitoramento` (PT). O matcher do `proxy.ts` exclui `monitoring` (EN) — esse é o **túnel do Sentry**, NÃO esta aba. São propositalmente distintos; não "corrigir" a grafia ou o túnel do Sentry quebra.
 
 **Regra de isolamento:** UI nunca sabe *como* uma ação funciona (lê blueprint, chama rota). Registry nunca importa UI. Coleta de sistema nunca importa lógica de negócio.
 
@@ -105,11 +109,17 @@ Quatro camadas isoladas, cada uma com responsabilidade única:
 - Queries lentas (contagem acima do limiar) com rota/model.
 - Cache hit rate (`plan-features-cache` + `idempotency`).
 
-**Alimentação de `MetricSample` (sem explodir o banco):** o wrapper acumula contadores in-memory; um **cron a cada 5 min** lê os contadores e grava 1 snapshot agregado por janela (não 1-row-por-request). Retenção: o mesmo cron apaga linhas >30 dias.
+**Alimentação de `MetricSample` — write-on-request com flush por tempo (resolve o problema serverless).**
+Um cron que "lê contadores in-memory" NÃO funciona na Vercel: o cron roda numa lambda diferente das que atenderam requests, então leria contadores vazios. Além disso, o plano Hobby não permite cron sub-diário. Portanto:
+- O wrapper `with-observability` acumula contadores **na própria instância** (in-memory) com um carimbo de janela (`Math.floor(now / WINDOW_MS)`, default 5 min) e um `instanceId` aleatório por lambda.
+- Quando a instância detecta que **virou a janela** (a primeira request da janela seguinte), ela faz um **flush**: grava 1 row em `MetricSample` com os agregados da janela anterior (`reqCount`, `errorCount`, p50/p95, slowQueries, cache hits/misses) e zera o acumulador. O flush é `void` (não bloqueia a resposta; falha logada, não propaga).
+- Resultado: cada lambda ativa grava ~1 row por janela enquanto recebe tráfego. `getSystemTrends()` **agrega no SQL** (soma/percentil sobre todas as rows da janela, somando as várias instâncias) — então as tendências refletem a frota inteira, não uma instância.
+- **Sem cron de métricas.** A retenção (apagar >30 dias) pega carona num cron diário já existente (ex.: estende `mark-delayed` ou `reconcile-billing` com um `DELETE FROM MetricSample WHERE capturedAt < now()-30d`), respeitando o limite Hobby.
+- Trade-off honesto: lambdas que recebem 1 request e morrem antes de virar a janela podem não fazer flush (perda marginal de tráfego de cauda). Aceitável para tendência agregada; documentado na UI.
 
-**UI honesta:** rótulo "pulso = instância atual · tendências = agregado" — deixa claro o que é ao-vivo vs. histórico em serverless.
+**UI honesta:** rótulo "pulso = instância atual · tendências = agregado da frota (flush por janela)" — deixa claro o que é ao-vivo vs. histórico em serverless.
 
-**Request ID:** gerado em `proxy.ts`, propagado via `x-request-id`, presente em todo log JSON e na resposta de erro (unificado com `errorId`). Liga um erro visto na aba ao log/Sentry exato.
+**Request ID:** gerado em `proxy.ts`, propagado via `x-request-id`, presente em todo log JSON e na resposta de erro (unificado com `errorId`). Liga um erro visto na aba ao log/Sentry exato. **Atenção de implementação:** `proxy.ts` tem vários `return` antecipados (401 de API não-autenticada, redirects de admin/dashboard) que retornam ANTES de `nextWithCurrentPath`. O `x-request-id` deve ser injetado em **todos** os caminhos de retorno (inclusive 401/redirect), senão respostas de erro de requests não-autenticadas saem sem ID.
 
 ## 6. Saúde dos Clientes (coluna direita)
 
@@ -149,12 +159,14 @@ interface AdminActionBlueprint<TInput> {
 3. **Valida input com `blueprint.schema`** (400 se inválido).
 4. Se `riskLevel: "high"` → exige `reason` não-vazio e `typeToConfirm` bater com o nome da empresa.
 5. Roda `execute()`.
-6. Grava `AdminActionLog` (quem/quando/ação/companyId/input sem segredos/result/reason/requestId).
+6. Grava `AdminActionLog` (quem/quando/ação/companyId/input sem segredos/result/reason/requestId). **Se a ação tem empresa-alvo, também chama `logActivity(...)`** (mantém o timeline do cliente em `/admin/clientes/[id]` — ver §2) com o `ActivityType` correspondente já existente (COMPANY_BLOCKED, TRIAL_EXTENDED, etc.).
 7. Retorna resultado via `api-response`/`handleApiError`.
 
 **UI gera o modal a partir do schema:** `number→stepper`, `enum→select`, `string→texto`; mostra campo "motivo" se `requireReason`; mostra "digite o nome da empresa" se `typeToConfirm`.
 
-**Migração:** as 8 ações de `company-actions.tsx` viram blueprints; `prompt()`/`alert()` removidos; `/admin/clientes/[id]` passa a consumir os mesmos blueprints (fonte única).
+**Inventário de migração (precisão):** a rota `/api/admin/clientes/[id]/actions` tem **8 cases**: block, unblock, reactivate, extend_trial, change_plan, cancel_subscription, change_billing_cycle, delete. **`impersonate` NÃO está nessa rota** — é um endpoint separado (`POST /api/admin/impersonate`) chamado direto pelo `company-actions.tsx`. Logo, a migração cobre **9 ações de usuário** sobre **2 rotas backend**: os 8 cases viram blueprints `category:"client"` na rota nova `/api/admin/actions/[id]`, e `impersonate` vira um blueprint que internamente chama o endpoint de impersonação existente (ou é absorvido). `prompt()`/`alert()` removidos; `/admin/clientes/[id]` passa a consumir os mesmos blueprints (fonte única).
+
+**Matriz de `allowedRoles` (mudança de comportamento — explicitar):** hoje a rota gata **apenas** `delete` (`role !== "SUPER_ADMIN"` inline) e usa `getAdminSession()`; as outras 7 ações não têm restrição de papel. O modelo de blueprint adiciona `allowedRoles` a TODAS — então é preciso definir a matriz por ação para não tirar acesso que SUPPORT/BILLING têm hoje. Proposta inicial (a confirmar no plano): `delete`/`cancel_subscription` → `[SUPER_ADMIN]`; `block`/`unblock`/`change_plan`/`change_billing_cycle` → `[SUPER_ADMIN, ADMIN]`; `reactivate`/`extend_trial`/`impersonate` → `[SUPER_ADMIN, ADMIN, SUPPORT]`.
 
 **Ações de sistema (opcional, fase posterior):** recalcular health de todos, limpar `plan-features-cache`, reprocessar `FinanceEntryRetry`.
 
@@ -178,25 +190,29 @@ model MetricSample {
 }
 ```
 
-**`AdminActionLog`** (auditoria de ações super-admin — separado do `AuditLog` multi-tenant existente):
+**`AdminActionLog`** (trilha admin-cêntrica das ações do super-admin). **Distinto de `AuditLog` (multi-tenant, dentro do PDV) E de `ActivityLog` (timeline do cliente, `companyId` NOT NULL).** Justificativa: ações de super-admin podem não ter empresa-alvo e precisam de campos que os outros dois não têm (`adminId`, `riskLevel`, `reason`, `requestId`, `result`). **Reconciliação (ver §2/§7): suplementa, não substitui** — ação com empresa grava `AdminActionLog` **e** `ActivityLog`; ação sem empresa grava só `AdminActionLog`.
 ```prisma
 model AdminActionLog {
   id         String   @id @default(cuid())
-  adminId    String
-  actionId   String
-  companyId  String?
+  adminId    String   // id do admin (NÃO userId de empresa)
+  actionId   String   // "block_company", "extend_trial"...
+  companyId  String?  // alvo, quando aplicável (sem FK p/ não acoplar a Company)
   riskLevel  String
-  input      Json
+  input      Json     // sem segredos
   result     Json
   reason     String?
-  requestId  String?
+  requestId  String?  // liga ao log/Sentry
   createdAt  DateTime @default(now())
   @@index([companyId])
   @@index([adminId, createdAt])
 }
 ```
 
-**Alertas (1ª entrega):** regras em arquivo versionado (`src/lib/monitoring/alert-rules.ts`), avaliadas por cron, disparo via `captureMessage` do Sentry. UI editável = fase opcional (tabela `AlertRule` só então).
+**Ambas as migrations são puramente aditivas** (tabelas novas, sem FK que altere linhas existentes) → rollback seguro: redeploy do build anterior deixa as tabelas presentes e não-usadas, sem corromper dados.
+
+**Slow-query log (nota de implementação — não é trivial):** `src/lib/prisma.ts` hoje cria o `PrismaClient` com `log: ["error","warn"]` estático. Cronometrar query via `$on("query")` exigiria mudar esse array para `[{ emit: "event", level: "query" }]` (muda o ruído de log em dev). Como o projeto **já usa `$use(...)`** no `prisma-audit-middleware.ts`, o caminho preferido é cronometrar dentro de um middleware `$use`/`$extends` (sem mexer no array `log`), gated por `PRISMA_QUERY_LOG`, limiar `SLOW_QUERY_MS` (default 200ms), logando só `{ model, durationMs }` — **nunca parâmetros (PII)**.
+
+**Alertas (1ª entrega):** regras em arquivo versionado (`src/lib/monitoring/alert-rules.ts`), avaliadas por um cron **diário já existente** (carona, respeitando Hobby) ou on-demand ao abrir a aba, disparo via `captureMessage` do Sentry. UI editável = fase opcional (tabela `AlertRule` só então).
 
 ## 9. Fluxo de erros
 
@@ -220,8 +236,8 @@ model AdminActionLog {
 Cada fase: **tsc + build + testes + review** antes de seguir (regra do projeto).
 
 - **Fase 1 — Espinha de observabilidade de sistema.** Request ID no `proxy.ts`; `with-observability`; `/api/health` (público enxuto + interno detalhado); slow-query log; contadores de cache. Aplicar wrapper nas rotas críticas (sales/finance/cash/service-orders) primeiro. *Sem migration.* Testes: request-id gera/reusa; wrapper loga e propaga requestId em erro; health shape; slow-query só acima do limiar.
-- **Fase 2 — Persistência de tendências.** Migration `MetricSample` + cron 5 min (snapshot + retenção 30d). Testes: agrega p95 certo; retenção apaga >30d.
-- **Fase 3 — Motor de ações (registry).** `types.ts`, `registry.ts`, rota `/api/admin/actions/[id]`, `AdminActionLog`, migração das 8 ações. Testes (cobertura maior — toca produção): schema valida/rejeita; guarda de risco exige motivo+typeToConfirm; auditoria grava; roles barram.
+- **Fase 2 — Persistência de tendências.** Migration `MetricSample` + **flush write-on-request por janela** no `with-observability` (NÃO cron de 5 min — ver §5) + retenção 30d pegando carona num cron diário existente. Testes: flush grava 1 row ao virar a janela; `getSystemTrends` agrega p95 sobre múltiplas instâncias; retenção apaga >30d.
+- **Fase 3 — Motor de ações (registry).** `types.ts`, `registry.ts`, rota `/api/admin/actions/[id]`, `AdminActionLog`, migração das **9 ações sobre 2 rotas** (8 cases + impersonate), gravação dupla `AdminActionLog`+`logActivity`, matriz `allowedRoles`. Testes (cobertura maior — toca produção): schema valida/rejeita; guarda de risco exige motivo+typeToConfirm; auditoria grava nos dois logs; roles barram conforme matriz; impersonate preserva fluxo atual.
 - **Fase 4 — Agregação.** `getSystemPulse`, `getSystemTrends`, `getClientHealthSnapshot`. Testes com fixtures.
 - **Fase 5 — Cockpit UI.** `/admin/monitoramento`, item no nav, faixa de status + 2 colunas, `<ActionModal>` por schema, polling. **Usar skill `frontend-design` na implementação** (dark, alinhado ao /admin, hierarquia de cockpit, micro-interações). Testes: rota exige sessão; modal renderiza campos do schema.
 - **Fase 6 — Alertas + deploy guard.** Config de alertas + cron → Sentry. Smoke pós-deploy (`/api/health?deep=1` + rotas-chave) + runbook `vercel rollback`. UI de alertas = fase opcional 7.
@@ -230,7 +246,8 @@ Cada fase: **tsc + build + testes + review** antes de seguir (regra do projeto).
 
 ## 12. Não-objetivos (YAGNI)
 
-- Persistir métrica por-request (descartado: snapshots periódicos bastam).
+- Persistir métrica por-request (descartado: flush agregado por janela basta).
+- Cron de métricas sub-diário (descartado: Hobby não permite; usamos flush write-on-request — ver §5).
 - UI editável de alertas na 1ª entrega (config-em-arquivo basta).
 - Rollback automático por canary (requer Vercel Pro+ Rolling Releases — documentar caminho de upgrade, não implementar agora).
 - CPU detalhado por núcleo (serverless não expõe de forma útil; usar `process.cpuUsage()` como proxy se necessário).
