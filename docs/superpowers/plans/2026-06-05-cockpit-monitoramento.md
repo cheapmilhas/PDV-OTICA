@@ -728,7 +728,7 @@ if (hit) { metrics.cacheHit(); return hit; }
 metrics.cacheMiss();
 ```
 
-- [ ] **Step 2: Repetir o padrão equivalente em `idempotency.ts`** (no ponto onde decide se já existe registro).
+- [ ] **Step 2: (Pular `idempotency.ts` — não é um cache in-memory.)** A review do plano confirmou: `src/lib/idempotency.ts` só exporta `canonicalize`/`hashPayload` (funções puras), não tem hit/miss. Se houver um *store* de idempotência consumindo `hashPayload` com decisão "já existe?", instrumentar lá; caso contrário, só `plan-features-cache.ts` é instrumentado nesta fase. Não inventar um ponto de hit/miss inexistente.
 
 - [ ] **Step 3: Verificar tipos + testes existentes**
 
@@ -738,8 +738,8 @@ Expected: testes existentes do cache continuam verdes.
 - [ ] **Step 4: Commit**
 
 ```bash
-git add src/lib/plan-features-cache.ts src/lib/idempotency.ts
-git commit -m "feat(observability): cache hit/miss tracking (Regra 6)"
+git add src/lib/plan-features-cache.ts
+git commit -m "feat(observability): cache hit/miss tracking no plan-features-cache (Regra 6)"
 ```
 
 ---
@@ -873,10 +873,12 @@ git commit -m "feat(observability): flush write-on-request por janela → Metric
 **Files:**
 - Modify: `src/app/api/cron/mark-delayed/route.ts`
 
-- [ ] **Step 1: Adicionar limpeza ao fim do handler do cron**
+- [ ] **Step 1: Adicionar limpeza ANTES do `return` de sucesso do handler**
+
+Atenção (review): o handler tem um `return NextResponse.json({ ok: true ... })`. Inserir o `deleteMany` **antes** desse return — senão vira código morto. Ler o arquivo primeiro (`grep -n "return" src/app/api/cron/mark-delayed/route.ts`) e posicionar a limpeza logo antes do return de sucesso, dentro do try.
 
 ```ts
-// dentro do handler, após a lógica existente:
+// imediatamente antes do return de sucesso (dentro do try):
 const cutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
 await prisma.metricSample.deleteMany({ where: { capturedAt: { lt: cutoff } } });
 ```
@@ -958,6 +960,8 @@ export type RiskLevel = "low" | "medium" | "high";
 
 export interface ActionContext {
   adminId: string;
+  adminName?: string;   // preenchido pela rota a partir da session — evita re-buscar nos logs
+  adminEmail?: string;  // idem (usado em globalAudit.metadata)
   requestId?: string;
 }
 
@@ -1111,7 +1115,7 @@ git commit -m "feat(admin-actions): validação + guarda de risco (§7,§10)"
 
 ---
 
-### Task 3.4: Blueprints de cliente (migra os 8 cases + impersonate)
+### Task 3.4: Blueprints de cliente (migra os 8 cases; impersonate fica à parte)
 
 **Files:**
 - Create: `src/lib/admin-actions/blueprints/client.ts`
@@ -1119,11 +1123,16 @@ git commit -m "feat(admin-actions): validação + guarda de risco (§7,§10)"
 - Test: `src/lib/admin-actions/registry.test.ts`
 - Referência (copiar lógica de execução): `src/app/api/admin/clientes/[id]/actions/route.ts`
 
-Atenção (M3/M4): são **9 ações** (8 cases + impersonate). Matriz `allowedRoles` conforme spec §7. Cada blueprint que tem empresa-alvo define `targetCompanyId`.
+**ATENÇÃO (correções da review do plano — ler antes de codar):**
+- São **8 blueprints** (os 8 cases). **`impersonate` NÃO entra no registry** — ele é um fluxo de token+redirect client-side (POST devolve `{token,sessionId}`, o browser abre `/impersonate?token=...`; encerrar é `DELETE /api/admin/impersonate/[id]`). Não cabe no shape `execute()→ActionResult`. Permanece como botão especial na UI (ver Fase 5), chamando o endpoint existente. **Não criar blueprint para impersonate.**
+- **Auditoria TRIPLA por ação — não dropar nada.** Cada case do route atual grava DOIS logs hoje: `prisma.globalAudit.create({ actorType:"ADMIN_USER", actorId, companyId, action, metadata })` E `logActivity({ ..., actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name })`. O `execute()` do blueprint deve **portar ambos verbatim** (o `AdminActionLog` novo é gravado pela ROTA, à parte — Task 3.5). `GlobalAudit` foi omitido na 1ª versão do plano — é o sistema de auditoria admin que já existe.
+- **Portar campos de dados verbatim:** ex. `block` seta `blockedReason:"ADMIN_ACTION", blockedAt: new Date()`, não só `isBlocked:true`.
+- **`extend_trial` é +7 dias FIXO, sem parâmetro `days`** — lê a subscription `status:"TRIAL"`, 400 se não houver. Não inventar `days`.
+- **Invariante:** todo blueprint tem `companyId` no schema; a UI sempre injeta. `execute()` recebe `ctx: ActionContext` com `adminId` — usar para os logs.
 
-- [ ] **Step 1: Ler a lógica atual de cada case** para portar fielmente
+- [ ] **Step 1: Ler a lógica COMPLETA de cada case** (é a fonte de verdade — portar verbatim, não de memória)
 
-Run: `sed -n '26,260p' src/app/api/admin/clientes/[id]/actions/route.ts`
+Run: `sed -n '26,330p' src/app/api/admin/clientes/[id]/actions/route.ts`
 
 - [ ] **Step 2: Escrever o teste do registry** (estrutura, não execução de DB)
 
@@ -1133,31 +1142,35 @@ import { describe, it, expect } from "vitest";
 import { actionRegistry, getBlueprint } from "./registry";
 
 describe("registry", () => {
-  it("contém as 9 ações de cliente esperadas", () => {
+  it("contém os 8 blueprints de cliente (impersonate é tratado à parte, fora do registry)", () => {
     const ids = Object.keys(actionRegistry);
-    for (const id of ["block","unblock","reactivate","extend_trial","change_plan","cancel_subscription","change_billing_cycle","delete","impersonate"]) {
+    for (const id of ["block","unblock","reactivate","extend_trial","change_plan","cancel_subscription","change_billing_cycle","delete"]) {
       expect(ids).toContain(id);
     }
+    expect(ids).not.toContain("impersonate");
   });
   it("delete e cancel_subscription são SUPER_ADMIN-only", () => {
     expect(getBlueprint("delete")!.allowedRoles).toEqual(["SUPER_ADMIN"]);
     expect(getBlueprint("cancel_subscription")!.allowedRoles).toEqual(["SUPER_ADMIN"]);
   });
-  it("ações de alto risco têm confirm.typeToConfirm", () => {
+  it("delete tem confirm.typeToConfirm e todo blueprint tem companyId no schema", () => {
     expect(getBlueprint("delete")!.confirm?.typeToConfirm).toBe("companyName");
+    // companyId obrigatório no schema de toda ação de cliente
+    expect(getBlueprint("block")!.schema.safeParse({}).success).toBe(false);
   });
 });
 ```
 
 - [ ] **Step 3: Run → FAIL**
 
-- [ ] **Step 4: Implementar `client.ts`** — um blueprint por ação. Exemplo de dois (replicar o padrão para os demais, portando a lógica do route atual e chamando `logActivity` quando há empresa):
+- [ ] **Step 4: Implementar `client.ts`** — 8 blueprints. Dois exemplos FIÉIS ao route atual (replicar o padrão portando cada case verbatim, incluindo `globalAudit` + `logActivity` completo):
 
 ```ts
 // src/lib/admin-actions/blueprints/client.ts
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/services/activity-log.service";
+import { ActorType } from "@prisma/client";
 import type { AdminActionBlueprint } from "../types";
 
 const companyInput = z.object({ companyId: z.string().min(1) });
@@ -1168,29 +1181,47 @@ export const blockCompany: AdminActionBlueprint<{ companyId: string }> = {
   schema: companyInput, confirm: { requireReason: true },
   allowedRoles: ["SUPER_ADMIN", "ADMIN"],
   targetCompanyId: (i) => i.companyId,
-  async execute(_ctx, { companyId }) {
-    await prisma.company.update({ where: { id: companyId }, data: { isBlocked: true } });
-    await logActivity({ companyId, type: "COMPANY_BLOCKED", title: "Empresa bloqueada" });
+  async execute(ctx, { companyId }) {
+    await prisma.company.update({
+      where: { id: companyId },
+      data: { isBlocked: true, blockedReason: "ADMIN_ACTION", blockedAt: new Date() },
+    });
+    await prisma.globalAudit.create({
+      data: { actorType: "ADMIN_USER", actorId: ctx.adminId, companyId, action: "COMPANY_BLOCKED", metadata: { adminEmail: ctx.adminEmail } },
+    });
+    await logActivity({ companyId, type: "COMPANY_BLOCKED", title: "Empresa bloqueada", actorId: ctx.adminId, actorType: ActorType.ADMIN, actorName: ctx.adminName });
     return { ok: true, message: "Empresa bloqueada" };
   },
 };
 
-export const extendTrial: AdminActionBlueprint<{ companyId: string; days: number }> = {
-  id: "extend_trial", label: "Estender trial", description: "Adiciona dias ao período de trial.",
+export const extendTrial: AdminActionBlueprint<{ companyId: string }> = {
+  id: "extend_trial", label: "Estender trial (+7 dias)", description: "Adiciona 7 dias ao trial.",
   category: "client", icon: "CreditCard", riskLevel: "low",
-  schema: companyInput.extend({ days: z.number().int().min(1).max(30).default(7) }),
+  schema: companyInput, // SEM days — é fixo +7
   allowedRoles: ["SUPER_ADMIN", "ADMIN", "SUPPORT"],
   targetCompanyId: (i) => i.companyId,
-  async execute(_ctx, { companyId, days }) {
-    // portar a lógica de cálculo de trialEndsAt do route atual
-    // ... + logActivity TRIAL_EXTENDED
-    return { ok: true, message: `Trial estendido +${days} dias` };
+  async execute(ctx, { companyId }) {
+    const sub = await prisma.subscription.findFirst({ where: { companyId, status: "TRIAL" } });
+    if (!sub) return { ok: false, message: "Trial não encontrado" };
+    const newEnd = new Date(sub.trialEndsAt ?? new Date());
+    newEnd.setDate(newEnd.getDate() + 7);
+    await prisma.subscription.update({ where: { id: sub.id }, data: { trialEndsAt: newEnd } });
+    await prisma.globalAudit.create({
+      data: { actorType: "ADMIN_USER", actorId: ctx.adminId, companyId, action: "TRIAL_EXTENDED", metadata: { newTrialEnd: newEnd.toISOString() } },
+    });
+    await logActivity({ companyId, type: "TRIAL_EXTENDED", title: `Trial estendido até ${newEnd.toLocaleDateString("pt-BR")}`, detail: { newTrialEnd: newEnd.toISOString() }, actorId: ctx.adminId, actorType: ActorType.ADMIN, actorName: ctx.adminName });
+    return { ok: true, message: `Trial estendido até ${newEnd.toLocaleDateString("pt-BR")}` };
   },
 };
 
-// + unblock, reactivate, change_plan, cancel_subscription (high, SUPER_ADMIN),
-//   change_billing_cycle, delete (high+typeToConfirm, SUPER_ADMIN), impersonate.
+// + unblock, reactivate, change_plan (medium, [SUPER_ADMIN,ADMIN]),
+//   cancel_subscription (high, requireReason, [SUPER_ADMIN]),
+//   change_billing_cycle (medium, [SUPER_ADMIN,ADMIN]),
+//   delete (high, requireReason + typeToConfirm:"companyName", [SUPER_ADMIN]).
+// Cada um: portar o case correspondente verbatim, mantendo globalAudit + logActivity completos.
 ```
+
+Os exemplos usam `ctx.adminName`/`ctx.adminEmail` (preenchidos pela rota a partir da session — ver Task 3.2/3.5), evitando re-buscar o admin. O importante: **não perder nenhum campo dos logs** (`globalAudit.metadata`, `logActivity` actor*).
 
 - [ ] **Step 5: Implementar `registry.ts`**
 
@@ -1217,7 +1248,7 @@ Run: `npm test -- src/lib/admin-actions/registry.test.ts`
 
 ```bash
 git add src/lib/admin-actions
-git commit -m "feat(admin-actions): blueprints de cliente + registry (9 ações, §7)"
+git commit -m "feat(admin-actions): blueprints de cliente + registry (8 ações, §7)"
 ```
 
 ---
@@ -1227,7 +1258,9 @@ git commit -m "feat(admin-actions): blueprints de cliente + registry (9 ações,
 **Files:**
 - Create: `src/app/api/admin/actions/[id]/route.ts`
 
-- [ ] **Step 1: Implementar** (orquestra validate → execute → auditoria dupla)
+Nota: a rota preenche `ActionContext` com `adminName`/`adminEmail` da session (o `execute()` os usa para `globalAudit`/`logActivity` sem re-buscar). `AdminActionLog` é a 3ª escrita de auditoria, adicional ao `globalAudit`+`logActivity` que o `execute()` já fez — não substitui.
+
+- [ ] **Step 1: Implementar** (orquestra validate → execute → AdminActionLog)
 
 ```ts
 // src/app/api/admin/actions/[id]/route.ts
@@ -1263,9 +1296,12 @@ export async function POST(req: NextRequest, ctx: { params: Promise<{ id: string
     });
     if (!v.ok) return NextResponse.json({ error: { code: "VALIDATION", message: v.message } }, { status: v.status });
 
-    const result = await bp.execute({ adminId: session.user.id, requestId }, v.input);
+    const result = await bp.execute(
+      { adminId: session.user.id, adminName: session.user.name, adminEmail: session.user.email, requestId },
+      v.input,
+    );
 
-    // auditoria admin-cêntrica (sempre)
+    // 3ª trilha: log do motor de ações (adicional ao globalAudit+logActivity do execute)
     await prisma.adminActionLog.create({
       data: {
         adminId: session.user.id, actionId: bp.id, companyId: targetCompanyId,
@@ -1409,13 +1445,17 @@ Lembrete (M6): rota é `monitoramento` (PT), distinta do túnel Sentry `monitori
 **Files:**
 - Create: `src/app/admin/monitoramento/action-modal.tsx`
 
-- [ ] **Step 1: Implementar** — recebe um blueprint (id, label, riskLevel, confirm) + os campos do schema serializados; renderiza inputs (number→stepper, enum→select, string→texto), campo "motivo" se `requireReason`, "digite o nome" se `typeToConfirm`. Submete para `/api/admin/actions/[id]`. Mostra erro + requestId no fail.
+- [ ] **Step 1: Implementar** — recebe um blueprint (id, label, riskLevel, confirm) + os campos do schema serializados; renderiza inputs (number→stepper, enum→select, string→texto), campo "motivo" se `requireReason`, "digite o nome" se `typeToConfirm`. **Sempre injeta `companyId` no `input`** (invariante da spec §7). Submete para `/api/admin/actions/[id]`.
 
-Nota: o `z.ZodType` não serializa direto para o client. Expor no payload do endpoint apenas a **descrição dos campos** (um pequeno JSON: `[{name, type:"number"|"enum"|"string", options?}]`) derivada do schema no server. Adicionar `fields` ao blueprint OU uma função `describeSchema(bp)` no server.
+Nota (erro): o `handleApiError` devolve `errorId` (não `requestId`) no envelope `{ error: { code, message, errorId } }`. O `x-request-id` vem no **header** da resposta (setado pelo wrapper/proxy). No fail, o modal mostra `error.message` + o `errorId` do corpo **e/ou** o header `x-request-id` (ler via `res.headers.get("x-request-id")`) — ambos servem para achar o log. Não prometer um `requestId` no corpo que o `handleApiError` não coloca lá.
 
-- [ ] **Step 2: Ligar os botões de ação dos cards de cliente** ao modal.
-- [ ] **Step 3: Smoke** — executar uma ação low-risk e uma high-risk pelo cockpit.
-- [ ] **Step 4: Commit** `feat(monitoring): ActionModal gerado por schema + wiring no cockpit`
+Nota (schema→fields): o `z.ZodType` não serializa para o client. Expor no payload do endpoint admin apenas a **descrição dos campos** (`[{name, type:"number"|"enum"|"string", options?}]`) derivada do schema no server (função `describeSchema(bp)`). `companyId` é um campo oculto preenchido pela UI, não um input visível.
+
+- [ ] **Step 2: Botão de impersonate é especial** (NÃO passa pelo ActionModal/registry): mantém o fluxo atual — chama `POST /api/admin/impersonate`, lê `{token, sessionId}`, abre `/impersonate?token=...` em nova aba. Ver §7.
+
+- [ ] **Step 3: Ligar os botões de ação dos cards de cliente** ao modal.
+- [ ] **Step 4: Smoke** — executar uma ação low-risk e uma high-risk pelo cockpit; verificar que `GlobalAudit`, `ActivityLog` e `AdminActionLog` foram todos gravados.
+- [ ] **Step 5: Commit** `feat(monitoring): ActionModal gerado por schema + wiring no cockpit`
 
 ---
 
