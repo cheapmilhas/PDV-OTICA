@@ -20,19 +20,28 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
 
   const hasActiveSubscription = subscriptionStatus && ["TRIAL", "ACTIVE", "PAST_DUE"].includes(subscriptionStatus);
 
-  async function handleAction(action: string, extra?: Record<string, string>) {
-    if (action === "delete" && !confirm(`Excluir "${companyName}"? Esta ação não pode ser desfeita.`)) return;
+  async function handleAction(
+    action: string,
+    opts?: { input?: Record<string, string>; reason?: string; confirmName?: string },
+  ) {
     setLoading(true);
     setOpen(false);
     try {
-      const res = await fetch(`/api/admin/clientes/${companyId}/actions`, {
+      const res = await fetch(`/api/admin/actions/${action}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, ...extra }),
+        body: JSON.stringify({
+          input: { companyId, ...(opts?.input ?? {}) },
+          ...(opts?.reason ? { reason: opts.reason } : {}),
+          ...(opts?.confirmName ? { confirmName: opts.confirmName } : {}),
+        }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error || "Erro ao executar ação"); return; }
-      alert(data.message || "Ação executada com sucesso");
+      // Erro de transporte/validação: { error: { code, message } } com status != 2xx.
+      if (!res.ok) { alert(data.error?.message || "Erro ao executar ação"); return; }
+      // Falha "soft": blueprint retorna { ok: false, message } com HTTP 200.
+      if (data.data?.ok === false) { alert(data.data?.message || "Ação não realizada"); return; }
+      alert(data.data?.message || "Ação executada com sucesso");
       router.refresh();
     } catch { alert("Erro ao executar ação"); }
     finally { setLoading(false); }
@@ -80,7 +89,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
       const selectedPlan = plans[index];
       if (!confirm(`Trocar para o plano "${selectedPlan.name}"?`)) return;
 
-      await handleAction("change_plan", { planId: selectedPlan.id });
+      await handleAction("change_plan", { input: { planId: selectedPlan.id } });
     } catch { alert("Erro ao trocar plano"); }
   }
 
@@ -92,12 +101,22 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
     await handleAction("cancel_subscription", { reason });
   }
 
+  async function handleDelete() {
+    setOpen(false);
+    if (!confirm(`Excluir "${companyName}"? Esta ação não pode ser desfeita.`)) return;
+    const reason = prompt("Motivo da exclusão (obrigatório):");
+    if (!reason) return;
+    const confirmName = prompt(`Para confirmar, digite o nome da empresa: ${companyName}`);
+    if (!confirmName) return;
+    await handleAction("delete", { reason, confirmName });
+  }
+
   async function handleChangeBillingCycle() {
     setOpen(false);
     const newCycle = billingCycle === "MONTHLY" ? "YEARLY" : "MONTHLY";
     const label = newCycle === "MONTHLY" ? "Mensal" : "Anual";
     if (!confirm(`Alterar ciclo de cobrança para ${label}?`)) return;
-    await handleAction("change_billing_cycle", { cycle: newCycle });
+    await handleAction("change_billing_cycle", { input: { cycle: newCycle } });
   }
 
   return (
@@ -137,7 +156,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
             <div className="my-1 border-t border-gray-700" />
             <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={handleImpersonate} />
             <div className="my-1 border-t border-gray-700" />
-            <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={() => handleAction("delete")} />
+            <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={handleDelete} />
           </div>
         </>
       )}
