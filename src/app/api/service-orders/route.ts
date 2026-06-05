@@ -12,8 +12,9 @@ import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { requireWriteAccess } from "@/lib/subscription";
+import { withObservability } from "@/lib/observability/with-observability";
 
-export async function GET(request: Request) {
+async function getHandler(request: Request) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -33,7 +34,7 @@ export async function GET(request: Request) {
   }
 }
 
-export async function POST(request: Request) {
+async function postHandler(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
@@ -61,3 +62,6 @@ export async function POST(request: Request) {
     return handleApiError(error);
   }
 }
+
+export const GET = withObservability("GET /api/service-orders", getHandler);
+export const POST = withObservability("POST /api/service-orders", postHandler);

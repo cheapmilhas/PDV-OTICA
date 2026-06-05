@@ -3,8 +3,9 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { withObservability } from "@/lib/observability/with-observability";
 
-export async function GET(req: NextRequest) {
+async function getHandler(req: NextRequest) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
@@ -116,3 +117,5 @@ export async function GET(req: NextRequest) {
     return handleApiError(error);
   }
 }
+
+export const GET = withObservability("GET /api/cash-registers", getHandler);

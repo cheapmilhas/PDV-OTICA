@@ -15,6 +15,7 @@ import { validateBranchOwnership } from "@/lib/validate-branch";
 import { requireWriteAccess } from "@/lib/subscription";
 import { prisma } from "@/lib/prisma";
 import { hashPayload } from "@/lib/idempotency";
+import { withObservability } from "@/lib/observability/with-observability";
 
 /** Serializa Decimals de uma venda (com itens e pagamentos) para number. */
 function serializeSale(sale: Awaited<ReturnType<typeof saleService.create>>) {
@@ -56,7 +57,7 @@ function serializeSale(sale: Awaited<ReturnType<typeof saleService.create>>) {
  * - sortBy: "createdAt" | "total" | "customer" (default: "createdAt")
  * - sortOrder: "asc" | "desc" (default: "desc")
  */
-export async function GET(request: Request) {
+async function getHandler(request: Request): Promise<NextResponse> {
   try {
     // Requer autenticação
     await requireAuth();
@@ -225,3 +226,5 @@ export async function POST(request: Request) {
     return handleApiError(error);
   }
 }
+
+export const GET = withObservability("GET /api/sales", getHandler);
