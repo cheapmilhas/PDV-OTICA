@@ -2,7 +2,7 @@
  * Catálogo central de feature keys do sistema de planos.
  *
  * Cada key corresponde a uma funcionalidade que pode ser ligada/desligada por plano
- * (via PlanFeature no banco). O Plano Básico tem todas as 16 keys = "false";
+ * (via PlanFeature no banco). O Plano Básico tem todas as 15 keys = "false";
  * planos pagos (Profissional, Enterprise) têm todas = "true".
  *
  * Use em conjunto com:

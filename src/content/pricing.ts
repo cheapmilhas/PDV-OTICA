@@ -14,7 +14,7 @@ export interface PricingPlan {
   ctaVariant: "primary" | "secondary" | "outline";
 }
 
-// Labels das 16 features gated, na ordem do catálogo. Single source of truth
+// Labels das 15 features gated, na ordem do catálogo. Single source of truth
 // para landing, admin e sistema.
 const GATED_FEATURE_LABELS = Object.values(FEATURES).map(
   (key) => FEATURE_REGISTRY[key].label,
@@ -38,7 +38,7 @@ export const plans: PricingPlan[] = [
       "Suporte via chat",
       "Acesso mobile",
     ],
-    // 16 funcionalidades exclusivas dos planos pagos (do FEATURE_REGISTRY).
+    // 15 funcionalidades exclusivas dos planos pagos (do FEATURE_REGISTRY).
     notIncluded: GATED_FEATURE_LABELS,
     cta: "Testar Grátis",
     ctaVariant: "secondary",
@@ -53,13 +53,11 @@ export const plans: PricingPlan[] = [
     highlight: true,
     features: [
       "Tudo do Essencial",
-      "Emissão de NF-e e NFC-e",
       "Contas a pagar e receber",
       "Comissões de vendedores",
-      "Integração com laboratórios",
-      "WhatsApp automático",
+      "Gestão de laboratórios",
       "Campanhas de pós-venda",
-      // 16 funcionalidades gated incluídas:
+      // 15 funcionalidades gated incluídas:
       ...GATED_FEATURE_LABELS,
       "5 usuários",
       "Suporte prioritário",
