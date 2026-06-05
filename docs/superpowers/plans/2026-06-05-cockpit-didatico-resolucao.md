@@ -303,6 +303,13 @@ describe("detectCompanyIssues", () => {
     expect(i.action?.blueprintId).toBe("reactivate");
   });
 
+  it("pagamento atrasado (PAST_DUE) → warning + link", () => {
+    const [i] = detectCompanyIssues(company({ subscriptionStatus: "PAST_DUE" }), NOW);
+    expect(i.id).toBe("past_due:c1");
+    expect(i.severity).toBe("warning");
+    expect(i.action?.kind).toBe("link");
+  });
+
   it("empresa com 2 problemas gera 2 cards distintos", () => {
     const issues = detectCompanyIssues(company({ subscriptionStatus: "SUSPENDED", healthCategory: "CRITICAL" }), NOW);
     const ids = issues.map((i) => i.id);
@@ -392,6 +399,18 @@ export function detectCompanyIssues(c: ProblemCompany, now: Date): Issue[] {
       explanation: `A assinatura de ${c.name} está suspensa. O acesso fica limitado até reativar.`,
       companyId: c.id, companyName: c.name,
       action: { kind: "blueprint", blueprintId: "reactivate", label: "Reativar" },
+    });
+  }
+
+  // Pagamento atrasado (warning) → ainda não suspensa; ver cliente p/ cobrar/decidir.
+  // (Sem blueprint dedicado de cobrança — leva à página do cliente, como overdue.)
+  if (c.subscriptionStatus === "PAST_DUE") {
+    issues.push({
+      id: `past_due:${c.id}`, severity: "warning", category: "client",
+      title: "Pagamento atrasado",
+      explanation: `A assinatura de ${c.name} está com pagamento atrasado. Vale acompanhar antes que seja suspensa.`,
+      companyId: c.id, companyName: c.name,
+      action: { kind: "link", href: `/admin/clientes/${c.id}`, label: "Ver cliente" },
     });
   }
 
@@ -518,12 +537,17 @@ Confirmar: nome da relação Company→Subscription (provável `subscriptions`),
 
 - [ ] **Step 2: Implementar**
 
+ATENÇÃO (correções da review do plano):
+- **Overdue por EMPRESA, não por sub:** uma empresa pode ter várias subscriptions; faturas OVERDUE de QUALQUER uma contam. Buscar TODAS as subs (não `take:1`) só para somar overdue; o achatamento de status usa a sub acionável.
+- **Sub "acionável" para status:** priorizar uma sub em status acionável (TRIAL/TRIAL_EXPIRED/PAST_DUE/SUSPENDED) — espelha o `findFirst({where:{status}})` dos blueprints, senão detecção e ação discordam. Fallback: a mais recente.
+
 ```ts
 // src/lib/monitoring/problem-companies.ts
 import { prisma } from "@/lib/prisma";
 import type { ProblemCompany } from "./issues";
+import type { SubscriptionStatus } from "@prisma/client";
 
-const ACTIONABLE_SUB_STATUS = ["TRIAL", "TRIAL_EXPIRED", "PAST_DUE", "SUSPENDED"] as const;
+const ACTIONABLE_SUB_STATUS: SubscriptionStatus[] = ["TRIAL", "TRIAL_EXPIRED", "PAST_DUE", "SUSPENDED"];
 const TAKE_CAP = 200;
 
 /**
@@ -531,15 +555,12 @@ const TAKE_CAP = 200;
  * em ProblemCompany. Best-effort: o caller trata exceção. Cross-tenant (super-admin).
  */
 export async function getProblemCompanies(): Promise<ProblemCompany[]> {
-  // Empresas que tenham QUALQUER sinal: blocked, saúde crítica, ou uma subscription
-  // em status acionável / pastDue / billingSyncPending. (Inadimplência OVERDUE é
-  // agregada à parte e mesclada — uma empresa pode ter overdue sem outro sinal.)
   const companies = await prisma.company.findMany({
     where: {
       OR: [
         { isBlocked: true },
         { healthCategory: "CRITICAL" },
-        { subscriptions: { some: { status: { in: [...ACTIONABLE_SUB_STATUS] } } } },
+        { subscriptions: { some: { status: { in: ACTIONABLE_SUB_STATUS } } } },
         { subscriptions: { some: { pastDueSince: { not: null } } } },
         { subscriptions: { some: { billingSyncPending: true } } },
         { subscriptions: { some: { invoices: { some: { status: "OVERDUE" } } } } },
@@ -548,11 +569,10 @@ export async function getProblemCompanies(): Promise<ProblemCompany[]> {
     take: TAKE_CAP,
     select: {
       id: true, name: true, isBlocked: true, healthCategory: true,
+      // TODAS as subscriptions: precisamos de overdue de qualquer uma (por empresa)
+      // + escolher a "acionável" para o status. orderBy p/ fallback determinístico.
       subscriptions: {
         orderBy: { createdAt: "desc" },
-        take: 1,
-        // a "acionável mais recente" — espelha findFirst dos blueprints. Se nenhuma
-        // acionável, ainda pegamos a mais recente p/ refletir o status atual.
         select: {
           status: true, trialEndsAt: true, pastDueSince: true, billingSyncPending: true,
           invoices: { where: { status: "OVERDUE" }, select: { total: true } },
@@ -562,19 +582,25 @@ export async function getProblemCompanies(): Promise<ProblemCompany[]> {
   });
 
   return companies.map((c): ProblemCompany => {
-    const sub = c.subscriptions[0] ?? null;
-    const overdue = sub?.invoices ?? [];
+    const subs = c.subscriptions;
+    // sub p/ STATUS: a primeira acionável (subs já vem mais-recente-primeiro);
+    // fallback: a mais recente; se nenhuma: null.
+    const actionableSub = subs.find((s) => ACTIONABLE_SUB_STATUS.includes(s.status)) ?? subs[0] ?? null;
+    // sub p/ billingSyncPending: qualquer uma pendente (não só a acionável).
+    const anyPendingSync = subs.some((s) => s.billingSyncPending);
+    // overdue: AGREGADO de TODAS as subs da empresa.
+    const allOverdue = subs.flatMap((s) => s.invoices);
     return {
       id: c.id,
       name: c.name,
       isBlocked: c.isBlocked,
       healthCategory: c.healthCategory,
-      subscriptionStatus: sub?.status ?? null,
-      trialEndsAt: sub?.trialEndsAt ?? null,
-      pastDueSince: sub?.pastDueSince ?? null,
-      billingSyncPending: sub?.billingSyncPending ?? false,
-      overdueInvoiceCount: overdue.length,
-      overdueTotalCents: overdue.reduce((s, i) => s + i.total, 0),
+      subscriptionStatus: actionableSub?.status ?? null,
+      trialEndsAt: actionableSub?.trialEndsAt ?? null,
+      pastDueSince: actionableSub?.pastDueSince ?? null,
+      billingSyncPending: anyPendingSync,
+      overdueInvoiceCount: allOverdue.length,
+      overdueTotalCents: allOverdue.reduce((s, i) => s + i.total, 0),
     };
   });
 }
