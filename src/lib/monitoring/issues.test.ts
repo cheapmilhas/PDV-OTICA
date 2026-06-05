@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectSystemIssues, detectErrorRateIssue } from "./issues";
+import { detectSystemIssues, detectErrorRateIssue, detectCompanyIssues, type ProblemCompany } from "./issues";
 import type { SystemPulse } from "./system-pulse";
 
 function pulse(over: Partial<SystemPulse> = {}): SystemPulse {
@@ -44,5 +44,78 @@ describe("detectErrorRateIssue", () => {
     expect(i?.severity).toBe("critical");
     expect(i?.id).toBe("error_rate");
     expect(i?.action?.kind).toBe("link");
+  });
+});
+
+const NOW = new Date("2026-06-05T12:00:00.000Z");
+
+function company(over: Partial<ProblemCompany> = {}): ProblemCompany {
+  return {
+    id: "c1", name: "Ótica Teste",
+    isBlocked: false, healthCategory: "HEALTHY",
+    subscriptionStatus: "ACTIVE", trialEndsAt: null, pastDueSince: null,
+    billingSyncPending: false, overdueInvoiceCount: 0, overdueTotalCents: 0,
+    ...over,
+  };
+}
+
+describe("detectCompanyIssues", () => {
+  it("empresa saudável e ativa → nenhum problema", () => {
+    expect(detectCompanyIssues(company(), NOW)).toEqual([]);
+  });
+  it("billing sync pendente → warning, link p/ cliente", () => {
+    const [i] = detectCompanyIssues(company({ billingSyncPending: true }), NOW);
+    expect(i.id).toBe("billing_sync:c1");
+    expect(i.severity).toBe("warning");
+    expect(i.action?.kind).toBe("link");
+    expect(i.action?.href).toBe("/admin/clientes/c1");
+  });
+  it("inadimplência → critical, link", () => {
+    const [i] = detectCompanyIssues(company({ overdueInvoiceCount: 2, overdueTotalCents: 30000 }), NOW);
+    expect(i.id).toBe("overdue:c1");
+    expect(i.severity).toBe("critical");
+    expect(i.explanation).toContain("R$");
+  });
+  it("trial vencendo (status TRIAL, <=3 dias) → info + blueprint extend_trial", () => {
+    const trialEndsAt = new Date("2026-06-07T12:00:00.000Z");
+    const [i] = detectCompanyIssues(company({ subscriptionStatus: "TRIAL", trialEndsAt }), NOW);
+    expect(i.id).toBe("trial_ending:c1");
+    expect(i.severity).toBe("info");
+    expect(i.action?.kind).toBe("blueprint");
+    expect(i.action?.blueprintId).toBe("extend_trial");
+  });
+  it("trial vencido (TRIAL_EXPIRED) → warning + link (não extend_trial)", () => {
+    const [i] = detectCompanyIssues(company({ subscriptionStatus: "TRIAL_EXPIRED" }), NOW);
+    expect(i.id).toBe("trial_expired:c1");
+    expect(i.severity).toBe("warning");
+    expect(i.action?.kind).toBe("link");
+  });
+  it("trial com status TRIAL mas data já passada → vencido (link)", () => {
+    const trialEndsAt = new Date("2026-06-01T12:00:00.000Z");
+    const [i] = detectCompanyIssues(company({ subscriptionStatus: "TRIAL", trialEndsAt }), NOW);
+    expect(i.id).toBe("trial_expired:c1");
+    expect(i.action?.kind).toBe("link");
+  });
+  it("saúde crítica → warning + link", () => {
+    const [i] = detectCompanyIssues(company({ healthCategory: "CRITICAL" }), NOW);
+    expect(i.id).toBe("health_critical:c1");
+    expect(i.action?.href).toBe("/admin/clientes/c1");
+  });
+  it("suspensa → warning + blueprint reactivate", () => {
+    const [i] = detectCompanyIssues(company({ subscriptionStatus: "SUSPENDED" }), NOW);
+    expect(i.id).toBe("suspended:c1");
+    expect(i.action?.blueprintId).toBe("reactivate");
+  });
+  it("pagamento atrasado (PAST_DUE) → warning + link", () => {
+    const [i] = detectCompanyIssues(company({ subscriptionStatus: "PAST_DUE" }), NOW);
+    expect(i.id).toBe("past_due:c1");
+    expect(i.severity).toBe("warning");
+    expect(i.action?.kind).toBe("link");
+  });
+  it("empresa com 2 problemas gera 2 cards distintos", () => {
+    const issues = detectCompanyIssues(company({ subscriptionStatus: "SUSPENDED", healthCategory: "CRITICAL" }), NOW);
+    const ids = issues.map((i) => i.id);
+    expect(ids).toContain("suspended:c1");
+    expect(ids).toContain("health_critical:c1");
   });
 });
