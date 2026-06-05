@@ -386,6 +386,22 @@ model AuditLog {
   @@index([branchId, createdAt])
 }
 
+model MetricSample {
+  id          String   @id @default(cuid())
+  capturedAt  DateTime @default(now())
+  windowMin   Int
+  route       String?
+  reqCount    Int      @default(0)
+  errorCount  Int      @default(0)
+  p50Ms       Int?
+  p95Ms       Int?
+  slowQueries Int      @default(0)
+  cacheHits   Int      @default(0)
+  cacheMisses Int      @default(0)
+
+  @@index([capturedAt])
+}
+
 model Customer {
   id                 String                 @id @default(cuid())
   companyId          String
