@@ -182,6 +182,8 @@ function StatusBanner({ pulse, lastUpdate, refreshing, onRefresh }: { pulse: Pul
 // ─── Coluna do Sistema ──────────────────────────────────────────────────────────
 
 function SystemColumn({ pulse, trends }: { pulse: Pulse; trends: Trends }) {
+  const p95Tone = tonePctLatency(pulse.p95Ms);
+  const p95Text = p95Tone === "good" ? "Telas abrindo rápido" : p95Tone === "warn" ? "Um pouco lento" : p95Tone === "bad" ? "Muito lento" : undefined;
   return (
     <section className="space-y-4">
       <ColumnHeader icon={Activity} title="Sistema" subtitle="Pulso ao vivo · tendências 24h" />
@@ -200,8 +202,8 @@ function SystemColumn({ pulse, trends }: { pulse: Pulse; trends: Trends }) {
           icon={Zap}
           label="Velocidade das telas"
           value={pulse.p95Ms !== null ? `${pulse.p95Ms}ms` : "—"}
-          tone={tonePctLatency(pulse.p95Ms)}
-          statusText={tonePctLatency(pulse.p95Ms) === "good" ? "Telas abrindo rápido" : tonePctLatency(pulse.p95Ms) === "warn" ? "Um pouco lento" : tonePctLatency(pulse.p95Ms) === "bad" ? "Muito lento" : undefined}
+          tone={p95Tone}
+          statusText={p95Text}
           tip="Quanto tempo as telas levam para carregar para os usuários."
           hint={pulse.p50Ms !== null ? `p50 ${pulse.p50Ms}ms · p95` : "sem amostras"}
         />
