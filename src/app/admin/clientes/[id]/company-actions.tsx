@@ -18,6 +18,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [blueprints, setBlueprints] = useState<Record<string, BlueprintDescriptor>>({});
+  const [blueprintsError, setBlueprintsError] = useState<string | null>(null);
   const [activeModal, setActiveModal] = useState<string | null>(null);
   const router = useRouter();
 
@@ -25,31 +26,44 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
 
   // Carrega os descritores de blueprint (campos/confirm/risco) uma vez — o modal
   // é gerado a partir deles. Filtrados por role pelo endpoint.
+  // Não engole erro: se a lista falhar (401/500), guarda a mensagem para que
+  // openModal possa avisar em vez de não fazer nada (falha silenciosa).
   useEffect(() => {
     let alive = true;
     fetch("/api/admin/actions", { cache: "no-store" })
-      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then(async (r) => {
+        if (!r.ok) {
+          const body = await r.json().catch(() => ({}));
+          throw new Error(body.error?.message || `Falha ao carregar ações (HTTP ${r.status})`);
+        }
+        return r.json();
+      })
       .then((json) => {
         if (!alive) return;
         const map: Record<string, BlueprintDescriptor> = {};
         for (const bp of json.data ?? []) map[bp.id] = bp;
         setBlueprints(map);
+        setBlueprintsError(null);
       })
-      .catch(() => {});
+      .catch((err: unknown) => {
+        if (!alive) return;
+        setBlueprintsError(err instanceof Error ? err.message : "Falha ao carregar ações");
+      });
     return () => {
       alive = false;
     };
   }, []);
 
-  // Ações sem nenhum input/confirmação extra (só companyId): executa direto.
-  async function runSimple(actionId: string) {
+  // Executa uma ação via rota de blueprints com o input dado (companyId é sempre
+  // incluído). Base para runSimple e para o atalho de 1-clique do ciclo.
+  async function runWithInput(actionId: string, extraInput: Record<string, unknown> = {}) {
     setOpen(false);
     setLoading(true);
     try {
       const res = await fetch(`/api/admin/actions/${actionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ input: { companyId } }),
+        body: JSON.stringify({ input: { companyId, ...extraInput } }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) { alert(data.error?.message || "Erro ao executar ação"); return; }
@@ -59,9 +73,30 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
     finally { setLoading(false); }
   }
 
+  // Ações sem nenhum input/confirmação extra (só companyId): executa direto.
+  function runSimple(actionId: string) {
+    return runWithInput(actionId);
+  }
+
+  // "Ciclo → Anual/Mensal" é uma ação de 1 clique: alterna para o ciclo OPOSTO
+  // do atual. Sem <select> cru — o alvo é determinado aqui e confirmado.
+  function handleToggleCycle() {
+    setOpen(false);
+    const target = billingCycle === "MONTHLY" ? "YEARLY" : "MONTHLY";
+    const targetLabel = target === "YEARLY" ? "Anual" : "Mensal";
+    if (!confirm(`Alterar o ciclo de cobrança para ${targetLabel}?`)) return;
+    return runWithInput("change_billing_cycle", { cycle: target });
+  }
+
   // Abre o modal gerado por schema para ações com campos/motivo/confirmação.
+  // Se o descritor não chegou (lista falhou ou role sem permissão), avisa em vez
+  // de não fazer nada — o modal só renderiza se blueprints[actionId] existir.
   function openModal(actionId: string) {
     setOpen(false);
+    if (!blueprints[actionId]) {
+      alert(blueprintsError ?? "Esta ação não está disponível para o seu perfil.");
+      return;
+    }
     setActiveModal(actionId);
   }
 
@@ -156,7 +191,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
               <>
                 <div className="my-1 border-t border-gray-700" />
                 <ActionBtn icon={ArrowRightLeft} label="Trocar plano" color="blue" onClick={handleChangePlan} />
-                <ActionBtn icon={RefreshCw} label={`Ciclo → ${billingCycle === "MONTHLY" ? "Anual" : "Mensal"}`} color="blue" onClick={() => openModal("change_billing_cycle")} />
+                <ActionBtn icon={RefreshCw} label={`Ciclo → ${billingCycle === "MONTHLY" ? "Anual" : "Mensal"}`} color="blue" onClick={handleToggleCycle} />
                 <ActionBtn icon={XCircle} label="Cancelar assinatura" color="red" onClick={() => openModal("cancel_subscription")} />
               </>
             )}
