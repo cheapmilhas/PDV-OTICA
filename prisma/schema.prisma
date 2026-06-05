@@ -402,6 +402,22 @@ model MetricSample {
   @@index([capturedAt])
 }
 
+model AdminActionLog {
+  id         String   @id @default(cuid())
+  adminId    String
+  actionId   String
+  companyId  String?
+  riskLevel  String
+  input      Json
+  result     Json
+  reason     String?
+  requestId  String?
+  createdAt  DateTime @default(now())
+
+  @@index([companyId])
+  @@index([adminId, createdAt])
+}
+
 model Customer {
   id                 String                 @id @default(cuid())
   companyId          String
