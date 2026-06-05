@@ -47,6 +47,10 @@ export async function GET(request: Request) {
       }
     }
 
+    // Retenção de métricas: apaga MetricSample com mais de 30 dias (carona no cron diário — Vercel Hobby não permite cron sub-diário dedicado).
+    const metricCutoff = new Date(Date.now() - 30 * 24 * 60 * 60 * 1000);
+    await prisma.metricSample.deleteMany({ where: { capturedAt: { lt: metricCutoff } } });
+
     return NextResponse.json({
       ok: true,
       companiesScanned: companies.length,
