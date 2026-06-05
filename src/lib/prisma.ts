@@ -37,15 +37,19 @@ function createPrismaClient(): PrismaClient {
       const result = await next(params);
       const durationMs = performance.now() - start;
       if (durationMs >= SLOW_QUERY_MS) {
-        const { metrics } = await import("./observability/metrics");
-        const { logger } = await import("./logger");
-        metrics.recordSlowQuery();
-        logger.child({ module: "prisma" }).warn("slow query", {
-          model: params.model,
-          action: params.action,
-          durationMs: Math.round(durationMs),
-          // NUNCA logar params.args (PII)
-        });
+        try {
+          const { metrics } = await import("./observability/metrics");
+          const { logger } = await import("./logger");
+          metrics.recordSlowQuery();
+          logger.child({ module: "prisma" }).warn("slow query", {
+            model: params.model,
+            action: params.action,
+            durationMs: Math.round(durationMs),
+            // NUNCA logar params.args (PII)
+          });
+        } catch {
+          /* nunca quebrar uma query por telemetria */
+        }
       }
       return result;
     });

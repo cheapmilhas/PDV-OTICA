@@ -51,16 +51,21 @@ export async function checkHealth(deep: boolean): Promise<HealthReport> {
   let dbOk = false;
   let dbLatencyMs: number | null = null;
   const started = performance.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
   try {
     await Promise.race([
       prisma.$queryRaw`SELECT 1`,
-      new Promise((_, rej) => setTimeout(() => rej(new Error("db timeout")), 2000)),
+      new Promise((_, rej) => {
+        timer = setTimeout(() => rej(new Error("db timeout")), 2000);
+      }),
     ]);
     dbOk = true;
     dbLatencyMs = Math.round(performance.now() - started);
   } catch {
     dbOk = false;
     dbLatencyMs = null;
+  } finally {
+    if (timer) clearTimeout(timer);
   }
   return buildHealthReport({ dbOk, dbLatencyMs, uptimeS, version });
 }
