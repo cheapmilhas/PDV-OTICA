@@ -981,7 +981,7 @@ export interface AdminActionBlueprint<TInput = any> {
   schema: z.ZodType<TInput>;
   confirm?: { requireReason: boolean; typeToConfirm?: "companyName" };
   allowedRoles: AdminRole[];
-  /** companyId-alvo extraído do input, p/ auditoria dupla (null em ações de sistema) */
+  /** companyId-alvo extraído do input, p/ auditoria + typeToConfirm (null em ações de sistema) */
   targetCompanyId?: (input: TInput) => string | null;
   execute: (ctx: ActionContext, input: TInput) => Promise<ActionResult>;
 }
@@ -1015,30 +1015,32 @@ import { z } from "zod";
 import { validateActionRequest } from "./validate";
 import type { AdminActionBlueprint } from "./types";
 
-const lowBp: AdminActionBlueprint<{ days: number }> = {
-  id: "extend_trial", label: "", description: "", category: "client", icon: "",
-  riskLevel: "low", schema: z.object({ days: z.number().int().min(1).max(30) }),
+// Fixtures sintéticas — id genérico de propósito (NÃO são os blueprints reais;
+// o campo `n` aqui só exercita a validação de schema do validateActionRequest).
+const lowBp: AdminActionBlueprint<{ n: number }> = {
+  id: "_test_low", label: "", description: "", category: "client", icon: "",
+  riskLevel: "low", schema: z.object({ n: z.number().int().min(1).max(30) }),
   allowedRoles: ["SUPER_ADMIN"], execute: async () => ({ ok: true, message: "" }),
 };
 const highBp: AdminActionBlueprint<{}> = {
-  id: "delete", label: "", description: "", category: "client", icon: "",
+  id: "_test_high", label: "", description: "", category: "client", icon: "",
   riskLevel: "high", schema: z.object({}), confirm: { requireReason: true, typeToConfirm: "companyName" },
   allowedRoles: ["SUPER_ADMIN"], execute: async () => ({ ok: true, message: "" }),
 };
 
 describe("validateActionRequest", () => {
   it("rejeita role não permitida", () => {
-    const r = validateActionRequest(lowBp, { role: "SUPPORT", input: { days: 5 } });
+    const r = validateActionRequest(lowBp, { role: "SUPPORT", input: { n: 5 } });
     expect(r.ok).toBe(false);
     expect(r.status).toBe(403);
   });
   it("rejeita input inválido", () => {
-    const r = validateActionRequest(lowBp, { role: "SUPER_ADMIN", input: { days: 99 } });
+    const r = validateActionRequest(lowBp, { role: "SUPER_ADMIN", input: { n: 99 } });
     expect(r.ok).toBe(false);
     expect(r.status).toBe(400);
   });
   it("aceita input válido low-risk", () => {
-    const r = validateActionRequest(lowBp, { role: "SUPER_ADMIN", input: { days: 5 } });
+    const r = validateActionRequest(lowBp, { role: "SUPER_ADMIN", input: { n: 5 } });
     expect(r.ok).toBe(true);
   });
   it("high-risk exige reason", () => {
@@ -1326,7 +1328,7 @@ Run: `npx tsc --noEmit && npm run build`
 
 ```bash
 git add src/app/api/admin/actions
-git commit -m "feat(admin-actions): rota POST /api/admin/actions/[id] (validate→execute→auditoria dupla)"
+git commit -m "feat(admin-actions): rota POST /api/admin/actions/[id] (validate→execute→AdminActionLog)"
 ```
 
 ---
