@@ -104,6 +104,8 @@ export async function proxy(request: NextRequest) {
     publicRoutes.includes(pathname) ||
     pathname.startsWith("/api/auth") ||
     pathname.startsWith("/api/public") ||
+    // Health check é público (uptime monitors) e não expõe internals.
+    pathname.startsWith("/api/health") ||
     // Webhooks e crons NÃO usam cookie de sessão — têm auth própria:
     // webhooks validam HMAC/token do provedor; crons validam CRON_SECRET
     // (Bearer no header). Sem este bypass o middleware barra com 401 ANTES
