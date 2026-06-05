@@ -3,9 +3,19 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 import { jwtVerify } from "jose";
 import { decode } from "next-auth/jwt";
+import { readRequestId, REQUEST_ID_HEADER } from "@/lib/observability/request-context";
 
 // Auth para rotas do PDV (Edge-safe)
 const pdvAuth = NextAuth(authConfig).auth;
+
+/**
+ * Carimba o `x-request-id` no RESPONSE para que o browser/logs vejam o id.
+ * Aditivo: não altera status, redirect ou lógica de auth.
+ */
+function withRequestId(res: NextResponse, request: NextRequest): NextResponse {
+  res.headers.set(REQUEST_ID_HEADER, readRequestId(request.headers));
+  return res;
+}
 
 /**
  * Propaga o pathname atual via header `x-current-path` no REQUEST,
@@ -18,7 +28,11 @@ const pdvAuth = NextAuth(authConfig).auth;
 function nextWithCurrentPath(request: NextRequest): NextResponse {
   const requestHeaders = new Headers(request.headers);
   requestHeaders.set("x-current-path", request.nextUrl.pathname);
-  return NextResponse.next({ request: { headers: requestHeaders } });
+  // Propaga o request-id no REQUEST para que RSCs possam ler.
+  requestHeaders.set(REQUEST_ID_HEADER, readRequestId(request.headers));
+  const res = NextResponse.next({ request: { headers: requestHeaders } });
+  // E também no RESPONSE para o browser ver.
+  return withRequestId(res, request);
 }
 
 const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
@@ -66,7 +80,7 @@ export async function proxy(request: NextRequest) {
       if (tokenLogin) {
         const payloadLogin = await verifyAdminToken(tokenLogin);
         if (payloadLogin?.isAdmin) {
-          return NextResponse.redirect(new URL("/admin", request.url));
+          return withRequestId(NextResponse.redirect(new URL("/admin", request.url)), request);
         }
       }
       return nextWithCurrentPath(request);
@@ -78,21 +92,21 @@ export async function proxy(request: NextRequest) {
 
     if (!token) {
       if (isApiRoute) {
-        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+        return withRequestId(NextResponse.json({ error: "Não autorizado" }, { status: 401 }), request);
       }
-      return NextResponse.redirect(new URL("/admin/login", request.url));
+      return withRequestId(NextResponse.redirect(new URL("/admin/login", request.url)), request);
     }
 
     const payload = await verifyAdminToken(token);
 
     if (!payload || !payload.isAdmin) {
       if (isApiRoute) {
-        return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+        return withRequestId(NextResponse.json({ error: "Não autorizado" }, { status: 401 }), request);
       }
       // Token inválido ou expirado
       const response = NextResponse.redirect(new URL("/admin/login", request.url));
       response.cookies.delete("admin.session-token");
-      return response;
+      return withRequestId(response, request);
     }
 
     return nextWithCurrentPath(request);
@@ -127,10 +141,10 @@ export async function proxy(request: NextRequest) {
     if (!sessionToken) {
       // Sem autenticação: redirecionar para login (se não for API)
       if (pathname.startsWith("/dashboard")) {
-        return NextResponse.redirect(new URL("/login", request.url));
+        return withRequestId(NextResponse.redirect(new URL("/login", request.url)), request);
       }
       // Se for API, retornar 401
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      return withRequestId(NextResponse.json({ error: "Não autenticado" }, { status: 401 }), request);
     }
 
     // CRÍTICO: validar assinatura criptográfica do JWT.
@@ -143,15 +157,17 @@ export async function proxy(request: NextRequest) {
         const response = NextResponse.redirect(new URL("/login", request.url));
         response.cookies.delete(SESSION_COOKIE_NAME);
         response.cookies.delete(SECURE_SESSION_COOKIE_NAME);
-        return response;
+        return withRequestId(response, request);
       }
-      return NextResponse.json({ error: "Não autenticado" }, { status: 401 });
+      return withRequestId(NextResponse.json({ error: "Não autenticado" }, { status: 401 }), request);
     }
 
     return nextWithCurrentPath(request);
   }
 
   // Demais rotas → PDV auth
+  // Fallback do NextAuth: retorna um valor assíncrono que não controlamos
+  // sincronamente aqui, então NÃO envolvemos com withRequestId (deixado as-is).
   return (pdvAuth as any)(request);
 }
 
