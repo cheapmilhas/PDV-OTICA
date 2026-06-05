@@ -4,7 +4,7 @@
 // as tendências da frota (24h) e o snapshot de saúde dos clientes. Consumido pela
 // página server (carga inicial) E pelo cockpit-client (polling do pulso).
 import { NextResponse } from "next/server";
-import { requireAdminAuth } from "@/lib/admin-auth-helpers";
+import { getAdminSession } from "@/lib/admin-session";
 import { handleApiError } from "@/lib/error-handler";
 import { getSystemPulse } from "@/lib/monitoring/system-pulse";
 import { getSystemTrends } from "@/lib/monitoring/system-trends";
@@ -18,7 +18,17 @@ export const dynamic = "force-dynamic";
 
 export async function GET() {
   try {
-    await requireAdminAuth();
+    // Lê o cookie de sessão admin (jose) — MESMO leitor de /api/admin/plans,
+    // impersonate e actions. (Antes usava requireAdminAuth/authAdmin, que nunca
+    // acha sessão porque o login não usa NextAuth → 401 sempre → cockpit sem
+    // dados e polling do pulso quebrado.)
+    const admin = await getAdminSession();
+    if (!admin) {
+      return NextResponse.json(
+        { error: { code: "UNAUTHORIZED", message: "Não autorizado" } },
+        { status: 401 },
+      );
+    }
 
     // Em paralelo: pulso (toca DB), tendências (lê MetricSample), saúde da base e
     // empresas problemáticas. getProblemCompanies é best-effort — se falhar, segue
