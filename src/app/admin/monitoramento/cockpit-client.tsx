@@ -9,8 +9,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
 import {
   Activity, AlertTriangle, CheckCircle2, Database, Gauge, HardDrive,
-  RefreshCw, TrendingDown, Users, Wallet, Zap,
+  HelpCircle, RefreshCw, TrendingDown, Users, Wallet, Zap,
 } from "lucide-react";
+import { IssueCard, type Issue } from "./issue-card";
+import type { BlueprintDescriptor } from "./action-modal";
 
 type HealthStatus = "ok" | "degraded" | "down";
 
@@ -59,6 +61,7 @@ interface Payload {
   pulse: Pulse;
   trends: Trends;
   clientHealth: ClientHealth;
+  issues: Issue[];
 }
 
 const POLL_MS = 10_000;
@@ -67,7 +70,26 @@ export function CockpitClient({ initial }: { initial: Payload }) {
   const [data, setData] = useState<Payload>(initial);
   const [refreshing, setRefreshing] = useState(false);
   const [lastUpdate, setLastUpdate] = useState<string>("agora");
+  const [tab, setTab] = useState<"overview" | "resolve">("overview");
+  const [blueprints, setBlueprints] = useState<Record<string, BlueprintDescriptor>>({});
   const timer = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  // Carrega os descritores de blueprint uma vez (filtrados por role pelo endpoint).
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/actions", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json) => {
+        if (!alive) return;
+        const map: Record<string, BlueprintDescriptor> = {};
+        for (const bp of json.data ?? []) map[bp.id] = bp;
+        setBlueprints(map);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
 
   const refresh = useCallback(async () => {
     setRefreshing(true);
@@ -95,15 +117,26 @@ export function CockpitClient({ initial }: { initial: Payload }) {
   }, [refresh]);
 
   const { pulse, trends, clientHealth } = data;
+  const issues = data.issues ?? [];
+  const criticalCount = issues.filter((i) => i.severity === "critical").length;
 
   return (
     <div className="space-y-6">
       <StatusBanner pulse={pulse} lastUpdate={lastUpdate} refreshing={refreshing} onRefresh={refresh} />
 
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
-        <SystemColumn pulse={pulse} trends={trends} />
-        <ClientColumn clientHealth={clientHealth} />
+      <div className="flex items-center gap-2 border-b border-gray-800">
+        <TabBtn active={tab === "overview"} onClick={() => setTab("overview")} label="Visão geral" />
+        <TabBtn active={tab === "resolve"} onClick={() => setTab("resolve")} label="Resolução" badge={issues.length} critical={criticalCount > 0} />
       </div>
+
+      {tab === "overview" ? (
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-2">
+          <SystemColumn pulse={pulse} trends={trends} />
+          <ClientColumn clientHealth={clientHealth} />
+        </div>
+      ) : (
+        <ResolveTab issues={issues} blueprints={blueprints} onResolved={refresh} />
+      )}
     </div>
   );
 }
@@ -159,41 +192,53 @@ function SystemColumn({ pulse, trends }: { pulse: Pulse; trends: Trends }) {
           label="Banco de dados"
           value={pulse.db.latencyMs !== null ? `${pulse.db.latencyMs}ms` : "—"}
           tone={pulse.db.status === "ok" ? "good" : pulse.db.status === "degraded" ? "warn" : "bad"}
+          statusText={pulse.db.status === "ok" ? "Respondendo rápido" : pulse.db.status === "degraded" ? "Está lento" : "Sem resposta"}
+          tip="Tempo que o banco leva para responder. Abaixo de 500ms é saudável."
           hint={statusLabel(pulse.db.status)}
         />
         <MetricCard
           icon={Zap}
-          label="Latência p95"
+          label="Velocidade das telas"
           value={pulse.p95Ms !== null ? `${pulse.p95Ms}ms` : "—"}
           tone={tonePctLatency(pulse.p95Ms)}
-          hint={pulse.p50Ms !== null ? `p50 ${pulse.p50Ms}ms` : "sem amostras"}
+          statusText={tonePctLatency(pulse.p95Ms) === "good" ? "Telas abrindo rápido" : tonePctLatency(pulse.p95Ms) === "warn" ? "Um pouco lento" : tonePctLatency(pulse.p95Ms) === "bad" ? "Muito lento" : undefined}
+          tip="Quanto tempo as telas levam para carregar para os usuários."
+          hint={pulse.p50Ms !== null ? `p50 ${pulse.p50Ms}ms · p95` : "sem amostras"}
         />
         <MetricCard
           icon={AlertTriangle}
           label="Taxa de erro"
           value={`${pulse.errorRatePct}%`}
           tone={pulse.errorRatePct >= 5 ? "bad" : pulse.errorRatePct > 0 ? "warn" : "good"}
+          statusText={pulse.errorRatePct >= 5 ? "Muitos erros" : pulse.errorRatePct > 0 ? "Poucos erros" : "Nenhum erro"}
+          tip="Porcentagem de ações que falharam. O ideal é 0%."
           hint={`${pulse.errorCount} de ${pulse.reqCount} req`}
         />
         <MetricCard
           icon={HardDrive}
-          label="Memória (RSS)"
+          label="Memória"
           value={`${pulse.memoryRssMb}MB`}
           tone="neutral"
+          statusText="Uso normal"
+          tip="Quanta memória o servidor está usando agora."
           hint={`heap ${pulse.memoryHeapUsedMb}MB`}
         />
         <MetricCard
           icon={Gauge}
-          label="Cache hit"
+          label="Cache"
           value={pulse.cacheHitRatePct !== null ? `${pulse.cacheHitRatePct}%` : "—"}
           tone={pulse.cacheHitRatePct === null ? "neutral" : pulse.cacheHitRatePct >= 80 ? "good" : "warn"}
+          statusText={pulse.cacheHitRatePct === null ? "Sem dados ainda" : pulse.cacheHitRatePct >= 80 ? "Funcionando bem" : "Pode melhorar"}
+          tip="O cache acelera o sistema reaproveitando dados. Quanto maior, melhor."
           hint={`${pulse.cacheHits} hits · ${pulse.cacheMisses} miss`}
         />
         <MetricCard
           icon={TrendingDown}
-          label="Slow queries"
+          label="Consultas lentas"
           value={`${pulse.slowQueries}`}
           tone={pulse.slowQueries > 0 ? "warn" : "good"}
+          statusText={pulse.slowQueries > 0 ? "Há consultas lentas" : "Nenhuma consulta lenta"}
+          tip="Consultas ao banco que demoraram mais que o esperado."
           hint="nesta instância"
         />
       </div>
@@ -233,6 +278,8 @@ function ClientColumn({ clientHealth }: { clientHealth: ClientHealth }) {
           label="MRR em risco"
           value={formatBRL(clientHealth.mrrAtRisk.mrrAtRiskCents)}
           tone={clientHealth.mrrAtRisk.mrrAtRiskCents > 0 ? "warn" : "good"}
+          statusText={clientHealth.mrrAtRisk.mrrAtRiskCents > 0 ? "Há receita em risco" : "Nenhuma receita em risco"}
+          tip="Valor mensal de assinaturas que podem ser perdidas (suspensas/atrasadas)."
           hint={`${clientHealth.mrrAtRisk.atRiskCount} assinatura(s)`}
         />
         <MetricCard
@@ -240,6 +287,8 @@ function ClientColumn({ clientHealth }: { clientHealth: ClientHealth }) {
           label="Inadimplência"
           value={formatBRL(clientHealth.overdue.overdueTotalCents)}
           tone={clientHealth.overdue.overdueCount > 0 ? "bad" : "good"}
+          statusText={clientHealth.overdue.overdueCount > 0 ? "Há faturas vencidas" : "Ninguém devendo"}
+          tip="Total de faturas vencidas e não pagas."
           hint={`${clientHealth.overdue.overdueCount} fatura(s) vencida(s)`}
         />
         <MetricCard
@@ -247,6 +296,8 @@ function ClientColumn({ clientHealth }: { clientHealth: ClientHealth }) {
           label="Empresas ativas"
           value={`${clientHealth.activeCompanies}`}
           tone="neutral"
+          statusText="Clientes usando o sistema"
+          tip="Empresas com acesso liberado."
           hint={`${clientHealth.totalCompanies} no total`}
         />
         <MetricCard
@@ -254,6 +305,8 @@ function ClientColumn({ clientHealth }: { clientHealth: ClientHealth }) {
           label="Saudáveis+"
           value={`${cat.HEALTHY + cat.THRIVING}`}
           tone="good"
+          statusText="Clientes saudáveis"
+          tip="Clientes com boa saúde (engajamento e pagamento em dia)."
           hint={`${cat.CRITICAL + cat.AT_RISK} precisam de atenção`}
         />
       </div>
@@ -296,15 +349,21 @@ const TONE: Record<string, { value: string; icon: string; border: string }> = {
   neutral: { value: "text-white", icon: "text-gray-400", border: "border-gray-800" },
 };
 
-function MetricCard({ icon: Icon, label, value, tone, hint }: { icon: React.ElementType; label: string; value: string; tone: keyof typeof TONE; hint?: string }) {
+function MetricCard({ icon: Icon, label, value, tone, hint, statusText, tip }: { icon: React.ElementType; label: string; value: string; tone: keyof typeof TONE; hint?: string; statusText?: string; tip?: string }) {
   const t = TONE[tone];
   return (
     <div className={`rounded-xl border bg-gray-900/40 p-4 ${t.border}`}>
-      <div className="mb-2 flex items-center gap-2">
+      <div className="mb-2 flex items-center gap-1.5">
         <Icon className={`h-4 w-4 ${t.icon}`} />
         <span className="text-xs font-medium text-gray-400">{label}</span>
+        {tip && (
+          <span className="cursor-help" title={tip} aria-label={tip}>
+            <HelpCircle className="h-3.5 w-3.5 text-gray-600 hover:text-gray-400" />
+          </span>
+        )}
       </div>
-      <p className={`text-2xl font-bold tabular-nums ${t.value}`}>{value}</p>
+      {statusText && <p className={`text-base font-semibold ${t.value}`}>{statusText}</p>}
+      <p className={`text-2xl font-bold tabular-nums ${statusText ? "text-gray-300" : t.value}`}>{value}</p>
       {hint && <p className="mt-0.5 text-xs text-gray-500">{hint}</p>}
     </div>
   );
@@ -371,4 +430,36 @@ function tonePctLatency(p95: number | null): keyof typeof TONE {
   if (p95 >= 2000) return "bad";
   if (p95 >= 800) return "warn";
   return "good";
+}
+
+// ─── Abas ─────────────────────────────────────────────────────────────────────
+
+function TabBtn({ active, onClick, label, badge, critical }: { active: boolean; onClick: () => void; label: string; badge?: number; critical?: boolean }) {
+  return (
+    <button onClick={onClick} className={`relative px-4 py-2.5 text-sm font-medium transition-colors ${active ? "text-white" : "text-gray-400 hover:text-gray-200"}`}>
+      {label}
+      {badge != null && badge > 0 && (
+        <span className={`ml-2 rounded-full px-1.5 py-0.5 text-xs ${critical ? "bg-red-500/20 text-red-300" : "bg-gray-700 text-gray-300"}`}>{badge}</span>
+      )}
+      {active && <span className="absolute inset-x-0 -bottom-px h-0.5 bg-indigo-500" />}
+    </button>
+  );
+}
+
+function ResolveTab({ issues, blueprints, onResolved }: { issues: Issue[]; blueprints: Record<string, BlueprintDescriptor>; onResolved: () => void }) {
+  if (issues.length === 0) {
+    return (
+      <div className="rounded-xl border border-green-500/30 bg-green-500/5 p-8 text-center">
+        <p className="text-lg font-semibold text-green-300">Tudo certo! 🎉</p>
+        <p className="mt-1 text-sm text-gray-400">Nenhum problema precisa da sua atenção agora.</p>
+      </div>
+    );
+  }
+  return (
+    <div className="space-y-3">
+      {issues.map((i) => (
+        <IssueCard key={i.id} issue={i} blueprints={blueprints} onResolved={onResolved} />
+      ))}
+    </div>
+  );
 }

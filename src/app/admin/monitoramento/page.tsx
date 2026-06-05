@@ -7,6 +7,8 @@ import { requireAdmin } from "@/lib/admin-session";
 import { getSystemPulse } from "@/lib/monitoring/system-pulse";
 import { getSystemTrends } from "@/lib/monitoring/system-trends";
 import { getClientHealthSnapshot } from "@/lib/monitoring/client-health-snapshot";
+import { getProblemCompanies } from "@/lib/monitoring/problem-companies";
+import { detectIssues } from "@/lib/monitoring/issues";
 import { Gauge } from "lucide-react";
 import { CockpitClient } from "./cockpit-client";
 
@@ -15,11 +17,14 @@ export const dynamic = "force-dynamic";
 export default async function MonitoramentoPage() {
   await requireAdmin();
 
-  const [pulse, trends, clientHealth] = await Promise.all([
+  const [pulse, trends, clientHealth, problemCompanies] = await Promise.all([
     getSystemPulse(),
     getSystemTrends(),
     getClientHealthSnapshot(),
+    getProblemCompanies().catch(() => []),
   ]);
+
+  const issues = detectIssues({ pulse, trends, problemCompanies });
 
   return (
     <div className="space-y-6">
@@ -43,7 +48,7 @@ export default async function MonitoramentoPage() {
         últimas 24h.
       </div>
 
-      <CockpitClient initial={{ pulse, trends, clientHealth }} />
+      <CockpitClient initial={{ pulse, trends, clientHealth, issues }} />
     </div>
   );
 }
