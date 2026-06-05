@@ -2,7 +2,7 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign, HelpCircle } from "lucide-react";
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyNotes } from "./company-notes";
@@ -146,12 +146,13 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
               {/* Health Score Detalhado */}
               {latestHealthScore && (
                 <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-                  <h2 className="text-sm font-semibold text-white mb-4">Health Score Detalhado</h2>
-                  <div className="grid grid-cols-2 gap-4 mb-4">
-                    <ScoreBar label="Usage" score={latestHealthScore.usageScore} />
-                    <ScoreBar label="Billing" score={latestHealthScore.billingScore} />
-                    <ScoreBar label="Engagement" score={latestHealthScore.engagementScore} />
-                    <ScoreBar label="Support" score={latestHealthScore.supportScore} />
+                  <h2 className="text-sm font-semibold text-white mb-1">Saúde do cliente</h2>
+                  <p className="text-xs text-gray-500 mb-4">Cada dimensão vai de 0 a 100. Quanto maior, melhor.</p>
+                  <div className="space-y-3 mb-4">
+                    <ScoreBar label="Uso do sistema" score={latestHealthScore.usageScore} tip="Quanto a empresa usa o sistema no dia a dia (vendas, OS, acessos)." />
+                    <ScoreBar label="Pagamento" score={latestHealthScore.billingScore} tip="Situação financeira: faturas em dia, sem atrasos." />
+                    <ScoreBar label="Engajamento" score={latestHealthScore.engagementScore} tip="Usuários ativos e frequência de uso." />
+                    <ScoreBar label="Suporte" score={latestHealthScore.supportScore} tip="Histórico de chamados de suporte (menos problemas = melhor)." />
                   </div>
 
                   {latestHealthScore.riskFactors && Array.isArray(latestHealthScore.riskFactors) && (latestHealthScore.riskFactors as string[]).length > 0 && (
@@ -563,22 +564,35 @@ function MetricCard({ label, value, icon: Icon }: { label: string; value: number
   );
 }
 
-function ScoreBar({ label, score }: { label: string; score: number }) {
-  const getColor = (s: number) => {
-    if (s >= 80) return "bg-green-500";
-    if (s >= 60) return "bg-blue-500";
-    if (s >= 40) return "bg-yellow-500";
-    return "bg-red-500";
-  };
+function ScoreBar({ label, score, tip }: { label: string; score: number; tip?: string }) {
+  // Faixas de qualidade da dimensão (0-100): cor da barra + palavra de status.
+  const band =
+    score >= 80
+      ? { bar: "bg-green-500", text: "text-green-400", word: "Ótimo" }
+      : score >= 60
+        ? { bar: "bg-blue-500", text: "text-blue-400", word: "Bom" }
+        : score >= 40
+          ? { bar: "bg-yellow-500", text: "text-yellow-400", word: "Médio" }
+          : { bar: "bg-red-500", text: "text-red-400", word: "Ruim" };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-400">{label}</span>
-        <span className="text-xs font-medium text-white">{score}</span>
+        <span className="flex items-center gap-1.5 text-xs text-gray-300">
+          {label}
+          {tip && (
+            <span title={tip} aria-label={tip} className="cursor-help text-gray-600">
+              <HelpCircle className="h-3 w-3" />
+            </span>
+          )}
+        </span>
+        <span className="flex items-center gap-2 text-xs">
+          <span className={`font-medium ${band.text}`}>{band.word}</span>
+          <span className="tabular-nums text-gray-500">{score}/100</span>
+        </span>
       </div>
       <div className="w-full bg-gray-800 rounded-full h-2">
-        <div className={`h-2 rounded-full ${getColor(score)}`} style={{ width: `${score}%` }} />
+        <div className={`h-2 rounded-full ${band.bar}`} style={{ width: `${score}%` }} />
       </div>
     </div>
   );
