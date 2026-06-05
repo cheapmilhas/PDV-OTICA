@@ -25,4 +25,16 @@ describe("metrics", () => {
     metrics.recordSlowQuery();
     expect(metrics.snapshot().slowQueries).toBe(1);
   });
+
+  it("dispara flush ao virar a janela, com os agregados da janela anterior", () => {
+    const flushed: any[] = [];
+    metrics._setFlushSink((s) => flushed.push(s));
+    metrics.recordRequest({ route: "/a", status: 200, durationMs: 100, nowMs: 0 });
+    metrics.recordRequest({ route: "/a", status: 500, durationMs: 200, nowMs: 0 });
+    // vira a janela (WINDOW_MS = 5*60*1000 = 300000)
+    metrics.recordRequest({ route: "/a", status: 200, durationMs: 50, nowMs: 300001 });
+    expect(flushed.length).toBe(1);
+    expect(flushed[0].reqCount).toBe(2);
+    expect(flushed[0].errorCount).toBe(1);
+  });
 });
