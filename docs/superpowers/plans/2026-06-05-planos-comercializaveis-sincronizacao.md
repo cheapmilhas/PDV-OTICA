@@ -780,9 +780,9 @@ git commit -m "feat(planos): JSON-LD (precos + global) deriva preço do plano at
 - Modify: `src/components/subscription/subscription-blocked.tsx`
 - Modify: `src/components/pages/functionalities-page.tsx`
 
-- [ ] **Step 1: FAQ de trial**
+- [ ] **Step 1: FAQ de trial — NÃO editar (dead export)**
 
-Em `src/content/pricing.ts`, na `pricingFaq`, trocar a resposta "Sim, 14 dias grátis..." por texto sem número fixo: `"Sim, o teste é grátis e sem cartão de crédito. Sem compromisso de continuar."` (o número exato aparece dinâmico no `/registro`).
+`pricingFaq` em `src/content/pricing.ts:92` é **dead export** (`grep -rn "pricingFaq" src/` → só a declaração; ninguém importa). A FAQ visível na landing é `src/content/faq.ts`, que **não** contém "14 dias". Portanto **nada a editar aqui** — o "14 dias" de `pricing.ts:99` desaparece quando `pricingFaq` for **removido na Task 12**. Pular este passo.
 
 - [ ] **Step 2: Tela de trial expirado**
 
@@ -819,7 +819,7 @@ Expected: após Tasks 7 e 10, nenhum import de `plans` (só talvez `pricingFaq`)
 
 - [ ] **Step 2: Remover o array `plans` e `GATED_FEATURE_LABELS`**
 
-Em `src/content/pricing.ts`, apagar `export const plans` e o `GATED_FEATURE_LABELS`/imports do `FEATURE_REGISTRY` que só serviam a ele. Manter `pricingFaq` e tipos ainda usados.
+Em `src/content/pricing.ts`, apagar `export const plans`, o `GATED_FEATURE_LABELS` e os imports do `FEATURE_REGISTRY` que só serviam a ele. **Apagar também `export const pricingFaq`** — é dead export (confirmado por grep; o "14 dias grátis" da Task 11 mora aqui e some com a remoção). Se após isso o arquivo ficar sem nenhum export usado, removê-lo inteiro e limpar imports órfãos. Conferir com `grep -rn "from \"@/content/pricing\"" src/` → deve ficar vazio.
 
 - [ ] **Step 3: Remover componente órfão**
 
