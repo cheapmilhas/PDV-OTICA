@@ -45,3 +45,14 @@ export function detectSystemIssues(pulse: SystemPulse): Issue[] {
   }
   return issues;
 }
+
+export function detectErrorRateIssue(pulse: SystemPulse): Issue | null {
+  if (pulse.reqCount < MIN_REQ_FOR_ERROR_ALERT) return null;
+  if (pulse.errorRatePct < ERROR_RATE_PCT) return null;
+  return {
+    id: "error_rate", severity: "critical", category: "system",
+    title: "Muitos erros acontecendo",
+    explanation: `${pulse.errorRatePct}% das últimas requisições falharam. Algo pode estar quebrado para os usuários.`,
+    action: { kind: "link", href: "/admin/configuracoes/logs", label: "Ver registros de erro" },
+  };
+}

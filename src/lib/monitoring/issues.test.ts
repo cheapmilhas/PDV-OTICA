@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { detectSystemIssues } from "./issues";
+import { detectSystemIssues, detectErrorRateIssue } from "./issues";
 import type { SystemPulse } from "./system-pulse";
 
 function pulse(over: Partial<SystemPulse> = {}): SystemPulse {
@@ -29,5 +29,20 @@ describe("detectSystemIssues — sistema lento/fora do ar", () => {
   it("dispara critical quando sistema down", () => {
     const issues = detectSystemIssues(pulse({ db: { status: "down", latencyMs: null }, status: "down" }));
     expect(issues[0].severity).toBe("critical");
+  });
+});
+
+describe("detectErrorRateIssue", () => {
+  it("não dispara abaixo do limiar", () => {
+    expect(detectErrorRateIssue(pulse({ reqCount: 100, errorRatePct: 2 }))).toBeNull();
+  });
+  it("não dispara com poucas requests (evita falso positivo)", () => {
+    expect(detectErrorRateIssue(pulse({ reqCount: 5, errorRatePct: 50 }))).toBeNull();
+  });
+  it("dispara critical quando erro >= 5% com requests suficientes", () => {
+    const i = detectErrorRateIssue(pulse({ reqCount: 100, errorRatePct: 8 }));
+    expect(i?.severity).toBe("critical");
+    expect(i?.id).toBe("error_rate");
+    expect(i?.action?.kind).toBe("link");
   });
 });
