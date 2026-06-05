@@ -12,6 +12,7 @@
  */
 import { LRUCache } from "lru-cache";
 import { getSubscriptionInfo } from "@/lib/subscription";
+import { metrics } from "./observability/metrics";
 
 export interface CachedPlanFeatures {
   features: Record<string, boolean>;
@@ -32,7 +33,11 @@ export async function getCachedPlanFeatures(
   companyId: string,
 ): Promise<CachedPlanFeatures> {
   const hit = cache.get(companyId);
-  if (hit) return hit;
+  if (hit) {
+    metrics.cacheHit();
+    return hit;
+  }
+  metrics.cacheMiss();
 
   // Se DB falhar, propaga erro sem cachear — caller decide fail-open.
   const info = await getSubscriptionInfo(companyId);
