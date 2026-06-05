@@ -5,6 +5,7 @@ import Link from "next/link";
 import { ArrowRight, MessageCircle, Check, Sparkles } from "lucide-react";
 import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
 import { fadeInUp, staggerContainer, scaleIn } from "@/lib/animations";
+import { BrowserFrame } from "@/components/landing-layout/browser-frame";
 
 const HERO_BULLETS = [
   "Cada OS de lente, do pedido ao laboratório à entrega",
@@ -197,38 +198,7 @@ export function Hero() {
               />
 
               {/* Browser frame */}
-              <div
-                className="relative rounded-2xl overflow-hidden"
-                style={{
-                  border: "1px solid var(--lp-border)",
-                  background: "var(--lp-surface)",
-                  boxShadow:
-                    "0 32px 80px rgba(10,31,68,0.18), 0 8px 24px rgba(10,31,68,0.10)",
-                }}
-              >
-                {/* Browser chrome */}
-                <div
-                  className="flex items-center gap-2 px-4 py-3 border-b"
-                  style={{
-                    background: "var(--lp-surface-hover)",
-                    borderColor: "var(--lp-border)",
-                  }}
-                >
-                  <div className="flex gap-1.5">
-                    <div className="h-3 w-3 rounded-full" style={{ background: "#FF5F57" }} />
-                    <div className="h-3 w-3 rounded-full" style={{ background: "#FEBC2E" }} />
-                    <div className="h-3 w-3 rounded-full" style={{ background: "#28C840" }} />
-                  </div>
-                  <div className="flex-1 mx-4">
-                    <div
-                      className="rounded-md px-3 py-1 text-xs text-center"
-                      style={{ background: "var(--lp-background)", color: "var(--lp-subtle)" }}
-                    >
-                      vis.app.br/dashboard
-                    </div>
-                  </div>
-                </div>
-
+              <BrowserFrame url="vis.app.br/dashboard">
                 {/* Dashboard preview */}
                 <div
                   className="p-4 md:p-6"
@@ -334,7 +304,7 @@ export function Hero() {
                     </div>
                   </div>
                 </div>
-              </div>
+              </BrowserFrame>
 
               {/* Reflexo */}
               <div
