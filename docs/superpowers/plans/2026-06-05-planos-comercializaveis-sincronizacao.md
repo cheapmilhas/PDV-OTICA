@@ -113,12 +113,14 @@ Centraliza a conversão centavos→reais e a regra de "Em breve", para nenhum co
 
 - [ ] **Step 1: Escrever o teste falho**
 
+> **ATENÇÃO (confirmado no ambiente):** `formatCurrency` usa `Intl.NumberFormat("pt-BR")`, que separa "R$" do número com **espaço não-quebrável** (U+00A0), NÃO espaço normal. Para o teste ser determinístico, `formatPlanPrice` **normaliza** o NBSP para espaço normal, e o teste compara com espaço normal.
+
 ```typescript
 import { describe, it, expect } from "vitest";
 import { formatPlanPrice, isComingSoon } from "./plan-display";
 
 describe("formatPlanPrice", () => {
-  it("converte centavos → reais formatado", () => {
+  it("converte centavos → reais formatado (espaço normal, não NBSP)", () => {
     expect(formatPlanPrice(14990)).toBe("R$ 149,90");
     expect(formatPlanPrice(18990)).toBe("R$ 189,90");
   });
@@ -162,10 +164,12 @@ export interface PublicPlan {
   highlightFeatures: string[] | null;
 }
 
-/** Centavos → "R$ x,yy". Retorna null se não houver preço (0/null) — não chamar conversão. */
+const NBSP = String.fromCharCode(160); // U+00A0, inserido pelo Intl entre "R$" e o número
+
+/** Centavos → "R$ x,yy" (NBSP normalizado p/ espaço comum). null se sem preço (0/null). */
 export function formatPlanPrice(cents: number | null | undefined): string | null {
   if (!cents || cents <= 0) return null;
-  return formatCurrency(cents / 100);
+  return formatCurrency(cents / 100).split(NBSP).join(" ");
 }
 
 export function isComingSoon(plan: { status?: string }): boolean {
@@ -176,7 +180,7 @@ export function isComingSoon(plan: { status?: string }): boolean {
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `npx vitest run src/lib/plan-display.test.ts`
-Expected: PASS (4 testes). Se `formatCurrency` retornar `"R$ 149,90"` (espaço não-quebrável do Intl), ajustar o `expect` para o output real — rodar uma vez e alinhar a string esperada ao que o `Intl` produz no ambiente.
+Expected: PASS (4 testes). O helper já normaliza o NBSP, então o `expect` com espaço normal passa direto.
 
 - [ ] **Step 5: Commit**
 
@@ -272,6 +276,8 @@ Após a transação que atualiza o plano (depois do `globalAudit.create`, antes 
 ```typescript
     revalidateTag("public-plans");
 ```
+
+> **IMPORTANTE (escopo do revalidate):** `revalidateTag("public-plans")` só invalida entradas do **Data Cache** taggeadas com `public-plans` — na prática, **apenas o `unstable_cache` do JSON-LD criado na Task 10**. Ele **NÃO** invalida a resposta de `GET /api/public/plans` (route handler cacheado por header `s-maxage`), cujo reflexo vem do **TTL de 60s** (Task 3). Ou seja: home/`PricingSection` refletem em ≤60s; JSON-LD reflete imediato — mas **só depois que a Task 10 existir**. Até a Task 10, esta chamada é um no-op inofensivo. Não é erro: é o comportamento esperado, documentado no spec §6.2.
 
 - [ ] **Step 3: Mesmo tratamento no POST (criar)**
 
@@ -515,26 +521,44 @@ useEffect(() => {
 }, []);
 ```
 
-- [ ] **Step 3: Render por plano usando os campos novos**
+- [ ] **Step 3: Adaptar os campos internos (o componente usa vários campos do tipo estático antigo)**
 
-- Preço: `const price = formatPlanPrice(plan.priceMonthly);` — se `null`, esconder valor.
-- Bullets: usar `plan.highlightFeatures ?? []`.
-- Se `isComingSoon(plan)`: mostrar selo "Em breve", desabilitar botão de compra e exibir botão "Quero ser avisado" → `onClick={() => setInterest(plan)}`.
-- Se `ACTIVE`: CTA normal de registro (`REGISTER_URL`).
+O componente atual depende de campos que **não existem** no `PublicPlan` da API. Mapear cada um:
+
+| Uso atual (estático) | Substituir por |
+|---|---|
+| `plan.id` como `"essencial"\|"profissional"\|"rede"` em `PLAN_ICONS[plan.id]` e no link `plan.id === "rede"` | usar `plan.slug` (`"basico"\|"basico-nf"\|"profissional"\|"rede"`). Reescrever `PLAN_ICONS` com as **novas chaves de slug**. O link especial de WhatsApp passa a ser `plan.slug === "rede"`. |
+| `plan.highlight` (destaque visual) | `plan.isFeatured` |
+| `plan.badge` ("Mais escolhido") | derivar: `plan.isFeatured ? "Mais escolhido" : undefined` (ou `isComingSoon(plan) ? "Em breve" : ...`) |
+| `plan.monthlyPrice`/`plan.annualPrice` (reais, float) | `plan.priceMonthly`/`plan.priceYearly` (centavos) → `formatPlanPrice(...)` |
+| `plan.notIncluded` (lista) | remover — não há esse dado na API; a copy nova só usa `highlightFeatures` |
+
+- [ ] **Step 4: Tratar o toggle Mensal/Anual com preços em centavos e planos sem preço**
+
+O componente tem um toggle `annual` (estado) e renderiza `formatCurrency(annual ? plan.annualPrice : plan.monthlyPrice)` + "Economize .../ano". Regras novas:
+- Preço exibido: `const price = formatPlanPrice(annual ? plan.priceYearly : plan.priceMonthly);`
+- Se `price === null` (plano `COMING_SOON` sem preço, ex. Profissional/Rede, ou anual=0 do Básico+NF): **não** renderizar valor nem o bloco "Economize/ano" — mostrar só o selo "Em breve". Nunca passar 0 ao `formatCurrency`.
+- "Economize/ano" e "ou X/mês no anual": só quando **ambos** `priceMonthly>0` e `priceYearly>0`.
+
+- [ ] **Step 5: Render do estado "Em breve" + CTA**
+
+- Bullets: `plan.highlightFeatures ?? []`.
+- Se `isComingSoon(plan)`: selo "Em breve", botão de compra **desabilitado**, e botão "Quero ser avisado" → `onClick={() => setInterest(plan)}`.
+- Se `ACTIVE`: CTA normal (`REGISTER_URL`; manter o caso `plan.slug === "rede"` → `WHATSAPP_URL`, embora "rede" agora seja COMING_SOON — o ramo ACTIVE de "rede" fica inalcançável até lançar, sem problema).
 - Renderizar `<ComingSoonInterestModal open={!!interest} planSlug={interest?.slug ?? ""} planName={interest?.name ?? ""} onClose={() => setInterest(null)} />`.
-- Estado de carregamento: enquanto `plans.length === 0`, mostrar skeleton/placeholder (NÃO preço falso).
+- Carregamento: enquanto `plans.length === 0`, skeleton/placeholder (NÃO preço falso).
 
-- [ ] **Step 4: Verificar compilação + build**
+- [ ] **Step 6: Verificar compilação + build**
 
 Run: `npx tsc --noEmit && npm run build`
-Expected: sem erros. (Se `formatCurrency` não estava importado aqui, agora vem via `plan-display`.)
+Expected: sem erros. Conferir que nenhum campo removido (`monthlyPrice`/`badge`/`highlight`/`notIncluded`/`plan.id`) ficou referenciado.
 
-- [ ] **Step 5: Verificação visual (manual)**
+- [ ] **Step 7: Verificação visual (manual)**
 
 Run: `npm run dev` → abrir `/` e `/precos`.
-Expected: Básico mostra R$ 149,90 + CTA; os 3 "Em breve" com selo + "Quero ser avisado". Modal abre e envia.
+Expected: Básico mostra R$ 149,90 + CTA; os 3 "Em breve" com selo + "Quero ser avisado". Modal abre e envia. Toggle Anual não quebra (planos sem anual escondem o valor).
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
 git add src/components/home/pricing-section.tsx
@@ -588,6 +612,13 @@ Reescrever o seed para upsert (por `slug`) dos 4 planos. `highlightFeatures` = b
 
 Implementar como `for (const p of plans) await prisma.plan.upsert({ where: { slug: p.slug }, update: p, create: p })`. `highlightFeatures` é `Json` — passar o array direto.
 
+> **Plano legado `enterprise`:** o seed atual cria um plano `slug:"enterprise"` (R$599) que **não** está na nova lista. Como `/api/public/plans` filtra `isActive:true`, ele **vazaria** para a landing. Após o upsert dos 4, desativar quaisquer slugs legados:
+> ```typescript
+> const keep = ["basico", "basico-nf", "profissional", "rede"];
+> await prisma.plan.updateMany({ where: { slug: { notIn: keep } }, data: { isActive: false } });
+> ```
+> O slug `profissional` já existia (R$299) — o upsert o **sobrescreve** para COMING_SOON sem preço (correto). Empresas que já assinam um plano legado mantêm a `Subscription` (a desativação não apaga o `Plan`, só o tira da vitrine).
+
 - [ ] **Step 2: Rodar o seed**
 
 Run: `cd "/Users/matheusreboucas/PDV OTICA" && npx tsx prisma/seed-plans.ts` (ou o runner usado pelo projeto — checar `package.json` por `seed`)
@@ -619,7 +650,7 @@ Em `src/app/registro/page.tsx`, onde os planos do fetch são exibidos para sele�
 
 - [ ] **Step 2: Backend recusa COMING_SOON**
 
-Em `src/app/api/public/register/route.ts`, no bloco que busca o plano (linhas ~78-90), endurecer o filtro para `status: "ACTIVE"`:
+Em `src/app/api/public/register/route.ts`, no bloco que busca o plano (linhas ~78-90). **Atenção:** o código atual usa `prisma.plan.findUnique({ where: { id: planId, isActive: true } })` — isso é **inválido** no Prisma (`findUnique` só aceita campos `@id`/`@unique`; `isActive` não é) e quebra o `tsc`. **Trocar `findUnique` por `findFirst`** e adicionar `status: "ACTIVE"`:
 
 ```typescript
     if (planId) {
@@ -682,7 +713,7 @@ export function buildSoftwareApplicationJsonLd(lowestPriceReais: number): Record
 
 - [ ] **Step 2: Helper Server para buscar o menor preço ativo**
 
-Adicionar em `src/lib/plan-display.ts` uma função Server-safe (sem `formatCurrency`) — ou criar `src/lib/plan-pricing-server.ts`:
+Criar **`src/lib/plan-pricing-server.ts`** (localização fixa — não pôr em `plan-display.ts`, que é client-safe e não deve importar `prisma`/`next/cache`):
 
 ```typescript
 import { prisma } from "@/lib/prisma";
