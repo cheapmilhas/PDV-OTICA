@@ -43,4 +43,10 @@ describe("validateActionRequest", () => {
     const r = validateActionRequest(highBp, { role: "SUPER_ADMIN", input: {}, reason: "fraude", companyName: "Ótica X", confirmName: "Ótica X" });
     expect(r.ok).toBe(true);
   });
+  it("high-risk passa quando nome do banco tem espaço extra (compara com trim)", () => {
+    // Regressão: nome cadastrado com espaço no fim ("OTICA QA ") fazia o botão
+    // do modal habilitar (frontend usa trim) mas o backend rejeitava sem trim.
+    const r = validateActionRequest(highBp, { role: "SUPER_ADMIN", input: {}, reason: "encerrou", companyName: "OTICA QA ", confirmName: "OTICA QA" });
+    expect(r.ok).toBe(true);
+  });
 });

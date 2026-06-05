@@ -29,7 +29,14 @@ export function validateActionRequest<TInput>(
     if (bp.confirm?.requireReason && !req.reason?.trim()) {
       return { ok: false, status: 400, message: "Motivo é obrigatório" };
     }
-    if (bp.confirm?.typeToConfirm === "companyName" && req.confirmName !== req.companyName) {
+    // Compara com trim nos dois lados — alinhado ao frontend (action-modal),
+    // que habilita o botão quando confirmName.trim() === companyName.trim().
+    // Sem o trim, um nome com espaço no banco ("OTICA QA ") faz o botão habilitar
+    // mas o backend rejeitar com "Confirmação não confere".
+    if (
+      bp.confirm?.typeToConfirm === "companyName" &&
+      (req.confirmName ?? "").trim() !== (req.companyName ?? "").trim()
+    ) {
       return { ok: false, status: 400, message: "Confirmação não confere" };
     }
   }
