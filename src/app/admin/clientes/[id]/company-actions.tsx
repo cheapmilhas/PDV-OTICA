@@ -1,8 +1,9 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { ArrowRightLeft, Ban, CheckCircle, CreditCard, Eye, Loader2, MoreVertical, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { ActionModal, type BlueprintDescriptor } from "../../monitoramento/action-modal";
 
 interface CompanyActionsProps {
   companyId: string;
@@ -16,56 +17,56 @@ interface CompanyActionsProps {
 export function CompanyActions({ companyId, companyName, isBlocked, subscriptionStatus, billingCycle, currentPlanId }: CompanyActionsProps) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [blueprints, setBlueprints] = useState<Record<string, BlueprintDescriptor>>({});
+  const [activeModal, setActiveModal] = useState<string | null>(null);
   const router = useRouter();
 
   const hasActiveSubscription = subscriptionStatus && ["TRIAL", "ACTIVE", "PAST_DUE"].includes(subscriptionStatus);
 
-  async function handleAction(
-    action: string,
-    opts?: { input?: Record<string, string>; reason?: string; confirmName?: string },
-  ) {
-    setLoading(true);
+  // Carrega os descritores de blueprint (campos/confirm/risco) uma vez — o modal
+  // é gerado a partir deles. Filtrados por role pelo endpoint.
+  useEffect(() => {
+    let alive = true;
+    fetch("/api/admin/actions", { cache: "no-store" })
+      .then((r) => (r.ok ? r.json() : { data: [] }))
+      .then((json) => {
+        if (!alive) return;
+        const map: Record<string, BlueprintDescriptor> = {};
+        for (const bp of json.data ?? []) map[bp.id] = bp;
+        setBlueprints(map);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, []);
+
+  // Ações sem nenhum input/confirmação extra (só companyId): executa direto.
+  async function runSimple(actionId: string) {
     setOpen(false);
+    setLoading(true);
     try {
-      const res = await fetch(`/api/admin/actions/${action}`, {
+      const res = await fetch(`/api/admin/actions/${actionId}`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          input: { companyId, ...(opts?.input ?? {}) },
-          ...(opts?.reason ? { reason: opts.reason } : {}),
-          ...(opts?.confirmName ? { confirmName: opts.confirmName } : {}),
-        }),
+        body: JSON.stringify({ input: { companyId } }),
       });
-      const data = await res.json();
-      // Erro de transporte/validação: { error: { code, message } } com status != 2xx.
+      const data = await res.json().catch(() => ({}));
       if (!res.ok) { alert(data.error?.message || "Erro ao executar ação"); return; }
-      // Falha "soft": blueprint retorna { ok: false, message } com HTTP 200.
       if (data.data?.ok === false) { alert(data.data?.message || "Ação não realizada"); return; }
-      alert(data.data?.message || "Ação executada com sucesso");
       router.refresh();
     } catch { alert("Erro ao executar ação"); }
     finally { setLoading(false); }
   }
 
-  async function handleImpersonate() {
-    const reason = prompt("Motivo da impersonação (obrigatório):");
-    if (!reason) return;
-    setLoading(true);
+  // Abre o modal gerado por schema para ações com campos/motivo/confirmação.
+  function openModal(actionId: string) {
     setOpen(false);
-    try {
-      const res = await fetch("/api/admin/impersonate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ companyId, reason }),
-      });
-      const data = await res.json();
-      if (!res.ok) { alert(data.error || "Erro ao iniciar impersonação"); return; }
-      const url = `/impersonate?token=${data.data.token}&sessionId=${data.data.sessionId}`;
-      window.open(url, "_blank");
-    } catch { alert("Erro ao iniciar impersonação"); }
-    finally { setLoading(false); }
+    setActiveModal(actionId);
   }
 
+  // change_plan precisa de opções dinâmicas (lista de planos) que o schema genérico
+  // não carrega — mantém o picker dedicado, mas executa pela rota de blueprints.
   async function handleChangePlan() {
     setOpen(false);
     try {
@@ -89,35 +90,41 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
       const selectedPlan = plans[index];
       if (!confirm(`Trocar para o plano "${selectedPlan.name}"?`)) return;
 
-      await handleAction("change_plan", { input: { planId: selectedPlan.id } });
+      setLoading(true);
+      const exec = await fetch("/api/admin/actions/change_plan", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ input: { companyId, planId: selectedPlan.id } }),
+      });
+      const execData = await exec.json().catch(() => ({}));
+      if (!exec.ok) { alert(execData.error?.message || "Erro ao trocar plano"); return; }
+      if (execData.data?.ok === false) { alert(execData.data?.message || "Ação não realizada"); return; }
+      router.refresh();
     } catch { alert("Erro ao trocar plano"); }
+    finally { setLoading(false); }
   }
 
-  async function handleCancelSubscription() {
-    setOpen(false);
-    const reason = prompt("Motivo do cancelamento (obrigatório):");
+  async function handleImpersonate() {
+    // Impersonate é especial: fluxo de token+redirect, FORA do registry/ActionModal.
+    const reason = prompt("Motivo da impersonação (obrigatório):");
     if (!reason) return;
-    if (!confirm(`Cancelar assinatura de "${companyName}"? Motivo: ${reason}`)) return;
-    await handleAction("cancel_subscription", { reason });
+    setLoading(true);
+    setOpen(false);
+    try {
+      const res = await fetch("/api/admin/impersonate", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ companyId, reason }),
+      });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Erro ao iniciar impersonação"); return; }
+      const url = `/impersonate?token=${data.data.token}&sessionId=${data.data.sessionId}`;
+      window.open(url, "_blank");
+    } catch { alert("Erro ao iniciar impersonação"); }
+    finally { setLoading(false); }
   }
 
-  async function handleDelete() {
-    setOpen(false);
-    if (!confirm(`Excluir "${companyName}"? Esta ação não pode ser desfeita.`)) return;
-    const reason = prompt("Motivo da exclusão (obrigatório):");
-    if (!reason) return;
-    const confirmName = prompt(`Para confirmar, digite o nome da empresa: ${companyName}`);
-    if (!confirmName) return;
-    await handleAction("delete", { reason, confirmName });
-  }
-
-  async function handleChangeBillingCycle() {
-    setOpen(false);
-    const newCycle = billingCycle === "MONTHLY" ? "YEARLY" : "MONTHLY";
-    const label = newCycle === "MONTHLY" ? "Mensal" : "Anual";
-    if (!confirm(`Alterar ciclo de cobrança para ${label}?`)) return;
-    await handleAction("change_billing_cycle", { input: { cycle: newCycle } });
-  }
+  const activeBp = activeModal ? blueprints[activeModal] : null;
 
   return (
     <div className="relative">
@@ -135,30 +142,40 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
           <div className="absolute right-0 top-10 z-20 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-xl py-1 overflow-hidden">
             {isBlocked ? (
-              <ActionBtn icon={CheckCircle} label="Desbloquear empresa" color="green" onClick={() => handleAction("unblock")} />
+              <ActionBtn icon={CheckCircle} label="Desbloquear empresa" color="green" onClick={() => runSimple("unblock")} />
             ) : (
-              <ActionBtn icon={Ban} label="Bloquear empresa" color="red" onClick={() => handleAction("block")} />
+              <ActionBtn icon={Ban} label="Bloquear empresa" color="red" onClick={() => openModal("block")} />
             )}
             {subscriptionStatus === "SUSPENDED" && (
-              <ActionBtn icon={RefreshCw} label="Reativar assinatura" color="blue" onClick={() => handleAction("reactivate")} />
+              <ActionBtn icon={RefreshCw} label="Reativar assinatura" color="blue" onClick={() => runSimple("reactivate")} />
             )}
             {subscriptionStatus === "TRIAL" && (
-              <ActionBtn icon={CreditCard} label="Estender trial (+7 dias)" color="blue" onClick={() => handleAction("extend_trial")} />
+              <ActionBtn icon={CreditCard} label="Estender trial (+7 dias)" color="blue" onClick={() => runSimple("extend_trial")} />
             )}
             {hasActiveSubscription && (
               <>
                 <div className="my-1 border-t border-gray-700" />
                 <ActionBtn icon={ArrowRightLeft} label="Trocar plano" color="blue" onClick={handleChangePlan} />
-                <ActionBtn icon={RefreshCw} label={`Ciclo → ${billingCycle === "MONTHLY" ? "Anual" : "Mensal"}`} color="blue" onClick={handleChangeBillingCycle} />
-                <ActionBtn icon={XCircle} label="Cancelar assinatura" color="red" onClick={handleCancelSubscription} />
+                <ActionBtn icon={RefreshCw} label={`Ciclo → ${billingCycle === "MONTHLY" ? "Anual" : "Mensal"}`} color="blue" onClick={() => openModal("change_billing_cycle")} />
+                <ActionBtn icon={XCircle} label="Cancelar assinatura" color="red" onClick={() => openModal("cancel_subscription")} />
               </>
             )}
             <div className="my-1 border-t border-gray-700" />
             <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={handleImpersonate} />
             <div className="my-1 border-t border-gray-700" />
-            <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={handleDelete} />
+            <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={() => openModal("delete")} />
           </div>
         </>
+      )}
+
+      {activeBp && (
+        <ActionModal
+          blueprint={activeBp}
+          companyId={companyId}
+          companyName={companyName}
+          onClose={() => setActiveModal(null)}
+          onDone={() => router.refresh()}
+        />
       )}
     </div>
   );
