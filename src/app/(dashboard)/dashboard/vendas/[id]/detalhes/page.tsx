@@ -18,7 +18,8 @@ import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { hasPermission as hasRolePermission, Permission } from "@/lib/permissions";
 import { usePermissions } from "@/hooks/usePermissions";
-import { replaceMessageVariables, openWhatsAppWithMessage } from "@/lib/default-messages";
+import { openWhatsAppWithMessage } from "@/lib/default-messages";
+import { buildThankYouMessage } from "@/lib/whatsapp-message";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { saleDisplayNumber } from "@/lib/sale-number";
 
@@ -285,14 +286,24 @@ export default function DetalhesVendaPage() {
         return;
       }
 
-      // Substituir variáveis na mensagem
-      const message = replaceMessageVariables(messageTemplate, {
-        cliente: sale?.customer?.name || "Cliente",
-        valor: formatCurrency(Number(sale?.total || 0)),
-        otica: settings?.displayName || "Ótica",
-        data: format(new Date(sale?.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR }),
-        vendedor: sale?.sellerUser?.name || "Vendedor",
-      });
+      // Monta a mensagem via função pura (testada em whatsapp-message.test.ts)
+      const message = buildThankYouMessage(
+        messageTemplate,
+        {
+          customerName: sale?.customer?.name,
+          total: sale?.total,
+          dateLabel: format(new Date(sale?.createdAt || new Date()), "dd/MM/yyyy", { locale: ptBR }),
+          sellerName: sale?.sellerUser?.name,
+          productNames: sale?.items?.map((it) => it.product?.name),
+        },
+        {
+          displayName: settings?.displayName,
+          phone: settings?.phone,
+          whatsapp: settings?.whatsapp,
+          address: settings?.address,
+        },
+        (n) => formatCurrency(n)
+      );
 
       // 1. Baixar PDF em background (não bloqueia a UI)
       window.open(`/dashboard/vendas/${id}/imprimir?autoprint=true`, "_blank");

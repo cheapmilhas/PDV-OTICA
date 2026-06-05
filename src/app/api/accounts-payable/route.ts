@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountPayableStatus, AccountCategory } from "@prisma/client";
@@ -399,47 +399,45 @@ export async function PATCH(request: Request) {
         const didPayTransition = flipped.count === 1;
 
         if (didPayTransition) {
-          if (data.financeAccountId) {
-            // Validar que a conta financeira pertence à empresa
-            const acc = await tx.financeAccount.findFirst({
-              where: { id: data.financeAccountId, companyId },
-            });
-            if (!acc) {
-              throw new Error("Conta financeira inválida");
-            }
-
-            // Debitar o saldo da conta escolhida (exatamente uma vez)
-            await tx.financeAccount.update({
-              where: { id: acc.id },
-              data: { balance: { decrement: paidAmount } },
-            });
-
-            await generateAccountPayableExpenseEntry(
-              tx,
-              data.id,
-              companyId,
-              existing.category,
-              paidAmount,
-              `Pagamento: ${existing.description}`,
-              paidDate,
-              existing.branchId,
-              acc.id
-            );
-          } else {
-            // Sem conta escolhida: cria o lançamento mas NÃO debita saldo
-            // (retrocompat com callers que não selecionam conta).
-            await generateAccountPayableExpenseEntry(
-              tx,
-              data.id,
-              companyId,
-              existing.category,
-              paidAmount,
-              `Pagamento: ${existing.description}`,
-              paidDate,
-              existing.branchId,
-              null
+          // C1: a conta de saída é OBRIGATÓRIA. Sem ela, o pagamento ficava
+          // só no ledger sem debitar saldo nenhum (caixa/banco inflavam).
+          if (!data.financeAccountId) {
+            throw new AppError(
+              ERROR_CODES.VALIDATION_ERROR,
+              "Selecione a conta de onde sai o dinheiro para registrar o pagamento.",
+              400
             );
           }
+
+          // Validar que a conta financeira pertence à empresa
+          const acc = await tx.financeAccount.findFirst({
+            where: { id: data.financeAccountId, companyId },
+          });
+          if (!acc) {
+            throw new AppError(
+              ERROR_CODES.VALIDATION_ERROR,
+              "Conta financeira inválida",
+              400
+            );
+          }
+
+          // Debitar o saldo da conta escolhida (exatamente uma vez)
+          await tx.financeAccount.update({
+            where: { id: acc.id },
+            data: { balance: { decrement: paidAmount } },
+          });
+
+          await generateAccountPayableExpenseEntry(
+            tx,
+            data.id,
+            companyId,
+            existing.category,
+            paidAmount,
+            `Pagamento: ${existing.description}`,
+            paidDate,
+            existing.branchId,
+            acc.id
+          );
         }
 
         const updated = await tx.accountPayable.findUnique({

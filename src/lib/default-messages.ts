@@ -2,16 +2,21 @@
  * Mensagens padrão para comunicação com clientes
  *
  * Variáveis disponíveis:
- * {cliente}  - Nome do cliente
- * {valor}    - Valor total formatado (R$ 1.500,00)
- * {otica}    - Nome da ótica
- * {data}     - Data da transação (12/02/2026)
- * {vendedor} - Nome do vendedor
- * {itens}    - Lista resumida dos itens
- * {validade} - Data de validade (para orçamentos)
- * {saldo}    - Saldo de cashback (R$ 50,00)
- * {ganho}    - Cashback ganho (R$ 25,00)
- * {dias}     - Dias até expirar
+ * {cliente}   - Nome do cliente
+ * {valor}     - Valor total formatado (R$ 1.500,00)
+ * {otica}     - Nome da ótica
+ * {empresa}   - Alias de {otica} (mesmo valor)
+ * {data}      - Data da transação (12/02/2026)
+ * {vendedor}  - Nome do vendedor
+ * {produto}   - Resumo dos produtos da venda
+ * {telefone}  - Telefone da ótica
+ * {whatsapp}  - WhatsApp da ótica
+ * {endereco}  - Endereço da ótica
+ * {itens}     - Lista resumida dos itens
+ * {validade}  - Data de validade (para orçamentos)
+ * {saldo}     - Saldo de cashback (R$ 50,00)
+ * {ganho}     - Cashback ganho (R$ 25,00)
+ * {dias}      - Dias até expirar
  */
 
 export const DEFAULT_MESSAGES = {
@@ -128,8 +133,14 @@ export function replaceMessageVariables(
     cliente?: string;
     valor?: string;
     otica?: string;
+    /** Alias de {otica}. Se omitido, {empresa} usa o valor de {otica}. */
+    empresa?: string;
     data?: string;
     vendedor?: string;
+    produto?: string;
+    telefone?: string;
+    whatsapp?: string;
+    endereco?: string;
     itens?: string;
     validade?: string;
     saldo?: string;
@@ -139,16 +150,31 @@ export function replaceMessageVariables(
 ): string {
   let result = message;
 
-  if (variables.cliente) result = result.replace(/{cliente}/g, variables.cliente);
-  if (variables.valor) result = result.replace(/{valor}/g, variables.valor);
-  if (variables.otica) result = result.replace(/{otica}/g, variables.otica);
-  if (variables.data) result = result.replace(/{data}/g, variables.data);
-  if (variables.vendedor) result = result.replace(/{vendedor}/g, variables.vendedor);
-  if (variables.itens) result = result.replace(/{itens}/g, variables.itens);
-  if (variables.validade) result = result.replace(/{validade}/g, variables.validade);
-  if (variables.saldo) result = result.replace(/{saldo}/g, variables.saldo);
-  if (variables.ganho) result = result.replace(/{ganho}/g, variables.ganho);
-  if (variables.dias) result = result.replace(/{dias}/g, variables.dias);
+  // {empresa} é alias de {otica}: se não vier explícito, usa o nome da ótica.
+  const empresa = variables.empresa ?? variables.otica;
+
+  // Substitui apenas quando a chave foi informada (inclusive string vazia),
+  // para que um campo vazio NÃO deixe o placeholder literal na mensagem.
+  const sub = (key: string, value: string | undefined) => {
+    if (value === undefined) return;
+    result = result.split(`{${key}}`).join(value);
+  };
+
+  sub("cliente", variables.cliente);
+  sub("valor", variables.valor);
+  sub("otica", variables.otica);
+  sub("empresa", empresa);
+  sub("data", variables.data);
+  sub("vendedor", variables.vendedor);
+  sub("produto", variables.produto);
+  sub("telefone", variables.telefone);
+  sub("whatsapp", variables.whatsapp);
+  sub("endereco", variables.endereco);
+  sub("itens", variables.itens);
+  sub("validade", variables.validade);
+  sub("saldo", variables.saldo);
+  sub("ganho", variables.ganho);
+  sub("dias", variables.dias);
 
   return result;
 }

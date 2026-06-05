@@ -45,6 +45,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { format } from "date-fns";
 import { ModalReceberConta } from "@/components/financeiro/modal-receber-conta";
 import { ModalRenegociarConta } from "@/components/financeiro/modal-renegociar-conta";
+import { ModalPagarConta } from "@/components/financeiro/modal-pagar-conta";
 import { usePermissions } from "@/hooks/usePermissions";
 
 // Tipos
@@ -161,6 +162,11 @@ function FinanceiroPage() {
   // Q7.3 P2-9: estados pro modal de renegociação
   const [showRenegotiateModal, setShowRenegotiateModal] = useState(false);
   const [renegotiatingAccount, setRenegotiatingAccount] = useState<AccountReceivable | null>(null);
+
+  // C1: estados pro modal de pagamento (conta a pagar debita conta financeira)
+  const [showPayModal, setShowPayModal] = useState(false);
+  const [payingAccount, setPayingAccount] = useState<AccountPayable | null>(null);
+  const [payingLoading, setPayingLoading] = useState(false);
 
   // Buscar Contas a Pagar
   useEffect(() => {
@@ -316,27 +322,44 @@ function FinanceiroPage() {
     }
   };
 
-  // Marcar como pago
-  const handleMarkAsPaid = async (id: string) => {
-    if (!confirm("Deseja marcar esta conta como paga?")) return;
+  // Abrir modal de pagamento (escolher conta de saída)
+  const handleMarkAsPaid = (id: string) => {
+    const account = accountsPayable.find((a) => a.id === id) ?? null;
+    if (!account) return;
+    setPayingAccount(account);
+    setShowPayModal(true);
+  };
 
+  // Confirmar pagamento: debita a conta financeira escolhida
+  const handleConfirmPay = async (financeAccountId: string) => {
+    if (!payingAccount) return;
+
+    setPayingLoading(true);
     try {
       const res = await fetch("/api/accounts-payable", {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          id,
+          id: payingAccount.id,
           status: "PAID",
           paidDate: new Date().toISOString(),
+          financeAccountId,
         }),
       });
 
-      if (!res.ok) throw new Error("Erro ao marcar como paga");
+      if (!res.ok) {
+        const error = await res.json().catch(() => null);
+        throw new Error(error?.error?.message || error?.error || "Erro ao marcar como paga");
+      }
 
-      toast.success("Conta marcada como paga!");
+      toast.success("Conta paga! Saldo da conta debitado.");
+      setShowPayModal(false);
+      setPayingAccount(null);
       fetchAccountsPayable();
     } catch (error: any) {
       toast.error(error.message);
+    } finally {
+      setPayingLoading(false);
     }
   };
 
@@ -1426,6 +1449,18 @@ function FinanceiroPage() {
         onSuccess={() => {
           fetchAccountsReceivable();
         }}
+      />
+
+      {/* C1: Modal Pagar Conta a Pagar (escolhe conta de saída e debita saldo) */}
+      <ModalPagarConta
+        open={showPayModal}
+        onOpenChange={(o) => {
+          setShowPayModal(o);
+          if (!o) setPayingAccount(null);
+        }}
+        account={payingAccount}
+        onConfirm={handleConfirmPay}
+        loading={payingLoading}
       />
     </div>
   );

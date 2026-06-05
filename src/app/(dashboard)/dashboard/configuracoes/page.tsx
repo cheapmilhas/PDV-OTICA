@@ -29,6 +29,7 @@ import { usePermissions } from "@/hooks/usePermissions";
 import { useSession } from "next-auth/react";
 import { useEffect } from "react";
 import { DataManagement } from "@/components/configuracoes/data-management";
+import { mapMessagesToSettingsPayload } from "@/lib/whatsapp-message";
 
 // Mensagens padrão
 const MENSAGENS_PADRAO = {
@@ -123,6 +124,14 @@ function ConfiguracoesPage() {
             site: "",
             instagram: "",
           });
+
+          // Carregar mensagens salvas (cai no padrão se vier vazio).
+          setMensagens((prev) => ({
+            agradecimento: d.messageThankYou ?? prev.agradecimento,
+            orcamento: d.messageQuote ?? prev.orcamento,
+            lembrete: d.messageReminder ?? prev.lembrete,
+            aniversario: d.messageBirthday ?? prev.aniversario,
+          }));
         }
       })
       .catch(() => {})
@@ -154,13 +163,17 @@ function ConfiguracoesPage() {
         body: JSON.stringify({
           displayName: dadosEmpresa.nome,
           cnpj: dadosEmpresa.cnpj,
-          email: dadosEmpresa.email,
+          // email vazio quebraria o .email() do schema → envia null nesse caso
+          email: dadosEmpresa.email?.trim() ? dadosEmpresa.email.trim() : null,
           phone: dadosEmpresa.telefone,
           whatsapp: dadosEmpresa.whatsapp,
           address: dadosEmpresa.endereco,
           city: dadosEmpresa.cidade,
           state: dadosEmpresa.estado,
           zipCode: dadosEmpresa.cep,
+          // Mensagens personalizadas de WhatsApp (antes não eram enviadas → não salvavam).
+          // Mapeamento testado em whatsapp-message.test.ts.
+          ...mapMessagesToSettingsPayload(mensagens),
         }),
       });
       const result = await res.json();
@@ -396,8 +409,8 @@ function ConfiguracoesPage() {
                     <li><code className="bg-blue-100 px-1 rounded">{"{ cliente }"}</code> - Nome do cliente</li>
                     <li><code className="bg-blue-100 px-1 rounded">{"{ produto }"}</code> - Nome do produto</li>
                     <li><code className="bg-blue-100 px-1 rounded">{"{ valor }"}</code> - Valor total</li>
+                    <li><code className="bg-blue-100 px-1 rounded">{"{ vendedor }"}</code> - Nome do vendedor</li>
                     <li><code className="bg-blue-100 px-1 rounded">{"{ data }"}</code> - Data</li>
-                    <li><code className="bg-blue-100 px-1 rounded">{"{ horario }"}</code> - Horário</li>
                   </ul>
                 </div>
               </div>
