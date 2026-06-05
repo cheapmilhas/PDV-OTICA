@@ -103,18 +103,37 @@ email       String
 phone       String?
 companyName String?
 createdAt   DateTime @default(now())
+@@unique([email, planSlug])   // upsert: 2º clique não duplica
 @@index([planSlug])
 @@index([createdAt])
 ```
+> `POST /api/public/plan-interest` faz **upsert** em `(email, planSlug)` (atualiza `name/phone/companyName/createdAt`), evitando linhas duplicadas. Rate-limit reaproveita `src/lib/rate-limit.ts` (não inventar novo).
 
 *(Trial: NENHUM campo novo. `Plan.trialDays` e `Subscription.trialStartedAt/trialEndsAt` já existem e já funcionam.)*
 
 ### 6.2 API
 
+**Contrato de saída de `/api/public/plans` (fonte única — definido explicitamente):**
+Cada plano retorna:
+- `id`, `name`, `slug`, `description`
+- `priceMonthly`, `priceYearly` — **Int em centavos** (como no banco; NUNCA reais)
+- `status` — `"ACTIVE"` | `"COMING_SOON"`
+- `highlightFeatures` — `string[]` (bullets de copy)
+- `trialDays` — Int (já retornado)
+- `maxUsers`, `maxBranches`, `maxProducts`, `isFeatured`, `features: {key,value}[]`
+
+> **Regra de conversão (única):** o banco/contrato é sempre **centavos (Int)**. A conversão para reais acontece **só na borda de exibição**, via helper único `planValueForCycle`/`formatCurrency` em `src/lib/plan-pricing.ts`. Nenhum consumidor recebe reais da API. Isso elimina o bug de shape entre `content/pricing.ts` (float reais) e `Plan` (Int centavos).
+
+**Regra `status` × `isActive` (decisão tomada — issue do review):**
+- Planos `COMING_SOON` são criados com **`isActive: true`** (para não sumirem) e diferenciados pelo campo `status`.
+- `GET /api/public/plans` passa a filtrar `isActive: true` **e retornar o `status`** — devolve ACTIVE e COMING_SOON (a landing decide o que renderizar).
+- O **`/registro`** (criação de trial) filtra **apenas `status === "ACTIVE"`** na seleção de plano — um COMING_SOON nunca pode ser escolhido para iniciar assinatura/trial.
+- O gating de features não muda (continua por `PlanFeature`).
+
 **`GET /api/public/plans` (já existe — estender):**
-- Retorna campos atuais **+** `status` + `highlightFeatures` (`trialDays` já retornado).
-- **Cache:** reduzir de 3600s para ~60s **+** usar `revalidateTag('public-plans')`.
-- Ao salvar plano no admin (`POST/PATCH /api/admin/plans`), chamar `revalidateTag('public-plans')` → reflexo em segundos.
+- Adicionar `status` + `highlightFeatures` ao retorno.
+- **Cache:** reduzir `s-maxage` de 3600s para **60s** (mantém `stale-while-revalidate`). Como os consumidores principais são **client components** (ver 6.3), o reflexo de uma mudança é governado pelo **TTL do route handler (≤60s)**, não por `revalidateTag`.
+- `revalidateTag('public-plans')` só é útil para Server Components que busquem via `fetch(..., { next: { tags: ['public-plans'] } })`. Onde migrarmos para Server Component (JSON-LD), usaremos esse mecanismo para reflexo imediato. Ao salvar no admin, chamar `revalidateTag('public-plans')` para cobrir esses casos.
 
 **`POST /api/public/plan-interest` (nova):**
 - Body validado por Zod: `{ planSlug, name, email, phone?, companyName? }`.
@@ -128,14 +147,22 @@ createdAt   DateTime @default(now())
 
 ### 6.3 Consumidores — migrar hardcoded → ler da API
 
+**Correção factual (review):** o relatório inicial errou — `/precos` e a home **NÃO eram dinâmicos**. Estado real confirmado no código:
+- `src/components/home/pricing-section.tsx` é **client component** (`"use client"`) que `import { plans } from "@/content/pricing"` (estático). É usado **tanto pela home quanto por `/precos`** (mesmo componente).
+- `src/app/(landing)/precos/page.tsx` importa `plans` estático e o passa ao `buildProductJsonLd` (JSON-LD com preços hardcoded).
+- **Dois** JSON-LD: `buildProductJsonLd` (em /precos) **e** `softwareApplicationJsonLd` (preço `"149.90"` fixo) renderizado no **root `src/app/layout.tsx:80`** em TODA página.
+- Só `src/app/registro/page.tsx` já faz `fetch("/api/public/plans")`.
+
 | Local | Arquivo | Hoje | Depois |
 |---|---|---|---|
-| Página /precos | `src/app/(landing)/precos/page.tsx` | já dinâmico | mantém |
-| Registro/trial | `src/app/registro/page.tsx` | já dinâmico | mantém (remover fallback `\|\| 14` desnecessário) |
-| **Home — seção preços** | `src/components/home/pricing-section.tsx` ← `src/content/pricing.ts` | HARDCODED | ler de `/api/public/plans` |
+| **Home + /precos (seção preços)** | `src/components/home/pricing-section.tsx` ← `src/content/pricing.ts` | **HARDCODED (client)** | fetch `/api/public/plans` no client; converter centavos→reais via `plan-pricing.ts`; renderizar selo "Em breve" por `status` |
 | **Tabela comparativa** | `src/components/pages/pricing-page.tsx` | HARDCODED | ler de `/api/public/plans` |
-| **JSON-LD SEO** | `src/components/seo/json-ld.tsx` | preço 149.90 fixo | preço do plano em destaque, dinâmico |
+| **JSON-LD de /precos** | `src/app/(landing)/precos/page.tsx` + `src/components/seo/json-ld.tsx` (`buildProductJsonLd`) | HARDCODED (recebe `plans` estático) | tornar a página Server Component que busca via `fetch(... {next:{tags:['public-plans']}})`; só planos com preço viram `Offer` |
+| **JSON-LD global** | `src/app/layout.tsx:80` (`softwareApplicationJsonLd`, preço `"149.90"`) | HARDCODED (estático, todas as páginas) | derivar preço do plano `ACTIVE` em destaque via Server fetch taggeado; se múltiplos, usar o menor preço ativo |
+| Registro/trial | `src/app/registro/page.tsx` | já dinâmico | filtrar só `status === "ACTIVE"`; remover fallback `\|\| 14` |
 | Admin edição planos | `src/app/admin/configuracoes/planos/planos-client.tsx` | dinâmico | + campos `status`/`highlightFeatures` |
+
+> **Promessa de reflexo (corrigida):** nos consumidores **client** (home, /precos cards, comparativo) o reflexo de uma mudança no admin é **≤60s** (TTL do route handler + SWR) — `revalidateTag` não os afeta. Nos **JSON-LD** (Server Components após migração) o reflexo é **imediato** via `revalidateTag('public-plans')` no salvar do admin.
 
 ### 6.4 Trial consistente — trocar "14 dias" hardcoded por `Plan.trialDays`
 
@@ -161,7 +188,10 @@ createdAt   DateTime @default(now())
   - Profissional `COMING_SOON` (preço a definir com o dono)
   - Rede `COMING_SOON`
 - Cada plano recebe `highlightFeatures` da seção 5.
-- **Corrigir os 3 seeds desalinhados** (`src/content/pricing.ts`, `src/app/api/admin/seed/route.ts`, `prisma/seed-plans.ts`) para o conjunto único — ou deprecar os que não são mais a fonte.
+- **Fonte de dados única (decisão — não "alinhar 3 seeds"):**
+  - O **banco** é a fonte. O seed canônico passa a ser **um só** (`prisma/seed-plans.ts` OU `/api/admin/seed` — escolher um no plano e remover/deprecar o outro).
+  - **`src/content/pricing.ts` deixa de ser fonte de dados de preço/planos.** Ele hoje acopla `GATED_FEATURE_LABELS` ao `FEATURE_REGISTRY`; manter como "espelho" recria o drift. Ação: remover o array `plans` (e a FAQ de trial hardcoded) de lá; o que sobreviver vira apenas tipos/labels se ainda for usado. Verificar nenhum import órfão após remoção.
+  - Antes de fechar escopo: rodar `grep -rn "149\|189\|289\|549\|14 dias" src/` para caçar qualquer preço/trial hardcoded remanescente (emails, OG meta, sitemap, CTA de upgrade).
 
 ---
 
@@ -176,15 +206,20 @@ createdAt   DateTime @default(now())
 ## 8. Validação / critérios de aceite
 
 1. `tsc` limpo + `build` ok + testes verdes.
-2. **Teste de sincronização (manual):** editar preço e `status` de um plano no admin → confirmar reflexo (em até ~1 min ou imediato via revalidate) na **home**, em **/precos**, na **tabela comparativa**, no **/registro** e no **JSON-LD**.
+2. **Teste de sincronização (manual):** editar preço e `status` de um plano no admin → confirmar reflexo na **home**, **/precos**, **tabela comparativa** e **/registro** em **≤60s** (TTL do route handler); e reflexo **imediato** nos **JSON-LD** (/precos + layout global) após o `revalidateTag` do salvar. Conferir conversão correta: 14990¢ exibido como **R$ 149,90** (não 14990,00).
 3. **Trial:** alterar `Plan.trialDays` no admin → o número aparece atualizado na FAQ de preço, na tela de trial expirado e na página de funcionalidades, e o cálculo de `trialEndsAt` no registro usa o novo valor.
 4. **Em breve:** os 3 planos `COMING_SOON` aparecem com selo, sem botão de compra ativo, com "Quero ser avisado" funcional.
 5. **Interessados:** um envio de "Quero ser avisado" aparece em `/admin/interessados` e no export CSV.
-6. Não há mais preço de plano hardcoded em consumidor de UI (home, comparativo, JSON-LD).
+6. Não há mais preço de plano hardcoded em consumidor de UI: confirmado por `grep -rn "149\|189\|289\|549\|14 dias" src/` retornando só termos legais (termos/page.tsx) e helpers de conversão — nenhum preço de plano literal em home/comparativo/JSON-LD/emails/OG/sitemap.
 
 ## 9. Riscos / observações
 
-- **Cache/revalidate:** garantir que `revalidateTag` seja chamado em todos os caminhos de escrita de plano, senão o site mostra valor velho até o TTL.
+- **Conversão centavos↔reais:** risco #1 de bug. Banco/contrato sempre centavos (Int); converter só na exibição via `plan-pricing.ts`. Testar 14990 → "R$ 149,90".
+- **`status` × `isActive`:** COMING_SOON = `isActive:true` + `status:"COMING_SOON"`; `/registro` filtra só `ACTIVE`. Errar isso faz plano "em breve" virar comprável OU sumir da landing.
+- **Reflexo client vs server:** client components (home/precos/comparativo) refletem em ≤60s (TTL), não via `revalidateTag`. Só os JSON-LD (Server) refletem imediato. Não prometer "instantâneo" para a home.
+- **JSON-LD global esquecido:** `app/layout.tsx:80` (`softwareApplicationJsonLd`) está em TODA página — não esquecer de torná-lo dinâmico.
+- **`Offer` sem preço:** planos COMING_SOON sem preço (Profissional/Rede) NÃO devem gerar `Offer` no JSON-LD (evitar preço 0).
+- **Cache/revalidate:** garantir que `revalidateTag('public-plans')` seja chamado em todos os caminhos de escrita de plano (POST e PATCH).
 - **Landing depende do banco:** se a API falhar, a home/preços ficam sem planos. Mitigação: tratamento de erro com estado de carregamento/fallback visual (não dado falso).
 - **`AVAILABLE_FEATURES` legado** no admin (6 keys: crm/goals/campaigns/cashback/multi_branch/reports_advanced) **não** corresponde às 15 features do `FEATURE_REGISTRY`. Isto **não** é alterado aqui (fora de escopo), mas registrado como dívida — o `highlightFeatures` (copy) é independente do gating real.
 - **Honestidade:** alinhado com a limpeza de honestidade da v2 do site (sem NF-e prometida, sem WhatsApp automático, sem features inventadas).
