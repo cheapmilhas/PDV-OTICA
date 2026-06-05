@@ -77,20 +77,28 @@ export function aggregateTrends(rows: MetricSampleRow[], windowHours = 24): Syst
 
 /**
  * Lê as MetricSample das últimas `windowHours` horas e agrega a frota.
+ *
+ * Best-effort: as tendências são um "nice-to-have" do cockpit — se a leitura falhar
+ * (ex.: a migration MetricSample ainda não aplicada num ambiente), NÃO derruba a
+ * página; devolve um agregado vazio (sampleCount 0 → a UI mostra "sem amostras").
  */
 export async function getSystemTrends(windowHours = 24): Promise<SystemTrends> {
   const since = new Date(Date.now() - windowHours * 60 * 60 * 1000);
-  const rows = await prisma.metricSample.findMany({
-    where: { capturedAt: { gte: since } },
-    select: {
-      reqCount: true,
-      errorCount: true,
-      p50Ms: true,
-      p95Ms: true,
-      slowQueries: true,
-      cacheHits: true,
-      cacheMisses: true,
-    },
-  });
-  return aggregateTrends(rows, windowHours);
+  try {
+    const rows = await prisma.metricSample.findMany({
+      where: { capturedAt: { gte: since } },
+      select: {
+        reqCount: true,
+        errorCount: true,
+        p50Ms: true,
+        p95Ms: true,
+        slowQueries: true,
+        cacheHits: true,
+        cacheMisses: true,
+      },
+    });
+    return aggregateTrends(rows, windowHours);
+  } catch {
+    return aggregateTrends([], windowHours);
+  }
 }
