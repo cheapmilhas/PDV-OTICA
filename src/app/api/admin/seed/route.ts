@@ -10,7 +10,9 @@ const log = logger.child({ route: "admin/seed" });
 
 /**
  * POST /api/admin/seed
- * Seeds: admin user, planos, subscription da empresa existente, fix onboarding.
+ * Seeds: admin user, subscription da empresa existente, fix onboarding.
+ * NÃO semeia planos — isso é feito EXCLUSIVAMENTE por `prisma/seed-plans.ts`
+ * (fonte única de verdade no banco).
  * Requer autenticação admin.
  */
 export async function POST(request: Request) {
@@ -66,98 +68,13 @@ export async function POST(request: Request) {
       results.push(`Admin criado com sucesso (senha fonte: ${passwordSource})`);
     }
 
-    // ─── 2. Seed Planos ─────────────────────────────────────────────
-    const plansData = [
-      {
-        name: "Básico",
-        slug: "basico",
-        description: "Ideal para óticas pequenas que estão começando a digitalizar suas operações.",
-        priceMonthly: 14990, // R$ 149,90 em centavos
-        priceYearly: 149900, // R$ 1.499,00 em centavos (12x com desconto)
-        maxUsers: 3,
-        maxBranches: 1,
-        maxProducts: 500,
-        maxStorageMB: 1000,
-        trialDays: 14,
-        sortOrder: 1,
-        isActive: true,
-        isFeatured: false,
-        features: [] as { key: string; value: string }[],
-      },
-      {
-        name: "Profissional",
-        slug: "profissional",
-        description: "Para óticas em crescimento que precisam de ferramentas avançadas de gestão.",
-        priceMonthly: 24990, // R$ 249,90
-        priceYearly: 249900, // R$ 2.499,00
-        maxUsers: 10,
-        maxBranches: 3,
-        maxProducts: 2000,
-        maxStorageMB: 5000,
-        trialDays: 14,
-        sortOrder: 2,
-        isActive: true,
-        isFeatured: true,
-        features: [
-          { key: "crm", value: "true" },
-          { key: "goals", value: "true" },
-        ],
-      },
-      {
-        name: "Empresarial",
-        slug: "empresarial",
-        description: "Solução completa para redes de óticas com múltiplas filiais.",
-        priceMonthly: 49990, // R$ 499,90
-        priceYearly: 499900, // R$ 4.999,00
-        maxUsers: 999,
-        maxBranches: 99,
-        maxProducts: 99999,
-        maxStorageMB: 50000,
-        trialDays: 14,
-        sortOrder: 3,
-        isActive: true,
-        isFeatured: false,
-        features: [
-          { key: "crm", value: "true" },
-          { key: "goals", value: "true" },
-          { key: "campaigns", value: "true" },
-          { key: "cashback", value: "true" },
-          { key: "multi_branch", value: "true" },
-          { key: "reports_advanced", value: "true" },
-        ],
-      },
-    ];
-
-    for (const planData of plansData) {
-      const { features, ...planFields } = planData;
-
-      const existingPlan = await prisma.plan.findUnique({ where: { slug: planFields.slug } });
-
-      if (existingPlan) {
-        await prisma.plan.update({
-          where: { slug: planFields.slug },
-          data: planFields,
-        });
-        // Atualizar features: deletar existentes e recriar
-        await prisma.planFeature.deleteMany({ where: { planId: existingPlan.id } });
-        if (features.length > 0) {
-          await prisma.planFeature.createMany({
-            data: features.map((f) => ({ planId: existingPlan.id, ...f })),
-          });
-        }
-        results.push(`Plano "${planFields.name}" atualizado`);
-      } else {
-        const newPlan = await prisma.plan.create({
-          data: {
-            ...planFields,
-            features: {
-              create: features,
-            },
-          },
-        });
-        results.push(`Plano "${planFields.name}" criado (id: ${newPlan.id})`);
-      }
-    }
+    // ─── 2. Seed de Planos: REMOVIDO ─────────────────────────────────
+    // O seed de planos agora é feito EXCLUSIVAMENTE por `prisma/seed-plans.ts`
+    // (fonte única de verdade no banco). Este endpoint NÃO deve mais escrever
+    // planos — o array hardcoded antigo estava desalinhado (slugs/preços/features
+    // diferentes, sem os campos `status`/`highlightFeatures`) e sobrescrevia os
+    // planos canônicos via upsert por slug, recriando o drift. Para semear/atualizar
+    // planos, rode `prisma/seed-plans.ts`.
 
     // ─── 3. Criar Subscription + Fix Onboarding para empresa existente ───
     const company = await prisma.company.findFirst({
@@ -165,10 +82,11 @@ export async function POST(request: Request) {
     });
 
     if (company) {
-      // Buscar plano Empresarial
-      const empresarialPlan = await prisma.plan.findUnique({ where: { slug: "empresarial" } });
+      // Buscar plano top-tier canônico (slug "rede" — ver prisma/seed-plans.ts).
+      // O slug antigo "empresarial" não existe mais na fonte única de planos.
+      const topTierPlan = await prisma.plan.findUnique({ where: { slug: "rede" } });
 
-      if (empresarialPlan) {
+      if (topTierPlan) {
         // Verificar se já tem subscription
         const existingSub = await prisma.subscription.findFirst({
           where: { companyId: company.id },
@@ -182,7 +100,7 @@ export async function POST(request: Request) {
           await prisma.subscription.create({
             data: {
               companyId: company.id,
-              planId: empresarialPlan.id,
+              planId: topTierPlan.id,
               status: "ACTIVE",
               billingCycle: "YEARLY",
               activatedAt: now,
