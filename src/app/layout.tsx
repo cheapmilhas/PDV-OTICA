@@ -9,8 +9,9 @@ import { PostHogIdentify } from "@/components/providers/posthog-identify";
 import {
   JsonLd,
   organizationJsonLd,
-  softwareApplicationJsonLd,
+  buildSoftwareApplicationJsonLd,
 } from "@/components/seo/json-ld";
+import { getLowestActivePriceReais } from "@/lib/plan-pricing-server";
 import { SITE_URL } from "@/lib/constants";
 
 // Plus Jakarta Sans — geometric, contemporary, avoids "AI template" associations
@@ -68,16 +69,17 @@ export const metadata: Metadata = {
   },
 };
 
-export default function RootLayout({
+export default async function RootLayout({
   children,
 }: Readonly<{
   children: React.ReactNode;
 }>) {
+  const lowest = await getLowestActivePriceReais();
   return (
     <html lang="pt-BR">
       <head>
         <JsonLd data={organizationJsonLd} />
-        <JsonLd data={softwareApplicationJsonLd} />
+        <JsonLd data={buildSoftwareApplicationJsonLd(lowest)} />
       </head>
       <body className={`${jakartaSans.variable} font-sans`}>
         <Suspense fallback={null}>

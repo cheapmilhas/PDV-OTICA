@@ -2,16 +2,23 @@ import { PricingSection } from "@/components/home/pricing-section";
 import { FaqSection } from "@/components/home/faq-section";
 import { FinalCta } from "@/components/home/final-cta";
 import { JsonLd, buildProductJsonLd } from "@/components/seo/json-ld";
-import { plans } from "@/content/pricing";
+import { prisma } from "@/lib/prisma";
 
-export default function PrecosPage() {
+export default async function PrecosPage() {
+  const priced = await prisma.plan.findMany({
+    where: { isActive: true, status: "ACTIVE", priceMonthly: { gt: 0 } },
+    select: { name: true, priceMonthly: true },
+  });
+
   return (
     <>
-      <JsonLd
-        data={buildProductJsonLd(
-          plans.map((p) => ({ name: p.name, price: p.monthlyPrice })),
-        )}
-      />
+      {priced.length > 0 && (
+        <JsonLd
+          data={buildProductJsonLd(
+            priced.map((p) => ({ name: p.name, price: p.priceMonthly / 100 })),
+          )}
+        />
+      )}
       <div className="pt-10">
         <PricingSection />
       </div>

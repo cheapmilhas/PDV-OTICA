@@ -33,24 +33,28 @@ export const organizationJsonLd: Record<string, unknown> = {
   },
 };
 
-export const softwareApplicationJsonLd: Record<string, unknown> = {
-  "@context": "https://schema.org",
-  "@type": "SoftwareApplication",
-  name: "Vis",
-  applicationCategory: "BusinessApplication",
-  applicationSubCategory: "Sistema de Gestão para Óticas",
-  operatingSystem: "Web",
-  url: SITE_URL,
-  description:
-    "Sistema de gestão para óticas com PDV, controle de estoque, ordem de serviço de lentes, financeiro e CRM.",
-  offers: {
-    "@type": "Offer",
-    price: "149.90",
-    priceCurrency: "BRL",
-    url: `${SITE_URL}/precos`,
-    availability: "https://schema.org/InStock",
-  },
-};
+export function buildSoftwareApplicationJsonLd(
+  lowestPriceReais: number
+): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    name: "Vis",
+    applicationCategory: "BusinessApplication",
+    applicationSubCategory: "Sistema de Gestão para Óticas",
+    operatingSystem: "Web",
+    url: SITE_URL,
+    description:
+      "Sistema de gestão para óticas com PDV, controle de estoque, ordem de serviço de lentes, financeiro e CRM.",
+    offers: {
+      "@type": "Offer",
+      price: lowestPriceReais.toFixed(2),
+      priceCurrency: "BRL",
+      url: `${SITE_URL}/precos`,
+      availability: "https://schema.org/InStock",
+    },
+  };
+}
 
 interface FaqItem {
   question: string;
