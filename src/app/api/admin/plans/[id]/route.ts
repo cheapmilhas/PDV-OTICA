@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { propagatePlanLimits } from "@/services/plan-propagation.service";
@@ -20,6 +22,8 @@ const updatePlanSchema = z.object({
   isActive: z.boolean().optional(),
   isFeatured: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
+  status: z.enum(["ACTIVE", "COMING_SOON"]).optional(),
+  highlightFeatures: z.array(z.string()).optional().nullable(),
   features: z.array(z.object({
     key: z.string(),
     value: z.string(),
@@ -52,7 +56,15 @@ export async function PATCH(
       return NextResponse.json({ error: "Plano não encontrado" }, { status: 404 });
     }
 
-    const { features, ...planData } = data;
+    const { features, highlightFeatures, ...rest } = data;
+
+    // Json? do Prisma não aceita `null` cru: usar Prisma.JsonNull para limpar.
+    const planData: Prisma.PlanUpdateInput = {
+      ...rest,
+      ...(highlightFeatures !== undefined
+        ? { highlightFeatures: highlightFeatures === null ? Prisma.JsonNull : highlightFeatures }
+        : {}),
+    };
 
     const plan = await prisma.$transaction(async (tx) => {
       // Atualizar features se fornecidas
@@ -101,6 +113,8 @@ export async function PATCH(
         },
       },
     });
+
+    revalidateTag("public-plans", "max");
 
     return NextResponse.json({ data: plan, propagatedCompanies });
   } catch (error) {

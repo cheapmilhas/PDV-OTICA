@@ -1,4 +1,6 @@
 import { NextResponse } from "next/server";
+import { revalidateTag } from "next/cache";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { z } from "zod";
@@ -19,6 +21,8 @@ const createPlanSchema = z.object({
   trialDays: z.number().int().default(14),
   isFeatured: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
+  status: z.enum(["ACTIVE", "COMING_SOON"]).optional(),
+  highlightFeatures: z.array(z.string()).optional().nullable(),
   features: z.array(z.object({
     key: z.string(),
     value: z.string(),
@@ -65,11 +69,15 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Já existe um plano com este slug" }, { status: 409 });
     }
 
-    const { features, ...planData } = data;
+    const { features, highlightFeatures, ...planData } = data;
 
     const plan = await prisma.plan.create({
       data: {
         ...planData,
+        // Json? do Prisma não aceita `null` cru: usar Prisma.JsonNull para limpar.
+        ...(highlightFeatures !== undefined
+          ? { highlightFeatures: highlightFeatures === null ? Prisma.JsonNull : highlightFeatures }
+          : {}),
         features: {
           create: features.map((f) => ({ key: f.key, value: f.value })),
         },
@@ -85,6 +93,8 @@ export async function POST(request: Request) {
         metadata: { planName: plan.name, planSlug: plan.slug, adminEmail: admin.email },
       },
     });
+
+    revalidateTag("public-plans", "max");
 
     return NextResponse.json({ data: plan }, { status: 201 });
   } catch (error) {
