@@ -190,9 +190,16 @@ export function PricingSection() {
               const isHighlighted = plan.isFeatured;
               const comingSoon = isComingSoon(plan);
               const badge = isHighlighted ? "Mais escolhido" : undefined;
-              const price = formatPlanPrice(annual ? plan.priceYearly : plan.priceMonthly);
-              const yearlyPrice = formatPlanPrice(plan.priceYearly);
+              // priceYearly é o TOTAL anual (centavos). O valor exibido com "/mês" no
+              // modo anual é o mensal-equivalente (total anual ÷ 12).
+              const monthlyEquivAnnual = plan.priceYearly > 0
+                ? Math.round(plan.priceYearly / 12)
+                : 0;
+              const price = formatPlanPrice(annual ? monthlyEquivAnnual : plan.priceMonthly);
+              const yearlyMonthlyEquiv = formatPlanPrice(monthlyEquivAnnual);
               const hasBothPrices = plan.priceMonthly > 0 && plan.priceYearly > 0;
+              // Economia anual = 12 mensalidades cheias − total do plano anual.
+              const annualSavings = formatPlanPrice(plan.priceMonthly * 12 - plan.priceYearly);
               const features = plan.highlightFeatures ?? [];
 
               return (
@@ -320,14 +327,14 @@ export function PricingSection() {
                             </span>
                           </motion.div>
                         </AnimatePresence>
-                        {hasBothPrices && annual && (
+                        {hasBothPrices && annual && annualSavings && (
                           <p style={{ color: "var(--brand-success)", fontSize: "0.75rem", marginTop: "0.25rem", fontWeight: 600 }}>
-                            Economize {formatPlanPrice((plan.priceMonthly - plan.priceYearly) * 12)}/ano
+                            Economize {annualSavings}/ano
                           </p>
                         )}
-                        {hasBothPrices && !annual && yearlyPrice && (
+                        {hasBothPrices && !annual && yearlyMonthlyEquiv && (
                           <p style={{ color: "var(--lp-subtle)", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                            ou {yearlyPrice}/mês no plano anual
+                            ou {yearlyMonthlyEquiv}/mês no plano anual
                           </p>
                         )}
                       </>
