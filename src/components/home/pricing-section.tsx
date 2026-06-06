@@ -1,22 +1,36 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
-import { Check, X, ArrowRight, Zap, Building2, Rocket } from "lucide-react";
+import { Check, ArrowRight, Zap, FileText, Building2, Rocket, Bell } from "lucide-react";
 import Link from "next/link";
-import { plans } from "@/content/pricing";
-import { formatCurrency } from "@/lib/utils";
+import {
+  formatPlanPrice,
+  isComingSoon,
+  type PublicPlan,
+} from "@/lib/plan-display";
+import { ComingSoonInterestModal } from "@/components/plan/coming-soon-interest-modal";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
 
 const PLAN_ICONS = {
-  essencial: Zap,
-  profissional: Rocket,
-  rede: Building2,
+  basico: Zap,
+  "basico-nf": FileText,
+  profissional: Building2,
+  rede: Rocket,
 };
 
 export function PricingSection() {
   const [annual, setAnnual] = useState(false);
+  const [plans, setPlans] = useState<PublicPlan[]>([]);
+  const [interest, setInterest] = useState<PublicPlan | null>(null);
+
+  useEffect(() => {
+    fetch("/api/public/plans")
+      .then((r) => r.json())
+      .then((d) => setPlans(d.plans ?? []))
+      .catch(() => setPlans([]));
+  }, []);
 
   return (
     <section
@@ -121,203 +135,300 @@ export function PricingSection() {
           </div>
         </motion.div>
 
-        {/* Pricing cards — asymmetric sizes, highlighted plan is taller */}
-        <motion.div
-          variants={staggerContainer}
-          initial="hidden"
-          whileInView="visible"
-          viewport={viewportConfig}
-          className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end"
-        >
-          {plans.map((plan) => {
-            const Icon = PLAN_ICONS[plan.id as keyof typeof PLAN_ICONS] ?? Zap;
-            const isHighlighted = plan.highlight;
-
-            return (
-              <motion.div
-                key={plan.id}
-                variants={fadeInUp}
-                whileHover={
-                  isHighlighted
-                    ? { y: -6, transition: { duration: 0.28, ease: [0.25, 1, 0.5, 1] } }
-                    : { y: -4, transition: { duration: 0.28, ease: [0.25, 1, 0.5, 1] } }
-                }
-                className="relative rounded-2xl p-7 flex flex-col transition-all duration-300"
-                style={
-                  isHighlighted
-                    ? {
-                        background:
-                          "linear-gradient(160deg, rgba(46,107,255,0.07) 0%, rgba(34,195,230,0.04) 100%)",
-                        border: "1px solid rgba(46,107,255,0.35)",
-                        boxShadow:
-                          "0 0 0 1px rgba(46,107,255,0.12), 0 12px 48px rgba(46,107,255,0.16), 0 4px 12px rgba(10,31,68,0.08)",
-                        paddingTop: "2.5rem",
-                        paddingBottom: "2.5rem",
-                      }
-                    : {
-                        background: "var(--lp-background)",
-                        border: "1px solid var(--lp-border)",
-                      }
-                }
+        {/* Loading skeleton — no fake prices */}
+        {plans.length === 0 ? (
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
+            {[0, 1, 2].map((i) => (
+              <div
+                key={i}
+                className="rounded-2xl p-7 animate-pulse"
+                style={{
+                  background: "var(--lp-background)",
+                  border: "1px solid var(--lp-border)",
+                  minHeight: "26rem",
+                }}
               >
-                {/* "Most popular" badge — breaks out of the top border */}
-                {plan.badge && (
-                  <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
-                    <span
-                      className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-bold tracking-wide"
-                      style={{
-                        background: "var(--gradient-brand-vivid)",
-                        color: "white",
-                        boxShadow: "0 2px 12px var(--brand-glow)",
-                      }}
-                    >
-                      <Rocket className="h-3 w-3" />
-                      {plan.badge}
-                    </span>
-                  </div>
-                )}
-
-                {/* Plan icon + name */}
-                <div className="flex items-center gap-3 mb-5">
-                  <div
-                    className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
-                    style={{
-                      background: isHighlighted
-                        ? "var(--brand-tint)"
-                        : "var(--lp-surface)",
-                      border: isHighlighted
-                        ? "1px solid rgba(46,107,255,0.25)"
-                        : "1px solid var(--lp-border)",
-                    }}
-                  >
-                    <Icon
-                      className="h-5 w-5"
-                      style={{
-                        color: isHighlighted ? "var(--brand-primary)" : "var(--lp-muted)",
-                      }}
+                <div
+                  className="h-10 w-10 rounded-xl mb-5"
+                  style={{ background: "var(--lp-surface)" }}
+                />
+                <div
+                  className="h-4 w-2/3 rounded mb-3"
+                  style={{ background: "var(--lp-surface)" }}
+                />
+                <div
+                  className="h-10 w-1/2 rounded mb-6"
+                  style={{ background: "var(--lp-surface)" }}
+                />
+                <div
+                  className="h-11 w-full rounded-xl mb-6"
+                  style={{ background: "var(--lp-surface)" }}
+                />
+                <div className="space-y-2.5">
+                  {[0, 1, 2, 3].map((j) => (
+                    <div
+                      key={j}
+                      className="h-4 w-full rounded"
+                      style={{ background: "var(--lp-surface)" }}
                     />
-                  </div>
-                  <div>
-                    <h3
-                      className="font-heading font-bold"
-                      style={{ color: "var(--lp-foreground)", fontSize: "1.0625rem" }}
-                    >
-                      {plan.name}
-                    </h3>
-                    <p style={{ color: "var(--lp-subtle)", fontSize: "0.8125rem", lineHeight: 1.4 }}>
-                      {plan.description}
-                    </p>
-                  </div>
+                  ))}
                 </div>
+              </div>
+            ))}
+          </div>
+        ) : (
+          /* Pricing cards — asymmetric sizes, highlighted plan is taller */
+          <motion.div
+            variants={staggerContainer}
+            initial="hidden"
+            whileInView="visible"
+            viewport={viewportConfig}
+            className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end"
+          >
+            {plans.map((plan) => {
+              const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
+              const isHighlighted = plan.isFeatured;
+              const comingSoon = isComingSoon(plan);
+              const badge = isHighlighted ? "Mais escolhido" : undefined;
+              const price = formatPlanPrice(annual ? plan.priceYearly : plan.priceMonthly);
+              const yearlyPrice = formatPlanPrice(plan.priceYearly);
+              const hasBothPrices = plan.priceMonthly > 0 && plan.priceYearly > 0;
+              const features = plan.highlightFeatures ?? [];
 
-                {/* Price — animated swap */}
-                <div className="mb-6">
-                  <AnimatePresence mode="wait">
-                    <motion.div
-                      key={annual ? "annual" : "monthly"}
-                      initial={{ opacity: 0, y: -8 }}
-                      animate={{ opacity: 1, y: 0 }}
-                      exit={{ opacity: 0, y: 8 }}
-                      transition={{ duration: 0.22 }}
-                      className="flex items-baseline gap-1.5"
-                    >
+              return (
+                <motion.div
+                  key={plan.id}
+                  variants={fadeInUp}
+                  whileHover={
+                    isHighlighted
+                      ? { y: -6, transition: { duration: 0.28, ease: [0.25, 1, 0.5, 1] } }
+                      : { y: -4, transition: { duration: 0.28, ease: [0.25, 1, 0.5, 1] } }
+                  }
+                  className="relative rounded-2xl p-7 flex flex-col transition-all duration-300"
+                  style={
+                    isHighlighted
+                      ? {
+                          background:
+                            "linear-gradient(160deg, rgba(46,107,255,0.07) 0%, rgba(34,195,230,0.04) 100%)",
+                          border: "1px solid rgba(46,107,255,0.35)",
+                          boxShadow:
+                            "0 0 0 1px rgba(46,107,255,0.12), 0 12px 48px rgba(46,107,255,0.16), 0 4px 12px rgba(10,31,68,0.08)",
+                          paddingTop: "2.5rem",
+                          paddingBottom: "2.5rem",
+                        }
+                      : {
+                          background: "var(--lp-background)",
+                          border: "1px solid var(--lp-border)",
+                        }
+                  }
+                >
+                  {/* "Most popular" badge — breaks out of the top border */}
+                  {badge && (
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
                       <span
-                        className="font-heading font-extrabold"
+                        className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-bold tracking-wide"
                         style={{
-                          fontSize: "2.75rem",
-                          lineHeight: 1,
-                          letterSpacing: "-0.04em",
+                          background: "var(--gradient-brand-vivid)",
+                          color: "white",
+                          boxShadow: "0 2px 12px var(--brand-glow)",
+                        }}
+                      >
+                        <Rocket className="h-3 w-3" />
+                        {badge}
+                      </span>
+                    </div>
+                  )}
+
+                  {/* "Em breve" badge */}
+                  {comingSoon && (
+                    <div className="absolute -top-3.5 right-4 z-10">
+                      <span
+                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide"
+                        style={{
+                          background: "var(--lp-surface)",
+                          border: "1px solid var(--lp-border-hover)",
+                          color: "var(--lp-muted)",
+                        }}
+                      >
+                        <Bell className="h-3 w-3" />
+                        Em breve
+                      </span>
+                    </div>
+                  )}
+
+                  {/* Plan icon + name */}
+                  <div className="flex items-center gap-3 mb-5">
+                    <div
+                      className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
+                      style={{
+                        background: isHighlighted
+                          ? "var(--brand-tint)"
+                          : "var(--lp-surface)",
+                        border: isHighlighted
+                          ? "1px solid rgba(46,107,255,0.25)"
+                          : "1px solid var(--lp-border)",
+                      }}
+                    >
+                      <Icon
+                        className="h-5 w-5"
+                        style={{
+                          color: isHighlighted ? "var(--brand-primary)" : "var(--lp-muted)",
+                        }}
+                      />
+                    </div>
+                    <div>
+                      <h3
+                        className="font-heading font-bold"
+                        style={{ color: "var(--lp-foreground)", fontSize: "1.0625rem" }}
+                      >
+                        {plan.name}
+                      </h3>
+                      {plan.description && (
+                        <p style={{ color: "var(--lp-subtle)", fontSize: "0.8125rem", lineHeight: 1.4 }}>
+                          {plan.description}
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Price — animated swap; null price → "Em breve" */}
+                  <div className="mb-6">
+                    {price ? (
+                      <>
+                        <AnimatePresence mode="wait">
+                          <motion.div
+                            key={annual ? "annual" : "monthly"}
+                            initial={{ opacity: 0, y: -8 }}
+                            animate={{ opacity: 1, y: 0 }}
+                            exit={{ opacity: 0, y: 8 }}
+                            transition={{ duration: 0.22 }}
+                            className="flex items-baseline gap-1.5"
+                          >
+                            <span
+                              className="font-heading font-extrabold"
+                              style={{
+                                fontSize: "2.75rem",
+                                lineHeight: 1,
+                                letterSpacing: "-0.04em",
+                                color: "var(--lp-foreground)",
+                              }}
+                            >
+                              {price}
+                            </span>
+                            <span style={{ color: "var(--lp-subtle)", fontSize: "0.875rem" }}>
+                              /mês
+                            </span>
+                          </motion.div>
+                        </AnimatePresence>
+                        {hasBothPrices && annual && (
+                          <p style={{ color: "var(--brand-success)", fontSize: "0.75rem", marginTop: "0.25rem", fontWeight: 600 }}>
+                            Economize {formatPlanPrice((plan.priceMonthly - plan.priceYearly) * 12)}/ano
+                          </p>
+                        )}
+                        {hasBothPrices && !annual && yearlyPrice && (
+                          <p style={{ color: "var(--lp-subtle)", fontSize: "0.75rem", marginTop: "0.25rem" }}>
+                            ou {yearlyPrice}/mês no plano anual
+                          </p>
+                        )}
+                      </>
+                    ) : (
+                      <div className="flex items-baseline gap-1.5">
+                        <span
+                          className="font-heading font-extrabold"
+                          style={{
+                            fontSize: "2rem",
+                            lineHeight: 1.1,
+                            letterSpacing: "-0.03em",
+                            color: "var(--lp-muted)",
+                          }}
+                        >
+                          Em breve
+                        </span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* CTA */}
+                  <motion.div
+                    whileHover={comingSoon ? undefined : { scale: 1.02 }}
+                    whileTap={comingSoon ? undefined : { scale: 0.98 }}
+                    transition={{ type: "spring", stiffness: 400, damping: 17 }}
+                    className="mb-7"
+                  >
+                    {comingSoon ? (
+                      <button
+                        type="button"
+                        onClick={() => setInterest(plan)}
+                        className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
+                        style={{
+                          background: "var(--lp-surface)",
+                          border: "1px solid var(--lp-border-hover)",
                           color: "var(--lp-foreground)",
                         }}
                       >
-                        {formatCurrency(annual ? plan.annualPrice : plan.monthlyPrice)}
-                      </span>
-                      <span style={{ color: "var(--lp-subtle)", fontSize: "0.875rem" }}>
-                        /mês
-                      </span>
-                    </motion.div>
-                  </AnimatePresence>
-                  {annual ? (
-                    <p style={{ color: "var(--brand-success)", fontSize: "0.75rem", marginTop: "0.25rem", fontWeight: 600 }}>
-                      Economize {formatCurrency((plan.monthlyPrice - plan.annualPrice) * 12)}/ano
-                    </p>
-                  ) : (
-                    <p style={{ color: "var(--lp-subtle)", fontSize: "0.75rem", marginTop: "0.25rem" }}>
-                      ou {formatCurrency(plan.annualPrice)}/mês no plano anual
-                    </p>
-                  )}
-                </div>
-
-                {/* CTA */}
-                <motion.div
-                  whileHover={{ scale: 1.02 }}
-                  whileTap={{ scale: 0.98 }}
-                  transition={{ type: "spring", stiffness: 400, damping: 17 }}
-                  className="mb-7"
-                >
-                  <Link
-                    href={plan.id === "rede" ? WHATSAPP_URL : REGISTER_URL}
-                    rel={plan.id === "rede" ? "noopener noreferrer" : undefined}
-                    target={plan.id === "rede" ? "_blank" : undefined}
-                    className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
-                    style={
-                      isHighlighted
-                        ? {
-                            background: "var(--gradient-brand-vivid)",
-                            color: "white",
-                            boxShadow: "0 4px 20px var(--brand-glow)",
-                          }
-                        : {
-                            background: "var(--lp-surface)",
-                            border: "1px solid var(--lp-border-hover)",
-                            color: "var(--lp-foreground)",
-                          }
-                    }
-                  >
-                    {plan.cta}
-                    <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                  </Link>
-                </motion.div>
-
-                {/* Divider */}
-                <div
-                  className="w-full h-px mb-6"
-                  style={{ background: "var(--lp-border)" }}
-                />
-
-                {/* Feature list */}
-                <div className="space-y-2.5 flex-1">
-                  {plan.features.map((f) => (
-                    <div key={f} className="flex items-start gap-2.5 text-sm">
-                      <div
-                        className="mt-0.5 h-4 w-4 rounded-full flex items-center justify-center flex-shrink-0"
-                        style={{
-                          background: isHighlighted
-                            ? "var(--brand-tint)"
-                            : "rgba(22,163,74,0.12)",
-                        }}
+                        <Bell className="h-4 w-4" />
+                        Quero ser avisado
+                      </button>
+                    ) : (
+                      <Link
+                        href={plan.slug === "rede" ? WHATSAPP_URL : REGISTER_URL}
+                        rel={plan.slug === "rede" ? "noopener noreferrer" : undefined}
+                        target={plan.slug === "rede" ? "_blank" : undefined}
+                        className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
+                        style={
+                          isHighlighted
+                            ? {
+                                background: "var(--gradient-brand-vivid)",
+                                color: "white",
+                                boxShadow: "0 4px 20px var(--brand-glow)",
+                              }
+                            : {
+                                background: "var(--lp-surface)",
+                                border: "1px solid var(--lp-border-hover)",
+                                color: "var(--lp-foreground)",
+                              }
+                        }
                       >
-                        <Check
-                          className="h-2.5 w-2.5"
+                        {plan.slug === "rede" ? "Falar com Consultor" : "Testar Grátis"}
+                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                      </Link>
+                    )}
+                  </motion.div>
+
+                  {/* Divider */}
+                  <div
+                    className="w-full h-px mb-6"
+                    style={{ background: "var(--lp-border)" }}
+                  />
+
+                  {/* Feature list */}
+                  <div className="space-y-2.5 flex-1">
+                    {features.map((f) => (
+                      <div key={f} className="flex items-start gap-2.5 text-sm">
+                        <div
+                          className="mt-0.5 h-4 w-4 rounded-full flex items-center justify-center flex-shrink-0"
                           style={{
-                            color: isHighlighted ? "var(--brand-primary)" : "var(--brand-success)",
+                            background: isHighlighted
+                              ? "var(--brand-tint)"
+                              : "rgba(22,163,74,0.12)",
                           }}
-                        />
+                        >
+                          <Check
+                            className="h-2.5 w-2.5"
+                            style={{
+                              color: isHighlighted ? "var(--brand-primary)" : "var(--brand-success)",
+                            }}
+                          />
+                        </div>
+                        <span style={{ color: "var(--lp-foreground)", lineHeight: 1.5 }}>{f}</span>
                       </div>
-                      <span style={{ color: "var(--lp-foreground)", lineHeight: 1.5 }}>{f}</span>
-                    </div>
-                  ))}
-                  {plan.notIncluded?.map((f) => (
-                    <div key={f} className="flex items-start gap-2.5 text-sm opacity-30">
-                      <X className="h-4 w-4 flex-shrink-0 mt-0.5" style={{ color: "var(--lp-subtle)" }} />
-                      <span style={{ color: "var(--lp-subtle)" }}>{f}</span>
-                    </div>
-                  ))}
-                </div>
-              </motion.div>
-            );
-          })}
-        </motion.div>
+                    ))}
+                  </div>
+                </motion.div>
+              );
+            })}
+          </motion.div>
+        )}
 
         <p
           className="text-center text-sm mt-10"
@@ -326,6 +437,13 @@ export function PricingSection() {
           Comece grátis. Sem cartão de crédito, sem taxa de implantação e sem fidelidade.
         </p>
       </div>
+
+      <ComingSoonInterestModal
+        open={!!interest}
+        planSlug={interest?.slug ?? ""}
+        planName={interest?.name ?? ""}
+        onClose={() => setInterest(null)}
+      />
     </section>
   );
 }
