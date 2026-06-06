@@ -2045,6 +2045,8 @@ model Plan {
   maxStorageMB         Int            @default(1000)
   isActive             Boolean        @default(true)
   isFeatured           Boolean        @default(false)
+  status               String         @default("ACTIVE") // ACTIVE | COMING_SOON
+  highlightFeatures    Json?          // string[] de bullets de copy
   trialDays            Int            @default(14)
   sortOrder            Int            @default(0)
   stripeProductId      String?
@@ -4011,4 +4013,18 @@ enum InvoicePaymentMethod {
   CARTAO_CREDITO
   TRANSFERENCIA
   MANUAL
+}
+
+model PlanInterest {
+  id          String   @id @default(cuid())
+  planSlug    String
+  name        String
+  email       String
+  phone       String?
+  companyName String?
+  createdAt   DateTime @default(now())
+
+  @@unique([email, planSlug])
+  @@index([planSlug])
+  @@index([createdAt])
 }
