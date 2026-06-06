@@ -16,7 +16,7 @@ export function SubscriptionBlocked({ status, message, companyName }: Subscripti
         return {
           title: "Período de teste expirado",
           description:
-            "Seu período de teste de 14 dias chegou ao fim. Assine um plano para continuar usando o PDV Ótica.",
+            "Seu período de teste chegou ao fim. Assine um plano para continuar usando o PDV Ótica.",
           Icon: AlertOctagon,
           color: "text-orange-500",
           bgColor: "bg-orange-500/10",

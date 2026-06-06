@@ -248,7 +248,7 @@ export function FunctionalitiesPage() {
             Pronto para experimentar?
           </h2>
           <p className="text-muted mb-8 max-w-md mx-auto">
-            14 dias grátis. Todos os módulos incluídos. Sem cartão de crédito.
+            Teste grátis. Todos os módulos incluídos. Sem cartão de crédito.
           </p>
           <Link
             href={REGISTER_URL}
