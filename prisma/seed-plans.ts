@@ -2,118 +2,126 @@ import { PrismaClient } from "@prisma/client";
 
 const prisma = new PrismaClient();
 
+// Definição canônica dos 4 planos (fonte única de verdade no banco).
+// priceMonthly/priceYearly em CENTAVOS. highlightFeatures é Json (array de strings).
+const PLANS = [
+  {
+    slug: "basico",
+    name: "Básico",
+    status: "ACTIVE",
+    isActive: true,
+    isFeatured: true,
+    priceMonthly: 14990,
+    priceYearly: 149900,
+    trialDays: 14,
+    sortOrder: 1,
+    maxUsers: 3,
+    maxBranches: 1,
+    maxProducts: 500,
+    description:
+      "Tudo que sua ótica precisa para vender e gerenciar o dia a dia.",
+    highlightFeatures: [
+      "PDV completo (vendas, código de barras, descontos, aprovação de gerente)",
+      "Orçamentos (criar, imprimir, converter em venda)",
+      "Ordem de Serviço com Kanban (garantia, retrabalho, erro médico)",
+      "Leitura de receita por IA (OCR automático)",
+      "Clientes + lembretes (aniversário, pós-venda, troca de receita)",
+      "Estoque (entrada, saída, ajuste, histórico)",
+      "Caixa (abrir/fechar, sangria, reforço, histórico)",
+      "Relatórios em tempo real (vendas, estoque, contas a pagar/receber, comissões)",
+      "Cashback",
+      "Laboratórios e fornecedores",
+      "Links de WhatsApp para falar com o cliente",
+      "Permissões por usuário",
+      "Suporte via chamado",
+      "Acesso mobile",
+    ],
+  },
+  {
+    slug: "basico-nf",
+    name: "Básico + Emissão de NF",
+    status: "COMING_SOON",
+    isActive: true,
+    isFeatured: false,
+    priceMonthly: 18990,
+    priceYearly: 0,
+    trialDays: 14,
+    sortOrder: 2,
+    maxUsers: 3,
+    maxBranches: 1,
+    maxProducts: 500,
+    description: "Todo o Básico, com emissão de nota fiscal direto do sistema.",
+    highlightFeatures: [
+      "Tudo do Básico",
+      "Emissão de NFC-e/NF-e integrada",
+    ],
+  },
+  {
+    slug: "profissional",
+    name: "Profissional",
+    status: "COMING_SOON",
+    isActive: true,
+    isFeatured: false,
+    priceMonthly: 0,
+    priceYearly: 0,
+    trialDays: 14,
+    sortOrder: 3,
+    maxUsers: 5,
+    maxBranches: 1,
+    maxProducts: 2000,
+    description:
+      "Gestão financeira completa para crescer com controle total.",
+    highlightFeatures: [
+      "Tudo do Básico + NF",
+      "Módulo financeiro avançado: DRE, Fluxo de Caixa, Conciliação Bancária, BI, Cartões/Recebíveis, Metas, Lotes FIFO e mais",
+    ],
+  },
+  {
+    slug: "rede",
+    name: "Rede / Multi-loja",
+    status: "COMING_SOON",
+    isActive: true,
+    isFeatured: false,
+    priceMonthly: 0,
+    priceYearly: 0,
+    trialDays: 14,
+    sortOrder: 4,
+    maxUsers: 999,
+    maxBranches: 999,
+    maxProducts: 99999,
+    description: "Para redes com várias lojas e visão consolidada.",
+    highlightFeatures: [
+      "Tudo do Profissional",
+      "Múltiplas filiais, transferências entre lojas, comparativo de lojas, usuários ilimitados",
+    ],
+  },
+];
+
 async function seedPlans() {
-  console.log("🌱 Criando planos...");
+  console.log("🌱 Criando/atualizando planos...");
 
-  const basicPlan = await prisma.plan.upsert({
-    where: { slug: "basico" },
-    update: {},
-    create: {
-      name: "Básico",
-      slug: "basico",
-      description: "Ideal para óticas pequenas que estão começando",
-      priceMonthly: 14900,
-      priceYearly: 149000,
-      maxUsers: 3,
-      maxBranches: 1,
-      maxProducts: 500,
-      maxStorageMB: 1000,
-      isActive: true,
-      isFeatured: false,
-      trialDays: 14,
-      sortOrder: 1,
-      features: {
-        create: [
-          { key: "vendas", value: "true" },
-          { key: "estoque", value: "true" },
-          { key: "clientes", value: "true" },
-          { key: "relatorios_basicos", value: "true" },
-          { key: "suporte_email", value: "true" },
-          { key: "whatsapp_integration", value: "false" },
-          { key: "api_access", value: "false" },
-          { key: "relatorios_avancados", value: "false" },
-          { key: "multi_filial", value: "false" },
-        ],
-      },
-    },
+  for (const p of PLANS) {
+    await prisma.plan.upsert({
+      where: { slug: p.slug },
+      update: p,
+      create: p,
+    });
+    console.log(`   ✓ ${p.name} (${p.slug}) — ${p.status}`);
+  }
+
+  // Desativa qualquer plano legado (ex.: "enterprise") que vazaria na landing,
+  // pois /api/public/plans filtra isActive:true. Não apagamos Plans para
+  // preservar Subscriptions de empresas que já assinam.
+  const keep = ["basico", "basico-nf", "profissional", "rede"];
+  const deactivated = await prisma.plan.updateMany({
+    where: { slug: { notIn: keep } },
+    data: { isActive: false },
   });
+  if (deactivated.count > 0) {
+    console.log(`   ✓ ${deactivated.count} plano(s) legado(s) desativado(s)`);
+  }
 
-  const proPlan = await prisma.plan.upsert({
-    where: { slug: "profissional" },
-    update: {},
-    create: {
-      name: "Profissional",
-      slug: "profissional",
-      description: "Para óticas em crescimento que precisam de mais recursos",
-      priceMonthly: 29900,
-      priceYearly: 299000,
-      maxUsers: 10,
-      maxBranches: 3,
-      maxProducts: 5000,
-      maxStorageMB: 10000,
-      isActive: true,
-      isFeatured: true,
-      trialDays: 14,
-      sortOrder: 2,
-      features: {
-        create: [
-          { key: "vendas", value: "true" },
-          { key: "estoque", value: "true" },
-          { key: "clientes", value: "true" },
-          { key: "relatorios_basicos", value: "true" },
-          { key: "relatorios_avancados", value: "true" },
-          { key: "suporte_email", value: "true" },
-          { key: "suporte_chat", value: "true" },
-          { key: "whatsapp_integration", value: "true" },
-          { key: "multi_filial", value: "true" },
-          { key: "api_access", value: "false" },
-        ],
-      },
-    },
-  });
-
-  const enterprisePlan = await prisma.plan.upsert({
-    where: { slug: "enterprise" },
-    update: {},
-    create: {
-      name: "Enterprise",
-      slug: "enterprise",
-      description: "Para redes de óticas e operações de grande porte",
-      priceMonthly: 59900,
-      priceYearly: 599000,
-      maxUsers: -1,
-      maxBranches: -1,
-      maxProducts: -1,
-      maxStorageMB: 100000,
-      isActive: true,
-      isFeatured: false,
-      trialDays: 14,
-      sortOrder: 3,
-      features: {
-        create: [
-          { key: "vendas", value: "true" },
-          { key: "estoque", value: "true" },
-          { key: "clientes", value: "true" },
-          { key: "relatorios_basicos", value: "true" },
-          { key: "relatorios_avancados", value: "true" },
-          { key: "suporte_email", value: "true" },
-          { key: "suporte_chat", value: "true" },
-          { key: "suporte_prioritario", value: "true" },
-          { key: "suporte_telefone", value: "true" },
-          { key: "whatsapp_integration", value: "true" },
-          { key: "multi_filial", value: "true" },
-          { key: "api_access", value: "true" },
-          { key: "webhook_notifications", value: "true" },
-          { key: "white_label", value: "true" },
-        ],
-      },
-    },
-  });
-
-  console.log("✅ Planos criados:");
-  console.log(`   - ${basicPlan.name} (${basicPlan.slug})`);
-  console.log(`   - ${proPlan.name} (${proPlan.slug})`);
-  console.log(`   - ${enterprisePlan.name} (${enterprisePlan.slug})`);
+  console.log("✅ Planos sincronizados.");
 }
 
 async function seedAdminUser() {
