@@ -5,10 +5,17 @@ import { JsonLd, buildProductJsonLd } from "@/components/seo/json-ld";
 import { prisma } from "@/lib/prisma";
 
 export default async function PrecosPage() {
-  const priced = await prisma.plan.findMany({
-    where: { isActive: true, status: "ACTIVE", priceMonthly: { gt: 0 } },
-    select: { name: true, priceMonthly: true },
-  });
+  // Blindado: falha de banco (coluna ausente em deploy, indisponibilidade) não derruba
+  // a página — apenas omite o JSON-LD de Product.
+  let priced: { name: string; priceMonthly: number }[] = [];
+  try {
+    priced = await prisma.plan.findMany({
+      where: { isActive: true, status: "ACTIVE", priceMonthly: { gt: 0 } },
+      select: { name: true, priceMonthly: true },
+    });
+  } catch {
+    priced = [];
+  }
 
   return (
     <>
