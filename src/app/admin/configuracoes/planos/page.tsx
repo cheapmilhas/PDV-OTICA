@@ -17,6 +17,7 @@ export default async function PlanosPage() {
     ...plan,
     createdAt: plan.createdAt.toISOString(),
     updatedAt: plan.updatedAt.toISOString(),
+    highlightFeatures: (plan.highlightFeatures as string[] | null) ?? null,
     features: plan.features.map((f) => ({ id: f.id, key: f.key, value: f.value, planId: f.planId })),
   }));
 

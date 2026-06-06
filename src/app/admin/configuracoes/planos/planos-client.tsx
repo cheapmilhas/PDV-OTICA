@@ -26,6 +26,8 @@ interface Plan {
   isActive: boolean;
   isFeatured: boolean;
   sortOrder: number;
+  status: string;
+  highlightFeatures: string[] | null;
   features: PlanFeature[];
   _count: { subscriptions: number };
 }
@@ -52,6 +54,8 @@ const emptyForm = {
   trialDays: 14,
   isFeatured: false,
   sortOrder: 0,
+  status: "ACTIVE",
+  highlightFeatures: "",
   features: [] as string[],
 };
 
@@ -86,6 +90,8 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
       trialDays: plan.trialDays,
       isFeatured: plan.isFeatured,
       sortOrder: plan.sortOrder,
+      status: plan.status,
+      highlightFeatures: (plan.highlightFeatures ?? []).join("\n"),
       features: plan.features.filter((f) => f.value === "true").map((f) => f.key),
     });
     setError("");
@@ -99,6 +105,9 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
 
     const payload = {
       ...form,
+      status: form.status,
+      highlightFeatures: form.highlightFeatures
+        .split("\n").map((s) => s.trim()).filter(Boolean),
       features: AVAILABLE_FEATURES.map((f) => ({
         key: f.key,
         value: form.features.includes(f.key) ? "true" : "false",
@@ -430,6 +439,27 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
                 />
                 <label htmlFor="isFeatured" className="text-sm text-gray-300">Plano destaque (mais popular)</label>
               </div>
+
+              <FormField label="Status">
+                <select
+                  value={form.status}
+                  onChange={(e) => setForm({ ...form, status: e.target.value })}
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
+                >
+                  <option value="ACTIVE">Ativo (comprável)</option>
+                  <option value="COMING_SOON">Em breve</option>
+                </select>
+              </FormField>
+
+              <FormField label="Benefícios em destaque (copy)">
+                <textarea
+                  value={form.highlightFeatures}
+                  onChange={(e) => setForm({ ...form, highlightFeatures: e.target.value })}
+                  rows={4}
+                  placeholder="Um benefício por linha"
+                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
+                />
+              </FormField>
 
               <div>
                 <p className="text-sm font-medium text-gray-300 mb-2">Funcionalidades</p>
