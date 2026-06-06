@@ -78,13 +78,13 @@ export async function POST(request: Request) {
     // Buscar plano (se informado) ou usar o primeiro ativo
     let plan = null;
     if (planId) {
-      plan = await prisma.plan.findUnique({
-        where: { id: planId, isActive: true },
+      plan = await prisma.plan.findFirst({
+        where: { id: planId, isActive: true, status: "ACTIVE" },
       });
     }
     if (!plan) {
       plan = await prisma.plan.findFirst({
-        where: { isActive: true },
+        where: { isActive: true, status: "ACTIVE" },
         orderBy: { sortOrder: "asc" },
       });
     }

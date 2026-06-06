@@ -29,6 +29,7 @@ interface Plan {
   maxProducts: number;
   maxBranches: number;
   trialDays: number;
+  status: string;
   isFeatured: boolean;
   features: { key: string; value: string }[];
 }
@@ -61,12 +62,17 @@ export default function RegistroPage() {
       .then((r) => r.json())
       .then((data) => {
         if (data.plans) {
-          setPlans(data.plans);
-          const featured = data.plans.find((p: Plan) => p.isFeatured);
+          // Trial só pode oferecer planos lançados (ACTIVE). "Em breve"
+          // (COMING_SOON) não inicia trial.
+          const activePlans = (data.plans as Plan[]).filter(
+            (p) => p.status === "ACTIVE"
+          );
+          setPlans(activePlans);
+          const featured = activePlans.find((p) => p.isFeatured);
           if (featured) {
             setFormData((prev) => ({ ...prev, planId: featured.id }));
-          } else if (data.plans.length > 0) {
-            setFormData((prev) => ({ ...prev, planId: data.plans[0].id }));
+          } else if (activePlans.length > 0) {
+            setFormData((prev) => ({ ...prev, planId: activePlans[0].id }));
           }
         }
       })
@@ -332,8 +338,12 @@ export default function RegistroPage() {
                   <>
                     <p className="text-sm text-muted-foreground">
                       Todos os planos incluem{" "}
-                      <strong>{selectedPlan?.trialDays || 14} dias grátis</strong>.
-                      Nenhum cartão de crédito é necessário.
+                      <strong>
+                        {selectedPlan
+                          ? `${selectedPlan.trialDays} dias grátis`
+                          : "trial grátis"}
+                      </strong>
+                      . Nenhum cartão de crédito é necessário.
                     </p>
                     <div className="space-y-3">
                       {plans.map((plan) => (
