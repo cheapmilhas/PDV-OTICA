@@ -1,6 +1,6 @@
 type FreshClaims = {
-  role: unknown;
-  name: unknown;
+  role: string;
+  name: string;
   companyId: string;
   networkId: string | null;
   branchId?: string | null;
