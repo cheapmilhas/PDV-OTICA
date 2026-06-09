@@ -5,6 +5,7 @@ import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/rate-limit";
+import { applyRevalidatedClaims } from "./auth-claims";
 
 // SEGURANÇA: hash dummy bcrypt VÁLIDO (60 chars, cost 10) para comparar quando
 // não há candidato. Sem isso há timing leak: !user retorna ~0ms, user existente
@@ -240,24 +241,24 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null;
           }
 
-          // Aplica role/nome frescos (rebaixar/promover passa a valer sem relogar).
-          token.role = fresh.role;
-          token.name = fresh.name;
-
-          // BUGFIX (impersonação): NÃO sobrescrever companyId/branchId/networkId
-          // quando o token é de impersonação. A empresa impersonada é fixa e foi
-          // definida na criação da sessão (impersonate/route.ts). Sobrescrever aqui
-          // com o `fresh.companyId` do targetUser fazia o admin "cair" na empresa
-          // do usuário-alvo (ex.: clicar em Vitali e abrir Atacadão se o targetUser
-          // estivesse vinculado a outra empresa). Fora de impersonação, segue
-          // refletindo transferências de empresa normalmente.
-          if (!impersonation?.sessionId) {
-            token.companyId = fresh.companyId;
-            token.networkId = fresh.company?.networkId ?? null;
-            if (fresh.branches[0]?.branchId) {
-              token.branchId = fresh.branches[0].branchId;
-            }
-          }
+          // BUGFIX (impersonação): durante impersonação a identidade impersonada
+          // (company/branch/network/role/name) é FIXA — foi definida na criação da
+          // sessão (impersonate/route.ts). NÃO pode ser sobrescrita pelo `fresh` do
+          // usuário-alvo: senão, ao rebaixar/transferir o targetUser, o admin
+          // impersonador herdava o novo role/empresa (ex.: clicar em Vitali e abrir
+          // Atacadão, ou virar VENDEDOR). Fora de impersonação, segue refletindo
+          // rebaixamento/promoção e transferências de empresa normalmente.
+          applyRevalidatedClaims(
+            token,
+            {
+              role: fresh.role,
+              name: fresh.name,
+              companyId: fresh.companyId,
+              networkId: fresh.company?.networkId ?? null,
+              branchId: fresh.branches[0]?.branchId,
+            },
+            Boolean(impersonation?.sessionId)
+          );
           token.revalidatedAt = Date.now();
         } catch (err) {
           // Falha transitória de DB: NÃO desloga (evita falso logout em massa).
