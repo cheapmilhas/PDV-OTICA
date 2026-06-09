@@ -28,6 +28,17 @@ function normalizeEmail(email?: string | null): string | undefined {
 }
 
 /**
+ * Normaliza CNPJ para o índice único: só dígitos (remove máscara). Vazio vira
+ * undefined (NULL no banco). Espelha o tratamento de email, para que a checagem
+ * preventiva e o índice comparem sempre o mesmo formato.
+ */
+function normalizeCnpj(cnpj?: string | null): string | undefined {
+  if (cnpj == null) return undefined;
+  const digits = cnpj.replace(/\D/g, "");
+  return digits === "" ? undefined : digits;
+}
+
+/**
  * M7: converte P2002 (corrida que escapou do findFirst) num duplicateError
  * amigável, distinguindo email de CPF pelo nome do índice violado. Outros erros
  * passam adiante intactos.
@@ -227,7 +238,7 @@ export class CustomerService {
   async create(data: CreateCustomerDTO, companyId: string, originBranchId?: string | null): Promise<Customer> {
     // M7: normaliza email vazio/whitespace → undefined (vira NULL no banco; o
     // índice único parcial Customer_companyId_email_unique trata só não-nulos).
-    data = { ...data, email: normalizeEmail(data.email) };
+    data = { ...data, email: normalizeEmail(data.email), cnpj: normalizeCnpj(data.cnpj) };
 
     // Validação: CPF duplicado (se fornecido)
     if (data.cpf) {
@@ -254,6 +265,20 @@ export class CustomerService {
 
       if (existing) {
         throw duplicateError("Email já cadastrado nesta empresa", "email");
+      }
+    }
+
+    // Validação: CNPJ duplicado (anti-race; o índice único é a defesa final).
+    if (data.cnpj) {
+      const existing = await prisma.customer.findFirst({
+        where: {
+          companyId,
+          cnpj: data.cnpj,
+        },
+      });
+
+      if (existing) {
+        throw duplicateError("CNPJ já cadastrado nesta empresa", "cnpj");
       }
     }
 
