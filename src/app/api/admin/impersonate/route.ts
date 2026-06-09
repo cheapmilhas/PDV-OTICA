@@ -65,7 +65,9 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
     }
 
-    // Buscar o primeiro user ADMIN da empresa para impersonar
+    // Buscar o user ADMIN MAIS ANTIGO da empresa para impersonar.
+    // orderBy é obrigatório: sem ele, findFirst é não-determinístico quando há
+    // múltiplos admins (podia impersonar um usuário diferente a cada clique).
     const targetUser = await prisma.user.findFirst({
       where: { companyId, role: "ADMIN", active: true },
       include: {
@@ -74,12 +76,32 @@ export async function POST(request: Request) {
           take: 1,
         },
       },
+      orderBy: { createdAt: "asc" },
     });
 
     if (!targetUser || !targetUser.branches[0]) {
       return NextResponse.json(
         { error: "Empresa não possui usuário admin ativo com filial" },
         { status: 400 }
+      );
+    }
+
+    // Defesa em profundidade: garante que o usuário-alvo realmente pertence à
+    // empresa solicitada e que a filial é da mesma empresa. Evita impersonar a
+    // empresa errada caso haja dados inconsistentes (usuário/filial cruzados).
+    if (
+      targetUser.companyId !== companyId ||
+      targetUser.branches[0].branch.companyId !== companyId
+    ) {
+      log.error("Inconsistência: targetUser/filial não pertencem à empresa", {
+        companyId,
+        targetUserId: targetUser.id,
+        targetUserCompanyId: targetUser.companyId,
+        branchCompanyId: targetUser.branches[0].branch.companyId,
+      });
+      return NextResponse.json(
+        { error: "Inconsistência de dados ao preparar acesso. Contate o suporte." },
+        { status: 409 }
       );
     }
 

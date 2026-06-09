@@ -56,6 +56,24 @@ export async function GET(request: Request) {
     return NextResponse.redirect(new URL("/login", request.url));
   }
 
+  // Validação cruzada: o token precisa ser coerente com a sessão registrada.
+  // Garante que o cookie setado pertence à MESMA empresa/sessão que o admin
+  // iniciou — sem isso, um token de outra empresa com sessionId válido passaria
+  // (parte da causa de "clicar numa empresa e abrir outra").
+  const tokenImpersonation = payload.impersonation as { sessionId?: string } | undefined;
+  if (
+    payload.companyId !== session.companyId ||
+    tokenImpersonation?.sessionId !== session.id
+  ) {
+    log.error("Token incoerente com a sessão de impersonação", {
+      sessionId,
+      sessionCompanyId: session.companyId,
+      tokenCompanyId: payload.companyId,
+      tokenSessionId: tokenImpersonation?.sessionId,
+    });
+    return NextResponse.redirect(new URL("/login", request.url));
+  }
+
   const isProduction = process.env.NODE_ENV === "production";
   const response = NextResponse.redirect(new URL("/dashboard", request.url));
 

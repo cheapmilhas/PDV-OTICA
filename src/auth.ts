@@ -240,14 +240,23 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             return null;
           }
 
-          // Aplica role/nome/empresa/filial frescos (rebaixar/promover/transferir
-          // passa a valer sem precisar relogar).
+          // Aplica role/nome frescos (rebaixar/promover passa a valer sem relogar).
           token.role = fresh.role;
           token.name = fresh.name;
-          token.companyId = fresh.companyId;
-          token.networkId = fresh.company?.networkId ?? null;
-          if (fresh.branches[0]?.branchId) {
-            token.branchId = fresh.branches[0].branchId;
+
+          // BUGFIX (impersonação): NÃO sobrescrever companyId/branchId/networkId
+          // quando o token é de impersonação. A empresa impersonada é fixa e foi
+          // definida na criação da sessão (impersonate/route.ts). Sobrescrever aqui
+          // com o `fresh.companyId` do targetUser fazia o admin "cair" na empresa
+          // do usuário-alvo (ex.: clicar em Vitali e abrir Atacadão se o targetUser
+          // estivesse vinculado a outra empresa). Fora de impersonação, segue
+          // refletindo transferências de empresa normalmente.
+          if (!impersonation?.sessionId) {
+            token.companyId = fresh.companyId;
+            token.networkId = fresh.company?.networkId ?? null;
+            if (fresh.branches[0]?.branchId) {
+              token.branchId = fresh.branches[0].branchId;
+            }
           }
           token.revalidatedAt = Date.now();
         } catch (err) {
