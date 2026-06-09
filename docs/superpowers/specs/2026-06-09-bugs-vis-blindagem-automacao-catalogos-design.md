@@ -69,20 +69,25 @@ testes". Cada item tem correção mínima e um teste que falha se o bug voltar.
 - `src/app/admin/logout/route.ts` tem fallback `process.env.NEXTAUTH_URL || "http://localhost:3000"`.
 - Múltiplos pontos de logout (header, force-logout, login, admin) sem padrão único.
 
-**Correção:**
-1. Criar helper `doLogout()` em `src/lib/auth/logout.ts` que centraliza
-   `signOut({ callbackUrl: \`${window.location.origin}/login\` })` para o app
-   (NextAuth/cliente). Usar em todos os pontos de logout do app.
-2. Remover o fallback `"http://localhost:3000"` de `admin/logout/route.ts`;
-   se `NEXTAUTH_URL` não estiver setado, falhar de forma visível (log de erro),
-   não redirecionar para localhost silenciosamente.
-3. Adicionar `NEXTAUTH_URL=https://vis.app.br` ao checklist de deploy (documentar
-   no `.env.example` que em prod DEVE ser o domínio público).
+**Correção (são DOIS mecanismos diferentes — não misturar):**
+1. **App (client, NextAuth):** criar helper `doLogout()` em
+   `src/lib/auth/logout.ts` (client-only) que centraliza
+   `signOut({ callbackUrl: \`${window.location.origin}/login\` })`. Usar em TODOS
+   os pontos de logout client do app (header, force-logout, etc.). `window` só
+   existe no client — este helper é exclusivo de componentes client.
+2. **Admin (server route):** `admin/logout/route.ts` NÃO tem `window`. Em vez de
+   depender de `NEXTAUTH_URL` (ou cair em localhost), **derivar a origin do
+   próprio request** (header `origin`/`host` + protocolo). Assim o redirect
+   acompanha o domínio em que o usuário está, sem env nem fallback localhost.
+   Nunca deixar o usuário "preso sem conseguir sair".
+3. Documentar `NEXTAUTH_URL=https://vis.app.br` como obrigatório em produção no
+   `.env.example` (afeta redirects relativos do NextAuth).
 
-**Teste:** teste unitário/regressão que garante que o helper deriva a URL de
-`window.location.origin` e que nenhum ponto de logout do app usa URL hardcoded
-de domínio. Para o admin, teste que sem `NEXTAUTH_URL` o handler não cai em
-localhost.
+**Testes:**
+- Helper client deriva a URL de `window.location.origin` (não hardcoded).
+- Admin route deriva a origin do request (não usa localhost) mesmo sem
+  `NEXTAUTH_URL` setado.
+- Regressão: nenhum ponto de logout do app usa URL de domínio hardcoded.
 
 ### A2. Pop-up exit-intent reaparece (anônimo / localStorage cheio)
 
@@ -95,8 +100,10 @@ Tratar indisponibilidade de localStorage de forma coerente: usar fallback em
 memória no escopo da sessão para não reaparecer repetidamente nem sumir para
 sempre por engano.
 
-**Teste:** teste do hook simulando `localStorage` indisponível e quota excedida —
-o pop-up não deve reaparecer em loop nem ser marcado incorretamente.
+**Teste:** o teste do hook deve cobrir os DOIS lados, simulando `localStorage`
+que lança em `setItem` E em `getItem` separadamente: (a) o pop-up NÃO reaparece
+em loop entre navegações; (b) o pop-up NÃO some para sempre por marcação
+incorreta. Cobrir também quota excedida.
 
 ### A3. Impersonate — role/name ainda mutam
 
@@ -153,17 +160,32 @@ risco de derrubar o sistema. Controlado pelo dono via tela no admin.
 
 ### B1. Modelo de configuração — `AutoSyncConfig`
 
-Novo model (migration aditiva), instância única:
+Novo model (migration aditiva), instância única.
+
+> ⚠️ **Prisma não aceita literal string estático em `@default()` para `@id`**
+> (só `cuid()/uuid()/autoincrement()`). Por isso o id NÃO tem default — o registro
+> único é garantido por um helper que faz upsert com id fixo `"singleton"`.
 
 ```prisma
 model AutoSyncConfig {
-  id         String    @id @default("singleton")
+  id         String    @id          // sem default; sempre "singleton" via helper
   isEnabled  Boolean   @default(false)   // começa DESLIGADO
   dryRun     Boolean   @default(true)     // começa em SIMULAÇÃO
   lastRunAt  DateTime?
   updatedBy  String?
   updatedAt  DateTime  @updatedAt
 }
+```
+
+Helper de acesso (idempotente, cria o registro único na 1ª leitura):
+
+```typescript
+// getAutoSyncConfig(): garante o singleton
+prisma.autoSyncConfig.upsert({
+  where: { id: "singleton" },
+  create: { id: "singleton" },      // defaults: isEnabled=false, dryRun=true
+  update: {},
+})
 ```
 
 ### B2. Service central — `company-resync.service.ts`
@@ -181,19 +203,47 @@ resyncCompanySetup(companyId, {
 
 - **Financeiro:** reusa `setupCompanyFinance` (idempotente por code/name; balance
   só no create; nunca mexe em saldos).
-- **Mensagens:** reusa o backfill de `settings.service.ts` (`missingMessageTemplates`)
-  — preenche SÓ os campos de mensagem que estão NULL. Se a empresa escreveu algo,
-  NÃO toca.
+- **Mensagens:** ver a regra de "default intacto vs personalizado" logo abaixo
+  (B2.1). NÃO basta preencher NULL — isso deixaria de fora empresas que já têm o
+  default ANTIGO gravado (não-NULL, não-personalizado).
 - **dry-run:** quando `true`, calcula o que MUDARIA mas não grava nada (só relatório).
 - O endpoint manual `/resync` passa a chamar este service (sem duplicar lógica).
   Os testes existentes do endpoint continuam válidos.
+
+#### B2.1 — Como distinguir "default antigo intacto" de "personalização" (mensagens)
+
+**Problema (ISSUE 4 da review):** a promessa do item 8 é *"quando o dono melhora um
+texto padrão, a melhoria chega a todas as empresas que não personalizaram"*. Se a
+detecção for só "campo NULL", as empresas que já receberam o default ANTIGO (campo
+preenchido, mas não editado pelo cliente) **nunca recebem a melhoria** — a promessa
+quebra justamente onde mais importa.
+
+**Decisão:** rastrear, por empresa, **quais valores de mensagem são o default que o
+sistema aplicou** (não personalização do cliente). Mecanismo: comparar o valor atual
+do campo com o **conjunto de defaults conhecidos** (`DEFAULT_MESSAGES` atual + um
+registro versionado dos defaults já aplicados, ex.: `prisma/default-messages-history.ts`).
+Regra de atualização por campo:
+
+- Campo **NULL** → preenche com o default atual (backfill, como hoje).
+- Campo **== algum default conhecido** (atual ou histórico) → é "default intacto":
+  pode **atualizar** para o default novo (a melhoria chega).
+- Campo **≠ qualquer default conhecido** → é **personalização do cliente**: NÃO toca.
+
+Assim "nunca sobrescrever personalização" continua valendo (o cliente que escreveu
+o próprio texto fica intocado), MAS a melhoria de um default propaga para quem só
+tinha a versão antiga do sistema. Cada novo default precisa ser adicionado ao
+histórico para que o anterior seja reconhecido como "intacto".
+
+**Trade-off honesto:** se o cliente, por coincidência, digitou um texto idêntico a
+um default conhecido, será tratado como "intacto" e poderá ser atualizado. É um caso
+raro e aceitável (o texto era igual ao padrão de qualquer forma).
 
 ### B3. Cron diário — `sync-all-companies`
 
 `src/app/api/cron/sync-all-companies/route.ts`, espelhando o padrão de
 `recalcAllActiveHealthScores` (loop empresa-a-empresa com try/catch isolado):
 
-- Autenticação por `CRON_SECRET` (Bearer), igual aos 6 crons existentes.
+- Autenticação por `CRON_SECRET` (Bearer), igual aos crons existentes.
 - Lê `AutoSyncConfig`: se `isEnabled=false` → no-op (loga e retorna). Se
   `dryRun=true` → só gera relatório. Se `dryRun=false` → aplica.
 - Itera `prisma.company.findMany` (empresas ativas). Cada empresa em try/catch
@@ -202,7 +252,11 @@ resyncCompanySetup(companyId, {
 - Para cada empresa com mudança, grava `GlobalAudit` com `actorType: "SYSTEM"`,
   `action: "COMPANY_AUTO_SYNCED"`, metadata `{ before, after, created, dryRun }`.
 - Registrado no `vercel.json` em horário livre: `0 4 * * *` (4h; 3/5/6/8/11h já
-  estão ocupados).
+  estão ocupados). Hoje há **6 crons** no `vercel.json`; este será o **7º**.
+
+> **Plano Vercel:** o cron `email-queue` roda `*/10 * * * *` (a cada 10min), o que
+> só é permitido no plano **Pro** (Hobby limita a 2 crons, diários). Logo o projeto
+> já está em Pro e comporta o 7º cron. Confirmar no dashboard antes do deploy.
 
 ### B4. Tela admin — `/admin/configuracoes/sincronizacao`
 
@@ -272,12 +326,19 @@ model BrandCatalogItem {
   catalogId     String
   catalog       BrandCatalog @relation(fields: [catalogId], references: [id])
   name          String       // nome da lente
-  cost          Decimal      // custo da tabela
+  cost          Decimal      // custo da tabela — ver UNIDADE abaixo
   lensType      String?      // tipo (opcional)
   suggestedMultiplier Decimal @default(3)  // markup sugerido
   isActive      Boolean      @default(true)
 }
 ```
+
+> ⚠️ **UNIDADE de `cost` (ISSUE 3 da review):** este foi exatamente o bug do item 5
+> (centavos gravados como reais → preço 100x). Decisão: `cost` é em **reais**
+> (mesma unidade que o onboarding usa hoje em produtos de exemplo). A tela de
+> catálogo (C2) e a importação (C3) DEVEM validar a unidade — avisar/rejeitar
+> valores fora de faixa plausível de preço de lente (ex.: < R$1 ou > R$10.000 →
+> "confira se o valor está em reais, não centavos"). Teste obrigatório de faixa.
 
 ### C2. Tela admin — `/admin/configuracoes/catalogos-marca`
 
@@ -295,11 +356,21 @@ Quer já cadastrar lentes destas marcas?
   ☐ Essilor   ☐ Zeiss   ☐ Hoya   ☐ SenseView
 ```
 Para cada marca marcada, criar os produtos na ótica:
-- `costPrice` = `cost` do item de catálogo.
+- `costPrice` = `cost` do item de catálogo (em reais — ver C1).
 - `salePrice` = `cost × suggestedMultiplier` (3 por padrão), **editável depois**.
 - Estoque real via `atomicStockCredit` + `InventoryLot` — **reusando a engrenagem
   corrigida no item 5** para que os produtos nasçam certos e vendam sem erro.
-- Idempotente (não duplica se rodar de novo).
+
+**Idempotência e não-sobrescrita (ISSUE 5 da review):**
+- O `Product` ganha um campo `brandCatalogItemId String?` que é a **chave de
+  idempotência** (vínculo produto ↔ item de catálogo). Re-importar a mesma marca
+  na mesma empresa **não duplica**: faz match por `brandCatalogItemId`.
+- Se o produto já existe e a ótica **editou** preço/custo, a re-importação **NÃO
+  sobrescreve** os valores editados (espelha a regra "não apagar personalização"
+  da Fase B). Pode atualizar só campos não tocados pela ótica (ex.: nome/tipo do
+  catálogo), nunca o `salePrice`/`costPrice` já editado.
+- Produtos cadastrados à mão pela ótica (sem `brandCatalogItemId`) são ignorados
+  pela importação (não vincula nem mexe).
 
 ### C4. Sequenciamento
 
@@ -322,10 +393,14 @@ mexer em código.
 
 - **Fase A:** 1 teste por furo — logout-URL, pop-up sem localStorage, impersonate
   role/name imutável, CNPJ race, override na conversão.
-- **Fase B:** idempotência, não-sobrescrita de personalização, dry-run não aplica,
-  cron desligado = no-op, erro de uma empresa não para as outras.
-- **Fase C:** preço = custo × 3, produto de marca cria estoque real e vende,
-  pergunta do onboarding respeita as marcas marcadas, idempotência.
+- **Fase B:** idempotência, não-sobrescrita de personalização (incl. default antigo
+  vs personalizado — B2.1), dry-run não aplica, cron desligado = no-op, erro de uma
+  empresa não para as outras, **autorização: ADMIN/SUPPORT/BILLING recebem 403 no
+  toggle e na API de config** (só SUPER_ADMIN).
+- **Fase C:** preço = custo × 3, **faixa de preço plausível (reais, não centavos)**,
+  produto de marca cria estoque real e vende, pergunta do onboarding respeita as
+  marcas marcadas, idempotência por `brandCatalogItemId` (re-import não duplica nem
+  sobrescreve preço editado), **autorização: só SUPER_ADMIN no CRUD do catálogo**.
 - **Sempre:** `tsc` + suíte completa + build verde antes de cada commit.
 
 ## Ordem de entrega e deploy
