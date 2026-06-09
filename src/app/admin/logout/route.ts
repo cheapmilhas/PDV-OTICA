@@ -1,8 +1,9 @@
 import { NextResponse } from "next/server";
 import { cookies } from "next/headers";
 
-export async function GET() {
+export async function GET(request: Request) {
   const cookieStore = await cookies();
   cookieStore.delete("admin.session-token");
-  return NextResponse.redirect(new URL("/admin/login", process.env.NEXTAUTH_URL || "http://localhost:3000"));
+  const origin = new URL(request.url).origin;
+  return NextResponse.redirect(new URL("/admin/login", origin));
 }

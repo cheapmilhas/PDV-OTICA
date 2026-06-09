@@ -1,12 +1,12 @@
 "use client";
 
 import { useEffect } from "react";
-import { signOut } from "next-auth/react";
+import { doLogout } from "@/lib/auth/logout";
 
 export default function ForceLogoutPage() {
   useEffect(() => {
     // Logout automático ao carregar a página
-    signOut({ callbackUrl: "/login" });
+    doLogout();
   }, []);
 
   return (

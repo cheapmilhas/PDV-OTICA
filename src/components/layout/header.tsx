@@ -22,7 +22,8 @@ import {
 } from "@/components/ui/dialog";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
 import { Badge } from "@/components/ui/badge";
-import { signOut, useSession } from "next-auth/react";
+import { useSession } from "next-auth/react";
+import { doLogout } from "@/lib/auth/logout";
 import { useRouter } from "next/navigation";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { Separator } from "@/components/ui/separator";
@@ -481,13 +482,7 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive text-sm"
-              onClick={() =>
-                signOut({
-                  // URL absoluta no domínio atual evita o redirect para o
-                  // domínio antigo da Vercel (NextAuth resolveria baseUrl errado).
-                  callbackUrl: `${window.location.origin}/login`,
-                })
-              }
+              onClick={() => doLogout()}
             >
               <LogOut className="mr-2 h-3.5 w-3.5" />
               Sair
