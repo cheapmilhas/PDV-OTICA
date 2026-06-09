@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { atomicStockCredit } from "@/services/stock.service";
 
 /**
  * GET /api/onboarding
@@ -104,6 +105,14 @@ export async function PUT(request: Request) {
         // Verificar se já existem produtos
         const count = await prisma.product.count({ where: { companyId } });
         if (count === 0) {
+          // Filial onde o estoque inicial será creditado. Sem ela não dá para
+          // criar BranchStock (e a venda falharia mesmo com Product.stockQty>0).
+          const branch = await prisma.branch.findFirst({
+            where: { companyId },
+            orderBy: { createdAt: "asc" },
+            select: { id: true },
+          });
+
           // Criar categoria padrão
           const category = await prisma.category.upsert({
             where: {
@@ -113,29 +122,57 @@ export async function PUT(request: Request) {
             update: {},
           });
 
-          // Criar alguns produtos de exemplo
+          // Produtos de exemplo. Preços em REAIS (Decimal 12,2) — alinhado ao
+          // resto do sistema. ANTES estavam em centavos (ex: 18900), o que no
+          // banco virava R$ 18.900,00 (100x o valor). costPrice ~55% do preço
+          // para o CMV/DRE sair coerente.
           const sampleProducts = [
-            { name: "Armação Aviador Clássico", sku: "ARM-001", salePrice: 18900, stockQty: 10, type: "FRAME" as const },
-            { name: "Armação Redonda Vintage", sku: "ARM-002", salePrice: 15900, stockQty: 8, type: "FRAME" as const },
-            { name: "Armação Quadrada Moderna", sku: "ARM-003", salePrice: 22900, stockQty: 5, type: "FRAME" as const },
-            { name: "Óculos de Sol Esportivo", sku: "SOL-001", salePrice: 24900, stockQty: 12, type: "SUNGLASSES" as const },
-            { name: "Lente CR-39 Anti-reflexo", sku: "LEN-001", salePrice: 12000, stockQty: 20, type: "OPHTHALMIC_LENS" as const },
+            { name: "Armação Aviador Clássico", sku: "ARM-001", salePrice: 189.0, costPrice: 95.0, stockQty: 10, type: "FRAME" as const },
+            { name: "Armação Redonda Vintage", sku: "ARM-002", salePrice: 159.0, costPrice: 80.0, stockQty: 8, type: "FRAME" as const },
+            { name: "Armação Quadrada Moderna", sku: "ARM-003", salePrice: 229.0, costPrice: 120.0, stockQty: 5, type: "FRAME" as const },
+            { name: "Óculos de Sol Esportivo", sku: "SOL-001", salePrice: 249.0, costPrice: 130.0, stockQty: 12, type: "SUNGLASSES" as const },
+            { name: "Lente CR-39 Anti-reflexo", sku: "LEN-001", salePrice: 120.0, costPrice: 60.0, stockQty: 20, type: "OPHTHALMIC_LENS" as const },
           ];
 
           for (const p of sampleProducts) {
-            await prisma.product.create({
+            // Cria o produto com stockQty 0 — o estoque real entra via
+            // atomicStockCredit (BranchStock) + InventoryLot abaixo, igual a uma
+            // entrada de estoque de verdade. Setar stockQty direto deixaria o
+            // cache "10" mas sem BranchStock, e a venda falharia no débito.
+            const product = await prisma.product.create({
               data: {
                 companyId,
                 name: p.name,
                 sku: p.sku,
                 salePrice: p.salePrice,
-                stockQty: p.stockQty,
+                costPrice: p.costPrice,
+                stockQty: 0,
                 stockMin: 2,
                 categoryId: category.id,
                 type: p.type,
                 active: true,
               },
             });
+
+            if (branch && p.stockQty > 0) {
+              // Crédito atômico no BranchStock (e atualiza o cache Product.stockQty).
+              await atomicStockCredit(product.id, p.stockQty, companyId, undefined, branch.id);
+
+              // Lote de estoque para o CMV/FIFO funcionar na venda (senão o custo
+              // sai 0 e a DRE fica incorreta).
+              await prisma.inventoryLot.create({
+                data: {
+                  companyId,
+                  branchId: branch.id,
+                  productId: product.id,
+                  qtyIn: p.stockQty,
+                  qtyRemaining: p.stockQty,
+                  unitCost: p.costPrice,
+                  totalCost: p.costPrice * p.stockQty,
+                  acquiredAt: new Date(),
+                },
+              });
+            }
           }
         }
       }

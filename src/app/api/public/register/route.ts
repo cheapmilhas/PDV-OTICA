@@ -4,6 +4,7 @@ import bcrypt from "bcryptjs";
 import { setupCompanyFinance } from "@/services/finance-setup.service";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { DEFAULT_MESSAGES } from "@/lib/default-messages";
 
 const log = logger.child({ route: "public/register" });
 
@@ -181,6 +182,25 @@ export async function POST(request: Request) {
       // chartOfAccounts/FinanceAccount quebra venda/orçamento silenciosamente.
       // Melhor falhar o cadastro do que entregar conta em estado inválido.
       await setupCompanyFinance(tx, company.id, branch.id);
+
+      // 5.2. CompanySettings com os dados cadastrais + mensagens padrão.
+      // Antes o /registro não criava settings — o nome/CNPJ saíam em branco nos
+      // recibos até o dono preencher manualmente, divergindo das empresas criadas
+      // pelo admin. Agora nasce igual (fonte única de defaults: DEFAULT_MESSAGES).
+      await tx.companySettings.create({
+        data: {
+          companyId: company.id,
+          displayName: companyName.trim(),
+          cnpj: document ? document.replace(/\D/g, "") || null : null,
+          phone: phone?.trim() || null,
+          email: email.toLowerCase().trim(),
+          messageThankYou: DEFAULT_MESSAGES.thankYou,
+          messageQuote: DEFAULT_MESSAGES.quote,
+          messageReminder: DEFAULT_MESSAGES.reminder,
+          messageBirthday: DEFAULT_MESSAGES.birthday,
+          defaultQuoteValidDays: 15,
+        },
+      });
 
       // 6. Auditoria (actorId é FK para AdminUser, não User — usar null)
       await tx.globalAudit.create({

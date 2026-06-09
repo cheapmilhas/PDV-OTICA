@@ -100,8 +100,12 @@ export async function applyStockDebitInTx(
     );
 
     if (!stockResult.success) {
+      // Usa o code INSUFFICIENT_STOCK (não VALIDATION_ERROR genérico): assim o
+      // PDV reconhece a falha, mostra o toast "📦 Estoque insuficiente" e oferece
+      // a autorização do gerente. Antes caía no toast genérico e o usuário só via
+      // o erro no console, sem entender a causa.
       throw new AppError(
-        ERROR_CODES.VALIDATION_ERROR,
+        ERROR_CODES.INSUFFICIENT_STOCK,
         stockResult.error || "Estoque insuficiente",
         400
       );
