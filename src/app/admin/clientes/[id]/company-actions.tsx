@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { ArrowRightLeft, Ban, CheckCircle, CreditCard, Eye, Loader2, MoreVertical, RefreshCw, Trash2, XCircle } from "lucide-react";
+import { ArrowRightLeft, Ban, CheckCircle, CreditCard, Eye, Loader2, MoreVertical, RefreshCw, RotateCcw, Trash2, XCircle } from "lucide-react";
 
 interface CompanyActionsProps {
   companyId: string;
@@ -100,6 +100,23 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
     await handleAction("change_billing_cycle", { cycle: newCycle });
   }
 
+  async function handleResync() {
+    setOpen(false);
+    if (!confirm(`Re-sincronizar o setup de "${companyName}"?\n\nRe-aplica plano de contas, contas financeiras e templates de conciliação ao padrão atual. É seguro (não apaga dados nem mexe em saldos) — só cria o que falta.`)) return;
+    setLoading(true);
+    try {
+      const res = await fetch(`/api/admin/companies/${companyId}/resync`, { method: "POST" });
+      const data = await res.json();
+      if (!res.ok) { alert(data.error || "Erro ao re-sincronizar"); return; }
+      const c = data.data?.created || {};
+      alert(
+        `Setup re-sincronizado.\n\nCriados agora:\n• Plano de contas: ${c.chartOfAccounts ?? 0}\n• Contas financeiras: ${c.financeAccounts ?? 0}\n• Templates de conciliação: ${c.reconciliationTemplates ?? 0}`
+      );
+      router.refresh();
+    } catch { alert("Erro ao re-sincronizar"); }
+    finally { setLoading(false); }
+  }
+
   return (
     <div className="relative">
       <button
@@ -136,6 +153,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
             )}
             <div className="my-1 border-t border-gray-700" />
             <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={handleImpersonate} />
+            <ActionBtn icon={RotateCcw} label="Re-sincronizar setup" color="blue" onClick={handleResync} />
             <div className="my-1 border-t border-gray-700" />
             <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={() => handleAction("delete")} />
           </div>
