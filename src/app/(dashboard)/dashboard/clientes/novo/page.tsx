@@ -16,6 +16,7 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 function NovoClientePageContent() {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
+  const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
   const [formData, setFormData] = useState({
     personType: "PF",
     name: "",
@@ -40,8 +41,36 @@ function NovoClientePageContent() {
     referralSource: "",
   });
 
+  // Validação no cliente antes de enviar — dá feedback imediato sem ida ao servidor.
+  const validateForm = (): boolean => {
+    const errors: Record<string, string> = {};
+
+    if (!formData.name || formData.name.trim().length < 3) {
+      errors.name = "Nome deve ter no mínimo 3 caracteres";
+    }
+    if (formData.personType === "PJ" && !formData.cnpj) {
+      errors.cnpj = "CNPJ é obrigatório para Pessoa Jurídica";
+    }
+    if (formData.personType === "PJ" && formData.cnpj && formData.cnpj.length !== 14) {
+      errors.cnpj = "CNPJ deve conter 14 dígitos";
+    }
+    if (formData.personType === "PF" && formData.cpf && formData.cpf.length !== 11) {
+      errors.cpf = "CPF deve conter 11 dígitos";
+    }
+
+    setFieldErrors(errors);
+    return Object.keys(errors).length === 0;
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Valida e mostra erros por campo + toast. Não envia se inválido.
+    if (!validateForm()) {
+      toast.error("Verifique os campos destacados em vermelho.");
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -53,7 +82,18 @@ function NovoClientePageContent() {
 
       if (!res.ok) {
         const error = await res.json();
-        throw new Error(error.error?.message || "Erro ao criar cliente");
+        const details = (error.error?.details ?? []) as Array<{ field?: string; message?: string }>;
+        // Mapeia os erros por campo retornados pelo backend (Zod/Prisma) p/ destacar na UI.
+        if (details.length > 0) {
+          const mapped: Record<string, string> = {};
+          for (const d of details) {
+            if (d.field) mapped[d.field] = d.message || "Campo inválido";
+          }
+          setFieldErrors((prev) => ({ ...prev, ...mapped }));
+        }
+        // Mensagem do toast: prioriza o 1º detalhe (mais específico) sobre a genérica.
+        const message = details[0]?.message || error.error?.message || "Erro ao criar cliente";
+        throw new Error(message);
       }
 
       const { data: createdCustomer } = await res.json();
@@ -119,8 +159,15 @@ function NovoClientePageContent() {
                   id="name"
                   required
                   value={formData.name}
-                  onChange={(e) => setFormData({ ...formData, name: e.target.value })}
+                  onChange={(e) => {
+                    setFormData({ ...formData, name: e.target.value });
+                    setFieldErrors((p) => ({ ...p, name: "" }));
+                  }}
+                  className={fieldErrors.name ? "border-red-500" : ""}
                 />
+                {fieldErrors.name && (
+                  <p className="text-sm text-red-500">{fieldErrors.name}</p>
+                )}
               </div>
 
               {formData.personType === "PF" ? (
@@ -129,22 +176,38 @@ function NovoClientePageContent() {
                   <Input
                     id="cpf"
                     value={formData.cpf}
-                    onChange={(e) => setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") })}
+                    onChange={(e) => {
+                      setFormData({ ...formData, cpf: e.target.value.replace(/\D/g, "") });
+                      setFieldErrors((p) => ({ ...p, cpf: "" }));
+                    }}
                     maxLength={11}
                     placeholder="Apenas números"
+                    className={fieldErrors.cpf ? "border-red-500" : ""}
                   />
+                  {fieldErrors.cpf && (
+                    <p className="text-sm text-red-500">{fieldErrors.cpf}</p>
+                  )}
                 </div>
               ) : (
                 <>
                   <div className="space-y-2">
-                    <Label htmlFor="cnpj">CNPJ</Label>
+                    <Label htmlFor="cnpj">
+                      CNPJ <span className="text-red-500">*</span>
+                    </Label>
                     <Input
                       id="cnpj"
                       value={formData.cnpj}
-                      onChange={(e) => setFormData({ ...formData, cnpj: e.target.value.replace(/\D/g, "") })}
+                      onChange={(e) => {
+                        setFormData({ ...formData, cnpj: e.target.value.replace(/\D/g, "") });
+                        setFieldErrors((p) => ({ ...p, cnpj: "" }));
+                      }}
                       maxLength={14}
                       placeholder="Apenas números"
+                      className={fieldErrors.cnpj ? "border-red-500" : ""}
                     />
+                    {fieldErrors.cnpj && (
+                      <p className="text-sm text-red-500">{fieldErrors.cnpj}</p>
+                    )}
                   </div>
                   <div className="space-y-2">
                     <Label htmlFor="companyName">Razão Social</Label>

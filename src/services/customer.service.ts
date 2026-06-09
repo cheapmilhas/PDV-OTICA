@@ -42,6 +42,9 @@ function mapCustomerUniqueError(err: unknown): unknown {
   if (target.includes("cpf")) {
     return duplicateError("CPF já cadastrado nesta empresa", "cpf");
   }
+  if (target.includes("cnpj")) {
+    return duplicateError("CNPJ já cadastrado", "cnpj");
+  }
   return duplicateError("Registro duplicado", "customer");
 }
 

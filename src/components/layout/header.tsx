@@ -481,7 +481,13 @@ export function Header() {
             <DropdownMenuSeparator />
             <DropdownMenuItem
               className="text-destructive text-sm"
-              onClick={() => signOut({ callbackUrl: "/" })}
+              onClick={() =>
+                signOut({
+                  // URL absoluta no domínio atual evita o redirect para o
+                  // domínio antigo da Vercel (NextAuth resolveria baseUrl errado).
+                  callbackUrl: `${window.location.origin}/login`,
+                })
+              }
             >
               <LogOut className="mr-2 h-3.5 w-3.5" />
               Sair

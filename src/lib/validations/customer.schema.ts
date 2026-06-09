@@ -6,6 +6,11 @@ import { z } from "zod";
 const CPF_REGEX = /^\d{11}$/;
 
 /**
+ * Regex para validação de CNPJ (apenas números, 14 dígitos)
+ */
+const CNPJ_REGEX = /^\d{14}$/;
+
+/**
  * Regex para validação de telefone brasileiro
  * Aceita: (99) 99999-9999 ou 99999999999
  */
@@ -17,7 +22,10 @@ const PHONE_REGEX = /^(\(\d{2}\)\s?)?[\s9]?\d{4,5}-?\d{4}$/;
  * Campos obrigatórios: name
  * Campos opcionais: todos os outros
  */
-export const createCustomerSchema = z.object({
+const createCustomerObject = z.object({
+  // Tipo de pessoa (PF = física, PJ = jurídica)
+  personType: z.enum(["PF", "PJ"]).default("PF"),
+
   // Dados pessoais
   name: z.string()
     .min(3, "Nome deve ter no mínimo 3 caracteres")
@@ -25,6 +33,22 @@ export const createCustomerSchema = z.object({
 
   cpf: z.string()
     .regex(CPF_REGEX, "CPF inválido (deve conter 11 dígitos)")
+    .optional()
+    .or(z.literal("")),
+
+  // Dados de Pessoa Jurídica
+  cnpj: z.string()
+    .regex(CNPJ_REGEX, "CNPJ inválido (deve conter 14 dígitos)")
+    .optional()
+    .or(z.literal("")),
+
+  companyName: z.string()
+    .max(150, "Razão social deve ter no máximo 150 caracteres")
+    .optional()
+    .or(z.literal("")),
+
+  tradeName: z.string()
+    .max(150, "Nome fantasia deve ter no máximo 150 caracteres")
     .optional()
     .or(z.literal("")),
 
@@ -127,10 +151,25 @@ export const createCustomerSchema = z.object({
 });
 
 /**
+ * Schema de criação com regra condicional:
+ * Cliente Pessoa Jurídica (PJ) obriga CNPJ.
+ * O erro é anexado ao campo `cnpj` para a UI conseguir destacá-lo.
+ */
+export const createCustomerSchema = createCustomerObject.superRefine((data, ctx) => {
+  if (data.personType === "PJ" && (!data.cnpj || data.cnpj === "")) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      path: ["cnpj"],
+      message: "CNPJ é obrigatório para Pessoa Jurídica",
+    });
+  }
+});
+
+/**
  * Schema para atualização de cliente
  * Todos os campos são opcionais
  */
-export const updateCustomerSchema = createCustomerSchema.partial();
+export const updateCustomerSchema = createCustomerObject.partial();
 
 /**
  * Schema para query params de listagem de clientes
