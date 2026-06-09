@@ -137,8 +137,8 @@ export function PricingSection() {
 
         {/* Loading skeleton — no fake prices */}
         {plans.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end">
-            {[0, 1, 2].map((i) => (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
+            {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
                 className="rounded-2xl p-7 animate-pulse"
@@ -177,13 +177,13 @@ export function PricingSection() {
             ))}
           </div>
         ) : (
-          /* Pricing cards — asymmetric sizes, highlighted plan is taller */
+          /* Pricing cards — 4 planos: 2 col no tablet, 4 col no desktop, altura uniforme */
           <motion.div
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
             viewport={viewportConfig}
-            className="grid grid-cols-1 md:grid-cols-3 gap-5 items-end"
+            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch"
           >
             {plans.map((plan) => {
               const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
