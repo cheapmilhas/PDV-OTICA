@@ -6,7 +6,12 @@ const STORAGE_KEY = "exit-intent-shown-at";
 // Só reexibe o popup após esse período (evita perturbar o usuário a cada aba/visita)
 const COOLDOWN_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
 
+// Fallback em memória para localStorage indisponível/cheio. Evita os dois
+// extremos: reaparecer em loop (setItem falha) e sumir pra sempre (getItem falha).
+let shownInThisSession = false;
+
 function wasShownRecently(): boolean {
+  if (shownInThisSession) return true;
   try {
     const raw = localStorage.getItem(STORAGE_KEY);
     if (!raw) return false;
@@ -14,18 +19,22 @@ function wasShownRecently(): boolean {
     if (!Number.isFinite(shownAt)) return false;
     return Date.now() - shownAt < COOLDOWN_MS;
   } catch {
-    // Se localStorage estiver indisponível (modo privativo etc.), não bloqueia,
-    // mas também não trava: trata como "já mostrado" para não perturbar.
-    return true;
+    return shownInThisSession;
   }
 }
 
 function markShown(): void {
+  shownInThisSession = true;
   try {
     localStorage.setItem(STORAGE_KEY, String(Date.now()));
   } catch {
-    // ignora — sem persistência, o popup simplesmente poderá reaparecer
+    // sem persistência entre sessões, mas o flag de memória cobre a sessão atual
   }
+}
+
+// exposto só para teste
+export function __markShownForTest(): void {
+  markShown();
 }
 
 export function useExitIntent() {
