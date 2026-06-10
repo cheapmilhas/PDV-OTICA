@@ -31,14 +31,22 @@ export async function PATCH(request: Request) {
 
   try {
     const config = await updateAutoSyncConfig(parsed.data, admin.id);
-    await prisma.globalAudit.create({
-      data: {
-        actorType: "ADMIN_USER",
-        actorId: admin.id,
-        action: "AUTO_SYNC_TOGGLED",
-        metadata: { ...parsed.data, adminEmail: admin.email },
-      },
-    });
+    // Auditoria best-effort: a config JÁ mudou (e config.updatedBy registra quem);
+    // falha do audit não pode virar 500 mascarando um update bem-sucedido.
+    try {
+      await prisma.globalAudit.create({
+        data: {
+          actorType: "ADMIN_USER",
+          actorId: admin.id,
+          action: "AUTO_SYNC_TOGGLED",
+          metadata: { ...parsed.data, adminEmail: admin.email },
+        },
+      });
+    } catch (auditError) {
+      log.error("Falha ao auditar AUTO_SYNC_TOGGLED (config foi alterada)", {
+        error: auditError instanceof Error ? auditError.message : String(auditError),
+      });
+    }
     log.info("Auto-sync config alterada", { ...parsed.data, adminId: admin.id });
     return NextResponse.json({ success: true, data: config });
   } catch (error) {
