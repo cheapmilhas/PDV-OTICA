@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
   Settings, Package, UserCog, ScrollText, UserPlus, Ticket,
-  FileBarChart, UsersRound, Activity, Mail,
+  FileBarChart, UsersRound, Activity, Mail, RefreshCw,
 } from "lucide-react";
 
 const menuItems = [
@@ -46,6 +46,7 @@ const menuItems = [
       { href: "/admin/configuracoes/planos",  icon: Package,  label: "Planos",  exact: false },
       { href: "/admin/configuracoes/equipe",  icon: UserCog,  label: "Equipe",  exact: false },
       { href: "/admin/configuracoes/logs",    icon: ScrollText, label: "Logs",  exact: false },
+      { href: "/admin/configuracoes/sincronizacao", icon: RefreshCw, label: "Sincronização", exact: false },
       { href: "/admin/configuracoes",         icon: Settings, label: "Config",  exact: true  },
     ],
   },
