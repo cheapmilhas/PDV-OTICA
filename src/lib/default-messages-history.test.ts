@@ -1,6 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { DEFAULT_MESSAGES } from "./default-messages";
-import { classifyMessageValue } from "./default-messages-history";
+import { classifyMessageValue, HISTORICAL_DEFAULTS } from "./default-messages-history";
 
 describe("classifyMessageValue (B2.1)", () => {
   it("NULL/vazio → missing (vai preencher)", () => {
@@ -21,5 +21,17 @@ describe("classifyMessageValue (B2.1)", () => {
 
   it("texto próprio do cliente → custom (NUNCA toca)", () => {
     expect(classifyMessageValue("birthday", "Parabéns do jeito da minha ótica!")).toBe("custom");
+  });
+
+  it("undefined → missing", () => {
+    expect(classifyMessageValue("thankYou", undefined)).toBe("missing");
+  });
+
+  it("guarda de manutenção: nenhum default histórico pode ser igual ao default ATUAL", () => {
+    for (const key of Object.keys(DEFAULT_MESSAGES) as Array<keyof typeof DEFAULT_MESSAGES>) {
+      const current = DEFAULT_MESSAGES[key].trim();
+      const dupes = HISTORICAL_DEFAULTS[key].filter((h) => h.trim() === current);
+      expect(dupes, `HISTORICAL_DEFAULTS.${key} contém o default atual — remova`).toEqual([]);
+    }
   });
 });

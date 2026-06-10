@@ -9,13 +9,16 @@ export type MessageKey = keyof typeof DEFAULT_MESSAGES;
  * adicione o texto ANTIGO ao array do campo correspondente aqui. É assim que o
  * sincronizador automático distingue "default antigo intacto" (atualiza para o
  * novo) de "texto personalizado pela ótica" (nunca toca).
+ *
+ * Congelado de propósito: testes NÃO devem mutar este objeto — injetem o
+ * parâmetro `history` de classifyMessageValue ou usem vi.mock parcial.
  */
-export const HISTORICAL_DEFAULTS: Record<MessageKey, string[]> = {
-  thankYou: [],
-  quote: [],
-  reminder: [],
-  birthday: [],
-};
+export const HISTORICAL_DEFAULTS: Record<MessageKey, readonly string[]> = Object.freeze({
+  thankYou: Object.freeze([]),
+  quote: Object.freeze([]),
+  reminder: Object.freeze([]),
+  birthday: Object.freeze([]),
+});
 
 export type MessageClass = "missing" | "current-default" | "stale-default" | "custom";
 
@@ -30,7 +33,7 @@ export const MESSAGE_FIELD_BY_KEY = {
 export function classifyMessageValue(
   key: MessageKey,
   value: string | null | undefined,
-  history: Record<MessageKey, string[]> = HISTORICAL_DEFAULTS
+  history: Record<MessageKey, readonly string[]> = HISTORICAL_DEFAULTS
 ): MessageClass {
   if (value == null || value.trim() === "") return "missing";
   const v = value.trim();
