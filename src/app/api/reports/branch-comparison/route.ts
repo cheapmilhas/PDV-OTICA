@@ -4,6 +4,8 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
 import { startOfLocalMonth, startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 /**
  * GET /api/reports/branch-comparison
@@ -11,6 +13,8 @@ import { startOfLocalMonth, startOfLocalDay, endOfLocalDay } from "@/lib/date-ut
  */
 export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_SALES);
     await requireAuth();
     const companyId = await getCompanyId();
 

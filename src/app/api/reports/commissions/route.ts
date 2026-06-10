@@ -4,6 +4,8 @@ import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
 import { handleApiError } from "@/lib/error-handler";
 import { CommissionsService } from "@/services/reports/commissions.service";
 import { parseISO } from "date-fns";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 /**
  * GET /api/reports/commissions
@@ -11,6 +13,8 @@ import { parseISO } from "date-fns";
  */
 export async function GET(request: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     const companyId = await getCompanyId();
     const { searchParams } = request.nextUrl;
 

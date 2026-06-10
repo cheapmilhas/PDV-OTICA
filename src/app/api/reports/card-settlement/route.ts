@@ -3,9 +3,13 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 export async function GET(req: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     await requireAuth();
     const companyId = await getCompanyId();
     const { searchParams } = new URL(req.url);

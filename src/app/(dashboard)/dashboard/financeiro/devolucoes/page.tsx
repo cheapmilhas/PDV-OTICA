@@ -808,7 +808,9 @@ function DevolucoesPageContent() {
 
 export default function DevolucoesPage() {
   return (
-    <ProtectedRoute permission="financial.view">
+    // SEC-001: a tela inteira opera devoluções → exige sales.refund (GERENTE+/ADMIN),
+    // não mais o amplo financial.view (que CAIXA também possui).
+    <ProtectedRoute permission="sales.refund">
       <DevolucoesPageContent />
     </ProtectedRoute>
   );

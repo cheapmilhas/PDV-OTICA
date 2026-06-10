@@ -2,11 +2,15 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 const log = logger.child({ route: "reports/category-distribution" });
 
 export async function GET() {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_INVENTORY);
     const session = await auth();
     if (!session?.user?.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

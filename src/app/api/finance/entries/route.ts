@@ -5,6 +5,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { generateManualExpenseEntry } from "@/services/finance-entry.service";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export const GET = withPlanFeatureGuard(async (req: Request) => {
   try {
@@ -22,6 +23,12 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
     const branchId = searchParams.get("branchId");
 
     const { skip, take } = getPaginationParams(page, pageSize);
+
+    // SEC-004: se filtrar por filial, garante que ela pertence à empresa
+    // (403 explícito em vez de resultado vazio silencioso).
+    if (branchId && branchId !== "ALL") {
+      await validateBranchOwnership(branchId, companyId);
+    }
 
     const where: any = { companyId };
 
@@ -86,6 +93,12 @@ export const POST = withPlanFeatureGuard(async (req: Request) => {
       return handleApiError(
         new Error("description, amount, debitAccountCode e creditAccountCode são obrigatórios")
       );
+    }
+
+    // SEC-004: lançamento manual grava branchId vindo do body — valida posse
+    // antes de escrever (evita lançar em filial de outra empresa).
+    if (branchId) {
+      await validateBranchOwnership(branchId, companyId);
     }
 
     const entryId = await prisma.$transaction(async (tx) => {

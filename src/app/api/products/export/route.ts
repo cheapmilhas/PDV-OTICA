@@ -1,15 +1,23 @@
 import { NextResponse } from "next/server";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requireAuth, requireRole } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { logActivity } from "@/services/activity-log.service";
+import { ActorType } from "@prisma/client";
 import * as XLSX from "xlsx";
 
 /**
  * GET /api/products/export
- * Exporta todos os produtos em formato Excel
+ * Exporta todos os produtos em formato Excel.
+ *
+ * SEC-002: a planilha expõe custo/margem/preço de toda a base — dado comercial
+ * sensível. ADMIN-only e auditada (espelha customers/export). Antes só exigia
+ * estar logado: qualquer papel baixava a tabela inteira sem rastro.
  */
 export async function GET() {
   try {
+    const session = await requireAuth();
+    await requireRole(["ADMIN"]);
     const companyId = await getCompanyId();
 
     // Buscar todos os produtos da empresa
@@ -21,6 +29,17 @@ export async function GET() {
         supplier: { select: { name: true } },
       },
       orderBy: { name: "asc" },
+    });
+
+    // Auditoria: registra quem exportou a base de produtos (custos/margens) e quantos.
+    await logActivity({
+      companyId,
+      type: "DATA_UPDATED",
+      title: "Exportou a base de produtos (XLSX com custos e margens)",
+      detail: { count: products.length, resource: "products.export" },
+      actorId: session.user.id,
+      actorType: ActorType.ADMIN,
+      actorName: session.user.name ?? session.user.email ?? undefined,
     });
 
     // Preparar dados para exportação

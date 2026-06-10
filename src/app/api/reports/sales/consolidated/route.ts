@@ -3,6 +3,9 @@ import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { SalesConsolidatedService } from "@/services/reports/sales-consolidated.service";
 import { parseISO } from "date-fns";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 /**
  * GET /api/reports/sales/consolidated
@@ -10,6 +13,8 @@ import { parseISO } from "date-fns";
  */
 export async function GET(request: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_SALES);
     const companyId = await getCompanyId();
     const { searchParams } = request.nextUrl;
 
@@ -24,10 +29,17 @@ export async function GET(request: NextRequest) {
       );
     }
 
+    const branchId = searchParams.get("branchId") || undefined;
+
+    // SEC-004: valida posse da filial filtrada (403 explícito em vez de vazio).
+    if (branchId && branchId !== "ALL") {
+      await validateBranchOwnership(branchId, companyId);
+    }
+
     const filters = {
       startDate: parseISO(startDate),
       endDate: parseISO(endDate),
-      branchId: searchParams.get("branchId") || undefined,
+      branchId,
       sellerUserId: searchParams.get("sellerUserId") || undefined,
       paymentMethod: searchParams.get("paymentMethod") || undefined,
       status: searchParams.get("status") || undefined,

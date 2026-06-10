@@ -3,11 +3,15 @@ import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { logger } from "@/lib/logger";
 import { startOfLocalMonth } from "@/lib/date-utils";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 const log = logger.child({ route: "reports/payment-methods" });
 
 export async function GET() {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     const session = await auth();
     if (!session?.user?.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { AccountsPayableService } from "@/services/reports/accounts-payable.service";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 /**
  * GET /api/reports/financial/accounts-payable
@@ -9,6 +11,8 @@ import { AccountsPayableService } from "@/services/reports/accounts-payable.serv
  */
 export async function GET(request: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     const companyId = await getCompanyId();
     const { searchParams } = request.nextUrl;
 

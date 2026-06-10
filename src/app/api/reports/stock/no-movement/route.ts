@@ -2,6 +2,8 @@ import { NextRequest, NextResponse } from "next/server";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { NoMovementProductsService } from "@/services/reports/no-movement-products.service";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 /**
  * GET /api/reports/stock/no-movement
@@ -9,6 +11,8 @@ import { NoMovementProductsService } from "@/services/reports/no-movement-produc
  */
 export async function GET(request: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_INVENTORY);
     const companyId = await getCompanyId();
     const { searchParams } = request.nextUrl;
 

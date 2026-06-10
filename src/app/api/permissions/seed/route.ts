@@ -22,8 +22,9 @@ const PERMISSIONS = [
   { code: Permission.SALES_VIEW_ALL, name: PERMISSION_LABELS[Permission.SALES_VIEW_ALL], description: "Permite visualizar vendas de todos os vendedores", module: "sales", category: "Vendas", sortOrder: 3 },
   { code: Permission.SALES_VIEW_CANCELED, name: PERMISSION_LABELS[Permission.SALES_VIEW_CANCELED], description: "Permite visualizar vendas canceladas", module: "sales", category: "Vendas", sortOrder: 4 },
   { code: Permission.SALES_CANCEL, name: PERMISSION_LABELS[Permission.SALES_CANCEL], description: "Permite cancelar vendas já finalizadas", module: "sales", category: "Vendas", sortOrder: 5 },
-  { code: Permission.SALES_EDIT_SELLER, name: PERMISSION_LABELS[Permission.SALES_EDIT_SELLER], description: "Permite alterar o vendedor de uma venda", module: "sales", category: "Vendas", sortOrder: 6 },
-  { code: Permission.SALES_EDIT_DISCOUNT, name: PERMISSION_LABELS[Permission.SALES_EDIT_DISCOUNT], description: "Permite aplicar descontos em vendas", module: "sales", category: "Vendas", sortOrder: 7 },
+  { code: Permission.SALES_REFUND, name: PERMISSION_LABELS[Permission.SALES_REFUND], description: "Permite devolver/estornar vendas finalizadas", module: "sales", category: "Vendas", sortOrder: 6 },
+  { code: Permission.SALES_EDIT_SELLER, name: PERMISSION_LABELS[Permission.SALES_EDIT_SELLER], description: "Permite alterar o vendedor de uma venda", module: "sales", category: "Vendas", sortOrder: 7 },
+  { code: Permission.SALES_EDIT_DISCOUNT, name: PERMISSION_LABELS[Permission.SALES_EDIT_DISCOUNT], description: "Permite aplicar descontos em vendas", module: "sales", category: "Vendas", sortOrder: 8 },
 
   // ORÇAMENTOS
   { code: Permission.QUOTES_CREATE, name: PERMISSION_LABELS[Permission.QUOTES_CREATE], description: "Permite criar novos orçamentos", module: "quotes", category: "Orçamentos", sortOrder: 1 },
@@ -113,7 +114,7 @@ const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
   GERENTE: [
     // Vendas
     Permission.SALES_CREATE, Permission.SALES_VIEW, Permission.SALES_VIEW_ALL,
-    Permission.SALES_VIEW_CANCELED, Permission.SALES_CANCEL,
+    Permission.SALES_VIEW_CANCELED, Permission.SALES_CANCEL, Permission.SALES_REFUND,
     Permission.SALES_EDIT_SELLER, Permission.SALES_EDIT_DISCOUNT,
     // Orçamentos
     Permission.QUOTES_CREATE, Permission.QUOTES_VIEW, Permission.QUOTES_VIEW_ALL,

@@ -11,6 +11,7 @@ export enum Permission {
   SALES_VIEW_ALL = "sales.view_all", // Ver vendas de outros vendedores
   SALES_VIEW_CANCELED = "sales.view_canceled",
   SALES_CANCEL = "sales.cancel",
+  SALES_REFUND = "sales.refund", // Devolver/estornar venda finalizada
   SALES_EDIT_SELLER = "sales.edit_seller",
   SALES_EDIT_DISCOUNT = "sales.edit_discount",
 
@@ -107,6 +108,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.SALES_VIEW_ALL,
     Permission.SALES_VIEW_CANCELED,
     Permission.SALES_CANCEL,
+    Permission.SALES_REFUND,
     Permission.SALES_EDIT_SELLER,
     Permission.SALES_EDIT_DISCOUNT,
 
@@ -318,6 +320,7 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.SALES_VIEW_ALL]: "Visualizar todas as vendas",
   [Permission.SALES_VIEW_CANCELED]: "Visualizar vendas canceladas",
   [Permission.SALES_CANCEL]: "Cancelar vendas",
+  [Permission.SALES_REFUND]: "Devolver/estornar vendas",
   [Permission.SALES_EDIT_SELLER]: "Alterar vendedor da venda",
   [Permission.SALES_EDIT_DISCOUNT]: "Aplicar descontos",
 

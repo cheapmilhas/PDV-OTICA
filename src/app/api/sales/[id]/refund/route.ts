@@ -1,4 +1,6 @@
-import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 import { handleApiError, businessRuleError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { saleService } from "@/services/sale.service";
@@ -21,7 +23,9 @@ export const POST = withPlanFeatureGuard(async (
   { params }: { params: Promise<{ id: string }> }
 ) => {
   try {
-    await requireAuth();
+    // SEC-001: devolução de venda exige permissão sales.refund (GERENTE+ e ADMIN).
+    // Antes só exigia estar logado — qualquer papel revertia receita.
+    await requirePermission(Permission.SALES_REFUND);
     const companyId = await getCompanyId();
     const { id: saleId } = await params;
 

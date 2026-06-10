@@ -3,9 +3,13 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { resolveReportBranchId } from "@/lib/resolve-report-branch";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 export async function GET(request: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_SALES);
     await requireAuth();
     const { searchParams } = new URL(request.url);
     const branchId = await resolveReportBranchId(searchParams); // M3: respeita seletor

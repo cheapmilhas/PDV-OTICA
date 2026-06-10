@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
@@ -14,6 +15,11 @@ export const GET = withPlanFeatureGuard(async (request: Request) => {
     const endDate = searchParams.get("endDate");
     const status = searchParams.get("status");
     const branchId = searchParams.get("branchId");
+
+    // SEC-004: valida posse da filial filtrada (403 explícito em vez de vazio).
+    if (branchId && branchId !== "ALL") {
+      await validateBranchOwnership(branchId, companyId);
+    }
 
     const where: Record<string, unknown> = { companyId };
     if (startDate && endDate) {

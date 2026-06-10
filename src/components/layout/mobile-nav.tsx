@@ -61,7 +61,7 @@ const moreNav = [
   { icon: Receipt, label: "Lançamentos", href: "/dashboard/financeiro/lancamentos", permission: "financial.view", feature: "finance_entries" },
   { icon: Building2, label: "Contas Fin.", href: "/dashboard/financeiro/contas", permission: "financial.view", feature: "finance_accounts" },
   { icon: ListTree, label: "Plano Contas", href: "/dashboard/financeiro/plano-contas", permission: "financial.view", feature: "chart_of_accounts" },
-  { icon: RotateCcw, label: "Devoluções", href: "/dashboard/financeiro/devolucoes", permission: "financial.view", feature: "sales_refunds" },
+  { icon: RotateCcw, label: "Devoluções", href: "/dashboard/financeiro/devolucoes", permission: "sales.refund", feature: "sales_refunds" },
   { icon: RefreshCw, label: "Conciliação", href: "/dashboard/financeiro/conciliacao", permission: "financial.view", feature: "bank_reconciliation" },
   { icon: Boxes, label: "Lotes Estoque", href: "/dashboard/financeiro/lotes-estoque", permission: "financial.view", feature: "inventory_lots" },
   { icon: PieChart, label: "BI Analítico", href: "/dashboard/financeiro/bi", permission: "financial.view", feature: "bi_analytics" },

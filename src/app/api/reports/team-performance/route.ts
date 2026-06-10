@@ -5,11 +5,15 @@ import { logger } from "@/lib/logger";
 import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
 import { startOfLocalMonth } from "@/lib/date-utils";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 const log = logger.child({ route: "reports/team-performance" });
 
 export async function GET(request: Request) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     const session = await auth();
     if (!session?.user?.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });

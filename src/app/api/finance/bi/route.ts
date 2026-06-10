@@ -5,6 +5,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { validateBranchOwnership } from "@/lib/validate-branch";
 
 type Dimension = "brand" | "category" | "seller" | "paymentMethod" | "productType";
 
@@ -75,6 +76,11 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
     const startDate = searchParams.get("startDate");
     const endDate = searchParams.get("endDate");
     const branchId = searchParams.get("branchId");
+
+    // SEC-004: valida posse da filial filtrada (403 explícito em vez de vazio).
+    if (branchId && branchId !== "ALL") {
+      await validateBranchOwnership(branchId, companyId);
+    }
 
     if (!startDate || !endDate) {
       return handleApiError(new Error("startDate e endDate são obrigatórios"));

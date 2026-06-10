@@ -4,6 +4,8 @@ import { handleApiError } from "@/lib/error-handler";
 import { DREService } from "@/services/reports/dre.service";
 import { parseISO } from "date-fns";
 import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 /**
  * GET /api/reports/financial/dre
@@ -11,6 +13,8 @@ import { withPlanFeatureGuard } from "@/lib/with-plan-feature";
  */
 export const GET = withPlanFeatureGuard(async (request: Request) => {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     const companyId = await getCompanyId();
     const { searchParams } = (request as NextRequest).nextUrl;
 

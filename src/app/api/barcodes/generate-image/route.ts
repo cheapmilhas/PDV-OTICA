@@ -2,11 +2,29 @@ import { NextRequest, NextResponse } from "next/server"
 import bwipjs from "bwip-js"
 import QRCode from "qrcode"
 import { logger } from "@/lib/logger"
+import { requireAuth } from "@/lib/auth-helpers"
+import { handleApiError } from "@/lib/error-handler"
+import { checkRateLimit, clientIp } from "@/lib/rate-limit"
 
 const log = logger.child({ route: "barcodes/generate-image" })
 
 export async function POST(req: NextRequest) {
   try {
+    // SEC-005: rota antes era pública e sem rate-limit (vetor de DoS por
+    // geração de imagem). Agora exige login e limita por IP.
+    await requireAuth()
+
+    const limit = checkRateLimit(`barcode:${clientIp(req)}`, {
+      maxRequests: 60,
+      windowMs: 60 * 1000,
+    })
+    if (!limit.allowed) {
+      return NextResponse.json(
+        { error: "Muitas requisições. Tente novamente em instantes." },
+        { status: 429, headers: { "Retry-After": String(Math.ceil(limit.retryAfterMs / 1000)) } }
+      )
+    }
+
     const { code, type } = await req.json()
 
     if (!code || !type) {
@@ -49,6 +67,10 @@ export async function POST(req: NextRequest) {
 
     return NextResponse.json({ image: base64Image })
   } catch (error) {
+    // AppError (ex.: 401 do requireAuth) preserva o status correto via handleApiError.
+    if (error && typeof error === "object" && "statusCode" in error) {
+      return handleApiError(error)
+    }
     log.error("Erro ao gerar imagem do código", { error: error instanceof Error ? error.message : String(error) })
     return NextResponse.json(
       { error: "Erro ao gerar imagem do código" },

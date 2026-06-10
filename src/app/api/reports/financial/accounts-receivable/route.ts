@@ -3,6 +3,8 @@ import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { AccountsReceivableService } from "@/services/reports/accounts-receivable.service";
 import { parseISO } from "date-fns";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 /**
  * GET /api/reports/financial/accounts-receivable
@@ -10,6 +12,8 @@ import { parseISO } from "date-fns";
  */
 export async function GET(request: NextRequest) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_FINANCIAL);
     const companyId = await getCompanyId();
     const { searchParams } = request.nextUrl;
 

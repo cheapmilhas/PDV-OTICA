@@ -262,7 +262,7 @@ const menuItems: MenuSection[] = [
         name: "Devoluções",
         href: "/dashboard/financeiro/devolucoes",
         icon: RotateCcw,
-        permission: "financial.view",
+        permission: "sales.refund", // SEC-001: só GERENTE+/ADMIN
         feature: "sales_refunds"
       },
       {

@@ -6,11 +6,15 @@ import { resolveReportBranchFilter } from "@/lib/resolve-report-branch";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 import { subMonths } from "date-fns";
 import { handleApiError } from "@/lib/error-handler";
+import { requirePermission } from "@/lib/auth-permissions";
+import { Permission } from "@/lib/permissions";
 
 const log = logger.child({ route: "reports/sales-evolution" });
 
 export async function GET(request: Request) {
   try {
+    // SEC-003: relatório exige permissão.
+    await requirePermission(Permission.REPORTS_SALES);
     const session = await auth();
     if (!session?.user?.companyId) {
       return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
