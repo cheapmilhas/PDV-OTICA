@@ -157,7 +157,9 @@ export async function resyncCompanySetup(
     });
     before = await countFinance(companyId);
     await prisma.$transaction(async (tx) => {
-      await setupCompanyFinance(tx, companyId, branch?.id);
+      // Regra de negócio aprovada pelo dono: o resync "só ADICIONA o que falta;
+      // respeita 100% o que a empresa editou" — por isso additiveOnly.
+      await setupCompanyFinance(tx, companyId, branch?.id, { additiveOnly: true });
     });
     after = await countFinance(companyId);
     created = {

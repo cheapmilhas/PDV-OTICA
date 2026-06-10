@@ -9,7 +9,9 @@ import { logger } from "@/lib/logger";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
-// Loop sequencial por empresa: garante folga de timeout mesmo com a base crescendo.
+// 300s é válido em TODOS os planos da Vercel com Fluid Compute (runtime padrão
+// desde 2025; Hobby vai até 800s). Loop sequencial por empresa: folga garantida
+// mesmo com a base crescendo.
 export const maxDuration = 300;
 
 const log = logger.child({ route: "cron/sync-all-companies" });

@@ -125,8 +125,8 @@ describe("POST /api/admin/companies/[id]/resync", () => {
 
     expect(res.status).toBe(200);
     expect(setupCompanyFinance).toHaveBeenCalledOnce();
-    // passa o tx e o branchId resolvido
-    expect(setupCompanyFinance).toHaveBeenCalledWith({}, "co-1", "br-1");
+    // passa o tx, o branchId resolvido e o modo aditivo (nunca toca registro existente)
+    expect(setupCompanyFinance).toHaveBeenCalledWith({}, "co-1", "br-1", { additiveOnly: true });
     expect(json.data.created).toEqual({
       chartOfAccounts: 0,
       financeAccounts: 0,

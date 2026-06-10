@@ -106,7 +106,7 @@ describe("resyncCompanySetup", () => {
   it("modo REAL: roda setupCompanyFinance na transação e reporta created via before/after", async () => {
     chartCount.mockResolvedValueOnce(26).mockResolvedValueOnce(28);
     const r = await resyncCompanySetup("co-1", { actorType: "ADMIN_USER", actorId: "adm-1" });
-    expect(setupCompanyFinance).toHaveBeenCalledWith({}, "co-1", "br-1");
+    expect(setupCompanyFinance).toHaveBeenCalledWith({}, "co-1", "br-1", { additiveOnly: true });
     expect(r?.created.chartOfAccounts).toBe(2);
     expect(r?.changed).toBe(true);
     expect(auditCreate.mock.calls[0][0].data.action).toBe("COMPANY_RESYNCED");

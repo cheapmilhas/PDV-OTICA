@@ -75,12 +75,20 @@ export const FINANCE_ACCOUNTS_SEED: FinanceAccountSeed[] = [
 /**
  * Configura o módulo financeiro para uma empresa.
  * IDEMPOTENTE — usa upsert, seguro para rodar múltiplas vezes.
+ *
+ * `opts.additiveOnly` (default false): quando true, NUNCA toca registros
+ * existentes (todos os upserts usam `update: {}`) — só cria o que falta.
+ * Usado pelo resync/auto-sync para respeitar personalizações do cliente.
+ * O onboarding (criação de empresa) mantém o comportamento legado.
  */
 export async function setupCompanyFinance(
   tx: TransactionClient,
   companyId: string,
-  branchId?: string
+  branchId?: string,
+  opts?: { additiveOnly?: boolean }
 ): Promise<void> {
+  const additiveOnly = opts?.additiveOnly ?? false;
+
   // 1. Criar plano de contas (ordem importa — pais antes de filhos)
   const accountIdMap = new Map<string, string>();
 
@@ -89,15 +97,19 @@ export async function setupCompanyFinance(
       ? accountIdMap.get(account.parentCode) ?? null
       : null;
 
+    // Mesmo com update: {}, o upsert retorna o registro existente — o
+    // accountIdMap continua recebendo o id certo para o parentId dos filhos.
     const upserted = await tx.chartOfAccounts.upsert({
       where: {
         companyId_code: { companyId, code: account.code },
       },
-      update: {
-        name: account.name,
-        kind: account.kind,
-        parentId,
-      },
+      update: additiveOnly
+        ? {}
+        : {
+            name: account.name,
+            kind: account.kind,
+            parentId,
+          },
       create: {
         companyId,
         code: account.code,
@@ -117,10 +129,12 @@ export async function setupCompanyFinance(
       where: {
         companyId_name: { companyId, name: fa.name },
       },
-      update: {
-        type: fa.type,
-        isDefault: fa.isDefault,
-      },
+      update: additiveOnly
+        ? {}
+        : {
+            type: fa.type,
+            isDefault: fa.isDefault,
+          },
       create: {
         companyId,
         branchId: branchId ?? undefined,
@@ -133,5 +147,5 @@ export async function setupCompanyFinance(
   }
 
   // 3. Criar templates de conciliação padrão
-  await setupReconciliationDefaults(tx, companyId);
+  await setupReconciliationDefaults(tx, companyId, opts);
 }

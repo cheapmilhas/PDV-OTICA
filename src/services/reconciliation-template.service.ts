@@ -95,24 +95,33 @@ export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
 /**
  * Configura templates padrão de conciliação para uma empresa.
  * IDEMPOTENTE — usa upsert.
+ *
+ * `opts.additiveOnly` (default false): quando true, NUNCA toca templates
+ * existentes (`update: {}`) — só cria os que faltam. Usado pelo resync/auto-sync
+ * para respeitar personalizações do cliente.
  */
 export async function setupReconciliationDefaults(
   tx: TransactionClient,
-  companyId: string
+  companyId: string,
+  opts?: { additiveOnly?: boolean }
 ): Promise<void> {
+  const additiveOnly = opts?.additiveOnly ?? false;
+
   for (const tpl of DEFAULT_TEMPLATES) {
     await tx.reconciliationTemplate.upsert({
       where: {
         companyId_name: { companyId, name: tpl.name },
       },
-      update: {
-        acquirerName: tpl.acquirerName,
-        columnMapping: tpl.columnMapping as any,
-        delimiter: tpl.delimiter,
-        dateFormat: tpl.dateFormat,
-        decimalSep: tpl.decimalSep,
-        skipRows: tpl.skipRows,
-      },
+      update: additiveOnly
+        ? {}
+        : {
+            acquirerName: tpl.acquirerName,
+            columnMapping: tpl.columnMapping as any,
+            delimiter: tpl.delimiter,
+            dateFormat: tpl.dateFormat,
+            decimalSep: tpl.decimalSep,
+            skipRows: tpl.skipRows,
+          },
       create: {
         companyId,
         name: tpl.name,
