@@ -444,6 +444,7 @@ model Customer {
   accessLogs         CustomerAccessLog[]
 
   @@unique([companyId, cpf])
+  @@unique([companyId, cnpj])
   @@index([companyId, name])
   @@index([companyId, phone])
   @@index([companyId, email])
