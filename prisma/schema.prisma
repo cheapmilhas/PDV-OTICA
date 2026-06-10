@@ -4020,6 +4020,19 @@ enum InvoicePaymentMethod {
   MANUAL
 }
 
+// Config global da sincronização automática de setup (Fase B). Registro ÚNICO
+// (id fixo "singleton" garantido por upsert no service — Prisma não aceita
+// literal em @default de @id). Entregue DESLIGADO e em modo SIMULAÇÃO.
+model AutoSyncConfig {
+  id             String    @id
+  isEnabled      Boolean   @default(false)
+  dryRun         Boolean   @default(true)
+  lastRunAt      DateTime?
+  lastRunSummary Json?
+  updatedBy      String?
+  updatedAt      DateTime  @updatedAt
+}
+
 model PlanInterest {
   id          String   @id @default(cuid())
   planSlug    String
