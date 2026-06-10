@@ -949,6 +949,9 @@ export class QuoteService {
         sale: { id: sale.id, branchId, companyId },
         items: quote.items.map((i) => ({ productId: i.productId, qty: i.qty })),
         userId,
+        // A5: propaga o override do gerente — se o estoque mudou entre o PDV e a
+        // conversão, o gerente pode autorizar a venda negativa (espelha sale.service).
+        allowNegative: overrideAllows(override, "INSUFFICIENT_STOCK"),
       });
 
       // 9.4. SalePayments + auto-fee + CashMovement (filtrado IN_CASH) + AR + CR (helper)
