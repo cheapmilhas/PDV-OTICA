@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { PaymentMethod } from "@prisma/client";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
+import { calculateTotals, itemLineTotal } from "@/lib/sale-totals";
 
 /**
  * Schemas de validação para Vendas (PDV)
@@ -201,14 +202,19 @@ export function sanitizeSaleDTO(
 }
 
 /**
- * Helper para calcular total de um item
+ * Helper para calcular total de um item.
+ * TEC-06: delega ao helper único sale-totals (decimal.js).
  */
 export function calculateItemTotal(item: SaleItemDTO): number {
-  return item.qty * item.unitPrice - (item.discount || 0);
+  return itemLineTotal({ qty: item.qty, unitPrice: item.unitPrice, discount: item.discount });
 }
 
 /**
- * Helper para calcular total da venda
+ * Helper para calcular total da venda.
+ * TEC-06: delega ao helper único. NOTA: por compatibilidade, o campo `total`
+ * aqui já vem líquido de cashback (totalAfterCashback) — semântica histórica
+ * deste helper, preservada. O sale.service usa total e totalAfterCashback
+ * separadamente direto do calculateTotals.
  */
 export function calculateSaleTotal(items: SaleItemDTO[], discount = 0, cashbackUsed = 0): {
   subtotal: number;
@@ -216,12 +222,16 @@ export function calculateSaleTotal(items: SaleItemDTO[], discount = 0, cashbackU
   cashbackUsed: number;
   total: number;
 } {
-  const subtotal = items.reduce((sum, item) => sum + calculateItemTotal(item), 0);
-  return {
-    subtotal,
+  const t = calculateTotals({
+    items: items.map((i) => ({ qty: i.qty, unitPrice: i.unitPrice, discount: i.discount })),
     discount,
     cashbackUsed,
-    total: subtotal - discount - cashbackUsed,
+  });
+  return {
+    subtotal: t.subtotal,
+    discount: t.discount,
+    cashbackUsed: t.cashbackUsed,
+    total: t.totalAfterCashback,
   };
 }
 

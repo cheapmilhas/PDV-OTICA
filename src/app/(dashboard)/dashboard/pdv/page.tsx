@@ -28,6 +28,7 @@ import {
   Tag,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { calculateTotals } from "@/lib/sale-totals";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
 import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
 import { ManagerApprovalModal } from "@/components/pdv/manager-approval-modal";
@@ -577,13 +578,17 @@ function PDVPage() {
     return item.discountValue; // FIXED
   };
 
-  const calcularSubtotal = () => {
-    return carrinho.reduce((acc, item) => {
-      const preco = item.customPrice || item.salePrice;
-      const descontoItem = calcularDescontoItem(item);
-      return acc + (preco * item.quantity) - descontoItem;
-    }, 0);
-  };
+  // TEC-06: a soma do subtotal usa o helper único (decimal.js), com o desconto
+  // de cada item já resolvido por calcularDescontoItem (que trata % vs R$ — algo
+  // específico da UI do PDV). Mantém a feature de % por item e unifica a soma.
+  const calcularSubtotal = () =>
+    calculateTotals({
+      items: carrinho.map((item) => ({
+        qty: item.quantity,
+        unitPrice: item.customPrice || item.salePrice,
+        discount: calcularDescontoItem(item),
+      })),
+    }).subtotal;
 
   const subtotal = calcularSubtotal();
 
@@ -603,7 +608,12 @@ function PDVPage() {
   };
 
   const desconto = calcularDescontoVenda();
-  const total = Math.round((subtotal - desconto) * 100) / 100;
+  // TEC-06: total via helper único (subtotal já é o líquido dos itens; aplica o
+  // desconto da venda já resolvido em R$). Mesmo arredondamento decimal do backend.
+  const total = calculateTotals({
+    items: [{ qty: 1, unitPrice: subtotal }],
+    discount: desconto,
+  }).total;
   const totalItens = carrinho.reduce((acc, item) => acc + item.quantity, 0);
 
   // Venda com lente gera Ordem de Serviço — e OS exige cliente vinculado.

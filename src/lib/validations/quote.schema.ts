@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { QuoteStatus, QuoteItemType } from "@prisma/client";
 import { paymentSchema, managerOverrideSchema, type PaymentDTO } from "./sale.schema";
+import { calculateTotals, itemLineTotal } from "@/lib/sale-totals";
 
 /**
  * Schema para dados de prescrição do olho
@@ -138,14 +139,17 @@ export const updateQuoteStatusSchema = z.object({
 export type UpdateQuoteStatusDTO = z.infer<typeof updateQuoteStatusSchema>;
 
 /**
- * Helper para calcular total de um item
+ * Helper para calcular total de um item.
+ * TEC-06: delega ao helper único sale-totals (decimal.js). QuoteItem usa
+ * `quantity`; o helper usa `qty`.
  */
 export function calculateQuoteItemTotal(item: QuoteItemDTO): number {
-  return item.quantity * item.unitPrice - item.discount;
+  return itemLineTotal({ qty: item.quantity, unitPrice: item.unitPrice, discount: item.discount });
 }
 
 /**
- * Helper para calcular totais do orçamento
+ * Helper para calcular totais do orçamento.
+ * TEC-06: delega ao helper único (calculateTotals). Paridade comprovada.
  */
 export function calculateQuoteTotals(
   items: QuoteItemDTO[],
@@ -156,20 +160,15 @@ export function calculateQuoteTotals(
   discountTotal: number;
   total: number;
 } {
-  const subtotal = items.reduce((sum, item) => {
-    return sum + calculateQuoteItemTotal(item);
-  }, 0);
-
-  // Aplicar desconto percentual se houver
-  let finalDiscount = discountTotal;
-  if (discountPercent > 0) {
-    finalDiscount = subtotal * (discountPercent / 100);
-  }
-
+  const t = calculateTotals({
+    items: items.map((i) => ({ qty: i.quantity, unitPrice: i.unitPrice, discount: i.discount })),
+    discount: discountTotal,
+    discountPercent,
+  });
   return {
-    subtotal,
-    discountTotal: finalDiscount,
-    total: subtotal - finalDiscount,
+    subtotal: t.subtotal,
+    discountTotal: t.discount,
+    total: t.total,
   };
 }
 

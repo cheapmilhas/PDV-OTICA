@@ -17,6 +17,7 @@ import {
 import { Checkbox } from "@/components/ui/checkbox";
 import { ArrowLeft, Plus, Trash2, Save, Eye, ChevronDown, Package, Search, X, User } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { calculateTotals } from "@/lib/sale-totals";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
 import { useUnsavedChangesWarning } from "@/hooks/use-unsaved-changes-warning";
@@ -208,20 +209,18 @@ function NovoOrcamentoPage() {
     toast.success("Item removido");
   };
 
-  const calculateSubtotal = () => {
-    return items.reduce((sum, item) => {
-      return sum + item.quantity * item.unitPrice - item.discount;
-    }, 0);
-  };
+  // TEC-06: usa o helper único (mesma fórmula do backend, decimal.js).
+  const calculateSubtotal = () =>
+    calculateTotals({
+      items: items.map((i) => ({ qty: i.quantity, unitPrice: i.unitPrice, discount: i.discount })),
+    }).subtotal;
 
-  const calculateTotal = () => {
-    const subtotal = calculateSubtotal();
-    let discount = discountTotal;
-    if (discountPercent > 0) {
-      discount = subtotal * (discountPercent / 100);
-    }
-    return subtotal - discount;
-  };
+  const calculateTotal = () =>
+    calculateTotals({
+      items: items.map((i) => ({ qty: i.quantity, unitPrice: i.unitPrice, discount: i.discount })),
+      discount: discountTotal,
+      discountPercent,
+    }).total;
 
   const handleSave = async () => {
     if (!customerName && !customerId) {

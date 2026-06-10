@@ -25,6 +25,7 @@ import {
   reverseCashbackForSaleInTx,
 } from "@/services/sale-side-effects.service";
 import { getProductPrice } from "@/lib/product-price";
+import { calculateTotals, itemLineTotal } from "@/lib/sale-totals";
 import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
 import { SystemRuleService } from "@/services/system-rule.service";
 
@@ -296,12 +297,10 @@ export class SaleService {
       );
     }
 
-    // Calcular total dos itens
-    let subtotal = 0;
-    for (const item of items) {
-      const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
-      subtotal += itemTotal;
-    }
+    // TEC-06/BUG-02: cálculo via helper único (decimal.js). Paridade comprovada
+    // com a fórmula float anterior (ver sale-totals.test.ts).
+    const totals = calculateTotals({ items, discount, cashbackUsed });
+    const subtotal = totals.subtotal;
 
     // Validação: desconto não pode ser maior que o subtotal
     if (discount > subtotal) {
@@ -312,7 +311,7 @@ export class SaleService {
       );
     }
 
-    const total = subtotal - discount;
+    const total = totals.total;
 
     // Validação: cashback não pode ser maior que o total
     if (cashbackUsed > total) {
@@ -343,7 +342,7 @@ export class SaleService {
       }
     }
 
-    const totalAfterCashback = total - cashbackUsed;
+    const totalAfterCashback = totals.totalAfterCashback;
 
     // Validação: soma de pagamentos = total após cashback
     const paymentTotal = payments.reduce((sum, p) => sum + p.amount, 0);
@@ -660,7 +659,7 @@ export class SaleService {
       // Agora: 1 round-trip via createMany — em vendas com 5+ itens reduz
       // ~80% do tempo na fase de criação.
       const saleItemsData = items.map((item) => {
-        const itemTotal = item.qty * item.unitPrice - (item.discount || 0);
+        const itemTotal = itemLineTotal(item);
         let itemCostPrice = 0;
         if (item.productId) {
           if (!costMap.has(item.productId)) {
