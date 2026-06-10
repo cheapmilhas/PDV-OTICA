@@ -196,14 +196,16 @@ export async function resyncCompanySetup(
   return { companyId, companyName: company.name, changed, dryRun, before, after, created, messages };
 }
 
-export interface SyncAllResult {
+// `type` (não `interface`): aliases de objeto ganham index signature implícita,
+// o que torna SyncAllResult atribuível ao tipo Json do Prisma sem cast.
+export type SyncAllResult = {
   skipped: boolean;
   dryRun?: boolean;
   total?: number;
   changed?: number;
   unchanged?: number;
   errors?: number;
-}
+};
 
 /**
  * Orquestrador do cron: sincroniza TODAS as empresas ativas, isolando falhas
@@ -257,7 +259,7 @@ export async function syncAllCompanies(): Promise<SyncAllResult> {
 
   await prisma.autoSyncConfig.update({
     where: { id: "singleton" },
-    data: { lastRunAt: new Date(), lastRunSummary: summary as object },
+    data: { lastRunAt: new Date(), lastRunSummary: summary },
   });
 
   return summary;
