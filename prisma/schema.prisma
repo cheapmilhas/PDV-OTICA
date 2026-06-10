@@ -444,7 +444,11 @@ model Customer {
   accessLogs         CustomerAccessLog[]
 
   @@unique([companyId, cpf])
-  @@unique([companyId, cnpj])
+  // cnpj: único POR EMPRESA via índice PARCIAL (WHERE cnpj IS NOT NULL) criado na
+  // migration 20260609190000_customer_cnpj_unique_partial — NÃO declarado como
+  // @@unique aqui de propósito (mesmo padrão de email/User.email), senão o Prisma
+  // esperaria um índice completo (Customer_companyId_cnpj_key) e acusaria drift.
+  // Aplicação trata P2002 + findFirst preventivo em customer.service.ts.
   @@index([companyId, name])
   @@index([companyId, phone])
   @@index([companyId, email])
