@@ -1,12 +1,15 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
+import { DEFAULT_MESSAGES } from "@/lib/default-messages";
 
 const getAdminSession = vi.fn();
 vi.mock("@/lib/admin-session", () => ({ getAdminSession: () => getAdminSession() }));
 
 const setupCompanyFinance = vi.fn();
-vi.mock("@/services/finance-setup.service", () => ({
-  setupCompanyFinance: (...a: unknown[]) => setupCompanyFinance(...a),
-}));
+// Mock PARCIAL: o service de resync importa também os seeds (CHART_OF_ACCOUNTS_SEED etc.)
+vi.mock("@/services/finance-setup.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/finance-setup.service")>();
+  return { ...actual, setupCompanyFinance: (...a: unknown[]) => setupCompanyFinance(...a) };
+});
 
 vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ info: vi.fn(), error: vi.fn() }) },
@@ -32,13 +35,29 @@ let chartCount = makeCounter("chartOfAccounts");
 let financeCount = makeCounter("financeAccount");
 let templateCount = makeCounter("reconciliationTemplate");
 
+// Settings completos com os defaults ATUAIS → sync de mensagens é no-op nos testes.
+const fullSettings = {
+  messageThankYou: DEFAULT_MESSAGES.thankYou,
+  messageQuote: DEFAULT_MESSAGES.quote,
+  messageReminder: DEFAULT_MESSAGES.reminder,
+  messageBirthday: DEFAULT_MESSAGES.birthday,
+};
+const settingsFindUnique = vi.fn(async (..._a: unknown[]) => fullSettings);
+const settingsCreate = vi.fn();
+const settingsUpdate = vi.fn();
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     company: { findUnique: (...a: unknown[]) => companyFindUnique(...a) },
     branch: { findFirst: (...a: unknown[]) => branchFindFirst(...a) },
-    chartOfAccounts: { count: () => chartCount() },
-    financeAccount: { count: () => financeCount() },
-    reconciliationTemplate: { count: () => templateCount() },
+    chartOfAccounts: { count: () => chartCount(), findMany: vi.fn(async () => []) },
+    financeAccount: { count: () => financeCount(), findMany: vi.fn(async () => []) },
+    reconciliationTemplate: { count: () => templateCount(), findMany: vi.fn(async () => []) },
+    companySettings: {
+      findUnique: (...a: unknown[]) => settingsFindUnique(...a),
+      create: (...a: unknown[]) => settingsCreate(...a),
+      update: (...a: unknown[]) => settingsUpdate(...a),
+    },
     globalAudit: { create: (...a: unknown[]) => globalAuditCreate(...a) },
     // $transaction repassa um "tx" (aqui o próprio objeto) para o callback.
     $transaction: async (fn: (tx: unknown) => Promise<unknown>) => fn({}),

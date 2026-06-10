@@ -15,7 +15,7 @@ interface DefaultTemplate {
   skipRows: number;
 }
 
-const DEFAULT_TEMPLATES: DefaultTemplate[] = [
+export const DEFAULT_TEMPLATES: DefaultTemplate[] = [
   {
     name: "Stone Padrão",
     acquirerName: "Stone",

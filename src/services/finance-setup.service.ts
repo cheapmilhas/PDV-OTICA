@@ -13,7 +13,7 @@ interface ChartAccountSeed {
   parentCode?: string;
 }
 
-const CHART_OF_ACCOUNTS_SEED: ChartAccountSeed[] = [
+export const CHART_OF_ACCOUNTS_SEED: ChartAccountSeed[] = [
   // 1. Ativo
   { code: "1", name: "Ativo", kind: "ASSET" },
   { code: "1.1", name: "Ativo Circulante", kind: "ASSET", parentCode: "1" },
@@ -65,7 +65,7 @@ interface FinanceAccountSeed {
   isDefault: boolean;
 }
 
-const FINANCE_ACCOUNTS_SEED: FinanceAccountSeed[] = [
+export const FINANCE_ACCOUNTS_SEED: FinanceAccountSeed[] = [
   { name: "Caixa", type: "CASH", isDefault: true },
   { name: "PIX", type: "PIX", isDefault: false },
   { name: "Conta Bancária", type: "BANK", isDefault: false },
