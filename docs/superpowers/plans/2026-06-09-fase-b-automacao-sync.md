@@ -437,6 +437,28 @@ describe("resyncCompanySetup", () => {
     expect(r?.changed).toBe(false);
     expect(auditCreate).not.toHaveBeenCalled();
   });
+
+  it("mensagens: ATUALIZA default antigo intacto (B2.1 fio completo)", async () => {
+    // simula um default histórico registrado: o texto antigo deve ser atualizado
+    // para o default atual. Requer mockar o history — usar vi.mock parcial de
+    // @/lib/default-messages-history com HISTORICAL_DEFAULTS contendo o texto antigo,
+    // OU (mais simples) usar vi.spyOn em HISTORICAL_DEFAULTS se for objeto mutável:
+    // HISTORICAL_DEFAULTS.quote.push("Texto default antigo v1") + restaurar no fim.
+    const { HISTORICAL_DEFAULTS } = await import("@/lib/default-messages-history");
+    HISTORICAL_DEFAULTS.quote.push("Texto default antigo v1");
+    try {
+      settingsFindUnique.mockResolvedValue({
+        ...fullSettings,
+        messageQuote: "Texto default antigo v1", // default antigo intacto → atualiza
+      });
+      const r = await resyncCompanySetup("co-1", { actorType: "SYSTEM" });
+      expect(r?.messages.updated).toEqual(["quote"]);
+      const patch = settingsUpdate.mock.calls[0][0].data;
+      expect(patch.messageQuote).toBe(DEFAULT_MESSAGES.quote);
+    } finally {
+      HISTORICAL_DEFAULTS.quote.pop(); // restaura o estado do módulo
+    }
+  });
 });
 ```
 
@@ -772,7 +794,18 @@ export async function POST(
 }
 ```
 
-- [ ] **Step 7: Atualizar os mocks do teste do endpoint.** Em `route.test.ts`, o service real roda com o prisma mockado — o mock precisa ganhar `companySettings` (retornando settings completos = defaults atuais, para não gerar mudança de mensagens) e `findMany` nos 3 models financeiros. Adicionar ao `vi.mock("@/lib/prisma")` existente:
+- [ ] **Step 7: Atualizar os mocks do teste do endpoint.** Em `route.test.ts`, o service real roda com o prisma mockado. DUAS mudanças obrigatórias:
+
+**(a) O mock de `finance-setup.service` DEVE virar parcial via `importOriginal`** — o novo service importa também os seeds (`CHART_OF_ACCOUNTS_SEED`/`FINANCE_ACCOUNTS_SEED`) desse módulo; um mock que só define `setupCompanyFinance` quebraria se os seeds forem acessados:
+
+```typescript
+vi.mock("@/services/finance-setup.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/finance-setup.service")>();
+  return { ...actual, setupCompanyFinance: (...a: unknown[]) => setupCompanyFinance(...a) };
+});
+```
+
+**(b) O mock do prisma precisa ganhar `companySettings`** (retornando settings completos = defaults atuais, para não gerar mudança de mensagens) e `findMany` nos 3 models financeiros. Adicionar ao `vi.mock("@/lib/prisma")` existente:
 
 ```typescript
 companySettings: {
@@ -787,6 +820,10 @@ companySettings: {
 },
 ```
 (+ `import { DEFAULT_MESSAGES } from "@/lib/default-messages";` e `findMany: vi.fn(async () => [])` em chartOfAccounts/financeAccount/reconciliationTemplate). **Os 5 asserts existentes devem continuar passando sem alteração de expectativa** (401/403/404, idempotência created=0, criados+auditoria `COMPANY_RESYNCED`). Se um assert falhar, o comportamento divergiu — corrigir o SERVICE, não o assert.
+
+> **Mudanças de comportamento conscientes (documentar na msg de commit):**
+> 1. O endpoint manual deixa de auditar resync SEM mudança (antes auditava sempre; agora o service audita só quando `changed=true` — menos ruído no GlobalAudit).
+> 2. A spec B4 menciona GET/PATCH; implementamos só PATCH — a tela lê a config server-side direto pelo service (YAGNI, funcionalmente equivalente).
 
 - [ ] **Step 8:** Rodar `./node_modules/.bin/vitest run "src/app/api/admin/companies/[id]/resync/route.test.ts" src/services/company-resync.service.test.ts` → PASS (10 testes). tsc → 0 erros.
 
@@ -926,6 +963,23 @@ export async function GET(request: Request) {
 import { syncAllCompanies } from "./company-resync.service";
 
 describe("syncAllCompanies", () => {
+  // ⚠️ beforeEach PRÓPRIO e completo — NÃO depender do beforeEach do describe
+  // anterior (vi.clearAllMocks não limpa mockResolvedValue; herdar implementações
+  // tornaria estes testes dependentes de ordem de execução).
+  beforeEach(() => {
+    vi.clearAllMocks();
+    configUpsert.mockResolvedValue({ id: "singleton", isEnabled: true, dryRun: false });
+    configUpdate.mockResolvedValue({});
+    companyFindMany.mockResolvedValue([]);
+    companyFindUnique.mockResolvedValue({ id: "co-x", name: "X" });
+    branchFindFirst.mockResolvedValue({ id: "br-1" });
+    chartCount.mockResolvedValue(28);
+    financeCount.mockResolvedValue(4);
+    templateCount.mockResolvedValue(4);
+    settingsFindUnique.mockResolvedValue(fullSettings); // sem mudança de mensagens
+    auditCreate.mockResolvedValue({});
+  });
+
   it("desligado → no-op (não consulta empresas)", async () => {
     configUpsert.mockResolvedValue({ id: "singleton", isEnabled: false, dryRun: true });
     const r = await syncAllCompanies();
@@ -934,7 +988,6 @@ describe("syncAllCompanies", () => {
   });
 
   it("erro em UMA empresa não para as outras + grava lastRunSummary", async () => {
-    configUpsert.mockResolvedValue({ id: "singleton", isEnabled: true, dryRun: false });
     companyFindMany.mockResolvedValue([{ id: "co-1" }, { id: "co-2" }]);
     // co-1 falha (company.findUnique lança), co-2 ok sem mudanças
     companyFindUnique
