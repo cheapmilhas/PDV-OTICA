@@ -7,7 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import toast from "react-hot-toast";
 import { UserPlus, Loader2 } from "lucide-react";
-import { LgpdConsentCheckbox, useConsentState } from "@/components/clientes/lgpd-consent-checkbox";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 
 interface ModalNovoClienteProps {
   open: boolean;
@@ -22,16 +22,19 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
     phone: "",
     email: "",
     cpf: "",
+    birthDate: "",
+    gender: "",
+    zipCode: "",
+    address: "",
+    number: "",
+    neighborhood: "",
+    city: "",
+    state: "",
   });
-  const [consent, setConsent] = useConsentState();
+  const [mostrarMais, setMostrarMais] = useState(false);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-
-    if (!consent.personalData) {
-      toast.error("É necessário aceitar o tratamento de dados pessoais (LGPD)");
-      return;
-    }
 
     setLoading(true);
 
@@ -40,7 +43,6 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
       const customerData: any = {
         name: formData.name,
         phone: formData.phone.replace(/\D/g, ""), // Remover formatação
-        consent,
       };
 
       if (formData.email) {
@@ -50,6 +52,15 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
       if (formData.cpf) {
         customerData.cpf = formData.cpf.replace(/\D/g, ""); // Remover formatação
       }
+
+      if (formData.birthDate) customerData.birthDate = formData.birthDate;
+      if (formData.gender) customerData.gender = formData.gender;
+      if (formData.zipCode) customerData.zipCode = formData.zipCode.replace(/\D/g, "");
+      if (formData.address) customerData.address = formData.address;
+      if (formData.number) customerData.number = formData.number;
+      if (formData.neighborhood) customerData.neighborhood = formData.neighborhood;
+      if (formData.city) customerData.city = formData.city;
+      if (formData.state) customerData.state = formData.state;
 
       const res = await fetch("/api/customers", {
         method: "POST",
@@ -74,8 +85,16 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
         phone: "",
         email: "",
         cpf: "",
+        birthDate: "",
+        gender: "",
+        zipCode: "",
+        address: "",
+        number: "",
+        neighborhood: "",
+        city: "",
+        state: "",
       });
-      setConsent({ personalData: false, healthData: false, marketing: false });
+      setMostrarMais(false);
 
       onOpenChange(false);
     } catch (error: any) {
@@ -174,7 +193,90 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
             />
           </div>
 
-          <LgpdConsentCheckbox value={consent} onChange={setConsent} required />
+          <div className="space-y-3">
+            <Button
+              type="button"
+              variant="ghost"
+              size="sm"
+              className="w-full justify-start px-0 text-muted-foreground"
+              onClick={() => setMostrarMais((v) => !v)}
+              disabled={loading}
+            >
+              {mostrarMais ? "− Ocultar informações adicionais" : "+ Adicionar mais informações"}
+            </Button>
+
+            {mostrarMais && (
+              <div className="space-y-4 rounded-lg border p-3">
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="birthDate">Data de nascimento</Label>
+                    <Input
+                      id="birthDate"
+                      type="date"
+                      value={formData.birthDate}
+                      onChange={(e) => setFormData({ ...formData, birthDate: e.target.value })}
+                      disabled={loading}
+                    />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="gender">Gênero</Label>
+                    <Select
+                      value={formData.gender}
+                      onValueChange={(value) => setFormData({ ...formData, gender: value })}
+                      disabled={loading}
+                    >
+                      <SelectTrigger id="gender">
+                        <SelectValue placeholder="Selecione" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="M">Masculino</SelectItem>
+                        <SelectItem value="F">Feminino</SelectItem>
+                        <SelectItem value="Outro">Outro</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="zipCode">CEP</Label>
+                    <Input id="zipCode" placeholder="00000-000" value={formData.zipCode}
+                      onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })} disabled={loading} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="number">Número</Label>
+                    <Input id="number" value={formData.number}
+                      onChange={(e) => setFormData({ ...formData, number: e.target.value })} disabled={loading} />
+                  </div>
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="address">Endereço</Label>
+                  <Input id="address" placeholder="Rua, avenida..." value={formData.address}
+                    onChange={(e) => setFormData({ ...formData, address: e.target.value })} disabled={loading} />
+                </div>
+
+                <div className="space-y-2">
+                  <Label htmlFor="neighborhood">Bairro</Label>
+                  <Input id="neighborhood" value={formData.neighborhood}
+                    onChange={(e) => setFormData({ ...formData, neighborhood: e.target.value })} disabled={loading} />
+                </div>
+
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <Label htmlFor="city">Cidade</Label>
+                    <Input id="city" value={formData.city}
+                      onChange={(e) => setFormData({ ...formData, city: e.target.value })} disabled={loading} />
+                  </div>
+                  <div className="space-y-2">
+                    <Label htmlFor="state">UF</Label>
+                    <Input id="state" maxLength={2} placeholder="SP" value={formData.state}
+                      onChange={(e) => setFormData({ ...formData, state: e.target.value.toUpperCase() })} disabled={loading} />
+                  </div>
+                </div>
+              </div>
+            )}
+          </div>
 
           <div className="rounded-lg bg-muted p-3 text-sm text-muted-foreground">
             <p className="font-medium">💡 Dica:</p>
