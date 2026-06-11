@@ -933,13 +933,6 @@ function ClienteDetalhesPage() {
                     <p className="font-medium">{customer.referralSource}</p>
                   </div>
                 )}
-
-                <div>
-                  <p className="text-sm text-muted-foreground">Cliente desde</p>
-                  <p className="font-medium">
-                    {format(safeDate(customer.createdAt), "dd/MM/yyyy", { locale: ptBR })}
-                  </p>
-                </div>
               </div>
 
               {(customer.address || customer.neighborhood || customer.city || customer.state || customer.zipCode) && (
