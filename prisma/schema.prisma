@@ -2144,6 +2144,8 @@ model Invoice {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   billingType          String?
+  isManual             Boolean               @default(false)
+  source               String?
   invoiceGenerated     Boolean               @default(false)
   invoiceGeneratedAt   DateTime?
   invoiceGeneratedBy   String?
