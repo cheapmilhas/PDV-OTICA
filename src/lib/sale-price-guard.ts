@@ -85,7 +85,7 @@ export function assertSalePricing(input: PriceGuardInput): void {
       if (!overrideAllows(override, "PRICE_BELOW_COST")) {
         throw new AppError(
           ERROR_CODES.PRICE_BELOW_COST,
-          `"${it.productName}" sairia a R$ ${unitNet.toFixed(2)}, abaixo do custo (R$ ${it.costPrice.toFixed(2)}). Requer autorização de gerente.`,
+          `"${it.productName}" sairia a R$ ${unitNet.toFixed(2)}, abaixo do custo (R$ ${it.costPrice.toFixed(2)}). Requer liberação.`,
           400
         );
       }
@@ -102,7 +102,7 @@ export function assertSalePricing(input: PriceGuardInput): void {
       ) {
         throw new AppError(
           ERROR_CODES.DISCOUNT_EXCEEDS_LIMIT,
-          `Desconto de ${discountPercent.toFixed(1)}% em "${it.productName}" excede o limite de ${maxDiscountPercent}% do seu perfil. Requer autorização de gerente.`,
+          `Desconto de ${discountPercent.toFixed(1)}% em "${it.productName}" excede o limite de ${maxDiscountPercent}% do seu perfil. Requer liberação.`,
           400
         );
       }

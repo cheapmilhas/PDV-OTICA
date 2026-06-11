@@ -934,6 +934,7 @@ function PDVPage() {
           }
         }}
         reason={overrideReason}
+        currentUserId={session?.user?.id}
         onApproved={handleManagerApproved}
       />
       <ModalNovoCliente

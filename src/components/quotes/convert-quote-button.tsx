@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { useSession } from "next-auth/react";
 import { Button } from "@/components/ui/button";
 import { CreditCard, Loader2, CheckCircle2 } from "lucide-react";
 import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
@@ -43,6 +44,7 @@ export function ConvertQuoteButton({
   disabled = false,
 }: ConvertQuoteButtonProps) {
   const router = useRouter();
+  const { data: session } = useSession();
   const [modalOpen, setModalOpen] = useState(false);
   const [converting, setConverting] = useState(false);
 
@@ -228,6 +230,7 @@ export function ConvertQuoteButton({
           setOverrideReason("");
         }}
         reason={overrideReason}
+        currentUserId={session?.user?.id}
         onApproved={handleManagerApproved}
       />
     </>

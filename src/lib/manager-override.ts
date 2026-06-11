@@ -4,9 +4,10 @@ import type { ManagerOverrideDTO } from "@/lib/validations/sale.schema";
 
 /**
  * Re-valida no servidor que o `approvedByUserId` enviado pelo frontend pertence
- * a um ADMIN ou GERENTE da mesma empresa. Nunca confiamos apenas na resposta do
- * /api/auth/verify-manager (que o cliente poderia forjar) — checamos de novo
- * aqui antes de pular qualquer regra de negócio.
+ * a um usuário da mesma empresa. A liberação não exige mais senha de gerente —
+ * o próprio operador logado confirma e fica registrado como autorizador. Ainda
+ * checamos aqui que o id é de um usuário real da empresa (nunca confiar só no
+ * que o cliente enviou) antes de pular qualquer regra de negócio.
  *
  * Retorna o nome do autorizador (para auditoria) ou lança AppError 403.
  */
@@ -18,7 +19,6 @@ export async function assertValidManagerOverride(
     where: {
       id: override.approvedByUserId,
       companyId,
-      role: { in: ["ADMIN", "GERENTE"] },
     },
     select: { id: true, name: true },
   });
@@ -26,12 +26,12 @@ export async function assertValidManagerOverride(
   if (!approver) {
     throw new AppError(
       ERROR_CODES.FORBIDDEN,
-      "Autorização de gerente inválida. Refaça a autorização.",
+      "Autorização inválida. Refaça a liberação.",
       403
     );
   }
 
-  return { approverName: approver.name ?? "Gerente" };
+  return { approverName: approver.name ?? "Operador" };
 }
 
 /** Conjunto de motivos autorizados, para checagem rápida no service. */

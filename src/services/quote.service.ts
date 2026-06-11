@@ -1055,7 +1055,7 @@ export class QuoteService {
             data: {
               companyId,
               type: "DATA_UPDATED",
-              title: "Conversão de orçamento autorizada por gerente (override)",
+              title: "Conversão de orçamento liberada pelo operador (override)",
               detail: {
                 kind: "quote_convert_manager_override",
                 saleId: result.sale.id,

@@ -397,7 +397,8 @@ export class SaleService {
       }
 
       // Só valida estoque para produtos com controle de estoque ativo.
-      // Gerente pode autorizar venda mesmo sem estoque (gera estoque negativo).
+      // O operador pode liberar a venda mesmo sem estoque (gera estoque negativo)
+      // confirmando o alerta — fica registrado no nome dele (override).
       if (
         product.stockControlled &&
         product.stockQty < item.qty &&
@@ -756,7 +757,7 @@ export class SaleService {
           data: {
             companyId,
             type: "DATA_UPDATED",
-            title: "Venda autorizada por gerente (override)",
+            title: "Venda liberada pelo operador (override)",
             detail: {
               kind: "sale_manager_override",
               saleId: sale.id,
