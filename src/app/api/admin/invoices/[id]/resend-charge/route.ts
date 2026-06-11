@@ -1,17 +1,11 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
-import { notifyCompany } from "@/services/saas-notification.service";
+import { sendInvoiceCharge } from "@/services/invoice-send.service";
 import { logger } from "@/lib/logger";
-import { brl, dateBR } from "@/lib/format-brl";
 
 const log = logger.child({ route: "admin/invoices/resend-charge" });
 export const dynamic = "force-dynamic";
-
-// UTC proposital: o periodKey é um token de dedup (1 reenvio/fatura/dia), não uma data de exibição.
-function yyyymmdd(d: Date): string {
-  return `${d.getUTCFullYear()}${String(d.getUTCMonth() + 1).padStart(2, "0")}${String(d.getUTCDate()).padStart(2, "0")}`;
-}
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   const admin = await getAdminSession();
@@ -23,43 +17,14 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
 
   try {
-    const invoice = await prisma.invoice.findUnique({
-      where: { id },
-      include: { subscription: { include: { company: { select: { name: true } } } } },
-    });
+    // findUnique apenas para o 404; o service gera a cobrança e envia (porta única).
+    const invoice = await prisma.invoice.findUnique({ where: { id }, select: { id: true } });
     if (!invoice) return NextResponse.json({ error: "Fatura não encontrada" }, { status: 404 });
 
-    // Sem paymentUrl não há o que reenviar (o template exige uma URL válida); evita
-    // enfileirar um email que falharia no render (notifyCompany é fail-silent).
-    if (!invoice.paymentUrl) {
-      return NextResponse.json(
-        { error: "Fatura sem link de pagamento — sincronize a cobrança primeiro" },
-        { status: 400 }
-      );
-    }
+    const { status, alreadySentToday } = await sendInvoiceCharge(id, admin.id);
 
-    const companyId = invoice.subscription.companyId;
-
-    const result = await notifyCompany(
-      companyId,
-      "INVOICE_CREATED",
-      {
-        name: invoice.subscription.company?.name ?? "cliente",
-        amountLabel: brl(invoice.total),
-        // Fatura legada pode ter dueDate null; o template exige string não-vazia (min(1)).
-        dueDateLabel: dateBR(invoice.dueDate) || "—",
-        pixCode: invoice.pixCode ?? undefined,
-        paymentUrl: invoice.paymentUrl,
-        boletoUrl: invoice.boletoUrl ?? undefined,
-      },
-      {
-        channels: ["email"],
-        periodKey: `invoice:${id}:resend:${yyyymmdd(new Date())}`,
-      }
-    );
-
-    log.info("reenvio de cobrança", { invoiceId: id, adminId: admin.id, status: result.status });
-    return NextResponse.json({ success: true, status: result.status });
+    log.info("reenvio de cobrança", { invoiceId: id, adminId: admin.id, status, alreadySentToday });
+    return NextResponse.json({ success: true, status, alreadySentToday });
   } catch (error) {
     log.error("Erro no reenvio de cobrança", { invoiceId: id, error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
