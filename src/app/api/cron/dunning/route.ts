@@ -6,6 +6,7 @@ import { nextDunningStage, canCancel, dunningMessage, SUSPEND_DAYS, CANCEL_DAYS 
 import { createCompanyNotification } from "@/services/company-notification.service";
 import { createAdminNotification } from "@/services/admin-notification.service";
 import { logActivity } from "@/services/activity-log.service";
+import { notifyCompany } from "@/services/saas-notification.service";
 
 const log = logger.child({ route: "cron/dunning" });
 
@@ -35,6 +36,7 @@ export async function GET(request: Request) {
   }
 
   const now = new Date();
+  const base = process.env.NEXTAUTH_URL ?? "https://app.vis.app.br";
 
   // Inclui SUSPENDED: sem isso, quem é suspenso aos 14d sai do conjunto e nunca
   // chega aos 30d → cancelamento jamais dispara.
@@ -94,6 +96,12 @@ export async function GET(request: Request) {
               metadata: { subscriptionId: sub.id, stage, daysOverdue },
             },
           }).catch(() => {});
+          await notifyCompany(
+            sub.companyId,
+            "INVOICE_OVERDUE",
+            { name: "Cliente", daysOverdue, payUrl: `${base}/dashboard/configuracoes` },
+            { periodKey: `stage:${stage}`, channels: ["email"] }
+          );
         }
       }
 
@@ -114,6 +122,12 @@ export async function GET(request: Request) {
           title: `Assinatura suspensa (${daysOverdue}d de atraso)`,
           actorType: ActorType.SYSTEM,
         });
+        await notifyCompany(
+          sub.companyId,
+          "SUBSCRIPTION_SUSPENDED",
+          { name: "Cliente", payUrl: `${base}/dashboard/configuracoes` },
+          { periodKey: "suspended", channels: ["email"] }
+        );
       }
 
       // 3) Cancelamento aos 30d — só com avisos registrados (canCancel exige lastStage>=14).
@@ -154,6 +168,12 @@ export async function GET(request: Request) {
               metadata: { subscriptionId: sub.id, daysOverdue },
             },
           }).catch(() => {});
+          await notifyCompany(
+            sub.companyId,
+            "SUBSCRIPTION_CANCELED",
+            { name: "Cliente", reactivateUrl: `${base}/dashboard/upgrade` },
+            { periodKey: "canceled", channels: ["email"] }
+          );
         } else {
           // >=30d mas sem avisos registrados → adia o cancelamento (já enviamos o aviso
           // pendente acima, se aplicável). Cancela numa próxima run quando lastStage>=14.
