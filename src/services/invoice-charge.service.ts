@@ -72,13 +72,17 @@ export async function ensureInvoiceCharge(
 
   const dueStr = `${dueDate.getUTCFullYear()}-${String(dueDate.getUTCMonth() + 1).padStart(2, "0")}-${String(dueDate.getUTCDate()).padStart(2, "0")}`;
 
-  const payment = await asaasClient.payments.create({
-    customer: sub.asaasCustomerId,
-    billingType: (invoice.billingType as any) || "PIX",
-    value: invoice.total / 100,
-    dueDate: dueStr,
-    externalReference: `invoice:${invoice.id}`,
-  });
+  const payment = await asaasClient.payments.create(
+    {
+      customer: sub.asaasCustomerId,
+      billingType: (invoice.billingType as any) || "PIX",
+      value: invoice.total / 100,
+      dueDate: dueStr,
+      externalReference: `invoice:${invoice.id}`,
+    },
+    // Idempotência: retry no mesmo invoice não cria cobrança duplicada no Asaas (money path).
+    `invoice:${invoice.id}`,
+  );
 
   let pixCode: string | undefined;
   try {

@@ -41,9 +41,11 @@ it("avulso quando sem subscription Asaas mas com customer", async () => {
   } } as any;
   const out = await ensureInvoiceCharge("i1", { prismaClient, asaasClient, syncFn: vi.fn() });
   expect(asaasClient.payments.create).toHaveBeenCalled();
-  const callArg = asaasClient.payments.create.mock.calls[0][0];
+  const [callArg, idempotencyKey] = asaasClient.payments.create.mock.calls[0];
   expect(callArg.customer).toBe("cus_1");
   expect(callArg.value).toBe(5); // 500 cents → R$5
+  // money path: idempotencyKey impede cobrança duplicada em retry
+  expect(idempotencyKey).toBe("invoice:i1");
   expect(out.paymentUrl).toBe("https://x/i/1");
   expect(out.pixCode).toBe("PIXCC");
 });
