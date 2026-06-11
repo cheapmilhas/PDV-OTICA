@@ -1,115 +1,105 @@
-# Ferramenta de Cobrança Avulsa (Manual + Recorrente) — Design
+# Ferramenta de Cobrança Avulsa — Design (FASE 2a: Única)
 
 **Data:** 2026-06-11
 **Branch:** feat/saas-cobranca-fase2 (worktree `.worktrees/saas-cobranca-fase2`)
-**Status:** Design aprovado pelo dono (direção + 6 decisões). Spec para review.
+**Status:** Design aprovado pelo dono. **Faseado:** esta spec implementa a Fase 2a (cobrança ÚNICA). A recorrência é Fase 2b (seção "Futuro", spec/review próprios).
 
 ## Problema
 
-Hoje o SaaS (Vis) só cobra via a mensalidade da assinatura (que nem está provisionada no Asaas ainda). Não há como o admin emitir uma cobrança **avulsa** a um cliente — taxa de implementação/setup, serviço extra pontual, ou mensalidade manual. O dono quer uma ferramenta genérica no admin para criar **qualquer** cobrança a um cliente, com valor e motivo livres, **única ou recorrente**, gerando boleto/PIX real no Asaas e mandando email.
+O SaaS (Vis) não tem como o admin emitir uma cobrança avulsa a um cliente (taxa de implementação, serviço extra, mensalidade manual). O dono quer uma ferramenta no admin para criar cobranças, gerando boleto/PIX real no Asaas. Motivador: o teste de R$5 travou porque `ASAAS_API_KEY` só existe na Vercel (não no `.env` local) → a cobrança precisa nascer **dentro do app em prod**. Esta feature resolve o R$5 como caso particular.
 
-Contexto que motivou: o teste de R$5 travou porque (a) `vercel env pull` falha de vários jeitos e (b) o `ASAAS_API_KEY` não está no `.env` local — só na Vercel. A solução é a cobrança nascer **dentro do app em prod** (que tem a chave), via uma rota admin, não por script local. Esta feature resolve o teste de R$5 como caso particular ("cobrança avulsa de R$5 no Atacadão") e entrega uma ferramenta de produto.
+**Decisão de faseamento (revisão de spec):** toda a complexidade de risco financeiro (cobrar 2x, cron novo, idempotência por mês) está na RECORRÊNCIA. A cobrança ÚNICA já resolve o objetivo e a ferramenta pontual sem cron novo nem risco de duplicação mensal. Logo: **Fase 2a = só única; Fase 2b = recorrente.**
 
 ## Decisões do dono (travadas)
-1. **Ferramenta genérica** de cobrança (implementação / extra / mensalidade manual), valor e motivo livres.
-2. **Recorrência controlada pelo NOSSO sistema** (cron diário cria a próxima cobrança avulsa) — NÃO via subscription recorrente do Asaas. Dá controle total (pausar/editar/cancelar).
-3. **Dois pontos de entrada com a mesma lógica:** ficha do cliente (`/admin/clientes/[id]`) E tela de faturas (`/admin/financeiro/faturas`) — "as mesmas informações que tem na ficha do cliente tem na tela de faturas".
-4. **Modo teste:** a cobrança no Asaas é **sempre real** (é o ponto). O `testMode` controla apenas para quem vai o **email** (testEmail vs cliente real). Sem dialog de confirmação extra.
-5. **Customer Asaas on-demand:** ao criar a cobrança, se a subscription não tem `asaasCustomerId`, cria automaticamente via `ensureAsaasCustomer` (já implementado) e segue. (Se o documento for inválido/ausente, erro claro.)
-6. **Recorrência:** por **dia fixo do mês** (1-28). Fim **opcional**: sem fim (até pausar) OU N ocorrências (parcelamento).
+1. Ferramenta genérica de cobrança (implementação / extra / mensalidade), valor e motivo livres.
+2. Dois pontos de entrada, mesma lógica: ficha do cliente (`/admin/clientes/[id]`) E tela de faturas (`/admin/financeiro/faturas`).
+3. Modo teste: a cobrança no Asaas é **sempre real**; o `testMode` controla apenas para quem vai o **email** (testEmail vs cliente). Sem dialog de confirmação extra.
+4. Customer Asaas on-demand: cria via `ensureAsaasCustomer` no clique se faltar; erro claro se doc inválido.
+5. (Fase 2b) Recorrência por dia fixo do mês (1-28), fim opcional (sem fim OU N vezes).
 
-## Arquitetura (abordagem C — híbrido)
+## Arquitetura (abordagem C — híbrido; Fase 2a usa só a metade "Invoice")
 
-A cobrança em si reusa o pipeline de `Invoice` que JÁ está em produção (Fase 2). A recorrência é um model novo pequeno e isolado.
+A cobrança reusa o pipeline de `Invoice` que JÁ está em produção (Fase 2): `ensureInvoiceCharge` (gera boleto/PIX no Asaas via `payments.create`, valor=`total/100`, idempotencyKey `invoice:${id}`) + `sendInvoiceCharge` (envia via `notifyCompany`, grava `invoiceSent`).
 
-### Modelo de dados
+### Modelo de dados (migration aditiva, Fase 2a)
 
-**`Invoice` (model existente — 2 campos novos, aditivos):**
-- `isManual Boolean @default(false)` — distingue cobrança avulsa das faturas de assinatura.
-- `source String?` — origem/motivo (`"implementation" | "extra" | "manual_monthly" | "recurring"` ou texto livre). Documental; não muda lógica de cobrança.
-- A cobrança avulsa É uma Invoice ligada à **subscription ativa** da empresa (`subscriptionId` é NOT NULL no schema — não há relação direta Invoice→Company). Toda empresa-cliente tem subscription (mesmo TRIAL), então pendura nela. `total/subtotal` = valor livre (centavos), `description` = motivo, `dueDate` = escolhido. Reusa `ensureInvoiceCharge` (gera boleto/PIX no Asaas via `payments.create`, valor = `total/100`) e `sendInvoiceCharge` (envia + grava `invoiceSent`).
+**`Invoice` — 2 campos novos:**
+- `isManual Boolean @default(false)` — distingue cobrança avulsa das faturas de assinatura. **Usado também para EXCLUIR avulsas dos crons de lembrete (ver "Interação com crons").**
+- `source String?` — origem/motivo documental (`"implementation" | "extra" | "manual_monthly"` ou livre).
 
-**`RecurringChargeRule` (model NOVO):**
-```
-id            String   @id @default(cuid())
-subscriptionId String                          // FK Subscription (mesma da Invoice)
-description   String                            // motivo, copiado p/ cada Invoice gerada
-amount        Int                               // centavos
-source        String   @default("recurring")
-dayOfMonth    Int                               // 1-28 (evita 29/30/31)
-maxOccurrences Int?                             // null = sem fim; N = para após N
-occurrencesDone Int    @default(0)
-active        Boolean  @default(true)
-nextRunAt     DateTime                          // data da próxima emissão (00:00 UTC do dayOfMonth)
-createdBy     String?                           // adminId
-createdAt     DateTime @default(now())
-updatedAt     DateTime @updatedAt
-@@index([active, nextRunAt])
-```
+(Fase 2b adicionará `recurringChargeRuleId` + model `RecurringChargeRule` — fora desta spec.)
 
-### Fluxo: criar cobrança (única OU recorrente)
+A cobrança avulsa É uma Invoice ligada à **subscription ativa** da empresa (`subscriptionId` NOT NULL — não há relação Invoice→Company). Campos obrigatórios setados: `subtotal=total=amount`, `discount=0`, `periodStart=now`, `periodEnd=now+30d`, `number=nextSaasInvoiceNumber`, `status=PENDING`, `billingType=PIX`, `description`, `isManual=true`, `source`, `dueDate` (escolhido ou null).
 
-`POST /api/admin/charges` (rota nova, auth SUPER_ADMIN/ADMIN) body:
-`{ companyId, amount(centavos), description, source?, dueDate?, recurring?: { dayOfMonth, maxOccurrences? } }`
+### 🔴 Interação com crons existentes (correção C1 — obrigatória)
 
-1. Resolve a subscription ativa da empresa (findFirst not CANCELED orderBy createdAt desc; throw se 0).
-2. `ensureAsaasCustomer(companyId)` — cria customer on-demand se faltar (erro claro se doc inválido).
-3. Cria a **1ª Invoice** avulsa: `isManual=true`, `source`, `total=subtotal=amount`, `description`, `dueDate`, `number = nextSaasInvoiceNumber`, `status=PENDING`, `billingType=PIX`.
-4. `ensureInvoiceCharge(invoice.id)` → gera boleto/PIX real no Asaas (idempotencyKey `invoice:${id}`).
-5. Se `recurring` → cria `RecurringChargeRule` com `occurrencesDone=1`, `nextRunAt` = próximo `dayOfMonth` no mês seguinte. (A 1ª cobrança conta como ocorrência 1.)
-6. (Opcional, conforme `testMode`) `sendInvoiceCharge` para já mandar o email da 1ª; OU deixar o admin clicar "Enviar cobrança" depois. **Decisão:** criar já envia (chama sendInvoiceCharge) — o email respeita testMode. O botão "Reenviar" continua disponível.
-7. Retorna `{ invoiceId, asaasChargeCreated, ruleId? }`.
+O cron `invoice-reminders` Parte B (`invoice-reminders.service.ts:92-106`, `INVOICE_DUE_SOON`) filtra hoje só `status PENDING` + `paymentConfirmedAt null` + `subscription ACTIVE` + `dueDate gt now lte now+3d`. **NÃO exclui `isManual`** → uma cobrança avulsa PENDING vencendo em ≤3d receberia um email `INVOICE_DUE_SOON` automático, ALÉM do `INVOICE_CREATED` já mandado na criação. Email fantasma para o cliente.
+**Correção (escopo desta spec):** adicionar `isManual: false` ao `where` da Parte B do `invoice-reminders.service.ts`. Parte A (created) é segura (itera só `syncInvoicesForSubscription`, que não cria avulsas) — mas por robustez, documentar que avulsas não passam por ela. Adicionar teste regressão: "Parte B ignora Invoice isManual".
 
-### Fluxo: cron `charge-recurrences` (diário, novo — 10º cron)
+### Fluxo: criar cobrança única
 
-`GET /api/cron/charge-recurrences` (auth CRON_SECRET, fail-closed):
-1. Busca `RecurringChargeRule` `active=true` com `nextRunAt <= now`.
-2. Para cada regra: **idempotência** — se já existe Invoice desta regra para o período atual (por `description` + `subscriptionId` + janela do mês, OU um campo `ruleId` na Invoice — ver abaixo), pula. Senão cria Invoice avulsa (mesma lógica do passo 3-4 acima) + `ensureInvoiceCharge` + `sendInvoiceCharge` (email respeita testMode).
-3. `occurrencesDone++`; se `maxOccurrences != null && occurrencesDone >= maxOccurrences` → `active=false` (encerra). Senão avança `nextRunAt` para o próximo mês no mesmo `dayOfMonth`.
-4. Fail-silent por regra (um erro não derruba o lote); loga.
+`POST /api/admin/charges` (auth SUPER_ADMIN/ADMIN) body Zod:
+`{ companyId: string, amount: int>0 (centavos), description: string(min 1), source?: string, dueDate?: ISO date }`
 
-**Rastreio regra→Invoice (idempotência robusta):** adicionar `recurringChargeRuleId String?` na Invoice (FK opcional para RecurringChargeRule) + `@@unique([recurringChargeRuleId, periodStart])` OU checagem por janela de mês. Decisão: campo `recurringChargeRuleId` + checar "existe Invoice desta regra com periodStart no mês corrente" antes de criar (evita unique complexo; idempotente por mês).
+1. **Resolve a subscription UMA vez** (no service, e passa o id adiante — não re-resolver em cada função): `findFirst({ where:{ companyId, status:{ not:"CANCELED" } }, orderBy:{ createdAt:"desc" } })`. Se null → throw "Empresa sem subscription ativa" (não cobrar quem cancelou). **Este throw acontece ANTES de `ensureAsaasCustomer`** (que tem fallback p/ CANCELED — divergência intencional; o service decide o critério mais estrito).
+2. `ensureAsaasCustomer(companyId)` — cria customer on-demand se faltar. Se doc inválido/ausente → erro traduzido p/ 400 "Cadastre o CNPJ/CPF da empresa antes de cobrar".
+3. Cria a Invoice avulsa (`isManual=true`, campos acima). **`number = await nextSaasInvoiceNumber(prisma)`** (helper ATÔMICO via SaasCounter) — NUNCA `invoice.count()+1` da rota legada `faturas/create/route.ts` (tem race → colisão no `number @unique`).
+4. `ensureInvoiceCharge(invoice.id)` → gera boleto/PIX real no Asaas (idempotencyKey `invoice:${id}` — único por Invoice, sem colisão).
+5. `sendInvoiceCharge(invoice.id, adminId)` → envia email (respeita testMode via notifyCompany). **Propaga o `status` retornado** (SENT/SKIPPED/FAILED) — a UI mostra o resultado real, NÃO "enviado" cegamente (M8: testMode/masterEnabled off → SKIPPED silencioso é normal).
+6. Retorna `{ invoiceId, asaasChargeCreated: boolean, emailStatus }`.
 
 ### UI (dois pontos de entrada, mesma lógica)
 
-- **Componente compartilhado** `<NovaCobrancaButton companyId=... />` (client) → abre modal/form: valor, descrição, vencimento, toggle "recorrente" (→ dia do mês + "sem fim"/"N vezes"). Submete em `POST /api/admin/charges`.
-- Montado em: ficha do cliente (`/admin/clientes/[id]`) e tela de faturas (`/admin/financeiro/faturas`, header — substitui/complementa o atual "Nova Cobrança" que hoje não fala com Asaas).
-- A tela de faturas já lista Invoices (avulsas aparecem naturalmente, com `isManual`/`source` no badge). A ficha do cliente já lista as faturas do cliente.
-- **Gestão de recorrências:** uma seção/aba simples listando as `RecurringChargeRule` da empresa (na ficha do cliente) com ação pausar/reativar (`active` toggle) e cancelar. Editar valor = fora do MVP (pode cancelar+criar nova).
+- **Componente compartilhado** `src/components/admin/nova-cobranca-button.tsx` (client) → botão "Nova cobrança" abre modal/form: valor (R$), descrição, vencimento (opcional), source (select simples: Implementação/Extra/Mensalidade/Outro). Submete `POST /api/admin/charges`. Mostra o resultado: cobrança criada + status do email (ex.: "Cobrança criada. Email enviado." / "Cobrança criada. Email não enviado (modo teste sem email / desligado)."). Aviso fixo no modal: "A cobrança é criada de verdade no Asaas. O modo teste afeta apenas o email."
+- Montado em: ficha do cliente (`/admin/clientes/[id]`, header/seção faturas) e tela de faturas (`/admin/financeiro/faturas`, header — ao lado do "Sincronizar"). Há DOIS botões "Nova Cobrança" antigos apontando para a página legada `/faturas/nova` (form manual sem Asaas): `financeiro/faturas/page.tsx:106` E `financeiro/page.tsx:173`. **Trocar AMBOS** o `<Link>` por `<NovaCobrancaButton>` (senão fica um botão órfão no fluxo antigo enquanto o outro usa o novo). A página `/faturas/nova` fica intocada (acessível por URL direta, sem link de entrada) — não deletar por ora.
+- A Invoice avulsa aparece naturalmente na listagem de faturas (badge com `source`). Os botões de estado de envio (ResendChargeButton, Fase anterior) já funcionam nela.
 
 ## Componentes (responsabilidades isoladas)
 
-1. `src/services/manual-charge.service.ts` — `createManualCharge({ companyId, amount, description, source, dueDate, recurring, adminId })`: orquestra resolve-sub → ensureAsaasCustomer → cria Invoice → ensureInvoiceCharge → (rule?) → sendInvoiceCharge. PURO/testável (DI de prisma/asaas/ensureFns).
-2. `src/services/recurring-charge.service.ts` — `runRecurringCharges(deps?)`: motor do cron (busca regras due, cria Invoice idempotente por mês, avança/encerra). Reusa `createManualCharge` internamente (sem o `recurring` — só a Invoice).
-3. `src/app/api/admin/charges/route.ts` — POST cria cobrança (auth, valida zod, chama service).
-4. `src/app/api/admin/charges/rules/[id]/route.ts` — PATCH pausar/reativar, DELETE cancelar regra.
-5. `src/app/api/cron/charge-recurrences/route.ts` — GET cron (CRON_SECRET) → runRecurringCharges.
-6. `src/components/admin/nova-cobranca-button.tsx` — botão+modal compartilhado (client).
-7. `src/components/admin/recurring-rules-list.tsx` — lista de regras + pausar/cancelar (na ficha do cliente).
-8. Migration: +`Invoice.isManual`, +`Invoice.source`, +`Invoice.recurringChargeRuleId`, +model `RecurringChargeRule`. Aditiva.
-9. vercel.json: 9→10 crons (+charge-recurrences, ex.: `0 11 * * *`).
+1. `src/services/manual-charge.service.ts` — `createManualCharge({ companyId, amount, description, source, dueDate, adminId }, deps?)`: resolve-sub → ensureAsaasCustomer → cria Invoice → ensureInvoiceCharge → sendInvoiceCharge → retorna `{ invoiceId, asaasChargeCreated, emailStatus }`. DI de prisma + das 3 fns (ensureAsaasCustomer/ensureInvoiceCharge/sendInvoiceCharge) p/ testes.
+2. `src/app/api/admin/charges/route.ts` — POST (auth, Zod, chama service, traduz erros: 400 doc/sub inválida, 500 catch). Padrão das rotas admin existentes (getAdminSession, role check).
+3. `src/components/admin/nova-cobranca-button.tsx` — botão+modal compartilhado (client). Padrão jsdom nos testes (sem jest-dom, `.toBeDefined()`).
+4. Migration aditiva: +`Invoice.isManual`, +`Invoice.source`.
+5. `src/services/invoice-reminders.service.ts` — adicionar `isManual:false` ao where da Parte B (correção C1).
+6. Montagem do botão em `clientes/[id]/page.tsx` e `financeiro/faturas/page.tsx`.
 
 ## Error handling
-- Doc inválido/ausente no ensureAsaasCustomer → 400 com mensagem clara ("Cadastre o CNPJ/CPF da empresa antes de cobrar").
-- Asaas falha ao gerar cobrança → a Invoice fica PENDING sem paymentUrl; o admin pode reenviar (botão existente reusa ensureInvoiceCharge). Logar.
-- Cron: fail-silent por regra; sumário de criados/encerrados/erros.
-- `dayOfMonth` validado 1-28 (zod). `amount` > 0. `maxOccurrences` ≥ 1 se presente.
+- Doc inválido/ausente (ensureAsaasCustomer throw) → 400 "Cadastre o CNPJ/CPF da empresa antes de cobrar".
+- Sub inexistente/cancelada → 400 "Empresa sem assinatura ativa para cobrar".
+- Asaas falha ao gerar cobrança (ensureInvoiceCharge throw) → 500 logado; a Invoice pode ter ficado PENDING sem paymentUrl → o admin reenvia pelo botão existente (reusa ensureInvoiceCharge). Documentar.
+- `amount` ≤ 0 ou `description` vazia → 400 (Zod).
+- Email SKIPPED/FAILED não é erro da cobrança — a cobrança já existe; UI informa o status do email separadamente.
 
 ## Testing
-- `manual-charge.service.test.ts`: cria Invoice avulsa (única) com ensureAsaasCustomer chamado; com recurring cria a rule (occurrencesDone=1, nextRunAt mês seguinte); doc inválido → throw; email respeita testMode (sendInvoiceCharge chamado).
-- `recurring-charge.service.test.ts`: regra due → cria Invoice + avança nextRunAt; idempotente (já tem Invoice do mês → pula); maxOccurrences atingido → active=false; regra inativa não roda.
-- Rotas: 401/403 sem auth; 400 doc inválido; 200 cria. Cron: 401 sem CRON_SECRET.
-- Componentes: render do form, toggle recorrente mostra dia do mês.
+- `manual-charge.service.test.ts`: (a) cria Invoice avulsa única com isManual=true + ensureAsaasCustomer/ensureInvoiceCharge/sendInvoiceCharge chamados na ordem; (b) sub CANCELED-only → throw antes de tocar Asaas; (c) ensureAsaasCustomer throw (doc inválido) → propaga; (d) emailStatus propagado (SENT e SKIPPED); (e) amount usado como total (R$5 → total=500).
+- `charges/route.test.ts`: 401 sem auth; 403 role errado; 400 doc inválido (service throw); 400 Zod (amount 0); 200 cria (mock service) retorna invoiceId/emailStatus.
+- `invoice-reminders.service.test.ts`: novo caso "Parte B ignora Invoice isManual=true" (regressão C1).
+- `nova-cobranca-button.test.tsx`: render do form; submit chama a rota; mostra status do email; aviso de modo teste visível.
 
-## Modo teste — confirmação explícita
-A cobrança no Asaas é SEMPRE real (mesmo com testMode ON). `testMode` só desvia o EMAIL (notifyCompany já faz isso). Documentar na UI: um aviso "Cobranças são criadas de verdade no Asaas. O modo teste afeta apenas o email."
+## Modo teste — nota explícita na UI
+Cobrança no Asaas é SEMPRE real (mesmo testMode ON). `testMode` só desvia o email (confirmado em `saas-notification.service.ts:62-68`: troca `to` por `testEmail`, ou SKIP se testEmail ausente). UI deixa isso claro.
+
+## Deploy (manual, igual às fases)
+- Migration aditiva (`isManual`/`source`) via `prisma db execute --stdin` heredoc (RTK quebra --file) + registrar em `_prisma_migrations` (drift cockpit). Pré-check: colunas não existem.
+- `vercel deploy --prod` do worktree (email commit `cheapmilhas@users.noreply.github.com`; `.env`+`.vercel` copiados). **Sem cron novo nesta fase** (evita o risco de limite HOBBY).
+
+## Teste de R$5 como caso particular (objetivo original)
+Após deploy: ficha do Atacadão (ou tela de faturas) → "Nova cobrança" → R$5, "Teste", única → o app (em prod, com a chave) cria o customer on-demand + gera o boleto/PIX de R$5 + manda email pro testEmail. Sem script local, sem chave no terminal.
+
+---
+
+## FASE 2b — Recorrência (FUTURO, fora desta spec)
+
+Documentado para não se perder; terá spec + review próprios. Decisões já tomadas + correções da review a incorporar:
+- Model `RecurringChargeRule { subscriptionId (+companyId denormalizado), description, amount, source, dayOfMonth(1-28), maxOccurrences?, occurrencesDone, status enum(ACTIVE|PAUSED|CANCELED) [não só boolean], nextRunAt, lastRunAt?, lastInvoiceId?, createdBy }`.
+- `Invoice.recurringChargeRuleId String?` + **`@@unique([recurringChargeRuleId, periodMonthKey])`** (periodMonthKey tipo `"2026-07"`) — **anti-duplicação obrigatória**: 2 execuções do cron NÃO podem criar 2 Invoices/mês (o idempotencyKey do Asaas é por Invoice.id, NÃO protege contra 2 Invoices). Criar Invoice e em P2002 pular (padrão notifyCompany).
+- Cálculo de `nextRunAt`: `Date.UTC(year, month+1, dayOfMonth)` (rollover de ano automático, fuso UTC) — nunca `setMonth`.
+- Cron: **avaliar acoplar ao `invoice-reminders` existente** (mesma cadência diária) em vez de criar o 10º cron (risco de limite HOBBY — incidente prévio derrubou deploys). Se cron novo, horário livre (NÃO `0 11 * * *` = mark-delayed).
+- UI de gestão de regras (pausar/reativar/cancelar) na ficha do cliente.
 
 ## Fora de escopo (YAGNI)
-- Subscription recorrente nativa do Asaas (decisão: nosso cron controla).
-- Editar valor de uma regra existente (cancela+cria nova).
+- Recorrência (Fase 2b).
+- Subscription recorrente nativa do Asaas.
+- Editar valor de regra (cancela+cria nova).
 - Multi-moeda, parcelamento no cartão, desconto/juros na avulsa.
-- Provisionar customer no cadastro self-service (continua Fase B separada).
-- Backfill em massa de customers (o ensureAsaasCustomer on-demand cobre o que precisa; backfill script já existe se quiser).
-
-## Teste de R$5 como caso particular
-Após deploy: na ficha do Atacadão (ou tela de faturas), clicar "Nova cobrança" → R$5, descrição "Teste", única → o app (em prod, com a chave) cria o customer on-demand + gera o boleto/PIX de R$5 + manda email pro testEmail. Sem script local, sem chave no terminal. Resolve o objetivo original.
+- Backfill em massa de customers (o on-demand cobre; script de backfill já existe).
