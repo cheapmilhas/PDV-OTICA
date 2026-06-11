@@ -140,7 +140,7 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="sm:max-w-lg">
+      <DialogContent className="sm:max-w-lg flex max-h-[90vh] flex-col">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
             <UserPlus className="h-5 w-5" />
@@ -151,7 +151,8 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
           </DialogDescription>
         </DialogHeader>
 
-        <form onSubmit={handleSubmit} className="space-y-4">
+        <form onSubmit={handleSubmit} className="flex min-h-0 flex-1 flex-col">
+          <div className="flex-1 space-y-4 overflow-y-auto px-1">
           <div className="space-y-2">
             <Label htmlFor="name">
               Nome Completo <span className="text-destructive">*</span>
@@ -302,8 +303,9 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
             <p className="font-medium">💡 Dica:</p>
             <p>Cadastre apenas os dados essenciais. Você pode completar o cadastro depois.</p>
           </div>
+          </div>
 
-          <div className="flex gap-2">
+          <div className="mt-4 flex gap-2 border-t pt-4">
             <Button
               type="button"
               variant="outline"
