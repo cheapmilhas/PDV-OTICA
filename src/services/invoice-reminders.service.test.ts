@@ -27,6 +27,7 @@ it("gate: invoiceGenerationEnabled OFF → não toca Asaas", async () => {
 
 it("Parte A: cobrança nova de subscription ACTIVE → email INVOICE_CREATED", async () => {
   (getSaasEmailConfig as any).mockResolvedValue({ invoiceGenerationEnabled: true });
+  (notifyCompany as any).mockResolvedValue({ status: "SENT" });
   (prisma.subscription.findMany as any).mockResolvedValue([
     { id: "sub_local", asaasSubscriptionId: "sub_1", companyId: "c1", company: { name: "Ótica X" } },
   ]);
@@ -41,6 +42,7 @@ it("Parte A: cobrança nova de subscription ACTIVE → email INVOICE_CREATED", a
 
 it("Parte B: fatura PENDING vencendo em ≤3d → DUE_SOON + reminderSentAt", async () => {
   (getSaasEmailConfig as any).mockResolvedValue({ invoiceGenerationEnabled: true });
+  (notifyCompany as any).mockResolvedValue({ status: "SENT" });
   (prisma.subscription.findMany as any).mockResolvedValue([]);
   (syncInvoicesForSubscription as any).mockResolvedValue([]);
   (prisma.invoice.findMany as any).mockResolvedValue([
@@ -59,4 +61,33 @@ it("erro numa subscription não derruba a run", async () => {
   (prisma.invoice.findMany as any).mockResolvedValue([]);
   const out = await runInvoiceReminders({ now: NOW });
   expect(out.errors).toBeGreaterThanOrEqual(1);
+});
+
+it("notifyCompany FAILED conta como erro (não como enviado)", async () => {
+  (getSaasEmailConfig as any).mockResolvedValue({ invoiceGenerationEnabled: true });
+  (prisma.subscription.findMany as any).mockResolvedValue([
+    { id: "s1", asaasSubscriptionId: "a1", companyId: "c1", company: { name: "X" } },
+  ]);
+  (syncInvoicesForSubscription as any).mockResolvedValue([
+    { id: "inv_1", total: 14990, dueDate: NOW, paymentUrl: "https://asaas/i/1", pixCode: undefined, boletoUrl: undefined },
+  ]);
+  (prisma.invoice.findMany as any).mockResolvedValue([]);
+  (notifyCompany as any).mockResolvedValue({ status: "FAILED" });
+  const out = await runInvoiceReminders({ now: NOW });
+  expect(out.invoiceCreatedEmails).toBe(0);
+  expect(out.errors).toBeGreaterThanOrEqual(1);
+});
+
+it("Invoice sem paymentUrl é ignorada (não chama notifyCompany)", async () => {
+  (getSaasEmailConfig as any).mockResolvedValue({ invoiceGenerationEnabled: true });
+  (prisma.subscription.findMany as any).mockResolvedValue([
+    { id: "s1", asaasSubscriptionId: "a1", companyId: "c1", company: { name: "X" } },
+  ]);
+  (syncInvoicesForSubscription as any).mockResolvedValue([
+    { id: "inv_np", total: 14990, dueDate: NOW, paymentUrl: null, pixCode: undefined, boletoUrl: undefined },
+  ]);
+  (prisma.invoice.findMany as any).mockResolvedValue([]);
+  const out = await runInvoiceReminders({ now: NOW });
+  expect(out.invoiceCreatedEmails).toBe(0);
+  expect(notifyCompany).not.toHaveBeenCalled();
 });

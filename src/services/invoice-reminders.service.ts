@@ -11,7 +11,7 @@ export interface RunSummary {
   invoicesCreated: number;
   invoiceCreatedEmails: number;
   dueSoonEmails: number;
-  skipped: string | null;
+  skipped: "generation_disabled" | null;
   errors: number;
   runAt: string;
 }
@@ -55,6 +55,10 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
       const novas = await syncInvoicesForSubscription(sub);
       summary.invoicesCreated += novas.length;
       for (const inv of novas) {
+        if (!inv.paymentUrl) {
+          log.warn("Invoice sem paymentUrl — INVOICE_CREATED ignorado", { invoiceId: inv.id });
+          continue;
+        }
         const r = await notifyCompany(
           sub.companyId,
           "INVOICE_CREATED",
@@ -63,7 +67,7 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
             amountLabel: brl(inv.total),
             dueDateLabel: inv.dueDate ? dateBR(inv.dueDate) : "",
             pixCode: inv.pixCode ?? undefined,
-            paymentUrl: inv.paymentUrl ?? "",
+            paymentUrl: inv.paymentUrl,
             boletoUrl: inv.boletoUrl ?? undefined,
           },
           {
@@ -76,7 +80,12 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
             },
           }
         );
-        if (r.status === "SENT") summary.invoiceCreatedEmails++;
+        if (r.status === "SENT") {
+          summary.invoiceCreatedEmails++;
+        } else if (r.status === "FAILED") {
+          summary.errors++;
+          log.warn("notifyCompany retornou FAILED (INVOICE_CREATED)", { invoiceId: inv.id, companyId: sub.companyId });
+        }
       }
     } catch (e) {
       summary.errors++;
@@ -106,6 +115,10 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
   for (const inv of dueSoon) {
     try {
       const companyId = inv.subscription.companyId;
+      if (!inv.paymentUrl) {
+        log.warn("Invoice sem paymentUrl — INVOICE_DUE_SOON ignorado", { invoiceId: inv.id });
+        continue;
+      }
       const r = await notifyCompany(
         companyId,
         "INVOICE_DUE_SOON",
@@ -114,7 +127,7 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
           amountLabel: brl(inv.total),
           dueDateLabel: inv.dueDate ? dateBR(inv.dueDate) : "",
           pixCode: inv.pixCode ?? undefined,
-          paymentUrl: inv.paymentUrl ?? "",
+          paymentUrl: inv.paymentUrl,
           boletoUrl: inv.boletoUrl ?? undefined,
         },
         {
@@ -133,6 +146,9 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
           where: { id: inv.id },
           data: { reminderSentAt: now, reminderCount: { increment: 1 } },
         });
+      } else if (r.status === "FAILED") {
+        summary.errors++;
+        log.warn("notifyCompany retornou FAILED (INVOICE_DUE_SOON)", { invoiceId: inv.id, companyId });
       }
     } catch (e) {
       summary.errors++;
