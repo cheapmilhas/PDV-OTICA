@@ -69,6 +69,25 @@ describe("syncInvoicesForSubscription", () => {
     expect(created).toHaveLength(0);
   });
 
+  it("propaga erro de create que não seja P2002", async () => {
+    const asaasClient = {
+      payments: {
+        list: vi.fn().mockResolvedValue({ data: [payment()], totalCount: 1, hasMore: false, limit: 100, offset: 0 }),
+        pixQrCode: vi.fn().mockResolvedValue({ payload: "X" }),
+      },
+    };
+    const prismaClient = {
+      $queryRaw: vi.fn().mockResolvedValue([{ value: 1 }]),
+      invoice: {
+        findUnique: vi.fn().mockResolvedValue(null),
+        create: vi.fn().mockRejectedValue(new Error("db down")),
+      },
+    } as any;
+    await expect(
+      syncInvoicesForSubscription(sub, { asaasClient: asaasClient as any, prismaClient, sleep: async () => {} })
+    ).rejects.toThrow("db down");
+  });
+
   it("paginação — 2 páginas viram todas as cobranças", async () => {
     const list = vi.fn()
       .mockResolvedValueOnce({ data: [payment({ id: "p1" })], totalCount: 2, hasMore: true, limit: 1, offset: 0 })

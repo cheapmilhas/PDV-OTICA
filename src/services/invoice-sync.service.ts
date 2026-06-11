@@ -67,7 +67,13 @@ export async function syncInvoicesForSubscription(
 
   const payments: AsaasPayment[] = [];
   let offset = 0;
+  const MAX_PAGES = 50;
+  let pages = 0;
   for (;;) {
+    if (++pages > MAX_PAGES) {
+      log.warn("syncInvoicesForSubscription: limite de páginas atingido", { subscriptionId: subscription.id });
+      break;
+    }
     const page = await asaas.payments.list({
       subscription: subscription.asaasSubscriptionId,
       offset,
@@ -100,8 +106,8 @@ export async function syncInvoicesForSubscription(
     try {
       const pix = await asaas.payments.pixQrCode(payment.id);
       pixCode = pix?.payload;
-    } catch {
-      log.warn("pixQrCode falhou (segue sem PIX)", { paymentId: payment.id });
+    } catch (err) {
+      log.warn("pixQrCode falhou (segue sem PIX)", { paymentId: payment.id, err });
     }
 
     try {

@@ -15,5 +15,8 @@ export async function nextSaasInvoiceNumber(
     ON CONFLICT ("key") DO UPDATE SET "value" = "SaasCounter"."value" + 1
     RETURNING "value"
   `);
+  if (rows.length === 0) {
+    throw new Error("SaasCounter RETURNING returned no rows — verifique se a migration foi aplicada");
+  }
   return `INV-${String(rows[0].value).padStart(6, "0")}`;
 }
