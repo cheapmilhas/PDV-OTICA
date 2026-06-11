@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import bcrypt from "bcryptjs";
 import { logger } from "@/lib/logger";
+import { sendWelcomeEmail } from "@/services/saas-welcome.service";
 
 const log = logger.child({ route: "auth/activate" });
 
@@ -110,6 +111,8 @@ export async function POST(request: Request) {
 
       return user;
     });
+
+    await sendWelcomeEmail(invite.companyId, invite.name);
 
     return NextResponse.json({
       success: true,
