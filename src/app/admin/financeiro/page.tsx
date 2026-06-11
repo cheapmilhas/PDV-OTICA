@@ -20,6 +20,7 @@ export default async function FinanceiroPage() {
     vencido,
     previsaoProximoMes,
     faturasVencidas,
+    receivable,
   ] = await Promise.all([
     // Recebido no mês atual
     prisma.invoice.aggregate({
@@ -60,9 +61,9 @@ export default async function FinanceiroPage() {
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
+    // A receber esta semana
+    getReceivableThisWeek(now),
   ]);
-
-  const receivable = await getReceivableThisWeek(now);
 
   const recebidoValue = ((recebidoMes._sum?.total ?? 0) / 100);
   const pendenteValue = ((pendente._sum?.total ?? 0) / 100);

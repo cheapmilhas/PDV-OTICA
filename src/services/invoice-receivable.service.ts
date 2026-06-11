@@ -32,7 +32,7 @@ export async function getReceivableThisWeek(
     orderBy: { dueDate: "asc" },
   });
 
-  const items = rows.map((r: { id: string; total: number; dueDate: Date | null; subscription: { company?: { name: string } | null } }) => ({
+  const items = rows.map((r) => ({
     id: r.id,
     companyName: r.subscription.company?.name ?? "—",
     total: r.total,
