@@ -4,6 +4,7 @@ import { Prisma, SubscriptionStatus } from "@prisma/client";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { asaas, AsaasError } from "@/lib/asaas";
+import { resolveAsaasCustomerId } from "@/services/asaas-customer.service";
 import { handleApiError } from "@/lib/error-handler";
 import { initialSubscriptionState } from "@/lib/checkout-status";
 
@@ -179,25 +180,25 @@ async function doCheckout(
   const value =
     input.billingCycle === "YEARLY" ? plan.priceYearly / 100 : plan.priceMonthly / 100;
 
-  // 1. Criar/reusar customer no Asaas
+  // 1. Criar/reusar customer no Asaas (lógica find-or-create extraída p/ resolveAsaasCustomerId)
   let asaasCustomerId = existingSub?.asaasCustomerId ?? null;
   if (!asaasCustomerId) {
     const cpfCnpj = input.holderInfo?.cpfCnpj ?? company.cnpj;
     if (!cpfCnpj) {
       return { kind: "error", status: 400, message: "CPF/CNPJ é obrigatório" };
     }
-    const existingCustomer = await asaas.customers.findByCpfCnpj(cpfCnpj);
-    if (existingCustomer) {
-      asaasCustomerId = existingCustomer.id;
-    } else {
-      const created = await asaas.customers.create({
+    try {
+      const resolved = await resolveAsaasCustomerId({
         name: input.holderInfo?.name ?? company.name,
         email: input.holderInfo?.email ?? company.email ?? userEmail ?? "",
-        cpfCnpj,
+        cpfCnpjRaw: cpfCnpj,
         mobilePhone: input.holderInfo?.mobilePhone ?? company.phone ?? undefined,
         externalReference: `company:${companyId}`,
       });
-      asaasCustomerId = created.id;
+      asaasCustomerId = resolved.asaasCustomerId;
+    } catch {
+      // service lança em doc inválido/ausente → o checkout traduz p/ 400 (contrato de erro do checkout)
+      return { kind: "error", status: 400, message: "CPF/CNPJ é obrigatório" };
     }
   }
 
