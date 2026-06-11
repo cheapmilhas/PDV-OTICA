@@ -15,6 +15,22 @@ const SAMPLE: Record<SaasEmailType, Record<string, unknown>> = {
   PAYMENT_CONFIRMED: { name: "João Silva", amountLabel: "R$ 149,90" },
   SUBSCRIPTION_SUSPENDED: { name: "João Silva", payUrl: "https://app.vis.app.br/dashboard/configuracoes" },
   SUBSCRIPTION_CANCELED: { name: "João Silva", reactivateUrl: "https://app.vis.app.br/dashboard/upgrade" },
+  INVOICE_CREATED: {
+    name: "João Silva",
+    amountLabel: "R$ 149,90",
+    dueDateLabel: "10/07/2026",
+    pixCode: "00020126...br.gov.bcb.pix...6304ABCD",
+    paymentUrl: "https://www.asaas.com/i/abc123",
+    boletoUrl: "https://www.asaas.com/b/pdf/abc123",
+  },
+  INVOICE_DUE_SOON: {
+    name: "João Silva",
+    amountLabel: "R$ 149,90",
+    dueDateLabel: "10/07/2026",
+    pixCode: "00020126...br.gov.bcb.pix...6304ABCD",
+    paymentUrl: "https://www.asaas.com/i/abc123",
+    boletoUrl: "https://www.asaas.com/b/pdf/abc123",
+  },
 };
 
 export async function GET(request: Request) {

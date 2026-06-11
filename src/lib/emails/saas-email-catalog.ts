@@ -13,7 +13,9 @@ export interface SaasEmailCatalogEntry {
     | "invoiceOverdueEnabled"
     | "paymentConfirmedEnabled"
     | "subscriptionSuspendedEnabled"
-    | "subscriptionCanceledEnabled";
+    | "subscriptionCanceledEnabled"
+    | "invoiceCreatedEnabled"
+    | "invoiceDueSoonEnabled";
 }
 
 export const SAAS_EMAIL_CATALOG: Record<SaasEmailType, SaasEmailCatalogEntry> = {
@@ -51,6 +53,16 @@ export const SAAS_EMAIL_CATALOG: Record<SaasEmailType, SaasEmailCatalogEntry> = 
     template: "saas-subscription-canceled",
     subject: "Sua assinatura do Vis foi cancelada",
     configFlag: "subscriptionCanceledEnabled",
+  },
+  INVOICE_CREATED: {
+    template: "saas-invoice-created",
+    subject: "Sua fatura do Vis está disponível",
+    configFlag: "invoiceCreatedEnabled",
+  },
+  INVOICE_DUE_SOON: {
+    template: "saas-invoice-due-soon",
+    subject: "Sua fatura do Vis vence em 3 dias",
+    configFlag: "invoiceDueSoonEnabled",
   },
 };
 
