@@ -80,3 +80,28 @@ describe("templates SaaS (Fase 1)", () => {
     expect(html).not.toContain("&amp;amp;");
   });
 });
+
+describe("saas-invoice-created", () => {
+  const data = { name: "João", amountLabel: "R$ 149,90", dueDateLabel: "10/07/2026", pixCode: "PIXCOPIACOLA123", paymentUrl: "https://asaas/i/1", boletoUrl: "https://asaas/b/1" };
+  it("renderiza com PIX copia-e-cola, botão e link do boleto", () => {
+    const { html, text } = renderEmailTemplate("saas-invoice-created", data);
+    expect(html).toContain("PIXCOPIACOLA123");
+    expect(html).toContain("https://asaas/i/1");   // botão Pagar agora
+    expect(html).toContain("https://asaas/b/1");   // boleto
+    expect(html).toContain("R$ 149,90");
+    expect(html).not.toContain("data:image");       // SEM imagem base64
+    expect(html).not.toContain("encodedImage");
+    expect(text).toContain("PIXCOPIACOLA123");
+  });
+  it("degrada sem pixCode/boletoUrl (só botão)", () => {
+    const { html } = renderEmailTemplate("saas-invoice-created", { name: "João", amountLabel: "R$ 149,90", dueDateLabel: "10/07/2026", paymentUrl: "https://asaas/i/1" });
+    expect(html).toContain("https://asaas/i/1");
+  });
+});
+
+describe("saas-invoice-due-soon", () => {
+  it("renderiza tom de lembrete", () => {
+    const { html } = renderEmailTemplate("saas-invoice-due-soon", { name: "João", amountLabel: "R$ 149,90", dueDateLabel: "10/07/2026", pixCode: "PIX", paymentUrl: "https://asaas/i/1" });
+    expect(html.toLowerCase()).toContain("vence");
+  });
+});
