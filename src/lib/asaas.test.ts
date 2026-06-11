@@ -111,6 +111,83 @@ describe("Asaas client", () => {
     });
   });
 
+  describe("payments.list / create", () => {
+    beforeEach(() => {
+      process.env.ASAAS_API_KEY = "$aact_test_abc";
+    });
+
+    it("payments.list monta query e parseia a resposta", async () => {
+      const body = {
+        data: [{ id: "pay_1", value: 149.9, status: "PENDING" }],
+        totalCount: 1,
+        hasMore: false,
+        limit: 100,
+        offset: 0,
+      };
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify(body), { status: 200 }),
+      );
+
+      const { asaas } = await import("./asaas");
+      const res = await asaas.payments.list({
+        subscription: "sub_1",
+        status: "PENDING",
+        offset: 0,
+        limit: 100,
+      });
+
+      expect(res.data).toHaveLength(1);
+      expect(res.hasMore).toBe(false);
+      const calledUrl = fetchMock.mock.calls[0][0] as string;
+      expect(calledUrl).toContain("/payments?");
+      expect(calledUrl).toContain("subscription=sub_1");
+      expect(calledUrl).toContain("status=PENDING");
+      expect(calledUrl).toContain("limit=100");
+      expect(calledUrl).toContain("offset=0");
+    });
+
+    it("payments.list aplica defaults de limit/offset", async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ data: [], totalCount: 0, hasMore: false, limit: 100, offset: 0 }),
+          { status: 200 },
+        ),
+      );
+
+      const { asaas } = await import("./asaas");
+      await asaas.payments.list({ subscription: "sub_1" });
+
+      const calledUrl = fetchMock.mock.calls[0][0] as string;
+      expect(calledUrl).toContain("limit=100");
+      expect(calledUrl).toContain("offset=0");
+    });
+
+    it("payments.create faz POST com body e idempotencyKey", async () => {
+      fetchMock.mockResolvedValueOnce(
+        new Response(
+          JSON.stringify({ id: "pay_2", value: 149.9, status: "PENDING" }),
+          { status: 200 },
+        ),
+      );
+
+      const { asaas } = await import("./asaas");
+      await asaas.payments.create(
+        { customer: "cus_1", billingType: "BOLETO", value: 149.9, dueDate: "2026-07-10" },
+        "idem-1",
+      );
+
+      const init = fetchMock.mock.calls[0][1] as RequestInit;
+      expect(init.method).toBe("POST");
+      expect(JSON.parse(init.body as string)).toMatchObject({
+        customer: "cus_1",
+        billingType: "BOLETO",
+        value: 149.9,
+      });
+      const headers = init.headers as Record<string, string>;
+      expect(headers["asaas-idempotency-key"]).toBe("idem-1");
+    });
+  });
+
   describe("verifyWebhookToken", () => {
     it("retorna false sem ASAAS_WEBHOOK_TOKEN configurado", async () => {
       delete process.env.ASAAS_WEBHOOK_TOKEN;

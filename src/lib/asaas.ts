@@ -128,6 +128,31 @@ export interface AsaasPayment {
   externalReference?: string;
 }
 
+export interface AsaasPaymentListFilters {
+  customer?: string;
+  subscription?: string;
+  status?: AsaasPayment["status"];
+  offset?: number;
+  limit?: number;
+}
+
+export interface AsaasPaymentListResult {
+  data: AsaasPayment[];
+  totalCount: number;
+  hasMore: boolean;
+  limit: number;
+  offset: number;
+}
+
+export interface AsaasPaymentCreateInput {
+  customer: string;
+  billingType: AsaasBillingType;
+  value: number; // reais
+  dueDate: string; // YYYY-MM-DD
+  description?: string;
+  externalReference?: string;
+}
+
 class AsaasError extends Error {
   constructor(
     public status: number,
@@ -224,6 +249,27 @@ export const asaas = {
   },
 
   payments: {
+    async list(
+      filters: AsaasPaymentListFilters = {},
+    ): Promise<AsaasPaymentListResult> {
+      const params = new URLSearchParams();
+      if (filters.customer) params.set("customer", filters.customer);
+      if (filters.subscription) params.set("subscription", filters.subscription);
+      if (filters.status) params.set("status", filters.status);
+      params.set("limit", String(filters.limit ?? 100));
+      params.set("offset", String(filters.offset ?? 0));
+      return asaasFetch<AsaasPaymentListResult>(`/payments?${params.toString()}`);
+    },
+    async create(
+      input: AsaasPaymentCreateInput,
+      idempotencyKey?: string,
+    ): Promise<AsaasPayment> {
+      return asaasFetch<AsaasPayment>("/payments", {
+        method: "POST",
+        body: JSON.stringify(input),
+        idempotencyKey,
+      });
+    },
     async get(id: string): Promise<AsaasPayment> {
       return asaasFetch<AsaasPayment>(`/payments/${id}`);
     },
