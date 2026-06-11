@@ -18,8 +18,8 @@ export function SyncInvoicesButton() {
         setMsg("Geração desligada — ligue a flag de geração primeiro.");
       } else {
         setMsg(`Processado: ${data.invoicesCreated ?? 0} faturas, ${(data.invoiceCreatedEmails ?? 0) + (data.dueSoonEmails ?? 0)} emails.`);
+        router.refresh();
       }
-      router.refresh();
     } catch {
       setMsg("Erro ao sincronizar");
     } finally {
