@@ -2,6 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
 
 interface EmailConfig {
   masterEnabled: boolean;
@@ -14,6 +15,9 @@ interface EmailConfig {
   paymentConfirmedEnabled: boolean;
   subscriptionSuspendedEnabled: boolean;
   subscriptionCanceledEnabled: boolean;
+  invoiceGenerationEnabled: boolean;
+  invoiceCreatedEnabled: boolean;
+  invoiceDueSoonEnabled: boolean;
 }
 
 interface LogRow {
@@ -33,6 +37,8 @@ const EMAIL_TYPES = [
   { key: "PAYMENT_CONFIRMED",     label: "Pagamento confirmado",   flag: "paymentConfirmedEnabled" as const },
   { key: "SUBSCRIPTION_SUSPENDED",label: "Assinatura suspensa",    flag: "subscriptionSuspendedEnabled" as const },
   { key: "SUBSCRIPTION_CANCELED", label: "Assinatura cancelada",   flag: "subscriptionCanceledEnabled" as const },
+  { key: "INVOICE_CREATED",       label: "Fatura disponível",      flag: "invoiceCreatedEnabled" as const },
+  { key: "INVOICE_DUE_SOON",      label: "Fatura a vencer",        flag: "invoiceDueSoonEnabled" as const },
 ] as const;
 
 type FlagKey = typeof EMAIL_TYPES[number]["flag"];
@@ -154,6 +160,61 @@ export function EmailsClient({
         >
           {config.masterEnabled ? "Desligar" : "Ligar"}
         </button>
+      </div>
+
+      {/* Geração de cobrança */}
+      <div className="bg-gray-800 border border-gray-700 rounded-lg p-5 space-y-4">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="font-semibold text-white">Geração de cobrança</p>
+            <p className="text-sm text-gray-400">
+              Controla se o sistema busca faturas Asaas e envia emails de cobrança.
+            </p>
+          </div>
+          <button
+            onClick={() => patch({ invoiceGenerationEnabled: !config.invoiceGenerationEnabled })}
+            disabled={saving}
+            className={`px-4 py-2 rounded-md font-semibold text-sm disabled:opacity-50 ${
+              config.invoiceGenerationEnabled
+                ? "bg-red-600 hover:bg-red-700 text-white"
+                : "bg-green-600 hover:bg-green-700 text-white"
+            }`}
+          >
+            {config.invoiceGenerationEnabled ? "Desligar" : "Ligar"}
+          </button>
+        </div>
+
+        {/* Status banner */}
+        {!config.invoiceGenerationEnabled ? (
+          <div className="bg-gray-700/50 border border-gray-600 rounded-md p-3">
+            <p className="text-sm text-gray-300">
+              Geração de cobrança DESLIGADA — o sistema não busca nem comunica cobranças. Ligue só
+              quando estiver pronto.
+            </p>
+          </div>
+        ) : config.testMode ? (
+          <div className="bg-yellow-900/40 border border-yellow-700 rounded-md p-3">
+            <p className="text-sm text-yellow-300">
+              Cobranças sendo processadas, mas emails vão só para{" "}
+              <span className="font-mono">{config.testEmail || "(sem endereço)"}</span>.
+            </p>
+          </div>
+        ) : !config.masterEnabled ? (
+          <div className="bg-red-900/40 border border-red-700 rounded-md p-3">
+            <p className="text-sm text-red-300">
+              ⚠️ Geração ligada, mas o interruptor mestre de emails está DESLIGADO — nenhum email
+              sai.
+            </p>
+          </div>
+        ) : (
+          <div className="bg-green-900/40 border border-green-700 rounded-md p-3">
+            <p className="text-sm text-green-300">
+              Geração de cobrança ativa — cobranças são buscadas e comunicadas aos clientes.
+            </p>
+          </div>
+        )}
+
+        <SyncInvoicesButton />
       </div>
 
       {/* Modo teste + testEmail */}
