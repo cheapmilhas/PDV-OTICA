@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight } from "lucide-react";
+import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight, Clock } from "lucide-react";
+import { getReceivableThisWeek } from "@/services/invoice-receivable.service";
 
 export default async function FinanceiroPage() {
   await requireAdmin();
@@ -60,6 +61,8 @@ export default async function FinanceiroPage() {
       take: 5,
     }),
   ]);
+
+  const receivable = await getReceivableThisWeek(now);
 
   const recebidoValue = ((recebidoMes._sum?.total ?? 0) / 100);
   const pendenteValue = ((pendente._sum?.total ?? 0) / 100);
@@ -181,6 +184,40 @@ export default async function FinanceiroPage() {
               description="Gerenciar clientes inadimplentes"
             />
           </div>
+        </div>
+      </div>
+
+      {/* A receber esta semana */}
+      <div className="mt-6 rounded-xl border border-gray-800 bg-gray-900">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
+          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-400" />
+            A receber esta semana
+          </h2>
+          <span className="text-sm font-semibold text-blue-400">
+            R$ {(receivable.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div className="divide-y divide-gray-800/50">
+          {receivable.items.length === 0 ? (
+            <p className="px-5 py-8 text-center text-gray-600 text-sm">
+              Nenhuma fatura a vencer nos próximos 7 dias
+            </p>
+          ) : (
+            receivable.items.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between px-5 py-3 hover:bg-gray-800/30">
+                <div>
+                  <p className="font-medium text-white">{inv.companyName}</p>
+                  <p className="text-xs text-gray-500">
+                    Venc: {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
+                  </p>
+                </div>
+                <p className="text-sm text-white font-medium">
+                  R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>
