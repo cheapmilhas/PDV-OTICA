@@ -1,5 +1,6 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi } from "vitest";
+vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ResendChargeButton } from "./resend-charge-button";
 

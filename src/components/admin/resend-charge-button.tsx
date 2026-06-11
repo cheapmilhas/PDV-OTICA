@@ -1,7 +1,9 @@
 "use client";
 import { useState } from "react";
+import { useRouter } from "next/navigation";
 
 export function ResendChargeButton({ invoiceId, label = "Reenviar boleto/PIX" }: { invoiceId: string; label?: string }) {
+  const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
   async function run() {
@@ -10,6 +12,7 @@ export function ResendChargeButton({ invoiceId, label = "Reenviar boleto/PIX" }:
       const res = await fetch(`/api/admin/invoices/${invoiceId}/resend-charge`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       setMsg(res.ok ? (data.status === "SENT" ? "Reenviado." : `Status: ${data.status ?? "—"}`) : (data.error || "Erro"));
+      if (res.ok) router.refresh();
     } catch { setMsg("Erro"); } finally { setLoading(false); }
   }
   return (
