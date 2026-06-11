@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign } from "lucide-react";
+import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyNotes } from "./company-notes";
@@ -450,6 +451,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                       <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Valor</th>
                       <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Status</th>
                       <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Tipo Pgto</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -474,6 +476,9 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                         </td>
                         <td className="px-5 py-3 text-gray-400 text-xs">
                           {inv.billingType || "—"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <ResendChargeButton invoiceId={inv.id} />
                         </td>
                       </tr>
                     ))}

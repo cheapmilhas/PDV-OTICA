@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Building2, CheckCircle, Circle, Send, CreditCard, Receipt, FileText } from "lucide-react";
 import { InvoiceActions } from "./invoice-actions";
+import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
@@ -212,48 +213,55 @@ export default async function InvoiceDetailPage({
           </div>
 
           {/* Links */}
-          {(invoice.paymentUrl || invoice.boletoUrl || invoice.pixCode || invoice.nfUrl) && (
-            <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-              <h3 className="text-sm font-medium text-gray-400 mb-3">Links</h3>
-              <div className="space-y-2">
-                {invoice.paymentUrl && (
-                  <a
-                    href={invoice.paymentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-indigo-400 hover:text-indigo-300"
-                  >
-                    Link de pagamento ↗
-                  </a>
-                )}
-                {invoice.boletoUrl && (
-                  <a
-                    href={invoice.boletoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-indigo-400 hover:text-indigo-300"
-                  >
-                    Boleto PDF ↗
-                  </a>
-                )}
-                {invoice.nfUrl && (
-                  <a
-                    href={invoice.nfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-indigo-400 hover:text-indigo-300"
-                  >
-                    Nota Fiscal ↗
-                  </a>
-                )}
-              </div>
-              {invoice.pixCode && (
-                <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono break-all text-gray-400">
-                  PIX: {invoice.pixCode.slice(0, 30)}...
+          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+            <h3 className="text-sm font-medium text-gray-400 mb-3">Links</h3>
+            {(invoice.paymentUrl || invoice.boletoUrl || invoice.pixCode || invoice.nfUrl) ? (
+              <>
+                <div className="space-y-2">
+                  {invoice.paymentUrl && (
+                    <a
+                      href={invoice.paymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-indigo-400 hover:text-indigo-300"
+                    >
+                      Link de pagamento ↗
+                    </a>
+                  )}
+                  {invoice.boletoUrl && (
+                    <a
+                      href={invoice.boletoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-indigo-400 hover:text-indigo-300"
+                    >
+                      Boleto PDF ↗
+                    </a>
+                  )}
+                  {invoice.nfUrl && (
+                    <a
+                      href={invoice.nfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-indigo-400 hover:text-indigo-300"
+                    >
+                      Nota Fiscal ↗
+                    </a>
+                  )}
                 </div>
-              )}
+                {invoice.pixCode && (
+                  <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono break-all text-gray-400">
+                    PIX: {invoice.pixCode.slice(0, 30)}...
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-gray-600 mb-2">Nenhum link gerado ainda</p>
+            )}
+            <div className="mt-3 pt-3 border-t border-gray-800">
+              <ResendChargeButton invoiceId={invoice.id} />
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

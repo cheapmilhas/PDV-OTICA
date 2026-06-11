@@ -5,6 +5,7 @@ import {
   FileText, ExternalLink, CheckCircle, Circle,
   Send, Receipt, CreditCard, AlertTriangle
 } from "lucide-react";
+import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
@@ -90,13 +91,16 @@ export default async function FaturasPage({
           <h1 className="text-2xl font-bold">Faturas</h1>
           <p className="text-sm text-gray-400">Gestão de cobranças manuais</p>
         </div>
-        <Link
-          href="/admin/financeiro/faturas/nova"
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
-        >
-          <FileText className="w-4 h-4" />
-          Nova Cobrança
-        </Link>
+        <div className="flex items-center gap-3">
+          <SyncInvoicesButton />
+          <Link
+            href="/admin/financeiro/faturas/nova"
+            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
+          >
+            <FileText className="w-4 h-4" />
+            Nova Cobrança
+          </Link>
+        </div>
       </div>
 
       {/* Resumo Financeiro */}
