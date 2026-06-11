@@ -31,7 +31,7 @@ Hoje, quando o admin cria uma fatura (`/api/admin/faturas/create`), ela nasce **
 2. Migration aditiva: `Invoice @@unique([subscriptionId, asaasPaymentId])` + 3 flags em `SaasEmailConfig` + 2 valores no enum `SaasEmailType`.
 3. Service `invoice-sync.service.ts` (puro/testável) — materializa Invoice local a partir do Asaas.
 4. 2 templates: `saas-invoice-created`, `saas-invoice-due-soon` (PIX copia-e-cola em destaque + botão "Pagar agora", valor do Asaas; sem imagem de QR embutida).
-5. Cron `invoice-reminders` (diário, gated por flag mestre).
+5. Motor `runInvoiceReminders` (lógica compartilhada) + cron `invoice-reminders` (diário automático) + gatilho manual (botão "rodar agora" no painel). Ambos gated por flag mestre.
 6. Tela admin: 2 toggles novos + a flag mestre `invoiceGenerationEnabled` (com banner de aviso).
 7. Rota `/api/admin/invoices/[id]/resend-charge` + botões "reenviar" em Faturas e Cliente.
 8. **Quick win:** PIX em destaque no email.
@@ -110,20 +110,34 @@ O endpoint `asaas.payments.pixQrCode(id)` devolve a imagem do QR **só como base
 - Ambos: escape de dados, layout `renderSaasEmailLayout`, `text` plano. **Sem imagem de QR** (Asaas só dá base64, bloqueado em email); o cliente que quer o QR clica no botão "Pagar agora" e escaneia na página do Asaas. Se faltar `pixCode`/`boletoUrl`, mostra só o botão (degrada gracioso).
 - Entram em `SAAS_EMAIL_CATALOG` (template/subject/configFlag) e no switch de `renderEmailTemplate`.
 
-### 5. Cron `invoice-reminders` (`src/app/api/cron/invoice-reminders/route.ts` — novo)
+### 5. Motor de sincronização + cron + gatilho manual
 
-- Diário, **fail-closed** com `CRON_SECRET` (Bearer), `runtime nodejs`, `dynamic force-dynamic` — espelha os crons existentes.
-- **Gate mestre:** lê `SaasEmailConfig`; se `invoiceGenerationEnabled === false` → retorna `{ ok: true, skipped: "generation_disabled" }` SEM tocar no Asaas.
+A lógica de sincronização vive numa **função compartilhada** (`runInvoiceReminders`), e DUAS portas de entrada a chamam: o cron (automático/diário) e o botão do painel (manual/sob demanda). Sem duplicar lógica.
+
+**5a. Função compartilhada `runInvoiceReminders(opts?: { force?: boolean }): Promise<RunSummary>`** (`src/services/invoice-reminders.service.ts` — novo)
+- **Gate mestre:** lê `SaasEmailConfig`; se `invoiceGenerationEnabled === false` **e** `opts.force !== true` → retorna `{ skipped: "generation_disabled", ... }` SEM tocar no Asaas. (O `force` permite que o botão rode mesmo com a flag OFF, se o dono quiser testar — mas por padrão o botão também respeita a flag; ver decisão do dono na rota 5c.)
 - **Parte A — INVOICE_CREATED:** `subscription.findMany({ where: { status: "ACTIVE", asaasSubscriptionId: { not: null } } })` (NÃO TRIAL/SUSPENDED/CANCELED) → para cada, `syncInvoicesForSubscription` → para cada fatura NOVA → `notifyCompany(companyId, "INVOICE_CREATED", payload, { periodKey: \`invoice:${invoiceId}:created\`, channels: ["email","inapp"], inapp })`.
 - **Parte B — INVOICE_DUE_SOON:** `invoice.findMany({ where: { status: "PENDING", paymentConfirmedAt: null, subscription: { status: "ACTIVE" }, dueDate: { gt: now, lte: now+3d } } })` → `notifyCompany(.., "INVOICE_DUE_SOON", .., { periodKey: \`invoice:${invoiceId}:due_soon\`, channels: ["email","inapp"], inapp })` → marca `reminderSentAt: now`, `reminderCount: increment`.
-- Idempotência dupla: `SaasEmailLog` (periodKey por fatura+tipo) impede reenvio; `reminderSentAt` é guarda extra.
-- Throttle entre chamadas ao Asaas. Per-sub try/catch (um erro não derruba o cron).
+- Retorna um **RunSummary** serializável: `{ subscriptionsScanned, invoicesCreated, invoiceCreatedEmails, dueSoonEmails, skipped, errors, runAt }` — usado tanto pelo log do cron quanto pela resposta do botão (pra mostrar "processou X faturas, Y emails").
+- Idempotência: `SaasEmailLog` (periodKey por fatura+tipo) é a trava (impede reenvio mesmo se o botão for clicado 2x ou rodar logo após o cron). `reminderSentAt` é só marcador de UI.
+- Throttle entre chamadas ao Asaas. Per-sub try/catch (um erro não derruba a run).
+
+**5b. Cron `invoice-reminders`** (`src/app/api/cron/invoice-reminders/route.ts` — novo)
+- Diário, **fail-closed** com `CRON_SECRET` (Bearer), `runtime nodejs`, `dynamic force-dynamic` — espelha os crons existentes.
+- Só autentica e chama `runInvoiceReminders()` (sem `force`), loga o RunSummary, responde JSON.
 - `vercel.json`: +1 cron (vira 9). Horário livre (ex.: `0 10 * * *`).
+
+**5c. Gatilho manual** (`src/app/api/admin/invoice-reminders/run/route.ts` — novo)
+- POST, autenticação por **sessão admin** (`getAdminSession` → SUPER_ADMIN; NÃO usa CRON_SECRET — é o admin logado disparando).
+- Chama `runInvoiceReminders()` — **respeitando as mesmas travas** (flag mestre `invoiceGenerationEnabled` + modo teste, decisão do dono). Se a flag estiver OFF, retorna o `skipped` (e a UI mostra "ligue a geração primeiro"). NÃO passa `force` (comportamento idêntico ao automático, só disparado pelo botão).
+- Retorna o RunSummary pra UI exibir o resultado na hora ("Processado: 3 faturas, 3 emails enviados").
+- Rate-limit/anti-duplo-clique: a idempotência do `SaasEmailLog` já protege contra reenvio; a rota pode desabilitar o botão durante o processamento (UI).
 
 ### 6. Tela admin (estende `/admin/configuracoes/emails`)
 
 - 2 toggles novos: "Fatura disponível" (`invoiceCreatedEnabled`), "Fatura a vencer" (`invoiceDueSoonEnabled`).
-- A flag mestre `invoiceGenerationEnabled` com **banner de aviso**: quando OFF → "Geração de cobrança DESLIGADA — o sistema não busca nem comunica cobranças. Ligue só quando estiver pronto." Quando ON + modo teste ON → "Cobranças sendo processadas, mas emails vão só para <testEmail>."
+- A flag mestre `invoiceGenerationEnabled` com **banner de aviso**: quando OFF → "Geração de cobrança DESLIGADA — o sistema não busca nem comunica cobranças. Ligue só quando estiver pronto." Quando ON + modo teste ON → "Cobranças sendo processadas, mas emails vão só para <testEmail>." Quando ON + `masterEnabled` OFF → "⚠️ Geração ligada, mas o interruptor mestre de emails está DESLIGADO — nenhum email sai."
+- **Botão "Sincronizar cobranças agora"** → POST `/api/admin/invoice-reminders/run` → mostra o RunSummary retornado ("Processado: X faturas, Y emails"). Desabilita durante o processamento. (O mesmo botão aparece também em `/admin/financeiro/faturas` — item 7 — ambos chamam a mesma rota.)
 - Os 2 novos tipos entram no histórico (`SaasEmailLog`) e no preview, reusando a infra da Fase 1.
 
 ### 7. Rota + botões "reenviar" (`/api/admin/invoices/[id]/resend-charge` — novo)
@@ -162,7 +176,9 @@ Derivadas de uma análise adversarial de risco financeiro:
 ## Testes (rede anti-regressão)
 
 - **`invoice-sync.service`:** materializa Invoice com valor do Asaas (total+subtotal+período derivado); idempotente (2ª chamada não duplica); paginação (2 páginas → todas as cobranças); **ignora cobrança em status terminal** (RECEIVED/CONFIRMED/REFUNDED/CHARGEBACK → não cria Invoice); número via counter sem colisão; sem boleto/PIX → degrada.
-- **Cron `invoice-reminders`:** 401 sem CRON_SECRET; gate `invoiceGenerationEnabled` OFF → não toca Asaas; INVOICE_CREATED só p/ ACTIVE; DUE_SOON pula pago/cancelado/trial/vencido; idempotente (roda 2x → 1 email); estado divergente `invoiceGenerationEnabled=ON`+`masterEnabled=OFF` → processa mas email SKIPPED (não quebra).
+- **`runInvoiceReminders` (motor):** gate `invoiceGenerationEnabled` OFF → não toca Asaas; INVOICE_CREATED só p/ ACTIVE; DUE_SOON pula pago/cancelado/trial/vencido; idempotente (roda 2x → 1 email); estado divergente `invoiceGenerationEnabled=ON`+`masterEnabled=OFF` → processa mas email SKIPPED (não quebra); retorna RunSummary correto.
+- **Cron `invoice-reminders`:** 401 sem CRON_SECRET; com secret → chama o motor.
+- **Gatilho manual `/api/admin/invoice-reminders/run`:** 401 sem sessão; 403 não-SUPER_ADMIN; SUPER_ADMIN → chama o MESMO motor e retorna RunSummary; respeita flag mestre (OFF → skipped).
 - **Templates:** render + Zod; PIX copia-e-cola + boleto + botão presentes; SEM imagem de QR (não base64, não URL); valor correto.
 - **Rota resend:** auth; reenfileira via notifyCompany; respeita modo teste.
 - **Lib Asaas:** `payments.list` paginado (mock 2 páginas); `payments.create` monta body certo.
@@ -177,11 +193,12 @@ Derivadas de uma análise adversarial de risco financeiro:
 3. `nextBusinessDay` helper.
 4. `invoice-sync.service` (mapeamento Asaas→Invoice, filtro de status, número via counter, período derivado) + testes.
 5. 2 templates (PIX copia-e-cola + botão, sem QR base64) + catálogo.
-6. Cron `invoice-reminders` + vercel.json + testes.
-7. Tela admin (toggles + banner flag mestre).
-8. Rota resend + botões (Faturas + Cliente) + histórico filtrado.
-9. Widget "a receber esta semana".
-10. Suíte + build + revisão final.
+6. Motor `runInvoiceReminders` (lógica compartilhada) + testes.
+7. Cron `invoice-reminders` (chama o motor) + vercel.json + gatilho manual `/api/admin/invoice-reminders/run` (chama o motor) + testes.
+8. Tela admin (toggles + banner flag mestre + botão "Sincronizar agora").
+9. Rota resend + botões reenviar (Faturas + Cliente) + botão "Sincronizar agora" em Faturas + histórico filtrado.
+10. Widget "a receber esta semana".
+11. Suíte + build + revisão final.
 
 ## Notas de deploy / armadilhas (herdadas + novas)
 
