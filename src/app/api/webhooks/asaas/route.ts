@@ -6,6 +6,7 @@ import { trackServer } from "@/lib/posthog-server";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { captureMessage } from "@/lib/sentry";
+import { notifyCompany } from "@/services/saas-notification.service";
 
 const log = logger.child({ webhook: "asaas" });
 
@@ -225,6 +226,27 @@ export async function POST(request: Request) {
             asaasPaymentId: event.payment?.id,
             value: event.payment?.value,
           });
+        }
+        if (companyId) {
+          const amountLabel =
+            event.payment?.value != null
+              ? new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(event.payment.value)
+              : "";
+          const company = await prisma.company.findUnique({ where: { id: companyId }, select: { name: true } });
+          await notifyCompany(
+            companyId,
+            "PAYMENT_CONFIRMED",
+            { name: company?.name ?? "Cliente", amountLabel },
+            {
+              periodKey: `pay:${event.payment?.id ?? event.id}`,
+              channels: ["email", "inapp"],
+              inapp: {
+                title: "Pagamento confirmado",
+                message: `Recebemos seu pagamento${amountLabel ? ` de ${amountLabel}` : ""}. Obrigado!`,
+                link: "/dashboard/configuracoes",
+              },
+            },
+          );
         }
         break;
       }
