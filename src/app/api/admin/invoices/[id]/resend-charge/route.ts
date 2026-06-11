@@ -46,7 +46,8 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       {
         name: invoice.subscription.company?.name ?? "cliente",
         amountLabel: brl(invoice.total),
-        dueDateLabel: dateBR(invoice.dueDate),
+        // Fatura legada pode ter dueDate null; o template exige string não-vazia (min(1)).
+        dueDateLabel: dateBR(invoice.dueDate) || "—",
         pixCode: invoice.pixCode ?? undefined,
         paymentUrl: invoice.paymentUrl,
         boletoUrl: invoice.boletoUrl ?? undefined,
