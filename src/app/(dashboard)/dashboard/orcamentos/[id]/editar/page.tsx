@@ -15,7 +15,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
-import { ArrowLeft, Plus, Trash2, Save, ChevronDown, Package, Loader2 } from "lucide-react";
+import { Dialog, DialogContent } from "@/components/ui/dialog";
+import { ArrowLeft, Plus, Trash2, Save, ChevronDown, Package, Loader2, Tag } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { calculateTotals } from "@/lib/sale-totals";
 import { useRouter, useParams } from "next/navigation";
@@ -37,6 +38,10 @@ interface QuoteItem {
   quantity: number;
   unitPrice: number;
   discount: number;
+  // Edição por item (mesma mecânica do PDV): preço ajustável + desconto R$/%.
+  customPrice?: number;
+  discountValue?: number;
+  discountType?: "FIXED" | "PERCENTAGE";
   itemType: "PRODUCT" | "SERVICE" | "CUSTOM";
   prescriptionData?: any;
   notes?: string;
@@ -86,6 +91,13 @@ function EditarOrcamentoPage() {
   const [validDays, setValidDays] = useState(15);
   const [showPrescription, setShowPrescription] = useState(false);
 
+  // Modal de editar preço/desconto por item (portado do PDV).
+  const [editModalOpen, setEditModalOpen] = useState(false);
+  const [editModalMode, setEditModalMode] = useState<"price" | "discount">("price");
+  const [editModalItemId, setEditModalItemId] = useState<string>("");
+  const [editModalValue, setEditModalValue] = useState("");
+  const [editModalDiscountType, setEditModalDiscountType] = useState<"FIXED" | "PERCENTAGE">("FIXED");
+
   // Carregar dados do orçamento
   useEffect(() => {
     const loadQuote = async () => {
@@ -112,7 +124,8 @@ function EditarOrcamentoPage() {
           setCustomerEmail(quote.customerEmail || "");
         }
 
-        // Preencher itens
+        // Preencher itens. O desconto salvo (R$) é remapeado para discountValue
+        // FIXED para que continue editável e não se perca ao reabrir a edição.
         const loadedItems = quote.items.map((item: any) => ({
           id: item.id,
           productId: item.productId,
@@ -120,6 +133,8 @@ function EditarOrcamentoPage() {
           quantity: item.quantity,
           unitPrice: item.unitPrice,
           discount: item.discount,
+          discountValue: item.discount > 0 ? item.discount : undefined,
+          discountType: item.discount > 0 ? ("FIXED" as const) : undefined,
           itemType: item.itemType,
           notes: item.notes,
           sku: item.product?.sku,
@@ -208,15 +223,101 @@ function EditarOrcamentoPage() {
     toast.success("Item removido");
   };
 
+  // Preço efetivo do item: o ajustado pelo usuário (customPrice) ou o original.
+  const precoEfetivo = (item: QuoteItem): number => item.customPrice ?? item.unitPrice;
+
+  // Desconto do item em R$ (resolve % vs R$, igual ao PDV).
+  const calcularDescontoItem = (item: QuoteItem): number => {
+    if (!item.discountValue || item.discountValue <= 0) return 0;
+    const preco = precoEfetivo(item);
+    if (item.discountType === "PERCENTAGE") {
+      return (preco * item.quantity * item.discountValue) / 100;
+    }
+    return item.discountValue; // FIXED
+  };
+
+  const editarPreco = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    setEditModalItemId(itemId);
+    setEditModalMode("price");
+    setEditModalValue(precoEfetivo(item).toString());
+    setEditModalOpen(true);
+  };
+
+  const editarDesconto = (itemId: string) => {
+    const item = items.find((i) => i.id === itemId);
+    if (!item) return;
+    setEditModalItemId(itemId);
+    setEditModalMode("discount");
+    setEditModalDiscountType(item.discountType || "FIXED");
+    setEditModalValue(item.discountValue ? item.discountValue.toString() : "");
+    setEditModalOpen(true);
+  };
+
+  const resetarPreco = (itemId: string) => {
+    setItems(items.map((i) => (i.id === itemId ? { ...i, customPrice: undefined } : i)));
+    toast.success("Preço restaurado");
+  };
+
+  const confirmarEdicaoModal = () => {
+    const item = items.find((i) => i.id === editModalItemId);
+    if (!item) return;
+
+    if (editModalMode === "price") {
+      const preco = parseFloat(editModalValue.replace(",", "."));
+      if (isNaN(preco) || preco <= 0) {
+        toast.error("Preço inválido");
+        return;
+      }
+      setItems(items.map((i) => (i.id === editModalItemId ? { ...i, customPrice: preco } : i)));
+      toast.success(`Preço alterado para R$ ${preco.toFixed(2)}`);
+    } else {
+      if (!editModalValue || editModalValue === "0") {
+        setItems(items.map((i) => (i.id === editModalItemId ? { ...i, discountValue: undefined, discountType: undefined } : i)));
+        toast.success("Desconto removido");
+        setEditModalOpen(false);
+        return;
+      }
+
+      const valor = parseFloat(editModalValue.replace(",", "."));
+      if (isNaN(valor) || valor < 0) {
+        toast.error("Valor inválido");
+        return;
+      }
+
+      const preco = precoEfetivo(item);
+      if (editModalDiscountType === "PERCENTAGE" && valor > 100) {
+        toast.error("Percentual máximo: 100%");
+        return;
+      }
+      if (editModalDiscountType === "FIXED" && valor > preco * item.quantity) {
+        toast.error("Desconto maior que o total do item");
+        return;
+      }
+
+      setItems(items.map((i) =>
+        i.id === editModalItemId
+          ? { ...i, discountValue: valor, discountType: editModalDiscountType }
+          : i
+      ));
+
+      const calc = editModalDiscountType === "PERCENTAGE" ? (preco * item.quantity * valor) / 100 : valor;
+      toast.success(`Desconto de ${editModalDiscountType === "PERCENTAGE" ? `${valor}%` : `R$ ${valor.toFixed(2)}`} aplicado (-R$ ${calc.toFixed(2)})`);
+    }
+
+    setEditModalOpen(false);
+  };
+
   // TEC-06: usa o helper único (mesma fórmula do backend, decimal.js).
   const calculateSubtotal = () =>
     calculateTotals({
-      items: items.map((i) => ({ qty: i.quantity, unitPrice: i.unitPrice, discount: i.discount })),
+      items: items.map((i) => ({ qty: i.quantity, unitPrice: precoEfetivo(i), discount: calcularDescontoItem(i) })),
     }).subtotal;
 
   const calculateTotal = () =>
     calculateTotals({
-      items: items.map((i) => ({ qty: i.quantity, unitPrice: i.unitPrice, discount: i.discount })),
+      items: items.map((i) => ({ qty: i.quantity, unitPrice: precoEfetivo(i), discount: calcularDescontoItem(i) })),
       discount: discountTotal,
       discountPercent,
     }).total;
@@ -244,8 +345,9 @@ function EditarOrcamentoPage() {
         items: items.map((item) => ({
           description: item.description,
           quantity: item.quantity,
-          unitPrice: item.unitPrice,
-          discount: item.discount,
+          // Persiste o preço efetivo (ajustado) e o desconto já resolvido em R$.
+          unitPrice: precoEfetivo(item),
+          discount: calcularDescontoItem(item),
           itemType: item.itemType,
           productId: item.productId,
           prescriptionData:
@@ -304,6 +406,108 @@ function EditarOrcamentoPage() {
 
   return (
     <div className="space-y-6 max-w-5xl mx-auto pb-20">
+      {/* Modal Editar Preço / Desconto (portado do PDV) */}
+      <Dialog open={editModalOpen} onOpenChange={setEditModalOpen}>
+        <DialogContent className="max-w-xs p-4">
+          {(() => {
+            const item = items.find((i) => i.id === editModalItemId);
+            if (!item) return null;
+            const preco = precoEfetivo(item);
+            return (
+              <>
+                <div className="space-y-1">
+                  <p className="font-semibold text-sm truncate">{item.description}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {editModalMode === "price"
+                      ? `Original: R$ ${item.unitPrice.toFixed(2)}`
+                      : `R$ ${preco.toFixed(2)} × ${item.quantity} = R$ ${(preco * item.quantity).toFixed(2)}`}
+                  </p>
+                </div>
+
+                {editModalMode === "discount" && (
+                  <div className="grid grid-cols-2 gap-1.5">
+                    <Button
+                      variant={editModalDiscountType === "FIXED" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditModalDiscountType("FIXED")}
+                    >
+                      R$ Valor
+                    </Button>
+                    <Button
+                      variant={editModalDiscountType === "PERCENTAGE" ? "default" : "outline"}
+                      size="sm"
+                      onClick={() => setEditModalDiscountType("PERCENTAGE")}
+                    >
+                      % Percentual
+                    </Button>
+                  </div>
+                )}
+
+                {(() => {
+                  const valor = parseFloat(editModalValue.replace(",", "."));
+                  const isDiscountInvalid = editModalMode === "discount" && !isNaN(valor) && valor > 0 && (
+                    (editModalDiscountType === "PERCENTAGE" && valor > 100) ||
+                    (editModalDiscountType === "FIXED" && valor > preco * item.quantity)
+                  );
+                  return (
+                    <div className="space-y-1">
+                      <Input
+                        type="number"
+                        step="0.01"
+                        min="0"
+                        placeholder="0"
+                        value={editModalValue}
+                        onChange={(e) => setEditModalValue(e.target.value)}
+                        autoFocus
+                        className={`text-lg h-10 text-center font-semibold ${isDiscountInvalid ? "border-red-500 focus-visible:ring-red-500" : ""}`}
+                        onKeyDown={(e) => e.key === "Enter" && confirmarEdicaoModal()}
+                      />
+                      {isDiscountInvalid && (
+                        <p className="text-xs text-red-500 text-center">
+                          {editModalDiscountType === "PERCENTAGE"
+                            ? "Percentual máximo: 100%"
+                            : `Máximo: R$ ${(preco * item.quantity).toFixed(2).replace(".", ",")}`}
+                        </p>
+                      )}
+                    </div>
+                  );
+                })()}
+
+                <div className="flex gap-2">
+                  {editModalMode === "discount" && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      className="text-xs text-muted-foreground"
+                      onClick={() => { setEditModalValue("0"); confirmarEdicaoModal(); }}
+                    >
+                      Limpar
+                    </Button>
+                  )}
+                  <div className="flex-1" />
+                  <Button variant="outline" size="sm" onClick={() => setEditModalOpen(false)}>
+                    Cancelar
+                  </Button>
+                  <Button
+                    size="sm"
+                    onClick={confirmarEdicaoModal}
+                    disabled={editModalMode === "discount" && (() => {
+                      const valor = parseFloat(editModalValue.replace(",", "."));
+                      return !isNaN(valor) && valor > 0 && (
+                        (editModalDiscountType === "PERCENTAGE" && valor > 100) ||
+                        (editModalDiscountType === "FIXED" && valor > preco * item.quantity)
+                      );
+                    })()}
+                  >
+                    OK
+                  </Button>
+                </div>
+              </>
+            );
+          })()}
+        </DialogContent>
+      </Dialog>
+
       {/* Header */}
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-4">
@@ -500,10 +704,57 @@ function EditarOrcamentoPage() {
                         />
                       </td>
                       <td className="text-right p-2">
-                        {formatCurrency(item.unitPrice)}
+                        <div className="flex flex-col items-end gap-0.5">
+                          <div className="flex items-center gap-1">
+                            {item.customPrice !== undefined && item.customPrice !== item.unitPrice && (
+                              <span className="text-xs text-muted-foreground line-through">
+                                {formatCurrency(item.unitPrice)}
+                              </span>
+                            )}
+                            <span className="font-medium">{formatCurrency(precoEfetivo(item))}</span>
+                          </div>
+                          <div className="flex items-center gap-1">
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-1 text-xs"
+                              onClick={() => editarPreco(item.id)}
+                            >
+                              Editar
+                            </Button>
+                            {item.customPrice !== undefined && (
+                              <Button
+                                variant="ghost"
+                                size="sm"
+                                className="h-5 px-1 text-xs text-muted-foreground"
+                                onClick={() => resetarPreco(item.id)}
+                              >
+                                Resetar
+                              </Button>
+                            )}
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              className="h-5 px-1 text-xs text-green-600"
+                              onClick={() => editarDesconto(item.id)}
+                            >
+                              <Tag className="h-3 w-3 mr-0.5" />
+                              Desc
+                            </Button>
+                          </div>
+                        </div>
                       </td>
                       <td className="text-right p-2 font-semibold">
-                        {formatCurrency(item.quantity * item.unitPrice - item.discount)}
+                        <div className="flex flex-col items-end gap-0.5">
+                          <span>{formatCurrency(precoEfetivo(item) * item.quantity - calcularDescontoItem(item))}</span>
+                          {calcularDescontoItem(item) > 0 && (
+                            <span className="text-xs text-green-600">
+                              {item.discountType === "PERCENTAGE"
+                                ? `-${item.discountValue}%`
+                                : `-${formatCurrency(calcularDescontoItem(item))}`}
+                            </span>
+                          )}
+                        </div>
                       </td>
                       <td className="p-2">
                         <Button

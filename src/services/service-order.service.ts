@@ -315,8 +315,19 @@ export class ServiceOrderService {
     return this.getById(order.id, companyId, true);
   }
 
-  /** Tipos de produto que caracterizam uma lente (geram OS). */
+  /** Tipos de produto que caracterizam uma lente (GATILHO: só geram OS se houver lente). */
   static readonly LENS_PRODUCT_TYPES = ["OPHTHALMIC_LENS", "CONTACT_LENS", "LENS_SERVICE"];
+
+  /**
+   * Tipos de produto que ENTRAM na OS uma vez que ela é criada (CONTEÚDO).
+   * Inclui as lentes (gatilho) + a armação: FRAME (armação de grau) e SUNGLASSES
+   * (óculos de sol com grau, tratado como armação no sistema). O laboratório
+   * precisa saber qual armação recebeu para não perder/trocar a peça do cliente.
+   * Importante: FRAME/SUNGLASSES NÃO estão em LENS_PRODUCT_TYPES de propósito —
+   * uma venda de armação avulsa (sem lente) continua NÃO gerando OS. Aqui só
+   * enriquecemos o conteúdo de uma OS que já vai ser criada por causa da lente.
+   */
+  static readonly OS_INCLUDED_PRODUCT_TYPES = [...ServiceOrderService.LENS_PRODUCT_TYPES, "FRAME", "SUNGLASSES"];
 
   /**
    * Cria uma OS a partir de uma venda já existente (fluxo Venda → OS).
@@ -366,7 +377,7 @@ export class ServiceOrderService {
       return { created: false, serviceOrderId: existing?.id ?? sale.serviceOrderId, number: existing?.number ?? null };
     }
 
-    // Filtra itens de lente.
+    // GATILHO: só geramos OS se houver pelo menos uma lente na venda.
     const lensItems = sale.items.filter(
       (it) => it.product?.type && ServiceOrderService.LENS_PRODUCT_TYPES.includes(it.product.type)
     );
@@ -374,6 +385,13 @@ export class ServiceOrderService {
     if (lensItems.length === 0) {
       return { created: false, serviceOrderId: null, number: null };
     }
+
+    // CONTEÚDO: uma vez que a OS vai ser criada, ela leva as lentes E a armação
+    // (FRAME). Assim o laboratório vê qual armação foi enviada. Outros itens
+    // (acessórios etc.) continuam de fora — decisão do dono.
+    const osItems = sale.items.filter(
+      (it) => it.product?.type && ServiceOrderService.OS_INCLUDED_PRODUCT_TYPES.includes(it.product.type)
+    );
 
     if (!sale.customerId) {
       throw new AppError(
@@ -402,12 +420,13 @@ export class ServiceOrderService {
         },
       });
 
-      for (const it of lensItems) {
+      for (const it of osItems) {
+        const isArmacao = it.product?.type === "FRAME" || it.product?.type === "SUNGLASSES";
         await tx.serviceOrderItem.create({
           data: {
             serviceOrderId: newOrder.id,
             productId: it.product?.id || undefined,
-            description: it.description || it.product?.name || "Lente",
+            description: it.description || it.product?.name || (isArmacao ? "Armação" : "Lente"),
             qty: it.qty,
             unitPrice: 0, // OS não carrega valores — laboratório não usa preço.
             discount: 0,
