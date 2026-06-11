@@ -47,6 +47,7 @@ const menuItems = [
       { href: "/admin/configuracoes/equipe",  icon: UserCog,  label: "Equipe",  exact: false },
       { href: "/admin/configuracoes/logs",    icon: ScrollText, label: "Logs",  exact: false },
       { href: "/admin/configuracoes/sincronizacao", icon: RefreshCw, label: "Sincronização", exact: false },
+      { href: "/admin/configuracoes/emails", icon: Mail, label: "Emails", exact: false },
       { href: "/admin/configuracoes",         icon: Settings, label: "Config",  exact: true  },
     ],
   },
