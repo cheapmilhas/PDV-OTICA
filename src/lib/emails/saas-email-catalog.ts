@@ -54,11 +54,11 @@ export const SAAS_EMAIL_CATALOG: Record<SaasEmailType, SaasEmailCatalogEntry> = 
   },
 };
 
+/** Config (parcial) que carrega as flags por tipo — `SaasEmailConfig` satisfaz isto. */
+export type SaasEmailFlags = Partial<Record<SaasEmailCatalogEntry["configFlag"], boolean>>;
+
 /** True se o tipo está ligado na config (e o mestre está ligado — checado fora). */
-export function isSaasEmailEnabled(
-  eventType: SaasEmailType,
-  config: Record<string, boolean>
-): boolean {
+export function isSaasEmailEnabled(eventType: SaasEmailType, config: SaasEmailFlags): boolean {
   const flag = SAAS_EMAIL_CATALOG[eventType].configFlag;
   return config[flag] !== false;
 }
