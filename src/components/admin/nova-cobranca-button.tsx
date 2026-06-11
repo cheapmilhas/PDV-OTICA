@@ -4,7 +4,8 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 
 interface NovaCobrancaButtonProps {
-  companyId: string;
+  companyId?: string;
+  companies?: { id: string; name: string }[];
   label?: string;
 }
 
@@ -17,8 +18,9 @@ const SOURCE_OPTIONS: { value: ChargeSource; label: string }[] = [
   { value: "other", label: "Outro" },
 ];
 
-export function NovaCobrancaButton({ companyId, label }: NovaCobrancaButtonProps) {
+export function NovaCobrancaButton({ companyId, companies, label }: NovaCobrancaButtonProps) {
   const router = useRouter();
+  const showCompanySelect = !companyId && !!companies;
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const [msg, setMsg] = useState<string | null>(null);
@@ -27,12 +29,14 @@ export function NovaCobrancaButton({ companyId, label }: NovaCobrancaButtonProps
   const [description, setDescription] = useState("");
   const [dueDate, setDueDate] = useState("");
   const [source, setSource] = useState<ChargeSource>("other");
+  const [selectedCompanyId, setSelectedCompanyId] = useState("");
 
   function resetForm() {
     setValor("");
     setDescription("");
     setDueDate("");
     setSource("other");
+    setSelectedCompanyId("");
   }
 
   function close() {
@@ -42,6 +46,11 @@ export function NovaCobrancaButton({ companyId, label }: NovaCobrancaButtonProps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+    const effectiveCompanyId = companyId ?? selectedCompanyId;
+    if (!effectiveCompanyId) {
+      setMsg("Selecione uma empresa.");
+      return;
+    }
     setLoading(true);
     setMsg(null);
     try {
@@ -49,7 +58,7 @@ export function NovaCobrancaButton({ companyId, label }: NovaCobrancaButtonProps
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          companyId,
+          companyId: effectiveCompanyId,
           amount: Math.round(parseFloat(valor) * 100),
           description,
           source,
@@ -97,6 +106,28 @@ export function NovaCobrancaButton({ companyId, label }: NovaCobrancaButtonProps
             className="w-full max-w-md space-y-4 rounded-lg border border-gray-700 bg-gray-800 p-6 text-white shadow-xl"
           >
             <h2 className="text-lg font-semibold">Nova cobrança</h2>
+
+            {showCompanySelect && (
+              <div>
+                <label className="block text-sm font-medium text-gray-400 mb-1">
+                  Empresa
+                  <select
+                    aria-label="Empresa"
+                    value={selectedCompanyId}
+                    onChange={(e) => setSelectedCompanyId(e.target.value)}
+                    required
+                    className="mt-1 w-full rounded-lg border border-gray-700 bg-gray-900 px-3 py-2 text-white"
+                  >
+                    <option value="">Selecione…</option>
+                    {companies!.map((c) => (
+                      <option key={c.id} value={c.id}>
+                        {c.name}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+              </div>
+            )}
 
             <div>
               <label className="block text-sm font-medium text-gray-400 mb-1">

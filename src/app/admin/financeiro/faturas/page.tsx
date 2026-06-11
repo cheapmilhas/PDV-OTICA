@@ -2,11 +2,12 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
-  FileText, ExternalLink, CheckCircle, Circle,
+  ExternalLink, CheckCircle, Circle,
   Send, Receipt, CreditCard, AlertTriangle
 } from "lucide-react";
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
 
 function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
   if (!a) return false;
@@ -82,6 +83,12 @@ export default async function FaturasPage({
     prisma.invoice.count({ where: { paymentConfirmed: true, nfGenerated: false } }),
   ]);
 
+  const companies = await prisma.company.findMany({
+    where: { subscriptions: { some: { status: { not: "CANCELED" } } } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
   // Totais financeiros
   const totalRecebido = await prisma.invoice.aggregate({
     where: { status: "PAID" },
@@ -102,13 +109,7 @@ export default async function FaturasPage({
         </div>
         <div className="flex items-center gap-3">
           <SyncInvoicesButton />
-          <Link
-            href="/admin/financeiro/faturas/nova"
-            className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors text-sm"
-          >
-            <FileText className="w-4 h-4" />
-            Nova Cobrança
-          </Link>
+          <NovaCobrancaButton companies={companies} />
         </div>
       </div>
 

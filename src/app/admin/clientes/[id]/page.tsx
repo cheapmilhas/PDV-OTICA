@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign } from "lucide-react";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyNotes } from "./company-notes";
@@ -135,14 +136,17 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             <p className="text-sm text-gray-400">{company.email ?? "—"}</p>
           </div>
         </div>
-        <CompanyActions
-          companyId={company.id}
-          companyName={company.name}
-          isBlocked={company.isBlocked}
-          subscriptionStatus={currentSubscription?.status ?? null}
-          billingCycle={currentSubscription?.billingCycle ?? null}
-          currentPlanId={currentSubscription?.planId ?? null}
-        />
+        <div className="flex items-center gap-3">
+          <NovaCobrancaButton companyId={company.id} />
+          <CompanyActions
+            companyId={company.id}
+            companyName={company.name}
+            isBlocked={company.isBlocked}
+            subscriptionStatus={currentSubscription?.status ?? null}
+            billingCycle={currentSubscription?.billingCycle ?? null}
+            currentPlanId={currentSubscription?.planId ?? null}
+          />
+        </div>
       </div>
 
       {/* Tabs */}

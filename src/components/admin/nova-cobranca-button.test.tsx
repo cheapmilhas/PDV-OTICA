@@ -78,6 +78,19 @@ it("(f) sucesso sem envio mostra status do email", async () => {
   await waitFor(() => expect(screen.getByText(/Email não enviado \(SKIPPED\)/i)).toBeDefined());
 });
 
+it("(h) com companies mostra select de empresa", () => {
+  render(<NovaCobrancaButton companies={[{ id: "c1", name: "Empresa X" }]} />);
+  fireEvent.click(screen.getByText("Nova cobrança"));
+  expect(screen.getByLabelText("Empresa")).toBeDefined();
+  expect(screen.getByText("Empresa X")).toBeDefined();
+});
+
+it("(i) com companyId NÃO mostra select de empresa", () => {
+  render(<NovaCobrancaButton companyId="c1" />);
+  fireEvent.click(screen.getByText("Nova cobrança"));
+  expect(screen.queryByLabelText("Empresa")).toBeNull();
+});
+
 it("(g) erro mostra a mensagem da resposta", async () => {
   vi.spyOn(global, "fetch").mockResolvedValue(
     new Response(JSON.stringify({ error: "Empresa sem cliente Asaas" }), { status: 400 }),
