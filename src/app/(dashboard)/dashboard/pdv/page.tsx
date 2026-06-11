@@ -79,6 +79,9 @@ function PDVPage() {
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<Customer | null>(null);
   const [cashbackSelecionado, setCashbackSelecionado] = useState<number | null>(null);
+  // Incrementado após uma venda concluída que NÃO sai da página (crediário),
+  // para re-buscar o saldo de cashback do cliente que permanece selecionado.
+  const [cashbackRefreshKey, setCashbackRefreshKey] = useState(0);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -176,7 +179,7 @@ function PDVPage() {
     return () => {
       ativo = false;
     };
-  }, [clienteSelecionado?.id]);
+  }, [clienteSelecionado?.id, cashbackRefreshKey]);
 
   // Refs para atalhos
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -789,6 +792,9 @@ function PDVPage() {
         setDescontoVendaTipo("FIXED");
         setShowCarneDialog(true);
         setLastSaleId(vendaId);
+        // Cliente permanece selecionado neste fluxo (não há redirect) — força
+        // re-busca do saldo de cashback, que pode ter mudado com esta venda.
+        setCashbackRefreshKey((k) => k + 1);
         // Não redireciona ainda, espera o usuário decidir sobre o carnê
         return;
       }
