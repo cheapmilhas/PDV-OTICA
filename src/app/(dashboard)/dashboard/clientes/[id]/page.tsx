@@ -57,7 +57,7 @@ import {
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency, getInitials } from "@/lib/utils";
-import { format } from "date-fns";
+import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import toast from "react-hot-toast";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -913,7 +913,8 @@ function ClienteDetalhesPage() {
                   <div>
                     <p className="text-sm text-muted-foreground">Data de nascimento</p>
                     <p className="font-medium">
-                      {format(safeDate(customer.birthDate), "dd/MM/yyyy", { locale: ptBR })}
+                      {/* slice(0,10) + parseISO evita o shift de fuso (UTC-3 mostraria 1 dia antes) */}
+                      {format(parseISO(customer.birthDate.slice(0, 10)), "dd/MM/yyyy", { locale: ptBR })}
                     </p>
                   </div>
                 )}
