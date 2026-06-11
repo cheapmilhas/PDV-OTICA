@@ -16,6 +16,14 @@ import { CompanyTimeline } from "./company-timeline";
 import { CompanyOnboarding } from "./company-onboarding";
 import { CompanyTags } from "./company-tags";
 
+function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
+  if (!a) return false;
+  const da = new Date(a);
+  if (Number.isNaN(da.getTime())) return false;
+  const key = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return key(da) === key(b);
+}
+
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
   SUSPENDED: "Suspenso", CANCELED: "Cancelado", TRIAL_EXPIRED: "Trial Expirado",
@@ -478,7 +486,12 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                           {inv.billingType || "—"}
                         </td>
                         <td className="px-5 py-3">
-                          <ResendChargeButton invoiceId={inv.id} />
+                          <ResendChargeButton
+                            invoiceId={inv.id}
+                            invoiceSent={inv.invoiceSent}
+                            invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
+                            sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
+                          />
                         </td>
                       </tr>
                     ))}

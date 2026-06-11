@@ -6,6 +6,15 @@ import {
   Send, Receipt, CreditCard, AlertTriangle
 } from "lucide-react";
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
+import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+
+function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
+  if (!a) return false;
+  const da = new Date(a);
+  if (Number.isNaN(da.getTime())) return false;
+  const key = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return key(da) === key(b);
+}
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
@@ -271,12 +280,20 @@ export default async function FaturasPage({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/financeiro/faturas/${inv.id}`}
-                        className="px-3 py-1.5 text-sm bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
-                      >
-                        Gerenciar
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <ResendChargeButton
+                          invoiceId={inv.id}
+                          invoiceSent={inv.invoiceSent}
+                          invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
+                          sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
+                        />
+                        <Link
+                          href={`/admin/financeiro/faturas/${inv.id}`}
+                          className="px-3 py-1.5 text-sm bg-gray-800 text-white rounded hover:bg-gray-700 transition-colors"
+                        >
+                          Gerenciar
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))

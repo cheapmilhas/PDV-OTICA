@@ -6,6 +6,14 @@ import { ArrowLeft, Building2, CheckCircle, Circle, Send, CreditCard, Receipt, F
 import { InvoiceActions } from "./invoice-actions";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 
+function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
+  if (!a) return false;
+  const da = new Date(a);
+  if (Number.isNaN(da.getTime())) return false;
+  const key = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return key(da) === key(b);
+}
+
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
   PENDING: "Pendente",
@@ -259,7 +267,12 @@ export default async function InvoiceDetailPage({
               <p className="text-xs text-gray-600 mb-2">Nenhum link gerado ainda</p>
             )}
             <div className="mt-3 pt-3 border-t border-gray-800">
-              <ResendChargeButton invoiceId={invoice.id} />
+              <ResendChargeButton
+                invoiceId={invoice.id}
+                invoiceSent={invoice.invoiceSent}
+                invoiceSentAt={invoice.invoiceSentAt ? invoice.invoiceSentAt.toISOString() : null}
+                sentToday={mesmoDia(invoice.invoiceSentAt, new Date())}
+              />
             </div>
           </div>
         </div>
