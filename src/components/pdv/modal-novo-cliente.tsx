@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -32,6 +32,26 @@ export function ModalNovoCliente({ open, onOpenChange, onClienteCriado }: ModalN
     state: "",
   });
   const [mostrarMais, setMostrarMais] = useState(false);
+
+  useEffect(() => {
+    if (!open) {
+      setFormData({
+        name: "",
+        phone: "",
+        email: "",
+        cpf: "",
+        birthDate: "",
+        gender: "",
+        zipCode: "",
+        address: "",
+        number: "",
+        neighborhood: "",
+        city: "",
+        state: "",
+      });
+      setMostrarMais(false);
+    }
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
