@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { escapeHtml } from "@/lib/escape-html";
+import { renderSaasEmailLayout } from "@/lib/emails/saas-email-layout";
 
 export interface RenderedEmail {
   html: string;
@@ -84,10 +85,145 @@ function renderInviteEmail(data: unknown): RenderedEmail {
   return { html, text };
 }
 
+// ─── SaaS templates ───────────────────────────────────────────────────────────
+
+const welcomeSchema = z.object({ name: z.string().min(1), loginUrl: z.string().url() });
+function renderSaasWelcome(data: unknown): RenderedEmail {
+  const p = welcomeSchema.parse(data);
+  // `name` vai no campo `heading`, que o layout JÁ escapa — passar cru (não
+  // pré-escapar, senão fica duplo: "João & Cia" viraria "João &amp;amp; Cia").
+  const bodyHtml = `<p style="margin:0 0 16px;">Sua conta no Vis está ativa. A partir de agora você tem o controle completo da sua ótica em um só lugar — vendas, ordens de serviço, estoque e financeiro.</p>
+<p style="margin:0 0 22px;">Clique abaixo para começar.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Bem-vindo ao Vis",
+    heading: `Bem-vindo(a), ${p.name}`,
+    bodyHtml,
+    cta: { label: "Acessar o sistema", url: p.loginUrl },
+  });
+  const text = [`Bem-vindo(a), ${p.name}`, "", "Sua conta no Vis está ativa.", `Acesse: ${p.loginUrl}`].join("\n");
+  return { html, text };
+}
+
+const trialEndingSchema = z.object({
+  name: z.string().min(1),
+  daysLeft: z.number().int().nonnegative(),
+  subscribeUrl: z.string().url(),
+});
+function renderSaasTrialEnding(data: unknown): RenderedEmail {
+  const p = trialEndingSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Seu período de teste no Vis termina em <strong>${p.daysLeft} dia(s)</strong>.</p>
+<p style="margin:0 0 22px;">Assine agora para continuar usando todos os recursos sem interrupção.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Seu teste está acabando",
+    heading: `${p.name}, seu teste está acabando`,
+    bodyHtml,
+    cta: { label: "Assinar agora", url: p.subscribeUrl },
+  });
+  const text = [`${p.name}, seu teste termina em ${p.daysLeft} dia(s).`, "", `Assine agora: ${p.subscribeUrl}`].join("\n");
+  return { html, text };
+}
+
+const trialExpiredSchema = z.object({ name: z.string().min(1), subscribeUrl: z.string().url() });
+function renderSaasTrialExpired(data: unknown): RenderedEmail {
+  const p = trialExpiredSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Seu período de teste no Vis chegou ao fim.</p>
+<p style="margin:0 0 22px;">Para continuar usando o sistema, escolha um plano e ative sua assinatura agora.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Seu teste expirou",
+    heading: `${p.name}, seu teste expirou`,
+    bodyHtml,
+    cta: { label: "Assinar agora", url: p.subscribeUrl },
+  });
+  const text = [`${p.name}, seu período de teste expirou.`, "", `Assine agora: ${p.subscribeUrl}`].join("\n");
+  return { html, text };
+}
+
+const invoiceOverdueSchema = z.object({
+  name: z.string().min(1),
+  daysOverdue: z.number().int().nonnegative(),
+  payUrl: z.string().url(),
+});
+function renderSaasInvoiceOverdue(data: unknown): RenderedEmail {
+  const p = invoiceOverdueSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Identificamos um atraso de <strong>${p.daysOverdue} dia(s)</strong> no pagamento da sua assinatura Vis.</p>
+<p style="margin:0 0 22px;">Regularize agora para manter seu acesso ativo e evitar a suspensão.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Pagamento em atraso",
+    heading: `${p.name}, seu pagamento está em atraso`,
+    bodyHtml,
+    cta: { label: "Pagar agora", url: p.payUrl },
+  });
+  const text = [`${p.name}, seu pagamento está em atraso (${p.daysOverdue} dia(s)).`, "", `Regularize: ${p.payUrl}`].join("\n");
+  return { html, text };
+}
+
+const paymentConfirmedSchema = z.object({ name: z.string().min(1), amountLabel: z.string().min(1) });
+function renderSaasPaymentConfirmed(data: unknown): RenderedEmail {
+  const p = paymentConfirmedSchema.parse(data);
+  // `amount` entra no bodyHtml (inserido cru pelo layout) → escapar aqui.
+  // `name` vai no `heading` (layout escapa) → passar cru.
+  const amount = escapeHtml(p.amountLabel);
+  const bodyHtml = `<p style="margin:0 0 16px;">Recebemos seu pagamento de <strong>${amount}</strong> referente à sua assinatura Vis.</p>
+<p style="margin:0 0 22px;">Obrigado por continuar com a gente. Seu acesso segue ativo normalmente.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Pagamento confirmado",
+    heading: `${p.name}, pagamento confirmado`,
+    bodyHtml,
+  });
+  const text = [`${p.name}, seu pagamento de ${p.amountLabel} foi confirmado.`, "", "Obrigado! Seu acesso segue ativo."].join("\n");
+  return { html, text };
+}
+
+const subscriptionSuspendedSchema = z.object({ name: z.string().min(1), payUrl: z.string().url() });
+function renderSaasSubscriptionSuspended(data: unknown): RenderedEmail {
+  const p = subscriptionSuspendedSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Sua assinatura Vis foi <strong>suspensa</strong> por falta de pagamento.</p>
+<p style="margin:0 0 22px;">Regularize seu pagamento para reativar o acesso imediatamente.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Assinatura suspensa",
+    heading: `${p.name}, sua assinatura foi suspensa`,
+    bodyHtml,
+    cta: { label: "Regularizar agora", url: p.payUrl },
+  });
+  const text = [`${p.name}, sua assinatura foi suspensa.`, "", `Regularize: ${p.payUrl}`].join("\n");
+  return { html, text };
+}
+
+const subscriptionCanceledSchema = z.object({ name: z.string().min(1), reactivateUrl: z.string().url() });
+function renderSaasSubscriptionCanceled(data: unknown): RenderedEmail {
+  const p = subscriptionCanceledSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Sua assinatura Vis foi cancelada.</p>
+<p style="margin:0 0 22px;">Se mudar de ideia, você pode reativar sua conta a qualquer momento.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Assinatura cancelada",
+    heading: `${p.name}, sua assinatura foi cancelada`,
+    bodyHtml,
+    cta: { label: "Reativar assinatura", url: p.reactivateUrl },
+  });
+  const text = [`${p.name}, sua assinatura foi cancelada.`, "", `Reativar: ${p.reactivateUrl}`].join("\n");
+  return { html, text };
+}
+
+// ─── router ───────────────────────────────────────────────────────────────────
+
 export function renderEmailTemplate(template: string, data: unknown): RenderedEmail {
   switch (template) {
     case "invite":
       return renderInviteEmail(data);
+    case "saas-welcome":
+      return renderSaasWelcome(data);
+    case "saas-trial-ending":
+      return renderSaasTrialEnding(data);
+    case "saas-trial-expired":
+      return renderSaasTrialExpired(data);
+    case "saas-invoice-overdue":
+      return renderSaasInvoiceOverdue(data);
+    case "saas-payment-confirmed":
+      return renderSaasPaymentConfirmed(data);
+    case "saas-subscription-suspended":
+      return renderSaasSubscriptionSuspended(data);
+    case "saas-subscription-canceled":
+      return renderSaasSubscriptionCanceled(data);
     default:
       throw new Error(`Unsupported email template: ${template}`);
   }
