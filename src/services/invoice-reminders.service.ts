@@ -95,6 +95,7 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
     where: {
       status: "PENDING",
       paymentConfirmedAt: null,
+      isManual: false,
       subscription: { status: "ACTIVE" },
       dueDate: { gt: now, lte: in3d },
     },

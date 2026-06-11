@@ -54,6 +54,18 @@ it("Parte B: fatura PENDING vencendo em ≤3d → DUE_SOON + reminderSentAt", as
   expect(prisma.invoice.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "inv_2" } }));
 });
 
+it("Parte B ignora Invoice isManual=true (cobrança avulsa)", async () => {
+  (getSaasEmailConfig as any).mockResolvedValue({ invoiceGenerationEnabled: true });
+  (prisma.subscription.findMany as any).mockResolvedValue([]);
+  (syncInvoicesForSubscription as any).mockResolvedValue([]);
+  (prisma.invoice.findMany as any).mockResolvedValue([]);
+  await runInvoiceReminders({ now: NOW });
+  const calls = (prisma.invoice.findMany as any).mock.calls;
+  const partB = calls.find((c: any) => c[0]?.where?.dueDate);
+  expect(partB).toBeTruthy();
+  expect(partB[0].where.isManual).toBe(false);
+});
+
 it("erro numa subscription não derruba a run", async () => {
   (getSaasEmailConfig as any).mockResolvedValue({ invoiceGenerationEnabled: true });
   (prisma.subscription.findMany as any).mockResolvedValue([{ id: "s1", asaasSubscriptionId: "a1", companyId: "c1", company: { name: "X" } }]);
