@@ -207,6 +207,7 @@ model Company {
   usageSnapshots          UsageSnapshot[]
   cardReceivables         CardReceivable[]
   recurringExpenses       RecurringExpense[]
+  saasEmailLogs           SaasEmailLog[]
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -4045,4 +4046,63 @@ model PlanInterest {
   @@unique([email, planSlug])
   @@index([planSlug])
   @@index([createdAt])
+}
+
+/// Tipos de email transacional do ciclo de vida da assinatura (Fase 1).
+enum SaasEmailType {
+  WELCOME
+  TRIAL_ENDING
+  TRIAL_EXPIRED
+  INVOICE_OVERDUE
+  PAYMENT_CONFIRMED
+  SUBSCRIPTION_SUSPENDED
+  SUBSCRIPTION_CANCELED
+}
+
+enum SaasEmailLogStatus {
+  PENDING
+  SENT
+  SKIPPED
+  FAILED
+}
+
+/// Config global dos emails do SaaS. Registro ÚNICO (id fixo "singleton" via
+/// upsert no service). Flags liga/desliga por tipo + modo teste. Entregue com
+/// testMode LIGADO (emails vão só p/ testEmail até o dono desligar).
+model SaasEmailConfig {
+  id                           String   @id
+  masterEnabled                Boolean  @default(true)
+  testMode                     Boolean  @default(true)
+  testEmail                    String?
+  welcomeEnabled               Boolean  @default(true)
+  trialEndingEnabled           Boolean  @default(true)
+  trialExpiredEnabled          Boolean  @default(true)
+  invoiceOverdueEnabled        Boolean  @default(true)
+  paymentConfirmedEnabled      Boolean  @default(true)
+  subscriptionSuspendedEnabled Boolean  @default(true)
+  subscriptionCanceledEnabled  Boolean  @default(true)
+  updatedBy                    String?
+  updatedAt                    DateTime @updatedAt
+}
+
+/// Histórico + chave de idempotência de cada notificação do SaaS disparada.
+/// A unique (companyId, eventType, periodKey) impede reenviar o mesmo evento
+/// no mesmo período (ex.: "vencida 7d" uma vez só; trial ending uma vez só).
+model SaasEmailLog {
+  id           String             @id @default(cuid())
+  companyId    String
+  eventType    SaasEmailType
+  periodKey    String
+  to           String
+  status       SaasEmailLogStatus @default(PENDING)
+  channels     String             @default("email")
+  emailQueueId String?
+  skipReason   String?
+  createdAt    DateTime           @default(now())
+
+  company Company @relation(fields: [companyId], references: [id])
+
+  @@unique([companyId, eventType, periodKey])
+  @@index([companyId, createdAt])
+  @@index([eventType, createdAt])
 }
