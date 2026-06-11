@@ -78,6 +78,7 @@ function PDVPage() {
   const [buscaProduto, setBuscaProduto] = useState("");
   const [buscaCliente, setBuscaCliente] = useState("");
   const [clienteSelecionado, setClienteSelecionado] = useState<Customer | null>(null);
+  const [cashbackSelecionado, setCashbackSelecionado] = useState<number | null>(null);
   const [products, setProducts] = useState<Product[]>([]);
   const [customers, setCustomers] = useState<Customer[]>([]);
   const [loadingProducts, setLoadingProducts] = useState(false);
@@ -146,6 +147,36 @@ function PDVPage() {
       })
       .catch(console.error);
   }, [activeBranchId]);
+
+  // Busca o saldo de cashback do cliente selecionado (de qualquer origem:
+  // busca, pré-preenchido por orçamento/OS, ou recém-criado no modal).
+  useEffect(() => {
+    if (!clienteSelecionado?.id) {
+      setCashbackSelecionado(null);
+      return;
+    }
+    let ativo = true;
+    fetch(`/api/cashback/balance/${clienteSelecionado.id}`)
+      .then(async (res) => {
+        if (res.status === 403) return null; // plano sem cashback
+        if (!res.ok) return null;
+        return res.json();
+      })
+      .then((data) => {
+        if (!ativo) return;
+        if (data?.success) {
+          setCashbackSelecionado(Number(data.data?.balance) || 0);
+        } else {
+          setCashbackSelecionado(null);
+        }
+      })
+      .catch(() => {
+        if (ativo) setCashbackSelecionado(null);
+      });
+    return () => {
+      ativo = false;
+    };
+  }, [clienteSelecionado?.id]);
 
   // Refs para atalhos
   const searchInputRef = useRef<HTMLInputElement>(null);
@@ -1162,6 +1193,11 @@ function PDVPage() {
                     <p className="text-sm font-medium">{clienteSelecionado.name}</p>
                     {clienteSelecionado.phone && (
                       <p className="text-xs text-muted-foreground">{clienteSelecionado.phone}</p>
+                    )}
+                    {cashbackSelecionado != null && cashbackSelecionado > 0 && (
+                      <p className="text-xs text-emerald-600 font-medium">
+                        Cashback: {formatCurrency(cashbackSelecionado)}
+                      </p>
                     )}
                   </div>
                   <Button
