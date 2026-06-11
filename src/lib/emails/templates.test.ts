@@ -105,3 +105,29 @@ describe("saas-invoice-due-soon", () => {
     expect(html.toLowerCase()).toContain("vence");
   });
 });
+
+describe("saas-invoice-created — hardening (Fase 2)", () => {
+  it("escapa dados HTML no corpo (sem XSS)", () => {
+    const { html } = renderEmailTemplate("saas-invoice-created", {
+      name: "João",
+      amountLabel: "R$ <b>149</b>",
+      dueDateLabel: "10/07/2026",
+      pixCode: "<script>x</script>",
+      paymentUrl: "https://asaas/i/1",
+    });
+    expect(html).not.toContain("<b>149</b>");
+    expect(html).not.toContain("<script>x</script>");
+    expect(html).toContain("&lt;script&gt;"); // escapado por escapeHtml
+  });
+
+  it("rejeita paymentUrl com esquema javascript:", () => {
+    expect(() =>
+      renderEmailTemplate("saas-invoice-created", {
+        name: "João",
+        amountLabel: "R$ 1",
+        dueDateLabel: "10/07/2026",
+        paymentUrl: "javascript:alert(1)",
+      })
+    ).toThrow();
+  });
+});

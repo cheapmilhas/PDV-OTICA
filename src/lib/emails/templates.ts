@@ -206,13 +206,19 @@ function renderSaasSubscriptionCanceled(data: unknown): RenderedEmail {
 
 // ─── SaaS invoice templates (Fase 2) ─────────────────────────────────────────
 
+/** URL que aceita só http(s) — bloqueia javascript:/data: em hrefs (saída é pré-vista no browser admin). */
+const safeUrl = z.string().url().refine(
+  (u) => u.startsWith("https://") || u.startsWith("http://"),
+  { message: "URL deve usar esquema http ou https" }
+);
+
 const invoiceCreatedSchema = z.object({
   name: z.string().min(1),
   amountLabel: z.string().min(1),
   dueDateLabel: z.string().min(1),
   pixCode: z.string().optional(),
-  paymentUrl: z.string().url(),
-  boletoUrl: z.string().url().optional(),
+  paymentUrl: safeUrl,
+  boletoUrl: safeUrl.optional(),
 });
 
 function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: boolean): RenderedEmail {
@@ -233,7 +239,7 @@ function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: 
   const bodyHtml = `${intro}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Prefere cartão ou ver o QR Code? Clique em "Pagar agora".</p>${boletoBlock}`;
   const html = renderSaasEmailLayout({
     previewTitle: isReminder ? "Sua fatura vence em breve" : "Sua fatura está disponível",
-    heading: isReminder ? `${p.name}, sua fatura vence em 3 dias` : `${p.name}, sua fatura está disponível`,
+    heading: isReminder ? `${p.name}, sua fatura vence em breve` : `${p.name}, sua fatura está disponível`,
     bodyHtml,
     cta: { label: "Pagar agora", url: p.paymentUrl },
   });
