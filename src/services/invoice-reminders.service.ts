@@ -3,6 +3,7 @@ import { logger } from "@/lib/logger";
 import { getSaasEmailConfig } from "@/services/saas-email-config.service";
 import { syncInvoicesForSubscription } from "@/services/invoice-sync.service";
 import { notifyCompany } from "@/services/saas-notification.service";
+import { brl, dateBR } from "@/lib/format-brl";
 
 const log = logger.child({ service: "invoice-reminders" });
 
@@ -14,14 +15,6 @@ export interface RunSummary {
   skipped: "generation_disabled" | null;
   errors: number;
   runAt: string;
-}
-
-function brl(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function dateBR(d: Date): string {
-  return new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Fortaleza" }).format(d);
 }
 
 export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<RunSummary> {

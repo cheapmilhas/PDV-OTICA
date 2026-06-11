@@ -3,19 +3,10 @@ import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { notifyCompany } from "@/services/saas-notification.service";
 import { logger } from "@/lib/logger";
+import { brl, dateBR } from "@/lib/format-brl";
 
 const log = logger.child({ route: "admin/invoices/resend-charge" });
 export const dynamic = "force-dynamic";
-
-function brl(cents: number): string {
-  return (cents / 100).toLocaleString("pt-BR", { style: "currency", currency: "BRL" });
-}
-
-function dateBR(d: Date | null): string {
-  return d
-    ? new Intl.DateTimeFormat("pt-BR", { dateStyle: "short", timeZone: "America/Fortaleza" }).format(d)
-    : "";
-}
 
 // UTC proposital: o periodKey é um token de dedup (1 reenvio/fatura/dia), não uma data de exibição.
 function yyyymmdd(d: Date): string {
