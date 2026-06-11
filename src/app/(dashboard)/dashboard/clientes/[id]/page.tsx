@@ -67,13 +67,21 @@ interface Customer {
   name: string;
   email?: string;
   phone?: string;
+  phone2?: string;
   cpf?: string;
   cnpj?: string;
-  type: "INDIVIDUAL" | "BUSINESS";
+  personType: "PF" | "PJ";
+  birthDate?: string | null;
+  gender?: string | null;
+  referralSource?: string | null;
   address?: string;
+  number?: string | null;
+  complement?: string | null;
+  neighborhood?: string | null;
   city?: string;
   state?: string;
   zipCode?: string;
+  notes?: string | null;
   createdAt: string;
 }
 
@@ -853,7 +861,7 @@ function ClienteDetalhesPage() {
                 <div>
                   <p className="text-sm text-muted-foreground">Tipo</p>
                   <Badge variant="secondary">
-                    {customer.type === "INDIVIDUAL" ? "Pessoa Física" : "Pessoa Jurídica"}
+                    {customer.personType === "PF" ? "Pessoa Física" : "Pessoa Jurídica"}
                   </Badge>
                 </div>
 
@@ -890,9 +898,51 @@ function ClienteDetalhesPage() {
                     <p className="font-medium">{customer.phone}</p>
                   </div>
                 )}
+
+                {customer.phone2 && (
+                  <div>
+                    <p className="text-sm text-muted-foreground flex items-center gap-1">
+                      <Phone className="h-3 w-3" />
+                      Telefone 2
+                    </p>
+                    <p className="font-medium">{customer.phone2}</p>
+                  </div>
+                )}
+
+                {customer.birthDate && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Data de nascimento</p>
+                    <p className="font-medium">
+                      {format(safeDate(customer.birthDate), "dd/MM/yyyy", { locale: ptBR })}
+                    </p>
+                  </div>
+                )}
+
+                {customer.gender && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Gênero</p>
+                    <p className="font-medium">
+                      {customer.gender === "M" ? "Masculino" : customer.gender === "F" ? "Feminino" : customer.gender}
+                    </p>
+                  </div>
+                )}
+
+                {customer.referralSource && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Como nos conheceu</p>
+                    <p className="font-medium">{customer.referralSource}</p>
+                  </div>
+                )}
+
+                <div>
+                  <p className="text-sm text-muted-foreground">Cliente desde</p>
+                  <p className="font-medium">
+                    {format(safeDate(customer.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+                  </p>
+                </div>
               </div>
 
-              {(customer.address || customer.city || customer.state || customer.zipCode) && (
+              {(customer.address || customer.neighborhood || customer.city || customer.state || customer.zipCode) && (
                 <>
                   <Separator />
                   <div>
@@ -901,7 +951,14 @@ function ClienteDetalhesPage() {
                       Endereço
                     </h3>
                     <div className="space-y-1 text-sm">
-                      {customer.address && <p>{customer.address}</p>}
+                      {customer.address && (
+                        <p>
+                          {customer.address}
+                          {customer.number && `, ${customer.number}`}
+                          {customer.complement && ` - ${customer.complement}`}
+                        </p>
+                      )}
+                      {customer.neighborhood && <p>{customer.neighborhood}</p>}
                       {(customer.city || customer.state || customer.zipCode) && (
                         <p>
                           {customer.city && `${customer.city}`}
@@ -910,6 +967,16 @@ function ClienteDetalhesPage() {
                         </p>
                       )}
                     </div>
+                  </div>
+                </>
+              )}
+
+              {customer.notes && (
+                <>
+                  <Separator />
+                  <div>
+                    <h3 className="font-semibold mb-2">Observações</h3>
+                    <p className="text-sm whitespace-pre-wrap">{customer.notes}</p>
                   </div>
                 </>
               )}
