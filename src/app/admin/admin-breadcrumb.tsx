@@ -40,14 +40,14 @@ export function AdminBreadcrumb() {
   if (crumbs.length <= 1) return null; // só "admin" → sem breadcrumb
 
   return (
-    <nav className="flex items-center gap-1 text-xs text-gray-500" aria-label="Breadcrumb">
+    <nav className="flex items-center gap-1 text-xs text-muted-foreground" aria-label="Breadcrumb">
       {crumbs.map((crumb, idx) => (
         <span key={crumb.href} className="flex items-center gap-1">
-          {idx > 0 && <ChevronRight className="h-3 w-3 text-gray-700" />}
+          {idx > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/50" />}
           {crumb.isLast ? (
-            <span className="text-gray-300 font-medium">{crumb.label}</span>
+            <span className="text-foreground font-medium">{crumb.label}</span>
           ) : (
-            <Link href={crumb.href} className="hover:text-gray-300 transition-colors">
+            <Link href={crumb.href} className="hover:text-foreground transition-colors">
               {crumb.label}
             </Link>
           )}
