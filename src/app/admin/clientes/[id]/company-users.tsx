@@ -47,11 +47,11 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_STYLES: Record<string, string> = {
-  ADMIN: "bg-purple-900/50 text-purple-400",
-  GERENTE: "bg-blue-900/50 text-blue-400",
-  VENDEDOR: "bg-green-900/50 text-green-400",
-  CAIXA: "bg-yellow-900/50 text-yellow-400",
-  ATENDENTE: "bg-gray-800 text-gray-400",
+  ADMIN: "bg-purple-100 text-purple-700",
+  GERENTE: "bg-blue-100 text-blue-700",
+  VENDEDOR: "bg-emerald-100 text-emerald-700",
+  CAIXA: "bg-amber-100 text-amber-700",
+  ATENDENTE: "bg-zinc-100 text-zinc-700",
 };
 
 interface CompanyUsersProps {
@@ -119,15 +119,15 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
   if (loading) {
     return (
       <div className="flex items-center justify-center py-12">
-        <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+        <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="rounded-xl border border-red-800 bg-red-900/20 p-6 text-center">
-        <p className="text-red-400">{error}</p>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
+        <p className="text-rose-600">{error}</p>
       </div>
     );
   }
@@ -137,17 +137,17 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h2 className="text-sm font-semibold text-white">
+          <h2 className="text-sm font-semibold text-foreground">
             Usuários ({activeCount}/{meta.maxUsers})
           </h2>
-          <p className="text-xs text-gray-500 mt-0.5">
+          <p className="text-xs text-muted-foreground mt-0.5">
             Plano {meta.planName}
           </p>
         </div>
         <button
           onClick={() => setShowCreateModal(true)}
           disabled={limitReached}
-          className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
+          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
         >
           <Plus className="w-4 h-4" />
           Novo Usuário
@@ -157,17 +157,17 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
       {/* Barra de limite */}
       <div>
         <div className="flex items-center justify-between mb-1">
-          <span className="text-xs text-gray-500">
+          <span className="text-xs text-muted-foreground">
             {activeCount} de {meta.maxUsers} usuários ativos
           </span>
           {limitReached && (
-            <span className="text-xs text-red-400">Limite atingido!</span>
+            <span className="text-xs text-rose-600">Limite atingido!</span>
           )}
         </div>
-        <div className="w-full bg-gray-800 rounded-full h-2">
+        <div className="w-full bg-muted rounded-full h-2">
           <div
             className={`h-2 rounded-full transition-all ${
-              limitReached ? "bg-red-500" : activeCount / meta.maxUsers > 0.8 ? "bg-yellow-500" : "bg-indigo-500"
+              limitReached ? "bg-rose-500" : activeCount / meta.maxUsers > 0.8 ? "bg-amber-500" : "bg-primary"
             }`}
             style={{ width: `${Math.min((activeCount / meta.maxUsers) * 100, 100)}%` }}
           />
@@ -176,47 +176,47 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
 
       {/* Tabela de usuários */}
       {users.length === 0 ? (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-12 text-center">
-          <Users className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-          <p className="text-gray-500">Nenhum usuário cadastrado</p>
-          <p className="text-xs text-gray-600 mt-1">Clique em "Novo Usuário" para criar o primeiro</p>
+        <div className="rounded-xl border border-border bg-card p-12 text-center">
+          <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
+          <p className="text-muted-foreground">Nenhum usuário cadastrado</p>
+          <p className="text-xs text-muted-foreground mt-1">Clique em "Novo Usuário" para criar o primeiro</p>
         </div>
       ) : (
-        <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
               <thead>
-                <tr className="border-b border-gray-800">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Nome</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Email</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Cargo</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Filial</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-gray-500">Ações</th>
+                <tr className="border-b border-border">
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Nome</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Email</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cargo</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Filial</th>
+                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                  <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
                 </tr>
               </thead>
               <tbody>
                 {users.map((user) => (
-                  <tr key={user.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                  <tr key={user.id} className="border-b border-border hover:bg-muted transition-colors">
                     <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-white">{user.name}</p>
+                      <p className="text-sm font-medium text-foreground">{user.name}</p>
                     </td>
-                    <td className="px-5 py-3 text-gray-400 text-sm">{user.email}</td>
+                    <td className="px-5 py-3 text-muted-foreground text-sm">{user.email}</td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ROLE_STYLES[user.role] ?? "bg-gray-800 text-gray-400"}`}>
+                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ROLE_STYLES[user.role] ?? "bg-zinc-100 text-zinc-700"}`}>
                         {ROLE_LABELS[user.role] ?? user.role}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-gray-400 text-xs">
+                    <td className="px-5 py-3 text-muted-foreground text-xs">
                       {user.branches.map((b) => b.name).join(", ") || "—"}
                     </td>
                     <td className="px-5 py-3">
                       {user.active ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-green-900/50 text-green-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
                           Ativo
                         </span>
                       ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-red-900/50 text-red-400">
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">
                           Inativo
                         </span>
                       )}
@@ -224,18 +224,18 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
                     <td className="px-5 py-3 text-right relative">
                       <button
                         onClick={() => setDropdownOpen(dropdownOpen === user.id ? null : user.id)}
-                        className="p-1.5 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
                       >
                         <MoreVertical className="w-4 h-4" />
                       </button>
                       {dropdownOpen === user.id && (
-                        <div className="absolute right-5 top-12 z-10 w-48 bg-gray-800 border border-gray-700 rounded-lg shadow-xl py-1">
+                        <div className="absolute right-5 top-12 z-10 w-48 bg-card border border-border rounded-lg shadow-xl py-1">
                           <button
                             onClick={() => {
                               setDropdownOpen(null);
                               setShowPasswordModal({ userId: user.id, userName: user.name });
                             }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground"
                           >
                             <KeyRound className="w-4 h-4" />
                             Resetar Senha
@@ -245,7 +245,7 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
                               setDropdownOpen(null);
                               setShowEditModal(user);
                             }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground"
                           >
                             <Pencil className="w-4 h-4" />
                             Editar Dados
@@ -255,18 +255,18 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
                               setDropdownOpen(null);
                               setShowPermissionsModal({ userId: user.id, userName: user.name, role: user.role });
                             }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-gray-300 hover:bg-gray-700 hover:text-white"
+                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground"
                           >
                             <Shield className="w-4 h-4" />
                             Gerenciar Permissões
                           </button>
-                          <div className="border-t border-gray-700 my-1" />
+                          <div className="border-t border-border my-1" />
                           <button
                             onClick={() => handleToggleActive(user.id, user.active)}
                             className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
                               user.active
-                                ? "text-red-400 hover:bg-red-900/30"
-                                : "text-green-400 hover:bg-green-900/30"
+                                ? "text-rose-600 hover:bg-rose-50"
+                                : "text-emerald-600 hover:bg-emerald-50"
                             }`}
                           >
                             {user.active ? (
@@ -411,45 +411,45 @@ function CreateUserModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h3 className="text-lg font-semibold text-white">Novo Usuário</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white">
+      <div className="bg-card border border-border rounded-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="text-lg font-semibold text-foreground">Novo Usuário</h3>
+          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded-lg text-sm">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Nome completo *</label>
+            <label className="block text-sm text-muted-foreground mb-1">Nome completo *</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email (login) *</label>
+            <label className="block text-sm text-muted-foreground mb-1">Email (login) *</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Senha *</label>
+            <label className="block text-sm text-muted-foreground mb-1">Senha *</label>
             <div className="flex gap-2">
               <input
                 type="text"
@@ -457,13 +457,13 @@ function CreateUserModal({
                 onChange={(e) => setPassword(e.target.value)}
                 required
                 minLength={8}
-                className="flex-1 px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+                className="flex-1 px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
                 placeholder="Mínimo 8 caracteres"
               />
               <button
                 type="button"
                 onClick={generatePassword}
-                className="flex items-center gap-1 px-3 py-2 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-600 hover:text-white transition-colors text-sm"
+                className="flex items-center gap-1 px-3 py-2 bg-muted border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-colors text-sm"
               >
                 <RefreshCw className="w-3.5 h-3.5" />
                 Gerar
@@ -472,11 +472,11 @@ function CreateUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Cargo *</label>
+            <label className="block text-sm text-muted-foreground mb-1">Cargo *</label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             >
               <option value="ADMIN">Administrador (ADMIN)</option>
               <option value="GERENTE">Gerente (GERENTE)</option>
@@ -487,11 +487,11 @@ function CreateUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Filial *</label>
+            <label className="block text-sm text-muted-foreground mb-1">Filial *</label>
             <select
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             >
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -503,14 +503,14 @@ function CreateUserModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Criar Usuário
@@ -565,33 +565,33 @@ function ResetPasswordModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h3 className="text-lg font-semibold text-white">Resetar Senha</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white">
+      <div className="bg-card border border-border rounded-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="text-lg font-semibold text-foreground">Resetar Senha</h3>
+          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
-          <p className="text-sm text-gray-400">
-            Resetar a senha de <strong className="text-white">{userName}</strong>
+          <p className="text-sm text-muted-foreground">
+            Resetar a senha de <strong className="text-foreground">{userName}</strong>
           </p>
 
           {error && (
-            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded-lg text-sm">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Nova senha (opcional)</label>
+            <label className="block text-sm text-muted-foreground mb-1">Nova senha (opcional)</label>
             <input
               type="text"
               value={newPassword}
               onChange={(e) => setNewPassword(e.target.value)}
               minLength={8}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
               placeholder="Deixe vazio para gerar automática"
             />
           </div>
@@ -600,7 +600,7 @@ function ResetPasswordModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
             >
               Cancelar
             </button>
@@ -638,32 +638,32 @@ function PasswordResultModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
+      <div className="bg-card border border-border rounded-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 space-y-4">
           <div className="text-center">
-            <div className="w-12 h-12 bg-green-900/50 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Check className="w-6 h-6 text-green-400" />
+            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Check className="w-6 h-6 text-emerald-600" />
             </div>
-            <h3 className="text-lg font-semibold text-white">Senha resetada!</h3>
+            <h3 className="text-lg font-semibold text-foreground">Senha resetada!</h3>
           </div>
 
-          <div className="bg-gray-800 border border-gray-700 rounded-lg p-4 flex items-center justify-between">
-            <code className="text-lg font-mono text-white">{password}</code>
+          <div className="bg-muted border border-border rounded-lg p-4 flex items-center justify-between">
+            <code className="text-lg font-mono text-foreground">{password}</code>
             <button
               onClick={handleCopy}
-              className="p-2 rounded-lg hover:bg-gray-700 text-gray-400 hover:text-white transition-colors"
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
             >
-              {copied ? <Check className="w-4 h-4 text-green-400" /> : <Copy className="w-4 h-4" />}
+              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
             </button>
           </div>
 
-          <p className="text-xs text-yellow-400 text-center">
+          <p className="text-xs text-amber-600 text-center">
             Envie esta senha ao usuário. Ela não será exibida novamente.
           </p>
 
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+            className="w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
           >
             Fechar
           </button>
@@ -719,49 +719,49 @@ function EditUserModal({
 
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
-      <div className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800">
-          <h3 className="text-lg font-semibold text-white">Editar Usuário</h3>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white">
+      <div className="bg-card border border-border rounded-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border">
+          <h3 className="text-lg font-semibold text-foreground">Editar Usuário</h3>
+          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded-lg text-sm">
+            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm">
               {error}
             </div>
           )}
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Nome completo</label>
+            <label className="block text-sm text-muted-foreground mb-1">Nome completo</label>
             <input
               type="text"
               value={name}
               onChange={(e) => setName(e.target.value)}
               required
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Email</label>
+            <label className="block text-sm text-muted-foreground mb-1">Email</label>
             <input
               type="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             />
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Cargo</label>
+            <label className="block text-sm text-muted-foreground mb-1">Cargo</label>
             <select
               value={role}
               onChange={(e) => setRole(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             >
               <option value="ADMIN">Administrador (ADMIN)</option>
               <option value="GERENTE">Gerente (GERENTE)</option>
@@ -772,11 +772,11 @@ function EditUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-gray-400 mb-1">Filial</label>
+            <label className="block text-sm text-muted-foreground mb-1">Filial</label>
             <select
               value={branchId}
               onChange={(e) => setBranchId(e.target.value)}
-              className="w-full px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white focus:outline-none focus:border-indigo-500"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             >
               {branches.map((b) => (
                 <option key={b.id} value={b.id}>{b.name}</option>
@@ -788,14 +788,14 @@ function EditUserModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
             >
               Cancelar
             </button>
             <button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 text-sm"
+              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Salvar
@@ -979,43 +979,43 @@ function PermissionsModal({
   return (
     <div className="fixed inset-0 bg-black/60 flex items-center justify-center z-50 p-4" onClick={onClose}>
       <div
-        className="bg-gray-900 border border-gray-800 rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
+        className="bg-card border border-border rounded-xl w-full max-w-2xl max-h-[85vh] flex flex-col"
         onClick={(e) => e.stopPropagation()}
       >
         {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-gray-800 flex-shrink-0">
+        <div className="flex items-center justify-between px-6 py-4 border-b border-border flex-shrink-0">
           <div>
-            <h3 className="text-lg font-semibold text-white">Permissões</h3>
-            <p className="text-sm text-gray-400">
+            <h3 className="text-lg font-semibold text-foreground">Permissões</h3>
+            <p className="text-sm text-muted-foreground">
               {userName} ({ROLE_LABELS[userRole] ?? userRole})
             </p>
           </div>
-          <button onClick={onClose} className="p-1 text-gray-400 hover:text-white">
+          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
             <X className="w-5 h-5" />
           </button>
         </div>
 
         {loading ? (
           <div className="flex items-center justify-center py-16">
-            <Loader2 className="w-6 h-6 animate-spin text-gray-500" />
+            <Loader2 className="w-6 h-6 animate-spin text-muted-foreground" />
           </div>
         ) : data ? (
           <>
             {/* Role selector + summary */}
-            <div className="px-6 py-4 border-b border-gray-800 flex-shrink-0">
+            <div className="px-6 py-4 border-b border-border flex-shrink-0">
               {error && (
-                <div className="bg-red-900/50 border border-red-500 text-red-200 px-4 py-2 rounded-lg text-sm mb-3">
+                <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm mb-3">
                   {error}
                 </div>
               )}
 
               <div className="flex items-center justify-between">
                 <div className="flex items-center gap-3">
-                  <label className="text-sm text-gray-400">Cargo:</label>
+                  <label className="text-sm text-muted-foreground">Cargo:</label>
                   <select
                     value={role}
                     onChange={(e) => handleRoleChange(e.target.value)}
-                    className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:border-indigo-500"
+                    className="px-3 py-1.5 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:border-primary"
                   >
                     <option value="ADMIN">Administrador</option>
                     <option value="GERENTE">Gerente</option>
@@ -1024,13 +1024,13 @@ function PermissionsModal({
                     <option value="ATENDENTE">Atendente</option>
                   </select>
                 </div>
-                <span className="text-xs text-gray-500">
+                <span className="text-xs text-muted-foreground">
                   {effectiveCount} de {data.summary.total} permissões
                 </span>
               </div>
 
               {roleChanged && (
-                <p className="text-xs text-yellow-400 mt-2">
+                <p className="text-xs text-amber-600 mt-2">
                   Alterar o cargo vai resetar as permissões customizadas para o padrão do novo cargo.
                 </p>
               )}
@@ -1041,23 +1041,23 @@ function PermissionsModal({
               {Object.entries(data.modules).map(([moduleKey, moduleData]) => {
                 const moduleEffective = moduleData.permissions.filter((p) => getEffective(p)).length;
                 return (
-                  <div key={moduleKey} className="rounded-lg border border-gray-800 overflow-hidden">
-                    <div className="px-4 py-2.5 bg-gray-800/50 flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">
+                  <div key={moduleKey} className="rounded-lg border border-border overflow-hidden">
+                    <div className="px-4 py-2.5 bg-muted flex items-center justify-between">
+                      <span className="text-sm font-medium text-foreground">
                         {MODULE_LABELS[moduleKey] ?? moduleKey}
                       </span>
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted-foreground">
                         {moduleEffective} de {moduleData.permissions.length}
                       </span>
                     </div>
-                    <div className="divide-y divide-gray-800/50">
+                    <div className="divide-y divide-border">
                       {moduleData.permissions.map((perm) => {
                         const effective = getEffective(perm);
                         const isCustom = perm.customOverride !== null || changes.has(perm.code);
                         return (
                           <label
                             key={perm.code}
-                            className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-gray-800/30 transition-colors ${
+                            className={`flex items-center gap-3 px-4 py-2 cursor-pointer hover:bg-muted transition-colors ${
                               roleChanged ? "opacity-60 cursor-default" : ""
                             }`}
                           >
@@ -1066,11 +1066,11 @@ function PermissionsModal({
                               checked={effective}
                               onChange={() => handleTogglePermission(perm.code, effective)}
                               disabled={roleChanged}
-                              className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-indigo-500 focus:ring-indigo-500 focus:ring-offset-0"
+                              className="w-4 h-4 rounded border-input bg-background text-primary focus:ring-ring focus:ring-offset-0"
                             />
-                            <span className="text-sm text-gray-300 flex-1">{perm.name}</span>
+                            <span className="text-sm text-foreground flex-1">{perm.name}</span>
                             {isCustom && !roleChanged && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-yellow-900/50 text-yellow-400">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
                                 custom
                               </span>
                             )}
@@ -1084,25 +1084,25 @@ function PermissionsModal({
             </div>
 
             {/* Footer */}
-            <div className="flex items-center justify-between px-6 py-4 border-t border-gray-800 flex-shrink-0">
+            <div className="flex items-center justify-between px-6 py-4 border-t border-border flex-shrink-0">
               <button
                 onClick={handleReset}
                 disabled={saving || data.summary.customOverrides === 0}
-                className="text-sm text-gray-400 hover:text-white transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
                 Resetar para padrão do cargo
               </button>
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-gray-700 text-white rounded-lg hover:bg-gray-600 transition-colors text-sm"
+                  className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
                 >
                   Cancelar
                 </button>
                 <button
                   onClick={handleSave}
                   disabled={saving || !hasChanges}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50 text-sm"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm"
                 >
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Salvar Permissões
@@ -1111,7 +1111,7 @@ function PermissionsModal({
             </div>
           </>
         ) : (
-          <div className="p-8 text-center text-red-400">{error || "Erro ao carregar"}</div>
+          <div className="p-8 text-center text-rose-600">{error || "Erro ao carregar"}</div>
         )}
       </div>
     </div>
