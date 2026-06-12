@@ -71,7 +71,7 @@ export function ClientesTable({ companies }: ClientesTableProps) {
                 <tr key={c.id} className="border-b border-border hover:bg-muted transition-colors">
                   {/* Empresa */}
                   <td className="px-4 py-3">
-                    <Link href={`/admin/clientes/${c.id}`} className="font-medium text-foreground hover:text-indigo-300">
+                    <Link href={`/admin/clientes/${c.id}`} className="font-medium text-foreground hover:text-primary">
                       {c.name}
                     </Link>
                     {c.cnpj && <p className="text-xs text-muted-foreground font-mono">{c.cnpj}</p>}
