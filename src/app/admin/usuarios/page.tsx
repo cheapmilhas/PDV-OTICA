@@ -1,7 +1,8 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Users, ExternalLink, CheckCircle, XCircle } from "lucide-react";
+import { ExternalLink, CheckCircle, XCircle } from "lucide-react";
+import { PageHeader } from "@/components/admin/PageHeader";
 import { ToggleUserButton } from "./toggle-user-button";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -13,11 +14,11 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_STYLES: Record<string, string> = {
-  ADMIN:     "bg-indigo-900/50 text-indigo-300 border-indigo-800",
-  GERENTE:   "bg-purple-900/50 text-purple-300 border-purple-800",
-  VENDEDOR:  "bg-blue-900/50 text-blue-300 border-blue-800",
-  CAIXA:     "bg-yellow-900/50 text-yellow-300 border-yellow-800",
-  ATENDENTE: "bg-gray-800 text-gray-400 border-gray-700",
+  ADMIN:     "bg-indigo-100 text-indigo-700 border-indigo-200",
+  GERENTE:   "bg-purple-100 text-purple-700 border-purple-200",
+  VENDEDOR:  "bg-blue-100 text-blue-700 border-blue-200",
+  CAIXA:     "bg-amber-100 text-amber-700 border-amber-200",
+  ATENDENTE: "bg-zinc-100 text-zinc-600 border-zinc-200",
 };
 
 export default async function UsuariosPage({
@@ -103,31 +104,24 @@ export default async function UsuariosPage({
   }
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white flex items-center gap-2">
-            <Users className="h-6 w-6 text-gray-400" />
-            Usuários
-          </h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {total} usuário{total !== 1 ? "s" : ""} em {companies.length} empresa{companies.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-
-        {/* Contadores rápidos */}
-        <div className="flex items-center gap-3">
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-green-900/30 border border-green-800 text-green-400 text-xs font-medium">
-            <CheckCircle className="h-3.5 w-3.5" />
-            {activeCount} ativos (página)
+      <PageHeader
+        title="Usuários"
+        subtitle={`${total} usuário${total !== 1 ? "s" : ""} em ${companies.length} empresa${companies.length !== 1 ? "s" : ""}`}
+        actions={
+          <div className="flex items-center gap-3">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+              <CheckCircle className="h-3.5 w-3.5" />
+              {activeCount} ativos (página)
+            </div>
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+              <XCircle className="h-3.5 w-3.5" />
+              {inactiveCount} inativos (página)
+            </div>
           </div>
-          <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-red-900/30 border border-red-800 text-red-400 text-xs font-medium">
-            <XCircle className="h-3.5 w-3.5" />
-            {inactiveCount} inativos (página)
-          </div>
-        </div>
-      </div>
+        }
+      />
 
       {/* Filtros */}
       <form method="GET" className="flex flex-wrap gap-3 mb-5">
@@ -135,13 +129,13 @@ export default async function UsuariosPage({
           name="search"
           defaultValue={search}
           placeholder="Buscar por nome ou email..."
-          className="px-4 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 w-64"
+          className="px-4 py-2 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring w-64"
         />
 
         <select
           name="companyId"
           defaultValue={companyId}
-          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="">Todas as empresas</option>
           {companies.map((c) => (
@@ -154,7 +148,7 @@ export default async function UsuariosPage({
         <select
           name="role"
           defaultValue={role}
-          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="">Todos os perfis</option>
           {Object.entries(ROLE_LABELS).map(([val, label]) => (
@@ -165,7 +159,7 @@ export default async function UsuariosPage({
         <select
           name="status"
           defaultValue={status}
-          className="px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500"
+          className="px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring"
         >
           <option value="">Todos os status</option>
           <option value="active">Ativos</option>
@@ -174,7 +168,7 @@ export default async function UsuariosPage({
 
         <button
           type="submit"
-          className="px-4 py-2 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+          className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition-colors"
         >
           Filtrar
         </button>
@@ -182,7 +176,7 @@ export default async function UsuariosPage({
         {(search || companyId || role || status) && (
           <Link
             href="/admin/usuarios"
-            className="px-4 py-2 bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white text-sm rounded-lg transition-colors"
+            className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-sm rounded-lg transition-colors"
           >
             Limpar
           </Link>
@@ -190,23 +184,23 @@ export default async function UsuariosPage({
       </form>
 
       {/* Tabela */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Usuário</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Empresa</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Perfil</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Cadastro</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Ações</th>
+              <tr className="border-b border-border">
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Usuário</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Empresa</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Perfil</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cadastro</th>
+                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
               {users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-gray-600">
+                  <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
                     Nenhum usuário encontrado com os filtros aplicados
                   </td>
                 </tr>
@@ -214,21 +208,21 @@ export default async function UsuariosPage({
                 users.map((user) => (
                   <tr
                     key={user.id}
-                    className={`border-b border-gray-800/50 hover:bg-gray-800/20 transition-colors ${
+                    className={`border-b border-border hover:bg-muted transition-colors ${
                       !user.active ? "opacity-50" : ""
                     }`}
                   >
                     {/* Usuário */}
                     <td className="px-5 py-3.5">
-                      <p className="font-medium text-white">{user.name}</p>
-                      <p className="text-xs text-gray-500">{user.email}</p>
+                      <p className="font-medium text-foreground">{user.name}</p>
+                      <p className="text-xs text-muted-foreground">{user.email}</p>
                     </td>
 
                     {/* Empresa */}
                     <td className="px-5 py-3.5">
                       <Link
                         href={`/admin/clientes/${user.company.id}`}
-                        className="flex items-center gap-1.5 text-gray-300 hover:text-white transition-colors group"
+                        className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group"
                       >
                         <span className="text-sm">
                           {user.company.tradeName ?? user.company.name}
@@ -241,7 +235,7 @@ export default async function UsuariosPage({
                     <td className="px-5 py-3.5">
                       <span
                         className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
-                          ROLE_STYLES[user.role] ?? "bg-gray-800 text-gray-400 border-gray-700"
+                          ROLE_STYLES[user.role] ?? "bg-zinc-100 text-zinc-600 border-zinc-200"
                         }`}
                       >
                         {ROLE_LABELS[user.role] ?? user.role}
@@ -251,12 +245,12 @@ export default async function UsuariosPage({
                     {/* Status */}
                     <td className="px-5 py-3.5">
                       {user.active ? (
-                        <span className="flex items-center gap-1.5 text-xs text-green-400">
+                        <span className="flex items-center gap-1.5 text-xs text-emerald-600">
                           <CheckCircle className="h-3.5 w-3.5" />
                           Ativo
                         </span>
                       ) : (
-                        <span className="flex items-center gap-1.5 text-xs text-red-400">
+                        <span className="flex items-center gap-1.5 text-xs text-rose-600">
                           <XCircle className="h-3.5 w-3.5" />
                           Inativo
                         </span>
@@ -264,7 +258,7 @@ export default async function UsuariosPage({
                     </td>
 
                     {/* Cadastro */}
-                    <td className="px-5 py-3.5 text-xs text-gray-500">
+                    <td className="px-5 py-3.5 text-xs text-muted-foreground">
                       {new Date(user.createdAt).toLocaleDateString("pt-BR")}
                     </td>
 
@@ -287,14 +281,14 @@ export default async function UsuariosPage({
       {/* Paginação */}
       {totalPages > 1 && (
         <div className="flex items-center justify-between mt-5">
-          <p className="text-xs text-gray-500">
+          <p className="text-xs text-muted-foreground">
             Exibindo {(page - 1) * limit + 1}–{Math.min(page * limit, total)} de {total}
           </p>
           <div className="flex gap-2">
             {page > 1 && (
               <Link
                 href={buildHref({ page: String(page - 1) })}
-                className="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
               >
                 ← Anterior
               </Link>
@@ -307,8 +301,8 @@ export default async function UsuariosPage({
                   href={buildHref({ page: String(p) })}
                   className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
                     p === page
-                      ? "bg-indigo-600 text-white"
-                      : "bg-gray-800 hover:bg-gray-700 text-gray-300"
+                      ? "bg-primary text-primary-foreground"
+                      : "bg-muted hover:bg-muted/80 text-foreground"
                   }`}
                 >
                   {p}
@@ -318,7 +312,7 @@ export default async function UsuariosPage({
             {page < totalPages && (
               <Link
                 href={buildHref({ page: String(page + 1) })}
-                className="px-3 py-1.5 text-xs bg-gray-800 hover:bg-gray-700 text-gray-300 rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
               >
                 Próxima →
               </Link>
