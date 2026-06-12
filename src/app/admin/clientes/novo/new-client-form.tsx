@@ -47,10 +47,10 @@ const STATES = [
 function Field({ label, children, hint, error }: { label: string; children: React.ReactNode; hint?: string; error?: string }) {
   return (
     <div>
-      <label className="block text-xs font-medium text-gray-400 mb-1.5">{label}</label>
+      <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
       {children}
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-      {!error && hint && <p className="text-xs text-gray-600 mt-1">{hint}</p>}
+      {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
+      {!error && hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
 }
@@ -59,7 +59,7 @@ function Input(props: React.InputHTMLAttributes<HTMLInputElement>) {
   return (
     <input
       {...props}
-      className={`w-full px-3.5 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${props.className ?? ""}`}
+      className={`w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-primary transition-colors ${props.className ?? ""}`}
     />
   );
 }
@@ -68,16 +68,16 @@ function Select(props: React.SelectHTMLAttributes<HTMLSelectElement> & { childre
   return (
     <select
       {...props}
-      className={`w-full px-3.5 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 transition-colors ${props.className ?? ""}`}
+      className={`w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-primary transition-colors ${props.className ?? ""}`}
     />
   );
 }
 
 function SummaryRow({ label, value }: { label: string; value: string }) {
   return (
-    <div className="flex justify-between items-baseline py-2 border-b border-gray-800/60 last:border-0">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className="text-sm text-white font-medium ml-4 text-right">{value || "—"}</span>
+    <div className="flex justify-between items-baseline py-2 border-b border-border last:border-0">
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-sm text-foreground font-medium ml-4 text-right">{value || "—"}</span>
     </div>
   );
 }
@@ -245,21 +245,21 @@ export function NewClientForm({ plans, networks }: Props) {
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
                     isDone
-                      ? "bg-green-600"
+                      ? "bg-emerald-600"
                       : isActive
-                      ? "bg-indigo-600 ring-2 ring-indigo-500/30"
-                      : "bg-gray-800 border border-gray-700"
+                      ? "bg-primary ring-2 ring-ring/30"
+                      : "bg-muted border border-border"
                   }`}
                 >
                   {isDone ? (
                     <CheckCircle className="h-4 w-4 text-white" />
                   ) : (
-                    <Icon className="h-4 w-4 text-white" />
+                    <Icon className={`h-4 w-4 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
                   )}
                 </div>
                 <span
                   className={`text-xs font-medium hidden sm:block ${
-                    isActive ? "text-white" : "text-gray-500"
+                    isActive ? "text-foreground" : "text-muted-foreground"
                   }`}
                 >
                   {step.label}
@@ -270,7 +270,7 @@ export function NewClientForm({ plans, networks }: Props) {
               {idx < STEPS.length - 1 && (
                 <div
                   className={`flex-1 h-px mx-3 transition-colors ${
-                    currentStep > step.id ? "bg-green-700" : "bg-gray-800"
+                    currentStep > step.id ? "bg-emerald-600" : "bg-border"
                   }`}
                 />
               )}
@@ -281,7 +281,7 @@ export function NewClientForm({ plans, networks }: Props) {
 
       {/* Erro global */}
       {error && (
-        <div className="mb-5 bg-red-900/40 border border-red-800 text-red-300 px-4 py-3 rounded-lg text-sm">
+        <div className="mb-5 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm">
           {error}
         </div>
       )}
@@ -290,18 +290,18 @@ export function NewClientForm({ plans, networks }: Props) {
       {currentStep === 1 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Dados da Empresa</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Informações básicas da ótica</p>
+            <h2 className="text-lg font-semibold text-foreground">Dados da Empresa</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">Informações básicas da ótica</p>
           </div>
 
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
             <div className="grid grid-cols-2 gap-4">
               <Field label="Nome Fantasia *" error={fieldErrors.tradeName}>
                 <Input
                   value={tradeName}
                   onChange={(e) => { setTradeName(e.target.value); setFieldErrors((p) => ({ ...p, tradeName: "" })); }}
                   placeholder="Ótica Visão Clara"
-                  className={fieldErrors.tradeName ? "border-red-500" : ""}
+                  className={fieldErrors.tradeName ? "border-rose-500" : ""}
                 />
               </Field>
               <Field label="Razão Social">
@@ -333,7 +333,7 @@ export function NewClientForm({ plans, networks }: Props) {
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setFieldErrors((p) => ({ ...p, email: "" })); }}
                 placeholder="contato@oticavisao.com"
-                className={fieldErrors.email ? "border-red-500" : ""}
+                className={fieldErrors.email ? "border-rose-500" : ""}
               />
             </Field>
             <div className="grid grid-cols-2 gap-4">
@@ -342,7 +342,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setFieldErrors((p) => ({ ...p, phone: "" })); }}
                   placeholder="(85) 3333-4444"
-                  className={fieldErrors.phone ? "border-red-500" : ""}
+                  className={fieldErrors.phone ? "border-rose-500" : ""}
                 />
               </Field>
               <Field label="WhatsApp">
@@ -356,9 +356,9 @@ export function NewClientForm({ plans, networks }: Props) {
           </div>
 
           {/* Endereço */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <MapPin className="h-4 w-4 text-gray-500" />
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <MapPin className="h-4 w-4 text-muted-foreground" />
               Endereço
             </h3>
             <div className="grid grid-cols-3 gap-4">
@@ -404,7 +404,7 @@ export function NewClientForm({ plans, networks }: Props) {
                 <Select
                   value={stateUF}
                   onChange={(e) => { setStateUF(e.target.value); setFieldErrors((p) => ({ ...p, stateUF: "" })); }}
-                  className={fieldErrors.stateUF ? "border-red-500" : ""}
+                  className={fieldErrors.stateUF ? "border-rose-500" : ""}
                 >
                   <option value="">UF</option>
                   {STATES.map((uf) => (
@@ -417,7 +417,7 @@ export function NewClientForm({ plans, networks }: Props) {
               <Input
                 value={city}
                 onChange={(e) => { setCity(e.target.value); setFieldErrors((p) => ({ ...p, city: "" })); }}
-                className={fieldErrors.city ? "border-red-500" : ""}
+                className={fieldErrors.city ? "border-rose-500" : ""}
                 placeholder="Fortaleza"
                 required
               />
@@ -430,11 +430,11 @@ export function NewClientForm({ plans, networks }: Props) {
       {currentStep === 2 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Assinatura</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Plano e condições de faturamento</p>
+            <h2 className="text-lg font-semibold text-foreground">Assinatura</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">Plano e condições de faturamento</p>
           </div>
 
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-5">
+          <div className="bg-card rounded-xl border border-border p-5 space-y-5">
             {/* Cards de plano */}
             <Field label="Selecionar Plano *" error={fieldErrors.planId}>
               <div className="grid gap-3 mt-1">
@@ -445,21 +445,21 @@ export function NewClientForm({ plans, networks }: Props) {
                     onClick={() => { setPlanId(plan.id); setFieldErrors((p) => ({ ...p, planId: "" })); }}
                     className={`w-full text-left px-4 py-3.5 rounded-lg border transition-all ${
                       planId === plan.id
-                        ? "border-indigo-500 bg-indigo-900/20 ring-1 ring-indigo-500/30"
-                        : "border-gray-700 bg-gray-800/50 hover:border-gray-600"
+                        ? "border-primary bg-primary/10 ring-1 ring-ring/30"
+                        : "border-border bg-muted hover:border-muted-foreground/30"
                     }`}
                   >
                     <div className="flex items-center justify-between">
-                      <span className="text-sm font-medium text-white">{plan.name}</span>
+                      <span className="text-sm font-medium text-foreground">{plan.name}</span>
                       <div className="text-right">
-                        <span className="text-sm font-bold text-white" suppressHydrationWarning>
+                        <span className="text-sm font-bold text-foreground" suppressHydrationWarning>
                           R$ {(plan.priceMonthly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </span>
-                        <span className="text-xs text-gray-500">/mês</span>
+                        <span className="text-xs text-muted-foreground">/mês</span>
                       </div>
                     </div>
                     {billingCycle === "YEARLY" && (
-                      <p className="text-xs text-green-400 mt-1">
+                      <p className="text-xs text-emerald-600 mt-1">
                         R$ {(plan.priceYearly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ano
                       </p>
                     )}
@@ -478,13 +478,13 @@ export function NewClientForm({ plans, networks }: Props) {
                     onClick={() => setBillingCycle(cycle)}
                     className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all ${
                       billingCycle === cycle
-                        ? "border-indigo-500 bg-indigo-900/20 text-indigo-300"
-                        : "border-gray-700 bg-gray-800 text-gray-400 hover:border-gray-600 hover:text-white"
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground"
                     }`}
                   >
                     {cycle === "MONTHLY" ? "Mensal" : "Anual"}
                     {cycle === "YEARLY" && (
-                      <span className="ml-1.5 text-xs text-green-400">~20% off</span>
+                      <span className="ml-1.5 text-xs text-emerald-600">~20% off</span>
                     )}
                   </button>
                 ))}
@@ -519,14 +519,14 @@ export function NewClientForm({ plans, networks }: Props) {
       {currentStep === 3 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Acesso</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Responsável e credenciais de acesso</p>
+            <h2 className="text-lg font-semibold text-foreground">Acesso</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">Responsável e credenciais de acesso</p>
           </div>
 
           {/* Responsável */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <User className="h-4 w-4 text-gray-500" />
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <User className="h-4 w-4 text-muted-foreground" />
               Responsável / Proprietário
             </h3>
             <div className="grid grid-cols-2 gap-4">
@@ -535,7 +535,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={ownerName}
                   onChange={(e) => { setOwnerName(e.target.value); setFieldErrors((p) => ({ ...p, ownerName: "" })); }}
                   placeholder="João da Silva"
-                  className={fieldErrors.ownerName ? "border-red-500" : ""}
+                  className={fieldErrors.ownerName ? "border-rose-500" : ""}
                 />
               </Field>
               <Field label="CPF">
@@ -557,7 +557,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={ownerEmail}
                   onChange={(e) => { setOwnerEmail(e.target.value); setFieldErrors((p) => ({ ...p, ownerEmail: "" })); }}
                   placeholder="joao@otica.com"
-                  className={fieldErrors.ownerEmail ? "border-red-500" : ""}
+                  className={fieldErrors.ownerEmail ? "border-rose-500" : ""}
                 />
               </Field>
               <Field label="Telefone">
@@ -571,12 +571,12 @@ export function NewClientForm({ plans, networks }: Props) {
           </div>
 
           {/* Admin da ótica */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <KeyRound className="h-4 w-4 text-gray-500" />
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <KeyRound className="h-4 w-4 text-muted-foreground" />
               Administrador da Ótica
             </h3>
-            <p className="text-xs text-gray-500">
+            <p className="text-xs text-muted-foreground">
               Se preenchido, cria o usuário admin com acesso imediato. Caso contrário, a empresa ativa via convite por email.
             </p>
             <div className="grid grid-cols-2 gap-4">
@@ -608,7 +608,7 @@ export function NewClientForm({ plans, networks }: Props) {
                 <button
                   type="button"
                   onClick={generatePassword}
-                  className="flex items-center gap-1.5 px-3 py-2.5 bg-gray-700 border border-gray-600 rounded-lg text-gray-300 hover:bg-gray-600 hover:text-white transition-colors text-xs whitespace-nowrap"
+                  className="flex items-center gap-1.5 px-3 py-2.5 bg-muted border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-colors text-xs whitespace-nowrap"
                 >
                   <RefreshCw className="w-3.5 h-3.5" />
                   Gerar
@@ -623,29 +623,29 @@ export function NewClientForm({ plans, networks }: Props) {
       {currentStep === 4 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Extras</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Rede, aquisição e opções</p>
+            <h2 className="text-lg font-semibold text-foreground">Extras</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">Rede, aquisição e opções</p>
           </div>
 
           {/* Rede */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <Users className="h-4 w-4 text-gray-500" />
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <Users className="h-4 w-4 text-muted-foreground" />
               Rede de Lojas
-              <span className="text-xs text-gray-600 font-normal">(opcional)</span>
+              <span className="text-xs text-muted-foreground font-normal">(opcional)</span>
             </h3>
             <label className="flex items-center gap-3 cursor-pointer">
               <input
                 type="checkbox"
                 checked={isNetwork}
                 onChange={(e) => setIsNetwork(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-indigo-500"
+                className="w-4 h-4 rounded border-input bg-background text-primary"
               />
-              <span className="text-sm text-white">Esta ótica faz parte de uma rede</span>
+              <span className="text-sm text-foreground">Esta ótica faz parte de uma rede</span>
             </label>
 
             {isNetwork && (
-              <div className="pl-6 space-y-3 border-l-2 border-gray-700">
+              <div className="pl-6 space-y-3 border-l-2 border-border">
                 {(["new", "existing"] as const).map((mode) => (
                   <label key={mode} className="flex items-center gap-3 cursor-pointer">
                     <input
@@ -653,9 +653,9 @@ export function NewClientForm({ plans, networks }: Props) {
                       name="networkMode"
                       checked={networkMode === mode}
                       onChange={() => setNetworkMode(mode)}
-                      className="text-indigo-500"
+                      className="text-primary"
                     />
-                    <span className="text-sm text-white">
+                    <span className="text-sm text-foreground">
                       {mode === "new" ? "Criar nova rede (será a MATRIZ)" : "Vincular a rede existente (será FILIAL)"}
                     </span>
                   </label>
@@ -693,9 +693,9 @@ export function NewClientForm({ plans, networks }: Props) {
           </div>
 
           {/* Aquisição */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5 space-y-4">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2">
-              <BarChart3 className="h-4 w-4 text-gray-500" />
+          <div className="bg-card rounded-xl border border-border p-5 space-y-4">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+              <BarChart3 className="h-4 w-4 text-muted-foreground" />
               Aquisição
             </h3>
             <Field label="Canal de Aquisição">
@@ -719,15 +719,15 @@ export function NewClientForm({ plans, networks }: Props) {
                 onChange={(e) => setNotes(e.target.value)}
                 rows={3}
                 placeholder="Anotações sobre o cliente..."
-                className="w-full px-3.5 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-600 text-sm focus:outline-none focus:ring-1 focus:ring-indigo-500 focus:border-indigo-500 resize-none"
+                className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground placeholder-muted-foreground text-sm focus:outline-none focus:ring-1 focus:ring-ring focus:border-primary resize-none"
               />
             </Field>
           </div>
 
           {/* Opções */}
-          <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-            <h3 className="text-sm font-semibold text-white flex items-center gap-2 mb-4">
-              <Settings className="h-4 w-4 text-gray-500" />
+          <div className="bg-card rounded-xl border border-border p-5">
+            <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
+              <Settings className="h-4 w-4 text-muted-foreground" />
               Opções
             </h3>
             <label className="flex items-start gap-3 cursor-pointer">
@@ -735,11 +735,11 @@ export function NewClientForm({ plans, networks }: Props) {
                 type="checkbox"
                 checked={sendInviteEmail}
                 onChange={(e) => setSendInviteEmail(e.target.checked)}
-                className="w-4 h-4 rounded border-gray-600 bg-gray-800 text-indigo-500 mt-0.5"
+                className="w-4 h-4 rounded border-input bg-background text-primary mt-0.5"
               />
               <div>
-                <span className="text-sm text-white">Enviar convite por email imediatamente</span>
-                <p className="text-xs text-gray-500 mt-0.5">
+                <span className="text-sm text-foreground">Enviar convite por email imediatamente</span>
+                <p className="text-xs text-muted-foreground mt-0.5">
                   O responsável receberá um link para criar senha e ativar a conta
                 </p>
               </div>
@@ -752,14 +752,14 @@ export function NewClientForm({ plans, networks }: Props) {
       {currentStep === 5 && (
         <div className="space-y-5">
           <div>
-            <h2 className="text-lg font-semibold text-white">Confirmar Cadastro</h2>
-            <p className="text-sm text-gray-500 mt-0.5">Revise os dados antes de criar a empresa</p>
+            <h2 className="text-lg font-semibold text-foreground">Confirmar Cadastro</h2>
+            <p className="text-sm text-muted-foreground mt-0.5">Revise os dados antes de criar a empresa</p>
           </div>
 
           <div className="grid gap-4">
             {/* Empresa */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Empresa</h3>
+            <div className="bg-card rounded-xl border border-border p-5">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Empresa</h3>
               <SummaryRow label="Nome Fantasia" value={tradeName} />
               <SummaryRow label="Razão Social" value={companyName} />
               <SummaryRow label="CNPJ" value={cnpj} />
@@ -769,8 +769,8 @@ export function NewClientForm({ plans, networks }: Props) {
             </div>
 
             {/* Assinatura */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Assinatura</h3>
+            <div className="bg-card rounded-xl border border-border p-5">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Assinatura</h3>
               <SummaryRow label="Plano" value={selectedPlan?.name ?? ""} />
               <SummaryRow label="Ciclo" value={billingCycle === "MONTHLY" ? "Mensal" : "Anual"} />
               <SummaryRow label="Trial" value={trialDays > 0 ? `${trialDays} dias` : "Sem trial"} />
@@ -778,8 +778,8 @@ export function NewClientForm({ plans, networks }: Props) {
             </div>
 
             {/* Acesso */}
-            <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-              <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Acesso</h3>
+            <div className="bg-card rounded-xl border border-border p-5">
+              <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Acesso</h3>
               <SummaryRow label="Responsável" value={ownerName} />
               <SummaryRow label="Email responsável" value={ownerEmail} />
               <SummaryRow label="Admin login" value={adminEmail || ownerEmail} />
@@ -789,8 +789,8 @@ export function NewClientForm({ plans, networks }: Props) {
 
             {/* Extras */}
             {(isNetwork || acquisitionChannel) && (
-              <div className="bg-gray-900 rounded-xl border border-gray-800 p-5">
-                <h3 className="text-xs font-semibold text-gray-400 uppercase tracking-wide mb-3">Extras</h3>
+              <div className="bg-card rounded-xl border border-border p-5">
+                <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Extras</h3>
                 {isNetwork && (
                   <SummaryRow
                     label="Rede"
@@ -807,13 +807,13 @@ export function NewClientForm({ plans, networks }: Props) {
       )}
 
       {/* ── Navegação ─────────────────────────────────────────────────── */}
-      <div className="flex items-center justify-between mt-8 pt-5 border-t border-gray-800">
+      <div className="flex items-center justify-between mt-8 pt-5 border-t border-border">
         <div>
           {currentStep > 1 ? (
             <button
               type="button"
               onClick={prev}
-              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
               Voltar
@@ -821,7 +821,7 @@ export function NewClientForm({ plans, networks }: Props) {
           ) : (
             <Link
               href="/admin/clientes"
-              className="flex items-center gap-2 px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+              className="flex items-center gap-2 px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
             >
               <ChevronLeft className="h-4 w-4" />
               Cancelar
@@ -830,7 +830,7 @@ export function NewClientForm({ plans, networks }: Props) {
         </div>
 
         <div className="flex items-center gap-3">
-          <span className="text-xs text-gray-600">
+          <span className="text-xs text-muted-foreground">
             Etapa {currentStep} de {STEPS.length}
           </span>
 
@@ -838,7 +838,7 @@ export function NewClientForm({ plans, networks }: Props) {
             <button
               type="button"
               onClick={next}
-              className="flex items-center gap-2 px-5 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg transition-colors"
+              className="flex items-center gap-2 px-5 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition-colors"
             >
               Próximo
               <ChevronRight className="h-4 w-4" />
@@ -848,7 +848,7 @@ export function NewClientForm({ plans, networks }: Props) {
               type="button"
               onClick={handleSubmit}
               disabled={isPending}
-              className="flex items-center gap-2 px-5 py-2.5 bg-green-600 hover:bg-green-500 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               {isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
