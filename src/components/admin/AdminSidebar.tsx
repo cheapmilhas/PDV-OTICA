@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
 import { Menu } from "lucide-react";
 
-import { Sheet, SheetContent, SheetTrigger } from "@/components/ui/sheet";
+import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
 import { AdminNav } from "@/app/admin/admin-nav";
 import { AdminLogoutButton } from "@/app/admin/AdminLogoutButton";
 
@@ -81,6 +81,7 @@ export function AdminMobileMenu() {
         </button>
       </SheetTrigger>
       <SheetContent side="left" className="w-60 p-0 bg-card flex flex-col">
+        <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
         <SidebarContent />
       </SheetContent>
     </Sheet>
