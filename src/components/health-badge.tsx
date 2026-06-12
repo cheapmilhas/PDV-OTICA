@@ -59,7 +59,7 @@ export function HealthBadge({ score, category, size = "md", showLabel = true }: 
         {score}
       </span>
       {showLabel && (
-        <span className={`text-gray-500 ${sizeStyles.text}`}>
+        <span className={`text-muted-foreground ${sizeStyles.text}`}>
           {config.label}
         </span>
       )}

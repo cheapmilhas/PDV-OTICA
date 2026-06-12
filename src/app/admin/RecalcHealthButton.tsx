@@ -39,12 +39,12 @@ export function RecalcHealthButton() {
       <button
         onClick={handleRecalc}
         disabled={loading}
-        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-indigo-800 bg-indigo-900/20 text-indigo-300 hover:bg-indigo-900/40 transition-colors text-xs font-medium disabled:opacity-60"
+        className="flex items-center gap-2 px-3 py-1.5 rounded-lg border border-primary/30 bg-primary/10 text-primary hover:bg-primary/20 transition-colors text-xs font-medium disabled:opacity-60"
       >
         {loading ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Activity className="h-3.5 w-3.5" />}
         {loading ? "Recalculando…" : "Recalcular saúde"}
       </button>
-      {msg && <span className="text-xs text-gray-500">{msg}</span>}
+      {msg && <span className="text-xs text-muted-foreground">{msg}</span>}
     </div>
   );
 }
