@@ -367,6 +367,40 @@ export class CashService {
       },
     });
   }
+
+  /**
+   * Vendas do turno agrupadas por forma de pagamento (fonte: SalePayment).
+   * Mostra crédito/crediário/boleto/cheque que NÃO geram CashMovement.
+   * Semântica = "faturado no turno por método", NÃO "a receber em aberto".
+   */
+  async getShiftSalesByMethod(
+    shift: { id: string; branchId: string; openedAt: Date; closedAt?: Date | null },
+    companyId: string
+  ) {
+    const rows = await prisma.salePayment.groupBy({
+      by: ["method"],
+      where: {
+        status: { not: "VOIDED" },
+        sale: {
+          companyId,
+          branchId: shift.branchId,
+          status: "COMPLETED",
+          createdAt: {
+            gte: shift.openedAt,
+            ...(shift.closedAt ? { lte: shift.closedAt } : {}),
+          },
+        },
+      },
+      _sum: { amount: true },
+      _count: true,
+    });
+
+    return rows.map((r) => ({
+      method: r.method,
+      amount: Number(r._sum.amount ?? 0),
+      count: r._count,
+    }));
+  }
 }
 
 export const cashService = new CashService();
