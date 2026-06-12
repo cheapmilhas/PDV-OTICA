@@ -2,8 +2,10 @@ import { prisma } from "@/lib/prisma";
 import { StockAdjustmentStatus, Prisma } from "@prisma/client";
 import type { CreateStockAdjustmentDTO, StockAdjustmentQuery } from "@/lib/validations/stock-adjustment.schema";
 import { SystemRuleService } from "./system-rule.service";
+import { logger } from "@/lib/logger";
 
 const systemRuleService = new SystemRuleService();
+const log = logger.child({ service: "stock-adjustment" });
 
 export class StockAdjustmentService {
   /**
@@ -335,14 +337,50 @@ export class StockAdjustmentService {
       throw new Error("Ajuste não encontrado");
     }
 
-    // Atualiza estoque do produto
-    await prisma.product.update({
-      where: { id: adjustment.productId },
-      data: {
-        stockQty: {
-          increment: adjustment.quantityChange,
-        },
-      },
+    // Atualiza o cache Product.stockQty E o BranchStock da filial juntos. O
+    // BranchStock é a fonte que a venda debita; se o ajuste mexesse só no cache,
+    // a filial divergiria (bug "estoque fantasma": tela mostra estoque, venda
+    // falha "Disponível: 0"). Transação garante que os dois andem juntos.
+    await prisma.$transaction(async (tx) => {
+      await tx.product.update({
+        where: { id: adjustment.productId },
+        data: { stockQty: { increment: adjustment.quantityChange } },
+      });
+
+      // Só produtos com controle de estoque têm BranchStock relevante.
+      if (adjustment.product.stockControlled) {
+        // Filial do ajuste; fallback p/ a filial principal (mais antiga) se o
+        // ajuste não registrou branchId.
+        let branchId = adjustment.branchId;
+        if (!branchId) {
+          const mainBranch = await tx.branch.findFirst({
+            where: { companyId: adjustment.companyId, active: true },
+            orderBy: { createdAt: "asc" },
+            select: { id: true },
+          });
+          branchId = mainBranch?.id ?? null;
+        }
+
+        if (branchId) {
+          // Se a linha JÁ existe: incrementa (delta + ou -, vira saldo corrente).
+          // Se NÃO existe e o ajuste é positivo: cria com a quantidade.
+          // Se NÃO existe e o ajuste é NEGATIVO: criar com valor negativo seria
+          // pior que o estado anterior (filial sem linha = sem histórico). Cria
+          // em 0 e registra — a contagem física deve ser reconciliada à parte.
+          const createQty = Math.max(0, adjustment.quantityChange);
+          if (adjustment.quantityChange < 0) {
+            log.warn(
+              "Ajuste negativo em produto sem BranchStock na filial — linha criada em 0",
+              { productId: adjustment.productId, branchId, quantityChange: adjustment.quantityChange }
+            );
+          }
+          await tx.branchStock.upsert({
+            where: { branchId_productId: { branchId, productId: adjustment.productId } },
+            create: { branchId, productId: adjustment.productId, quantity: createQty },
+            update: { quantity: { increment: adjustment.quantityChange } },
+          });
+        }
+      }
     });
   }
 
