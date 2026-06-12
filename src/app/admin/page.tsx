@@ -4,21 +4,11 @@ import { AlertTriangle, Building2, Clock, CreditCard, TrendingUp, DollarSign, Ac
 import Link from "next/link";
 import { HealthBadge } from "@/components/health-badge";
 import { RecalcHealthButton } from "./RecalcHealthButton";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { KPICard } from "@/components/admin/KPICard";
+import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
-import { computeTrend, formatTrend, computeMRR, type Trend, type SubscriptionForMRR } from "@/lib/admin-metrics";
-
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
-  SUSPENDED: "Suspenso", CANCELED: "Cancelado", TRIAL_EXPIRED: "Trial Expirado",
-};
-const STATUS_STYLES: Record<string, string> = {
-  ACTIVE: "bg-green-900/50 text-green-400 border border-green-800",
-  TRIAL: "bg-blue-900/50 text-blue-400 border border-blue-800",
-  PAST_DUE: "bg-red-900/50 text-red-400 border border-red-800",
-  SUSPENDED: "bg-red-900/50 text-red-400 border border-red-800",
-  CANCELED: "bg-gray-800 text-gray-400 border border-gray-700",
-  TRIAL_EXPIRED: "bg-orange-900/50 text-orange-400 border border-orange-800",
-};
+import { computeTrend, formatTrend, computeMRR, type SubscriptionForMRR } from "@/lib/admin-metrics";
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
@@ -123,42 +113,46 @@ export default async function AdminDashboardPage() {
   const mrrValue = computeMRR(subsForMrr, nowDate) / 100;
 
   return (
-    <div className="p-6 text-white">
-      {/* Header */}
-      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Dashboard</h1>
-          <p className="text-sm text-gray-400 mt-0.5">Bem-vindo, {admin.name} · {admin.role}</p>
-        </div>
-        <div className="flex flex-col items-end gap-1">
-          <RecalcHealthButton />
-          <p className="text-xs text-gray-600">
-            {lastHealthCalc?.healthUpdatedAt
-              ? `Saúde atualizada em ${new Date(lastHealthCalc.healthUpdatedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}`
-              : "Saúde ainda não calculada — clique para recalcular"}
-          </p>
-        </div>
-      </div>
+    <div className="p-6">
+      <PageHeader
+        title="Dashboard"
+        subtitle={`Bem-vindo, ${admin.name} · ${admin.role}`}
+        actions={
+          <div className="flex flex-col items-end gap-1">
+            <RecalcHealthButton />
+            <p className="text-xs text-muted-foreground">
+              {lastHealthCalc?.healthUpdatedAt
+                ? `Saúde atualizada em ${new Date(lastHealthCalc.healthUpdatedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}`
+                : "Saúde ainda não calculada — clique para recalcular"}
+            </p>
+          </div>
+        }
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
-        <KpiCard title="Total de Empresas" value={totalCompanies} icon={Building2} color="blue" trend={companiesTrend} trendLabel="novas no mês" />
-        <KpiCard title="Assinaturas Ativas" value={activeCount} icon={CreditCard} color="green" />
-        <KpiCard
-          title="MRR"
+        <KPICard
+          label="Total de Empresas"
+          value={String(totalCompanies)}
+          icon={Building2}
+          trend={companiesTrend.direction === "up" || companiesTrend.direction === "down"
+            ? { direction: companiesTrend.direction, label: formatTrend(companiesTrend) }
+            : undefined}
+        />
+        <KPICard label="Assinaturas Ativas" value={String(activeCount)} icon={CreditCard} />
+        <KPICard
+          label="MRR"
           value={`R$ ${mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           icon={DollarSign}
-          color="purple"
         />
-        <KpiCard title="Em Trial" value={trialCount} icon={Clock} color="yellow" />
-        <KpiCard
-          title="Recebido Total"
+        <KPICard label="Em Trial" value={String(trialCount)} icon={Clock} />
+        <KPICard
+          label="Recebido Total"
           value={`R$ ${totalRevenueValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
-          hint="Soma das faturas pagas"
           icon={TrendingUp}
-          color="teal"
-          trend={revenueTrend}
-          trendLabel="recebido no mês vs. anterior"
+          trend={revenueTrend.direction === "up" || revenueTrend.direction === "down"
+            ? { direction: revenueTrend.direction, label: formatTrend(revenueTrend) }
+            : undefined}
         />
       </div>
 
@@ -166,20 +160,20 @@ export default async function AdminDashboardPage() {
       {(criticalHealthCount > 0 || atRiskHealthCount > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
           {criticalHealthCount > 0 && (
-            <Link href="/admin/saude?category=CRITICAL" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
-              <Activity className="h-5 w-5 text-red-400 flex-shrink-0" />
+            <Link href="/admin/saude?category=CRITICAL" className="flex items-center gap-3 p-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 transition-colors">
+              <Activity className="h-5 w-5 text-red-600 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-red-300">{criticalHealthCount} cliente{criticalHealthCount > 1 ? "s" : ""} em estado crítico</p>
-                <p className="text-xs text-red-500">Requer ação imediata →</p>
+                <p className="text-sm font-medium text-red-700">{criticalHealthCount} cliente{criticalHealthCount > 1 ? "s" : ""} em estado crítico</p>
+                <p className="text-xs text-red-600">Requer ação imediata →</p>
               </div>
             </Link>
           )}
           {atRiskHealthCount > 0 && (
-            <Link href="/admin/saude?category=AT_RISK" className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20 hover:bg-yellow-900/30 transition-colors">
-              <Activity className="h-5 w-5 text-yellow-400 flex-shrink-0" />
+            <Link href="/admin/saude?category=AT_RISK" className="flex items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors">
+              <Activity className="h-5 w-5 text-amber-600 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-yellow-300">{atRiskHealthCount} cliente{atRiskHealthCount > 1 ? "s" : ""} em risco</p>
-                <p className="text-xs text-yellow-600">Precisa atenção →</p>
+                <p className="text-sm font-medium text-amber-700">{atRiskHealthCount} cliente{atRiskHealthCount > 1 ? "s" : ""} em risco</p>
+                <p className="text-xs text-amber-600">Precisa atenção →</p>
               </div>
             </Link>
           )}
@@ -189,41 +183,41 @@ export default async function AdminDashboardPage() {
       {/* Ações Pendentes */}
       <div className="mb-6">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-white flex items-center gap-2">
-            <Bell className="w-4 h-4 text-indigo-400" />
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Bell className="w-4 h-4 text-primary" />
             Ações Pendentes
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {pastDueCount === 0 && expiringTrials.length === 0 && pendingInvoices.length === 0 && (
-            <div className="md:col-span-3 flex items-center gap-3 p-4 rounded-xl border border-gray-800 bg-gray-900/50 text-gray-500">
-              <CheckCircle2 className="h-5 w-5 text-green-500 flex-shrink-0" />
+            <div className="md:col-span-3 flex items-center gap-3 p-4 rounded-xl border border-border bg-card text-muted-foreground">
+              <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
               <p className="text-sm">Nenhuma ação pendente no momento</p>
             </div>
           )}
           {pastDueCount > 0 && (
-            <Link href="/admin/financeiro/inadimplencia" className="flex items-center gap-3 p-4 rounded-xl border border-red-800 bg-red-900/20 hover:bg-red-900/30 transition-colors">
-              <AlertTriangle className="h-5 w-5 text-red-400 flex-shrink-0" />
+            <Link href="/admin/financeiro/inadimplencia" className="flex items-center gap-3 p-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 transition-colors">
+              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-red-300">{pastDueCount} fatura{pastDueCount > 1 ? "s" : ""} vencida{pastDueCount > 1 ? "s" : ""}</p>
-                <p className="text-xs text-red-500">Cobrar agora →</p>
+                <p className="text-sm font-medium text-red-700">{pastDueCount} fatura{pastDueCount > 1 ? "s" : ""} vencida{pastDueCount > 1 ? "s" : ""}</p>
+                <p className="text-xs text-red-600">Cobrar agora →</p>
               </div>
             </Link>
           )}
           {expiringTrials.length > 0 && (
-            <Link href="/admin/clientes?status=TRIAL" className="flex items-center gap-3 p-4 rounded-xl border border-yellow-800 bg-yellow-900/20 hover:bg-yellow-900/30 transition-colors">
-              <Clock className="h-5 w-5 text-yellow-400 flex-shrink-0" />
+            <Link href="/admin/clientes?status=TRIAL" className="flex items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors">
+              <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-yellow-300">{expiringTrials.length} trial{expiringTrials.length > 1 ? "s" : ""} expirando</p>
-                <p className="text-xs text-yellow-600">Próximos 3 dias →</p>
+                <p className="text-sm font-medium text-amber-700">{expiringTrials.length} trial{expiringTrials.length > 1 ? "s" : ""} expirando</p>
+                <p className="text-xs text-amber-600">Próximos 3 dias →</p>
               </div>
             </Link>
           )}
           {pendingInvoices.length > 0 && (
-            <Link href="/admin/financeiro/faturas?status=PENDING" className="flex items-center gap-3 p-4 rounded-xl border border-blue-800 bg-blue-900/20 hover:bg-blue-900/30 transition-colors">
-              <CheckCircle2 className="h-5 w-5 text-blue-400 flex-shrink-0" />
+            <Link href="/admin/financeiro/faturas?status=PENDING" className="flex items-center gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors">
+              <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0" />
               <div>
-                <p className="text-sm font-medium text-blue-300">{pendingInvoices.length} fatura{pendingInvoices.length > 1 ? "s" : ""} a vencer</p>
+                <p className="text-sm font-medium text-blue-700">{pendingInvoices.length} fatura{pendingInvoices.length > 1 ? "s" : ""} a vencer</p>
                 <p className="text-xs text-blue-600">Próximos 7 dias →</p>
               </div>
             </Link>
@@ -232,39 +226,37 @@ export default async function AdminDashboardPage() {
       </div>
 
       {/* Empresas recentes */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900">
-        <div className="flex items-center justify-between px-5 py-4 border-b border-gray-800">
-          <h2 className="text-sm font-semibold text-white">Empresas Recentes</h2>
-          <Link href="/admin/clientes" className="text-xs text-indigo-400 hover:text-indigo-300">Ver todas →</Link>
+      <div className="rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground">Empresas Recentes</h2>
+          <Link href="/admin/clientes" className="text-xs text-primary hover:text-primary/80">Ver todas →</Link>
         </div>
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-border">
                 {["Empresa", "Plano", "Status", "Usuários", "Cadastro"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-gray-500">{h}</th>
+                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
             <tbody>
               {recentCompanies.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-gray-600">Nenhuma empresa</td></tr>
+                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">Nenhuma empresa</td></tr>
               ) : recentCompanies.map((c) => {
                 const sub = c.subscriptions[0];
                 const status = sub?.status ?? "NO_SUBSCRIPTION";
                 return (
-                  <tr key={c.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                  <tr key={c.id} className="border-b border-border hover:bg-muted transition-colors">
                     <td className="px-5 py-3">
-                      <Link href={`/admin/clientes/${c.id}`} className="font-medium text-white hover:text-indigo-300">{c.name}</Link>
+                      <Link href={`/admin/clientes/${c.id}`} className="font-medium text-foreground hover:text-primary">{c.name}</Link>
                     </td>
-                    <td className="px-5 py-3 text-gray-400">{sub?.plan?.name ?? "—"}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{sub?.plan?.name ?? "—"}</td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium ${STATUS_STYLES[status] ?? STATUS_STYLES["CANCELED"]}`}>
-                        {STATUS_LABELS[status] ?? status}
-                      </span>
+                      <AdminStatusBadge kind="subscription" status={status} />
                     </td>
-                    <td className="px-5 py-3 text-gray-400">{c._count.users}</td>
-                    <td className="px-5 py-3 text-gray-500">{new Date(c.createdAt).toLocaleDateString("pt-BR")}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{c._count.users}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{new Date(c.createdAt).toLocaleDateString("pt-BR")}</td>
                   </tr>
                 );
               })}
@@ -272,39 +264,6 @@ export default async function AdminDashboardPage() {
           </table>
         </div>
       </div>
-    </div>
-  );
-}
-
-function KpiCard({ title, value, icon: Icon, color, hint, trend, trendLabel }: { title: string; value: string | number; icon: React.ElementType; color: string; hint?: string; trend?: Trend; trendLabel?: string }) {
-  const colors: Record<string, string> = {
-    blue: "text-blue-400 bg-blue-900/20",
-    green: "text-green-400 bg-green-900/20",
-    yellow: "text-yellow-400 bg-yellow-900/20",
-    purple: "text-purple-400 bg-purple-900/20",
-    teal: "text-teal-400 bg-teal-900/20",
-  };
-  const trendColor =
-    trend?.direction === "up" ? "text-green-400" : trend?.direction === "down" ? "text-red-400" : "text-gray-500";
-  return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-      <div className="flex items-center justify-between mb-3">
-        <div>
-          <p className="text-xs font-medium text-gray-500">{title}</p>
-          {hint && <p className="text-xs text-gray-600 mt-0.5">{hint}</p>}
-        </div>
-        <div className={`w-8 h-8 rounded-lg flex items-center justify-center ${colors[color]}`}>
-          <Icon className="h-4 w-4" />
-        </div>
-      </div>
-      <p className={`text-2xl font-bold ${colors[color].split(" ")[0]}`}>{value}</p>
-      {trend && (
-        <p className={`text-xs mt-1.5 flex items-center gap-1 ${trendColor}`}>
-          <span>{trend.direction === "up" ? "▲" : trend.direction === "down" ? "▼" : "—"}</span>
-          <span>{formatTrend(trend)}</span>
-          {trendLabel && <span className="text-gray-600">· {trendLabel}</span>}
-        </p>
-      )}
     </div>
   );
 }
