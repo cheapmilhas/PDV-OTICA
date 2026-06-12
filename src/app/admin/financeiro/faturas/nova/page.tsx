@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { NewInvoiceForm } from "./new-invoice-form";
+import { PageHeader } from "@/components/admin/PageHeader";
 
 export default async function NovaFaturaPage() {
   await requireAdmin();
@@ -25,8 +26,8 @@ export default async function NovaFaturaPage() {
   });
 
   return (
-    <div className="p-6 text-white max-w-2xl">
-      <h1 className="text-2xl font-bold mb-6">Nova Cobrança</h1>
+    <div className="p-6 text-foreground max-w-2xl">
+      <PageHeader title="Nova Cobrança" />
       <NewInvoiceForm companies={companies} />
     </div>
   );

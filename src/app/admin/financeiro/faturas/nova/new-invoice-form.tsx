@@ -65,12 +65,12 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
     <form onSubmit={handleSubmit} className="space-y-6">
       {/* Empresa */}
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-2">Empresa *</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-2">Empresa *</label>
         <select
           value={companyId}
           onChange={(e) => setCompanyId(e.target.value)}
           required
-          className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white"
+          className="w-full px-4 py-3 bg-background border border-input rounded-lg text-foreground"
         >
           <option value="">Selecione uma empresa...</option>
           {companies.map((company) => (
@@ -83,7 +83,7 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
 
       {/* Valor */}
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-2">
+        <label className="block text-sm font-medium text-muted-foreground mb-2">
           Valor (deixe vazio para usar o valor do plano: R$ {planValue.toFixed(2)})
         </label>
         <input
@@ -92,28 +92,28 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
           value={customValue}
           onChange={(e) => setCustomValue(e.target.value)}
           placeholder={planValue.toFixed(2)}
-          className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white"
+          className="w-full px-4 py-3 bg-background border border-input rounded-lg text-foreground"
         />
       </div>
 
       {/* Vencimento */}
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-2">Vencimento</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-2">Vencimento</label>
         <input
           type="date"
           value={dueDate}
           onChange={(e) => setDueDate(e.target.value)}
-          className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white"
+          className="w-full px-4 py-3 bg-background border border-input rounded-lg text-foreground"
         />
       </div>
 
       {/* Tipo */}
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-2">Forma de Pagamento</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-2">Forma de Pagamento</label>
         <select
           value={billingType}
           onChange={(e) => setBillingType(e.target.value)}
-          className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white"
+          className="w-full px-4 py-3 bg-background border border-input rounded-lg text-foreground"
         >
           <option value="PIX">PIX</option>
           <option value="BOLETO">Boleto</option>
@@ -124,13 +124,13 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
 
       {/* Descrição */}
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-2">Descrição (opcional)</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-2">Descrição (opcional)</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           rows={3}
           placeholder="Ex: Mensalidade Março/2026"
-          className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white resize-none"
+          className="w-full px-4 py-3 bg-background border border-input rounded-lg text-foreground resize-none"
         />
       </div>
 
@@ -138,7 +138,7 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
       <button
         type="submit"
         disabled={loading || !companyId}
-        className="w-full py-3 bg-indigo-600 text-white rounded-lg font-medium hover:bg-indigo-700 disabled:opacity-50 flex items-center justify-center gap-2"
+        className="w-full py-3 bg-primary text-primary-foreground rounded-lg font-medium hover:bg-primary/90 disabled:opacity-50 flex items-center justify-center gap-2"
       >
         {loading ? (
           <>
