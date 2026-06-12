@@ -43,7 +43,7 @@ Cinco entregas: **A** (rastreador), **B** (clareza no detalhe da venda), **C** (
 - Não reescreve o fluxo de fechamento/conciliação além do necessário para D.
 - Não cria FK `Sale → CashShift` (a ligação continua por branchId + janela temporal).
 - Não persiste o breakdown por método no banco (é derivável das vendas do turno).
-- Não muda o modelo de dados além da migration aditiva mínima da Entrega E (se necessária).
+- Não muda o modelo de dados (Entrega E é só lógica — `AccountReceivable` já existe; nenhuma migration).
 
 ---
 
@@ -79,6 +79,8 @@ type PaymentTrace = {
 - Resposta: `{ trace: PaymentTrace[] }`.
 
 **Diagnóstico imediato:** este endpoint rodado na venda real do PS VISION confirma se foi "a prazo" ou shift/filial diferente. Substitui em produção o que `cash/debug` só fazia em dev.
+
+**Destino de `cash/debug`:** o `cash-trace` supersede o `cash/debug` (dev-only). **Deletar** `src/app/api/cash/debug/route.ts` nesta entrega — evita rota órfã duplicada (alinhado à limpeza de APIs órfãs que o projeto já vem fazendo).
 
 ### Entrega B — Clareza no detalhe da venda
 
@@ -122,6 +124,8 @@ Daqui sai o **valor real** de crédito/crediário/saldo, independente de `CashMo
 - 💵 **Na gaveta / conferível** (Dinheiro, PIX, Débito): valor autoritativo dos `CashMovement` do turno (inclui sangria/reforço no saldo). Esta é a fonte que bate o físico.
 - 📄 **A receber / informativo** (Crédito, Crediário, Saldo a receber, Boleto, Cheque): valor real vindo de `getShiftSalesByMethod`.
 
+**Regra de consumo na UI (anti-dupla-contagem):** `getShiftSalesByMethod` retorna TODOS os métodos (incluindo CASH/PIX/DEBIT). O bloco "a receber" consome de `salesByMethod` **apenas as linhas de métodos a prazo** (crédito/crediário/saldo/boleto/cheque); as linhas CASH/PIX/DEBIT retornadas são **ignoradas na UI** — a gaveta vem exclusivamente de `CashMovement`. O serviço mantém todos os métodos no retorno (para testabilidade e reuso futuro); o filtro é responsabilidade da UI.
+
 **Modal de fechamento** (`src/components/caixa/modal-fechamento-caixa.tsx`):
 - Ganha o mesmo quadro read-only no Step 1 (após o `FORMAS.map`, antes do "Total geral", ~linha 372). Puramente informativo — **não** altera o que é persistido. `closeShift` continua conferindo só dinheiro (`closingDeclaredCash` vs `closingExpectedCash`). Conserta a inconsistência do `BALANCE_DUE`, que hoje fica num limbo.
 
@@ -129,15 +133,27 @@ Daqui sai o **valor real** de crédito/crediário/saldo, independente de `CashMo
 
 ### Entrega E — Consertar BOLETO e CHEQUE
 
-**Decisão do dono:** boleto e cheque → **conta a receber** (como crediário).
+**Decisão do dono:** boleto e cheque → **conta a receber** (como crediário). **Exigem cliente** (decisão confirmada — ver behavior change abaixo).
 
-`src/services/sale-side-effects.service.ts`:
-- Incluir `BOLETO` e `CHEQUE` no caminho que gera `AccountReceivable` (hoje em `METHODS_WITH_RECEIVABLE = ["STORE_CREDIT","BALANCE_DUE"]`).
-- `src/lib/payment-methods.ts`: adicionar `BOLETO`/`CHEQUE` a `METHODS_WITH_RECEIVABLE` (e a `METHODS_A_PRAZO` para classificação consistente nas telas).
-- **Vencimento:** boleto e cheque com vencimento +30 dias (igual `BALANCE_DUE`), 1 parcela. (Pré-datado com vencimento customizado fica fora de escopo — sprint futuro.)
-- **Cliente obrigatório?** Conta a receber precisa de cliente. Avaliar se boleto/cheque entram em `METHODS_REQUIRE_CUSTOMER`. **Decisão:** SIM — conta a receber sem cliente é órfã. Adicionar ambos a `METHODS_REQUIRE_CUSTOMER` e validar no PDV (gating como crediário já faz).
-- **Migration:** nenhuma alteração de schema necessária (`AccountReceivable` já existe). Apenas lógica.
-- **Dados legados:** vendas antigas com boleto/cheque sem recebível não são corrigidas retroativamente (sinalizadas como `destino: "none"` na Entrega B). Migração de dados legados = fora de escopo; documentar como dívida.
+> ⚠️ **Atenção: as constantes `METHODS_WITH_RECEIVABLE` e `METHODS_REQUIRE_CUSTOMER` são dead code** — não são importadas por nenhum arquivo não-teste. A regra real é **hardcoded por método** em dois/três pontos. Adicionar aos constantes NÃO muda comportamento. A implementação precisa editar os call sites hardcoded.
+
+**1. Geração de recebível** — `src/services/sale-side-effects.service.ts`:
+- Hoje a criação de `AccountReceivable` é hardcoded por método (`STORE_CREDIT` → N parcelas ~linha 244; `BALANCE_DUE` → 1 parcela +30d ~linha 274). Adicionar tratamento explícito para `BOLETO` e `CHEQUE` → `AccountReceivable` de **1 parcela, vencimento +30 dias** (igual `BALANCE_DUE`). (Pré-datado com vencimento customizado = fora de escopo.)
+
+**2. Exigência de cliente (hardcoded)** — editar os DOIS call sites:
+- Frontend: `src/components/vendas/modal-finalizar-venda.tsx` (~linha 213, hoje `if (selectedMethod === "BALANCE_DUE")`) → estender para incluir `BOLETO` e `CHEQUE`.
+- Backend: `src/services/sale.service.ts` (~linha 474, hoje `if (payment.method === "BALANCE_DUE" && !customerId)`) → estender para `BOLETO`/`CHEQUE`.
+
+**3. Reclassificação para as telas** — `src/lib/payment-methods.ts`:
+- Adicionar `BOLETO`/`CHEQUE` a `METHODS_A_PRAZO` (usado pela classificação de telas — Entregas B e D). Adicionar também a `METHODS_WITH_RECEIVABLE` e `METHODS_REQUIRE_CUSTOMER` por **consistência documental**, mesmo sendo dead code hoje — assim, se algum dia os call sites forem refatorados para ler dos constantes, já estarão corretos.
+
+**Behavior change (confirmado pelo dono):** após esta entrega, **venda no boleto/cheque sem cliente cadastrado passa a ser bloqueada** no PDV (toast de erro, igual crediário). Isso muda o fluxo de balcão atual onde era possível vender no boleto sem cliente. É o comportamento financeiramente correto — conta a receber sem cliente não tem como ser cobrada. Decisão do dono: aceitar o bloqueio.
+
+**Migration:** nenhuma — `AccountReceivable` já existe. Só lógica.
+
+**Dados legados:** vendas antigas com boleto/cheque sem recebível não são corrigidas retroativamente (sinalizadas como `destino: "none"` na Entrega B). Migração de dados legados = fora de escopo; documentar como dívida.
+
+> Nota: `CREDIT_CARD` vive em `METHODS_A_PRAZO` mas seu recebível é `CardReceivable`, não `AccountReceivable`. A UI separa por **destino** (Entrega A), não por essa constante — o bloco "a receber" não assume que tudo em `METHODS_A_PRAZO` é `AccountReceivable`.
 
 ---
 
@@ -145,24 +161,26 @@ Daqui sai o **valor real** de crédito/crediário/saldo, independente de `CashMo
 
 | Arquivo | Mudança | Entrega |
 |---|---|---|
-| `src/services/sale.service.ts` | + `getCashTrace()` | A |
+| `src/services/sale.service.ts` | + `getCashTrace()`; exigir cliente boleto/cheque (~l.474) | A, E |
 | `src/app/api/sales/[id]/cash-trace/route.ts` | novo endpoint | A |
+| `src/app/api/cash/debug/route.ts` | **deletar** (superseded por cash-trace) | A |
 | `src/app/(dashboard)/dashboard/vendas/[id]/detalhes/page.tsx` | chama cash-trace, renderiza selos | B |
 | `src/components/vendas/payment-destination-badge.tsx` | componente novo | B |
 | `src/app/(dashboard)/dashboard/caixa/page.tsx` | microcopy, rótulo de filial, quadro 2-blocos | C, D |
 | `src/services/cash.service.ts` | + `getShiftSalesByMethod()`, estender `getCurrentShift` | D |
 | `src/app/api/cash/shift/route.ts` | retornar `salesByMethod` | D |
 | `src/components/caixa/modal-fechamento-caixa.tsx` | quadro read-only de conferência | D |
-| `src/services/sale-side-effects.service.ts` | boleto/cheque → AccountReceivable | E |
-| `src/lib/payment-methods.ts` | reclassificar boleto/cheque | E |
+| `src/services/sale-side-effects.service.ts` | boleto/cheque → AccountReceivable (+30d, 1 parcela) | E |
+| `src/components/vendas/modal-finalizar-venda.tsx` | exigir cliente boleto/cheque (~l.213) | E |
+| `src/lib/payment-methods.ts` | reclassificar boleto/cheque (METHODS_A_PRAZO etc.) | E |
 
 ---
 
 ## 5. Testes
 
-- **A:** `getCashTrace` — venda só dinheiro (1 trace cash_register com shift), venda crédito (card_receivable, sem shift), venda mista (cash + crédito), venda de outra company (404). Endpoint: 200 com permissão, 403 sem.
+- **A:** `getCashTrace` — venda só dinheiro (1 trace cash_register com shift), venda crédito (card_receivable, sem shift), venda mista (cash + crédito), venda de outra company (404). Endpoint: 200 com permissão, 403 sem. **+ cenários reais do bug:** pagamento cujo CashMovement está num turno **CLOSED** → trace resolve `shift` com `status: "CLOSED"`; pagamento cujo movimento está num turno de **filial diferente** → trace resolve com o `branchName` correto (não o da sessão).
 - **D:** `getShiftSalesByMethod` — turno com vendas de todos os métodos retorna soma correta por método; exclui CANCELED/REFUNDED; respeita janela `openedAt..closedAt`; respeita `branchId` (venda de outra filial não entra). Garante crédito não-zerado.
-- **E:** venda com boleto gera `AccountReceivable` +30d; idem cheque; ambos exigem cliente (rejeita sem cliente); não geram `CashMovement`; aparecem no bloco "a receber" da Entrega D.
+- **E:** venda com boleto gera `AccountReceivable` +30d (1 parcela); idem cheque; ambos **rejeitam venda sem cliente** (backend `sale.service.ts` + frontend `modal-finalizar-venda.tsx`); não geram `CashMovement`; aparecem no bloco "a receber" da Entrega D. **Regressão:** venda com boleto/cheque **com** cliente conclui normalmente.
 - **Regressão:** dinheiro/PIX/débito continuam gerando CashMovement e batendo o fechamento; `closeShift` inalterado (só dinheiro).
 - Meta: manter suíte verde (atualmente ~663 testes) + cobertura dos novos serviços.
 
@@ -173,7 +191,8 @@ Daqui sai o **valor real** de crédito/crediário/saldo, independente de `CashMo
 | Risco | Mitigação |
 |---|---|
 | Fonte dupla (CashMovement vs SalePayment) gerar dupla contagem | Bloco gaveta usa só CashMovement; bloco a receber usa só SalePayment. Documentado. Nunca somar as duas para o mesmo método. |
-| Janela temporal `createdAt` vs `completedAt` divergir | Usar `createdAt >= openedAt`, alinhado a como CashMovements são carimbados hoje. Índice `@@index([companyId, branchId, createdAt])` cobre. |
+| Janela temporal `createdAt` vs `completedAt` divergir | Usar `createdAt >= openedAt`, alinhado a como CashMovements são carimbados hoje. O índice `@@index([companyId, branchId, createdAt])` é na tabela **`Sale`** (confirmar) e cobre o filtro; o `groupBy` é sobre `SalePayment.method` via FK `saleId` (confirmar índice do FK). |
+| Behavior change boleto/cheque exigir cliente | Confirmado pelo dono. Cobrir com teste de regressão (com cliente conclui) + comunicar ao dono na validação. |
 | Boleto/cheque legados sem recebível | Não corrigir retroativamente; sinalizar honestamente como "sem destino". Dívida documentada. |
 | Performance do groupBy por turno | Índice existente cobre branchId+createdAt; turno = janela curta (1 dia típico). |
 | Multi-filial confundir ainda | Entrega C torna a filial explícita + bloqueia "todas as filiais" para conferência. |
