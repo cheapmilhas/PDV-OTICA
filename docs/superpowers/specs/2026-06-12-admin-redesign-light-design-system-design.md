@@ -16,8 +16,8 @@ O objetivo é transformar a admin numa interface **clara, minimalista e moderna*
 **Restrição inegociável do dono:** *não quebrar nenhuma funcionalidade existente que já funciona.* O sistema está em produção e a entrega deve ser incremental, validada fase a fase, com deploy só após aprovação manual.
 
 ### Escopo (o que entra)
-- Migração visual dark → light (tema Linear/Vercel) de **toda** a área admin (24 páginas).
-- Criação de uma biblioteca de **7 componentes admin reutilizáveis**.
+- Migração visual dark → light (tema Linear/Vercel) de **toda** a área admin (24 páginas), **reusando o sistema de tokens e os componentes shadcn que já existem** (ver §4).
+- Criação de **apenas os compositores admin que faltam** (`KPICard`, `PageHeader`, `FilterBar`, `EmptyState`), por cima dos componentes existentes.
 - **Correção de solturas:** 2 páginas órfãs do menu + sidebar mobile quebrada + hub de configurações.
 - **Dashboard mais acionável:** gráfico MRR/churn, sparklines, alertas/ações clicáveis.
 - **Limpeza de código morto:** remover APIs comprovadamente sem consumidor.
@@ -34,7 +34,7 @@ O objetivo é transformar a admin numa interface **clara, minimalista e moderna*
 Esta é a coluna vertebral da spec, embutida na arquitetura — não é só uma intenção.
 
 1. **Mudança só de "casca", nunca de "miolo".** Cada página tem duas camadas: lógica (fetch, filtros, cálculos, handlers) e aparência (divs/cores). O redesign troca **apenas a aparência**. Os `fetch('/api/admin/*')`, cálculos de MRR, queries Prisma e handlers de botão permanecem **idênticos**.
-2. **Isolamento total da admin.** O tema vive num escopo `.admin-theme`. App/PDV, dashboard das óticas e landing **não são tocados**.
+2. **Isolamento natural da admin.** A migração só toca arquivos sob `src/app/admin/**` e adiciona compositores em `src/components/admin/`. App/PDV, dashboard das óticas e landing **não são tocados** — usamos os tokens claros que já existem no `:root`, sem alterar o tema global nem o `.dark`.
 3. **Portão de validação por fase.** Ao fim de cada fase/lote: `tsc` + `build` + testes + review + **smoke visual no browser** confirmando que os mesmos dados carregam, os mesmos botões funcionam e os mesmos filtros filtram.
 4. **Limpeza conservadora e por último.** A única parte que *remove* código fica isolada no fim. Só se remove o que for confirmado, via grep de UI + cron + webhook, como sem nenhum consumidor.
 5. **Deploy só com aprovação manual.** Nada vai a produção sem o dono ver e aprovar.
@@ -80,46 +80,55 @@ Levantamento feito por análise paralela de `src/app/admin/**` e `src/app/api/ad
 
 ## 4. Arquitetura da solução
 
-### 4.1. Fundação de tokens (tema claro, escopo isolado)
+> **Descoberta-chave (revisão da spec):** o projeto **já possui** um sistema de tokens semânticos em CSS-variables (`--background`, `--card`, `--foreground`, `--border`, `--accent`, `--success/--warning/--info`, sombras `.shadow-*`) ligado ao `tailwind.config.js` como `bg-card`, `text-foreground`, `border-border`, etc. **O `:root` já é um tema CLARO** (`--background: 220 20% 98%`, `--card: 0 0% 100%`, accent teal); `.dark` é o override escuro. A admin está dark **não** por causa dos tokens, mas porque suas páginas **hardcodam literais** `bg-gray-950`/`bg-gray-900`/`text-gray-400`. Além disso, os componentes shadcn que a admin precisa **já existem** em `src/components/ui/`: `Card`, `Badge`, `StatusBadge` (6 variantes semânticas prontas), `Table`, `Sheet` (drawer para o mobile), `responsive-table`.
+>
+> **Consequência:** NÃO criamos um sistema de tokens paralelo nem duplicamos componentes. A solução é **parar de hardcodar cores e passar a usar os tokens e componentes que já existem.** Isso é mais simples, mais seguro e mais DRY do que a primeira ideia. Verificado: a árvore da admin **não** está sob nenhum wrapper `.dark` — logo, ao remover os literais, ela herda o `:root` claro automaticamente.
 
-CSS variables sob `.admin-theme`, aplicado no `layout.tsx` da admin. Tailwind mapeia para classes utilitárias semânticas.
+### 4.1. Tokens — reuso do sistema existente (mecânica)
 
-| Token | Valor | Uso |
+**Não há tokens novos.** A migração usa os tokens semânticos já mapeados no Tailwind:
+
+| Literal hardcoded hoje | Token a usar | Origem |
 |---|---|---|
-| `surface-base` | `#FAFAFA` | Fundo da aplicação |
-| `surface-card` | `#FFFFFF` | Cards, tabelas, painéis |
-| `surface-hover` | `#F4F4F5` | Hover de linhas/itens |
-| `border-subtle` | `#ECECEC` | Bordas de cards |
-| `border-default` | `#E4E4E7` | Divisores, inputs |
-| `text-primary` | `#18181B` | Títulos, valores |
-| `text-secondary` | `#52525B` | Corpo |
-| `text-muted` | `#A1A1AA` | Labels, hints |
-| `accent` | `#2563EB` | Ações primárias, item ativo |
-| status (green/amber/red/blue) | `-600` sobre fundo `-50` | Badges de estado |
+| `bg-gray-950` / `bg-gray-900` (fundo/cards) | `bg-background` / `bg-card` | `--background` / `--card` (`:root` claro) |
+| `text-white` / `text-gray-300` | `text-foreground` / `text-card-foreground` | `--foreground` |
+| `text-gray-400` / `text-gray-500` | `text-muted-foreground` | `--muted-foreground` |
+| `border-gray-800` / `border-gray-700` | `border-border` | `--border` |
+| hover `bg-gray-800` | `hover:bg-muted` / `hover:bg-accent` | `--muted` / `--accent` |
+| `bg-indigo-600` (ações/ativo) | `bg-primary` / `text-primary` | `--primary`/`--accent` (tema Vis) |
+| badges de status hardcoded | `<StatusBadge variant=...>` | componente existente |
+| sombras ad-hoc | classes `.shadow-soft/.shadow-medium` | já em `globals.css` |
 
-**Isolamento:** como o tema é escopado em `.admin-theme`, o restante do sistema (app/PDV teal, landing azul) não é afetado. Migração de página = trocar `bg-gray-900` → `bg-card`, `text-gray-400` → `text-secondary`, etc.
+**Mecânica confirmada:**
+- Os tokens já existem em `src/app/globals.css` `:root` e estão ligados ao `tailwind.config.js`. **Nenhuma entrada nova de cor no Tailwind é necessária.**
+- A admin **não** precisa de um escopo `.admin-theme` nem de aplicar `.dark`. Como `:root` é claro e a admin não está sob `.dark`, basta **remover os literais** para ela ficar clara.
+- Caso o acento da admin (teal padrão do `--accent`) precise diferir, isso é um ajuste pontual de classe (`bg-primary`), não um token novo. O accent permanece o da marca Vis — sem introduzir um terceiro azul.
 
-### 4.2. Biblioteca de componentes — `src/components/admin/ui/`
+### 4.2. Componentes — reuso + apenas 4 compositores novos
 
-Cada componente é criado **espelhando exatamente** o comportamento atual da página (mesmos dados, mesma lógica); só muda a casca. Cada um com teste unitário isolado.
+**Reusar (já existem em `src/components/ui/`):**
+- `Card` → containers (substitui ~40 divs `rounded-xl border bg-gray-900`).
+- `StatusBadge` (variantes success/warning/info/danger/neutral/premium) → **fonte única de verdade** para os badges de status hoje duplicados 6×. Mapear cada status de domínio (subscription/invoice/ticket/health) para uma variante via um helper puro `adminStatusVariant(kind, status)`.
+- `Table` / `responsive-table` → tabelas (substitui `<table>` HTML cru com overflow).
+- `Sheet` → drawer da sidebar mobile.
+- `Badge`, `Button`, `Input`, `Select` → conforme necessário.
+
+**Criar novos em `src/components/admin/` (compositores admin que não existem):**
 
 | Componente | Substitui | Responsabilidade |
 |---|---|---|
-| `<AdminCard>` | ~40 divs `rounded-xl border bg-gray-900` | Container padrão (variantes plain / header / footer) |
 | `<KPICard>` | blocos de métrica do dashboard/financeiro | Ícone + label + valor + tendência (▲▼) + sparkline opcional |
-| `<StatusBadge>` | `STATUS_STYLES` duplicado 6× | `status` + `kind` (subscription/invoice/ticket/health) → pinta sozinho. **Fonte única de verdade.** |
-| `<DataTable>` | `<table>` HTML repetido | Header, linhas com hover, `overflow-x-auto`, empty state, densidade consistente |
 | `<PageHeader>` | títulos `text-2xl` divergentes | Título + subtítulo + slot de ações |
 | `<FilterBar>` / `<FilterChip>` | filtros reimplementados | Chips de filtro consistentes |
 | `<EmptyState>` | ad-hoc | Ícone + mensagem + ação para listas vazias |
 
-Esses 7 cobrem ~90% do que a admin renderiza.
+Cada novo componente é construído **por cima dos existentes** (ex.: `KPICard` usa `Card`), espelhando exatamente o comportamento atual (mesmos dados, mesma lógica); só muda a casca. Cada um com teste unitário isolado. O helper `adminStatusVariant` também é testado cobrindo todos os pares `kind`×`status`.
 
 ### 4.3. Limites e clareza (design for isolation)
-- **Tokens** dependem só de CSS/Tailwind; consumidos por todos os componentes.
-- **Componentes** dependem só de tokens + props tipadas; sem acoplamento a fetch/dados.
+- **Tokens** já existem; nada novo a manter.
+- **Componentes** dependem só de props tipadas + componentes base; sem acoplamento a fetch/dados.
 - **Páginas** consomem componentes e mantêm sua lógica intacta. Trocar a casca de uma página não afeta outra.
-- Os dois arquivos grandes (`clientes/[id]` e `clientes` lista) são quebrados em subcomponentes **ao serem migrados** — melhoria focada, não refactor solto.
+- **Ressalva de honestidade:** os dois arquivos grandes (`clientes/[id]/page.tsx` 594 linhas e `clientes/page.tsx` 394) serão quebrados em subcomponentes ao migrar. Isso vai **além** de "só troca de casca" — são os dois pontos de maior risco e recebem atenção redobrada no portão (smoke + diff de dados antes/depois).
 
 ---
 
@@ -128,17 +137,20 @@ Esses 7 cobrem ~90% do que a admin renderiza.
 Cada fase termina no **portão de validação**: `tsc` + `build` + testes + review + smoke visual no browser. Nada avança se o portão falhar. Deploy só com aprovação.
 
 ### Fase 0 — Fundação *(zero impacto visual)*
-- Tokens `.admin-theme` em `globals.css` + mapeamento no `tailwind.config`.
-- 7 componentes em `src/components/admin/ui/` + testes unitários.
-- Aplica `.admin-theme` no `layout.tsx` da admin.
-- **Portão:** build verde, componentes testados isolados; app/dashboard/landing intocados.
+- **Sem tokens novos** (reuso do `:root` existente — ver §4.1).
+- Criar os 4 compositores em `src/components/admin/` (`KPICard`, `PageHeader`, `FilterBar`, `EmptyState`) + helper `adminStatusVariant` + testes unitários.
+- Criar `admin-smoke-checklist.md` (24 rotas com asserções concretas — ver §6) que servirá de oráculo em todos os portões seguintes.
+- **Portão:** build verde, componentes/helper testados isolados; app/dashboard/landing intocados.
 
-### Fase 1 — Casca: layout + navegação *(primeiro impacto visual)*
-- `layout.tsx` e `admin-nav.tsx` → light mode.
-- **Sidebar mobile:** drawer + toggle.
+### Fase 1a — Casca: layout claro + navegação *(primeiro impacto visual)*
+- `layout.tsx` e `admin-nav.tsx`: remover literais dark → usar tokens (`bg-background`, `bg-card`, `border-border`, `text-foreground`, `text-muted-foreground`).
 - Menu ganha **Assinaturas** e **Segurança**.
 - `/configuracoes` deixa de ser redirect → **hub com cards** das 6 subseções.
-- **Portão:** navegar todas as rotas; sidebar testada em mobile + desktop.
+- **Portão:** navegar todas as rotas; cores claras aplicadas; menu completo.
+
+### Fase 1b — Sidebar mobile *(checkpoint isolado — maior risco de navegação)*
+- Drawer via `Sheet` + botão toggle; sidebar fixa em ≥lg, drawer em < lg.
+- **Portão:** testar abrir/fechar e navegar em mobile e desktop; nenhuma rota fica inacessível.
 
 ### Fase 2 — Migração de páginas (lotes)
 - **Lote A:** Dashboard, Clientes (lista), Assinaturas, Usuários.
@@ -165,11 +177,17 @@ Cada fase termina no **portão de validação**: `tsc` + `build` + testes + revi
 
 ## 6. Estratégia de testes
 
-- **Unitário:** cada componente em `src/components/admin/ui/` testado isolado (render, variantes, StatusBadge cobrindo todos os `kind`/`status`).
-- **Regressão visual/funcional:** smoke no browser por lote — confirmar que os dados que carregavam antes carregam depois e que botões/filtros operam igual.
+A garantia "zero regressão" precisa de um **oráculo verificável**, não só inspeção a olho. Por isso o portão combina três camadas:
+
+- **Unitário:** cada compositor novo em `src/components/admin/` testado isolado; o helper `adminStatusVariant` testado cobrindo todos os pares `kind`×`status`.
 - **Build/type:** `tsc` limpo + `next build` verde a cada portão.
-- **Suite existente:** rodar a suite completa (atualmente ~750 testes) a cada portão; não pode haver regressão.
-- **Cobertura:** componentes novos com testes; meta mínima 80% nos componentes adicionados.
+- **Suite existente:** rodar a suite completa (~750 testes) a cada portão; não pode haver regressão.
+- **Checklist de smoke por rota (oráculo manual):** existe um documento `admin-smoke-checklist.md` (criado na Fase 0) enumerando as 24 páginas e, para cada uma, as asserções concretas — quais KPIs/tabelas devem carregar dados, quais filtros aplicar e o resultado esperado, quais botões/modais devem abrir. O smoke por lote percorre esse checklist; "os mesmos dados carregam" passa a ter critério objetivo.
+- **Smoke automatizado leve (Playwright / skill `browse`):** por lote, um passe que carrega cada rota migrada, afirma que os elementos-chave renderizam (header, primeira tabela/card com ≥1 linha quando há dados) e dispara **uma** ação primária (ex.: aplicar um filtro) sem erro de console. Transforma o smoke num artefato repetível, não numa "vibe".
+- **Cobertura:** compositores novos com testes; meta mínima 80% no código adicionado.
+
+### Definição do portão de validação (aplicado ao fim de cada fase/lote)
+1. `tsc` limpo. 2. `next build` verde. 3. Suite ~750 testes verde. 4. Checklist de smoke da(s) rota(s) afetada(s) cumprido. 5. Passe Playwright/`browse` leve sem erro de console. 6. Review do diff. Só então avança; deploy só com aprovação manual.
 
 ---
 
@@ -178,7 +196,7 @@ Cada fase termina no **portão de validação**: `tsc` + `build` + testes + revi
 | Risco | Mitigação |
 |---|---|
 | Quebrar funcionalidade ao migrar | Só troca de casca; lógica/fetch intocados; smoke por lote |
-| Vazar tema claro para o resto do app | Escopo `.admin-theme`; app/landing não tocados |
+| Vazar tema claro para o resto do app | Só edita `src/app/admin/**` + add `src/components/admin/`; tema global e `.dark` intocados; app/landing não tocados |
 | Remover API viva na limpeza | Grep UI+cron+webhook antes; `notifications` excluída; limpeza por último |
 | Colisão com sessão paralela (histórico) | Trabalhar em branch dedicada; commits atômicos por fase |
 | Contraste/acessibilidade insuficiente no light | Tokens validados para WCAG AA; labels/ARIA nos componentes |
