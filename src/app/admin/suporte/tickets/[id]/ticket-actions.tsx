@@ -37,40 +37,40 @@ export function TicketActions({ ticket }: { ticket: any }) {
       <button
         onClick={() => setOpen((v) => !v)}
         disabled={loading}
-        className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 text-gray-400 hover:text-white border border-gray-700 transition-colors disabled:opacity-50"
+        className="p-2 rounded-lg bg-muted hover:bg-muted text-muted-foreground hover:text-foreground border border-border transition-colors disabled:opacity-50"
       >
         <MoreVertical className="h-4 w-4" />
       </button>
 
       {open && (
-        <div className="absolute right-0 top-10 z-10 w-52 rounded-xl border border-gray-700 bg-gray-900 shadow-xl py-1">
+        <div className="absolute right-0 top-10 z-10 w-52 rounded-xl border border-border bg-card shadow-xl py-1">
           <button
             onClick={() => handleStatusChange("IN_PROGRESS")}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
-            <User className="h-4 w-4 text-yellow-400" />
+            <User className="h-4 w-4 text-amber-600" />
             Em Andamento
           </button>
           <button
             onClick={() => handleStatusChange("WAITING_CUSTOMER")}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
-            <Clock className="h-4 w-4 text-purple-400" />
+            <Clock className="h-4 w-4 text-purple-600" />
             Aguardando Cliente
           </button>
           <button
             onClick={() => handleStatusChange("RESOLVED")}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
-            <CheckCircle2 className="h-4 w-4 text-green-400" />
+            <CheckCircle2 className="h-4 w-4 text-emerald-600" />
             Marcar como Resolvido
           </button>
-          <div className="my-1 border-t border-gray-800" />
+          <div className="my-1 border-t border-border" />
           <button
             onClick={() => handleStatusChange("CLOSED")}
-            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-gray-300 hover:bg-gray-800 hover:text-white transition-colors"
+            className="flex items-center gap-2.5 w-full px-4 py-2.5 text-sm text-foreground hover:bg-muted hover:text-foreground transition-colors"
           >
-            <XCircle className="h-4 w-4 text-red-400" />
+            <XCircle className="h-4 w-4 text-red-600" />
             Fechar Ticket
           </button>
         </div>
