@@ -141,6 +141,7 @@ describe("applyPaymentsInTx — boleto/cheque geram AccountReceivable", () => {
       customerId: "cust_1",
       userId: "user_1",
       openShiftId: "shift_1",
+      companySettings: null, // obrigatório na assinatura (lido só no branch STORE_CREDIT)
     });
     expect(arCreate).toHaveBeenCalledTimes(1);
     expect(arCreate.mock.calls[0][0].data).toMatchObject({
@@ -155,7 +156,7 @@ describe("applyPaymentsInTx — boleto/cheque geram AccountReceivable", () => {
     await applyPaymentsInTx(tx, {
       sale: baseSale,
       payments: [{ method: "CHEQUE", amount: 300 }],
-      customerId: "cust_1", userId: "user_1", openShiftId: "shift_1",
+      customerId: "cust_1", userId: "user_1", openShiftId: "shift_1", companySettings: null,
     });
     expect(arCreate).toHaveBeenCalledTimes(1);
     expect(cmCreate).not.toHaveBeenCalled();
@@ -441,7 +442,7 @@ function saleWith(payments: any[]) {
 describe("getCashTrace", () => {
   it("pagamento CASH com movimento IN → entrou no caixa, com shift", async () => {
     findFirst.mockResolvedValue(saleWith([{
-      id: "p1", method: "CASH", amount: 100, status: "PAID",
+      id: "p1", method: "CASH", amount: 100, status: "RECEIVED",
       cashMovements: [{ type: "SALE_PAYMENT", direction: "IN", amount: 100, cashShift: {
         id: "sh1", status: "CLOSED", openedAt: new Date(), branch: { name: "Loja 1" }, openedByUser: { name: "Ana" },
       }}],
@@ -466,7 +467,7 @@ describe("getCashTrace", () => {
   });
 
   it("crédito → destino card_receivable, sem shift", async () => {
-    findFirst.mockResolvedValue(saleWith([{ id: "p1", method: "CREDIT_CARD", amount: 200, status: "PAID", cashMovements: [] }]));
+    findFirst.mockResolvedValue(saleWith([{ id: "p1", method: "CREDIT_CARD", amount: 200, status: "RECEIVED", cashMovements: [] }]));
     const trace = await saleService.getCashTrace("sale_1", "co_1");
     expect(trace[0]).toMatchObject({ method: "CREDIT_CARD", enteredCashRegister: false, destino: "card_receivable" });
     expect(trace[0].shift).toBeUndefined();
