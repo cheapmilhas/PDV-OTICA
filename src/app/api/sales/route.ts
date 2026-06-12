@@ -7,7 +7,7 @@ import {
   type CreateSaleDTO,
 } from "@/lib/validations/sale.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
@@ -122,7 +122,7 @@ export async function POST(request: Request) {
     // Requer autenticação
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     // Rate limit: 30 vendas por minuto por usuário

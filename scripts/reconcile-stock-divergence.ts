@@ -27,8 +27,9 @@ import { prisma } from "../src/lib/prisma";
 const APPLY = process.argv.includes("--apply");
 
 // Allowlist de empresas. Vazio = todas as lojas únicas divergentes.
-// Para corrigir SÓ a PS Vision primeiro: ["cmq6mjm2w0002haqqsq9bhw0v"].
-const ONLY_COMPANIES: string[] = [];
+// Opção B (validação pontual): corrigir SÓ a PS Vision primeiro; depois rodar
+// nas demais (esvaziar a lista ou trocar pelos outros IDs).
+const ONLY_COMPANIES: string[] = ["cmq6mjm2w0002haqqsq9bhw0v"];
 
 async function main() {
   console.log(`\n=== RECONCILIAÇÃO DE ESTOQUE (BranchStock = Product.stockQty) ===`);

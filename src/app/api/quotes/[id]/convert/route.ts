@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { quoteService } from "@/services/quote.service";
 import { convertQuoteToSaleSchema } from "@/lib/validations/quote.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { requireWriteAccess } from "@/lib/subscription";
@@ -40,7 +40,7 @@ export async function POST(
     // Requer autenticação
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     const { id } = await params;

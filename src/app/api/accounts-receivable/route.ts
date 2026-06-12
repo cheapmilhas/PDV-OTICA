@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, requirePermission, canSeeCanceled } from "@/lib/auth-helpers";
-import { handleApiError, AppError, ERROR_CODES } from "@/lib/error-handler";
+import { handleApiError, AppError, ERROR_CODES, unauthorizedError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
@@ -277,7 +277,7 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     const companyId = await getCompanyId();
@@ -377,7 +377,7 @@ export async function PATCH(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     const companyId = await getCompanyId();

@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { auth } from "@/auth";
 import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
 
 /**
@@ -22,7 +22,7 @@ export async function PATCH(
     // Requer autenticação
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     const companyId = await getCompanyId();

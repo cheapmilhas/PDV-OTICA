@@ -877,7 +877,17 @@ function PDVPage() {
         INSUFFICIENT_STOCK: "📦 Estoque insuficiente",
         DISCOUNT_EXCEEDS_LIMIT: "🏷️ Desconto acima do limite",
         PRICE_BELOW_COST: "💸 Preço abaixo do custo",
+        UNAUTHORIZED: "🔒 Sessão expirada",
       };
+
+      // Sessão expirada: além do toast, leva para o login (a venda NÃO foi
+      // gravada). Antes isto vinha como 500 "Erro interno do servidor" e o
+      // operador não entendia que era só refazer o login.
+      if (code === "UNAUTHORIZED") {
+        toast.error(`🔒 Sessão expirada\n${mensagem}`, { duration: 6000 });
+        setTimeout(() => router.push("/login"), 1500);
+        return;
+      }
 
       if (code && titulos[code]) {
         toast.error(`${titulos[code]}\n${mensagem}`, { duration: 7000 });

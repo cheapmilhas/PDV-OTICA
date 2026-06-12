@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server";
 import { serviceOrderService } from "@/services/service-order.service";
 import { requirePermission, getCompanyId } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { auth } from "@/auth";
 
 /**
@@ -22,7 +22,7 @@ export async function POST(
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     const { id } = await params;

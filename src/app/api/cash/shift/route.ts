@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cashService } from "@/services/cash.service";
 import { openShiftSchema, type OpenShiftDTO } from "@/lib/validations/cash.schema";
 import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
@@ -60,7 +60,7 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     // Rate limit: 10 aberturas de caixa por minuto por usuário

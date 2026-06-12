@@ -2,7 +2,7 @@ import { NextResponse } from "next/server";
 import { cashService } from "@/services/cash.service";
 import { closeShiftSchema, type CloseShiftDTO } from "@/lib/validations/cash.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
@@ -19,7 +19,7 @@ export async function POST(request: Request) {
   try {
     const session = await auth();
     if (!session?.user?.id) {
-      throw new Error("Usuário não autenticado");
+      throw unauthorizedError("Sua sessão expirou. Faça login novamente.");
     }
 
     // Rate limit: 10 fechamentos de caixa por minuto por usuário
