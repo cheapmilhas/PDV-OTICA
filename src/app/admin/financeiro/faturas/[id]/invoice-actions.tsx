@@ -49,7 +49,7 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
         <select
           value={method}
           onChange={(e) => setMethod(e.target.value)}
-          className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white"
+          className="px-3 py-1.5 bg-background border border-input rounded text-sm text-foreground"
         >
           <option value="whatsapp">WhatsApp</option>
           <option value="email">Email</option>
@@ -58,7 +58,7 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
         <button
           onClick={() => handleAction({ method })}
           disabled={loading}
-          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Marcar como enviado
@@ -72,7 +72,7 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
       <button
         onClick={() => handleAction()}
         disabled={loading}
-        className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-green-600 text-white rounded text-sm hover:bg-green-700 disabled:opacity-50"
+        className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-emerald-600 text-white rounded text-sm hover:bg-emerald-700 disabled:opacity-50"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         Confirmar pagamento
@@ -88,19 +88,19 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
           placeholder="Número da NF"
           value={nfNumber}
           onChange={(e) => setNfNumber(e.target.value)}
-          className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white w-full"
+          className="px-3 py-1.5 bg-background border border-input rounded text-sm text-foreground w-full"
         />
         <input
           type="url"
           placeholder="URL da NF (opcional)"
           value={nfUrl}
           onChange={(e) => setNfUrl(e.target.value)}
-          className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded text-sm text-white w-full"
+          className="px-3 py-1.5 bg-background border border-input rounded text-sm text-foreground w-full"
         />
         <button
           onClick={() => handleAction({ nfNumber, nfUrl })}
           disabled={loading || !nfNumber}
-          className="flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
+          className="flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 disabled:opacity-50"
         >
           {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
           Registrar NF
@@ -114,7 +114,7 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
       <button
         onClick={() => handleAction()}
         disabled={loading}
-        className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
+        className="mt-2 flex items-center gap-2 px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 disabled:opacity-50"
       >
         {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
         Marcar NF como enviada
@@ -127,7 +127,7 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
       return (
         <button
           onClick={() => setShowNoteInput(true)}
-          className="mt-3 flex items-center gap-2 text-sm text-indigo-400 hover:text-indigo-300"
+          className="mt-3 flex items-center gap-2 text-sm text-primary hover:text-primary"
         >
           <Plus className="w-4 h-4" />
           {currentNote ? "Editar observação" : "Adicionar observação"}
@@ -142,19 +142,19 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
           onChange={(e) => setNote(e.target.value)}
           placeholder="Escreva uma observação..."
           rows={3}
-          className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded text-sm text-white resize-none"
+          className="w-full px-3 py-2 bg-background border border-input rounded text-sm text-foreground resize-none"
         />
         <div className="flex gap-2">
           <button
             onClick={() => handleAction({ note })}
             disabled={loading}
-            className="px-3 py-1.5 bg-indigo-600 text-white rounded text-sm hover:bg-indigo-700 disabled:opacity-50"
+            className="px-3 py-1.5 bg-primary text-primary-foreground rounded text-sm hover:bg-primary/90 disabled:opacity-50"
           >
             {loading ? "Salvando..." : "Salvar"}
           </button>
           <button
             onClick={() => setShowNoteInput(false)}
-            className="px-3 py-1.5 bg-gray-700 text-white rounded text-sm hover:bg-gray-600"
+            className="px-3 py-1.5 bg-muted text-foreground rounded text-sm hover:bg-muted/70"
           >
             Cancelar
           </button>

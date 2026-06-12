@@ -2,24 +2,9 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
-import { ArrowLeft, Building2, CheckCircle, Circle, Send, CreditCard, Receipt, FileText } from "lucide-react";
+import { ArrowLeft, Building2, CheckCircle, Send, CreditCard, Receipt, FileText } from "lucide-react";
 import { InvoiceActions } from "./invoice-actions";
-
-const STATUS_LABELS: Record<string, string> = {
-  DRAFT: "Rascunho",
-  PENDING: "Pendente",
-  PAID: "Pago",
-  OVERDUE: "Vencido",
-  CANCELED: "Cancelado",
-};
-
-const STATUS_STYLES: Record<string, string> = {
-  DRAFT: "bg-gray-800 text-gray-400",
-  PENDING: "bg-yellow-900/50 text-yellow-400 border border-yellow-800",
-  PAID: "bg-green-900/50 text-green-400 border border-green-800",
-  OVERDUE: "bg-red-900/50 text-red-400 border border-red-800",
-  CANCELED: "bg-gray-800 text-gray-500",
-};
+import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 
 export default async function InvoiceDetailPage({
   params,
@@ -49,23 +34,21 @@ export default async function InvoiceDetailPage({
   const plan = invoice.subscription.plan;
 
   return (
-    <div className="p-6 text-white max-w-4xl">
+    <div className="p-6 text-foreground max-w-4xl">
       {/* Header */}
       <div className="flex items-center gap-4 mb-6">
         <Link
           href="/admin/financeiro/faturas"
-          className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors"
+          className="p-2 rounded-lg bg-muted hover:bg-muted/70 transition-colors"
         >
           <ArrowLeft className="w-5 h-5" />
         </Link>
         <div className="flex-1">
           <div className="flex items-center gap-3">
             <h1 className="text-2xl font-bold">Fatura #{invoice.number || invoice.id.slice(0, 8)}</h1>
-            <span className={`px-3 py-1 rounded-full text-sm font-medium ${STATUS_STYLES[invoice.status]}`}>
-              {STATUS_LABELS[invoice.status]}
-            </span>
+            <AdminStatusBadge kind="invoice" status={invoice.status} />
           </div>
-          <p className="text-sm text-gray-400">{company.name} • {plan.name}</p>
+          <p className="text-sm text-muted-foreground">{company.name} • {plan.name}</p>
         </div>
       </div>
 
@@ -73,7 +56,7 @@ export default async function InvoiceDetailPage({
         {/* Coluna Principal */}
         <div className="lg:col-span-2 space-y-6">
           {/* Workflow de Etapas */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+          <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-lg font-semibold mb-4">Workflow de Cobrança</h2>
 
             <div className="space-y-4">
@@ -140,12 +123,12 @@ export default async function InvoiceDetailPage({
           </div>
 
           {/* Notas */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
+          <div className="rounded-xl border border-border bg-card p-6">
             <h2 className="text-lg font-semibold mb-4">Observações</h2>
             {invoice.adminNotes ? (
-              <p className="text-gray-300">{invoice.adminNotes}</p>
+              <p className="text-foreground">{invoice.adminNotes}</p>
             ) : (
-              <p className="text-gray-500 italic">Nenhuma observação</p>
+              <p className="text-muted-foreground italic">Nenhuma observação</p>
             )}
             <InvoiceActions invoiceId={invoice.id} type="add_note" currentNote={invoice.adminNotes} />
           </div>
@@ -154,58 +137,58 @@ export default async function InvoiceDetailPage({
         {/* Sidebar */}
         <div className="space-y-6">
           {/* Valor */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-            <p className="text-sm text-gray-500 mb-1">Valor</p>
-            <p className="text-3xl font-bold text-white">
+          <div className="rounded-xl border border-border bg-card p-6">
+            <p className="text-sm text-muted-foreground mb-1">Valor</p>
+            <p className="text-3xl font-bold text-foreground">
               R$ {(invoice.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
             </p>
             {invoice.discount > 0 && (
-              <p className="text-sm text-green-400">
+              <p className="text-sm text-emerald-600">
                 Desconto: R$ {(invoice.discount / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
               </p>
             )}
           </div>
 
           {/* Datas */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">Datas</h3>
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Datas</h3>
             <div className="space-y-2 text-sm">
               <div className="flex justify-between">
-                <span className="text-gray-500">Criada em:</span>
-                <span className="text-white">{new Date(invoice.createdAt).toLocaleDateString("pt-BR")}</span>
+                <span className="text-muted-foreground">Criada em:</span>
+                <span className="text-foreground">{new Date(invoice.createdAt).toLocaleDateString("pt-BR")}</span>
               </div>
               <div className="flex justify-between">
-                <span className="text-gray-500">Vencimento:</span>
-                <span className="text-white">{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString("pt-BR") : "—"}</span>
+                <span className="text-muted-foreground">Vencimento:</span>
+                <span className="text-foreground">{invoice.dueDate ? new Date(invoice.dueDate).toLocaleDateString("pt-BR") : "—"}</span>
               </div>
               {invoice.paidAt && (
                 <div className="flex justify-between">
-                  <span className="text-gray-500">Pago em:</span>
-                  <span className="text-green-400">{new Date(invoice.paidAt).toLocaleDateString("pt-BR")}</span>
+                  <span className="text-muted-foreground">Pago em:</span>
+                  <span className="text-emerald-600">{new Date(invoice.paidAt).toLocaleDateString("pt-BR")}</span>
                 </div>
               )}
             </div>
           </div>
 
           {/* Empresa */}
-          <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-            <h3 className="text-sm font-medium text-gray-400 mb-3">Empresa</h3>
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Empresa</h3>
             <div className="flex items-center gap-3 mb-3">
-              <div className="w-10 h-10 rounded-lg bg-indigo-600 flex items-center justify-center">
+              <div className="w-10 h-10 rounded-lg bg-primary text-primary-foreground flex items-center justify-center">
                 <Building2 className="w-5 h-5" />
               </div>
               <div>
-                <p className="font-medium text-white">{company.name}</p>
-                <p className="text-xs text-gray-500">{plan.name}</p>
+                <p className="font-medium text-foreground">{company.name}</p>
+                <p className="text-xs text-muted-foreground">{plan.name}</p>
               </div>
             </div>
             <div className="text-sm space-y-1">
-              <p className="text-gray-400">{company.email}</p>
-              <p className="text-gray-400">{company.phone}</p>
+              <p className="text-muted-foreground">{company.email}</p>
+              <p className="text-muted-foreground">{company.phone}</p>
             </div>
             <Link
               href={`/admin/clientes/${company.id}`}
-              className="mt-3 block text-center text-sm text-indigo-400 hover:text-indigo-300"
+              className="mt-3 block text-center text-sm text-primary hover:text-primary"
             >
               Ver empresa →
             </Link>
@@ -213,15 +196,15 @@ export default async function InvoiceDetailPage({
 
           {/* Links */}
           {(invoice.paymentUrl || invoice.boletoUrl || invoice.pixCode || invoice.nfUrl) && (
-            <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-              <h3 className="text-sm font-medium text-gray-400 mb-3">Links</h3>
+            <div className="rounded-xl border border-border bg-card p-6">
+              <h3 className="text-sm font-medium text-muted-foreground mb-3">Links</h3>
               <div className="space-y-2">
                 {invoice.paymentUrl && (
                   <a
                     href={invoice.paymentUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-sm text-indigo-400 hover:text-indigo-300"
+                    className="block text-sm text-primary hover:text-primary"
                   >
                     Link de pagamento ↗
                   </a>
@@ -231,7 +214,7 @@ export default async function InvoiceDetailPage({
                     href={invoice.boletoUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-sm text-indigo-400 hover:text-indigo-300"
+                    className="block text-sm text-primary hover:text-primary"
                   >
                     Boleto PDF ↗
                   </a>
@@ -241,14 +224,14 @@ export default async function InvoiceDetailPage({
                     href={invoice.nfUrl}
                     target="_blank"
                     rel="noopener noreferrer"
-                    className="block text-sm text-indigo-400 hover:text-indigo-300"
+                    className="block text-sm text-primary hover:text-primary"
                   >
                     Nota Fiscal ↗
                   </a>
                 )}
               </div>
               {invoice.pixCode && (
-                <div className="mt-3 p-2 bg-gray-800 rounded text-xs font-mono break-all text-gray-400">
+                <div className="mt-3 p-2 bg-muted rounded text-xs font-mono break-all text-muted-foreground">
                   PIX: {invoice.pixCode.slice(0, 30)}...
                 </div>
               )}
@@ -285,17 +268,17 @@ function WorkflowStep({
   isLast?: boolean;
 }) {
   return (
-    <div className={`flex gap-4 ${!isLast ? "pb-4 border-b border-gray-800" : ""}`}>
+    <div className={`flex gap-4 ${!isLast ? "pb-4 border-b border-border" : ""}`}>
       <div className={`w-10 h-10 rounded-full flex items-center justify-center flex-shrink-0 ${
-        completed ? "bg-green-900/50 text-green-400" : "bg-gray-800 text-gray-500"
+        completed ? "bg-emerald-50 text-emerald-600" : "bg-muted text-muted-foreground"
       }`}>
         {completed ? <CheckCircle className="w-5 h-5" /> : <Icon className="w-5 h-5" />}
       </div>
       <div className="flex-1">
-        <p className={`font-medium ${completed ? "text-green-400" : "text-gray-400"}`}>{title}</p>
-        {subtitle && <p className="text-xs text-gray-500">{subtitle}</p>}
+        <p className={`font-medium ${completed ? "text-emerald-600" : "text-muted-foreground"}`}>{title}</p>
+        {subtitle && <p className="text-xs text-muted-foreground">{subtitle}</p>}
         {completed && completedAt && (
-          <p className="text-xs text-gray-500 mt-1">
+          <p className="text-xs text-muted-foreground mt-1">
             {new Date(completedAt).toLocaleString("pt-BR")}
             {completedBy && ` • por ${completedBy}`}
           </p>
