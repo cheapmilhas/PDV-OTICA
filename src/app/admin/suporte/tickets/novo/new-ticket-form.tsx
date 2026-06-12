@@ -48,12 +48,12 @@ export function NewTicketForm({ companies, admins }: { companies: Company[]; adm
   return (
     <form onSubmit={handleSubmit} className="space-y-5">
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-1.5">Empresa *</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-1.5">Empresa *</label>
         <select
           value={companyId}
           onChange={(e) => setCompanyId(e.target.value)}
           required
-          className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
         >
           <option value="">Selecione uma empresa...</option>
           {companies.map((c) => (
@@ -63,36 +63,36 @@ export function NewTicketForm({ companies, admins }: { companies: Company[]; adm
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-1.5">Assunto *</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-1.5">Assunto *</label>
         <input
           type="text"
           value={subject}
           onChange={(e) => setSubject(e.target.value)}
           required
           placeholder="Descreva brevemente o problema..."
-          className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500"
+          className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-foreground text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
         />
       </div>
 
       <div>
-        <label className="block text-sm font-medium text-gray-400 mb-1.5">Descrição *</label>
+        <label className="block text-sm font-medium text-muted-foreground mb-1.5">Descrição *</label>
         <textarea
           value={description}
           onChange={(e) => setDescription(e.target.value)}
           required
           rows={5}
           placeholder="Descreva o problema em detalhes..."
-          className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 resize-none"
+          className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-foreground text-sm placeholder-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring resize-none"
         />
       </div>
 
       <div className="grid grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1.5">Prioridade</label>
+          <label className="block text-sm font-medium text-muted-foreground mb-1.5">Prioridade</label>
           <select
             value={priority}
             onChange={(e) => setPriority(e.target.value)}
-            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="LOW">Baixa</option>
             <option value="MEDIUM">Média</option>
@@ -102,11 +102,11 @@ export function NewTicketForm({ companies, admins }: { companies: Company[]; adm
         </div>
 
         <div>
-          <label className="block text-sm font-medium text-gray-400 mb-1.5">Atribuir para</label>
+          <label className="block text-sm font-medium text-muted-foreground mb-1.5">Atribuir para</label>
           <select
             value={assignedToId}
             onChange={(e) => setAssignedToId(e.target.value)}
-            className="w-full px-3 py-2.5 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:outline-none focus:ring-2 focus:ring-indigo-500"
+            className="w-full px-3 py-2.5 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
           >
             <option value="">Sem atribuição</option>
             {admins.map((a) => (
@@ -120,14 +120,14 @@ export function NewTicketForm({ companies, admins }: { companies: Company[]; adm
         <button
           type="button"
           onClick={() => router.back()}
-          className="px-4 py-2.5 bg-gray-800 hover:bg-gray-700 text-gray-300 border border-gray-700 text-sm font-medium rounded-lg transition-colors"
+          className="px-4 py-2.5 bg-muted hover:bg-muted text-foreground border border-border text-sm font-medium rounded-lg transition-colors"
         >
           Cancelar
         </button>
         <button
           type="submit"
           disabled={loading || !companyId || !subject.trim() || !description.trim()}
-          className="flex items-center gap-2 px-4 py-2.5 bg-indigo-600 hover:bg-indigo-500 text-white text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
+          className="flex items-center gap-2 px-4 py-2.5 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg disabled:opacity-50 transition-colors"
         >
           {loading && <Loader2 className="h-4 w-4 animate-spin" />}
           {loading ? "Criando..." : "Criar Ticket"}

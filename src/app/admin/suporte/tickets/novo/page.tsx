@@ -1,6 +1,7 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { NewTicketForm } from "./new-ticket-form";
+import { PageHeader } from "@/components/admin/PageHeader";
 
 export default async function NovoTicketPage() {
   await requireAdmin();
@@ -19,11 +20,11 @@ export default async function NovoTicketPage() {
   ]);
 
   return (
-    <div className="p-6 text-white max-w-2xl">
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold">Novo Ticket</h1>
-        <p className="text-sm text-gray-400 mt-0.5">Criar ticket de suporte para uma empresa</p>
-      </div>
+    <div className="p-6 max-w-2xl">
+      <PageHeader
+        title="Novo Ticket"
+        subtitle="Criar ticket de suporte para uma empresa"
+      />
       <NewTicketForm companies={companies} admins={admins} />
     </div>
   );
