@@ -7,6 +7,7 @@ import {
 function makeAsaasClient(overrides: {
   findByCpfCnpj?: ReturnType<typeof vi.fn>;
   create?: ReturnType<typeof vi.fn>;
+  update?: ReturnType<typeof vi.fn>;
 } = {}) {
   return {
     customers: {
@@ -15,15 +16,18 @@ function makeAsaasClient(overrides: {
       create:
         overrides.create ??
         vi.fn().mockResolvedValue({ id: "cus_new", cpfCnpj: "x" }),
+      update:
+        overrides.update ?? vi.fn().mockResolvedValue({ id: "cus_X" }),
     },
   } as any;
 }
 
 describe("resolveAsaasCustomerId", () => {
-  it("(a) returns existing customer when findByCpfCnpj finds one, without calling create", async () => {
-    const findByCpfCnpj = vi.fn().mockResolvedValue({ id: "cus_X" });
+  it("(a) returns existing customer when found; silences notification if still on", async () => {
+    const findByCpfCnpj = vi.fn().mockResolvedValue({ id: "cus_X", notificationDisabled: false });
     const create = vi.fn();
-    const asaasClient = makeAsaasClient({ findByCpfCnpj, create });
+    const update = vi.fn().mockResolvedValue({ id: "cus_X", notificationDisabled: true });
+    const asaasClient = makeAsaasClient({ findByCpfCnpj, create, update });
 
     const result = await resolveAsaasCustomerId(
       {
@@ -37,6 +41,22 @@ describe("resolveAsaasCustomerId", () => {
 
     expect(result).toEqual({ asaasCustomerId: "cus_X", created: false });
     expect(create).not.toHaveBeenCalled();
+    // customer pré-existente ainda notificava → silencia (evita email duplicado)
+    expect(update).toHaveBeenCalledWith("cus_X", { notificationDisabled: true });
+  });
+
+  it("(a2) existing customer already silenced → does NOT call update", async () => {
+    const findByCpfCnpj = vi.fn().mockResolvedValue({ id: "cus_X", notificationDisabled: true });
+    const update = vi.fn();
+    const asaasClient = makeAsaasClient({ findByCpfCnpj, update });
+
+    const result = await resolveAsaasCustomerId(
+      { name: "E", email: "a@a.com", cpfCnpjRaw: "12345678901", externalReference: "company:1" },
+      { asaasClient },
+    );
+
+    expect(result).toEqual({ asaasCustomerId: "cus_X", created: false });
+    expect(update).not.toHaveBeenCalled();
   });
 
   it("(b) creates customer when not found, with digits-only cpfCnpj and exact externalReference", async () => {

@@ -31,6 +31,7 @@ export interface AsaasCustomer {
   cpfCnpj: string;
   mobilePhone?: string;
   externalReference?: string;
+  notificationDisabled?: boolean;
 }
 
 export interface AsaasCustomerInput {
@@ -210,6 +211,15 @@ export const asaas = {
     },
     async get(id: string): Promise<AsaasCustomer> {
       return asaasFetch<AsaasCustomer>(`/customers/${id}`);
+    },
+    async update(
+      id: string,
+      input: Partial<AsaasCustomerInput>,
+    ): Promise<AsaasCustomer> {
+      return asaasFetch<AsaasCustomer>(`/customers/${id}`, {
+        method: "PUT",
+        body: JSON.stringify(input),
+      });
     },
     async findByCpfCnpj(cpfCnpj: string): Promise<AsaasCustomer | null> {
       const result = await asaasFetch<{ data: AsaasCustomer[] }>(

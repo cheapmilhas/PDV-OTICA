@@ -188,6 +188,24 @@ describe("Asaas client", () => {
     });
   });
 
+  describe("customers.update", () => {
+    it("usa PUT em /customers/{id} com o body (Asaas exige PUT, não POST)", async () => {
+      process.env.ASAAS_API_KEY = "$aact_test_abc";
+      fetchMock.mockResolvedValueOnce(
+        new Response(JSON.stringify({ id: "cus_1", notificationDisabled: true }), { status: 200 }),
+      );
+
+      const { asaas } = await import("./asaas");
+      await asaas.customers.update("cus_1", { notificationDisabled: true });
+
+      const url = fetchMock.mock.calls[0][0] as string;
+      const init = fetchMock.mock.calls[0][1] as RequestInit;
+      expect(url).toContain("/customers/cus_1");
+      expect(init.method).toBe("PUT");
+      expect(JSON.parse(init.body as string)).toEqual({ notificationDisabled: true });
+    });
+  });
+
   describe("verifyWebhookToken", () => {
     it("retorna false sem ASAAS_WEBHOOK_TOKEN configurado", async () => {
       delete process.env.ASAAS_WEBHOOK_TOKEN;

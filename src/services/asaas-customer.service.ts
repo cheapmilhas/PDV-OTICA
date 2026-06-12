@@ -29,6 +29,12 @@ export async function resolveAsaasCustomerId(
 
   const found = await asaas.customers.findByCpfCnpj(cpfCnpj);
   if (found) {
+    // Customers pré-existentes (criados antes do silenciamento) ainda têm a
+    // notificação automática do Asaas ligada — o que faz o cliente receber DOIS
+    // emails (o do Asaas + o nosso). Garante notificationDisabled também neles.
+    if (found.notificationDisabled !== true) {
+      await asaas.customers.update(found.id, { notificationDisabled: true });
+    }
     return { asaasCustomerId: found.id, created: false };
   }
 

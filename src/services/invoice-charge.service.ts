@@ -86,6 +86,18 @@ export async function ensureInvoiceCharge(
 
   const dueStr = `${dueDate.getUTCFullYear()}-${String(dueDate.getUTCMonth() + 1).padStart(2, "0")}-${String(dueDate.getUTCDate()).padStart(2, "0")}`;
 
+  // Silencia as notificações automáticas do Asaas no customer (idempotente).
+  // Sem isso, customers criados antes do silenciamento mandam o email feio do
+  // Asaas em paralelo ao nosso — cliente recebe DOIS emails. Best-effort: se
+  // falhar, a cobrança ainda é criada (o payment também leva notificationDisabled).
+  try {
+    await asaasClient.customers.update(sub.asaasCustomerId, {
+      notificationDisabled: true,
+    });
+  } catch {
+    // segue — notificationDisabled no payload do payment é o segundo guard
+  }
+
   const payment = await asaasClient.payments.create(
     {
       customer: sub.asaasCustomerId,
