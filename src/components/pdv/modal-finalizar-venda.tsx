@@ -210,10 +210,17 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
         return; // Não adiciona ainda
       }
 
-      // Saldo a Receber: exige cliente vinculado (sem modal de parcelas)
-      if (selectedMethod === "BALANCE_DUE") {
+      // A prazo (saldo/boleto/cheque): exige cliente vinculado
+      if (
+        selectedMethod === "BALANCE_DUE" ||
+        selectedMethod === "BOLETO" ||
+        selectedMethod === "CHEQUE"
+      ) {
         if (!customerId) {
-          toast.error("Saldo a Receber exige um cliente vinculado");
+          const label =
+            selectedMethod === "BALANCE_DUE" ? "Saldo a Receber"
+            : selectedMethod === "BOLETO" ? "Boleto" : "Cheque";
+          toast.error(`${label} exige um cliente vinculado`);
           return;
         }
       }
