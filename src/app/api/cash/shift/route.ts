@@ -18,6 +18,12 @@ export async function GET(request: Request) {
   try {
     await requireAuth();
     const companyId = await getCompanyId();
+
+    const url = new URL(request.url);
+    if (url.searchParams.get("branch") === "all") {
+      return NextResponse.json({ shift: null, allBranches: true }, { status: 200 });
+    }
+
     const branchId = await getBranchId();
 
     const shift = await cashService.getCurrentShift(branchId, companyId);
@@ -25,6 +31,11 @@ export async function GET(request: Request) {
     if (!shift) {
       return NextResponse.json({ shift: null }, { status: 200 });
     }
+
+    const salesByMethod = await cashService.getShiftSalesByMethod(
+      { id: shift.id, branchId, openedAt: shift.openedAt, closedAt: shift.closedAt },
+      companyId
+    );
 
     // Stalenezza (horas abertas) calculada no servidor — fonte de verdade.
     // Frontend evita Date.now() local que pode divergir do servidor.
@@ -46,7 +57,7 @@ export async function GET(request: Request) {
       })) || [],
     };
 
-    return NextResponse.json({ shift: serializedShift }, { status: 200 });
+    return NextResponse.json({ shift: serializedShift, salesByMethod }, { status: 200 });
   } catch (error) {
     return handleApiError(error);
   }
