@@ -6,6 +6,7 @@ import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
   Settings, Package, UserCog, ScrollText, UserPlus, Ticket,
   FileBarChart, UsersRound, Activity, Mail, RefreshCw,
+  CreditCard, ShieldCheck,
 } from "lucide-react";
 
 const menuItems = [
@@ -29,6 +30,7 @@ const menuItems = [
   {
     section: "Financeiro",
     items: [
+      { href: "/admin/assinaturas",       icon: CreditCard,      label: "Assinaturas",      exact: false },
       { href: "/admin/financeiro",        icon: Wallet,          label: "Visão Geral",      exact: true  },
       { href: "/admin/financeiro/faturas",icon: FileText,        label: "Faturas",          exact: false },
       { href: "/admin/financeiro/inadimplencia", icon: AlertTriangle, label: "Inadimplência", exact: false },
@@ -47,8 +49,9 @@ const menuItems = [
       { href: "/admin/configuracoes/equipe",  icon: UserCog,  label: "Equipe",  exact: false },
       { href: "/admin/configuracoes/logs",    icon: ScrollText, label: "Logs",  exact: false },
       { href: "/admin/configuracoes/sincronizacao", icon: RefreshCw, label: "Sincronização", exact: false },
-      { href: "/admin/configuracoes/emails", icon: Mail, label: "Emails", exact: false },
-      { href: "/admin/configuracoes",         icon: Settings, label: "Config",  exact: true  },
+      { href: "/admin/configuracoes/emails",    icon: Mail,        label: "Emails",    exact: false },
+      { href: "/admin/configuracoes/seguranca", icon: ShieldCheck, label: "Segurança", exact: false },
+      { href: "/admin/configuracoes",           icon: Settings,    label: "Config",    exact: true  },
     ],
   },
 ];
@@ -66,7 +69,7 @@ export function AdminNav() {
     <nav className="flex-1 px-3 py-4 overflow-y-auto">
       {menuItems.map((section) => (
         <div key={section.section} className="mb-6">
-          <p className="px-3 mb-2 text-xs font-semibold text-gray-500 uppercase tracking-wider">
+          <p className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             {section.section}
           </p>
           <div className="space-y-0.5">
@@ -78,14 +81,14 @@ export function AdminNav() {
                   href={item.href}
                   className={`flex items-center gap-2.5 px-3 py-2 rounded-lg text-sm transition-colors ${
                     active
-                      ? "bg-indigo-600/20 text-indigo-300 font-medium"
-                      : "text-gray-400 hover:text-white hover:bg-gray-800"
+                      ? "bg-primary/10 text-primary font-medium"
+                      : "text-muted-foreground hover:text-foreground hover:bg-muted"
                   }`}
                 >
-                  <item.icon className={`h-4 w-4 flex-shrink-0 ${active ? "text-indigo-400" : ""}`} />
+                  <item.icon className={`h-4 w-4 flex-shrink-0 ${active ? "text-primary" : ""}`} />
                   {item.label}
                   {active && (
-                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-indigo-400" />
+                    <span className="ml-auto w-1.5 h-1.5 rounded-full bg-primary" />
                   )}
                 </Link>
               );
