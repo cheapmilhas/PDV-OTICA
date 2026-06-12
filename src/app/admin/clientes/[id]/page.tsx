@@ -11,28 +11,11 @@ import { CompanyBranches } from "./company-branches";
 import { CompanyDataForm } from "./company-data-form";
 import { CompanyNetwork } from "./company-network";
 import { HealthBadge } from "@/components/health-badge";
+import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
+import { adminStatusLabel } from "@/lib/admin-status";
 import { CompanyTimeline } from "./company-timeline";
 import { CompanyOnboarding } from "./company-onboarding";
 import { CompanyTags } from "./company-tags";
-
-const STATUS_LABELS: Record<string, string> = {
-  ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
-  SUSPENDED: "Suspenso", CANCELED: "Cancelado", TRIAL_EXPIRED: "Trial Expirado",
-};
-const STATUS_STYLES: Record<string, string> = {
-  ACTIVE: "bg-green-900/50 text-green-400",
-  TRIAL: "bg-blue-900/50 text-blue-400",
-  PAST_DUE: "bg-red-900/50 text-red-400",
-  SUSPENDED: "bg-red-900/50 text-red-400",
-  CANCELED: "bg-gray-800 text-gray-400",
-  TRIAL_EXPIRED: "bg-orange-900/50 text-orange-400",
-};
-const INVOICE_STYLES: Record<string, string> = {
-  PAID: "bg-green-900/50 text-green-400",
-  PENDING: "bg-yellow-900/50 text-yellow-400",
-  OVERDUE: "bg-red-900/50 text-red-400",
-  CANCELED: "bg-gray-800 text-gray-400",
-};
 
 export default async function EmpresaDetalhesPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -104,18 +87,18 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
   const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-foreground">
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/admin/clientes" className="p-2 rounded-lg bg-gray-800 hover:bg-gray-700 transition-colors text-gray-400 hover:text-white">
+          <Link href="/admin/clientes" className="p-2 rounded-lg bg-muted hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
             <div className="flex items-center gap-3">
-              <h1 className="text-xl font-bold text-white">{company.name}</h1>
+              <h1 className="text-xl font-bold text-foreground">{company.name}</h1>
               {company.isBlocked && (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-900/50 text-red-400 border border-red-800">
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 border border-rose-200">
                   Bloqueado
                 </span>
               )}
@@ -123,7 +106,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                 <HealthBadge score={company.healthScore} category={company.healthCategory} size="md" />
               )}
             </div>
-            <p className="text-sm text-gray-400">{company.email ?? "—"}</p>
+            <p className="text-sm text-muted-foreground">{company.email ?? "—"}</p>
           </div>
         </div>
         <CompanyActions
@@ -145,8 +128,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             <div className="lg:col-span-2 space-y-5">
               {/* Health Score Detalhado */}
               {latestHealthScore && (
-                <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-                  <h2 className="text-sm font-semibold text-white mb-4">Health Score Detalhado</h2>
+                <div className="rounded-xl border border-border bg-card p-5">
+                  <h2 className="text-sm font-semibold text-foreground mb-4">Health Score Detalhado</h2>
                   <div className="grid grid-cols-2 gap-4 mb-4">
                     <ScoreBar label="Usage" score={latestHealthScore.usageScore} />
                     <ScoreBar label="Billing" score={latestHealthScore.billingScore} />
@@ -156,10 +139,10 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
                   {latestHealthScore.riskFactors && Array.isArray(latestHealthScore.riskFactors) && (latestHealthScore.riskFactors as string[]).length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs font-medium text-red-400 mb-2">⚠️ Fatores de Risco:</p>
+                      <p className="text-xs font-medium text-rose-600 mb-2">⚠️ Fatores de Risco:</p>
                       <ul className="space-y-1">
                         {(latestHealthScore.riskFactors as string[]).map((risk, i) => (
-                          <li key={i} className="text-xs text-gray-400 pl-4">• {risk}</li>
+                          <li key={i} className="text-xs text-muted-foreground pl-4">• {risk}</li>
                         ))}
                       </ul>
                     </div>
@@ -167,24 +150,24 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
                   {latestHealthScore.opportunities && Array.isArray(latestHealthScore.opportunities) && (latestHealthScore.opportunities as string[]).length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-blue-400 mb-2">💡 Oportunidades:</p>
+                      <p className="text-xs font-medium text-blue-600 mb-2">💡 Oportunidades:</p>
                       <ul className="space-y-1">
                         {(latestHealthScore.opportunities as string[]).map((opp, i) => (
-                          <li key={i} className="text-xs text-gray-400 pl-4">• {opp}</li>
+                          <li key={i} className="text-xs text-muted-foreground pl-4">• {opp}</li>
                         ))}
                       </ul>
                     </div>
                   )}
 
-                  <p className="text-xs text-gray-600 mt-3">
+                  <p className="text-xs text-muted-foreground mt-3">
                     Calculado em {new Date(latestHealthScore.calculatedAt).toLocaleString("pt-BR")}
                   </p>
                 </div>
               )}
 
               {/* Informações gerais */}
-              <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-                <h2 className="text-sm font-semibold text-white mb-4">Informações Gerais</h2>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold text-foreground mb-4">Informações Gerais</h2>
                 <div className="grid grid-cols-2 gap-3 text-sm">
                   <InfoRow label="CNPJ" value={company.cnpj ?? "—"} />
                   <InfoRow label="Telefone" value={company.phone ?? "—"} />
@@ -206,23 +189,23 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
               <CompanyOnboarding checklist={onboardingChecklist} />
 
               {/* Usuários */}
-              <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-                <div className="px-5 py-4 border-b border-gray-800">
-                  <h2 className="text-sm font-semibold text-white">Usuários ({company.users.length})</h2>
+              <div className="rounded-xl border border-border bg-card overflow-hidden">
+                <div className="px-5 py-4 border-b border-border">
+                  <h2 className="text-sm font-semibold text-foreground">Usuários ({company.users.length})</h2>
                 </div>
                 {company.users.length === 0 ? (
-                  <p className="px-5 py-4 text-sm text-gray-600">Nenhum usuário</p>
+                  <p className="px-5 py-4 text-sm text-muted-foreground">Nenhum usuário</p>
                 ) : (
-                  <div className="divide-y divide-gray-800/50">
+                  <div className="divide-y divide-border">
                     {company.users.map((u) => (
                       <div key={u.id} className="flex items-center justify-between px-5 py-3">
                         <div>
-                          <p className="text-sm font-medium text-white">{u.name}</p>
-                          <p className="text-xs text-gray-500">{u.email}</p>
+                          <p className="text-sm font-medium text-foreground">{u.name}</p>
+                          <p className="text-xs text-muted-foreground">{u.email}</p>
                         </div>
                         <div className="flex items-center gap-2">
-                          <span className="text-xs px-2 py-0.5 rounded bg-gray-800 text-gray-400">{u.role}</span>
-                          {!u.active && <span className="text-xs px-2 py-0.5 rounded bg-red-900/40 text-red-400">Inativo</span>}
+                          <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{u.role}</span>
+                          {!u.active && <span className="text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700">Inativo</span>}
                         </div>
                       </div>
                     ))}
@@ -232,17 +215,17 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
               {/* Filiais */}
               {company.branches.length > 0 && (
-                <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-800">
-                    <h2 className="text-sm font-semibold text-white">Filiais ({company.branches.length})</h2>
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-border">
+                    <h2 className="text-sm font-semibold text-foreground">Filiais ({company.branches.length})</h2>
                   </div>
-                  <div className="divide-y divide-gray-800/50">
+                  <div className="divide-y divide-border">
                     {company.branches.map((b) => (
                       <div key={b.id} className="flex items-center gap-3 px-5 py-3">
-                        <MapPin className="h-4 w-4 text-gray-500 flex-shrink-0" />
+                        <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                         <div>
-                          <p className="text-sm font-medium text-white">{b.name}</p>
-                          {b.city && <p className="text-xs text-gray-500">{b.city}, {b.state}</p>}
+                          <p className="text-sm font-medium text-foreground">{b.name}</p>
+                          {b.city && <p className="text-xs text-muted-foreground">{b.city}, {b.state}</p>}
                         </div>
                       </div>
                     ))}
@@ -257,16 +240,14 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             {/* Coluna lateral */}
             <div className="space-y-5">
               {/* Assinatura Resumo */}
-              <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-                <h2 className="text-sm font-semibold text-white mb-4">Assinatura Atual</h2>
+              <div className="rounded-xl border border-border bg-card p-5">
+                <h2 className="text-sm font-semibold text-foreground mb-4">Assinatura Atual</h2>
                 {currentSubscription ? (
                   <div className="space-y-2.5">
                     <SubRow label="Plano" value={currentSubscription.plan.name} />
                     <div className="flex justify-between items-center">
-                      <span className="text-xs text-gray-500">Status</span>
-                      <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${STATUS_STYLES[currentSubscription.status] ?? "bg-gray-800 text-gray-400"}`}>
-                        {STATUS_LABELS[currentSubscription.status] ?? currentSubscription.status}
-                      </span>
+                      <span className="text-xs text-muted-foreground">Status</span>
+                      <AdminStatusBadge kind="subscription" status={currentSubscription.status} />
                     </div>
                     <SubRow label="Ciclo" value={currentSubscription.billingCycle === "YEARLY" ? "Anual" : "Mensal"} />
                     {currentSubscription.trialEndsAt && (
@@ -275,8 +256,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                   </div>
                 ) : (
                   <div className="text-center py-4">
-                    <Building2 className="h-8 w-8 text-gray-700 mx-auto mb-2" />
-                    <p className="text-sm text-gray-600">Sem assinatura ativa</p>
+                    <Building2 className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                    <p className="text-sm text-muted-foreground">Sem assinatura ativa</p>
                   </div>
                 )}
               </div>
@@ -290,24 +271,22 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
               {/* Últimas Faturas (resumo) */}
               {invoices.length > 0 && (
-                <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-                  <div className="px-5 py-4 border-b border-gray-800">
-                    <h2 className="text-sm font-semibold text-white">Últimas 3 Faturas</h2>
+                <div className="rounded-xl border border-border bg-card overflow-hidden">
+                  <div className="px-5 py-4 border-b border-border">
+                    <h2 className="text-sm font-semibold text-foreground">Últimas 3 Faturas</h2>
                   </div>
-                  <div className="divide-y divide-gray-800/50">
+                  <div className="divide-y divide-border">
                     {invoices.slice(0, 3).map((inv) => (
                       <div key={inv.id} className="flex items-center justify-between px-5 py-3">
                         <div>
-                          <p className="text-xs font-mono text-gray-300">{inv.number}</p>
-                          <p className="text-xs text-gray-500">{new Date(inv.issuedAt).toLocaleDateString("pt-BR")}</p>
+                          <p className="text-xs font-mono text-foreground">{inv.number}</p>
+                          <p className="text-xs text-muted-foreground">{new Date(inv.issuedAt).toLocaleDateString("pt-BR")}</p>
                         </div>
                         <div className="text-right">
-                          <p className="text-sm font-medium text-white">
+                          <p className="text-sm font-medium text-foreground">
                             R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                           </p>
-                          <span className={`text-xs px-1.5 py-0.5 rounded font-medium ${INVOICE_STYLES[inv.status] ?? "bg-gray-800 text-gray-400"}`}>
-                            {inv.status}
-                          </span>
+                          <AdminStatusBadge kind="invoice" status={inv.status} />
                         </div>
                       </div>
                     ))}
@@ -344,12 +323,12 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             {currentSubscription ? (
               <>
                 {/* Detalhes da Assinatura */}
-                <div className="rounded-xl border border-gray-800 bg-gray-900 p-6">
-                  <h2 className="text-sm font-semibold text-white mb-5">Detalhes da Assinatura</h2>
+                <div className="rounded-xl border border-border bg-card p-6">
+                  <h2 className="text-sm font-semibold text-foreground mb-5">Detalhes da Assinatura</h2>
                   <div className="grid grid-cols-2 gap-4">
                     <InfoRow label="ID" value={currentSubscription.id} />
                     <InfoRow label="Plano" value={currentSubscription.plan.name} />
-                    <InfoRow label="Status" value={STATUS_LABELS[currentSubscription.status] ?? currentSubscription.status} />
+                    <InfoRow label="Status" value={adminStatusLabel("subscription", currentSubscription.status)} />
                     <InfoRow label="Ciclo de Cobrança" value={currentSubscription.billingCycle === "YEARLY" ? "Anual" : "Mensal"} />
                     <InfoRow label="Criada em" value={new Date(currentSubscription.createdAt).toLocaleDateString("pt-BR")} />
                     {currentSubscription.trialStartedAt && (
@@ -378,15 +357,15 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
                 {/* Histórico da Assinatura */}
                 {subscriptionHistory.length > 0 && (
-                  <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
-                    <div className="px-5 py-4 border-b border-gray-800">
-                      <h2 className="text-sm font-semibold text-white">Histórico de Alterações</h2>
+                  <div className="rounded-xl border border-border bg-card overflow-hidden">
+                    <div className="px-5 py-4 border-b border-border">
+                      <h2 className="text-sm font-semibold text-foreground">Histórico de Alterações</h2>
                     </div>
-                    <div className="divide-y divide-gray-800/50">
+                    <div className="divide-y divide-border">
                       {subscriptionHistory.map((hist) => (
                         <div key={hist.id} className="px-5 py-3">
                           <div className="flex items-center justify-between mb-1">
-                            <span className="text-xs font-medium text-white">
+                            <span className="text-xs font-medium text-foreground">
                               {hist.action === "created" && "Criada"}
                               {hist.action === "upgraded" && "Upgrade"}
                               {hist.action === "downgraded" && "Downgrade"}
@@ -396,10 +375,10 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                               {hist.action === "billing_cycle_changed" && "Ciclo Alterado"}
                               {!["created", "upgraded", "downgraded", "canceled", "reactivated", "extended_trial", "billing_cycle_changed"].includes(hist.action) && hist.action}
                             </span>
-                            <span className="text-xs text-gray-500">{new Date(hist.createdAt).toLocaleString("pt-BR")}</span>
+                            <span className="text-xs text-muted-foreground">{new Date(hist.createdAt).toLocaleString("pt-BR")}</span>
                           </div>
-                          {hist.reason && <p className="text-xs text-gray-400">{hist.reason}</p>}
-                          <p className="text-xs text-gray-600">Por: {hist.adminName}</p>
+                          {hist.reason && <p className="text-xs text-muted-foreground">{hist.reason}</p>}
+                          <p className="text-xs text-muted-foreground">Por: {hist.adminName}</p>
                         </div>
                       ))}
                     </div>
@@ -407,9 +386,9 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                 )}
               </>
             ) : (
-              <div className="rounded-xl border border-gray-800 bg-gray-900 p-12 text-center">
-                <Building2 className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-                <p className="text-gray-500">Esta empresa não possui assinatura ativa</p>
+              <div className="rounded-xl border border-border bg-card p-12 text-center">
+                <Building2 className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+                <p className="text-muted-foreground">Esta empresa não possui assinatura ativa</p>
               </div>
             )}
           </div>
@@ -434,45 +413,43 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
         {/* TAB: FATURAS */}
         <TabPanel tabId="faturas">
           {invoices.length === 0 ? (
-            <div className="rounded-xl border border-gray-800 bg-gray-900 p-12 text-center">
-              <DollarSign className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500">Nenhuma fatura encontrada</p>
+            <div className="rounded-xl border border-border bg-card p-12 text-center">
+              <DollarSign className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+              <p className="text-muted-foreground">Nenhuma fatura encontrada</p>
             </div>
           ) : (
-            <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+            <div className="rounded-xl border border-border bg-card overflow-hidden">
               <div className="overflow-x-auto">
                 <table className="w-full text-sm">
                   <thead>
-                    <tr className="border-b border-gray-800">
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Número</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Emissão</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Vencimento</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Valor</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Status</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Tipo Pgto</th>
+                    <tr className="border-b border-border">
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Número</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Emissão</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Tipo Pgto</th>
                     </tr>
                   </thead>
                   <tbody>
                     {invoices.map((inv) => (
-                      <tr key={inv.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                      <tr key={inv.id} className="border-b border-border hover:bg-muted transition-colors">
                         <td className="px-5 py-3">
-                          <span className="font-mono text-xs text-gray-300">{inv.number}</span>
+                          <span className="font-mono text-xs text-foreground">{inv.number}</span>
                         </td>
-                        <td className="px-5 py-3 text-gray-400">
+                        <td className="px-5 py-3 text-muted-foreground">
                           {new Date(inv.issuedAt).toLocaleDateString("pt-BR")}
                         </td>
-                        <td className="px-5 py-3 text-gray-400">
+                        <td className="px-5 py-3 text-muted-foreground">
                           {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
                         </td>
-                        <td className="px-5 py-3 text-white font-medium">
+                        <td className="px-5 py-3 text-foreground font-medium">
                           R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
                         </td>
                         <td className="px-5 py-3">
-                          <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${INVOICE_STYLES[inv.status] ?? "bg-gray-800 text-gray-400"}`}>
-                            {inv.status}
-                          </span>
+                          <AdminStatusBadge kind="invoice" status={inv.status} />
                         </td>
-                        <td className="px-5 py-3 text-gray-400 text-xs">
+                        <td className="px-5 py-3 text-muted-foreground text-xs">
                           {inv.billingType || "—"}
                         </td>
                       </tr>
@@ -492,21 +469,21 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
         {/* TAB: USO */}
         <TabPanel tabId="uso">
           {usageSnapshots.length === 0 ? (
-            <div className="rounded-xl border border-gray-800 bg-gray-900 p-12 text-center">
-              <Calendar className="h-12 w-12 text-gray-700 mx-auto mb-3" />
-              <p className="text-gray-500">Nenhum snapshot de uso registrado</p>
-              <p className="text-xs text-gray-600 mt-1">Snapshots são gerados automaticamente pelo sistema</p>
+            <div className="rounded-xl border border-border bg-card p-12 text-center">
+              <Calendar className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+              <p className="text-muted-foreground">Nenhum snapshot de uso registrado</p>
+              <p className="text-xs text-muted-foreground mt-1">Snapshots são gerados automaticamente pelo sistema</p>
             </div>
           ) : (
             <div className="space-y-3">
               {usageSnapshots.map((snapshot) => (
-                <div key={snapshot.id} className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+                <div key={snapshot.id} className="rounded-xl border border-border bg-card p-5">
                   <div className="flex items-center justify-between mb-4">
-                    <h3 className="text-sm font-semibold text-white">
+                    <h3 className="text-sm font-semibold text-foreground">
                       {new Date(snapshot.date).toLocaleDateString("pt-BR")}
                     </h3>
                     {snapshot.lastLoginAt && (
-                      <span className="text-xs text-gray-500">
+                      <span className="text-xs text-muted-foreground">
                         Último login: {new Date(snapshot.lastLoginAt).toLocaleString("pt-BR")}
                       </span>
                     )}
@@ -538,8 +515,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 function InfoRow({ label, value }: { label: string; value: string }) {
   return (
     <div>
-      <p className="text-xs text-gray-500 mb-0.5">{label}</p>
-      <p className="text-sm text-gray-200">{value}</p>
+      <p className="text-xs text-muted-foreground mb-0.5">{label}</p>
+      <p className="text-sm text-foreground">{value}</p>
     </div>
   );
 }
@@ -547,37 +524,37 @@ function InfoRow({ label, value }: { label: string; value: string }) {
 function SubRow({ label, value }: { label: string; value: string }) {
   return (
     <div className="flex justify-between items-center">
-      <span className="text-xs text-gray-500">{label}</span>
-      <span className="text-xs text-gray-200">{value}</span>
+      <span className="text-xs text-muted-foreground">{label}</span>
+      <span className="text-xs text-foreground">{value}</span>
     </div>
   );
 }
 
 function MetricCard({ label, value, icon: Icon }: { label: string; value: number; icon: React.ElementType }) {
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-4 text-center">
-      <Icon className="h-5 w-5 text-gray-500 mx-auto mb-2" />
-      <p className="text-xl font-bold text-white">{value}</p>
-      <p className="text-xs text-gray-500 mt-0.5">{label}</p>
+    <div className="rounded-xl border border-border bg-card p-4 text-center">
+      <Icon className="h-5 w-5 text-muted-foreground mx-auto mb-2" />
+      <p className="text-xl font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground mt-0.5">{label}</p>
     </div>
   );
 }
 
 function ScoreBar({ label, score }: { label: string; score: number }) {
   const getColor = (s: number) => {
-    if (s >= 80) return "bg-green-500";
+    if (s >= 80) return "bg-emerald-500";
     if (s >= 60) return "bg-blue-500";
-    if (s >= 40) return "bg-yellow-500";
-    return "bg-red-500";
+    if (s >= 40) return "bg-amber-500";
+    return "bg-rose-500";
   };
 
   return (
     <div>
       <div className="flex items-center justify-between mb-1">
-        <span className="text-xs text-gray-400">{label}</span>
-        <span className="text-xs font-medium text-white">{score}</span>
+        <span className="text-xs text-muted-foreground">{label}</span>
+        <span className="text-xs font-medium text-foreground">{score}</span>
       </div>
-      <div className="w-full bg-gray-800 rounded-full h-2">
+      <div className="w-full bg-muted rounded-full h-2">
         <div className={`h-2 rounded-full ${getColor(score)}`} style={{ width: `${score}%` }} />
       </div>
     </div>
@@ -587,8 +564,8 @@ function ScoreBar({ label, score }: { label: string; score: number }) {
 function UsageMetric({ label, value }: { label: string; value: number | string }) {
   return (
     <div className="text-center">
-      <p className="text-lg font-bold text-white">{value}</p>
-      <p className="text-xs text-gray-500">{label}</p>
+      <p className="text-lg font-bold text-foreground">{value}</p>
+      <p className="text-xs text-muted-foreground">{label}</p>
     </div>
   );
 }
