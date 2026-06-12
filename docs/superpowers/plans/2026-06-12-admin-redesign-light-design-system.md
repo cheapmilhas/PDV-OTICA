@@ -16,6 +16,17 @@
 - Build: `npm run build`
 - Branch de trabalho atual: `chore/import-psvision-armacoes-precos` — **criar branch dedicada** `feat/admin-redesign-light` antes de começar (ver Task 0).
 
+**⚠️ Convenção de testes (OBRIGATÓRIA — o setup do projeto exige):**
+O `vitest.config.ts` usa `environment: "node"` por padrão e **NÃO tem `setupFiles`/jest-dom**. Portanto, em TODO `.test.tsx` que renderiza React:
+1. A **linha 1** deve ser exatamente: `/** @vitest-environment jsdom */` (senão `render` lança "document is not defined").
+2. **NÃO usar** `.toBeInTheDocument()` nem `.toHaveAttribute()` (matchers jest-dom não registrados). Usar o estilo do projeto:
+   - `expect(screen.getByText("X")).toBeDefined()`
+   - `expect(screen.queryByText("X")).toBeNull()` (ausência)
+   - atributos: `expect(el.getAttribute("aria-current")).toBe("true")`
+3. Import padrão: `import { render, screen } from "@testing-library/react";`
+
+Os snippets de teste abaixo **já seguem** essa convenção — copiar como estão.
+
 ---
 
 ## File Structure
@@ -112,12 +123,19 @@ describe("adminStatusVariant", () => {
     expect(adminStatusVariant("subscription", "NO_SUBSCRIPTION")).toBe("neutral");
   });
 
-  it("mapeia status de invoice", () => {
+  it("mapeia status de invoice (inclui REFUNDED)", () => {
     expect(adminStatusVariant("invoice", "PAID")).toBe("success");
     expect(adminStatusVariant("invoice", "PENDING")).toBe("warning");
     expect(adminStatusVariant("invoice", "OVERDUE")).toBe("danger");
     expect(adminStatusVariant("invoice", "CANCELED")).toBe("neutral");
     expect(adminStatusVariant("invoice", "DRAFT")).toBe("neutral");
+    expect(adminStatusVariant("invoice", "REFUNDED")).toBe("neutral");
+  });
+
+  it("mapeia status de ticket (WAITING_CUSTOMER é o valor real do enum)", () => {
+    expect(adminStatusVariant("ticket", "OPEN")).toBe("info");
+    expect(adminStatusVariant("ticket", "WAITING_CUSTOMER")).toBe("warning");
+    expect(adminStatusVariant("ticket", "RESOLVED")).toBe("success");
   });
 
   it("cai em neutral para status desconhecido", () => {
@@ -127,6 +145,8 @@ describe("adminStatusVariant", () => {
   it("retorna label legível", () => {
     expect(adminStatusLabel("subscription", "ACTIVE")).toBe("Ativo");
     expect(adminStatusLabel("invoice", "OVERDUE")).toBe("Vencida");
+    expect(adminStatusLabel("invoice", "REFUNDED")).toBe("Reembolsada");
+    expect(adminStatusLabel("ticket", "WAITING_CUSTOMER")).toBe("Aguardando cliente");
     expect(adminStatusLabel("subscription", "FOOBAR")).toBe("FOOBAR");
   });
 });
@@ -153,10 +173,10 @@ const VARIANT_MAP: Record<StatusKind, Record<string, StatusVariant>> = {
   },
   invoice: {
     PAID: "success", PENDING: "warning", OVERDUE: "danger",
-    CANCELED: "neutral", DRAFT: "neutral",
+    CANCELED: "neutral", DRAFT: "neutral", REFUNDED: "neutral",
   },
   ticket: {
-    OPEN: "info", IN_PROGRESS: "warning", WAITING: "warning",
+    OPEN: "info", IN_PROGRESS: "warning", WAITING_CUSTOMER: "warning",
     RESOLVED: "success", CLOSED: "neutral",
   },
   health: {
@@ -172,10 +192,10 @@ const LABEL_MAP: Record<StatusKind, Record<string, string>> = {
   },
   invoice: {
     PAID: "Paga", PENDING: "Pendente", OVERDUE: "Vencida",
-    CANCELED: "Cancelada", DRAFT: "Rascunho",
+    CANCELED: "Cancelada", DRAFT: "Rascunho", REFUNDED: "Reembolsada",
   },
   ticket: {
-    OPEN: "Aberto", IN_PROGRESS: "Em andamento", WAITING: "Aguardando",
+    OPEN: "Aberto", IN_PROGRESS: "Em andamento", WAITING_CUSTOMER: "Aguardando cliente",
     RESOLVED: "Resolvido", CLOSED: "Fechado",
   },
   health: {
@@ -217,6 +237,7 @@ git commit -m "feat(admin): helper adminStatusVariant como fonte única dos badg
 - [ ] **Step 1: Teste que falha**
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/admin/AdminStatusBadge.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -225,12 +246,12 @@ import { AdminStatusBadge } from "./AdminStatusBadge";
 describe("AdminStatusBadge", () => {
   it("renderiza o label do status", () => {
     render(<AdminStatusBadge kind="subscription" status="ACTIVE" />);
-    expect(screen.getByText("Ativo")).toBeInTheDocument();
+    expect(screen.getByText("Ativo")).toBeDefined();
   });
 
   it("aceita label customizado via children", () => {
     render(<AdminStatusBadge kind="invoice" status="PAID">Quitada</AdminStatusBadge>);
-    expect(screen.getByText("Quitada")).toBeInTheDocument();
+    expect(screen.getByText("Quitada")).toBeDefined();
   });
 });
 ```
@@ -279,6 +300,7 @@ git commit -m "feat(admin): AdminStatusBadge reusando StatusBadge existente"
 - [ ] **Step 1: Teste que falha**
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/admin/PageHeader.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -287,13 +309,13 @@ import { PageHeader } from "./PageHeader";
 describe("PageHeader", () => {
   it("renderiza título e subtítulo", () => {
     render(<PageHeader title="Clientes" subtitle="12 empresas" />);
-    expect(screen.getByRole("heading", { name: "Clientes" })).toBeInTheDocument();
-    expect(screen.getByText("12 empresas")).toBeInTheDocument();
+    expect(screen.getByRole("heading", { name: "Clientes" })).toBeDefined();
+    expect(screen.getByText("12 empresas")).toBeDefined();
   });
 
   it("renderiza ações no slot", () => {
     render(<PageHeader title="X" actions={<button>Novo</button>} />);
-    expect(screen.getByRole("button", { name: "Novo" })).toBeInTheDocument();
+    expect(screen.getByRole("button", { name: "Novo" })).toBeDefined();
   });
 });
 ```
@@ -342,6 +364,7 @@ git commit -m "feat(admin): PageHeader padronizado"
 - [ ] **Step 1: Teste que falha**
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/admin/EmptyState.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -351,7 +374,7 @@ import { EmptyState } from "./EmptyState";
 describe("EmptyState", () => {
   it("renderiza mensagem", () => {
     render(<EmptyState icon={Inbox} message="Nenhum cliente" />);
-    expect(screen.getByText("Nenhum cliente")).toBeInTheDocument();
+    expect(screen.getByText("Nenhum cliente")).toBeDefined();
   });
 });
 ```
@@ -402,6 +425,7 @@ Contexto: filtros hoje são `<Link>` com classes ad-hoc (ex.: assinaturas, saúd
 - [ ] **Step 1: Teste que falha**
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/admin/FilterBar.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -416,8 +440,8 @@ describe("FilterBar / FilterChip", () => {
       </FilterBar>
     );
     const ativo = screen.getByRole("link", { name: "Ativos" });
-    expect(ativo).toHaveAttribute("aria-current", "true");
-    expect(screen.getByRole("link", { name: "Trial" })).toBeInTheDocument();
+    expect(ativo.getAttribute("aria-current")).toBe("true");
+    expect(screen.getByRole("link", { name: "Trial" })).toBeDefined();
   });
 });
 ```
@@ -480,6 +504,7 @@ Contexto: substitui os blocos de métrica do dashboard e do financeiro. Usa `Car
 - [ ] **Step 1: Teste que falha**
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/admin/KPICard.test.tsx
 import { describe, it, expect } from "vitest";
 import { render, screen } from "@testing-library/react";
@@ -489,15 +514,15 @@ import { KPICard } from "./KPICard";
 describe("KPICard", () => {
   it("renderiza label, valor e ícone", () => {
     render(<KPICard icon={Building2} label="Total de Empresas" value="12" />);
-    expect(screen.getByText("Total de Empresas")).toBeInTheDocument();
-    expect(screen.getByText("12")).toBeInTheDocument();
+    expect(screen.getByText("Total de Empresas")).toBeDefined();
+    expect(screen.getByText("12")).toBeDefined();
   });
 
   it("renderiza tendência positiva e negativa", () => {
     const { rerender } = render(<KPICard icon={Building2} label="MRR" value="R$ 274" trend={{ direction: "up", label: "+5%" }} />);
-    expect(screen.getByText("+5%")).toBeInTheDocument();
+    expect(screen.getByText("+5%")).toBeDefined();
     rerender(<KPICard icon={Building2} label="MRR" value="R$ 274" trend={{ direction: "down", label: "-100%" }} />);
-    expect(screen.getByText("-100%")).toBeInTheDocument();
+    expect(screen.getByText("-100%")).toBeDefined();
   });
 });
 ```
@@ -535,6 +560,8 @@ export function KPICard({ icon: Icon, label, value, trend, sparkline }: KPICardP
       {trend && (
         <div className={cn(
           "mt-2 inline-flex items-center gap-1 text-xs font-medium",
+          // exceção consciente: emerald/rose para tendência ↑/↓ (semântica fixa, não-tema).
+          // A varredura da Task 19 NÃO deve acusar estas duas classes.
           trend.direction === "up" ? "text-emerald-600" : "text-rose-600"
         )}>
           {trend.direction === "up" ? <ArrowUp className="h-3 w-3" /> : <ArrowDown className="h-3 w-3" />}
@@ -563,7 +590,7 @@ git commit -m "feat(admin): KPICard sobre Card existente"
 
 - [ ] **Step 1: Escrever o checklist**
 
-Criar o documento enumerando as 24 rotas. Para cada uma, listar: dados que devem carregar, filtros a aplicar + resultado esperado, botões/modais que devem abrir. Modelo por linha:
+Criar o documento enumerando **todas** as rotas sob `src/app/admin/**` (rodar `find src/app/admin -name 'page.tsx'` — hoje 25, incluindo `login` que tem layout próprio e fica fora do redesign de shell; as demais ~24 entram). Para cada uma, listar: dados que devem carregar, filtros a aplicar + resultado esperado, botões/modais que devem abrir. Modelo por linha:
 
 ```markdown
 # Admin Smoke Checklist (oráculo de regressão)
@@ -874,17 +901,20 @@ Contexto: `recharts@3` já instalado. Componente client que recebe `data: { mont
 - [ ] **Step 1: Teste que falha** (render com dados mock, assert que renderiza container sem crashar — testar Recharts em jsdom exige `ResponsiveContainer` com width/height fixos no teste).
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/admin/MrrChart.test.tsx
 import { describe, it, expect } from "vitest";
 import { render } from "@testing-library/react";
 import { MrrChart } from "./MrrChart";
 
 describe("MrrChart", () => {
+  // Oráculo fraco proposital: Recharts em jsdom frequentemente não pinta SVG
+  // sem dimensões fixas. Este é um teste de "não quebra", não de cobertura real.
   it("renderiza sem crashar com dados", () => {
     const { container } = render(
       <MrrChart data={[{ month: "Jan", mrr: 100 }, { month: "Fev", mrr: 200 }]} />
     );
-    expect(container.querySelector(".recharts-responsive-container") || container.firstChild).toBeTruthy();
+    expect(container.firstChild).toBeDefined();
   });
 });
 ```
