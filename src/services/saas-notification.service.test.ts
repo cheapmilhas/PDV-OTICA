@@ -27,6 +27,11 @@ vi.mock("@/services/company-notification.service", () => ({
   createCompanyNotification: (...a: unknown[]) => createCompanyNotification(...a),
 }));
 
+const processEmailQueue = vi.fn();
+vi.mock("@/services/email-queue.service", () => ({
+  processEmailQueue: (...a: unknown[]) => processEmailQueue(...a),
+}));
+
 import { notifyCompany } from "./saas-notification.service";
 
 const fullConfig = {
@@ -45,6 +50,7 @@ beforeEach(() => {
   logUpdate.mockReset();
   queueCreate.mockReset();
   createCompanyNotification.mockReset().mockResolvedValue(true);
+  processEmailQueue.mockReset().mockResolvedValue({ picked: 1, sent: 1, retryable: 0, failed: 0, skipped: 0 });
   configUpsert.mockResolvedValue(fullConfig);
   companyFindUnique.mockResolvedValue({ billingEmail: "bill@x.com", email: null });
   logCreate.mockResolvedValue({ id: "log-1" });
@@ -138,5 +144,23 @@ describe("notifyCompany", () => {
     queueCreate.mockRejectedValue(new Error("boom"));
     const r = await notifyCompany("c1", "WELCOME" as never, { name: "J", loginUrl: "https://a" }, { periodKey: "welcome", channels: ["email"] });
     expect(r.status).toBe("FAILED");
+  });
+
+  it("flushImmediately → processa a fila na hora", async () => {
+    const r = await notifyCompany("c1", "WELCOME" as never, { name: "J", loginUrl: "https://a" }, { periodKey: "welcome", channels: ["email"], flushImmediately: true });
+    expect(r.status).toBe("SENT");
+    expect(processEmailQueue).toHaveBeenCalledOnce();
+  });
+
+  it("sem flushImmediately → NÃO processa na hora (deixa pro cron)", async () => {
+    const r = await notifyCompany("c1", "WELCOME" as never, { name: "J", loginUrl: "https://a" }, { periodKey: "welcome", channels: ["email"] });
+    expect(r.status).toBe("SENT");
+    expect(processEmailQueue).not.toHaveBeenCalled();
+  });
+
+  it("flush que falha não derruba o notify (item segue na fila)", async () => {
+    processEmailQueue.mockRejectedValue(new Error("resend down"));
+    const r = await notifyCompany("c1", "WELCOME" as never, { name: "J", loginUrl: "https://a" }, { periodKey: "welcome", channels: ["email"], flushImmediately: true });
+    expect(r.status).toBe("SENT"); // enfileirou com sucesso; flush é best-effort
   });
 });

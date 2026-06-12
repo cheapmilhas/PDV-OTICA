@@ -74,7 +74,7 @@ export async function sendInvoiceCharge(
       paymentUrl: invoice.paymentUrl!,
       boletoUrl: invoice.boletoUrl ?? undefined,
     },
-    { channels: ["email"], periodKey }
+    { channels: ["email"], periodKey, flushImmediately: true }
   );
 
   // Step 4: handle result

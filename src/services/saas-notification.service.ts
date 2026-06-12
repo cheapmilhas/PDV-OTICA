@@ -13,6 +13,13 @@ export interface NotifyCompanyOpts {
   periodKey: string;
   channels?: SaasChannel[];
   inapp?: { title: string; message: string; link?: string };
+  /**
+   * Processa a fila de email na hora após enfileirar (em vez de esperar o cron
+   * diário). Usado em ações manuais como o reenvio de cobrança, para o cliente
+   * receber em segundos. Se o envio imediato falhar, o item permanece na fila e
+   * o cron o reprocessa depois (fallback automático).
+   */
+  flushImmediately?: boolean;
 }
 
 export interface NotifyResult {
@@ -99,6 +106,22 @@ export async function notifyCompany(
         data: { to, subject: entry.subject, template: entry.template, data: payload as Prisma.InputJsonValue },
       });
       emailQueueId = queued.id;
+
+      // Ação manual (ex.: reenvio de cobrança): processa a fila já, sem esperar
+      // o cron diário. Fail-silent — se falhar, fica PENDING e o cron reprocessa.
+      if (opts.flushImmediately) {
+        try {
+          const { processEmailQueue } = await import("@/services/email-queue.service");
+          await processEmailQueue(5);
+        } catch (flushError) {
+          log.warn("flush imediato da fila falhou (item segue na fila p/ o cron)", {
+            companyId,
+            eventType,
+            emailQueueId,
+            error: flushError instanceof Error ? flushError.message : String(flushError),
+          });
+        }
+      }
     }
 
     if (channels.includes("inapp") && opts.inapp) {
