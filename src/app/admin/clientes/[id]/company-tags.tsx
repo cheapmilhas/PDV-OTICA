@@ -89,16 +89,16 @@ export function CompanyTags({
   }
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+    <div className="rounded-xl border border-border bg-card p-5">
       <div className="flex items-center justify-between mb-3">
         <div className="flex items-center gap-2">
-          <Tag className="h-4 w-4 text-gray-500" />
-          <h2 className="text-sm font-semibold text-white">Tags</h2>
+          <Tag className="h-4 w-4 text-muted-foreground" />
+          <h2 className="text-sm font-semibold text-foreground">Tags</h2>
         </div>
         {unassignedTags.length > 0 && (
           <button
             onClick={() => setShowPicker((v) => !v)}
-            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-gray-400 hover:text-white hover:bg-gray-800 transition-colors"
+            className="flex items-center gap-1 px-2 py-1 rounded-lg text-xs text-muted-foreground hover:text-foreground hover:bg-muted transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Adicionar
@@ -108,7 +108,7 @@ export function CompanyTags({
 
       {/* Tags aplicadas */}
       {tags.length === 0 ? (
-        <p className="text-xs text-gray-600">Nenhuma tag aplicada</p>
+        <p className="text-xs text-muted-foreground">Nenhuma tag aplicada</p>
       ) : (
         <div className="flex flex-wrap gap-2">
           {tags.map((t) => (
@@ -136,8 +136,8 @@ export function CompanyTags({
 
       {/* Picker de tags disponíveis */}
       {showPicker && unassignedTags.length > 0 && (
-        <div className="mt-3 pt-3 border-t border-gray-800">
-          <p className="text-xs text-gray-500 mb-2">Selecionar tag:</p>
+        <div className="mt-3 pt-3 border-t border-border">
+          <p className="text-xs text-muted-foreground mb-2">Selecionar tag:</p>
           <div className="flex flex-wrap gap-2">
             {unassignedTags.map((tag) => (
               <button
@@ -159,7 +159,7 @@ export function CompanyTags({
         </div>
       )}
 
-      {error && <p className="text-xs text-red-400 mt-2">{error}</p>}
+      {error && <p className="text-xs text-rose-600 mt-2">{error}</p>}
     </div>
   );
 }

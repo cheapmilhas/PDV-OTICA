@@ -22,9 +22,9 @@ type OnboardingChecklist = {
 export function CompanyOnboarding({ checklist }: { checklist: OnboardingChecklist | null }) {
   if (!checklist) {
     return (
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
-        <h2 className="text-sm font-semibold text-white mb-3">Onboarding</h2>
-        <p className="text-sm text-gray-600">Checklist de onboarding não iniciado.</p>
+      <div className="rounded-xl border border-border bg-card p-5">
+        <h2 className="text-sm font-semibold text-foreground mb-3">Onboarding</h2>
+        <p className="text-sm text-muted-foreground">Checklist de onboarding não iniciado.</p>
       </div>
     );
   }
@@ -42,25 +42,25 @@ export function CompanyOnboarding({ checklist }: { checklist: OnboardingChecklis
                   "bg-red-500";
 
   return (
-    <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+    <div className="rounded-xl border border-border bg-card overflow-hidden">
       {/* Header com progress */}
-      <div className="px-5 py-4 border-b border-gray-800">
+      <div className="px-5 py-4 border-b border-border">
         <div className="flex items-center justify-between mb-2">
-          <h2 className="text-sm font-semibold text-white">Onboarding</h2>
-          <span className={`text-sm font-bold ${pct === 100 ? "text-green-400" : "text-white"}`}>
+          <h2 className="text-sm font-semibold text-foreground">Onboarding</h2>
+          <span className={`text-sm font-bold ${pct === 100 ? "text-emerald-600" : "text-foreground"}`}>
             {pct}%
           </span>
         </div>
-        <div className="w-full bg-gray-800 rounded-full h-2">
+        <div className="w-full bg-muted rounded-full h-2">
           <div
             className={`h-2 rounded-full transition-all ${barColor}`}
             style={{ width: `${pct}%` }}
           />
         </div>
-        <p className="text-xs text-gray-500 mt-2">
+        <p className="text-xs text-muted-foreground mt-2">
           {completedRequired} de {totalRequired} etapas obrigatórias concluídas
           {checklist.completedAt && (
-            <span className="ml-2 text-green-400">
+            <span className="ml-2 text-emerald-600">
               · Concluído em {new Date(checklist.completedAt).toLocaleDateString("pt-BR")}
             </span>
           )}
@@ -68,7 +68,7 @@ export function CompanyOnboarding({ checklist }: { checklist: OnboardingChecklis
       </div>
 
       {/* Steps */}
-      <div className="divide-y divide-gray-800/40">
+      <div className="divide-y divide-border">
         {steps.map((step) => (
           <div
             key={step.id}
@@ -79,34 +79,34 @@ export function CompanyOnboarding({ checklist }: { checklist: OnboardingChecklis
             {/* Ícone */}
             <div className="flex-shrink-0 mt-0.5">
               {step.isCompleted ? (
-                <CheckCircle className="h-4 w-4 text-green-400" />
+                <CheckCircle className="h-4 w-4 text-emerald-600" />
               ) : step.isRequired ? (
-                <Circle className="h-4 w-4 text-gray-600" />
+                <Circle className="h-4 w-4 text-muted-foreground" />
               ) : (
-                <Clock className="h-4 w-4 text-gray-700" />
+                <Clock className="h-4 w-4 text-muted-foreground" />
               )}
             </div>
 
             {/* Texto */}
             <div className="flex-1 min-w-0">
               <div className="flex items-center gap-2">
-                <p className={`text-sm ${step.isCompleted ? "line-through text-gray-500" : "text-white"}`}>
+                <p className={`text-sm ${step.isCompleted ? "line-through text-muted-foreground" : "text-foreground"}`}>
                   {step.title}
                 </p>
                 {!step.isRequired && (
-                  <span className="text-xs px-1.5 py-0.5 rounded bg-gray-800 text-gray-500">opcional</span>
+                  <span className="text-xs px-1.5 py-0.5 rounded bg-muted text-muted-foreground">opcional</span>
                 )}
               </div>
               {step.description && !step.isCompleted && (
-                <p className="text-xs text-gray-500 mt-0.5">{step.description}</p>
+                <p className="text-xs text-muted-foreground mt-0.5">{step.description}</p>
               )}
               {step.isCompleted && step.completedAt && (
-                <p className="text-xs text-gray-600 mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5">
                   Concluído em {new Date(step.completedAt).toLocaleDateString("pt-BR")}
                 </p>
               )}
               {step.notes && (
-                <p className="text-xs text-gray-500 mt-0.5 italic">{step.notes}</p>
+                <p className="text-xs text-muted-foreground mt-0.5 italic">{step.notes}</p>
               )}
             </div>
           </div>

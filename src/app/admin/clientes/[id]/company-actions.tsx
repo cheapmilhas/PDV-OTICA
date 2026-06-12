@@ -122,7 +122,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
       <button
         onClick={() => setOpen(!open)}
         disabled={loading}
-        className="flex items-center gap-2 px-3 py-2 bg-gray-800 border border-gray-700 text-white text-sm rounded-lg hover:bg-gray-700 transition-colors disabled:opacity-50"
+        className="flex items-center gap-2 px-3 py-2 bg-muted border border-border text-foreground text-sm rounded-lg hover:bg-muted transition-colors disabled:opacity-50"
       >
         {loading ? <Loader2 className="h-4 w-4 animate-spin" /> : <MoreVertical className="h-4 w-4" />}
         Ações
@@ -131,7 +131,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
       {open && (
         <>
           <div className="fixed inset-0 z-10" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-20 w-56 bg-gray-800 border border-gray-700 rounded-xl shadow-xl py-1 overflow-hidden">
+          <div className="absolute right-0 top-10 z-20 w-56 bg-card border border-border rounded-xl shadow-xl py-1 overflow-hidden">
             {isBlocked ? (
               <ActionBtn icon={CheckCircle} label="Desbloquear empresa" color="green" onClick={() => handleAction("unblock")} />
             ) : (
@@ -145,16 +145,16 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
             )}
             {hasActiveSubscription && (
               <>
-                <div className="my-1 border-t border-gray-700" />
+                <div className="my-1 border-t border-border" />
                 <ActionBtn icon={ArrowRightLeft} label="Trocar plano" color="blue" onClick={handleChangePlan} />
                 <ActionBtn icon={RefreshCw} label={`Ciclo → ${billingCycle === "MONTHLY" ? "Anual" : "Mensal"}`} color="blue" onClick={handleChangeBillingCycle} />
                 <ActionBtn icon={XCircle} label="Cancelar assinatura" color="red" onClick={handleCancelSubscription} />
               </>
             )}
-            <div className="my-1 border-t border-gray-700" />
+            <div className="my-1 border-t border-border" />
             <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={handleImpersonate} />
             <ActionBtn icon={RotateCcw} label="Re-sincronizar setup" color="blue" onClick={handleResync} />
-            <div className="my-1 border-t border-gray-700" />
+            <div className="my-1 border-t border-border" />
             <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={() => handleAction("delete")} />
           </div>
         </>
@@ -164,7 +164,7 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
 }
 
 function ActionBtn({ icon: Icon, label, color, onClick }: { icon: React.ElementType; label: string; color: "red" | "green" | "blue"; onClick: () => void }) {
-  const colors = { red: "text-red-400 hover:bg-red-900/30", green: "text-green-400 hover:bg-green-900/30", blue: "text-blue-400 hover:bg-blue-900/30" };
+  const colors = { red: "text-rose-600 hover:bg-rose-50", green: "text-emerald-600 hover:bg-emerald-50", blue: "text-blue-600 hover:bg-blue-50" };
   return (
     <button onClick={onClick} className={`flex items-center gap-2.5 w-full px-4 py-2.5 text-sm transition-colors ${colors[color]}`}>
       <Icon className="h-4 w-4 flex-shrink-0" />
