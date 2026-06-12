@@ -216,6 +216,7 @@ const invoiceCreatedSchema = z.object({
   name: z.string().min(1),
   amountLabel: z.string().min(1),
   dueDateLabel: z.string().min(1),
+  description: z.string().optional(),
   pixCode: z.string().optional(),
   paymentUrl: safeUrl,
   boletoUrl: safeUrl.optional(),
@@ -224,11 +225,25 @@ const invoiceCreatedSchema = z.object({
 function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: boolean): RenderedEmail {
   const amount = escapeHtml(p.amountLabel);
   const due = escapeHtml(p.dueDateLabel);
+  const description = p.description ? escapeHtml(p.description) : null;
   const pix = p.pixCode ? escapeHtml(p.pixCode) : null;
   const boleto = p.boletoUrl ? escapeHtml(p.boletoUrl) : null;
   const intro = isReminder
-    ? `<p style="margin:0 0 16px;">Passando para lembrar: sua fatura do Vis de <strong>${amount}</strong> vence em <strong>${due}</strong>.</p>`
-    : `<p style="margin:0 0 16px;">Sua fatura do Vis de <strong>${amount}</strong> está disponível. Vencimento: <strong>${due}</strong>.</p>`;
+    ? `<p style="margin:0 0 16px;">Passando para lembrar: sua fatura do Vis vence em breve.</p>`
+    : `<p style="margin:0 0 16px;">Sua fatura do Vis está disponível.</p>`;
+  const descriptionRow = description
+    ? `<tr><td style="padding:6px 0 0;font-size:13px;color:#6b7280;">Descrição: <span style="color:#374151;">${description}</span></td></tr>`
+    : "";
+  const card = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
+<tr><td style="padding:20px 22px;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+<tr><td style="font-size:13px;color:#6b7280;text-transform:uppercase;letter-spacing:.04em;">Valor</td></tr>
+<tr><td style="padding:2px 0 0;font-size:28px;font-weight:700;color:#111827;line-height:1.2;">${amount}</td></tr>
+<tr><td style="padding:8px 0 0;font-size:14px;color:#374151;">Vencimento: <strong>${due}</strong></td></tr>
+${descriptionRow}
+</table>
+</td></tr>
+</table>`;
   const pixBlock = pix
     ? `<p style="margin:0 0 8px;color:#374151;">PIX copia e cola:</p>
 <p style="margin:0 0 22px;padding:12px;background:#f3f4f6;border-radius:6px;font-family:monospace;font-size:13px;word-break:break-all;">${pix}</p>`
@@ -236,7 +251,7 @@ function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: 
   const boletoBlock = boleto
     ? `<p style="margin:18px 0 0;font-size:13px;"><a href="${boleto}" style="color:#2563eb;">Baixar boleto em PDF</a></p>`
     : "";
-  const bodyHtml = `${intro}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Prefere cartão ou ver o QR Code? Clique em "Pagar agora".</p>${boletoBlock}`;
+  const bodyHtml = `${intro}${card}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Prefere cartão ou ver o QR Code? Clique em "Pagar agora".</p>${boletoBlock}`;
   const html = renderSaasEmailLayout({
     previewTitle: isReminder ? "Sua fatura vence em breve" : "Sua fatura está disponível",
     heading: isReminder ? `${p.name}, sua fatura vence em breve` : `${p.name}, sua fatura está disponível`,
@@ -247,6 +262,7 @@ function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: 
     isReminder
       ? `${p.name}, sua fatura do Vis de ${p.amountLabel} vence em ${p.dueDateLabel}.`
       : `${p.name}, sua fatura do Vis de ${p.amountLabel} está disponível (vence ${p.dueDateLabel}).`,
+    p.description ? `Descrição: ${p.description}` : "",
     "",
     pix ? `PIX copia e cola: ${p.pixCode}` : "",
     `Pagar agora: ${p.paymentUrl}`,
