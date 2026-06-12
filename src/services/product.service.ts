@@ -12,6 +12,7 @@ import {
 import { endOfLocalDay } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { Product } from "@prisma/client";
+import { Prisma } from "@prisma/client";
 
 /**
  * Service de produtos
@@ -262,6 +263,46 @@ export class ProductService {
   }
 
   /**
+   * Sincroniza a linha BranchStock da filial principal (mais antiga/Matriz) com
+   * o estoque informado no cadastro/edição do produto.
+   *
+   * Por que isto existe: a venda DEBITA de `BranchStock.quantity` da filial, mas
+   * `Product.stockQty` é só um cache da soma global. Se um produto é criado/
+   * editado com estoque e NUNCA ganha a linha BranchStock correspondente, a tela
+   * mostra estoque (cache) mas a venda falha ("Disponível: 0") — o bug "estoque
+   * fantasma". Mantemos as duas fontes em sincronia na origem.
+   *
+   * SÓ atua em LOJA ÚNICA (1 filial ativa), onde Product.stockQty e o BranchStock
+   * dessa filial representam a mesma coisa — então BranchStock = stockQty.
+   * Multi-filial é deliberadamente IGNORADO: ali Product.stockQty é a SOMA das
+   * filiais e o estoque é distribuído por transferência; escrever essa soma numa
+   * única filial corromperia a distribuição. (Hoje nenhuma empresa multi-filial
+   * tem divergência — gerem estoque pelo fluxo de transferência.)
+   *
+   * Produto sem controle de estoque é ignorado (estoque não é rastreado).
+   */
+  private async syncBranchStock(
+    tx: Prisma.TransactionClient,
+    params: { productId: string; companyId: string; stockQty: number; stockControlled: boolean }
+  ): Promise<void> {
+    if (!params.stockControlled) return;
+
+    const branches = await tx.branch.findMany({
+      where: { companyId: params.companyId, active: true },
+      orderBy: { createdAt: "asc" },
+      select: { id: true },
+    });
+    // Só loja única: a equivalência stockQty == BranchStock da filial é exata.
+    if (branches.length !== 1) return;
+
+    await tx.branchStock.upsert({
+      where: { branchId_productId: { branchId: branches[0].id, productId: params.productId } },
+      create: { branchId: branches[0].id, productId: params.productId, quantity: params.stockQty },
+      update: { quantity: params.stockQty },
+    });
+  }
+
+  /**
    * Cria novo produto
    */
   async create(data: CreateProductDTO, companyId: string): Promise<Product> {
@@ -295,28 +336,42 @@ export class ProductService {
     const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
     const hasFrameDetail = frameModel || frameColor || frameSize || frameMaterial;
 
-    // Cria produto
-    const product = await prisma.product.create({
-      data: {
-        ...productData,
-        companyId,
-        ...(hasFrameDetail && {
-          frameDetail: {
-            create: {
-              sizeText: frameSize || undefined,
-              material: frameMaterial || undefined,
-              collection: frameModel || undefined,
+    // Cria produto + sincroniza BranchStock atomicamente. Sem a sincronização, o
+    // produto nasce com estoque no cache (Product.stockQty) mas sem linha
+    // BranchStock — a venda falharia ("Disponível: 0") apesar da tela mostrar
+    // estoque. Transação garante que ou os dois existem, ou nenhum.
+    const product = await prisma.$transaction(async (tx) => {
+      const created = await tx.product.create({
+        data: {
+          ...productData,
+          companyId,
+          ...(hasFrameDetail && {
+            frameDetail: {
+              create: {
+                sizeText: frameSize || undefined,
+                material: frameMaterial || undefined,
+                collection: frameModel || undefined,
+              },
             },
-          },
-        }),
-      },
-      include: {
-        category: true,
-        brand: true,
-        color: true,
-        shape: true,
-        frameDetail: true,
-      },
+          }),
+        },
+        include: {
+          category: true,
+          brand: true,
+          color: true,
+          shape: true,
+          frameDetail: true,
+        },
+      });
+
+      await this.syncBranchStock(tx, {
+        productId: created.id,
+        companyId,
+        stockQty: created.stockQty,
+        stockControlled: created.stockControlled,
+      });
+
+      return created;
     });
 
     return product;
@@ -363,35 +418,54 @@ export class ProductService {
     const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
     const hasFrameDetail = frameModel || frameColor || frameSize || frameMaterial;
 
-    // Atualiza produto
-    const product = await prisma.product.update({
-      where: { id },
-      data: {
-        ...productData,
-        ...(hasFrameDetail && {
-          frameDetail: {
-            upsert: {
-              create: {
-                sizeText: frameSize || undefined,
-                material: frameMaterial || undefined,
-                collection: frameModel || undefined,
-              },
-              update: {
-                sizeText: frameSize || undefined,
-                material: frameMaterial || undefined,
-                collection: frameModel || undefined,
+    // Só re-sincroniza BranchStock quando o estoque foi REALMENTE editado nesta
+    // chamada (campo presente no payload). Editar só o nome/preço não deve mexer
+    // no estoque da filial.
+    const stockEdited = Object.prototype.hasOwnProperty.call(data, "stockQty");
+
+    // Atualiza produto + (se o estoque mudou) sincroniza BranchStock atomicamente,
+    // mantendo cache e filial consistentes — previne o "estoque fantasma".
+    const product = await prisma.$transaction(async (tx) => {
+      const updated = await tx.product.update({
+        where: { id },
+        data: {
+          ...productData,
+          ...(hasFrameDetail && {
+            frameDetail: {
+              upsert: {
+                create: {
+                  sizeText: frameSize || undefined,
+                  material: frameMaterial || undefined,
+                  collection: frameModel || undefined,
+                },
+                update: {
+                  sizeText: frameSize || undefined,
+                  material: frameMaterial || undefined,
+                  collection: frameModel || undefined,
+                },
               },
             },
-          },
-        }),
-      },
-      include: {
-        category: true,
-        brand: true,
-        color: true,
-        shape: true,
-        frameDetail: true,
-      },
+          }),
+        },
+        include: {
+          category: true,
+          brand: true,
+          color: true,
+          shape: true,
+          frameDetail: true,
+        },
+      });
+
+      if (stockEdited) {
+        await this.syncBranchStock(tx, {
+          productId: updated.id,
+          companyId,
+          stockQty: updated.stockQty,
+          stockControlled: updated.stockControlled,
+        });
+      }
+
+      return updated;
     });
 
     return product;

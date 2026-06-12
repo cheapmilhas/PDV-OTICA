@@ -372,10 +372,15 @@ export class SaleService {
     });
     const productById = new Map(products.map((p) => [p.id, p]));
 
-    // Override por filial (BranchStock pode ter preço próprio).
+    // Override por filial (BranchStock pode ter preço próprio) + QUANTIDADE real
+    // da filial. `quantity` é a verdade de estoque que o débito usa
+    // (atomicStockDebit baixa do BranchStock), enquanto Product.stockQty é só um
+    // cache da soma global. A pré-validação PRECISA olhar a mesma fonte do
+    // débito — senão valida contra o cache (passa) e o débito falha
+    // ("Disponível: 0"), o bug do "estoque fantasma".
     const branchStocks = await prisma.branchStock.findMany({
       where: { branchId, productId: { in: productIds } },
-      select: { productId: true, costPrice: true, salePrice: true, promoPrice: true },
+      select: { productId: true, quantity: true, costPrice: true, salePrice: true, promoPrice: true },
     });
     const branchStockByProduct = new Map(
       branchStocks.map((bs) => [bs.productId, bs])
@@ -399,14 +404,21 @@ export class SaleService {
       // Só valida estoque para produtos com controle de estoque ativo.
       // O operador pode liberar a venda mesmo sem estoque (gera estoque negativo)
       // confirmando o alerta — fica registrado no nome dele (override).
+      //
+      // Fonte da verdade = BranchStock.quantity da filial (mesma que o débito
+      // baixa). Se não há linha de BranchStock para o produto nesta filial, o
+      // estoque efetivo é 0 — idêntico ao que atomicStockDebit faz
+      // (`branchStock?.quantity ?? 0`). NÃO usar product.stockQty (cache global):
+      // ele pode mostrar estoque que não existe na filial e mascarar a falha.
+      const branchQty = branchStockByProduct.get(item.productId)?.quantity ?? 0;
       if (
         product.stockControlled &&
-        product.stockQty < item.qty &&
+        branchQty < item.qty &&
         !overrideAllows(override, "INSUFFICIENT_STOCK")
       ) {
         throw new AppError(
           ERROR_CODES.INSUFFICIENT_STOCK,
-          `Estoque insuficiente para ${product.name}. Disponível: ${product.stockQty}, Solicitado: ${item.qty}`,
+          `Estoque insuficiente para ${product.name}. Disponível: ${branchQty}, Solicitado: ${item.qty}`,
           400
         );
       }
