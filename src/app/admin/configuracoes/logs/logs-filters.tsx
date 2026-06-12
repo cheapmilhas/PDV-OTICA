@@ -30,11 +30,11 @@ export function LogsFilters({ companies, companyId, dateFrom, dateTo, actionFilt
   return (
     <div className="flex flex-wrap gap-3 items-end">
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Empresa</label>
+        <label className="block text-xs text-muted-foreground mb-1">Empresa</label>
         <select
           value={companyId || ""}
           onChange={(e) => router.push(buildUrl({ companyId: e.target.value || undefined, page: undefined }))}
-          className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:border-indigo-500 focus:outline-none"
+          className="px-3 py-1.5 bg-background border border-input rounded-lg text-sm text-foreground focus:border-primary focus:outline-none"
         >
           <option value="">Todas</option>
           {companies.map((c) => (
@@ -43,27 +43,27 @@ export function LogsFilters({ companies, companyId, dateFrom, dateTo, actionFilt
         </select>
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">De</label>
+        <label className="block text-xs text-muted-foreground mb-1">De</label>
         <input
           type="date"
           value={dateFrom || ""}
           onChange={(e) => router.push(buildUrl({ dateFrom: e.target.value || undefined, page: undefined }))}
-          className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:border-indigo-500 focus:outline-none"
+          className="px-3 py-1.5 bg-background border border-input rounded-lg text-sm text-foreground focus:border-primary focus:outline-none"
         />
       </div>
       <div>
-        <label className="block text-xs text-gray-500 mb-1">Até</label>
+        <label className="block text-xs text-muted-foreground mb-1">Até</label>
         <input
           type="date"
           value={dateTo || ""}
           onChange={(e) => router.push(buildUrl({ dateTo: e.target.value || undefined, page: undefined }))}
-          className="px-3 py-1.5 bg-gray-800 border border-gray-700 rounded-lg text-sm text-white focus:border-indigo-500 focus:outline-none"
+          className="px-3 py-1.5 bg-background border border-input rounded-lg text-sm text-foreground focus:border-primary focus:outline-none"
         />
       </div>
       {(companyId || dateFrom || dateTo) && (
         <button
           onClick={() => router.push(buildUrl({ companyId: undefined, dateFrom: undefined, dateTo: undefined, page: undefined }))}
-          className="px-3 py-1.5 text-xs text-red-400 hover:text-red-300"
+          className="px-3 py-1.5 text-xs text-rose-600 hover:text-rose-700"
         >
           Limpar filtros
         </button>

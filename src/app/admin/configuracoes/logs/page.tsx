@@ -104,14 +104,14 @@ export default async function LogsPage({
     .map((item) => item.action);
 
   return (
-    <div className="p-6 text-white">
+    <div className="p-6 text-foreground">
       {/* Header */}
       <div className="mb-6">
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <ScrollText className="w-6 h-6 text-indigo-400" />
+          <ScrollText className="w-6 h-6 text-primary" />
           Logs de Auditoria
         </h1>
-        <p className="text-sm text-gray-400">
+        <p className="text-sm text-muted-foreground">
           {totalCount.toLocaleString("pt-BR")} registro{totalCount !== 1 ? "s" : ""} de auditoria
         </p>
       </div>
@@ -129,11 +129,11 @@ export default async function LogsPage({
 
         {/* Filtros por ação (links server) */}
         <div className="flex flex-wrap gap-2">
-          <p className="text-xs text-gray-500 w-full mb-1">FILTRAR POR AÇÃO:</p>
+          <p className="text-xs text-muted-foreground w-full mb-1">FILTRAR POR AÇÃO:</p>
           <Link
             href={buildUrl(baseFilters, { action: undefined, page: undefined })}
             className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-              !actionFilter ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+              !actionFilter ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
             Todas ({totalCount})
@@ -143,7 +143,7 @@ export default async function LogsPage({
               key={action}
               href={buildUrl(baseFilters, { action, page: undefined })}
               className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
-                actionFilter === action ? "bg-indigo-600 text-white" : "bg-gray-800 text-gray-400 hover:text-white"
+                actionFilter === action ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
               {ACTION_LABELS[action] || action} ({counts[action] || 0})
@@ -153,30 +153,30 @@ export default async function LogsPage({
       </div>
 
       {/* Tabela */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
         <table className="w-full text-sm">
           <thead>
-            <tr className="border-b border-gray-800">
-              <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Data/Hora</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Ação</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Admin</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Empresa</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-gray-500">Detalhes</th>
+            <tr className="border-b border-border">
+              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Data/Hora</th>
+              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Ação</th>
+              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Admin</th>
+              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Empresa</th>
+              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Detalhes</th>
             </tr>
           </thead>
           <tbody>
             {logs.length === 0 ? (
               <tr>
                 <td colSpan={5} className="px-5 py-12 text-center">
-                  <ScrollText className="w-8 h-8 text-gray-700 mx-auto mb-2" />
-                  <p className="text-gray-600">Nenhum log encontrado</p>
+                  <ScrollText className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
+                  <p className="text-muted-foreground">Nenhum log encontrado</p>
                 </td>
               </tr>
             ) : (
               logs.map((log) => (
-                <tr key={log.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                <tr key={log.id} className="border-b border-border hover:bg-muted transition-colors">
                   <td className="px-5 py-4">
-                    <div className="flex items-center gap-2 text-gray-400">
+                    <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="w-3 h-3" />
                       <span className="text-xs">
                         {new Date(log.createdAt).toLocaleString("pt-BR")}
@@ -184,43 +184,43 @@ export default async function LogsPage({
                     </div>
                   </td>
                   <td className="px-5 py-4">
-                    <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-indigo-900/50 text-indigo-400">
+                    <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
                       {ACTION_LABELS[log.action] || log.action}
                     </span>
                   </td>
                   <td className="px-5 py-4">
                     {log.adminUser ? (
                       <div className="flex items-center gap-2">
-                        <User className="w-3 h-3 text-gray-500" />
-                        <span className="text-gray-300">{log.adminUser.name}</span>
+                        <User className="w-3 h-3 text-muted-foreground" />
+                        <span className="text-foreground">{log.adminUser.name}</span>
                       </div>
                     ) : (
-                      <span className="text-gray-500">Sistema</span>
+                      <span className="text-muted-foreground">Sistema</span>
                     )}
                   </td>
                   <td className="px-5 py-4">
                     {log.company ? (
                       <Link
                         href={`/admin/clientes/${log.company.id}`}
-                        className="flex items-center gap-2 text-white hover:text-indigo-300"
+                        className="flex items-center gap-2 text-foreground hover:text-primary"
                       >
                         <Building2 className="w-3 h-3" />
                         {log.company.name}
                       </Link>
                     ) : (
-                      <span className="text-gray-500">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                   <td className="px-5 py-4">
                     {log.metadata && typeof log.metadata === "object" ? (
-                      <details className="text-xs text-gray-400">
-                        <summary className="cursor-pointer hover:text-white">Ver detalhes</summary>
-                        <pre className="mt-2 p-2 bg-gray-800 rounded text-xs overflow-auto max-w-md">
+                      <details className="text-xs text-muted-foreground">
+                        <summary className="cursor-pointer hover:text-foreground">Ver detalhes</summary>
+                        <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-auto max-w-md">
                           {JSON.stringify(log.metadata, null, 2)}
                         </pre>
                       </details>
                     ) : (
-                      <span className="text-gray-500">—</span>
+                      <span className="text-muted-foreground">—</span>
                     )}
                   </td>
                 </tr>
@@ -236,18 +236,18 @@ export default async function LogsPage({
           {page > 1 && (
             <Link
               href={buildUrl(baseFilters, { page: String(page - 1) })}
-              className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded hover:bg-muted/80 text-sm"
             >
               Anterior
             </Link>
           )}
-          <span className="px-4 py-2 bg-gray-900 text-gray-400 rounded text-sm">
+          <span className="px-4 py-2 bg-card text-muted-foreground rounded text-sm">
             Página {page} de {totalPages}
           </span>
           {page < totalPages && (
             <Link
               href={buildUrl(baseFilters, { page: String(page + 1) })}
-              className="px-4 py-2 bg-gray-800 text-white rounded hover:bg-gray-700 text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded hover:bg-muted/80 text-sm"
             >
               Próxima
             </Link>
