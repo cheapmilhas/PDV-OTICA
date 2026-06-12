@@ -8,6 +8,7 @@ function inv(over = {}) {
     id: "i1",
     total: 14990,
     dueDate: NOW,
+    description: "Mensalidade Plano Profissional",
     paymentUrl: "https://x/i/1",
     boletoUrl: "https://x/b/1",
     pixCode: "PIX",
@@ -45,9 +46,10 @@ describe("sendInvoiceCharge", () => {
       })
     );
 
-    const [companyId, type, , opts] = notifyFn.mock.calls[0];
+    const [companyId, type, payload, opts] = notifyFn.mock.calls[0];
     expect(companyId).toBe("c1");
     expect(type).toBe("INVOICE_CREATED");
+    expect(payload.description).toBe("Mensalidade Plano Profissional");
     expect(opts.channels).toEqual(["email"]);
     expect(opts.periodKey).toMatch(/^invoice:i1:resend:\d{8}$/);
   });

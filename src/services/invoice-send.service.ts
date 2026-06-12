@@ -69,6 +69,7 @@ export async function sendInvoiceCharge(
       name: invoice.subscription.company?.name ?? "cliente",
       amountLabel: brl(invoice.total),
       dueDateLabel: dateBR(invoice.dueDate) || "—",
+      description: invoice.description ?? undefined,
       pixCode: invoice.pixCode ?? undefined,
       paymentUrl: invoice.paymentUrl!,
       boletoUrl: invoice.boletoUrl ?? undefined,

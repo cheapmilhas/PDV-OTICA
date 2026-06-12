@@ -32,12 +32,12 @@ it("Parte A: cobrança nova de subscription ACTIVE → email INVOICE_CREATED", a
     { id: "sub_local", asaasSubscriptionId: "sub_1", companyId: "c1", company: { name: "Ótica X" } },
   ]);
   (syncInvoicesForSubscription as any).mockResolvedValue([
-    { id: "inv_1", total: 14990, dueDate: NOW, paymentUrl: "https://asaas/i/1", boletoUrl: "https://asaas/b/1", pixCode: "PIX" },
+    { id: "inv_1", total: 14990, dueDate: NOW, description: "Mensalidade Junho", paymentUrl: "https://asaas/i/1", boletoUrl: "https://asaas/b/1", pixCode: "PIX" },
   ]);
   (prisma.invoice.findMany as any).mockResolvedValue([]);
   const out = await runInvoiceReminders({ now: NOW });
   expect(out.invoiceCreatedEmails).toBe(1);
-  expect(notifyCompany).toHaveBeenCalledWith("c1", "INVOICE_CREATED", expect.objectContaining({ paymentUrl: "https://asaas/i/1" }), expect.objectContaining({ periodKey: "invoice:inv_1:created" }));
+  expect(notifyCompany).toHaveBeenCalledWith("c1", "INVOICE_CREATED", expect.objectContaining({ paymentUrl: "https://asaas/i/1", description: "Mensalidade Junho" }), expect.objectContaining({ periodKey: "invoice:inv_1:created" }));
 });
 
 it("Parte B: fatura PENDING vencendo em ≤3d → DUE_SOON + reminderSentAt", async () => {
@@ -46,11 +46,11 @@ it("Parte B: fatura PENDING vencendo em ≤3d → DUE_SOON + reminderSentAt", as
   (prisma.subscription.findMany as any).mockResolvedValue([]);
   (syncInvoicesForSubscription as any).mockResolvedValue([]);
   (prisma.invoice.findMany as any).mockResolvedValue([
-    { id: "inv_2", total: 14990, dueDate: new Date("2026-07-10T00:00:00Z"), paymentUrl: "https://asaas/i/2", subscription: { companyId: "c2", company: { name: "Ótica Y" } } },
+    { id: "inv_2", total: 14990, dueDate: new Date("2026-07-10T00:00:00Z"), description: "Mensalidade Julho", paymentUrl: "https://asaas/i/2", subscription: { companyId: "c2", company: { name: "Ótica Y" } } },
   ]);
   const out = await runInvoiceReminders({ now: NOW });
   expect(out.dueSoonEmails).toBe(1);
-  expect(notifyCompany).toHaveBeenCalledWith("c2", "INVOICE_DUE_SOON", expect.anything(), expect.objectContaining({ periodKey: "invoice:inv_2:due_soon" }));
+  expect(notifyCompany).toHaveBeenCalledWith("c2", "INVOICE_DUE_SOON", expect.objectContaining({ description: "Mensalidade Julho" }), expect.objectContaining({ periodKey: "invoice:inv_2:due_soon" }));
   expect(prisma.invoice.update).toHaveBeenCalledWith(expect.objectContaining({ where: { id: "inv_2" } }));
 });
 
