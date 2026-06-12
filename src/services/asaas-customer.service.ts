@@ -38,6 +38,7 @@ export async function resolveAsaasCustomerId(
     cpfCnpj,
     mobilePhone: args.mobilePhone,
     externalReference: args.externalReference,
+    notificationDisabled: true, // silencia o email automático do Asaas
   });
 
   return { asaasCustomerId: created.id, created: true };

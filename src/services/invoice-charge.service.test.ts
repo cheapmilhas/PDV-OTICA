@@ -73,7 +73,7 @@ it("sub COM asaasSubscriptionId → sincroniza e re-busca", async () => {
 });
 
 it("avulso quando sem subscription Asaas mas com customer", async () => {
-  const inv = { id:"i1", total:500, paymentUrl:null, billingType:null, dueDate:new Date("2026-07-10"), subscription:{ id:"s1", asaasSubscriptionId:null, asaasCustomerId:"cus_1", companyId:"c1" } };
+  const inv = { id:"i1", total:500, paymentUrl:null, billingType:null, description:"Mensalidade", dueDate:new Date("2026-07-10"), subscription:{ id:"s1", asaasSubscriptionId:null, asaasCustomerId:"cus_1", companyId:"c1" } };
   const prismaClient = mkPrisma([inv]);
   const asaasClient = { payments: {
     create: vi.fn().mockResolvedValue({ id:"pay_1", invoiceUrl:"https://x/i/1", bankSlipUrl:"https://x/b/1", billingType:"PIX" }),
@@ -84,6 +84,8 @@ it("avulso quando sem subscription Asaas mas com customer", async () => {
   const [callArg, idempotencyKey] = asaasClient.payments.create.mock.calls[0];
   expect(callArg.customer).toBe("cus_1");
   expect(callArg.value).toBe(5); // 500 cents → R$5
+  expect(callArg.description).toBe("Mensalidade");
+  expect(callArg.notificationDisabled).toBe(true);
   // money path: idempotencyKey impede cobrança duplicada em retry
   expect(idempotencyKey).toBe("invoice:i1");
   expect(out.paymentUrl).toBe("https://x/i/1");

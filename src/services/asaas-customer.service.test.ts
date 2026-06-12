@@ -62,6 +62,7 @@ describe("resolveAsaasCustomerId", () => {
       cpfCnpj: "12345678901",
       mobilePhone: "11999998888",
       externalReference: "company:42",
+      notificationDisabled: true,
     });
   });
 

@@ -93,6 +93,8 @@ export async function ensureInvoiceCharge(
       value: invoice.total / 100,
       dueDate: dueStr,
       externalReference: `invoice:${invoice.id}`,
+      description: invoice.description ?? undefined,
+      notificationDisabled: true,
     },
     // Idempotência: retry no mesmo invoice não cria cobrança duplicada no Asaas (money path).
     `invoice:${invoice.id}`,

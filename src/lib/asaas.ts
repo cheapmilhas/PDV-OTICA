@@ -151,6 +151,7 @@ export interface AsaasPaymentCreateInput {
   dueDate: string; // YYYY-MM-DD
   description?: string;
   externalReference?: string;
+  notificationDisabled?: boolean;
 }
 
 class AsaasError extends Error {
