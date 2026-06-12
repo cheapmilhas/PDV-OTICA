@@ -41,8 +41,8 @@ export function RecalcOneButton({ companyId }: { companyId: string }) {
       title={failed ? "Falhou — clique para tentar de novo" : "Recalcular saúde desta empresa"}
       className={`p-1.5 rounded-lg transition-colors disabled:opacity-50 ${
         failed
-          ? "text-red-400 hover:text-red-300 hover:bg-red-900/20"
-          : "text-gray-500 hover:text-indigo-300 hover:bg-indigo-900/20"
+          ? "text-red-600 hover:text-red-700 hover:bg-red-50"
+          : "text-muted-foreground hover:text-primary hover:bg-muted"
       }`}
     >
       <RefreshCw className={`h-3.5 w-3.5 ${loading ? "animate-spin" : ""}`} />
