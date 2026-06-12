@@ -134,7 +134,10 @@ Daqui sai o **valor real** de crédito/crediário/saldo, independente de `CashMo
 
 **Onde aplicar (defeito #3 — o conserto NÃO pode ser só o turno ao vivo):**
 - **Caixa do dia ao vivo:** `getCurrentShift` anexa o resumo; `/api/cash/shift` retorna `{ shift, salesByMethod }`.
-- **Histórico de caixas (turnos fechados):** `cash-history.service.ts` / `getShiftById` (que alimentam `caixa/historico`) **também** anexam `getShiftSalesByMethod(shift, companyId)` usando `openedAt..closedAt`. Sem isso, turno fechado continua mostrando R$ 0 em crédito/crediário — conserto pela metade.
+- **Histórico de caixas (turnos fechados) — caminho corrigido pós-auditoria:** o usuário abre o **modal** `src/components/caixa/modal-detalhes-caixa.tsx`, que busca de **`GET /api/cash-registers/[id]/transactions`** (`modal-detalhes-caixa.tsx:85`) — **NÃO** de `getShiftById`/`cash-history.service.ts` (este último existe em `src/services/reports/`, mas não está no caminho do modal). Logo:
+  - Editar `src/app/api/cash-registers/[id]/transactions/route.ts`: ele já carrega o `CashShift` completo (`openedAt`/`closedAt`/`branchId`/`companyId` em escopo, ~l.16-21) → chamar `getShiftSalesByMethod(shift, companyId)` e retornar `salesByMethod` junto com os movimentos. **⚠️ A fonte continua sendo `SalePayment` (mesmo serviço do caixa ao vivo), NÃO `cashMovement.groupBy`** — porque crédito/crediário não geram CashMovement (é o bug §1.4); agrupar por movimento deixaria o crédito em R$ 0 de novo.
+  - Editar `modal-detalhes-caixa.tsx`: consumir `salesByMethod` e renderizar o quadro de conferência (inserir após o resumo financeiro, antes do `<Separator/>` das Movimentações ~l.277-279), só quando `status === "CLOSED"`. Atenção: a resposta hoje é um array (`result.data` em ~l.89); ao adicionar `salesByMethod` o shape vira objeto — ajustar a tipagem.
+  - Sem isso, turno fechado continua mostrando R$ 0 em crédito/crediário — conserto pela metade.
 - **Modal de fechamento:** ver plumbing abaixo.
 
 **Trava de "todas as filiais" (defeito #4-multi):** `/api/cash/shift` resolve branch por `session.user.branchId`, ignorando a seleção `isAllBranches` do cliente → hoje mostraria dados de UMA loja sob rótulo "todas". **Correção:** o cliente passa a sinalizar o modo "ALL" ao endpoint (query param `?branch=all` ou header), e em modo ALL o endpoint **não** retorna `shift`/`salesByMethod` de uma filial arbitrária — retorna `{ shift: null, allBranches: true }`. A UI mostra "Selecione uma loja específica para ver a conferência do caixa" (Entrega C deixa de ser só visual e passa a refletir o que o backend realmente faz).
@@ -196,9 +199,10 @@ Sem isso, boleto/cheque seriam **contados em dobro** no DRE. Hoje eles caem no `
 | `src/app/(dashboard)/dashboard/vendas/[id]/detalhes/page.tsx` | cash-trace em useEffect `[id]`, renderiza selos (inclui 🔴 estornado) | B |
 | `src/components/vendas/payment-destination-badge.tsx` | componente novo (com loading próprio) | B |
 | `src/app/(dashboard)/dashboard/caixa/page.tsx` | microcopy, rótulo/trava de filial, quadro 2-blocos, thread `salesByMethod` p/ modal | C, D |
-| `src/services/cash.service.ts` | + `getShiftSalesByMethod()`, estender `getCurrentShift` + `getShiftById` | D |
-| `src/services/cash-history.service.ts` | anexar `salesByMethod` aos turnos fechados do histórico | D |
+| `src/services/cash.service.ts` | + `getShiftSalesByMethod()` (fonte `SalePayment`), estender `getCurrentShift` | D |
 | `src/app/api/cash/shift/route.ts` | retornar `salesByMethod`; tratar modo `?branch=all` (shift null) | D |
+| `src/app/api/cash-registers/[id]/transactions/route.ts` | retornar `salesByMethod` p/ turno fechado (histórico) | D |
+| `src/components/caixa/modal-detalhes-caixa.tsx` | consumir `salesByMethod` + quadro de conferência (histórico) | D |
 | `src/components/caixa/modal-fechamento-caixa.tsx` | nova prop `salesByMethod` + quadro read-only de conferência | D |
 | `src/services/sale-side-effects.service.ts` | boleto/cheque → AccountReceivable (+30d, 1 parcela) | E |
 | `src/services/finance-entry.service.ts` | boleto/cheque → DRE como "a receber" (3 pontos: débito, tipo, cashDate) | E |
@@ -210,7 +214,7 @@ Sem isso, boleto/cheque seriam **contados em dobro** no DRE. Hoje eles caem no `
 ## 5. Testes
 
 - **A:** `getCashTrace` — venda só dinheiro (cash_register com shift), crédito (card_receivable, sem shift), mista, outra company (404). **Cenários do bug:** movimento em turno **CLOSED** → `status: "CLOSED"`; movimento em **filial diferente** → `branchName` correto (não o da sessão). **Cenários estorno (críticos):** venda CASH **cancelada** → `reversed: true`, `netCashAmount: 0`, badge 🔴 (NÃO 🟢); estorno anexado a **outro turno** → `shift` resolve do `SALE_PAYMENT/IN` original, não do REFUND. **Método-sem-linha:** `STORE_CREDIT` sem `installmentConfig` → `destino: "none"`. Endpoint: 200 com `sales.view`; `STOCK_MANAGER` (tem sales.view, não cash_shift.view) **recebe 200**, não 403.
-- **D:** `getShiftSalesByMethod` — soma correta por método; exclui CANCELED/REFUNDED (Sale.status) e VOIDED (SalePayment.status); respeita janela `openedAt..closedAt` e `branchId`. Crédito não-zerado. **Histórico:** turno fechado também retorna `salesByMethod` (não R$ 0). **Modo ALL:** `?branch=all` retorna `shift: null` + `allBranches: true` (não dados de uma filial).
+- **D:** `getShiftSalesByMethod` — soma correta por método; exclui CANCELED/REFUNDED (Sale.status) e VOIDED (SalePayment.status); respeita janela `openedAt..closedAt` e `branchId`. Crédito não-zerado. **Histórico:** `/api/cash-registers/[id]/transactions` retorna `salesByMethod` p/ turno fechado (não R$ 0), e o modal `modal-detalhes-caixa` renderiza. **Modo ALL:** `?branch=all` retorna `shift: null` + `allBranches: true` (não dados de uma filial).
 - **E:** boleto gera `AccountReceivable` +30d (1 parcela); idem cheque; ambos **rejeitam venda sem cliente** (backend loop); **misto dinheiro+boleto** sem cliente também rejeita. **DRE:** boleto/cheque NÃO incrementam saldo de banco D+0 (lançados como a receber, `cashDate: null`) — teste anti-double-count. Não geram `CashMovement`. **Regressão:** boleto/cheque **com** cliente concluem normalmente.
 - **Regressão:** dinheiro/PIX/débito continuam gerando CashMovement e batendo o fechamento; `closeShift` inalterado (só dinheiro).
 - Meta: manter suíte verde (atualmente ~663 testes) + cobertura dos novos serviços e do DRE de boleto/cheque (hoje sem teste).
