@@ -52,6 +52,12 @@ describe("applyPaymentsInTx — boleto/cheque geram AccountReceivable", () => {
       status: "PENDING",
       createdByUserId: "user_1",
     });
+    const data = arCreate.mock.calls[0][0].data as any;
+    const dueDate = new Date(data.dueDate);
+    const expectedMin = new Date(); expectedMin.setDate(expectedMin.getDate() + 29);
+    const expectedMax = new Date(); expectedMax.setDate(expectedMax.getDate() + 31);
+    expect(dueDate.getTime()).toBeGreaterThanOrEqual(expectedMin.getTime());
+    expect(dueDate.getTime()).toBeLessThanOrEqual(expectedMax.getTime());
     expect(cmCreate).not.toHaveBeenCalled();
   });
 
