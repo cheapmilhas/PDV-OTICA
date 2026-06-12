@@ -95,7 +95,7 @@ Levantamento feito por análise paralela de `src/app/admin/**` e `src/app/api/ad
 | `text-gray-400` / `text-gray-500` | `text-muted-foreground` | `--muted-foreground` |
 | `border-gray-800` / `border-gray-700` | `border-border` | `--border` |
 | hover `bg-gray-800` | `hover:bg-muted` / `hover:bg-accent` | `--muted` / `--accent` |
-| `bg-indigo-600` (ações/ativo) | `bg-primary` / `text-primary` | `--primary`/`--accent` (tema Vis) |
+| `bg-indigo-600` (ações/ativo) | `bg-primary` / `text-primary` | `--primary` = **teal da marca Vis** (decisão do dono: acento muda de índigo → teal, para coerência com o app/dashboard das óticas) |
 | badges de status hardcoded | `<StatusBadge variant=...>` | componente existente |
 | sombras ad-hoc | classes `.shadow-soft/.shadow-medium` | já em `globals.css` |
 
