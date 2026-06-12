@@ -1,3 +1,4 @@
+import { Prisma } from "@prisma/client";
 import { prisma as defaultPrisma } from "@/lib/prisma";
 import { ensureAsaasCustomer } from "@/services/asaas-customer.service";
 import { ensureInvoiceCharge } from "@/services/invoice-charge.service";
@@ -22,6 +23,41 @@ interface CreateDeps {
     adminId: string
   ) => Promise<{ status: string; alreadySentToday: boolean }>;
   numberFn?: (client: any) => Promise<string>;
+}
+
+/**
+ * Cria a Invoice gerando o número INV-NNNNNN e, em caso de colisão do campo
+ * `number` (P2002 — SaasCounter dessincronizado dos números reais), re-gera o
+ * número e tenta de novo (até `attempts` tentativas). Qualquer outro erro é
+ * propagado imediatamente. Após esgotar as tentativas, propaga o último P2002.
+ */
+async function createInvoiceWithNumberRetry(
+  prisma: typeof defaultPrisma,
+  numberFn: (client: any) => Promise<string>,
+  dataBase: Omit<Prisma.InvoiceUncheckedCreateInput, "number">,
+  attempts = 3
+) {
+  let lastErr: unknown;
+  for (let i = 0; i < attempts; i++) {
+    const number = await numberFn(prisma);
+    try {
+      return await prisma.invoice.create({ data: { ...dataBase, number } });
+    } catch (e) {
+      const target = (e as { meta?: { target?: unknown } })?.meta?.target;
+      const isNumberCollision =
+        e instanceof Prisma.PrismaClientKnownRequestError &&
+        e.code === "P2002" &&
+        (Array.isArray(target)
+          ? target.includes("number")
+          : String(target ?? "").includes("number"));
+      if (isNumberCollision) {
+        lastErr = e;
+        continue;
+      }
+      throw e; // outro erro → propaga imediatamente
+    }
+  }
+  throw lastErr;
 }
 
 /**
@@ -59,29 +95,24 @@ export async function createManualCharge(
   // 2. Garante customer Asaas on-demand (pode lançar; Invoice ainda NÃO criada)
   await ensureCustomerFn(args.companyId);
 
-  // 3. Número atômico
-  const number = await numberFn(prisma);
-
-  // 4. Cria a Invoice manual
+  // 3-4. Cria a Invoice manual gerando o número atômico, com retry anti-colisão
+  // do campo `number` (P2002 quando o SaasCounter está atrás dos números reais).
   const now = new Date();
   const periodEnd = new Date(now.getTime() + 30 * 86400000);
 
-  const inv = await prisma.invoice.create({
-    data: {
-      subscriptionId: sub.id,
-      number,
-      subtotal: args.amount,
-      total: args.amount,
-      discount: 0,
-      periodStart: now,
-      periodEnd,
-      status: "PENDING",
-      billingType: "PIX",
-      description: args.description,
-      isManual: true,
-      source: args.source ?? null,
-      dueDate: args.dueDate ?? null,
-    },
+  const inv = await createInvoiceWithNumberRetry(prisma, numberFn, {
+    subscriptionId: sub.id,
+    subtotal: args.amount,
+    total: args.amount,
+    discount: 0,
+    periodStart: now,
+    periodEnd,
+    status: "PENDING",
+    billingType: "PIX",
+    description: args.description,
+    isManual: true,
+    source: args.source ?? null,
+    dueDate: args.dueDate ?? null,
   });
 
   // 5. Gera a cobrança no Asaas (sem rollback se falhar — I3 intencional)

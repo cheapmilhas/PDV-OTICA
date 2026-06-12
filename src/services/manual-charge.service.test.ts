@@ -1,5 +1,14 @@
 import { describe, it, expect, vi } from "vitest";
+import { Prisma } from "@prisma/client";
 import { createManualCharge } from "./manual-charge.service";
+
+function p2002Number() {
+  return new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+    code: "P2002",
+    clientVersion: "5.22.0",
+    meta: { target: ["number"] },
+  });
+}
 
 function mkPrisma(opts: { sub?: any; invoice?: any } = {}) {
   const sub = "sub" in opts ? opts.sub : { id: "s1" };
@@ -132,5 +141,80 @@ describe("createManualCharge", () => {
     ).rejects.toThrow("Asaas indisponível");
 
     expect(prismaClient.invoice.create).toHaveBeenCalled();
+  });
+
+  it("(g) retry em colisão de number: 1º create lança P2002(number), 2º sucede", async () => {
+    const prismaClient = mkPrisma();
+    prismaClient.invoice.create = vi
+      .fn()
+      .mockRejectedValueOnce(p2002Number())
+      .mockResolvedValueOnce({ id: "inv1" });
+
+    const numberFn = vi
+      .fn()
+      .mockResolvedValueOnce("INV-000010")
+      .mockResolvedValueOnce("INV-000011");
+
+    const out = await createManualCharge(baseArgs, {
+      prismaClient,
+      ensureCustomerFn: vi.fn().mockResolvedValue(undefined),
+      ensureChargeFn: vi.fn().mockResolvedValue(undefined),
+      numberFn,
+      sendFn: vi
+        .fn()
+        .mockResolvedValue({ status: "SENT", alreadySentToday: false }),
+    });
+
+    expect(out.invoiceId).toBe("inv1");
+    expect(numberFn).toHaveBeenCalledTimes(2);
+    expect(prismaClient.invoice.create).toHaveBeenCalledTimes(2);
+    // o 2º create usou o número re-gerado
+    expect(prismaClient.invoice.create.mock.calls[1][0].data.number).toBe(
+      "INV-000011"
+    );
+  });
+
+  it("(h) erro não-P2002 propaga sem retry", async () => {
+    const prismaClient = mkPrisma();
+    prismaClient.invoice.create = vi
+      .fn()
+      .mockRejectedValue(new Error("DB indisponível"));
+
+    const numberFn = vi.fn().mockResolvedValue("INV-000012");
+
+    await expect(
+      createManualCharge(baseArgs, {
+        prismaClient,
+        ensureCustomerFn: vi.fn().mockResolvedValue(undefined),
+        ensureChargeFn: vi.fn().mockResolvedValue(undefined),
+        numberFn,
+        sendFn: vi.fn(),
+      })
+    ).rejects.toThrow("DB indisponível");
+
+    expect(numberFn).toHaveBeenCalledTimes(1);
+    expect(prismaClient.invoice.create).toHaveBeenCalledTimes(1);
+  });
+
+  it("(i) 3 colisões seguidas → propaga o erro P2002", async () => {
+    const prismaClient = mkPrisma();
+    prismaClient.invoice.create = vi
+      .fn()
+      .mockRejectedValue(p2002Number());
+
+    const numberFn = vi.fn().mockResolvedValue("INV-000013");
+
+    await expect(
+      createManualCharge(baseArgs, {
+        prismaClient,
+        ensureCustomerFn: vi.fn().mockResolvedValue(undefined),
+        ensureChargeFn: vi.fn().mockResolvedValue(undefined),
+        numberFn,
+        sendFn: vi.fn(),
+      })
+    ).rejects.toMatchObject({ code: "P2002" });
+
+    expect(prismaClient.invoice.create).toHaveBeenCalledTimes(3);
+    expect(numberFn).toHaveBeenCalledTimes(3);
   });
 });

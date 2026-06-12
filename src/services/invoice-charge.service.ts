@@ -37,8 +37,22 @@ export async function ensureInvoiceCharge(
     throw new Error("Fatura não encontrada");
   }
 
-  // 2. Already has paymentUrl → no-op
+  // 2. Já tem paymentUrl → normalmente no-op. Mas se faltar o pixCode (o QR do
+  // Asaas demora a ser gerado na criação), re-busca aqui (ex.: no reenvio).
   if (invoice.paymentUrl) {
+    if (!invoice.pixCode && invoice.asaasPaymentId) {
+      try {
+        const pix = (await asaasClient.payments.pixQrCode(invoice.asaasPaymentId)).payload;
+        if (pix) {
+          return await prismaClient.invoice.update({
+            where: { id: invoice.id },
+            data: { pixCode: pix },
+          });
+        }
+      } catch {
+        // PIX ainda indisponível — segue com a Invoice como está
+      }
+    }
     return invoice;
   }
 
