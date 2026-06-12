@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Shield, Users, X, Pencil } from "lucide-react";
+import { PageHeader } from "@/components/admin/PageHeader";
 
 interface AdminUser {
   id: string;
@@ -22,10 +23,10 @@ const ROLE_LABELS: Record<string, string> = {
 };
 
 const ROLE_STYLES: Record<string, string> = {
-  SUPER_ADMIN: "bg-purple-900/50 text-purple-400",
-  ADMIN: "bg-blue-900/50 text-blue-400",
-  SUPPORT: "bg-green-900/50 text-green-400",
-  BILLING: "bg-yellow-900/50 text-yellow-400",
+  SUPER_ADMIN: "bg-purple-100 text-purple-700",
+  ADMIN: "bg-blue-100 text-blue-700",
+  SUPPORT: "bg-emerald-100 text-emerald-700",
+  BILLING: "bg-amber-100 text-amber-700",
 };
 
 const ROLES = ["SUPER_ADMIN", "ADMIN", "SUPPORT", "BILLING"] as const;
@@ -130,40 +131,38 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
   }
 
   return (
-    <div className="p-6 text-white">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-white">Usuários Admin</h1>
-          <p className="text-sm text-gray-400 mt-0.5">
-            {initialAdmins.length} usuário{initialAdmins.length !== 1 ? "s" : ""} administrativo{initialAdmins.length !== 1 ? "s" : ""}
-          </p>
-        </div>
-        <div className="flex items-center gap-3">
-          {!isSuperAdmin && (
-            <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-yellow-900/20 border border-yellow-800 text-yellow-400 text-xs">
-              <Shield className="h-3.5 w-3.5" />
-              Acesso limitado
-            </div>
-          )}
-          {isSuperAdmin && (
-            <button
-              onClick={openCreate}
-              className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors"
-            >
-              <Plus className="h-4 w-4" />
-              Novo Usuário
-            </button>
-          )}
-        </div>
-      </div>
+    <div className="p-6 text-foreground">
+      <PageHeader
+        title="Usuários Admin"
+        subtitle={`${initialAdmins.length} usuário${initialAdmins.length !== 1 ? "s" : ""} administrativo${initialAdmins.length !== 1 ? "s" : ""}`}
+        actions={
+          <div className="flex items-center gap-3">
+            {!isSuperAdmin && (
+              <div className="flex items-center gap-2 px-3 py-1.5 rounded-lg bg-amber-50 border border-amber-200 text-amber-600 text-xs">
+                <Shield className="h-3.5 w-3.5" />
+                Acesso limitado
+              </div>
+            )}
+            {isSuperAdmin && (
+              <button
+                onClick={openCreate}
+                className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors"
+              >
+                <Plus className="h-4 w-4" />
+                Novo Usuário
+              </button>
+            )}
+          </div>
+        }
+      />
 
-      <div className="rounded-xl border border-gray-800 bg-gray-900 overflow-hidden">
+      <div className="rounded-xl border border-border bg-card overflow-hidden">
         <div className="overflow-x-auto">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-800">
+              <tr className="border-b border-border">
                 {["Usuário", "Email", "Cargo", "Status", "Último Login", "Cadastro", ...(isSuperAdmin ? ["Ações"] : [])].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-gray-500">{h}</th>
+                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
                 ))}
               </tr>
             </thead>
@@ -171,37 +170,37 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
               {initialAdmins.length === 0 ? (
                 <tr>
                   <td colSpan={7} className="px-5 py-12 text-center">
-                    <Users className="h-8 w-8 text-gray-700 mx-auto mb-2" />
-                    <p className="text-gray-600">Nenhum usuário admin</p>
+                    <Users className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
+                    <p className="text-muted-foreground">Nenhum usuário admin</p>
                   </td>
                 </tr>
               ) : (
                 initialAdmins.map((admin) => (
-                  <tr key={admin.id} className="border-b border-gray-800/50 hover:bg-gray-800/30 transition-colors">
+                  <tr key={admin.id} className="border-b border-border hover:bg-muted transition-colors">
                     <td className="px-5 py-3">
                       <div className="flex items-center gap-3">
-                        <div className="w-8 h-8 rounded-full bg-indigo-600 flex items-center justify-center text-sm font-semibold text-white flex-shrink-0">
+                        <div className="w-8 h-8 rounded-full bg-primary flex items-center justify-center text-sm font-semibold text-primary-foreground flex-shrink-0">
                           {admin.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="font-medium text-white">{admin.name}</span>
+                        <span className="font-medium text-foreground">{admin.name}</span>
                       </div>
                     </td>
-                    <td className="px-5 py-3 text-gray-400">{admin.email}</td>
+                    <td className="px-5 py-3 text-muted-foreground">{admin.email}</td>
                     <td className="px-5 py-3">
-                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_STYLES[admin.role] ?? "bg-gray-800 text-gray-400"}`}>
+                      <span className={`inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-xs font-medium ${ROLE_STYLES[admin.role] ?? "bg-muted text-muted-foreground"}`}>
                         <Shield className="h-3 w-3" />
                         {ROLE_LABELS[admin.role] ?? admin.role}
                       </span>
                     </td>
                     <td className="px-5 py-3">
-                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${admin.active ? "bg-green-900/50 text-green-400" : "bg-red-900/50 text-red-400"}`}>
+                      <span className={`px-2 py-0.5 rounded text-xs font-medium ${admin.active ? "bg-emerald-100 text-emerald-700" : "bg-rose-100 text-rose-700"}`}>
                         {admin.active ? "Ativo" : "Inativo"}
                       </span>
                     </td>
-                    <td className="px-5 py-3 text-gray-400 text-xs">
+                    <td className="px-5 py-3 text-muted-foreground text-xs">
                       {admin.lastLoginAt ? new Date(admin.lastLoginAt).toLocaleString("pt-BR") : "Nunca"}
                     </td>
-                    <td className="px-5 py-3 text-gray-500 text-xs">
+                    <td className="px-5 py-3 text-muted-foreground text-xs">
                       {new Date(admin.createdAt).toLocaleDateString("pt-BR")}
                     </td>
                     {isSuperAdmin && (
@@ -209,7 +208,7 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
                         <div className="flex items-center gap-2">
                           <button
                             onClick={() => openEdit(admin)}
-                            className="p-1.5 text-gray-500 hover:text-white transition-colors rounded"
+                            className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded"
                             title="Editar"
                           >
                             <Pencil className="h-3.5 w-3.5" />
@@ -217,7 +216,7 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
                           {admin.id !== currentAdminId && (
                             <button
                               onClick={() => toggleActive(admin)}
-                              className={`text-xs px-2 py-1 rounded transition-colors ${admin.active ? "text-red-400 hover:bg-red-900/30" : "text-green-400 hover:bg-green-900/30"}`}
+                              className={`text-xs px-2 py-1 rounded transition-colors ${admin.active ? "text-rose-600 hover:bg-rose-50" : "text-emerald-600 hover:bg-emerald-50"}`}
                             >
                               {admin.active ? "Desativar" : "Reativar"}
                             </button>
@@ -236,40 +235,40 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
       {/* Modal de criação/edição */}
       {showModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/60">
-          <div className="bg-gray-900 border border-gray-700 rounded-xl w-full max-w-md p-6">
+          <div className="bg-card border border-border rounded-xl w-full max-w-md p-6">
             <div className="flex items-center justify-between mb-5">
-              <h2 className="text-lg font-bold text-white">
+              <h2 className="text-lg font-bold text-foreground">
                 {editingAdmin ? "Editar Admin" : "Novo Usuário Admin"}
               </h2>
-              <button onClick={() => setShowModal(false)} className="text-gray-500 hover:text-white">
+              <button onClick={() => setShowModal(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-5 w-5" />
               </button>
             </div>
 
             {error && (
-              <div className="mb-4 p-3 bg-red-900/30 border border-red-800 rounded-lg text-red-400 text-sm">
+              <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-600 text-sm">
                 {error}
               </div>
             )}
 
             <form onSubmit={handleSubmit} className="space-y-4">
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Nome <span className="text-red-400">*</span></label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Nome <span className="text-rose-600">*</span></label>
                 <input
                   value={form.name}
                   onChange={(e) => setForm({ ...form, name: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none"
                   required
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Email <span className="text-red-400">*</span></label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Email <span className="text-rose-600">*</span></label>
                 <input
                   type="email"
                   value={form.email}
                   onChange={(e) => setForm({ ...form, email: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none"
                   required
                   disabled={!!editingAdmin}
                 />
@@ -277,12 +276,12 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
 
               {!editingAdmin && (
                 <div>
-                  <label className="block text-xs font-medium text-gray-400 mb-1">Senha <span className="text-red-400">*</span></label>
+                  <label className="block text-xs font-medium text-muted-foreground mb-1">Senha <span className="text-rose-600">*</span></label>
                   <input
                     type="password"
                     value={form.password}
                     onChange={(e) => setForm({ ...form, password: e.target.value })}
-                    className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none"
                     minLength={6}
                     required
                   />
@@ -290,11 +289,11 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
               )}
 
               <div>
-                <label className="block text-xs font-medium text-gray-400 mb-1">Cargo <span className="text-red-400">*</span></label>
+                <label className="block text-xs font-medium text-muted-foreground mb-1">Cargo <span className="text-rose-600">*</span></label>
                 <select
                   value={form.role}
                   onChange={(e) => setForm({ ...form, role: e.target.value })}
-                  className="w-full px-3 py-2 bg-gray-800 border border-gray-700 rounded-lg text-white text-sm focus:border-indigo-500 focus:outline-none"
+                  className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none"
                 >
                   {ROLES.map((role) => (
                     <option key={role} value={role}>{ROLE_LABELS[role]}</option>
@@ -302,18 +301,18 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
                 </select>
               </div>
 
-              <div className="flex justify-end gap-3 pt-4 border-t border-gray-800">
+              <div className="flex justify-end gap-3 pt-4 border-t border-border">
                 <button
                   type="button"
                   onClick={() => setShowModal(false)}
-                  className="px-4 py-2 text-sm text-gray-400 hover:text-white transition-colors"
+                  className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
                 >
                   Cancelar
                 </button>
                 <button
                   type="submit"
                   disabled={loading}
-                  className="flex items-center gap-2 px-4 py-2 bg-indigo-600 text-white text-sm rounded-lg hover:bg-indigo-700 transition-colors disabled:opacity-50"
+                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground text-sm rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50"
                 >
                   {loading && <Loader2 className="h-4 w-4 animate-spin" />}
                   {editingAdmin ? "Salvar" : "Criar"}
