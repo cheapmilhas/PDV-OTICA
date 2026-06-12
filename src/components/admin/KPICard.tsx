@@ -8,16 +8,21 @@ interface KPICardProps {
   icon: LucideIcon;
   label: string;
   value: string;
+  /** Texto auxiliar discreto sob o rótulo (ex.: "Soma das faturas pagas"). */
+  hint?: string;
   trend?: { direction: "up" | "down"; label: string };
   sparkline?: React.ReactNode;
 }
 
-export function KPICard({ icon: Icon, label, value, trend, sparkline }: KPICardProps) {
+export function KPICard({ icon: Icon, label, value, hint, trend, sparkline }: KPICardProps) {
   return (
     <Card className="p-5">
-      <div className="flex items-center justify-between">
-        <p className="text-sm font-medium text-muted-foreground">{label}</p>
-        <Icon className="h-4 w-4 text-muted-foreground/60" />
+      <div className="flex items-center justify-between gap-2">
+        <div>
+          <p className="text-sm font-medium text-muted-foreground">{label}</p>
+          {hint && <p className="text-xs text-muted-foreground/70 mt-0.5">{hint}</p>}
+        </div>
+        <Icon className="h-4 w-4 text-muted-foreground/60 flex-shrink-0" />
       </div>
       <div className="mt-2 flex items-end justify-between gap-2">
         <p className="text-2xl font-semibold text-foreground tracking-tight">{value}</p>

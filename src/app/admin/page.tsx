@@ -136,7 +136,7 @@ export default async function AdminDashboardPage() {
           value={String(totalCompanies)}
           icon={Building2}
           trend={companiesTrend.direction === "up" || companiesTrend.direction === "down"
-            ? { direction: companiesTrend.direction, label: formatTrend(companiesTrend) }
+            ? { direction: companiesTrend.direction, label: `${formatTrend(companiesTrend)} · novas no mês` }
             : undefined}
         />
         <KPICard label="Assinaturas Ativas" value={String(activeCount)} icon={CreditCard} />
@@ -150,8 +150,9 @@ export default async function AdminDashboardPage() {
           label="Recebido Total"
           value={`R$ ${totalRevenueValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
           icon={TrendingUp}
+          hint="Soma das faturas pagas"
           trend={revenueTrend.direction === "up" || revenueTrend.direction === "down"
-            ? { direction: revenueTrend.direction, label: formatTrend(revenueTrend) }
+            ? { direction: revenueTrend.direction, label: `${formatTrend(revenueTrend)} · recebido vs. mês anterior` }
             : undefined}
         />
       </div>

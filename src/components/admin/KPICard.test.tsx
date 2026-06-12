@@ -18,4 +18,9 @@ describe("KPICard", () => {
     rerender(<KPICard icon={Building2} label="MRR" value="R$ 274" trend={{ direction: "down", label: "-100%" }} />);
     expect(screen.getByText("-100%")).toBeDefined();
   });
+
+  it("renderiza hint auxiliar quando fornecido", () => {
+    render(<KPICard icon={Building2} label="Recebido Total" value="R$ 99" hint="Soma das faturas pagas" />);
+    expect(screen.getByText("Soma das faturas pagas")).toBeDefined();
+  });
 });
