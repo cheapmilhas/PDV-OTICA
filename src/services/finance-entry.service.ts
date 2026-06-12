@@ -75,7 +75,9 @@ function getPaymentDebitAccountCode(method: PaymentMethod): string {
       return "1.1.05"; // Adquirente Cartão
     case "STORE_CREDIT":
     case "BALANCE_DUE":
-      return "1.1.03"; // Contas a Receber (crediário/saldo a receber — dinheiro ainda não recebido)
+    case "BOLETO":
+    case "CHEQUE":
+      return "1.1.03"; // Contas a Receber (crediário/saldo/boleto/cheque — dinheiro ainda não recebido)
     default:
       return "1.1.02"; // Bancos (fallback)
   }
@@ -99,7 +101,9 @@ function getFinanceAccountType(method: PaymentMethod): string | null {
       return "CARD_ACQUIRER";
     case "STORE_CREDIT":
     case "BALANCE_DUE":
-      return null; // Crediário/Saldo a Receber não entra em conta financeira — será recebido depois
+    case "BOLETO":
+    case "CHEQUE":
+      return null; // Crediário/Saldo/Boleto/Cheque não entra em conta financeira — será recebido depois
     default:
       return "BANK";
   }
@@ -360,8 +364,13 @@ export async function generateSaleEntries(
     // settlementDate da própria SalePayment vence — vem do feeService.
     const baseCashDate = payment.receivedAt ?? sale.completedAt ?? new Date();
     let cashDate: Date | null;
-    if (payment.method === "STORE_CREDIT" || payment.method === "BALANCE_DUE") {
-      cashDate = null; // crediário não entra no caixa
+    if (
+      payment.method === "STORE_CREDIT" ||
+      payment.method === "BALANCE_DUE" ||
+      payment.method === "BOLETO" ||
+      payment.method === "CHEQUE"
+    ) {
+      cashDate = null; // a prazo (crediário/saldo/boleto/cheque) não entra no caixa
     } else if (payment.method === "CREDIT_CARD") {
       if (payment.settlementDate) {
         cashDate = payment.settlementDate;
