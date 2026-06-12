@@ -158,7 +158,7 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
   if (loading) {
     return (
       <div className="flex justify-center py-12">
-        <Loader2 className="h-6 w-6 animate-spin text-gray-500" />
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
       </div>
     );
   }
@@ -167,12 +167,12 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
   if (!network && !networkId) {
     return (
       <div className="space-y-5">
-        <div className="rounded-xl border border-gray-800 bg-gray-900 p-8 text-center">
-          <Network className="h-12 w-12 text-gray-600 mx-auto mb-3" />
-          <p className="text-gray-400 mb-4">Esta empresa não faz parte de nenhuma rede.</p>
+        <div className="rounded-xl border border-border bg-card p-8 text-center">
+          <Network className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
+          <p className="text-muted-foreground mb-4">Esta empresa não faz parte de nenhuma rede.</p>
           <button
             onClick={() => { setShowCreateForm(true); loadCompanies(); }}
-            className="px-4 py-2 text-sm font-medium bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg"
+            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
           >
             <Plus className="inline h-4 w-4 mr-1" />
             Criar Nova Rede
@@ -180,31 +180,31 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
         </div>
 
         {showCreateForm && (
-          <div className="rounded-xl border border-gray-700 bg-gray-800/50 p-5 space-y-4">
+          <div className="rounded-xl border border-border bg-muted p-5 space-y-4">
             <div className="flex items-center justify-between">
-              <h3 className="text-sm font-semibold text-white">Nova Rede de Lojas</h3>
-              <button onClick={() => setShowCreateForm(false)} className="text-gray-400 hover:text-white">
+              <h3 className="text-sm font-semibold text-foreground">Nova Rede de Lojas</h3>
+              <button onClick={() => setShowCreateForm(false)} className="text-muted-foreground hover:text-foreground">
                 <X className="h-4 w-4" />
               </button>
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-1">Nome da Rede *</label>
+              <label className="block text-xs text-muted-foreground mb-1">Nome da Rede *</label>
               <input
                 value={networkName}
                 onChange={(e) => setNetworkName(e.target.value)}
-                className="w-full px-3 py-2 bg-gray-900 border border-gray-700 rounded-lg text-sm text-white"
+                className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground"
                 placeholder="Ex: Grupo Visão Total"
               />
             </div>
             <div>
-              <label className="block text-xs text-gray-400 mb-2">
+              <label className="block text-xs text-muted-foreground mb-2">
                 Empresas da Rede (selecione 2+)
               </label>
               <div className="space-y-1 max-h-48 overflow-y-auto">
                 {allCompanies
                   .filter((c) => !c.networkId || c.id === companyId)
                   .map((c) => (
-                    <label key={c.id} className="flex items-center gap-2 px-3 py-2 rounded hover:bg-gray-700/50 cursor-pointer">
+                    <label key={c.id} className="flex items-center gap-2 px-3 py-2 rounded hover:bg-muted cursor-pointer">
                       <input
                         type="checkbox"
                         checked={selectedCompanyIds.includes(c.id)}
@@ -218,7 +218,7 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
                         disabled={c.id === companyId}
                         className="rounded"
                       />
-                      <span className="text-sm text-gray-300">
+                      <span className="text-sm text-foreground">
                         {c.name} {c.id === companyId && "(esta empresa)"}
                       </span>
                     </label>
@@ -226,13 +226,13 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreateForm(false)} className="px-3 py-1.5 text-sm text-gray-400">
+              <button onClick={() => setShowCreateForm(false)} className="px-3 py-1.5 text-sm text-muted-foreground">
                 Cancelar
               </button>
               <button
                 onClick={handleCreateNetwork}
                 disabled={saving}
-                className="flex items-center gap-1 px-4 py-1.5 text-sm bg-indigo-600 hover:bg-indigo-500 text-white rounded-lg disabled:opacity-50"
+                className="flex items-center gap-1 px-4 py-1.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50"
               >
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Criar Rede
@@ -248,50 +248,50 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
   return (
     <div className="space-y-5">
       {/* Info da rede */}
-      <div className="rounded-xl border border-gray-800 bg-gray-900 p-5">
+      <div className="rounded-xl border border-border bg-card p-5">
         <div className="flex items-center justify-between mb-4">
           <div>
-            <h2 className="text-sm font-semibold text-white">{network?.name}</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="text-sm font-semibold text-foreground">{network?.name}</h2>
+            <p className="text-xs text-muted-foreground">
               {network?.companies.length} empresas • Matriz: {network?.headquarters?.name || "—"}
             </p>
           </div>
         </div>
 
         {/* Empresas */}
-        <div className="rounded-lg border border-gray-700 overflow-hidden mb-4">
+        <div className="rounded-lg border border-border overflow-hidden mb-4">
           <table className="w-full text-sm">
             <thead>
-              <tr className="border-b border-gray-700">
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">Empresa</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-gray-500">CNPJ</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Produtos</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Clientes</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-gray-500">Vendas</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-gray-500">Ações</th>
+              <tr className="border-b border-border">
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Empresa</th>
+                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">CNPJ</th>
+                <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Produtos</th>
+                <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Clientes</th>
+                <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Vendas</th>
+                <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Ações</th>
               </tr>
             </thead>
             <tbody>
               {network?.companies.map((c) => (
-                <tr key={c.id} className="border-b border-gray-700/50">
+                <tr key={c.id} className="border-b border-border">
                   <td className="px-4 py-2">
                     <div className="flex items-center gap-2">
-                      <Building2 className="h-3.5 w-3.5 text-gray-500" />
-                      <span className="text-white font-medium">{c.name}</span>
+                      <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
+                      <span className="text-foreground font-medium">{c.name}</span>
                       {network.headquarters?.id === c.id && (
-                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-indigo-900/50 text-indigo-400">Matriz</span>
+                        <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">Matriz</span>
                       )}
                     </div>
                   </td>
-                  <td className="px-4 py-2 text-gray-400 text-xs font-mono">{c.cnpj || "—"}</td>
-                  <td className="px-4 py-2 text-center text-gray-400">{c._count.products}</td>
-                  <td className="px-4 py-2 text-center text-gray-400">{c._count.customers}</td>
-                  <td className="px-4 py-2 text-center text-gray-400">{c._count.sales}</td>
+                  <td className="px-4 py-2 text-muted-foreground text-xs font-mono">{c.cnpj || "—"}</td>
+                  <td className="px-4 py-2 text-center text-muted-foreground">{c._count.products}</td>
+                  <td className="px-4 py-2 text-center text-muted-foreground">{c._count.customers}</td>
+                  <td className="px-4 py-2 text-center text-muted-foreground">{c._count.sales}</td>
                   <td className="px-4 py-2 text-right">
                     {network.headquarters?.id !== c.id && (
                       <button
                         onClick={() => handleRemoveCompany(c.id)}
-                        className="p-1 rounded hover:bg-gray-700 text-red-400"
+                        className="p-1 rounded hover:bg-muted text-rose-600"
                         title="Remover da rede"
                       >
                         <X className="h-3.5 w-3.5" />
@@ -306,7 +306,7 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
 
         {/* Configurações de compartilhamento */}
         <div className="space-y-3">
-          <h3 className="text-xs font-semibold text-gray-400 uppercase">Compartilhamento</h3>
+          <h3 className="text-xs font-semibold text-muted-foreground uppercase">Compartilhamento</h3>
           <ShareToggle
             label="Catálogo de Produtos"
             description="Produtos marcados como compartilhados ficam visíveis para todas as empresas"
@@ -335,11 +335,11 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
       </div>
 
       {/* Zona de perigo */}
-      <div className="rounded-xl border border-red-900/50 bg-red-950/20 p-5">
-        <h3 className="text-xs font-semibold text-red-400 uppercase mb-3">Zona de Perigo</h3>
+      <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
+        <h3 className="text-xs font-semibold text-rose-600 uppercase mb-3">Zona de Perigo</h3>
         <button
           onClick={handleDeleteNetwork}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-red-400 border border-red-800 rounded-lg hover:bg-red-900/30"
+          className="flex items-center gap-2 px-3 py-1.5 text-sm text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
           Desfazer Rede
@@ -369,8 +369,8 @@ function ShareToggle({
         className="mt-0.5 rounded"
       />
       <div>
-        <p className="text-sm text-white">{label}</p>
-        <p className="text-xs text-gray-500">{description}</p>
+        <p className="text-sm text-foreground">{label}</p>
+        <p className="text-xs text-muted-foreground">{description}</p>
       </div>
     </label>
   );
