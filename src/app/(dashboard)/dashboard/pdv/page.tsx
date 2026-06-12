@@ -790,6 +790,12 @@ function PDVPage() {
         // se o usuário não navegar para fora após o dialog do carnê.
         setDescontoVendaValor("");
         setDescontoVendaTipo("FIXED");
+        // Venda concluída: fecha o modal de finalizar (dispara o reset interno
+        // dele) antes de mostrar o carnê. Sem isso o modal ficaria montado por
+        // baixo do dialog do carnê com o pagamento já preenchido — e, no fluxo de
+        // crediário com liberação de gerente, dava a impressão de "preencher tudo
+        // de novo".
+        setModalVendaOpen(false);
         setShowCarneDialog(true);
         setLastSaleId(vendaId);
         // Cliente permanece selecionado neste fluxo (não há redirect) — força

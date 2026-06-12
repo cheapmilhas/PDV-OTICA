@@ -281,13 +281,15 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
 
     // Usar tolerância de 0.01 para evitar problemas de precisão de ponto flutuante
     if (Math.abs(remaining) < 0.01) {
+      // NÃO limpar os pagamentos aqui. A venda ainda não está confirmada: o
+      // backend pode devolver uma negativa autorizável (limite de crédito,
+      // inadimplência, etc.) e abrir o modal de override. Se zerássemos o estado
+      // agora, ao clicar em "Liberar mesmo assim" o operador veria este modal
+      // vazio ("0 pagamentos") e teria a impressão de precisar preencher tudo de
+      // novo. O reset acontece no useEffect de fechamento do modal (ver acima),
+      // que é disparado tanto no sucesso (redirect/carnê fecham o modal) quanto
+      // no cancelamento.
       onConfirm(payments, cashbackUsed);
-      setPayments([]);
-      setAmount("");
-      setInstallments("1");
-      setSelectedMethod("");
-      setUseCashback(false);
-      setCashbackAmount("");
     } else {
       toast.error(`Ainda falta pagar ${formatCurrency(Math.abs(remaining))}`);
     }
