@@ -71,9 +71,9 @@ export default function MfaSetup({ initialEnabled }: MfaSetupProps) {
 
   if (enabled && step !== "done") {
     return (
-      <div className="rounded-lg border border-green-800 bg-green-900/30 p-4 text-green-300">
+      <div className="rounded-lg border border-emerald-200 bg-emerald-50 p-4 text-emerald-700">
         <p className="font-medium">✓ Verificação em duas etapas está ATIVA.</p>
-        <p className="text-sm text-green-400/80 mt-1">
+        <p className="text-sm text-emerald-600 mt-1">
           Seu login exige o código do app autenticador.
         </p>
       </div>
@@ -83,15 +83,15 @@ export default function MfaSetup({ initialEnabled }: MfaSetupProps) {
   return (
     <div className="space-y-4">
       {step === "idle" && (
-        <div className="rounded-lg border border-gray-800 bg-gray-900 p-4">
-          <p className="text-gray-300 mb-3">
+        <div className="rounded-lg border border-border bg-card p-4">
+          <p className="text-foreground mb-3">
             Adicione uma camada extra de segurança ao seu login com um app
             autenticador (Google Authenticator, Authy, Microsoft Authenticator).
           </p>
           <button
             onClick={startEnroll}
             disabled={loading}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 text-white rounded-lg"
+            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg"
           >
             {loading ? "Gerando..." : "Ativar verificação em duas etapas"}
           </button>
@@ -99,31 +99,31 @@ export default function MfaSetup({ initialEnabled }: MfaSetupProps) {
       )}
 
       {step === "enrolling" && qr && (
-        <form onSubmit={confirmToken} className="rounded-lg border border-gray-800 bg-gray-900 p-4 space-y-3">
-          <p className="text-gray-300 text-sm">
+        <form onSubmit={confirmToken} className="rounded-lg border border-border bg-card p-4 space-y-3">
+          <p className="text-foreground text-sm">
             1. Escaneie o QR Code no seu app autenticador:
           </p>
           {/* eslint-disable-next-line @next/next/no-img-element */}
           <img src={qr} alt="QR Code MFA" className="w-48 h-48 bg-white p-2 rounded" />
           {manualKey && (
-            <p className="text-gray-500 text-xs break-all">
-              Ou digite manualmente: <span className="font-mono text-gray-400">{manualKey}</span>
+            <p className="text-muted-foreground text-xs break-all">
+              Ou digite manualmente: <span className="font-mono text-foreground">{manualKey}</span>
             </p>
           )}
-          <p className="text-gray-300 text-sm">2. Digite o código de 6 dígitos gerado:</p>
+          <p className="text-foreground text-sm">2. Digite o código de 6 dígitos gerado:</p>
           <input
             type="text"
             inputMode="numeric"
             value={token}
             onChange={(e) => setToken(e.target.value)}
-            className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white tracking-widest text-center"
+            className="w-full px-4 py-3 bg-background border border-input rounded-lg text-foreground tracking-widest text-center"
             placeholder="000000"
             autoFocus
           />
           <button
             type="submit"
             disabled={loading}
-            className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 text-white rounded-lg"
+            className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-lg"
           >
             {loading ? "Verificando..." : "Confirmar e ativar"}
           </button>
@@ -131,24 +131,24 @@ export default function MfaSetup({ initialEnabled }: MfaSetupProps) {
       )}
 
       {step === "done" && (
-        <div className="rounded-lg border border-amber-700 bg-amber-900/30 p-4 space-y-3">
-          <p className="font-medium text-amber-300">
+        <div className="rounded-lg border border-amber-200 bg-amber-50 p-4 space-y-3">
+          <p className="font-medium text-amber-700">
             ✓ 2FA ativado! Guarde seus códigos de recuperação.
           </p>
-          <p className="text-amber-400/80 text-sm">
+          <p className="text-amber-600 text-sm">
             Use um destes códigos se perder o acesso ao app. Cada código funciona
             UMA vez. Esta é a única vez que eles serão exibidos.
           </p>
-          <div className="grid grid-cols-2 gap-2 font-mono text-sm text-gray-200">
+          <div className="grid grid-cols-2 gap-2 font-mono text-sm text-foreground">
             {recoveryCodes.map((c) => (
-              <span key={c} className="bg-gray-800 rounded px-3 py-2 text-center">{c}</span>
+              <span key={c} className="bg-muted rounded px-3 py-2 text-center">{c}</span>
             ))}
           </div>
         </div>
       )}
 
       {error && (
-        <div className="p-3 bg-red-900/50 border border-red-800 rounded-lg text-red-400 text-sm">
+        <div className="p-3 bg-rose-50 border border-rose-200 rounded-lg text-rose-600 text-sm">
           {error}
         </div>
       )}
