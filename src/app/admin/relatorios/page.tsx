@@ -4,6 +4,9 @@ import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity } from "lucide-react";
 import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
 import { ReconcileBillingButton } from "./ReconcileBillingButton";
+import { PageHeader } from "@/components/admin/PageHeader";
+import { KPICard } from "@/components/admin/KPICard";
+import { DollarSign } from "lucide-react";
 
 export default async function RelatoriosPage() {
   await requireAdmin();
@@ -57,44 +60,42 @@ export default async function RelatoriosPage() {
   const churnPct = (churnRate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
   return (
-    <div className="p-6 text-white">
-      <div className="mb-6 flex items-start justify-between gap-4 flex-wrap">
-        <div>
-          <h1 className="text-2xl font-bold">Relatórios</h1>
-          <p className="text-gray-400">Gere relatórios e exporte dados do sistema</p>
-        </div>
-        <ReconcileBillingButton />
-      </div>
+    <div className="p-6">
+      <PageHeader
+        title="Relatórios"
+        subtitle="Gere relatórios e exporte dados do sistema"
+        actions={<ReconcileBillingButton />}
+      />
 
       {/* KPIs */}
       <div className="grid grid-cols-4 gap-4 mb-6">
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-          <p className="text-gray-400 text-sm">MRR Estimado</p>
-          <p className="text-2xl font-bold text-green-400">
-            R$ {(mrrEstimado / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-          </p>
-        </div>
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-          <p className="text-gray-400 text-sm">Clientes Ativos</p>
-          <p className="text-2xl font-bold text-white">{activeSubscriptions}</p>
-          <p className="text-xs text-gray-500">+ {trialSubscriptions} em trial</p>
-        </div>
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-          <p className="text-gray-400 text-sm">Churn (Mês) <span className="text-gray-600">· est.</span></p>
-          <p className="text-2xl font-bold text-red-400">{churnPct}%</p>
-          <p className="text-xs text-gray-500">
-            {canceledThisMonth} cancelada{canceledThisMonth === 1 ? "" : "s"} de {activeAtMonthStart} ativas
-          </p>
-        </div>
-        <div className="bg-gray-900 rounded-xl border border-gray-800 p-4">
-          <p className="text-gray-400 text-sm">Tickets (Mês)</p>
-          <p className="text-2xl font-bold text-blue-400">{ticketsThisMonth}</p>
-        </div>
+        <KPICard
+          icon={DollarSign}
+          label="MRR Estimado"
+          value={`R$ ${(mrrEstimado / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+        />
+        <KPICard
+          icon={Users}
+          label="Clientes Ativos"
+          value={String(activeSubscriptions)}
+          hint={`+ ${trialSubscriptions} em trial`}
+        />
+        <KPICard
+          icon={Activity}
+          label="Churn (Mês) · est."
+          value={`${churnPct}%`}
+          hint={`${canceledThisMonth} cancelada${canceledThisMonth === 1 ? "" : "s"} de ${activeAtMonthStart} ativas`}
+        />
+        <KPICard
+          icon={Ticket}
+          label="Tickets (Mês)"
+          value={String(ticketsThisMonth)}
+        />
       </div>
 
       {/* Aviso */}
-      <div className="bg-yellow-900/20 border border-yellow-800 rounded-lg px-4 py-3 mb-6">
-        <p className="text-yellow-500 text-sm">
+      <div className="bg-amber-50 border border-amber-200 rounded-lg px-4 py-3 mb-6">
+        <p className="text-amber-700 text-sm">
           ⚠️ MRR e Churn são estimados com base nas assinaturas. Para dados precisos de receita,
           integre com gateway de pagamento (sprint futuro).
         </p>
@@ -156,19 +157,19 @@ function ExportCard({
   href: string;
 }) {
   return (
-    <div className="bg-gray-900 rounded-xl border border-gray-800 p-6">
+    <div className="bg-card rounded-xl border border-border p-6">
       <div className="flex items-center gap-3 mb-4">
-        <div className="w-10 h-10 bg-gray-800 rounded-lg flex items-center justify-center">
-          <Icon className="w-5 h-5 text-gray-400" />
+        <div className="w-10 h-10 bg-muted rounded-lg flex items-center justify-center">
+          <Icon className="w-5 h-5 text-muted-foreground" />
         </div>
         <div>
-          <h3 className="font-semibold text-white">{title}</h3>
-          <p className="text-sm text-gray-500">{description}</p>
+          <h3 className="font-semibold text-foreground">{title}</h3>
+          <p className="text-sm text-muted-foreground">{description}</p>
         </div>
       </div>
       <a
         href={href}
-        className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-gray-800 text-white rounded-lg hover:bg-gray-700 transition-colors"
+        className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors"
       >
         <Download className="w-4 h-4" />
         Baixar CSV
