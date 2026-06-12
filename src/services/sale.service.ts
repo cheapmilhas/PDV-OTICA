@@ -469,11 +469,22 @@ export class SaleService {
         validateStoreCredit(payment, customerId);
       }
 
-      // Saldo a Receber: cliente obrigatório (paga ao receber o produto)
-      if (payment.method === "BALANCE_DUE" && !customerId) {
+      // Métodos a prazo (saldo/boleto/cheque) exigem cliente vinculado
+      if (
+        (payment.method === "BALANCE_DUE" ||
+          payment.method === "BOLETO" ||
+          payment.method === "CHEQUE") &&
+        !customerId
+      ) {
+        const label =
+          payment.method === "BALANCE_DUE"
+            ? "Saldo a Receber"
+            : payment.method === "BOLETO"
+              ? "Boleto"
+              : "Cheque";
         throw new AppError(
           ERROR_CODES.VALIDATION_ERROR,
-          "Saldo a Receber exige um cliente vinculado",
+          `${label} exige um cliente vinculado`,
           400
         );
       }
