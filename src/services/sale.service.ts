@@ -204,6 +204,83 @@ export class SaleService {
   }
 
   /**
+   * Rastreia, por pagamento de uma venda, em qual turno de caixa caiu
+   * (ou por que não entrou). Deriva dos dados, não só do método — tratando
+   * estorno/cancelamento corretamente (shift = movimento IN original, nunca o REFUND).
+   */
+  async getCashTrace(saleId: string, companyId: string) {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, companyId },
+      include: {
+        payments: {
+          include: {
+            cashMovements: {
+              include: {
+                cashShift: {
+                  select: {
+                    id: true,
+                    status: true,
+                    openedAt: true,
+                    branch: { select: { name: true } },
+                    openedByUser: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!sale) {
+      throw notFoundError("Venda não encontrada");
+    }
+
+    const A_PRAZO_AR = ["STORE_CREDIT", "BALANCE_DUE", "BOLETO", "CHEQUE"];
+
+    return sale.payments.map((p: any) => {
+      const movIn = p.cashMovements.find(
+        (m: any) => m.type === "SALE_PAYMENT" && m.direction === "IN"
+      );
+      const hasRefund = p.cashMovements.some(
+        (m: any) => m.type === "REFUND" || m.direction === "OUT"
+      );
+      const enteredCashRegister = !!movIn;
+      const reversed = hasRefund || p.status === "VOIDED";
+      const netCashAmount = p.cashMovements.reduce(
+        (sum: number, m: any) => sum + (m.direction === "IN" ? Number(m.amount) : -Number(m.amount)),
+        0
+      );
+
+      let destino: "cash_register" | "accounts_receivable" | "card_receivable" | "none";
+      if (enteredCashRegister) destino = "cash_register";
+      else if (p.method === "CREDIT_CARD") destino = "card_receivable";
+      else if (A_PRAZO_AR.includes(p.method)) destino = "accounts_receivable";
+      else destino = "none";
+
+      return {
+        paymentId: p.id,
+        method: p.method,
+        amount: Number(p.amount),
+        enteredCashRegister,
+        reversed,
+        netCashAmount,
+        destino,
+        shift: movIn?.cashShift
+          ? {
+              shiftId: movIn.cashShift.id,
+              branchName: movIn.cashShift.branch?.name ?? "—",
+              operador: movIn.cashShift.openedByUser?.name ?? "—",
+              openedAt: movIn.cashShift.openedAt,
+              status: movIn.cashShift.status,
+            }
+          : undefined,
+      };
+    });
+  }
+
+  /**
    * Cria nova venda com itens e pagamentos (transação)
    *
    * Validações:
