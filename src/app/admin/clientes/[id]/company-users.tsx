@@ -503,7 +503,7 @@ function CreateUserModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
             >
               Cancelar
             </button>
@@ -600,7 +600,7 @@ function ResetPasswordModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
             >
               Cancelar
             </button>
@@ -663,7 +663,7 @@ function PasswordResultModal({
 
           <button
             onClick={onClose}
-            className="w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
+            className="w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
           >
             Fechar
           </button>
@@ -788,7 +788,7 @@ function EditUserModal({
             <button
               type="button"
               onClick={onClose}
-              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
             >
               Cancelar
             </button>
@@ -1095,7 +1095,7 @@ function PermissionsModal({
               <div className="flex gap-3">
                 <button
                   onClick={onClose}
-                  className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors text-sm"
+                  className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
                 >
                   Cancelar
                 </button>

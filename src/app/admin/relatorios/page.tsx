@@ -169,7 +169,7 @@ function ExportCard({
       </div>
       <a
         href={href}
-        className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted transition-colors"
+        className="flex items-center justify-center gap-2 w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors"
       >
         <Download className="w-4 h-4" />
         Baixar CSV
