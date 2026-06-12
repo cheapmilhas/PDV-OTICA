@@ -7,7 +7,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit, sumOnCreditAmount } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
-import { METHODS_IN_CASH } from "@/lib/payment-methods";
+import { METHODS_IN_CASH, METHODS_WITH_RECEIVABLE } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
@@ -237,8 +237,6 @@ export class SaleService {
       throw notFoundError("Venda não encontrada");
     }
 
-    const A_PRAZO_AR = ["STORE_CREDIT", "BALANCE_DUE", "BOLETO", "CHEQUE"];
-
     return sale.payments.map((p: any) => {
       const movIn = p.cashMovements.find(
         (m: any) => m.type === "SALE_PAYMENT" && m.direction === "IN"
@@ -256,7 +254,7 @@ export class SaleService {
       let destino: "cash_register" | "accounts_receivable" | "card_receivable" | "none";
       if (enteredCashRegister) destino = "cash_register";
       else if (p.method === "CREDIT_CARD") destino = "card_receivable";
-      else if (A_PRAZO_AR.includes(p.method)) destino = "accounts_receivable";
+      else if ((METHODS_WITH_RECEIVABLE as readonly string[]).includes(p.method)) destino = "accounts_receivable";
       else destino = "none";
 
       return {
