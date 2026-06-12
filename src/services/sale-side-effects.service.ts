@@ -289,6 +289,26 @@ export async function applyPaymentsInTx(
       });
     }
 
+    // 5b. AccountReceivable para BOLETO/CHEQUE (+30 dias, 1 parcela) — igual BALANCE_DUE
+    if ((payment.method === "BOLETO" || payment.method === "CHEQUE") && customerId) {
+      const dueDate = addDays(new Date(), 30);
+      const metodoLabel = payment.method === "BOLETO" ? "Boleto" : "Cheque";
+      await tx.accountReceivable.create({
+        data: {
+          companyId: sale.companyId,
+          customerId,
+          saleId: sale.id,
+          description: `${metodoLabel} - Venda ${saleDisplayNumber(sale)}`,
+          amount: payment.amount,
+          dueDate,
+          installmentNumber: 1,
+          totalInstallments: 1,
+          status: "PENDING",
+          createdByUserId: userId,
+        },
+      });
+    }
+
     // 6. CardReceivable para CREDIT_CARD (N parcelas, +30*i dias cada)
     if (payment.method === "CREDIT_CARD") {
       const numInstallments = installmentsCount;
