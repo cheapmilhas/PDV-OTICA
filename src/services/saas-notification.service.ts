@@ -89,8 +89,10 @@ export async function notifyCompany(
     }
 
     let emailQueueId: string | null = null;
-    if (channels.includes("email")) {
-      const entry = SAAS_EMAIL_CATALOG[eventType];
+    const entry = SAAS_EMAIL_CATALOG[eventType];
+    // Tipos sem template no catálogo do SaaS (ex.: eventos de cobrança Asaas) não
+    // são enviados por este fluxo — só registram log/in-app, sem enfileirar email.
+    if (channels.includes("email") && entry) {
       // `data:` é o WRAPPER do Prisma create. `to`/`subject`/`template` são COLUNAS
       // da EmailQueue; `data: payload` é a COLUNA Json `data` (payload do template,
       // que o cron passa intacto ao renderEmailTemplate). NÃO injetar `to` no

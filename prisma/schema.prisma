@@ -4057,6 +4057,12 @@ enum SaasEmailType {
   PAYMENT_CONFIRMED
   SUBSCRIPTION_SUSPENDED
   SUBSCRIPTION_CANCELED
+  // Gerados pelo fluxo de cobrança Asaas (Fase Email-A). O valor já existe no
+  // enum do banco de prod (migration 20260611120000); declarado aqui para o
+  // Prisma Client reconhecê-los na leitura de SaasEmailLog (evita "value not
+  // found in enum" ao listar logs na tela /admin/configuracoes/emails).
+  INVOICE_CREATED
+  INVOICE_DUE_SOON
 }
 
 enum SaasEmailLogStatus {
