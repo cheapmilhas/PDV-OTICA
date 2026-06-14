@@ -13,17 +13,16 @@ import {
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Separator } from "@/components/ui/separator";
-import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
 import { Download, Loader2, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import ConferenciaFormas, {
+  type SalesByMethodEntry,
+} from "@/components/caixa/conferencia-formas";
+import {
+  MovimentacoesTable,
+  type MovRow,
+} from "@/components/caixa/movimentacoes-table";
 
 interface CashRegister {
   id: string;
@@ -49,14 +48,6 @@ interface CashRegister {
   };
 }
 
-interface CashTransaction {
-  id: string;
-  type: "SALE" | "EXPENSE" | "WITHDRAWAL" | "SUPPLY";
-  amount: number;
-  description: string;
-  createdAt: string;
-}
-
 interface ModalDetalhesCaixaProps {
   caixa: CashRegister | null;
   open: boolean;
@@ -68,7 +59,8 @@ export function ModalDetalhesCaixa({
   open,
   onOpenChange,
 }: ModalDetalhesCaixaProps) {
-  const [transactions, setTransactions] = useState<CashTransaction[]>([]);
+  const [transactions, setTransactions] = useState<MovRow[]>([]);
+  const [salesByMethod, setSalesByMethod] = useState<SalesByMethodEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -86,7 +78,14 @@ export function ModalDetalhesCaixa({
       const result = await response.json();
 
       if (response.ok) {
-        setTransactions(result.data || []);
+        const movs = (result.data?.movements || []).map((m: any) => ({ ...m, kind: "MOVEMENT" as const }));
+        const recs = (result.data?.receivableRows || []).map((r: any) => ({ ...r, kind: "RECEIVABLE" as const }));
+        const voids = (result.data?.voidedReceivableRows || []).map((r: any) => ({ ...r, kind: "VOIDED" as const }));
+        const all = [...movs, ...recs, ...voids].sort(
+          (a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime() // DESC: mais recente primeiro
+        );
+        setTransactions(all);
+        setSalesByMethod(result.data?.salesByMethod || []);
       } else {
         toast.error("Erro ao carregar transações");
       }
@@ -141,20 +140,6 @@ export function ModalDetalhesCaixa({
   }
 
   if (!caixa) return null;
-
-  const transactionTypeLabels: Record<string, string> = {
-    SALE: "Venda",
-    EXPENSE: "Despesa",
-    WITHDRAWAL: "Sangria",
-    SUPPLY: "Suprimento",
-  };
-
-  const transactionTypeColors: Record<string, string> = {
-    SALE: "text-green-600",
-    EXPENSE: "text-red-600",
-    WITHDRAWAL: "text-orange-600",
-    SUPPLY: "text-blue-600",
-  };
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
@@ -276,6 +261,14 @@ export function ModalDetalhesCaixa({
             </>
           )}
 
+          {/* Conferência de formas de pagamento (histórico — fonte: SalePayment) */}
+          {caixa.status === "CLOSED" && (
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">Conferência por forma de pagamento</h3>
+              <ConferenciaFormas salesByMethod={salesByMethod} />
+            </div>
+          )}
+
           <Separator />
 
           {/* Transações */}
@@ -291,43 +284,9 @@ export function ModalDetalhesCaixa({
               <div className="flex items-center justify-center py-8">
                 <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
               </div>
-            ) : transactions.length === 0 ? (
-              <div className="text-center py-8 text-muted-foreground">
-                Nenhuma movimentação registrada
-              </div>
             ) : (
               <div className="border rounded-lg overflow-hidden">
-                <Table>
-                  <TableHeader>
-                    <TableRow>
-                      <TableHead>Data/Hora</TableHead>
-                      <TableHead>Tipo</TableHead>
-                      <TableHead>Descrição</TableHead>
-                      <TableHead className="text-right">Valor</TableHead>
-                    </TableRow>
-                  </TableHeader>
-                  <TableBody>
-                    {transactions.map((transaction) => (
-                      <TableRow key={transaction.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {format(new Date(transaction.createdAt), "dd/MM HH:mm", {
-                            locale: ptBR,
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant="outline">
-                            {transactionTypeLabels[transaction.type]}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>{transaction.description}</TableCell>
-                        <TableCell className={cn("text-right font-medium", transactionTypeColors[transaction.type])}>
-                          {transaction.type === "EXPENSE" || transaction.type === "WITHDRAWAL" ? "-" : "+"}
-                          {formatCurrency(Math.abs(transaction.amount))}
-                        </TableCell>
-                      </TableRow>
-                    ))}
-                  </TableBody>
-                </Table>
+                <MovimentacoesTable rows={transactions} compact />
               </div>
             )}
           </div>

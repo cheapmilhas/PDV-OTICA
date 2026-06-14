@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { CashShift, CashMovement, Prisma } from "@prisma/client";
 import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 import type { OpenShiftDTO, CloseShiftDTO, CashMovementDTO } from "@/lib/validations/cash.schema";
+import { METHODS_IN_CASH } from "@/lib/payment-methods";
 import { computeCashBalance, withdrawalExceedsCash } from "@/lib/finance-validation";
 
 /**
@@ -366,6 +367,89 @@ export class CashService {
         },
       },
     });
+  }
+
+  /**
+   * Vendas do turno agrupadas por forma de pagamento (fonte: SalePayment).
+   * Mostra crédito/crediário/boleto/cheque que NÃO geram CashMovement.
+   * Semântica = "faturado no turno por método", NÃO "a receber em aberto".
+   */
+  async getShiftSalesByMethod(
+    shift: { id: string; branchId: string; openedAt: Date; closedAt?: Date | null },
+    companyId: string
+  ) {
+    const rows = await prisma.salePayment.groupBy({
+      by: ["method"],
+      where: {
+        status: { not: "VOIDED" },
+        sale: {
+          companyId,
+          branchId: shift.branchId,
+          status: "COMPLETED",
+          createdAt: {
+            gte: shift.openedAt,
+            ...(shift.closedAt ? { lte: shift.closedAt } : {}),
+          },
+        },
+      },
+      _sum: { amount: true },
+      _count: true,
+    });
+
+    return rows.map((r) => ({
+      method: r.method,
+      amount: Number(r._sum.amount ?? 0),
+      count: r._count,
+    }));
+  }
+
+  private async queryShiftReceivableRows(
+    shift: { id: string; branchId: string; openedAt: Date; closedAt?: Date | null },
+    companyId: string,
+    opts: { voided: boolean }
+  ) {
+    const where: Prisma.SalePaymentWhereInput = {
+      status: opts.voided ? "VOIDED" : { not: "VOIDED" },
+      method: { notIn: [...METHODS_IN_CASH] },
+      sale: {
+        companyId,
+        branchId: shift.branchId,
+        status: opts.voided ? { in: ["CANCELED", "REFUNDED"] } : "COMPLETED",
+        createdAt: { gte: shift.openedAt, ...(shift.closedAt ? { lte: shift.closedAt } : {}) },
+      },
+    };
+    const rows = await prisma.salePayment.findMany({
+      where,
+      select: { id: true, method: true, amount: true,
+        sale: { select: { id: true, number: true, createdAt: true, sellerUser: { select: { name: true } } } } },
+      orderBy: { sale: { createdAt: "asc" } },
+    });
+    return rows.map((r) => ({
+      id: r.id,
+      kind: opts.voided ? ("VOIDED" as const) : ("RECEIVABLE" as const),
+      voided: opts.voided,
+      createdAt: r.sale.createdAt.toISOString(),
+      method: r.method,
+      amount: Number(r.amount),
+      saleId: r.sale.id,
+      saleNumber: r.sale.number,
+      sellerName: r.sale.sellerUser?.name ?? "—",
+    }));
+  }
+
+  /** Vendas a prazo ATIVAS do turno (linha-a-linha). method notIn METHODS_IN_CASH → a prazo + convênio + outro. */
+  async getShiftSalePayments(shift: { id: string; branchId: string; openedAt: Date; closedAt?: Date | null }, companyId: string) {
+    return this.queryShiftReceivableRows(shift, companyId, { voided: false });
+  }
+
+  /**
+   * Vendas a prazo CANCELADAS do turno (riscadas na tabela).
+   * Filtra status "VOIDED": hoje NADA escreve PaymentStatus.REFUNDED (devolução = refundFull
+   * reusa cancel, que seta payment=VOIDED + sale=REFUNDED). Se algum dia gravar payment=REFUNDED,
+   * trocar p/ { in: ["VOIDED","REFUNDED"] }.
+   */
+  async getShiftVoidedReceivables(shift: { id: string; branchId: string; openedAt: Date; closedAt?: Date | null }, companyId: string) {
+    return this.queryShiftReceivableRows(shift, companyId, { voided: true });
   }
 }
 

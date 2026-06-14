@@ -28,6 +28,8 @@ import {
   Printer,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import ConferenciaFormas, { SalesByMethodEntry } from "@/components/caixa/conferencia-formas";
+import MovimentacoesTable, { type MovRow } from "@/components/caixa/movimentacoes-table";
 
 interface ModalFechamentoCaixaProps {
   open: boolean;
@@ -45,6 +47,8 @@ interface ModalFechamentoCaixaProps {
     direction: "IN" | "OUT";
     amount: number;
   }>;
+  salesByMethod?: SalesByMethodEntry[];
+  allRows?: MovRow[];
 }
 
 type Step = 1 | 2 | 3;
@@ -62,6 +66,8 @@ export function ModalFechamentoCaixa({
   caixaInfo,
   resumoPagamentos,
   movements = [],
+  salesByMethod,
+  allRows,
 }: ModalFechamentoCaixaProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -367,6 +373,26 @@ export function ModalFechamentoCaixa({
                   </div>
                 );
               })}
+
+              {/* Conferência por formas de pagamento (informativo) */}
+              {salesByMethod && salesByMethod.length > 0 && (
+                <div className="mt-1 rounded-lg border border-slate-200 bg-slate-50/60 p-4">
+                  <p className="mb-3 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Conferência por forma de pagamento (informativo)
+                  </p>
+                  <ConferenciaFormas salesByMethod={salesByMethod} />
+                </div>
+              )}
+
+              {/* Movimentações do turno (read-only, paridade com dia/histórico) */}
+              {allRows && allRows.length > 0 && (
+                <div className="mt-1">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Movimentações do turno
+                  </p>
+                  <MovimentacoesTable rows={allRows} compact />
+                </div>
+              )}
 
               {/* Total parcial */}
               <div className="mt-2 flex items-center justify-between rounded-lg border border-slate-200 bg-slate-50 px-4 py-3">

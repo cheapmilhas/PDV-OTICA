@@ -58,13 +58,13 @@ for (const m of ALL_PAYMENT_METHODS) {
 export const METHODS_IN_CASH = ["CASH", "PIX", "DEBIT_CARD"] as const;
 
 /** Métodos a prazo — NÃO entram como dinheiro imediato no caixa */
-export const METHODS_A_PRAZO = ["STORE_CREDIT", "CREDIT_CARD", "BALANCE_DUE"] as const;
+export const METHODS_A_PRAZO = ["STORE_CREDIT", "CREDIT_CARD", "BALANCE_DUE", "BOLETO", "CHEQUE"] as const;
 
 /** Métodos que geram AccountReceivable */
-export const METHODS_WITH_RECEIVABLE = ["STORE_CREDIT", "BALANCE_DUE"] as const;
+export const METHODS_WITH_RECEIVABLE = ["STORE_CREDIT", "BALANCE_DUE", "BOLETO", "CHEQUE"] as const;
 
 /** Métodos que exigem cliente vinculado */
-export const METHODS_REQUIRE_CUSTOMER = ["STORE_CREDIT", "BALANCE_DUE"] as const;
+export const METHODS_REQUIRE_CUSTOMER = ["STORE_CREDIT", "BALANCE_DUE", "BOLETO", "CHEQUE"] as const;
 
 /**
  * Given an array of onboarding IDs (lowercase), returns the corresponding

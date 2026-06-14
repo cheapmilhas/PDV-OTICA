@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useMemo } from "react";
 import { ConfirmReasonDialog } from "@/components/ui/confirm-reason-dialog";
 import { useRouter, useParams } from "next/navigation";
 import Link from "next/link";
@@ -22,6 +22,7 @@ import { openWhatsAppWithMessage } from "@/lib/default-messages";
 import { buildThankYouMessage } from "@/lib/whatsapp-message";
 import { Breadcrumbs } from "@/components/shared/breadcrumbs";
 import { saleDisplayNumber } from "@/lib/sale-number";
+import PaymentDestinationBadge, { type PaymentTrace } from "@/components/vendas/payment-destination-badge";
 
 interface SaleDetails {
   id: string;
@@ -98,6 +99,13 @@ export default function DetalhesVendaPage() {
   const [sendingWhatsApp, setSendingWhatsApp] = useState(false);
   const [cashbackInfo, setCashbackInfo] = useState<{ amount: number; expiresAt: string | null } | null>(null);
   const [cashbackLoaded, setCashbackLoaded] = useState(false);
+  const [trace, setTrace] = useState<PaymentTrace[]>([]);
+  const [traceLoading, setTraceLoading] = useState(true);
+
+  const traceByPayment = useMemo(
+    () => Object.fromEntries(trace.map((t) => [t.paymentId, t])),
+    [trace]
+  );
 
   // Verifica permissões do usuário (permission-based)
   const canCancelSale = hasPermission("sales.cancel");
@@ -121,6 +129,18 @@ export default function DetalhesVendaPage() {
     };
 
     fetchSale();
+  }, [id]);
+
+  // Rastreio do caixa: onde cada pagamento caiu (paralelo ao getById)
+  useEffect(() => {
+    let active = true;
+    setTraceLoading(true);
+    fetch(`/api/sales/${id}/cash-trace`)
+      .then((r) => (r.ok ? r.json() : Promise.reject(r)))
+      .then((j) => { if (active) setTrace(j.data?.trace ?? []); })
+      .catch(() => { if (active) setTrace([]); })
+      .finally(() => { if (active) setTraceLoading(false); });
+    return () => { active = false; };
   }, [id]);
 
   // Buscar cashback da venda
@@ -750,6 +770,12 @@ export default function DetalhesVendaPage() {
                       {payment.acquirer && <p>Operadora: {payment.acquirer}</p>}
                     </div>
                   )}
+                  <div className="mt-1.5">
+                    <PaymentDestinationBadge
+                      trace={traceByPayment[payment.id]}
+                      loading={traceLoading}
+                    />
+                  </div>
                 </div>
                 <p className="font-bold text-lg">
                   {formatCurrency(Number(payment.amount))}
