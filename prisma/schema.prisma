@@ -208,6 +208,7 @@ model Company {
   cardReceivables         CardReceivable[]
   recurringExpenses       RecurringExpense[]
   saasEmailLogs           SaasEmailLog[]
+  whatsappConnection      WhatsappConnection?
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -4122,4 +4123,47 @@ model SaasEmailLog {
 model SaasCounter {
   key   String @id
   value Int    @default(0)
+}
+
+/// Conexão de WhatsApp de uma ótica com a Evolution API (Fase B1).
+///
+/// 1:1 com Company (uma instância de WhatsApp por ótica). O nome da instância
+/// na Evolution é SEMPRE derivado do companyId (`vis_${companyId}`) — nunca de
+/// algo vindo do client — garantindo isolamento entre óticas: o webhook resolve
+/// a empresa pelo `instanceName` único.
+///
+/// Esta fase guarda apenas a CONEXÃO e o status (sem motor de mensagens/fila —
+/// isso é a Fase B2).
+model WhatsappConnection {
+  id              String                 @id @default(cuid())
+  companyId       String                 @unique
+  /// Reservado para o futuro (conexão por filial). Não usado nesta fase.
+  branchId        String?
+  /// Nome da instância na Evolution, derivado do companyId. Único globalmente.
+  instanceName    String                 @unique
+  /// API key escopada à instância (hash retornado no create). Nullable e NÃO
+  /// usada nas chamadas nesta fase — usamos sempre a chave global. Não criptografada.
+  instanceApiKey  String?
+  status          WhatsappConnStatus     @default(DISCONNECTED)
+  /// Número conectado (somente dígitos, ex: 5511999999999).
+  connectedNumber String?
+  lastQrAt        DateTime?
+  connectedAt     DateTime?
+  disconnectedAt  DateTime?
+  /// Último webhook recebido da Evolution (para dedupe/diagnóstico).
+  lastEventAt     DateTime?
+  lastError       String?
+  createdAt       DateTime               @default(now())
+  updatedAt       DateTime               @updatedAt
+
+  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([status])
+}
+
+enum WhatsappConnStatus {
+  DISCONNECTED
+  CONNECTING
+  CONNECTED
+  FAILED
 }

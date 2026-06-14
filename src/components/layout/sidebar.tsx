@@ -36,11 +36,13 @@ import {
   Shield,
   Lock,
   LifeBuoy,
+  MessageCircle,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePlanFeatures } from "@/hooks/usePlanFeatures";
+import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 
 interface MenuItem {
   name: string;
@@ -49,6 +51,8 @@ interface MenuItem {
   hotkey?: string;
   permission?: string;
   feature?: string;
+  /** Flag de integração ligada por empresa via env (não é gating de plano). */
+  flag?: "whatsapp";
 }
 
 interface MenuSection {
@@ -305,6 +309,13 @@ const menuItems: MenuSection[] = [
         permission: "settings.view"
       },
       {
+        name: "WhatsApp",
+        href: "/dashboard/configuracoes/whatsapp",
+        icon: MessageCircle,
+        permission: "settings.edit",
+        flag: "whatsapp"
+      },
+      {
         name: "Usuários",
         href: "/dashboard/usuarios",
         icon: Shield,
@@ -329,6 +340,7 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
   const { logoUrl, displayName, primaryColor } = useCompanySettings();
   const { hasPermission, isAdmin } = usePermissions();
   const { hasFeature } = usePlanFeatures();
+  const { enabled: whatsappEnabled } = useWhatsappEnabled();
 
   // Cor do sidebar: usa a cor primária escolhida ou padrão escuro
   const sidebarBg = primaryColor || null;
@@ -397,7 +409,9 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
             // Esconder 100% itens cuja feature está desativada no plano.
             // hasFeature retorna true por default (sem dados ou loading) — evita flash.
             const featureOk = !item.feature || hasFeature(item.feature);
-            return permissionOk && featureOk;
+            // Flag por empresa (env): some quando a integração não está ligada.
+            const flagOk = item.flag !== "whatsapp" || whatsappEnabled;
+            return permissionOk && featureOk && flagOk;
           });
 
           if (visibleItems.length === 0) return null;

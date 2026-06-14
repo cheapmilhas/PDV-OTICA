@@ -6,6 +6,7 @@ import { useState } from "react";
 import { cn } from "@/lib/utils";
 import { usePermissions } from "@/hooks/usePermissions";
 import { usePlanFeatures } from "@/hooks/usePlanFeatures";
+import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import {
   Home,
   ShoppingCart,
@@ -36,6 +37,7 @@ import {
   Store,
   CreditCard,
   CalendarClock,
+  MessageCircle,
 } from "lucide-react";
 
 const primaryNav = [
@@ -71,6 +73,7 @@ const moreNav = [
   { icon: Store, label: "Comp. Lojas", href: "/dashboard/relatorios/comparativo-lojas", permission: "reports.sales", feature: "branch_comparison" },
   { icon: CreditCard, label: "Cartões", href: "/dashboard/financeiro/cartoes", permission: "financial.view", feature: "card_receivables" },
   { icon: CalendarClock, label: "Desp. Recorrentes", href: "/dashboard/financeiro/despesas-recorrentes", permission: "financial.view", feature: "recurring_expenses" },
+  { icon: MessageCircle, label: "WhatsApp", href: "/dashboard/configuracoes/whatsapp", permission: "settings.edit", flag: "whatsapp" as const },
   { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];
 
@@ -79,16 +82,18 @@ export function MobileNav() {
   const [showMore, setShowMore] = useState(false);
   const { hasPermission, isAdmin } = usePermissions();
   const { hasFeature } = usePlanFeatures();
+  const { enabled: whatsappEnabled } = useWhatsappEnabled();
 
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === href;
     return pathname === href || pathname.startsWith(href + "/");
   }
 
-  const isVisible = (item: { permission?: string; feature?: string }) => {
+  const isVisible = (item: { permission?: string; feature?: string; flag?: "whatsapp" }) => {
     const permissionOk = !item.permission || isAdmin || hasPermission(item.permission);
     const featureOk = !item.feature || hasFeature(item.feature);
-    return permissionOk && featureOk;
+    const flagOk = item.flag !== "whatsapp" || whatsappEnabled;
+    return permissionOk && featureOk && flagOk;
   };
 
   const visiblePrimaryNav = primaryNav.filter(isVisible);
