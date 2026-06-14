@@ -51,6 +51,11 @@ export async function GET(
       method: mov.method,
       amount: Number(mov.amount),
       originType: mov.originType,
+      // note/createdByUser: campos que o <MovimentacoesTable> (MovRow MOVEMENT) lê
+      // para descrição (getMovementDescription) e operador. Mantém description/operador
+      // por compat de quem consome o shape antigo.
+      note: mov.note ?? undefined,
+      createdByUser: mov.createdByUser ?? undefined,
       description: mov.note || getMovementDescription(mov.type),
       operador: mov.createdByUser?.name ?? null,
       createdAt: mov.createdAt,
