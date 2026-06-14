@@ -1,8 +1,13 @@
 import { prisma } from "@/lib/prisma";
-import { softDeleteFilter } from "@/lib/soft-delete";
-import { notFoundError, businessRuleError } from "@/lib/error-handler";
+import { softDelete, softDeleteFilter } from "@/lib/soft-delete";
+import { notFoundError, businessRuleError, duplicateError } from "@/lib/error-handler";
 import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
-import type { CreateLeadDTO, LeadQuery } from "@/lib/validations/lead.schema";
+import type {
+  CreateLeadDTO,
+  LeadQuery,
+  MoveLeadDTO,
+  UpdateLeadDTO,
+} from "@/lib/validations/lead.schema";
 
 const LEAD_INCLUDE = {
   stage: true,
@@ -112,4 +117,59 @@ function serializeLead(l: any) {
     estimatedValue: l.estimatedValue == null ? null : Number(l.estimatedValue),
     quote: l.quote ? { ...l.quote, total: Number(l.quote.total) } : null,
   };
+}
+
+export async function moveLead(id: string, data: MoveLeadDTO, companyId: string) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true, updatedAt: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+
+  if (data.expectedUpdatedAt && new Date(data.expectedUpdatedAt).getTime() !== lead.updatedAt.getTime()) {
+    throw duplicateError("Este lead foi atualizado por outra pessoa. Recarregue o funil.");
+  }
+
+  const stage = await prisma.leadStage.findFirst({
+    where: { id: data.stageId, companyId },
+    select: { id: true, isLost: true },
+  });
+  if (!stage) throw notFoundError("Etapa inválida");
+  if (stage.isLost && !data.lostReason) {
+    throw businessRuleError("Informe o motivo da perda");
+  }
+
+  return prisma.lead.update({
+    where: { id },
+    data: {
+      stageId: data.stageId,
+      lostReason: stage.isLost ? data.lostReason : null,
+      lastActivityAt: new Date(),
+    },
+  });
+}
+
+export async function updateLead(id: string, data: UpdateLeadDTO, companyId: string) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+  return prisma.lead.update({
+    where: { id },
+    data: {
+      ...data,
+      email: data.email === "" ? null : data.email,
+      lastActivityAt: new Date(),
+    },
+  });
+}
+
+export async function deleteLead(id: string, companyId: string) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+  await softDelete("lead", id);
 }

@@ -7,7 +7,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead, listLeads } from "./lead.service";
+import { createLead, listLeads, moveLead } from "./lead.service";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -53,5 +53,33 @@ describe("listLeads", () => {
     await listLeads({ page: 1, pageSize: 50, search: "" } as any, "co_1", null, { viewAll: false, userId: "u_5" });
     const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
     expect(where.sellerUserId).toBe("u_5");
+  });
+});
+
+describe("moveLead", () => {
+  it("exige lostReason ao mover para etapa isLost", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_lost", isLost: true, isWon: false });
+    await expect(
+      moveLead("l1", { stageId: "stg_lost" } as any, "co_1")
+    ).rejects.toThrow(/motivo/i);
+  });
+
+  it("detecta conflito de optimistic-lock (expectedUpdatedAt diferente)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    await expect(
+      moveLead("l1", { stageId: "stg2", expectedUpdatedAt: "2026-06-14T09:00:00.000Z" } as any, "co_1")
+    ).rejects.toThrow(/atualizado/i);
+  });
+
+  it("move e atualiza lastActivityAt no caminho feliz", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1", stageId: "stg2" });
+    await moveLead("l1", { stageId: "stg2" } as any, "co_1");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.stageId).toBe("stg2");
+    expect(data.lastActivityAt).toBeInstanceOf(Date);
   });
 });
