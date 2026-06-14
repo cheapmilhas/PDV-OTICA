@@ -62,7 +62,7 @@ describe("POST /api/webhooks/evolution", () => {
   beforeEach(() => {
     whatsappFindUnique.mockReset();
     whatsappUpdate.mockReset();
-    process.env.NODE_ENV = "test";
+    vi.stubEnv("NODE_ENV", "test");
     process.env.EVOLUTION_WEBHOOK_SECRET = SECRET;
     delete process.env.ALLOW_UNSIGNED_EVOLUTION_WEBHOOK;
     whatsappFindUnique.mockResolvedValue({ id: "conn1", companyId: "co1", status: "CONNECTING" });
@@ -70,6 +70,7 @@ describe("POST /api/webhooks/evolution", () => {
   });
 
   afterEach(() => {
+    vi.unstubAllEnvs();
     process.env = { ...ORIGINAL_ENV };
   });
 
@@ -106,7 +107,7 @@ describe("POST /api/webhooks/evolution", () => {
 
   it("fail-closed em produção quando o secret está ausente (401)", async () => {
     delete process.env.EVOLUTION_WEBHOOK_SECRET;
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     const req = makeRequest({ event: "connection.update", instance: "vis_co1", data: { state: "open" } });
     const res = await POST(req);
     expect(res.status).toBe(401);
@@ -114,7 +115,7 @@ describe("POST /api/webhooks/evolution", () => {
 
   it("escape hatch ALLOW_UNSIGNED em prod permite sem JWT", async () => {
     delete process.env.EVOLUTION_WEBHOOK_SECRET;
-    process.env.NODE_ENV = "production";
+    vi.stubEnv("NODE_ENV", "production");
     process.env.ALLOW_UNSIGNED_EVOLUTION_WEBHOOK = "1";
     const req = makeRequest({ event: "connection.update", instance: "vis_co1", data: { state: "open" } });
     const res = await POST(req);
