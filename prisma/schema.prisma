@@ -209,6 +209,8 @@ model Company {
   recurringExpenses       RecurringExpense[]
   saasEmailLogs           SaasEmailLog[]
   whatsappConnection      WhatsappConnection?
+  leads                   Lead[]
+  leadStages              LeadStage[]
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -285,6 +287,7 @@ model Branch {
   transfersTo           StockTransfer[]          @relation("TransferTo")
   cardReceivables       CardReceivable[]
   recurringExpenses     RecurringExpense[]
+  leads                 Lead[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -351,6 +354,7 @@ model User {
   templatesCreated           MessageTemplate[]        @relation("TemplateCreator")
   transfersApproved          StockTransfer[]          @relation("TransferApprover")
   transfersRequested         StockTransfer[]          @relation("TransferRequester")
+  leadsAsSeller              Lead[]                   @relation("LeadSeller")
 
   @@index([companyId, email])
   @@index([companyId, role])
@@ -444,6 +448,7 @@ model Customer {
   crmReminders       CustomerReminder[]     @relation("CustomerReminders")
   consentRecords     ConsentRecord[]
   accessLogs         CustomerAccessLog[]
+  leads              Lead[]                 @relation("LeadCustomer")
 
   @@unique([companyId, cpf])
   // cnpj: único POR EMPRESA via índice PARCIAL (WHERE cnpj IS NOT NULL) criado na
@@ -1101,6 +1106,7 @@ model Quote {
   followUps         QuoteFollowUp[]
   items             QuoteItem[]
   convertedToSale   Sale?           @relation("QuoteToSale")
+  leads             Lead[]          @relation("LeadQuote")
 
   @@index([companyId, status])
   @@index([companyId, createdAt])
@@ -1128,6 +1134,56 @@ model QuoteItem {
   quote            Quote         @relation(fields: [quoteId], references: [id], onDelete: Cascade)
 
   @@index([quoteId])
+}
+
+model LeadStage {
+  id        String   @id @default(cuid())
+  companyId String
+  name      String
+  order     Int
+  isWon     Boolean  @default(false)
+  isLost    Boolean  @default(false)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  company Company @relation(fields: [companyId], references: [id])
+  leads   Lead[]
+
+  @@unique([companyId, name])
+  @@index([companyId, order])
+}
+
+model Lead {
+  id             String      @id @default(cuid())
+  companyId      String
+  branchId       String?
+  name           String
+  phone          String?
+  email          String?
+  interest       String?
+  source         LeadFunnelSource?
+  stageId        String
+  sellerUserId   String?
+  estimatedValue Decimal?    @db.Decimal(12, 2)
+  customerId     String?
+  quoteId        String?
+  lostReason     String?
+  notes          String?
+  lastActivityAt DateTime    @default(now())
+  deletedAt      DateTime?
+  createdAt      DateTime    @default(now())
+  updatedAt      DateTime    @updatedAt
+
+  company  Company   @relation(fields: [companyId], references: [id])
+  branch   Branch?   @relation(fields: [branchId], references: [id])
+  stage    LeadStage @relation(fields: [stageId], references: [id])
+  seller   User?     @relation("LeadSeller", fields: [sellerUserId], references: [id])
+  customer Customer? @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  quote    Quote?    @relation("LeadQuote", fields: [quoteId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, stageId])
+  @@index([companyId, sellerUserId])
+  @@index([companyId, deletedAt])
 }
 
 model Sale {
@@ -3918,6 +3974,15 @@ enum LeadSource {
   EVENTO
   DIRETO
   OUTRO
+}
+
+enum LeadFunnelSource {
+  WHATSAPP
+  INSTAGRAM
+  GOOGLE
+  REFERRAL
+  WALK_IN
+  OTHER
 }
 
 enum TagCategory {
