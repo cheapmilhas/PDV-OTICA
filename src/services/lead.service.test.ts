@@ -7,7 +7,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead } from "./lead.service";
+import { createLead, listLeads } from "./lead.service";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -34,5 +34,24 @@ describe("createLead", () => {
 
     const r = await createLead({ name: "Maria", phone: "85999" }, "co_1", "u", "b");
     expect(r.duplicateWarning).toBe(true);
+  });
+});
+
+describe("listLeads", () => {
+  it("filtra sempre por companyId e deletedAt:null", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    (prisma.lead.count as any).mockResolvedValue(0);
+    await listLeads({ page: 1, pageSize: 50, search: "" } as any, "co_1", null, { viewAll: true, userId: "u" });
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    expect(where.companyId).toBe("co_1");
+    expect(where.deletedAt).toBeNull();
+  });
+
+  it("quando viewAll=false, filtra pelo sellerUserId do usuário", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    (prisma.lead.count as any).mockResolvedValue(0);
+    await listLeads({ page: 1, pageSize: 50, search: "" } as any, "co_1", null, { viewAll: false, userId: "u_5" });
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    expect(where.sellerUserId).toBe("u_5");
   });
 });

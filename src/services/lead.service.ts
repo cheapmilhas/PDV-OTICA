@@ -1,7 +1,15 @@
 import { prisma } from "@/lib/prisma";
 import { softDeleteFilter } from "@/lib/soft-delete";
 import { notFoundError, businessRuleError } from "@/lib/error-handler";
-import type { CreateLeadDTO } from "@/lib/validations/lead.schema";
+import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
+import type { CreateLeadDTO, LeadQuery } from "@/lib/validations/lead.schema";
+
+const LEAD_INCLUDE = {
+  stage: true,
+  seller: { select: { id: true, name: true } },
+  customer: { select: { id: true, name: true } },
+  quote: { select: { id: true, total: true, status: true } },
+} as const;
 
 export async function createLead(
   data: CreateLeadDTO,
@@ -56,4 +64,52 @@ export async function createLead(
   });
 
   return { lead, duplicateWarning };
+}
+
+export async function listLeads(
+  query: LeadQuery,
+  companyId: string,
+  branchId: string | null,
+  access: { viewAll: boolean; userId: string }
+) {
+  const where: any = { companyId, deletedAt: null };
+  if (branchId) where.branchId = branchId;
+  if (query.stageId) where.stageId = query.stageId;
+  if (query.source) where.source = query.source;
+  if (query.sellerUserId) where.sellerUserId = query.sellerUserId;
+  if (!access.viewAll) where.sellerUserId = access.userId;
+  if (query.search) {
+    where.OR = [
+      { name: { contains: query.search, mode: "insensitive" } },
+      { interest: { contains: query.search, mode: "insensitive" } },
+    ];
+  }
+
+  const { skip, take } = getPaginationParams(query.page, query.pageSize);
+  const [rows, total] = await Promise.all([
+    prisma.lead.findMany({ where, include: LEAD_INCLUDE, orderBy: { lastActivityAt: "desc" }, skip, take }),
+    prisma.lead.count({ where }),
+  ]);
+
+  return {
+    data: rows.map(serializeLead),
+    pagination: createPaginationMeta(query.page, query.pageSize, total),
+  };
+}
+
+export async function getLeadById(id: string, companyId: string) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    include: LEAD_INCLUDE,
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+  return serializeLead(lead);
+}
+
+function serializeLead(l: any) {
+  return {
+    ...l,
+    estimatedValue: l.estimatedValue == null ? null : Number(l.estimatedValue),
+    quote: l.quote ? { ...l.quote, total: Number(l.quote.total) } : null,
+  };
 }
