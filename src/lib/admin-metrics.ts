@@ -98,6 +98,61 @@ export function computeMRR(activeSubscriptions: SubscriptionForMRR[], now: Date)
   return activeSubscriptions.reduce((acc, sub) => acc + monthlyValueOfSubscription(sub, now), 0);
 }
 
+/** Subscription enriched with its createdAt, for the historical series. */
+export interface SubscriptionForSeries extends SubscriptionForMRR {
+  createdAt: Date;
+}
+
+export interface MrrPoint {
+  /** Rótulo curto do mês, ex.: "jan", "fev" (pt-BR). */
+  month: string;
+  /** Ano-mês ISO para ordenação/asserção, ex.: "2026-01". */
+  key: string;
+  /** MRR do mês em REAIS (centavos/100), aproximado (subs existentes até o fim do mês). */
+  mrr: number;
+}
+
+/**
+ * Série mensal de MRR (em REAIS) dos últimos `months` meses até `now` (inclusive).
+ * Para cada mês, soma o valor mensal das subscriptions cujo createdAt <= fim daquele mês.
+ * Aproximação: usa o status/preço ATUAL das subs (não há snapshot histórico) — só filtra por existência (createdAt).
+ * O caller deve passar SÓ as subs ACTIVE (mesma decisão do computeMRR).
+ */
+export function computeMrrSeries(
+  subscriptions: SubscriptionForSeries[],
+  now: Date,
+  months: number
+): MrrPoint[] {
+  const points: MrrPoint[] = [];
+  const baseYear = now.getFullYear();
+  const baseMonth = now.getMonth(); // 0..11
+
+  for (let i = months - 1; i >= 0; i--) {
+    // Mês deste bucket (pode "voltar" o ano via overflow negativo, que o Date normaliza).
+    const monthDate = new Date(baseYear, baseMonth - i, 1, 0, 0, 0, 0);
+    const year = monthDate.getFullYear();
+    const monthIndex = monthDate.getMonth(); // 0..11
+    // Fim do mês = último instante do último dia (dia 0 do mês seguinte = último dia deste).
+    const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+    const endTime = endOfMonth.getTime();
+
+    const totalCentavos = subscriptions.reduce((acc, sub) => {
+      if (sub.createdAt.getTime() > endTime) return acc;
+      return acc + monthlyValueOfSubscription(sub, endOfMonth);
+    }, 0);
+
+    const month = monthDate
+      .toLocaleString("pt-BR", { month: "short" })
+      .replace(".", "");
+    const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+    const mrr = Math.round(totalCentavos) / 100;
+
+    points.push({ month, key, mrr });
+  }
+
+  return points;
+}
+
 /**
  * Taxa de churn do período (0..1): canceladas no período ÷ base ativa no início.
  * Base 0 → 0 (evita divisão por zero e "churn infinito").
