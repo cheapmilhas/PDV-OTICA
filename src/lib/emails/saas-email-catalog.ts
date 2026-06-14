@@ -13,13 +13,17 @@ export interface SaasEmailCatalogEntry {
     | "invoiceOverdueEnabled"
     | "paymentConfirmedEnabled"
     | "subscriptionSuspendedEnabled"
-    | "subscriptionCanceledEnabled";
+    | "subscriptionCanceledEnabled"
+    | "invoiceCreatedEnabled"
+    | "invoiceDueSoonEnabled";
 }
 
-// Partial: os tipos gerados pelo fluxo de cobrança Asaas (INVOICE_CREATED,
-// INVOICE_DUE_SOON) NÃO têm template/flag neste catálogo de emails do SaaS —
-// eles são enviados pelo fluxo de cobrança, com seus próprios templates.
-export const SAAS_EMAIL_CATALOG: Partial<Record<SaasEmailType, SaasEmailCatalogEntry>> = {
+// Catálogo completo: cobre TODOS os valores de SaasEmailType, incluindo os do
+// fluxo de cobrança Asaas (INVOICE_CREATED, INVOICE_DUE_SOON), que têm seus
+// próprios templates/flags. Record completo garante (em compile-time) que todo
+// tipo do enum tem entrada — se um valor novo for adicionado ao enum, o tsc
+// obriga a registrá-lo aqui.
+export const SAAS_EMAIL_CATALOG: Record<SaasEmailType, SaasEmailCatalogEntry> = {
   WELCOME: {
     template: "saas-welcome",
     subject: "Bem-vindo(a) ao Vis 🎉",
@@ -54,6 +58,16 @@ export const SAAS_EMAIL_CATALOG: Partial<Record<SaasEmailType, SaasEmailCatalogE
     template: "saas-subscription-canceled",
     subject: "Sua assinatura do Vis foi cancelada",
     configFlag: "subscriptionCanceledEnabled",
+  },
+  INVOICE_CREATED: {
+    template: "saas-invoice-created",
+    subject: "Sua fatura do Vis está disponível",
+    configFlag: "invoiceCreatedEnabled",
+  },
+  INVOICE_DUE_SOON: {
+    template: "saas-invoice-due-soon",
+    subject: "Sua fatura do Vis vence em 3 dias",
+    configFlag: "invoiceDueSoonEnabled",
   },
 };
 

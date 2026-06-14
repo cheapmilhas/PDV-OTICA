@@ -13,6 +13,9 @@ export interface SaasEmailConfigPatch {
   paymentConfirmedEnabled?: boolean;
   subscriptionSuspendedEnabled?: boolean;
   subscriptionCanceledEnabled?: boolean;
+  invoiceGenerationEnabled?: boolean;
+  invoiceCreatedEnabled?: boolean;
+  invoiceDueSoonEnabled?: boolean;
 }
 
 /** Lê (e garante) o registro único de config dos emails do SaaS. */

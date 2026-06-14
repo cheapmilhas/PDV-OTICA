@@ -1,9 +1,10 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight } from "lucide-react";
+import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight, Clock } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
+import { getReceivableThisWeek } from "@/services/invoice-receivable.service";
 
 export default async function FinanceiroPage() {
   await requireAdmin();
@@ -21,6 +22,7 @@ export default async function FinanceiroPage() {
     vencido,
     previsaoProximoMes,
     faturasVencidas,
+    receivable,
   ] = await Promise.all([
     // Recebido no mês atual
     prisma.invoice.aggregate({
@@ -61,6 +63,8 @@ export default async function FinanceiroPage() {
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
+    // A receber esta semana
+    getReceivableThisWeek(now),
   ]);
 
   const recebidoValue = ((recebidoMes._sum?.total ?? 0) / 100);
@@ -175,6 +179,40 @@ export default async function FinanceiroPage() {
               description="Gerenciar clientes inadimplentes"
             />
           </div>
+        </div>
+      </div>
+
+      {/* A receber esta semana */}
+      <div className="mt-6 rounded-xl border border-border bg-card">
+        <div className="flex items-center justify-between px-5 py-4 border-b border-border">
+          <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
+            <Clock className="w-4 h-4 text-blue-600" />
+            A receber esta semana
+          </h2>
+          <span className="text-sm font-semibold text-blue-600">
+            R$ {(receivable.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+          </span>
+        </div>
+        <div className="divide-y divide-border">
+          {receivable.items.length === 0 ? (
+            <p className="px-5 py-8 text-center text-muted-foreground text-sm">
+              Nenhuma fatura a vencer nos próximos 7 dias
+            </p>
+          ) : (
+            receivable.items.map((inv) => (
+              <div key={inv.id} className="flex items-center justify-between px-5 py-3 hover:bg-muted">
+                <div>
+                  <p className="font-medium text-foreground">{inv.companyName}</p>
+                  <p className="text-xs text-muted-foreground">
+                    Venc: {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
+                  </p>
+                </div>
+                <p className="text-sm text-foreground font-medium">
+                  R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                </p>
+              </div>
+            ))
+          )}
         </div>
       </div>
     </div>

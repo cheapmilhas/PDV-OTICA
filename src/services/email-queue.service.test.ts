@@ -107,4 +107,25 @@ describe("processEmailQueue", () => {
     expect(where.status).toBe("PENDING");
     expect(where.attempts).toEqual({ lt: 3 });
   });
+
+  it("aplica throttle entre envios (N-1 esperas p/ N emails) — anti rate-limit Resend", async () => {
+    findMany.mockResolvedValue([email({ id: "e1" }), email({ id: "e2" }), email({ id: "e3" })]);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+
+    const r = await processEmailQueue(10, { sleep });
+
+    expect(r.sent).toBe(3);
+    expect(sendEmail).toHaveBeenCalledTimes(3);
+    // 3 enviados → espera antes do 2º e do 3º (não antes do 1º)
+    expect(sleep).toHaveBeenCalledTimes(2);
+  });
+
+  it("não espera (throttle) quando há um único email", async () => {
+    findMany.mockResolvedValue([email()]);
+    const sleep = vi.fn().mockResolvedValue(undefined);
+
+    await processEmailQueue(10, { sleep });
+
+    expect(sleep).not.toHaveBeenCalled();
+  });
 });

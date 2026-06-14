@@ -19,6 +19,9 @@ const bodySchema = z
     paymentConfirmedEnabled: z.boolean().optional(),
     subscriptionSuspendedEnabled: z.boolean().optional(),
     subscriptionCanceledEnabled: z.boolean().optional(),
+    invoiceGenerationEnabled: z.boolean().optional(),
+    invoiceCreatedEnabled: z.boolean().optional(),
+    invoiceDueSoonEnabled: z.boolean().optional(),
   })
   .refine((b) => Object.keys(b).length > 0, { message: "Nada para atualizar" });
 

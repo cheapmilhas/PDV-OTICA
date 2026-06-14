@@ -17,6 +17,19 @@ describe("renderSaasEmailLayout", () => {
     expect(html).not.toContain("display:flex"); // sem flexbox
   });
 
+  it("exibe a logo Vis na faixa do cabeçalho", () => {
+    const html = renderSaasEmailLayout({
+      previewTitle: "Bem-vindo",
+      heading: "Olá, João",
+      bodyHtml: "<p>Conta criada.</p>",
+    });
+    expect(html).toContain('alt="Vis"');
+    expect(html).toContain("vis-logo-email.png");
+    expect(html).toContain("#2E6BFF"); // marca preservada
+    expect(html).toContain("Olá, João"); // heading segue presente
+    expect(html).toContain("Sistema de gestão para óticas"); // rodapé segue presente
+  });
+
   it("funciona sem CTA (botão opcional)", () => {
     const html = renderSaasEmailLayout({
       previewTitle: "Aviso",

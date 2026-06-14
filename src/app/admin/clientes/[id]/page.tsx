@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign } from "lucide-react";
+import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyNotes } from "./company-notes";
@@ -16,6 +18,14 @@ import { adminStatusLabel } from "@/lib/admin-status";
 import { CompanyTimeline } from "./company-timeline";
 import { CompanyOnboarding } from "./company-onboarding";
 import { CompanyTags } from "./company-tags";
+
+function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
+  if (!a) return false;
+  const da = new Date(a);
+  if (Number.isNaN(da.getTime())) return false;
+  const key = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return key(da) === key(b);
+}
 
 export default async function EmpresaDetalhesPage({ params }: { params: Promise<{ id: string }> }) {
   await requireAdmin();
@@ -109,14 +119,17 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             <p className="text-sm text-muted-foreground">{company.email ?? "—"}</p>
           </div>
         </div>
-        <CompanyActions
-          companyId={company.id}
-          companyName={company.name}
-          isBlocked={company.isBlocked}
-          subscriptionStatus={currentSubscription?.status ?? null}
-          billingCycle={currentSubscription?.billingCycle ?? null}
-          currentPlanId={currentSubscription?.planId ?? null}
-        />
+        <div className="flex items-center gap-3">
+          <NovaCobrancaButton companyId={company.id} />
+          <CompanyActions
+            companyId={company.id}
+            companyName={company.name}
+            isBlocked={company.isBlocked}
+            subscriptionStatus={currentSubscription?.status ?? null}
+            billingCycle={currentSubscription?.billingCycle ?? null}
+            currentPlanId={currentSubscription?.planId ?? null}
+          />
+        </div>
       </div>
 
       {/* Tabs */}
@@ -429,6 +442,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                       <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
                       <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
                       <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Tipo Pgto</th>
+                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Ações</th>
                     </tr>
                   </thead>
                   <tbody>
@@ -451,6 +465,14 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                         </td>
                         <td className="px-5 py-3 text-muted-foreground text-xs">
                           {inv.billingType || "—"}
+                        </td>
+                        <td className="px-5 py-3">
+                          <ResendChargeButton
+                            invoiceId={inv.id}
+                            invoiceSent={inv.invoiceSent}
+                            invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
+                            sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
+                          />
                         </td>
                       </tr>
                     ))}

@@ -2144,6 +2144,8 @@ model Invoice {
   createdAt            DateTime              @default(now())
   updatedAt            DateTime              @updatedAt
   billingType          String?
+  isManual             Boolean               @default(false)
+  source               String?
   invoiceGenerated     Boolean               @default(false)
   invoiceGeneratedAt   DateTime?
   invoiceGeneratedBy   String?
@@ -2173,6 +2175,7 @@ model Invoice {
   subscription         Subscription          @relation(fields: [subscriptionId], references: [id])
   dunningEvents        DunningEvent[]
 
+  @@unique([subscriptionId, asaasPaymentId])
   @@index([subscriptionId, status])
   @@index([dueDate, status])
   @@index([number])
@@ -4048,7 +4051,7 @@ model PlanInterest {
   @@index([createdAt])
 }
 
-/// Tipos de email transacional do ciclo de vida da assinatura (Fase 1).
+/// Tipos de email transacional do ciclo de vida da assinatura (Fase 1 + Fase 2).
 enum SaasEmailType {
   WELCOME
   TRIAL_ENDING
@@ -4058,9 +4061,7 @@ enum SaasEmailType {
   SUBSCRIPTION_SUSPENDED
   SUBSCRIPTION_CANCELED
   // Gerados pelo fluxo de cobrança Asaas (Fase Email-A). O valor já existe no
-  // enum do banco de prod (migration 20260611120000); declarado aqui para o
-  // Prisma Client reconhecê-los na leitura de SaasEmailLog (evita "value not
-  // found in enum" ao listar logs na tela /admin/configuracoes/emails).
+  // enum do banco de prod (migration 20260611120000).
   INVOICE_CREATED
   INVOICE_DUE_SOON
 }
@@ -4087,6 +4088,9 @@ model SaasEmailConfig {
   paymentConfirmedEnabled      Boolean  @default(true)
   subscriptionSuspendedEnabled Boolean  @default(true)
   subscriptionCanceledEnabled  Boolean  @default(true)
+  invoiceGenerationEnabled     Boolean  @default(false)
+  invoiceCreatedEnabled        Boolean  @default(true)
+  invoiceDueSoonEnabled        Boolean  @default(true)
   updatedBy                    String?
   updatedAt                    DateTime @updatedAt
 }
@@ -4111,4 +4115,11 @@ model SaasEmailLog {
   @@unique([companyId, eventType, periodKey])
   @@index([companyId, createdAt])
   @@index([eventType, createdAt])
+}
+
+/// Contadores globais do SaaS (ex.: sequência de número de fatura "INV-NNNNNN").
+/// SEM FK de Company — é uma tabela de sequências globais.
+model SaasCounter {
+  key   String @id
+  value Int    @default(0)
 }

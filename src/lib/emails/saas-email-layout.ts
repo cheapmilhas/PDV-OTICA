@@ -46,8 +46,12 @@ export function renderSaasEmailLayout(input: SaasEmailLayoutInput): string {
         <td align="center">
           <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:600px;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
             <tr>
-              <td style="padding:28px 28px 8px;">
-                <p style="margin:0 0 10px;color:${BRAND};font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Vis</p>
+              <td style="padding:24px 28px 16px;border-bottom:3px solid ${BRAND};">
+                <img src="https://vis.app.br/vis-logo-email.png" alt="Vis" height="28" style="display:block;border:0;outline:none;text-decoration:none;height:28px;width:auto;" />
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:24px 28px 8px;">
                 <h1 style="margin:0;color:#111827;font-size:24px;line-height:1.25;">${heading}</h1>
               </td>
             </tr>

@@ -25,11 +25,24 @@ function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : String(error);
 }
 
+const defaultSleep = (ms: number): Promise<void> =>
+  new Promise((resolve) => setTimeout(resolve, ms));
+
+export interface ProcessEmailQueueDeps {
+  /** injeção p/ teste — espera entre envios (throttle do rate-limit do Resend) */
+  sleep?: (ms: number) => Promise<void>;
+}
+
 export async function processEmailQueue(
-  limit = envInt("EMAIL_QUEUE_BATCH_LIMIT", 20)
+  limit = envInt("EMAIL_QUEUE_BATCH_LIMIT", 20),
+  deps: ProcessEmailQueueDeps = {}
 ): Promise<ProcessEmailQueueResult> {
   const batchLimit = Math.min(Math.max(limit, 1), 100);
   const maxAttempts = envInt("EMAIL_QUEUE_MAX_ATTEMPTS", 3);
+  // Resend limita a 5 req/s. Throttle padrão ~220ms (~4.5 req/s) evita o
+  // "Too many requests" que derrubava parte do lote. Configurável via env.
+  const throttleMs = envInt("EMAIL_QUEUE_THROTTLE_MS", 220);
+  const sleep = deps.sleep ?? defaultSleep;
 
   const pending = await prisma.emailQueue.findMany({
     where: {
@@ -48,6 +61,8 @@ export async function processEmailQueue(
     skipped: 0,
   };
 
+  let sentInThisRun = 0;
+
   for (const email of pending) {
     const locked = await prisma.emailQueue.updateMany({
       where: { id: email.id, status: EmailStatus.PENDING },
@@ -62,6 +77,12 @@ export async function processEmailQueue(
       summary.skipped++;
       continue;
     }
+
+    // Throttle do rate-limit: espera antes de cada envio efetivo, exceto o 1º.
+    if (sentInThisRun > 0 && throttleMs > 0) {
+      await sleep(throttleMs);
+    }
+    sentInThisRun++;
 
     const attempt = email.attempts + 1;
 

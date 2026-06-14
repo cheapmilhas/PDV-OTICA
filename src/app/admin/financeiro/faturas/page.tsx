@@ -2,12 +2,23 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
-  FileText, CheckCircle, Circle,
+  CheckCircle, Circle,
   Send, Receipt, CreditCard, AlertTriangle
 } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
+import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
+import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
+
+function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
+  if (!a) return false;
+  const da = new Date(a);
+  if (Number.isNaN(da.getTime())) return false;
+  const key = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return key(da) === key(b);
+}
 
 const STATUS_LABELS: Record<string, string> = {
   DRAFT: "Rascunho",
@@ -67,6 +78,12 @@ export default async function FaturasPage({
     prisma.invoice.count({ where: { paymentConfirmed: true, nfGenerated: false } }),
   ]);
 
+  const companies = await prisma.company.findMany({
+    where: { subscriptions: { some: { status: { not: "CANCELED" } } } },
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
+
   // Totais financeiros
   const totalRecebido = await prisma.invoice.aggregate({
     where: { status: "PAID" },
@@ -84,13 +101,10 @@ export default async function FaturasPage({
         title="Faturas"
         subtitle="Gestão de cobranças manuais"
         actions={
-          <Link
-            href="/admin/financeiro/faturas/nova"
-            className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors text-sm"
-          >
-            <FileText className="w-4 h-4" />
-            Nova Cobrança
-          </Link>
+          <div className="flex items-center gap-3">
+            <SyncInvoicesButton />
+            <NovaCobrancaButton companies={companies} />
+          </div>
         }
       />
 
@@ -260,12 +274,20 @@ export default async function FaturasPage({
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Link
-                        href={`/admin/financeiro/faturas/${inv.id}`}
-                        className="px-3 py-1.5 text-sm bg-muted text-foreground rounded hover:bg-muted/70 transition-colors"
-                      >
-                        Gerenciar
-                      </Link>
+                      <div className="flex items-center gap-2">
+                        <ResendChargeButton
+                          invoiceId={inv.id}
+                          invoiceSent={inv.invoiceSent}
+                          invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
+                          sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
+                        />
+                        <Link
+                          href={`/admin/financeiro/faturas/${inv.id}`}
+                          className="px-3 py-1.5 text-sm bg-muted text-foreground rounded hover:bg-muted/70 transition-colors"
+                        >
+                          Gerenciar
+                        </Link>
+                      </div>
                     </td>
                   </tr>
                 ))

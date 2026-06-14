@@ -5,6 +5,15 @@ import Link from "next/link";
 import { ArrowLeft, Building2, CheckCircle, Send, CreditCard, Receipt, FileText } from "lucide-react";
 import { InvoiceActions } from "./invoice-actions";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
+import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+
+function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
+  if (!a) return false;
+  const da = new Date(a);
+  if (Number.isNaN(da.getTime())) return false;
+  const key = (d: Date) => `${d.getUTCFullYear()}-${d.getUTCMonth()}-${d.getUTCDate()}`;
+  return key(da) === key(b);
+}
 
 export default async function InvoiceDetailPage({
   params,
@@ -195,48 +204,60 @@ export default async function InvoiceDetailPage({
           </div>
 
           {/* Links */}
-          {(invoice.paymentUrl || invoice.boletoUrl || invoice.pixCode || invoice.nfUrl) && (
-            <div className="rounded-xl border border-border bg-card p-6">
-              <h3 className="text-sm font-medium text-muted-foreground mb-3">Links</h3>
-              <div className="space-y-2">
-                {invoice.paymentUrl && (
-                  <a
-                    href={invoice.paymentUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-primary hover:text-primary"
-                  >
-                    Link de pagamento ↗
-                  </a>
-                )}
-                {invoice.boletoUrl && (
-                  <a
-                    href={invoice.boletoUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-primary hover:text-primary"
-                  >
-                    Boleto PDF ↗
-                  </a>
-                )}
-                {invoice.nfUrl && (
-                  <a
-                    href={invoice.nfUrl}
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="block text-sm text-primary hover:text-primary"
-                  >
-                    Nota Fiscal ↗
-                  </a>
-                )}
-              </div>
-              {invoice.pixCode && (
-                <div className="mt-3 p-2 bg-muted rounded text-xs font-mono break-all text-muted-foreground">
-                  PIX: {invoice.pixCode.slice(0, 30)}...
+          <div className="rounded-xl border border-border bg-card p-6">
+            <h3 className="text-sm font-medium text-muted-foreground mb-3">Links</h3>
+            {(invoice.paymentUrl || invoice.boletoUrl || invoice.pixCode || invoice.nfUrl) ? (
+              <>
+                <div className="space-y-2">
+                  {invoice.paymentUrl && (
+                    <a
+                      href={invoice.paymentUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-primary hover:text-primary"
+                    >
+                      Link de pagamento ↗
+                    </a>
+                  )}
+                  {invoice.boletoUrl && (
+                    <a
+                      href={invoice.boletoUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-primary hover:text-primary"
+                    >
+                      Boleto PDF ↗
+                    </a>
+                  )}
+                  {invoice.nfUrl && (
+                    <a
+                      href={invoice.nfUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="block text-sm text-primary hover:text-primary"
+                    >
+                      Nota Fiscal ↗
+                    </a>
+                  )}
                 </div>
-              )}
+                {invoice.pixCode && (
+                  <div className="mt-3 p-2 bg-muted rounded text-xs font-mono break-all text-muted-foreground">
+                    PIX: {invoice.pixCode.slice(0, 30)}...
+                  </div>
+                )}
+              </>
+            ) : (
+              <p className="text-xs text-muted-foreground mb-2">Nenhum link gerado ainda</p>
+            )}
+            <div className="mt-3 pt-3 border-t border-border">
+              <ResendChargeButton
+                invoiceId={invoice.id}
+                invoiceSent={invoice.invoiceSent}
+                invoiceSentAt={invoice.invoiceSentAt ? invoice.invoiceSentAt.toISOString() : null}
+                sentToday={mesmoDia(invoice.invoiceSentAt, new Date())}
+              />
             </div>
-          )}
+          </div>
         </div>
       </div>
     </div>

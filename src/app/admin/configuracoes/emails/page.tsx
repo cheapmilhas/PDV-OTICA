@@ -26,6 +26,9 @@ export default async function EmailsConfigPage() {
         paymentConfirmedEnabled: config.paymentConfirmedEnabled,
         subscriptionSuspendedEnabled: config.subscriptionSuspendedEnabled,
         subscriptionCanceledEnabled: config.subscriptionCanceledEnabled,
+        invoiceGenerationEnabled: config.invoiceGenerationEnabled,
+        invoiceCreatedEnabled: config.invoiceCreatedEnabled,
+        invoiceDueSoonEnabled: config.invoiceDueSoonEnabled,
       }}
       logs={logs.map((l) => ({
         id: l.id,
