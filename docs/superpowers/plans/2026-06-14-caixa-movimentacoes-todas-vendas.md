@@ -219,7 +219,7 @@ const allRows = [
 Na seção "Movimentações do caixa" (~l.656-742):
 - Trocar o guard `movements.length === 0` por `allRows.length === 0` (M2).
 - Trocar `movements.map((mov) => ...)` por `allRows.map((row) => ...)` com branch por `row._kind`:
-  - `MOVEMENT`: renderiza igual hoje (tipo via `getTipoLabel`, valor com sinal +/− por `direction`, operador `row.createdByUser?.name`).
+  - `MOVEMENT`: renderiza igual hoje (tipo via `getTipoLabel(row.type)`, valor com sinal +/− por `direction`, operador `row.createdByUser?.name`). **Nota:** `getMovementDescription` recebe o **objeto inteiro** (`getMovementDescription(row)`, não `row.type`) — lê `.note`/`.type`/`.salePayment`; o spread `{...m}` preserva esses campos.
   - `RECEIVABLE`: Tipo = Badge "Venda" + sub-badge amber "→ a receber"; Descrição = `Venda #${row.saleNumber}`; Forma = `getMethodLabel(row.method)`; Operador = `row.sellerName`; Valor = `formatCurrency(row.amount)` **sem sinal**, em classe amber/slate (não emerald/red).
 
 Exemplo da célula de valor:
