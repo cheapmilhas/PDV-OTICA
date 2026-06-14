@@ -13,6 +13,7 @@ import {
   type MessageKey,
 } from "@/lib/default-messages-history";
 import { getAutoSyncConfig } from "@/services/auto-sync-config.service";
+import { ensureDefaultStages } from "@/services/lead-stage.service";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ service: "company-resync" });
@@ -160,6 +161,8 @@ export async function resyncCompanySetup(
       // Regra de negócio aprovada pelo dono: o resync "só ADICIONA o que falta;
       // respeita 100% o que a empresa editou" — por isso additiveOnly.
       await setupCompanyFinance(tx, companyId, branch?.id, { additiveOnly: true });
+      // Seed do funil de leads: aditivo + idempotente (no-op se já há etapas).
+      await ensureDefaultStages(companyId, tx);
     });
     after = await countFinance(companyId);
     created = {
