@@ -136,7 +136,12 @@ Em `cash.service.ts`, **adicionar import** no topo: `import { METHODS_IN_CASH } 
     return this.queryShiftReceivableRows(shift, companyId, { voided: false });
   }
 
-  /** Vendas a prazo CANCELADAS do turno (riscadas na tabela). */
+  /**
+   * Vendas a prazo CANCELADAS do turno (riscadas na tabela).
+   * Filtra status "VOIDED": hoje NADA escreve PaymentStatus.REFUNDED (devolução = refundFull
+   * reusa cancel, que seta payment=VOIDED + sale=REFUNDED). Se algum dia o código passar a
+   * gravar payment.status=REFUNDED, este filtro precisa virar { in: ["VOIDED","REFUNDED"] }.
+   */
   async getShiftVoidedReceivables(shift: { id: string; branchId: string; openedAt: Date; closedAt?: Date | null }, companyId: string) {
     return this.queryShiftReceivableRows(shift, companyId, { voided: true });
   }
@@ -165,10 +170,14 @@ git commit -m "feat(caixa): getShiftSalePayments + getShiftVoidedReceivables (a 
 
 - [ ] **Step 1: Editar GET**
 
-Após o `salesByMethod`:
+Após resolver o shift, rodar as 3 queries derivadas em paralelo (B-LOW-6 — economiza latência em cold start Neon):
 ```ts
-const receivableRows = await cashService.getShiftSalePayments({ id: shift.id, branchId, openedAt: shift.openedAt, closedAt: shift.closedAt }, companyId);
-const voidedReceivableRows = await cashService.getShiftVoidedReceivables({ id: shift.id, branchId, openedAt: shift.openedAt, closedAt: shift.closedAt }, companyId);
+const shiftArg = { id: shift.id, branchId, openedAt: shift.openedAt, closedAt: shift.closedAt };
+const [salesByMethod, receivableRows, voidedReceivableRows] = await Promise.all([
+  cashService.getShiftSalesByMethod(shiftArg, companyId),
+  cashService.getShiftSalePayments(shiftArg, companyId),
+  cashService.getShiftVoidedReceivables(shiftArg, companyId),
+]);
 return NextResponse.json({ shift: serializedShift, salesByMethod, receivableRows, voidedReceivableRows }, { status: 200 });
 ```
 Modo `?branch=all` inalterado.
@@ -201,7 +210,10 @@ Render por `kind`:
 - `MOVEMENT` (resto) → igual hoje: `getTipoLabel(type)`, sinal por `direction`, operador `createdByUser?.name`.
 - `RECEIVABLE` → Tipo "Venda" + sub-badge amber "→ a receber"; Descrição `Venda #{saleNumber}`; Forma `getMethodLabel(method)`; Operador `sellerName`; valor amber **sem sinal**.
 - `VOIDED` → linha `line-through text-slate-400`, tag "Cancelada"; valor sem sinal; resto igual receivable.
-Mover os helpers `getTipoLabel/getTipoIcon/getTipoBadgeVariant/getFormaPagamentoIcon/getMethodLabel/getMovementDescription` para dentro deste componente (ou um `mov-helpers.ts`), pra serem reusados pelas 3 telas. Empty-state quando `rows.length === 0`. < 200 linhas.
+
+**⚠️ Contrato do componente (B-MED-5):** `<MovimentacoesTable>` renderiza `rows` **na ordem recebida** — NÃO ordena internamente. Cada caller pré-ordena (dia/fechamento = asc, histórico = desc). Documentar isso no JSDoc do componente para um edit futuro não quebrar uma das 3 telas com um sort interno.
+
+**⚠️ Helpers compartilhados — EXTRAIR, não MOVER (B-HIGH-1):** criar `src/components/caixa/mov-helpers.ts` com `getTipoLabel/getTipoIcon/getTipoBadgeVariant/getFormaPagamentoIcon/getMethodLabel/getMovementDescription` e **importar** em `<MovimentacoesTable>` E em `page.tsx`. **NÃO deletar `getMethodLabel`/`getFormaPagamentoIcon` da page** — `getMethodLabel` ainda é chamado por `calculatePaymentSummary` (`page.tsx:140`, que alimenta o modal de fechamento). A page passa a importar de `mov-helpers.ts` e remove as definições locais que ficarem sem uso, mas o IMPORT cobre `calculatePaymentSummary`. Empty-state quando `rows.length === 0`. < 200 linhas.
 
 - [ ] **Step 2: page.tsx — consumir + montar allRows + usar o componente**
 
@@ -235,7 +247,7 @@ Após a tabela (dentro do Card):
 
 - Deletar o JSX `{/* Resumo por Forma de Pagamento */}` (localizar pelo comentário, ~l.602-654).
 - Card "Total de vendas" (~l.535-550): trocar `totalVendas`→`salesByMethod.reduce((s,r)=>s+r.amount,0)` e `totalTransacoes`→`salesByMethod.reduce((s,r)=>s+r.count,0)`.
-- Remover `totalVendas`/`totalTransacoes` se tsc/lint acusar não-uso. **MANTER** `resumoPagamentos`/`calculatePaymentSummary`/`getFormaPagamentoIcon` (usados pelo modal de fechamento e pela tabela).
+- Remover `totalVendas`/`totalTransacoes` se tsc/lint acusar não-uso. **MANTER** `resumoPagamentos`/`calculatePaymentSummary` (modal de fechamento). `getMethodLabel`/`getFormaPagamentoIcon`/`getTipoLabel` etc. passam a vir de `import` de `mov-helpers.ts` (B-HIGH-1) — `calculatePaymentSummary` usa o `getMethodLabel` importado.
 
 - [ ] **Step 5: tsc + visual + commit**
 ```bash
@@ -259,9 +271,12 @@ const data = movements.map((mov) => ({
   description: mov.note || getMovementDescription(mov.type),
   operador: mov.createdByUser?.name ?? null, createdAt: mov.createdAt,
 }));
-const salesByMethod = await cashService.getShiftSalesByMethod({ id: shift.id, branchId: shift.branchId, openedAt: shift.openedAt, closedAt: shift.closedAt }, companyId);
-const receivableRows = await cashService.getShiftSalePayments({ id: shift.id, branchId: shift.branchId, openedAt: shift.openedAt, closedAt: shift.closedAt }, companyId);
-const voidedReceivableRows = await cashService.getShiftVoidedReceivables({ id: shift.id, branchId: shift.branchId, openedAt: shift.openedAt, closedAt: shift.closedAt }, companyId);
+const shiftArg = { id: shift.id, branchId: shift.branchId, openedAt: shift.openedAt, closedAt: shift.closedAt };
+const [salesByMethod, receivableRows, voidedReceivableRows] = await Promise.all([
+  cashService.getShiftSalesByMethod(shiftArg, companyId),
+  cashService.getShiftSalePayments(shiftArg, companyId),
+  cashService.getShiftVoidedReceivables(shiftArg, companyId),
+]);
 return successResponse({ movements: data, salesByMethod, receivableRows, voidedReceivableRows });
 ```
 Confirmar que o `findMany` de movements (route.ts) inclui `createdByUser` (já inclui).
