@@ -8,7 +8,9 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
-import { computeTrend, formatTrend, computeMRR, type SubscriptionForMRR } from "@/lib/admin-metrics";
+import { computeTrend, formatTrend, computeMRR, computeMrrSeries, type SubscriptionForMRR, type SubscriptionForSeries } from "@/lib/admin-metrics";
+import { MrrChart } from "@/components/admin/MrrChart";
+import { Card } from "@/components/ui/card";
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
@@ -111,6 +113,15 @@ export default async function AdminDashboardPage() {
     discountExpiresAt: sub.discountExpiresAt,
   }));
   const mrrValue = computeMRR(subsForMrr, nowDate) / 100;
+  const subsForSeries: SubscriptionForSeries[] = activeSubs.map((sub) => ({
+    priceMonthly: sub.plan.priceMonthly,
+    priceYearly: sub.plan.priceYearly,
+    billingCycle: sub.billingCycle,
+    discountPercent: sub.discountPercent,
+    discountExpiresAt: sub.discountExpiresAt,
+    createdAt: sub.createdAt,
+  }));
+  const mrrSeries = computeMrrSeries(subsForSeries, nowDate, 6);
 
   return (
     <div className="p-6">
@@ -156,6 +167,20 @@ export default async function AdminDashboardPage() {
             : undefined}
         />
       </div>
+
+      {/* Evolução do MRR */}
+      <Card className="p-5 mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h2 className="text-sm font-semibold text-foreground">Evolução do MRR</h2>
+            <p className="text-xs text-muted-foreground">Últimos 6 meses · aproximado pela data de início das assinaturas ativas</p>
+          </div>
+          <p className="text-lg font-semibold text-foreground">R$ {mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
+        </div>
+        <div className="h-56">
+          <MrrChart data={mrrSeries} />
+        </div>
+      </Card>
 
       {/* Health Score Resumo */}
       {(criticalHealthCount > 0 || atRiskHealthCount > 0) && (
