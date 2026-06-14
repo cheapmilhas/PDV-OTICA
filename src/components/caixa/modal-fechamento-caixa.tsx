@@ -29,6 +29,7 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import ConferenciaFormas, { SalesByMethodEntry } from "@/components/caixa/conferencia-formas";
+import MovimentacoesTable, { type MovRow } from "@/components/caixa/movimentacoes-table";
 
 interface ModalFechamentoCaixaProps {
   open: boolean;
@@ -47,6 +48,7 @@ interface ModalFechamentoCaixaProps {
     amount: number;
   }>;
   salesByMethod?: SalesByMethodEntry[];
+  allRows?: MovRow[];
 }
 
 type Step = 1 | 2 | 3;
@@ -65,6 +67,7 @@ export function ModalFechamentoCaixa({
   resumoPagamentos,
   movements = [],
   salesByMethod,
+  allRows,
 }: ModalFechamentoCaixaProps) {
   const { toast } = useToast();
   const router = useRouter();
@@ -378,6 +381,16 @@ export function ModalFechamentoCaixa({
                     Conferência por forma de pagamento (informativo)
                   </p>
                   <ConferenciaFormas salesByMethod={salesByMethod} />
+                </div>
+              )}
+
+              {/* Movimentações do turno (read-only, paridade com dia/histórico) */}
+              {allRows && allRows.length > 0 && (
+                <div className="mt-1">
+                  <p className="mb-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+                    Movimentações do turno
+                  </p>
+                  <MovimentacoesTable rows={allRows} compact />
                 </div>
               )}
 

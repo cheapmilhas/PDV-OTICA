@@ -275,6 +275,7 @@ function CaixaPage() {
         resumoPagamentos={resumoPagamentos}
         movements={movements}
         salesByMethod={salesByMethod}
+        allRows={allRows}
       />
       <ModalSangria
         open={modalSangriaOpen}
