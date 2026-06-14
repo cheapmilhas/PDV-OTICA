@@ -173,3 +173,28 @@ export async function deleteLead(id: string, companyId: string) {
   if (!lead) throw notFoundError("Lead não encontrado");
   await softDelete("lead", id);
 }
+
+/**
+ * Métricas do funil: total, ganhos, taxa de conversão (ganhos/total) e
+ * agregações por motivo de perda e por origem. Multi-tenant (companyId) +
+ * filtro opcional por filial. Ignora leads soft-deletados.
+ */
+export async function getLeadStats(companyId: string, branchId: string | null) {
+  const where: any = { companyId, deletedAt: null };
+  if (branchId) where.branchId = branchId;
+  const leads = await prisma.lead.findMany({
+    where,
+    select: { source: true, lostReason: true, stage: { select: { isWon: true, isLost: true } } },
+  });
+  const total = leads.length;
+  const won = leads.filter((l) => l.stage.isWon).length;
+  const byLostReason: Record<string, number> = {};
+  const bySource: Record<string, number> = {};
+  for (const l of leads) {
+    if (l.stage.isLost && l.lostReason) {
+      byLostReason[l.lostReason] = (byLostReason[l.lostReason] ?? 0) + 1;
+    }
+    if (l.source) bySource[l.source] = (bySource[l.source] ?? 0) + 1;
+  }
+  return { total, won, conversionRate: total ? won / total : 0, byLostReason, bySource };
+}

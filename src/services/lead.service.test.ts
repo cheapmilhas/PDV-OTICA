@@ -7,7 +7,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead, listLeads, moveLead } from "./lead.service";
+import { createLead, listLeads, moveLead, getLeadStats } from "./lead.service";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -81,5 +81,21 @@ describe("moveLead", () => {
     const data = (prisma.lead.update as any).mock.calls[0][0].data;
     expect(data.stageId).toBe("stg2");
     expect(data.lastActivityAt).toBeInstanceOf(Date);
+  });
+});
+
+describe("getLeadStats", () => {
+  it("calcula conversão = ganhos / total e agrega lostReason e source", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null },
+      { stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço" },
+      { stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null },
+    ]);
+    const s = await getLeadStats("co_1", null);
+    expect(s.total).toBe(3);
+    expect(s.won).toBe(1);
+    expect(s.conversionRate).toBeCloseTo(1 / 3);
+    expect(s.byLostReason["Preço"]).toBe(1);
+    expect(s.bySource["WHATSAPP"]).toBe(2);
   });
 });
