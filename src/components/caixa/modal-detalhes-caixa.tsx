@@ -24,6 +24,9 @@ import {
 import { Download, Loader2, DollarSign, TrendingUp, TrendingDown } from "lucide-react";
 import { toast } from "sonner";
 import { cn } from "@/lib/utils";
+import ConferenciaFormas, {
+  type SalesByMethodEntry,
+} from "@/components/caixa/conferencia-formas";
 
 interface CashRegister {
   id: string;
@@ -69,6 +72,7 @@ export function ModalDetalhesCaixa({
   onOpenChange,
 }: ModalDetalhesCaixaProps) {
   const [transactions, setTransactions] = useState<CashTransaction[]>([]);
+  const [salesByMethod, setSalesByMethod] = useState<SalesByMethodEntry[]>([]);
   const [isLoading, setIsLoading] = useState(false);
 
   useEffect(() => {
@@ -86,7 +90,8 @@ export function ModalDetalhesCaixa({
       const result = await response.json();
 
       if (response.ok) {
-        setTransactions(result.data || []);
+        setTransactions(result.data?.movements || []);
+        setSalesByMethod(result.data?.salesByMethod || []);
       } else {
         toast.error("Erro ao carregar transações");
       }
@@ -274,6 +279,14 @@ export function ModalDetalhesCaixa({
                 </div>
               </div>
             </>
+          )}
+
+          {/* Conferência de formas de pagamento (histórico — fonte: SalePayment) */}
+          {caixa.status === "CLOSED" && (
+            <div className="space-y-2">
+              <h3 className="text-lg font-semibold">Conferência por forma de pagamento</h3>
+              <ConferenciaFormas salesByMethod={salesByMethod} />
+            </div>
           )}
 
           <Separator />

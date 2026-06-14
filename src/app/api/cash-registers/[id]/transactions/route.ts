@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { successResponse } from "@/lib/api-response";
+import { cashService } from "@/services/cash.service";
 
 export async function GET(
   req: NextRequest,
@@ -51,7 +52,17 @@ export async function GET(
       createdAt: mov.createdAt,
     }));
 
-    return successResponse(data);
+    const salesByMethod = await cashService.getShiftSalesByMethod(
+      {
+        id: shift.id,
+        branchId: shift.branchId,
+        openedAt: shift.openedAt,
+        closedAt: shift.closedAt,
+      },
+      companyId
+    );
+
+    return successResponse({ movements: data, salesByMethod });
   } catch (error) {
     return handleApiError(error);
   }

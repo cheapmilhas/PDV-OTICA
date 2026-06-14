@@ -37,6 +37,9 @@ import { ModalFechamentoCaixa } from "@/components/caixa/modal-fechamento-caixa"
 import { ModalSangria } from "@/components/caixa/modal-sangria";
 import { ModalReforco } from "@/components/caixa/modal-reforco";
 import { CashShiftAlert } from "@/components/caixa/cash-shift-alert";
+import ConferenciaFormas, {
+  type SalesByMethodEntry,
+} from "@/components/caixa/conferencia-formas";
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
@@ -67,23 +70,30 @@ type CashMovement = {
 
 function CaixaPage() {
   const { hasPermission } = usePermissions();
-  const { isAllBranches } = useBranchContext();
+  const { isAllBranches, activeBranch } = useBranchContext();
+  const branchLabel = activeBranch?.name
+    ? `Caixa da loja ${activeBranch.name}`
+    : "Caixa da loja atual";
   const [modalAberturaOpen, setModalAberturaOpen] = useState(false);
   const [modalFechamentoOpen, setModalFechamentoOpen] = useState(false);
   const [modalSangriaOpen, setModalSangriaOpen] = useState(false);
   const [modalReforcoOpen, setModalReforcoOpen] = useState(false);
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState<CashShift | null>(null);
+  const [salesByMethod, setSalesByMethod] = useState<SalesByMethodEntry[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCashShift = async () => {
     try {
       setLoading(true);
       setError(null);
-      const response = await fetch("/api/cash/shift");
+      const response = await fetch(
+        isAllBranches ? "/api/cash/shift?branch=all" : "/api/cash/shift"
+      );
       if (!response.ok) throw new Error("Erro ao buscar dados do caixa");
       const data = await response.json();
       setShift(data.shift);
+      setSalesByMethod(data.salesByMethod || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -93,7 +103,9 @@ function CaixaPage() {
 
   useEffect(() => {
     fetchCashShift();
-  }, []);
+    // Re-busca ao trocar de filial (modo "todas" não tem caixa do dia).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isAllBranches]);
 
   const handleShiftAction = () => {
     fetchCashShift();
@@ -171,10 +183,6 @@ function CaixaPage() {
     if (m.type === "SALE_PAYMENT" && methodsAPrazo.includes(m.method)) return sum; // Ignora a prazo
     return sum + (m.direction === "IN" ? m.amount : -m.amount);
   }, 0);
-  // Total de vendas a prazo (crediário + crédito) para exibição separada
-  const totalAPrazo = movements
-    .filter((m) => m.type === "SALE_PAYMENT" && m.direction === "IN" && methodsAPrazo.includes(m.method))
-    .reduce((sum, m) => sum + m.amount, 0);
 
   const caixaStatus = shift
     ? {
@@ -309,6 +317,7 @@ function CaixaPage() {
         caixaInfo={caixaStatus}
         resumoPagamentos={resumoPagamentos}
         movements={movements}
+        salesByMethod={salesByMethod}
       />
       <ModalSangria
         open={modalSangriaOpen}
@@ -328,6 +337,15 @@ function CaixaPage() {
       <div className="space-y-6">
         {/* Alerta de caixa aberto há muito tempo */}
         <CashShiftAlert hideAction />
+
+        {/* Modo "todas as lojas": não há caixa do dia consolidado */}
+        {isAllBranches && (
+          <div className="rounded-lg border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            Você está vendo <span className="font-medium">todas as lojas</span>. O caixa do
+            dia é por loja — selecione uma loja específica no topo para ver a conferência e
+            operar o caixa.
+          </div>
+        )}
 
         {/* Header */}
         <div className="flex items-center justify-between">
@@ -429,6 +447,7 @@ function CaixaPage() {
                   <CardTitle className="text-lg">
                     {caixaStatus.aberto ? "Caixa aberto" : "Caixa fechado"}
                   </CardTitle>
+                  <p className="text-xs font-medium text-slate-600">{branchLabel}</p>
                   {caixaStatus.aberto && tempoAberto && (
                     <p className="text-xs text-muted-foreground">
                       Há <span className="font-medium tabular-nums">{tempoAberto.label}</span> ·
@@ -454,7 +473,7 @@ function CaixaPage() {
             </div>
           </CardHeader>
           <CardContent>
-            <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
+            <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
               <div className="rounded-lg border bg-white p-4">
                 <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-muted-foreground">
                   <Clock className="h-3.5 w-3.5" />
@@ -485,23 +504,29 @@ function CaixaPage() {
                 <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">
                   {formatCurrency(caixaStatus.valorAtual)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Dinheiro · PIX · Débito</p>
-              </div>
-              <div
-                className={`rounded-lg border p-4 ${
-                  totalAPrazo > 0 ? "border-amber-200 bg-amber-50" : "bg-white opacity-60"
-                }`}
-              >
-                <div className="flex items-center gap-2 text-xs uppercase tracking-wide text-amber-800">
-                  <CreditCard className="h-3.5 w-3.5" />
-                  <span>A prazo · informativo</span>
-                </div>
-                <p className="mt-1 text-2xl font-bold tabular-nums text-amber-700">
-                  {formatCurrency(totalAPrazo)}
-                </p>
-                <p className="text-[11px] text-muted-foreground">Crediário / cartão de crédito · não entra no caixa</p>
+                <p className="text-[11px] text-muted-foreground">Saldo em gaveta · Dinheiro · PIX · Débito</p>
               </div>
             </div>
+          </CardContent>
+        </Card>
+
+        {/* Conferência por forma de pagamento (2 blocos) */}
+        <Card>
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base">Conferência por forma de pagamento</CardTitle>
+            <CardDescription>
+              Crédito, crediário e saldo a receber não entram no caixa físico — viram contas
+              a receber e aparecem aqui só para conferência.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {isAllBranches && !shift ? (
+              <div className="rounded-lg border border-dashed border-amber-200 bg-amber-50 py-8 text-center text-sm text-amber-800">
+                Selecione uma loja específica para ver a conferência do caixa.
+              </div>
+            ) : (
+              <ConferenciaFormas salesByMethod={salesByMethod} />
+            )}
           </CardContent>
         </Card>
 

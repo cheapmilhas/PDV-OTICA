@@ -7,7 +7,7 @@ import type { SaleQuery, CreateSaleDTO } from "@/lib/validations/sale.schema";
 import { validateCreditLimit, sumOnCreditAmount } from "@/lib/installment-utils";
 import { validateStoreCredit } from "@/lib/validations/sale.schema";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
-import { METHODS_IN_CASH } from "@/lib/payment-methods";
+import { METHODS_IN_CASH, METHODS_WITH_RECEIVABLE } from "@/lib/payment-methods";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
@@ -201,6 +201,81 @@ export class SaleService {
     }
 
     return sale;
+  }
+
+  /**
+   * Rastreia, por pagamento de uma venda, em qual turno de caixa caiu
+   * (ou por que não entrou). Deriva dos dados, não só do método — tratando
+   * estorno/cancelamento corretamente (shift = movimento IN original, nunca o REFUND).
+   */
+  async getCashTrace(saleId: string, companyId: string) {
+    const sale = await prisma.sale.findFirst({
+      where: { id: saleId, companyId },
+      include: {
+        payments: {
+          include: {
+            cashMovements: {
+              include: {
+                cashShift: {
+                  select: {
+                    id: true,
+                    status: true,
+                    openedAt: true,
+                    branch: { select: { name: true } },
+                    openedByUser: { select: { name: true } },
+                  },
+                },
+              },
+            },
+          },
+          orderBy: { createdAt: "asc" },
+        },
+      },
+    });
+
+    if (!sale) {
+      throw notFoundError("Venda não encontrada");
+    }
+
+    return sale.payments.map((p: any) => {
+      const movIn = p.cashMovements.find(
+        (m: any) => m.type === "SALE_PAYMENT" && m.direction === "IN"
+      );
+      const hasRefund = p.cashMovements.some(
+        (m: any) => m.type === "REFUND" || m.direction === "OUT"
+      );
+      const enteredCashRegister = !!movIn;
+      const reversed = hasRefund || p.status === "VOIDED";
+      const netCashAmount = p.cashMovements.reduce(
+        (sum: number, m: any) => sum + (m.direction === "IN" ? Number(m.amount) : -Number(m.amount)),
+        0
+      );
+
+      let destino: "cash_register" | "accounts_receivable" | "card_receivable" | "none";
+      if (enteredCashRegister) destino = "cash_register";
+      else if (p.method === "CREDIT_CARD") destino = "card_receivable";
+      else if ((METHODS_WITH_RECEIVABLE as readonly string[]).includes(p.method)) destino = "accounts_receivable";
+      else destino = "none";
+
+      return {
+        paymentId: p.id,
+        method: p.method,
+        amount: Number(p.amount),
+        enteredCashRegister,
+        reversed,
+        netCashAmount,
+        destino,
+        shift: movIn?.cashShift
+          ? {
+              shiftId: movIn.cashShift.id,
+              branchName: movIn.cashShift.branch?.name ?? "—",
+              operador: movIn.cashShift.openedByUser?.name ?? "—",
+              openedAt: movIn.cashShift.openedAt,
+              status: movIn.cashShift.status,
+            }
+          : undefined,
+      };
+    });
   }
 
   /**
@@ -482,11 +557,22 @@ export class SaleService {
         validateStoreCredit(payment, customerId);
       }
 
-      // Saldo a Receber: cliente obrigatório (paga ao receber o produto)
-      if (payment.method === "BALANCE_DUE" && !customerId) {
+      // Métodos a prazo (saldo/boleto/cheque) exigem cliente vinculado
+      if (
+        (payment.method === "BALANCE_DUE" ||
+          payment.method === "BOLETO" ||
+          payment.method === "CHEQUE") &&
+        !customerId
+      ) {
+        const label =
+          payment.method === "BALANCE_DUE"
+            ? "Saldo a Receber"
+            : payment.method === "BOLETO"
+              ? "Boleto"
+              : "Cheque";
         throw new AppError(
           ERROR_CODES.VALIDATION_ERROR,
-          "Saldo a Receber exige um cliente vinculado",
+          `${label} exige um cliente vinculado`,
           400
         );
       }
