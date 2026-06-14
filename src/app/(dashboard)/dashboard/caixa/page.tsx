@@ -7,31 +7,21 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import {
-  Table,
-  TableBody,
-  TableCell,
-  TableHead,
-  TableHeader,
-  TableRow,
-} from "@/components/ui/table";
-import {
   DollarSign,
   TrendingUp,
-  TrendingDown,
   Lock,
   Unlock,
   ArrowDownCircle,
   ArrowUpCircle,
   Clock,
-  User,
-  CreditCard,
-  Banknote,
   Wallet,
   Loader2,
   History,
 } from "lucide-react";
 import Link from "next/link";
 import { formatCurrency } from "@/lib/utils";
+import { MovimentacoesTable, type MovRow } from "@/components/caixa/movimentacoes-table";
+import { getMethodLabel } from "@/components/caixa/mov-helpers";
 import { ModalAberturaCaixa } from "@/components/caixa/modal-abertura-caixa";
 import { ModalFechamentoCaixa } from "@/components/caixa/modal-fechamento-caixa";
 import { ModalSangria } from "@/components/caixa/modal-sangria";
@@ -63,9 +53,19 @@ type CashMovement = {
   method: "CASH" | "PIX" | "DEBIT_CARD" | "CREDIT_CARD" | "BOLETO" | "STORE_CREDIT" | "CHEQUE" | "AGREEMENT" | "OTHER";
   amount: number;
   note?: string;
+  originType?: string;
   createdAt: string;
   createdByUser?: { name: string };
   salePayment?: { sale: { id: string } };
+};
+
+type ReceivableRow = {
+  id: string;
+  method: string;
+  amount: number;
+  saleNumber: number;
+  sellerName: string;
+  createdAt: string;
 };
 
 function CaixaPage() {
@@ -81,6 +81,8 @@ function CaixaPage() {
   const [loading, setLoading] = useState(true);
   const [shift, setShift] = useState<CashShift | null>(null);
   const [salesByMethod, setSalesByMethod] = useState<SalesByMethodEntry[]>([]);
+  const [receivableRows, setReceivableRows] = useState<ReceivableRow[]>([]);
+  const [voidedReceivableRows, setVoidedReceivableRows] = useState<ReceivableRow[]>([]);
   const [error, setError] = useState<string | null>(null);
 
   const fetchCashShift = async () => {
@@ -94,6 +96,8 @@ function CaixaPage() {
       const data = await response.json();
       setShift(data.shift);
       setSalesByMethod(data.salesByMethod || []);
+      setReceivableRows(data.receivableRows || []);
+      setVoidedReceivableRows(data.voidedReceivableRows || []);
     } catch (err) {
       setError(err instanceof Error ? err.message : "Erro desconhecido");
     } finally {
@@ -151,25 +155,7 @@ function CaixaPage() {
     }));
   };
 
-  const getMethodLabel = (method: string) => {
-    const labels: Record<string, string> = {
-      CASH: "Dinheiro",
-      CREDIT_CARD: "Crédito",
-      DEBIT_CARD: "Débito",
-      PIX: "PIX",
-      BOLETO: "Boleto",
-      STORE_CREDIT: "Crediário",
-      BALANCE_DUE: "Saldo a Receber",
-      CHEQUE: "Cheque",
-      AGREEMENT: "Convenio",
-      OTHER: "Outro",
-    };
-    return labels[method] || method;
-  };
-
   const resumoPagamentos = calculatePaymentSummary();
-  const totalVendas = resumoPagamentos.reduce((acc, item) => acc + item.valor, 0);
-  const totalTransacoes = resumoPagamentos.reduce((acc, item) => acc + item.quantidade, 0);
   const totalSangrias = movements
     .filter((m) => m.type === "WITHDRAWAL" && m.direction === "OUT")
     .reduce((sum, m) => sum + m.amount, 0);
@@ -223,73 +209,44 @@ function CaixaPage() {
     !turnoCritico &&
     (shift?.stalenessLevel === "warning" || (tempoAberto?.hours ?? 0) >= 12);
 
-  const getTipoIcon = (type: string) => {
-    switch (type) {
-      case "SALE_PAYMENT":
-        return <TrendingUp className="h-4 w-4 text-green-600" />;
-      case "WITHDRAWAL":
-        return <ArrowDownCircle className="h-4 w-4 text-red-600" />;
-      case "SUPPLY":
-        return <ArrowUpCircle className="h-4 w-4 text-blue-600" />;
-      case "OPENING_FLOAT":
-        return <Unlock className="h-4 w-4 text-gray-600" />;
-      case "CLOSING":
-        return <Lock className="h-4 w-4 text-gray-600" />;
-      case "REFUND":
-        return <TrendingDown className="h-4 w-4 text-orange-600" />;
-      default:
-        return <DollarSign className="h-4 w-4 text-gray-600" />;
-    }
-  };
-
-  const getTipoLabel = (type: string) => {
-    const labels: Record<string, string> = {
-      SALE_PAYMENT: "Venda",
-      WITHDRAWAL: "Sangria",
-      SUPPLY: "Reforco",
-      OPENING_FLOAT: "Abertura",
-      CLOSING: "Fechamento",
-      REFUND: "Reembolso",
-      ADJUSTMENT: "Ajuste",
-    };
-    return labels[type] || type;
-  };
-
-  const getTipoBadgeVariant = (type: string) => {
-    switch (type) {
-      case "SALE_PAYMENT":
-        return "default" as const;
-      case "WITHDRAWAL":
-      case "REFUND":
-        return "destructive" as const;
-      case "SUPPLY":
-        return "secondary" as const;
-      default:
-        return "outline" as const;
-    }
-  };
-
-  const getFormaPagamentoIcon = (method: string) => {
-    switch (method) {
-      case "CASH":
-        return <Banknote className="h-4 w-4" />;
-      case "CREDIT_CARD":
-      case "DEBIT_CARD":
-        return <CreditCard className="h-4 w-4" />;
-      case "PIX":
-        return <Wallet className="h-4 w-4" />;
-      default:
-        return <DollarSign className="h-4 w-4" />;
-    }
-  };
-
-  const getMovementDescription = (movement: CashMovement) => {
-    if (movement.note) return movement.note;
-    if (movement.type === "SALE_PAYMENT" && movement.salePayment) {
-      return `Venda`;
-    }
-    return getTipoLabel(movement.type);
-  };
+  const allRows: MovRow[] = [
+    ...movements.map(
+      (m): MovRow => ({
+        kind: "MOVEMENT",
+        id: m.id,
+        type: m.type,
+        direction: m.direction,
+        method: m.method,
+        amount: m.amount,
+        note: m.note,
+        originType: m.originType,
+        createdAt: m.createdAt,
+        createdByUser: m.createdByUser,
+      })
+    ),
+    ...receivableRows.map(
+      (r): MovRow => ({
+        kind: "RECEIVABLE",
+        id: r.id,
+        method: r.method,
+        amount: r.amount,
+        saleNumber: r.saleNumber,
+        sellerName: r.sellerName,
+        createdAt: r.createdAt,
+      })
+    ),
+    ...voidedReceivableRows.map(
+      (r): MovRow => ({
+        kind: "VOIDED",
+        id: r.id,
+        method: r.method,
+        amount: r.amount,
+        saleNumber: r.saleNumber,
+        sellerName: r.sellerName,
+        createdAt: r.createdAt,
+      })
+    ),
+  ].sort((a, b) => new Date(a.createdAt).getTime() - new Date(b.createdAt).getTime());
 
   const handleModalClose = () => {
     fetchCashShift();
@@ -541,10 +498,11 @@ function CaixaPage() {
             </CardHeader>
             <CardContent>
               <p className="text-2xl font-bold tabular-nums text-emerald-700">
-                {formatCurrency(totalVendas)}
+                {formatCurrency(salesByMethod.reduce((s, r) => s + r.amount, 0))}
               </p>
               <p className="mt-1 text-xs text-muted-foreground tabular-nums">
-                {totalTransacoes} transaç{totalTransacoes === 1 ? "ão" : "ões"}
+                {salesByMethod.reduce((s, r) => s + r.count, 0)} transaç
+                {salesByMethod.reduce((s, r) => s + r.count, 0) === 1 ? "ão" : "ões"}
               </p>
             </CardContent>
           </Card>
@@ -599,60 +557,6 @@ function CaixaPage() {
           </Card>
         </div>
 
-        {/* Resumo por Forma de Pagamento */}
-        <Card>
-          <CardHeader className="pb-3">
-            <CardTitle className="text-base">Resumo por forma de pagamento</CardTitle>
-            <CardDescription>Distribuição das vendas do turno por método</CardDescription>
-          </CardHeader>
-          <CardContent>
-            {resumoPagamentos.length === 0 ? (
-              <div className="rounded-lg border border-dashed py-10 text-center text-sm text-muted-foreground">
-                Ainda não há pagamentos registrados neste turno.
-              </div>
-            ) : (
-              <div className="grid grid-cols-1 gap-3 md:grid-cols-4">
-                {resumoPagamentos.map((item) => {
-                  const percentual = totalVendas > 0 ? (item.valor / totalVendas) * 100 : 0;
-                  return (
-                    <div
-                      key={item.forma}
-                      className="rounded-lg border bg-white p-4 transition-colors hover:border-slate-300"
-                    >
-                      <div className="mb-3 flex items-center justify-between">
-                        <div className="flex items-center gap-2 text-sm font-medium text-slate-700">
-                          {getFormaPagamentoIcon(item.forma)}
-                          <span>{item.forma}</span>
-                        </div>
-                        <Badge variant="secondary" className="tabular-nums">
-                          {item.quantidade}
-                        </Badge>
-                      </div>
-                      <p className="text-2xl font-bold tabular-nums text-slate-900">
-                        {formatCurrency(item.valor)}
-                      </p>
-                      <div className="mt-2 flex items-center justify-between text-[11px] text-muted-foreground">
-                        <span className="tabular-nums">
-                          Ticket: {formatCurrency(item.valor / item.quantidade)}
-                        </span>
-                        <span className="tabular-nums font-medium text-slate-600">
-                          {percentual.toFixed(0)}%
-                        </span>
-                      </div>
-                      <div className="mt-1.5 h-1 w-full overflow-hidden rounded-full bg-slate-100">
-                        <div
-                          className="h-full rounded-full bg-emerald-500 transition-all"
-                          style={{ width: `${Math.min(percentual, 100)}%` }}
-                        />
-                      </div>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-          </CardContent>
-        </Card>
-
         {/* Movimentações */}
         <Card>
           <CardHeader className="pb-3">
@@ -662,82 +566,14 @@ function CaixaPage() {
             </CardDescription>
           </CardHeader>
           <CardContent className="p-0 sm:p-6 sm:pt-0">
-            <div className="overflow-x-auto">
-              <Table>
-                <TableHeader>
-                  <TableRow className="bg-slate-50/50">
-                    <TableHead className="w-[88px]">Horário</TableHead>
-                    <TableHead className="w-[140px]">Tipo</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead className="w-[150px]">Forma</TableHead>
-                    <TableHead className="w-[160px]">Operador</TableHead>
-                    <TableHead className="w-[140px] text-right">Valor</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {movements.length === 0 ? (
-                    <TableRow>
-                      <TableCell colSpan={6} className="py-12">
-                        <div className="flex flex-col items-center gap-2 text-center">
-                          <div className="rounded-full bg-slate-100 p-3">
-                            <Wallet className="h-6 w-6 text-slate-400" />
-                          </div>
-                          <p className="text-sm font-medium text-slate-700">Nenhuma movimentação ainda</p>
-                          <p className="text-xs text-muted-foreground">
-                            Vendas, sangrias e reforços aparecerão aqui em tempo real.
-                          </p>
-                        </div>
-                      </TableCell>
-                    </TableRow>
-                  ) : (
-                    movements.map((mov) => (
-                      <TableRow
-                        key={mov.id}
-                        className="transition-colors hover:bg-slate-50"
-                      >
-                        <TableCell className="tabular-nums text-sm font-medium text-slate-700">
-                          {new Date(mov.createdAt).toLocaleTimeString("pt-BR", {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={getTipoBadgeVariant(mov.type)} className="flex w-fit items-center gap-1">
-                            {getTipoIcon(mov.type)}
-                            {getTipoLabel(mov.type)}
-                          </Badge>
-                        </TableCell>
-                        <TableCell>
-                          <p className="text-sm text-slate-700">{getMovementDescription(mov)}</p>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 text-sm text-slate-700">
-                            {getFormaPagamentoIcon(mov.method)}
-                            <span>{getMethodLabel(mov.method)}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <div className="flex items-center gap-2 text-sm text-slate-600">
-                            <User className="h-3 w-3 text-muted-foreground" />
-                            <span>{mov.createdByUser?.name || "-"}</span>
-                          </div>
-                        </TableCell>
-                        <TableCell className="text-right">
-                          <span
-                            className={`font-semibold tabular-nums ${
-                              mov.direction === "IN" ? "text-emerald-700" : "text-red-600"
-                            }`}
-                          >
-                            {mov.direction === "IN" ? "+" : "−"}
-                            {formatCurrency(mov.amount)}
-                          </span>
-                        </TableCell>
-                      </TableRow>
-                    ))
-                  )}
-                </TableBody>
-              </Table>
+            <MovimentacoesTable rows={allRows} />
+            <div className="flex flex-col gap-1 border-t px-4 py-3 text-sm sm:flex-row sm:justify-end sm:gap-8">
+              <div className="sm:text-right"><span className="text-muted-foreground">Saldo em gaveta</span>
+                <span className="ml-2 font-semibold tabular-nums">{formatCurrency(valorAtual)}</span></div>
+              <div className="sm:text-right"><span className="text-muted-foreground">Total vendido no turno</span>
+                <span className="ml-2 font-semibold tabular-nums">{formatCurrency(salesByMethod.reduce((s, r) => s + r.amount, 0))}</span></div>
             </div>
+            <p className="px-4 pb-3 text-[11px] text-muted-foreground">Recebimentos de crediário entram no caixa mas não contam como venda do turno.</p>
           </CardContent>
         </Card>
       </div>
