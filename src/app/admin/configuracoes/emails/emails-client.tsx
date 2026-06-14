@@ -38,9 +38,17 @@ const EMAIL_TYPES = [
 
 type FlagKey = typeof EMAIL_TYPES[number]["flag"];
 
-const LABEL_BY_TYPE: Record<string, string> = Object.fromEntries(
-  EMAIL_TYPES.map(({ key, label }) => [key, label])
-);
+// Tipos gerados pelo fluxo de cobrança Asaas — aparecem nos logs mas não têm
+// toggle de configuração aqui (são controlados pelo fluxo de cobrança).
+const LOG_ONLY_LABELS: Record<string, string> = {
+  INVOICE_CREATED: "Fatura criada",
+  INVOICE_DUE_SOON: "Fatura a vencer",
+};
+
+const LABEL_BY_TYPE: Record<string, string> = {
+  ...Object.fromEntries(EMAIL_TYPES.map(({ key, label }) => [key, label])),
+  ...LOG_ONLY_LABELS,
+};
 
 function statusBadge(status: string) {
   switch (status) {

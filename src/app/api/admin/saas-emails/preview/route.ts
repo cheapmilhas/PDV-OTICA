@@ -7,7 +7,9 @@ import type { SaasEmailType } from "@prisma/client";
 
 const log = logger.child({ route: "admin/saas-emails/preview" });
 
-const SAMPLE: Record<SaasEmailType, Record<string, unknown>> = {
+// Partial: só os tipos com template no catálogo do SaaS têm amostra de preview
+// (os eventos de cobrança Asaas não são previewáveis aqui).
+const SAMPLE: Partial<Record<SaasEmailType, Record<string, unknown>>> = {
   WELCOME: { name: "João Silva", loginUrl: "https://app.vis.app.br/login" },
   TRIAL_ENDING: { name: "João Silva", daysLeft: 3, subscribeUrl: "https://app.vis.app.br/dashboard/upgrade" },
   TRIAL_EXPIRED: { name: "João Silva", subscribeUrl: "https://app.vis.app.br/dashboard/upgrade" },
@@ -24,13 +26,19 @@ export async function GET(request: Request) {
 
   const type = new URL(request.url).searchParams.get("type") as SaasEmailType | null;
   // Object.hasOwn (não `in`): `in` é truthy p/ chaves do protótipo ("__proto__",
-  // "constructor", ...) → passariam e quebrariam o render com 500.
-  if (!type || !Object.hasOwn(SAAS_EMAIL_CATALOG, type)) {
+  // "constructor", ...) → passariam e quebrariam o render com 500. Faz o guard
+  // ANTES de indexar o catálogo (indexar "__proto__" retornaria o protótipo).
+  if (!type || !Object.hasOwn(SAAS_EMAIL_CATALOG, type) || !Object.hasOwn(SAMPLE, type)) {
+    return NextResponse.json({ error: "Tipo inválido" }, { status: 400 });
+  }
+  const entry = SAAS_EMAIL_CATALOG[type];
+  const sample = SAMPLE[type];
+  if (!entry || !sample) {
     return NextResponse.json({ error: "Tipo inválido" }, { status: 400 });
   }
 
   try {
-    const { html } = renderEmailTemplate(SAAS_EMAIL_CATALOG[type].template, SAMPLE[type]);
+    const { html } = renderEmailTemplate(entry.template, sample);
     return new NextResponse(html, {
       status: 200,
       headers: { "content-type": "text/html; charset=utf-8" },

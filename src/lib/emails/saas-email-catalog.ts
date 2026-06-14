@@ -16,7 +16,10 @@ export interface SaasEmailCatalogEntry {
     | "subscriptionCanceledEnabled";
 }
 
-export const SAAS_EMAIL_CATALOG: Record<SaasEmailType, SaasEmailCatalogEntry> = {
+// Partial: os tipos gerados pelo fluxo de cobrança Asaas (INVOICE_CREATED,
+// INVOICE_DUE_SOON) NÃO têm template/flag neste catálogo de emails do SaaS —
+// eles são enviados pelo fluxo de cobrança, com seus próprios templates.
+export const SAAS_EMAIL_CATALOG: Partial<Record<SaasEmailType, SaasEmailCatalogEntry>> = {
   WELCOME: {
     template: "saas-welcome",
     subject: "Bem-vindo(a) ao Vis 🎉",
@@ -59,6 +62,9 @@ export type SaasEmailFlags = Partial<Record<SaasEmailCatalogEntry["configFlag"],
 
 /** True se o tipo está ligado na config (e o mestre está ligado — checado fora). */
 export function isSaasEmailEnabled(eventType: SaasEmailType, config: SaasEmailFlags): boolean {
-  const flag = SAAS_EMAIL_CATALOG[eventType].configFlag;
-  return config[flag] !== false;
+  const entry = SAAS_EMAIL_CATALOG[eventType];
+  // Tipo sem entrada no catálogo (ex.: eventos de cobrança) não é controlado
+  // por estas flags — considera habilitado (não bloqueia o fluxo de cobrança).
+  if (!entry) return true;
+  return config[entry.configFlag] !== false;
 }
