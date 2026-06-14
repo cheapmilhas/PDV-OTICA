@@ -32,10 +32,12 @@ export async function GET(request: Request) {
       return NextResponse.json({ shift: null }, { status: 200 });
     }
 
-    const salesByMethod = await cashService.getShiftSalesByMethod(
-      { id: shift.id, branchId, openedAt: shift.openedAt, closedAt: shift.closedAt },
-      companyId
-    );
+    const shiftArg = { id: shift.id, branchId, openedAt: shift.openedAt, closedAt: shift.closedAt };
+    const [salesByMethod, receivableRows, voidedReceivableRows] = await Promise.all([
+      cashService.getShiftSalesByMethod(shiftArg, companyId),
+      cashService.getShiftSalePayments(shiftArg, companyId),
+      cashService.getShiftVoidedReceivables(shiftArg, companyId),
+    ]);
 
     // Stalenezza (horas abertas) calculada no servidor — fonte de verdade.
     // Frontend evita Date.now() local que pode divergir do servidor.
@@ -57,7 +59,7 @@ export async function GET(request: Request) {
       })) || [],
     };
 
-    return NextResponse.json({ shift: serializedShift, salesByMethod }, { status: 200 });
+    return NextResponse.json({ shift: serializedShift, salesByMethod, receivableRows, voidedReceivableRows }, { status: 200 });
   } catch (error) {
     return handleApiError(error);
   }
