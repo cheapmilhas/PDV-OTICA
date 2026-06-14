@@ -1,7 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
 
-type SoftDeleteModel = "customer" | "product" | "sale" | "serviceOrder" | "quote";
+type SoftDeleteModel = "customer" | "product" | "sale" | "serviceOrder" | "quote" | "lead";
 
 /**
  * Realiza soft delete em uma entidade, definindo deletedAt = now().
@@ -30,6 +30,9 @@ export async function softDelete(
       break;
     case "quote":
       await client.quote.update({ where: { id }, data });
+      break;
+    case "lead":
+      await client.lead.update({ where: { id }, data });
       break;
   }
 }
