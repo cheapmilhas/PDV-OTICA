@@ -50,6 +50,18 @@ O erro atual é a tabela mostrar só a leitura 1. A correção é mostrar **as d
 
 Zero duplicação por construção: CashMovement nunca contém método fora de METHODS_IN_CASH, e a query nova exclui exatamente METHODS_IN_CASH.
 
+### 3.1.1. ⚠️ Invariante corrigida + recebimentos + canceladas (achados da reanálise adversarial)
+
+**A tabela ≠ "vendas do turno".** A reanálise (C1/C2) achou que a tabela = TODOS os CashMovements do turno inclui coisas que **não são vendas novas**:
+- **Recebimento de conta a receber** (cliente vem pagar parcela de crediário/boleto): cria `CashMovement IN` com `originType: "AccountReceivable"` **SEM SalePayment** (`accounts-receivable/route.ts:625`, `receive-multiple/route.ts:236`). Entra na gaveta (é dinheiro real) mas **não é venda do turno**.
+- **Reativação de venda cancelada:** cria novo CashMovement IN sem un-VOID do SalePayment (`sale.service.ts:1356`).
+
+Portanto a afirmação anterior "(à vista + receivableRows) == getShiftSalesByMethod" é **FALSA**. **Removida do spec e dos testes.** A única invariante verdadeira mantida é a de **não-duplicação** (à vista nunca aparece 2× via SalePayment+CashMovement).
+
+**Decisão do dono — recebimentos:** linha de recebimento de AR é rotulada **"Recebimento"** (não "Venda"), distinta das vendas. Já dá para distinguir por `originType === "AccountReceivable"` ou pela `note` ("Recebimento:…"). Mudança: `getTipoLabel`/`getMovementDescription` da page (e o label do modal) passam a mostrar "Recebimento" quando `originType === "AccountReceivable"`. O rodapé **"Total vendido no turno"** continua = `salesByMethod.reduce` (só vendas, via SalePayment) — recebimentos NÃO entram nele (correto: não são vendas). Adicionar microcopy: "Recebimentos de crediário entram no caixa mas não contam como venda do turno."
+
+**Decisão do dono — venda a prazo cancelada (H1):** mostrar **riscada com tag "Cancelada"** (deixa rastro de conferência). Isso exige um 2º serviço/linhas: `getShiftVoidedReceivables(shift, companyId)` = SalePayments `status VOIDED` de vendas `status CANCELED/REFUNDED` na janela, com `method notIn METHODS_IN_CASH`. Essas linhas aparecem riscadas (`line-through`, cinza), tag "Cancelada", **valor sem sinal e não somam em nada** (nem gaveta, nem total vendido).
+
 ### 3.2. Novo serviço: getShiftSalePayments
 `cashService.getShiftSalePayments(shift: { id, branchId, openedAt, closedAt? }, companyId)` — irmão de `getShiftSalesByMethod`, reusa o mesmo `where` mas com `findMany` linha-a-linha:
 ```ts
@@ -89,29 +101,31 @@ type ShiftReceivableRow = {
 ### 3.3. Caixa do dia (tela ao vivo)
 - `/api/cash/shift/route.ts` (GET): além de `shift` + `salesByMethod`, retornar `receivableRows` (de `getShiftSalePayments`). Modo `?branch=all` continua retornando `shift: null` (sem receivableRows).
 - `caixa/page.tsx`:
-  - Estado novo `receivableRows`.
-  - Array derivado `allRows` = `movements` (CashMovement, com `direction` IN/OUT e sinal) **+** `receivableRows` (marcadas `kind: "RECEIVABLE"`), **ordenado por horário** com `new Date(x.createdAt).getTime()` (M1 — datas vêm como string ISO da API).
-  - Renderizar `allRows` na tabela. Linhas a prazo:
-    - Tipo: badge "Venda" + sub-badge "→ a receber" (estilo amber, distinto do verde de entrada).
-    - Valor: mostrado **sem `+`/`−`** (ex.: "R$ 1.850,00" em cinza/amber), deixando claro que não entra na gaveta.
-    - Operador: `sellerName`.
-  - Empty-state da tabela: trocar o guard `movements.length === 0` (`page.tsx:678`) por `allRows.length === 0` (M2) — senão um turno só com vendas a prazo mostraria "nenhuma movimentação".
-  - **NÃO** injetar `receivableRows` no array `movements` usado pelo `reduce` de `valorAtual` (`page.tsx:182`) — o saldo da gaveta vem só de CashMovement, intocado.
+  - Estados novos `receivableRows`, `voidedReceivableRows`.
+  - Array derivado `allRows` = `movements` **+** `receivableRows` (`kind: "RECEIVABLE"`) **+** `voidedReceivableRows` (`kind: "VOIDED"`), **ordenado por horário** com `new Date(x.createdAt).getTime()` (M1). **Tipar `allRows` como união discriminada por `kind`** (sem `(m: any)` — usar inferência; achado #2 da reanálise) para o narrow de `direction`/`createdByUser` ser type-safe.
+  - Render por `kind`:
+    - `MOVEMENT`: igual hoje, MAS quando `originType === "AccountReceivable"` → Tipo "Recebimento" (não "Venda"), valor com sinal +/− (é dinheiro real na gaveta).
+    - `RECEIVABLE`: Tipo "Venda" + sub-badge amber "→ a receber"; valor **sem sinal**; operador `sellerName`.
+    - `VOIDED`: linha **riscada** (`line-through text-slate-400`), tag "Cancelada"; valor sem sinal; não soma em nada.
+  - Empty-state: guard `allRows.length === 0` (M2).
+  - **NÃO** injetar receivableRows/voided no array `movements` do `reduce` de `valorAtual` (`page.tsx:182`) — gaveta intocada.
 - **Rodapé da tabela** (novo): duas linhas distintas:
-  - "Saldo em gaveta: {valorAtual}" (já existe, de CashMovement).
-  - "Total vendido no turno: {total}" onde **`total = salesByMethod.reduce((s,r)=>s+r.amount,0)`** (H3 — NÃO usar `totalVendas`/`resumoPagamentos`, que são só à vista e dariam total subcontado; `salesByMethod` já inclui a prazo + convênio + outro).
+  - "Saldo em gaveta: {valorAtual}" (de CashMovement).
+  - "Total vendido no turno: {total}" onde **`total = salesByMethod.reduce((s,r)=>s+r.amount,0)`** (H3). `salesByMethod` conta só VENDAS (via SalePayment), então **recebimentos de AR não inflam** o total vendido (C1) — correto. Microcopy: "Recebimentos de crediário entram no caixa mas não contam como venda do turno."
 
 ### 3.4. Histórico (turnos fechados)
 - `/api/cash-registers/[id]/transactions/route.ts`: já retorna `{ movements, salesByMethod }`; adicionar `receivableRows` via `getShiftSalePayments(shift, companyId)` (o shift já está carregado com openedAt/closedAt/branchId).
 - **⚠️ Payload das transações do histórico (H1/H2):** hoje o endpoint mapeia cada movimento para `{ id, type, amount, description, createdAt }` (`transactions/route.ts:47-53`) — **descarta `method`, `direction` e operador**, e devolve `type` cru (`SALE_PAYMENT`/`OPENING_FLOAT`/`REFUND`…). O modal (`modal-detalhes-caixa.tsx`) tem um union `"SALE"|"EXPENSE"|"WITHDRAWAL"|"SUPPLY"` (`:55-61`) e um `transactionTypeLabels` (`:150-155`) que **já não casa** com os tipos crus → labels saem `undefined` para SALE_PAYMENT/OPENING_FLOAT/REFUND. Além disso o sinal é hardcoded `+`/`−` por tipo (`:336-338`) → uma linha a receber sairia com `+`. **Antes de mesclar receivableRows, esta entrega precisa:**
   - (a) Alinhar o mapa de tipos/labels do modal aos valores reais de `CashMovementType` (ou mapear no endpoint, como a tela ao vivo faz via `getTipoLabel`).
   - (b) Ampliar o shape retornado para incluir `method`, e um campo `kind` ("MOVEMENT" | "RECEIVABLE") + um flag de "sem sinal".
-  - (c) Adicionar branch de render `kind === "RECEIVABLE"` (amber, sem sinal, Forma + Operador do vendedor).
-  - (d) Reordenar a lista mesclada por horário parseado (o endpoint hoje devolve `desc`, `:43`; receivableRows vêm `asc` — re-sortar no cliente, M1).
+  - (c) Adicionar branch de render `kind === "RECEIVABLE"` (amber, sem sinal) e `kind === "VOIDED"` (riscada, "Cancelada"). **A tabela do modal só tem 4 colunas** (Data/Tipo/Descrição/Valor) — não tem Forma/Operador. Para não ficar mais pobre que o dia, **embutir forma+operador na Descrição** da venda a prazo: `Venda #1234 · Crédito · Ana` (achado #4 — obrigatório, não opcional). Recebimentos: "Recebimento · {forma}".
+  - (d) Reordenar a lista mesclada por horário parseado (endpoint devolve `desc`, `:43`; manter **desc** no histórico — decisão consciente: dia = cronológico crescente, histórico = mais recente primeiro; achado #5).
   Este conserto do mapeamento de tipos do histórico é pré-existente mas precisa ser feito junto, senão o histórico fica visualmente quebrado.
 
-### 3.5. Fechamento
-- `modal-fechamento-caixa.tsx`: **verificar** se renderiza tabela linha-a-linha de movimentações. Se SIM, aplicar o mesmo merge (precisa receber `receivableRows` como prop, threaded por `page.tsx`). Se só usa `ConferenciaFormas` (agregado), **não precisa mudança**. (A confirmar na implementação.)
+### 3.5. Fechamento (decisão do dono: PARIDADE — ganha a tabela rica)
+**Confirmado:** `modal-fechamento-caixa.tsx` hoje **NÃO** tem tabela linha-a-linha (só `FORMAS.map` agregado + `ConferenciaFormas`). **Decisão do dono:** adicionar a tabela rica também no fechamento, para as 3 telas (dia/histórico/fechamento) ficarem consistentes. O operador que fecha vê as mesmas linhas (à vista, recebimento, a receber, cancelada) que viu no dia.
+- `page.tsx` passa `receivableRows` + `voidedReceivableRows` como props novas para `<ModalFechamentoCaixa>` (já passa `movements` e `salesByMethod`).
+- O modal renderiza a mesma tabela `allRows` (extrair um componente compartilhado `<MovimentacoesTable rows={allRows} />` para não duplicar a lógica de render entre page/modal-detalhes/modal-fechamento — DRY). A tabela é **read-only/informativa**; não altera o que `closeShift` persiste (só dinheiro).
 
 ### 3.6. Reconciliar "Resumo por forma" vs "Conferência por forma" (M3)
 A tela do dia hoje tem **dois** blocos "por forma de pagamento" que mostram totais diferentes para o mesmo turno:
@@ -126,13 +140,13 @@ Com a tabela passando a mostrar tudo, ter um "Resumo por forma" que só conta à
 
 | Arquivo | Mudança |
 |---|---|
-| `src/services/cash.service.ts` | + `getShiftSalePayments()` (linha-a-linha, `method notIn METHODS_IN_CASH` → a prazo + convênio + outro) |
-| `src/app/api/cash/shift/route.ts` | retornar `receivableRows` |
-| `src/app/(dashboard)/dashboard/caixa/page.tsx` | mesclar movements + receivableRows (sort por data parseada); rodapé "gaveta vs total vendido" (total = salesByMethod); badge "a receber"; empty-state `allRows`; **remover bloco "Resumo por forma"**; card "Total de vendas" passa a usar salesByMethod |
-| `src/app/api/cash-registers/[id]/transactions/route.ts` | retornar `receivableRows`; ampliar shape (method, kind, sem-sinal) |
-| `src/components/caixa/modal-detalhes-caixa.tsx` | alinhar tipos/labels aos `CashMovementType` reais; mesclar receivableRows; branch render "a receber" (amber, sem sinal); re-sort por horário |
-| `src/components/caixa/modal-fechamento-caixa.tsx` | (se tiver tabela linha-a-linha) mesclar; senão sem mudança |
-| `src/services/__tests__/shift-sale-payments.test.ts` | novo — testes do serviço |
+| `src/services/cash.service.ts` | + `getShiftSalePayments()` (a prazo+convênio+outro) + `getShiftVoidedReceivables()` (canceladas a prazo, riscadas) |
+| `src/app/api/cash/shift/route.ts` | retornar `receivableRows` + `voidedReceivableRows` |
+| `src/app/(dashboard)/dashboard/caixa/page.tsx` | mesclar movements + receivableRows + voided (sort por data); rótulo "Recebimento" p/ originType=AccountReceivable; linha cancelada riscada; rodapé "gaveta vs total vendido" (total = salesByMethod, exclui recebimentos); badge "a receber"; empty-state `allRows`; **remover "Resumo por forma"**; "Total de vendas" usa salesByMethod; tipar `allRows` como união discriminada (sem `any`) |
+| `src/app/api/cash-registers/[id]/transactions/route.ts` | retornar `receivableRows` + `voidedReceivableRows`; ampliar shape (method, direction, operador) |
+| `src/components/caixa/modal-detalhes-caixa.tsx` | alinhar tipos/labels aos `CashMovementType` reais (+ "Recebimento"); mesclar receivableRows + voided; branch "a receber" (amber, sem sinal) e "Cancelada" (riscada); **embutir forma+operador na Descrição** (só 4 colunas); re-sort por horário |
+| `src/components/caixa/modal-fechamento-caixa.tsx` | **adicionar tabela rica** (paridade): receber `receivableRows`/`voidedReceivableRows` como props + render igual ao dia |
+| `src/services/__tests__/shift-sale-payments.test.ts` | novo — testes dos 2 serviços |
 
 ---
 
@@ -140,8 +154,10 @@ Com a tabela passando a mostrar tudo, ter um "Resumo por forma" que só conta à
 
 - **getShiftSalePayments:** retorna TODO método `notIn METHODS_IN_CASH` (a prazo + **AGREEMENT/convênio + OTHER/outro** — C1), e **NÃO** inclui CASH/PIX/DEBIT (esses já vêm de CashMovement); exclui VOIDED; exclui sale CANCELED/REFUNDED (status COMPLETED); respeita janela openedAt..closedAt e branchId; normaliza amount (Number) e sellerName (sale.sellerUser.name); ordena por createdAt.
 - **Cobre convênio/outro (C1):** teste explícito de que uma venda em AGREEMENT e uma em OTHER aparecem no resultado (não ficam invisíveis).
-- **Consistência com o agregado:** soma de (CashMovement à vista SALE_PAYMENT/IN) + (getShiftSalePayments) == soma de `getShiftSalesByMethod` para o mesmo turno (table e Conferência batem).
-- **Anti-duplicação:** garantir que uma venda em dinheiro (CASH) NÃO apareça em getShiftSalePayments — senão duplicaria na tabela.
+- **getShiftVoidedReceivables (canceladas a prazo, H1):** retorna SalePayments `status VOIDED` de vendas `status in [CANCELED, REFUNDED]`, `method notIn METHODS_IN_CASH`, na janela do turno; mesmo shape + flag `voided: true`. Teste: venda crédito cancelada aparece aqui; venda crédito normal NÃO.
+- **NÃO testar "tabela == Conferência":** essa invariante é FALSA (recebimentos de AR são CashMovement sem SalePayment; reativação cria CashMovement extra). Remover qualquer teste de igualdade. **Manter só:**
+- **Anti-duplicação (invariante real):** garantir que uma venda em dinheiro (CASH) NÃO apareça em getShiftSalePayments — senão duplicaria na tabela.
+- **Recebimento de AR rotulado distinto:** um CashMovement com `originType: "AccountReceivable"` é rotulado "Recebimento" (não "Venda") e NÃO entra em `getShiftSalesByMethod`/total vendido (asserção no helper de label/descrição).
 - **Saldo da gaveta inalterado:** teste/asserção de que `valorAtual` não muda ao adicionar receivableRows (idealmente teste de unidade do cálculo; na prática, garantir que receivableRows não entra no array `movements`).
 - **Regressão:** tabela continua mostrando CashMovement (à vista + sangria/reforço) como hoje; fechamento de caixa (dinheiro) intocado.
 - Meta: suíte verde (atualmente 697 testes) + cobertura do serviço novo.
@@ -155,10 +171,14 @@ Com a tabela passando a mostrar tudo, ter um "Resumo por forma" que só conta à
 | **Convênio/Outro ficarem invisíveis** (C1, crítico) | Query filtra `method: { notIn: METHODS_IN_CASH }` (não `in: METHODS_A_PRAZO`) → captura AGREEMENT/OTHER também. Teste explícito. |
 | **Histórico visualmente quebrado** (H1/H2) | Alinhar tipos/labels do modal aos CashMovementType reais + branch "a receber" sem sinal + ampliar payload, junto desta entrega. |
 | **Total do rodapé subcontado** (H3) | "Total vendido" usa `salesByMethod.reduce` (completo), não `totalVendas`/`resumoPagamentos` (só à vista). |
+| **Recebimento de crediário inflar "total vendido"** (C1, crítico) | Recebimento de AR (originType=AccountReceivable) é rotulado "Recebimento", NÃO entra em `salesByMethod` (que conta SalePayment). Total vendido conta só vendas. Microcopy explica. |
+| **Invariante "tabela==Conferência" falsa** (C1/C2) | REMOVIDA do spec/testes. Manter só a invariante de não-duplicação (verdadeira). |
+| **Venda a prazo cancelada some sem rastro** (H1) | `getShiftVoidedReceivables` traz as canceladas a prazo, renderizadas riscadas "Cancelada". |
+| **`allRows` virar `any`** (#2) | Tipar como união discriminada por `kind` (inferência, sem `(m: any)`). |
 | **3 números "por forma" inconsistentes** (M3) | Remover bloco "Resumo por forma" (só à vista) + card "Total de vendas" passa a usar salesByMethod. |
 | Dinheiro duplicar na tabela (CashMovement + SalePayment) | Query exclui `METHODS_IN_CASH` — à vista nunca entra. Teste anti-duplicação. |
-| Linha a prazo somar no saldo da gaveta | receivableRows vêm de fonte separada; nunca entram no array `movements` do `reduce` de valorAtual. Teste. |
-| Venda cancelada aparecer na tabela | Filtra status COMPLETED + payment não-VOIDED (igual getShiftSalesByMethod já validado). |
+| Linha a prazo somar no saldo da gaveta | receivableRows/voided vêm de fonte separada; nunca entram no array `movements` do `reduce` de valorAtual. Teste. |
+| Import faltando `METHODS_IN_CASH` em cash.service.ts | Hoje ausente (grep 0); D1 adiciona o import senão tsc erra. |
 | Janela de tempo de borda (sale.createdAt vs shift.openedAt) | Mesma janela do getShiftSalesByMethod já em produção; `gte openedAt` inclui a venda que abriu o turno (shift criado antes do sale na transação). |
 | Histórico/fechamento ficarem inconsistentes com o dia | Replicar a mesma mescla nos 3 lugares (dia, histórico, e fechamento se aplicável). |
 | Performance (findMany por turno) | Janela curta (1 dia); índices `Sale[companyId,branchId,createdAt]` + `SalePayment[saleId,status]` cobrem. |
@@ -167,8 +187,8 @@ Com a tabela passando a mostrar tudo, ter um "Resumo por forma" que só conta à
 
 ## 7. Critérios de sucesso
 
-1. Na tabela "Movimentações do caixa" (dia e histórico), TODA venda do turno aparece — à vista com sinal +/−, a prazo marcada "→ a receber" sem sinal.
-2. O saldo da gaveta continua igual (a prazo não soma no físico).
-3. O rodapé mostra claramente "saldo em gaveta" ≠ "total vendido no turno".
-4. Venda cancelada/estornada não polui a tabela.
-5. Suíte verde; zero regressão no fechamento de caixa (dinheiro).
+1. Nas 3 telas (dia, histórico, fechamento), TODA venda do turno aparece — à vista com sinal +/−, a prazo marcada "→ a receber" sem sinal, cancelada a prazo riscada "Cancelada", recebimento de crediário rotulado "Recebimento".
+2. O saldo da gaveta continua igual (a prazo/recebimento/cancelada não mudam o cálculo físico).
+3. O rodapé mostra "saldo em gaveta" ≠ "total vendido no turno", e o "total vendido" conta só vendas (não recebimentos).
+4. Convênio e Outro aparecem (não ficam invisíveis).
+5. Suíte verde; zero regressão no fechamento de caixa (dinheiro conferido igual).
