@@ -155,6 +155,66 @@ export const PERMISSIONS_CATALOG: PermissionDefinition[] = [
   },
 
   // =================================================================
+  // FUNIL DE LEADS
+  // =================================================================
+  {
+    code: "leads.access",
+    name: "Acessar Funil",
+    description: "Entrar na seção do funil de leads",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 160,
+  },
+  {
+    code: "leads.create",
+    name: "Criar Leads",
+    description: "Cadastrar novos leads",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 161,
+  },
+  {
+    code: "leads.view_own",
+    name: "Ver Seus Leads",
+    description: "Ver apenas os próprios leads",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 162,
+  },
+  {
+    code: "leads.view_all",
+    name: "Ver Todos os Leads",
+    description: "Ver leads de todos da empresa",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 163,
+  },
+  {
+    code: "leads.edit",
+    name: "Editar Leads",
+    description: "Editar/mover leads no funil",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 164,
+  },
+  {
+    code: "leads.delete",
+    name: "Excluir Leads",
+    description: "Remover leads",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 165,
+  },
+  {
+    code: "leads.convert",
+    name: "Converter Lead",
+    description: "Converter lead em venda",
+    module: "leads",
+    category: "Funil",
+    sortOrder: 166,
+  },
+
+  // =================================================================
   // ORDENS DE SERVIÇO
   // =================================================================
   {

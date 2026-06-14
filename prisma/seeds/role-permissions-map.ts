@@ -31,6 +31,15 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "quotes.delete",
     "quotes.convert",
 
+    // Funil de Leads - TODAS
+    "leads.access",
+    "leads.create",
+    "leads.view_own",
+    "leads.view_all",
+    "leads.edit",
+    "leads.delete",
+    "leads.convert",
+
     // OS - TODAS
     "service_orders.access",
     "service_orders.create",
@@ -170,6 +179,15 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "quotes.delete",
     "quotes.convert",
 
+    // Funil de Leads - TODAS
+    "leads.access",
+    "leads.create",
+    "leads.view_own",
+    "leads.view_all",
+    "leads.edit",
+    "leads.delete",
+    "leads.convert",
+
     // OS - TODAS
     "service_orders.access",
     "service_orders.create",
@@ -295,6 +313,13 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     "quotes.view_own",
     "quotes.edit",
     "quotes.convert",
+
+    // Funil de Leads - apenas os próprios (sem view_all nem delete)
+    "leads.access",
+    "leads.create",
+    "leads.view_own",
+    "leads.edit",
+    "leads.convert",
 
     // OS - apenas suas
     "service_orders.access",

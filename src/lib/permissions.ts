@@ -23,6 +23,15 @@ export enum Permission {
   QUOTES_DELETE = "quotes.delete",
   QUOTES_CONVERT = "quotes.convert",
 
+  // Funil de Leads
+  LEADS_ACCESS = "leads.access",
+  LEADS_CREATE = "leads.create",
+  LEADS_VIEW_OWN = "leads.view_own",
+  LEADS_VIEW_ALL = "leads.view_all",
+  LEADS_EDIT = "leads.edit",
+  LEADS_DELETE = "leads.delete",
+  LEADS_CONVERT = "leads.convert",
+
   // Clientes
   CUSTOMERS_CREATE = "customers.create",
   CUSTOMERS_VIEW = "customers.view",
@@ -120,6 +129,15 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.QUOTES_DELETE,
     Permission.QUOTES_CONVERT,
 
+    // Funil de Leads
+    Permission.LEADS_ACCESS,
+    Permission.LEADS_CREATE,
+    Permission.LEADS_VIEW_OWN,
+    Permission.LEADS_VIEW_ALL,
+    Permission.LEADS_EDIT,
+    Permission.LEADS_DELETE,
+    Permission.LEADS_CONVERT,
+
     // Clientes
     Permission.CUSTOMERS_CREATE,
     Permission.CUSTOMERS_VIEW,
@@ -194,6 +212,13 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.QUOTES_VIEW,
     Permission.QUOTES_EDIT,
     Permission.QUOTES_CONVERT,
+
+    // Funil de Leads (apenas os próprios)
+    Permission.LEADS_ACCESS,
+    Permission.LEADS_CREATE,
+    Permission.LEADS_VIEW_OWN,
+    Permission.LEADS_EDIT,
+    Permission.LEADS_CONVERT,
 
     // OS
     Permission.SERVICE_ORDERS_VIEW,
@@ -331,6 +356,15 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.QUOTES_EDIT]: "Editar orçamentos",
   [Permission.QUOTES_DELETE]: "Excluir orçamentos",
   [Permission.QUOTES_CONVERT]: "Converter orçamento em venda",
+
+  // Funil de Leads
+  [Permission.LEADS_ACCESS]: "Acessar funil de leads",
+  [Permission.LEADS_CREATE]: "Criar leads",
+  [Permission.LEADS_VIEW_OWN]: "Ver seus leads",
+  [Permission.LEADS_VIEW_ALL]: "Ver todos os leads",
+  [Permission.LEADS_EDIT]: "Editar/mover leads",
+  [Permission.LEADS_DELETE]: "Excluir leads",
+  [Permission.LEADS_CONVERT]: "Converter lead em venda",
 
   // Clientes
   [Permission.CUSTOMERS_CREATE]: "Cadastrar clientes",
