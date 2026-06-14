@@ -38,6 +38,7 @@ import {
   CreditCard,
   CalendarClock,
   MessageCircle,
+  Filter,
 } from "lucide-react";
 
 const primaryNav = [
@@ -49,6 +50,7 @@ const primaryNav = [
 
 const moreNav = [
   { icon: FileText, label: "Vendas", href: "/dashboard/vendas", permission: "sales.view" },
+  { icon: Filter, label: "Funil", href: "/dashboard/funil", permission: "leads.access" },
   { icon: Package, label: "Produtos", href: "/dashboard/produtos", permission: "products.view" },
   { icon: Warehouse, label: "Estoque", href: "/dashboard/estoque", permission: "stock.view" },
   { icon: FileText, label: "Contas Pagar/Receber", href: "/dashboard/financeiro", permission: "financial.view" },

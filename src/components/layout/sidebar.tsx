@@ -37,6 +37,7 @@ import {
   Lock,
   LifeBuoy,
   MessageCircle,
+  Filter,
 } from "lucide-react";
 import { PermissionGuard } from "@/components/permission-guard";
 import { useCompanySettings } from "@/hooks/useCompanySettings";
@@ -94,6 +95,12 @@ const menuItems: MenuSection[] = [
         href: "/dashboard/ordens-servico",
         icon: ClipboardList,
         permission: "service_orders.view"
+      },
+      {
+        name: "Funil",
+        href: "/dashboard/funil",
+        icon: Filter,
+        permission: "leads.access"
       },
     ],
   },
