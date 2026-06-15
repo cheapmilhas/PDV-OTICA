@@ -213,6 +213,7 @@ model Company {
   whatsappMessages        WhatsappMessageLog[]
   leads                   Lead[]
   leadStages              LeadStage[]
+  aiTokenUsages           AiTokenUsage[]
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -1916,6 +1917,11 @@ model CompanySettings {
   waInstallmentDueTemplate String?
   // Dias após a entrega da OS para disparar o pós-venda (default 7).
   waPostSaleDays          Int     @default(7)
+  // Medição/gestão de IA (Bloco C1). iaAvailable só super admin libera;
+  // iaEnabled ambos ligam/desligam; iaMonthlyTokenLimit null = ilimitado.
+  iaAvailable           Boolean  @default(false)
+  iaEnabled             Boolean  @default(false)
+  iaMonthlyTokenLimit   Int?
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
@@ -4325,6 +4331,25 @@ model WhatsappMessageLog {
   @@index([companyId, createdAt])
   @@index([companyId, type, status])
   @@index([customerId])
+}
+
+model AiTokenUsage {
+  id           String   @id @default(cuid())
+  companyId    String
+  feature      String   // "ocr_prescription" | "lead_qualification" | "audio_transcription"
+  provider     String   // "anthropic" | "openai"
+  model        String
+  inputTokens  Int      @default(0)
+  outputTokens Int      @default(0)
+  cacheTokens  Int      @default(0)
+  audioSeconds Int?
+  costUsd      Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt    DateTime @default(now())
+
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, createdAt])
+  @@index([companyId, feature])
 }
 
 enum WhatsappMessageType {
