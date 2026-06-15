@@ -32,6 +32,8 @@ const TEXT_PRICING: Record<string, TokenPrice> = {
     outputPerMillion: 15,
     cacheReadPerMillion: 0.3,
   },
+  // Alias que o Bloco B' usará (qualificação de leads). Mantido aqui para que a
+  // medição já cubra o B' assim que ele chamar a API com esse model id.
   "claude-sonnet-4-6": {
     inputPerMillion: 3,
     outputPerMillion: 15,

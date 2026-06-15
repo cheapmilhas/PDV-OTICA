@@ -75,6 +75,12 @@ export async function getMonthlyUsage(companyId: string): Promise<MonthlyUsage> 
     f.tokens += tokens;
     f.costUsd += cost;
   }
-  result.totalCostUsd = Math.round(result.totalCostUsd * 1_000_000) / 1_000_000;
+  // Arredonda em 6 casas (= precisão de Decimal(12,6)) tanto o total quanto cada
+  // feature, para o total e o breakdown exibidos nas telas baterem.
+  const round6 = (n: number) => Math.round(n * 1_000_000) / 1_000_000;
+  result.totalCostUsd = round6(result.totalCostUsd);
+  for (const f of Object.values(result.byFeature)) {
+    f.costUsd = round6(f.costUsd);
+  }
   return result;
 }

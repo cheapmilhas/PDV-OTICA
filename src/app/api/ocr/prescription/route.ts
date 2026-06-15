@@ -76,9 +76,6 @@ export async function POST(request: NextRequest) {
     });
     if (limited) return limited;
 
-    // Para medição de IA (não bloqueia — só registra). getCompanyId lê a mesma sessão.
-    const companyId = await getCompanyId();
-
     const body = await request.json();
     const { imageBase64, mimeType } = body as {
       imageBase64: string;
@@ -115,6 +112,11 @@ export async function POST(request: NextRequest) {
     )
       ? (mimeType as ImageMediaType)
       : "image/jpeg";
+
+    // Para medição de IA (não bloqueia — só registra). getCompanyId lê a mesma
+    // sessão já validada por requireAuth(); fica APÓS a validação de input para
+    // não fazer a leitura extra em requisições rejeitadas (400/413).
+    const companyId = await getCompanyId();
 
     const response = await anthropic.messages.create({
       model: "claude-sonnet-4-20250514",
