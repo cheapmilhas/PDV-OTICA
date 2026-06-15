@@ -209,6 +209,7 @@ model Company {
   recurringExpenses       RecurringExpense[]
   saasEmailLogs           SaasEmailLog[]
   whatsappConnection      WhatsappConnection?
+  whatsappConversations   WhatsappConversation[]
   leads                   Lead[]
   leadStages              LeadStage[]
 
@@ -4224,6 +4225,43 @@ model WhatsappConnection {
   company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([status])
+}
+
+model WhatsappConversation {
+  id            String    @id @default(cuid())
+  companyId     String
+  contactNumber String
+  contactName   String?
+  lastMessageAt DateTime  @default(now())
+  analyzedAt    DateTime?
+  leadId        String?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  messages WhatsappMessage[]
+
+  @@unique([companyId, contactNumber])
+  @@index([companyId, lastMessageAt])
+  @@index([companyId, analyzedAt])
+}
+
+model WhatsappMessage {
+  id             String   @id @default(cuid())
+  conversationId String
+  companyId      String
+  direction      String   // "inbound" | "outbound"
+  type           String   // "text" | "audio" | "image" | "other"
+  text           String?
+  mediaUrl       String?
+  evolutionId    String?  @unique
+  receivedAt     DateTime @default(now())
+  createdAt      DateTime @default(now())
+
+  conversation WhatsappConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+
+  @@index([companyId, conversationId])
+  @@index([conversationId, receivedAt])
 }
 
 enum WhatsappConnStatus {
