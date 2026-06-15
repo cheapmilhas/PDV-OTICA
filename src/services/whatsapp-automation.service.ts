@@ -75,10 +75,16 @@ interface CompanyCtx {
 }
 
 /**
- * Executa a varredura das automações para todas as óticas elegíveis.
+ * Executa a varredura das automações para as óticas elegíveis.
  * @param now data de referência (injetável p/ teste).
+ * @param options.companyId quando informado, limita a varredura a essa ótica
+ *   (usado pelo botão "Processar agora"). Sem ele, varre todas as conectadas
+ *   (comportamento do cron diário). O escopo deve vir da sessão, nunca do body.
  */
-export async function runWhatsappAutomations(now: Date = new Date()): Promise<AutomationRunResult> {
+export async function runWhatsappAutomations(
+  now: Date = new Date(),
+  options?: { companyId?: string },
+): Promise<AutomationRunResult> {
   const result: AutomationRunResult = {
     companiesProcessed: 0,
     sent: 0,
@@ -89,8 +95,11 @@ export async function runWhatsappAutomations(now: Date = new Date()): Promise<Au
 
   // Óticas conectadas (status CONNECTED). A flag global+allowlist é checada
   // por empresa logo abaixo (e de novo dentro de sendWhatsappMessage).
+  // Com options.companyId, restringe a uma única ótica (disparo manual).
   const connections = await prisma.whatsappConnection.findMany({
-    where: { status: "CONNECTED" },
+    where: options?.companyId
+      ? { status: "CONNECTED", companyId: options.companyId }
+      : { status: "CONNECTED" },
     select: { companyId: true },
   });
 
