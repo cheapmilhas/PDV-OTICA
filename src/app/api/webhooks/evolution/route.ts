@@ -3,6 +3,8 @@ import { jwtVerify } from "jose";
 import { prisma } from "@/lib/prisma";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
+import { parseInboundMessage } from "@/lib/validations/whatsapp-inbound";
+import { persistInboundMessage } from "@/services/whatsapp-message.service";
 
 const log = logger.child({ webhook: "evolution" });
 
@@ -169,6 +171,19 @@ export async function POST(request: Request) {
         await prisma.whatsappConnection.update({
           where: { id: conn.id },
           data: { status: "CONNECTING", lastQrAt: now, lastEventAt: now },
+        });
+        break;
+      }
+
+      case "messages.upsert": {
+        const parsed = parseInboundMessage(payload.data);
+        if (parsed) {
+          await persistInboundMessage(conn.companyId, parsed);
+        }
+        // outbound/inválido: ignora silenciosamente, ainda 200
+        await prisma.whatsappConnection.update({
+          where: { id: conn.id },
+          data: { lastEventAt: now },
         });
         break;
       }

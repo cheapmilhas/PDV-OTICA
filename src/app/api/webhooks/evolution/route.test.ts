@@ -14,12 +14,22 @@ import { SignJWT } from "jose";
 
 const whatsappFindUnique = vi.fn();
 const whatsappUpdate = vi.fn();
+const waConvUpsert = vi.fn();
+const waMsgFind = vi.fn();
+const waMsgCreate = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     whatsappConnection: {
       findUnique: (...a: unknown[]) => whatsappFindUnique(...a),
       update: (...a: unknown[]) => whatsappUpdate(...a),
+    },
+    whatsappConversation: {
+      upsert: (...a: unknown[]) => waConvUpsert(...a),
+    },
+    whatsappMessage: {
+      findUnique: (...a: unknown[]) => waMsgFind(...a),
+      create: (...a: unknown[]) => waMsgCreate(...a),
     },
   },
 }));
@@ -62,6 +72,9 @@ describe("POST /api/webhooks/evolution", () => {
   beforeEach(() => {
     whatsappFindUnique.mockReset();
     whatsappUpdate.mockReset();
+    waConvUpsert.mockReset();
+    waMsgFind.mockReset();
+    waMsgCreate.mockReset();
     vi.stubEnv("NODE_ENV", "test");
     process.env.EVOLUTION_WEBHOOK_SECRET = SECRET;
     delete process.env.ALLOW_UNSIGNED_EVOLUTION_WEBHOOK;
@@ -199,5 +212,47 @@ describe("POST /api/webhooks/evolution", () => {
     const b = whatsappUpdate.mock.calls[1][0].data;
     expect(a.status).toBe(b.status);
     expect(a.connectedNumber).toBe(b.connectedNumber);
+  });
+
+  it("messages.upsert inbound persiste a mensagem (200)", async () => {
+    waMsgFind.mockResolvedValue(null);
+    waConvUpsert.mockResolvedValue({ id: "conv1" });
+    waMsgCreate.mockResolvedValue({ id: "m1" });
+
+    const token = await signValid();
+    const req = makeRequest(
+      {
+        event: "messages.upsert",
+        instance: "vis_co1",
+        data: {
+          key: { id: "WAMID1", remoteJid: "5585999@s.whatsapp.net", fromMe: false },
+          pushName: "Maria",
+          message: { conversation: "tem óculos de grau?" },
+          messageTimestamp: 1750000000,
+        },
+      },
+      `Bearer ${token}`,
+    );
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(waMsgCreate).toHaveBeenCalled();
+  });
+
+  it("messages.upsert fromMe (outbound) é ignorado mas responde 200", async () => {
+    const token = await signValid();
+    const req = makeRequest(
+      {
+        event: "messages.upsert",
+        instance: "vis_co1",
+        data: {
+          key: { id: "X", remoteJid: "5585@s.whatsapp.net", fromMe: true },
+          message: { conversation: "resposta" },
+        },
+      },
+      `Bearer ${token}`,
+    );
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(waMsgCreate).not.toHaveBeenCalled();
   });
 });
