@@ -31,8 +31,12 @@ vi.mock("@/lib/prisma", () => ({
       findUnique: (...a: unknown[]) => waMsgFind(...a),
       create: (...a: unknown[]) => waMsgCreate(...a),
     },
+    customer: {
+      updateMany: (...a: unknown[]) => customerUpdateMany(...a),
+    },
   },
 }));
+const customerUpdateMany = vi.fn();
 
 vi.mock("@/lib/rate-limit", () => ({
   rateLimitResponse: () => null,
@@ -80,6 +84,7 @@ describe("POST /api/webhooks/evolution", () => {
     delete process.env.ALLOW_UNSIGNED_EVOLUTION_WEBHOOK;
     whatsappFindUnique.mockResolvedValue({ id: "conn1", companyId: "co1", status: "CONNECTING" });
     whatsappUpdate.mockResolvedValue({});
+    customerUpdateMany.mockReset().mockResolvedValue({ count: 1 });
   });
 
   afterEach(() => {
@@ -254,5 +259,56 @@ describe("POST /api/webhooks/evolution", () => {
     const res = await POST(req);
     expect(res.status).toBe(200);
     expect(waMsgCreate).not.toHaveBeenCalled();
+  });
+
+  it("opt-out: mensagem recebida 'SAIR' marca acceptsMarketing=false do cliente", async () => {
+    const token = await signValid();
+    const req = makeRequest({
+      event: "messages.upsert",
+      instance: "vis_co1",
+      data: {
+        key: { remoteJid: "5511988887777@s.whatsapp.net", fromMe: false },
+        message: { conversation: "SAIR" },
+      },
+    }, `Bearer ${token}`);
+    const res = await POST(req);
+    expect(res.status).toBe(200);
+    expect(customerUpdateMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: expect.objectContaining({ companyId: "co1", acceptsMarketing: true }),
+      data: { acceptsMarketing: false },
+    }));
+  });
+
+  it("opt-out: variações (PARAR, com pontuação) também descadastram", async () => {
+    const token = await signValid();
+    const req = makeRequest({
+      event: "messages.upsert",
+      instance: "vis_co1",
+      data: { key: { remoteJid: "5511988887777@s.whatsapp.net", fromMe: false }, message: { conversation: "Parar." } },
+    }, `Bearer ${token}`);
+    await POST(req);
+    expect(customerUpdateMany).toHaveBeenCalled();
+  });
+
+  it("mensagem normal (não opt-out) NÃO descadastra", async () => {
+    const token = await signValid();
+    const req = makeRequest({
+      event: "messages.upsert",
+      instance: "vis_co1",
+      data: { key: { remoteJid: "5511988887777@s.whatsapp.net", fromMe: false }, message: { conversation: "Oi, tudo bem?" } },
+    }, `Bearer ${token}`);
+    await POST(req);
+    expect(customerUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("mensagem NOSSA (fromMe=true) com 'SAIR' NÃO descadastra", async () => {
+    const token = await signValid();
+    const req = makeRequest({
+      event: "messages.upsert",
+      instance: "vis_co1",
+      data: { key: { remoteJid: "5511988887777@s.whatsapp.net", fromMe: true }, message: { conversation: "SAIR" } },
+    }, `Bearer ${token}`);
+    await POST(req);
+    expect(customerUpdateMany).not.toHaveBeenCalled();
   });
 });

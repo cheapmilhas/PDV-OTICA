@@ -35,11 +35,26 @@ interface EvolutionWebhookPayload {
   data?: {
     state?: string;
     statusReason?: number;
+    // messages.upsert: mensagem recebida (para detectar opt-out).
+    key?: { remoteJid?: string; fromMe?: boolean };
+    message?: {
+      conversation?: string;
+      extendedTextMessage?: { text?: string };
+    };
     // qrcode.updated pode trazer o objeto QR; não usamos o conteúdo aqui.
     [k: string]: unknown;
   };
   sender?: string;
   date_time?: string;
+}
+
+/** Palavras que, sozinhas na mensagem, sinalizam descadastro de marketing. */
+const OPT_OUT_KEYWORDS = new Set(["sair", "parar", "pare", "cancelar", "descadastrar", "stop"]);
+
+/** Extrai o texto de uma mensagem recebida (conversation ou extendedText). */
+function extractMessageText(data: EvolutionWebhookPayload["data"]): string | null {
+  const t = data?.message?.conversation ?? data?.message?.extendedTextMessage?.text;
+  return typeof t === "string" ? t : null;
 }
 
 /**
@@ -176,15 +191,42 @@ export async function POST(request: Request) {
       }
 
       case "messages.upsert": {
+        // (1) Inbox: registra a conversa/mensagem recebida (feature de inbox).
         const parsed = parseInboundMessage(payload.data);
         if (parsed) {
           await persistInboundMessage(conn.companyId, parsed);
         }
         // outbound/inválido: ignora silenciosamente, ainda 200
+
         await prisma.whatsappConnection.update({
           where: { id: conn.id },
           data: { lastEventAt: now },
         });
+
+        // (2) Opt-out (Fase C): mensagem RECEBIDA (fromMe=false) cujo texto é uma
+        // palavra de descadastro → marca acceptsMarketing=false no(s) cliente(s)
+        // com esse telefone na empresa. Transacionais (cobrança/OS) seguem
+        // permitidos. Independente do inbox — os dois rodam em sequência.
+        const fromMe = payload.data?.key?.fromMe === true;
+        const text = extractMessageText(payload.data);
+        if (!fromMe && text) {
+          const word = text.trim().toLowerCase().replace(/[.!?]+$/, "");
+          if (OPT_OUT_KEYWORDS.has(word)) {
+            const senderDigits = extractNumber(payload.data?.key?.remoteJid ?? payload.sender);
+            if (senderDigits) {
+              const tail = senderDigits.slice(-8); // casa com variações de DDI/9º dígito
+              await prisma.customer.updateMany({
+                where: {
+                  companyId: conn.companyId,
+                  acceptsMarketing: true,
+                  phone: { contains: tail },
+                },
+                data: { acceptsMarketing: false },
+              });
+              log.info("Opt-out de marketing por WhatsApp", { companyId: conn.companyId });
+            }
+          }
+        }
         break;
       }
 

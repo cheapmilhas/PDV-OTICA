@@ -21,10 +21,14 @@
  *   POST   /webhook/set/{instance}   (body ANINHADO sob `webhook`)
  */
 
-/** Eventos que nos interessam na Fase B1 (apenas conexão/status). */
+/**
+ * Eventos assinados no webhook: conexão/status (B1) + mensagens recebidas (B2,
+ * para detectar opt-out "SAIR/PARAR").
+ */
 export const WHATSAPP_WEBHOOK_EVENTS = [
   "QRCODE_UPDATED",
   "CONNECTION_UPDATE",
+  "MESSAGES_UPSERT",
 ] as const;
 
 /** Canal de integração — QR Code (Baileys). Nunca Cloud API. */

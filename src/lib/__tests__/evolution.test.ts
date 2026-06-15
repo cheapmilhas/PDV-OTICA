@@ -65,7 +65,8 @@ describe("evolution client", () => {
     // webhook inline com jwt_key e eventos de conexão
     expect(body.webhook.url).toBe("https://app.test/api/webhooks/evolution");
     expect(body.webhook.headers.jwt_key).toBe("WHSECRET");
-    expect(body.webhook.events).toEqual(["QRCODE_UPDATED", "CONNECTION_UPDATE"]);
+    // QR/conexão (B1) + MESSAGES_UPSERT (B2: inbox + opt-out).
+    expect(body.webhook.events).toEqual(["QRCODE_UPDATED", "CONNECTION_UPDATE", "MESSAGES_UPSERT"]);
 
     expect(res.qrcode?.base64).toBe("data:image/png;base64,AAA");
   });

@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package, UserCog, ScrollText, RefreshCw, Mail, ShieldCheck } from "lucide-react";
+import { Package, UserCog, ScrollText, RefreshCw, Mail, ShieldCheck, MessageCircle } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { requireAdmin } from "@/lib/admin-session";
@@ -11,6 +11,7 @@ const SECTIONS = [
   { href: "/admin/configuracoes/sincronizacao", icon: RefreshCw, title: "Sincronização", desc: "Auto-sync de configurações" },
   { href: "/admin/configuracoes/emails", icon: Mail, title: "Emails", desc: "Emails transacionais do SaaS" },
   { href: "/admin/configuracoes/seguranca", icon: ShieldCheck, title: "Segurança", desc: "MFA da sua conta admin" },
+  { href: "/admin/configuracoes/whatsapp", icon: MessageCircle, title: "WhatsApp", desc: "Conexões de WhatsApp por ótica" },
 ];
 
 export default async function ConfiguracoesHubPage() {

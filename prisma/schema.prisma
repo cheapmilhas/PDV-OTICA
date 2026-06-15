@@ -1902,6 +1902,20 @@ model CompanySettings {
   createdAt             DateTime @default(now())
   updatedAt             DateTime @updatedAt
   primaryColor          String?
+  // Automações de WhatsApp (Fase B2) — liga/desliga por tipo, por ótica.
+  // Default OFF: o cron só envia o tipo cuja flag está ligada (e a ótica
+  // habilitada+conectada). Os campos *Template guardam a copy customizada
+  // (placeholders {chave}); null = usa o texto padrão do sistema.
+  waOsReadyEnabled       Boolean @default(false)
+  waPostSaleEnabled      Boolean @default(false)
+  waBirthdayEnabled      Boolean @default(false)
+  waInstallmentDueEnabled Boolean @default(false)
+  waOsReadyTemplate       String?
+  waPostSaleTemplate      String?
+  waBirthdayTemplate      String?
+  waInstallmentDueTemplate String?
+  // Dias após a entrega da OS para disparar o pós-venda (default 7).
+  waPostSaleDays          Int     @default(7)
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])

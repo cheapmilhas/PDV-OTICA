@@ -3,8 +3,11 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { WhatsappConnectClient } from "./whatsapp-connect-client";
+import { WhatsappAutomationsClient } from "./whatsapp-automations-client";
+import { WhatsappHistoryClient } from "./whatsapp-history-client";
 import { Card, CardContent } from "@/components/ui/card";
-import { Loader2, MessageCircleOff } from "lucide-react";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Loader2, MessageCircleOff, QrCode, Zap, History } from "lucide-react";
 
 function WhatsappPageGated() {
   const { enabled, loading } = useWhatsappEnabled();
@@ -36,7 +39,26 @@ function WhatsappPageGated() {
     );
   }
 
-  return <WhatsappConnectClient />;
+  return (
+    <div className="p-6 max-w-3xl mx-auto">
+      <Tabs defaultValue="conexao" className="space-y-5">
+        <TabsList>
+          <TabsTrigger value="conexao"><QrCode className="h-4 w-4 mr-2" />Conexão</TabsTrigger>
+          <TabsTrigger value="automacoes"><Zap className="h-4 w-4 mr-2" />Automações</TabsTrigger>
+          <TabsTrigger value="historico"><History className="h-4 w-4 mr-2" />Histórico</TabsTrigger>
+        </TabsList>
+        <TabsContent value="conexao">
+          <WhatsappConnectClient />
+        </TabsContent>
+        <TabsContent value="automacoes">
+          <WhatsappAutomationsClient />
+        </TabsContent>
+        <TabsContent value="historico">
+          <WhatsappHistoryClient />
+        </TabsContent>
+      </Tabs>
+    </div>
+  );
 }
 
 export default function WhatsappConfigPage() {
