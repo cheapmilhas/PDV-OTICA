@@ -210,6 +210,7 @@ model Company {
   saasEmailLogs           SaasEmailLog[]
   whatsappConnection      WhatsappConnection?
   whatsappConversations   WhatsappConversation[]
+  whatsappMessages        WhatsappMessageLog[]
   leads                   Lead[]
   leadStages              LeadStage[]
 
@@ -447,6 +448,7 @@ model Customer {
   serviceOrders      ServiceOrder[]
   crmContacts        CrmContact[]           @relation("CrmContacts")
   crmReminders       CustomerReminder[]     @relation("CustomerReminders")
+  whatsappMessages   WhatsappMessageLog[]
   consentRecords     ConsentRecord[]
   accessLogs         CustomerAccessLog[]
   leads              Lead[]                 @relation("LeadCustomer")
@@ -4269,4 +4271,58 @@ enum WhatsappConnStatus {
   CONNECTING
   CONNECTED
   FAILED
+}
+
+/// Outbox de mensagens de WhatsApp enviadas pelo motor (Fase B2).
+///
+/// Fonte da verdade de TODO envio (manual ou automático): registra SENT/FAILED/
+/// SKIPPED com o motivo. Idempotência via @@unique(companyId, type, referenceId,
+/// periodKey) — no Postgres NULLs são distintos no índice único, então envios
+/// manuais (periodKey null) nunca colidem; só os automáticos (que preenchem
+/// periodKey) ficam protegidos de reenvio. Molde: SaasEmailLog.
+///
+/// LGPD: `content` guarda só o texto efetivamente enviado (nome, nº OS, valor,
+/// vencimento) — NUNCA grau/receita/dado clínico.
+model WhatsappMessageLog {
+  id                 String                @id @default(cuid())
+  companyId          String
+  customerId         String?
+  type               WhatsappMessageType
+  phone              String
+  content            String
+  status             WhatsappMessageStatus
+  /// Motivo quando SKIPPED (feature_off, not_connected, no_consent, no_phone, already_sent).
+  skipReason         String?
+  /// Erro quando FAILED (mensagem do provedor/rede).
+  error              String?
+  /// Id da mensagem retornado pela Evolution (quando SENT).
+  evolutionMessageId String?
+  /// Id da entidade de origem (saleId, serviceOrderId, accountReceivableId, customerId…).
+  referenceId        String?
+  /// Janela de dedupe para envios automáticos (ex.: "2026-06-15"). Null = manual.
+  periodKey          String?
+  createdAt          DateTime              @default(now())
+  sentAt             DateTime?
+
+  company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  customer Customer? @relation(fields: [customerId], references: [id])
+
+  @@unique([companyId, type, referenceId, periodKey])
+  @@index([companyId, createdAt])
+  @@index([companyId, type, status])
+  @@index([customerId])
+}
+
+enum WhatsappMessageType {
+  SHARE_LINK
+  OS_READY
+  POST_SALE
+  BIRTHDAY
+  INSTALLMENT_DUE
+}
+
+enum WhatsappMessageStatus {
+  SENT
+  FAILED
+  SKIPPED
 }

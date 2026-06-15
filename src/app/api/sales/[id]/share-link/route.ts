@@ -3,7 +3,7 @@ import { SignJWT } from "jose";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { prisma } from "@/lib/prisma";
 import { handleApiError } from "@/lib/error-handler";
-import { sendWhatsAppText } from "@/lib/whatsapp";
+import { sendWhatsappMessage } from "@/lib/whatsapp-send";
 import { whatsappTemplates } from "@/lib/whatsapp-templates";
 import { logger } from "@/lib/logger";
 
@@ -33,7 +33,7 @@ export async function POST(
     const sale = await prisma.sale.findFirst({
       where: { id, companyId },
       include: {
-        customer: { select: { name: true, phone: true } },
+        customer: { select: { name: true, phone: true, acceptsMarketing: true } },
         company: { select: { name: true, phone: true } },
       },
     });
@@ -58,19 +58,37 @@ export async function POST(
       // Sem body é ok — apenas retorna o link
     }
 
+    // Geração do link acima é o produto principal e SEMPRE funciona. O envio por
+    // WhatsApp é adicional e só sai de fato para a ótica habilitada + conectada
+    // (senão o serviço registra SKIPPED e devolve graciosamente). type SHARE_LINK
+    // é transacional (não exige consentimento de marketing). periodKey null →
+    // envio manual, sem dedupe.
     let whatsappSent = false;
-    if (body.sendWhatsApp && sale.customer?.phone) {
-      const result = await sendWhatsAppText({
-        to: sale.customer.phone,
-        text: whatsappTemplates.saleReceipt({
+    if (body.sendWhatsApp && sale.customer) {
+      const result = await sendWhatsappMessage({
+        companyId,
+        customer: {
+          id: sale.customerId,
+          name: sale.customer.name,
+          phone: sale.customer.phone,
+          acceptsMarketing: sale.customer.acceptsMarketing,
+        },
+        type: "SHARE_LINK",
+        transactional: true,
+        referenceId: sale.id,
+        template: whatsappTemplates.saleReceipt({
           customerName: sale.customer.name,
           company: { name: sale.company.name, phone: sale.company.phone },
           total: `R$ ${Number(sale.total).toFixed(2).replace(".", ",")}`,
           receiptUrl,
         }),
       });
-      whatsappSent = result.sent;
-      log.info("Recibo enviado por WhatsApp", { saleId: sale.id, sent: whatsappSent });
+      whatsappSent = result.status === "SENT";
+      log.info("Recibo via WhatsApp", {
+        saleId: sale.id,
+        status: result.status,
+        skipReason: result.skipReason,
+      });
     }
 
     return NextResponse.json({

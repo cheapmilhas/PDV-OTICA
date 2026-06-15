@@ -101,6 +101,21 @@ describe("evolution client", () => {
     expect(init.method).toBe("DELETE");
   });
 
+  it("sendText: POST /message/sendText/{instance} com number+text e apikey", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ key: { id: "EVO_MSG_1" }, status: "PENDING" }));
+
+    const res = await evolution.sendText("vis_co1", "5511999999999", "Olá!");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://evo.test/message/sendText/vis_co1");
+    expect(init.method).toBe("POST");
+    expect(init.headers.apikey).toBe("GLOBAL_KEY");
+    const body = JSON.parse(init.body);
+    expect(body.number).toBe("5511999999999");
+    expect(body.text).toBe("Olá!");
+    expect(res.key?.id).toBe("EVO_MSG_1");
+  });
+
   it("setWebhook: POST /webhook/set/{instance} com body ANINHADO sob 'webhook'", async () => {
     fetchMock.mockResolvedValueOnce(okJson({ ok: true }));
 

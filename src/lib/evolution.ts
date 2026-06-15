@@ -60,6 +60,17 @@ export interface EvolutionConnectionState {
   };
 }
 
+/** Resposta do envio de texto (campos relevantes; o resto é ignorado). */
+export interface EvolutionSendResponse {
+  key?: {
+    id?: string;
+    remoteJid?: string;
+    fromMe?: boolean;
+  };
+  status?: string;
+  message?: unknown;
+}
+
 interface WebhookConfigInput {
   url: string;
   /** Segredo compartilhado para a Evolution assinar o webhook (JWT HS256). */
@@ -196,6 +207,27 @@ export const evolution = {
       {
         method: "POST",
         body: JSON.stringify({ webhook: buildWebhookConfig(webhook) }),
+      },
+    );
+  },
+
+  /**
+   * Envia uma mensagem de texto pela instância (Fase B2).
+   *
+   * `POST /message/sendText/{instance}` com header `apikey` (chave global).
+   * `number` deve vir já normalizado (somente dígitos com DDI, ex: 5511999999999).
+   * Retorna o `key.id` da mensagem quando disponível.
+   */
+  async sendText(
+    instanceName: string,
+    number: string,
+    text: string,
+  ): Promise<EvolutionSendResponse> {
+    return evolutionFetch<EvolutionSendResponse>(
+      `/message/sendText/${encodeURIComponent(instanceName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({ number, text }),
       },
     );
   },
