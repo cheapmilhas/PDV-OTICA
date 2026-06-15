@@ -15,6 +15,12 @@ vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ info: vi.fn(), error: vi.fn() }) },
 }));
 
+const ensureDefaultStages = vi.fn();
+vi.mock("@/services/lead-stage.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/lead-stage.service")>();
+  return { ...actual, ensureDefaultStages: (...a: unknown[]) => ensureDefaultStages(...a) };
+});
+
 // Contadores controláveis: before usa o 1º valor de cada count, after o 2º.
 const counts = {
   chartOfAccounts: [0, 0],

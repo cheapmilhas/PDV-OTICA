@@ -7,6 +7,12 @@ vi.mock("@/services/finance-setup.service", async (importOriginal) => {
   return { ...actual, setupCompanyFinance: (...a: unknown[]) => setupCompanyFinance(...a) };
 });
 
+const ensureDefaultStages = vi.fn();
+vi.mock("@/services/lead-stage.service", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/services/lead-stage.service")>();
+  return { ...actual, ensureDefaultStages: (...a: unknown[]) => ensureDefaultStages(...a) };
+});
+
 vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ info: vi.fn(), error: vi.fn() }) },
 }));
