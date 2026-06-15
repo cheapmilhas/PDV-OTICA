@@ -1,0 +1,91 @@
+/**
+ * Tabela de preço de IA (custo REAL em USD) e tradução tokens→créditos.
+ *
+ * Preços em USD por 1 milhão de tokens (Anthropic) ou por segundo (áudio).
+ * Constantes versionadas — atualizar à mão quando o provedor mudar preço.
+ * NÃO buscar câmbio em runtime (v1): USD_BRL_RATE é fixo.
+ * A ótica NUNCA vê USD/BRL — só créditos (tokensToCredits).
+ */
+
+export const USD_BRL_RATE = 5.5; // taxa fixa v1 (atualizar manualmente)
+export const CREDIT_TOKEN_FACTOR = 1000; // 1 crédito = 1000 tokens
+
+interface TokenPrice {
+  /** USD por 1M de input tokens */
+  inputPerMillion: number;
+  /** USD por 1M de output tokens */
+  outputPerMillion: number;
+  /** USD por 1M de tokens lidos do cache */
+  cacheReadPerMillion: number;
+}
+
+interface AudioPrice {
+  /** USD por segundo de áudio */
+  perSecond: number;
+}
+
+/** Preço por modelo de texto (Anthropic). Chave = model string exata da API. */
+const TEXT_PRICING: Record<string, TokenPrice> = {
+  // Claude Sonnet 4 — $3/M in, $15/M out, $0.30/M cache read
+  "claude-sonnet-4-20250514": {
+    inputPerMillion: 3,
+    outputPerMillion: 15,
+    cacheReadPerMillion: 0.3,
+  },
+  "claude-sonnet-4-6": {
+    inputPerMillion: 3,
+    outputPerMillion: 15,
+    cacheReadPerMillion: 0.3,
+  },
+};
+
+/** Preço por modelo de áudio (OpenAI Whisper). */
+const AUDIO_PRICING: Record<string, AudioPrice> = {
+  // Whisper — $0.006/minuto = $0.0001/segundo
+  "whisper-1": { perSecond: 0.006 / 60 },
+};
+
+export interface CostInput {
+  provider: string;
+  model: string;
+  inputTokens?: number;
+  outputTokens?: number;
+  cacheTokens?: number;
+  audioSeconds?: number;
+}
+
+/**
+ * Calcula o custo REAL em USD de uma chamada de IA.
+ * Fail-safe: modelo desconhecido → 0 (nunca lança; a medição não pode quebrar a feature).
+ */
+export function computeCostUsd(input: CostInput): number {
+  const audio = AUDIO_PRICING[input.model];
+  if (audio) {
+    const seconds = input.audioSeconds ?? 0;
+    return round6(seconds * audio.perSecond);
+  }
+
+  const text = TEXT_PRICING[input.model];
+  if (text) {
+    const inputCost = ((input.inputTokens ?? 0) / 1_000_000) * text.inputPerMillion;
+    const outputCost = ((input.outputTokens ?? 0) / 1_000_000) * text.outputPerMillion;
+    const cacheCost = ((input.cacheTokens ?? 0) / 1_000_000) * text.cacheReadPerMillion;
+    return round6(inputCost + outputCost + cacheCost);
+  }
+
+  return 0; // modelo desconhecido — fail-safe
+}
+
+/** Converte custo USD em BRL (taxa fixa). Uso interno do super admin. */
+export function usdToBrl(usd: number): number {
+  return round6(usd * USD_BRL_RATE);
+}
+
+/** Traduz tokens em créditos amigáveis para a ótica (sem R$). */
+export function tokensToCredits(tokens: number): number {
+  return tokens / CREDIT_TOKEN_FACTOR;
+}
+
+function round6(n: number): number {
+  return Math.round(n * 1_000_000) / 1_000_000;
+}
