@@ -50,7 +50,12 @@ function StatusBadge({ item }: { item: HistoryItem }) {
   );
 }
 
-export function WhatsappHistoryClient() {
+interface WhatsappHistoryClientProps {
+  /** Muda → recarrega do início (ex.: após "Processar agora"). */
+  refreshKey?: number;
+}
+
+export function WhatsappHistoryClient({ refreshKey = 0 }: WhatsappHistoryClientProps) {
   const [items, setItems] = useState<HistoryItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -70,8 +75,9 @@ export function WhatsappHistoryClient() {
   }, []);
 
   useEffect(() => {
+    setLoading(true);
     fetchPage(null).finally(() => setLoading(false));
-  }, [fetchPage]);
+  }, [fetchPage, refreshKey]);
 
   async function loadMore() {
     setLoadingMore(true);

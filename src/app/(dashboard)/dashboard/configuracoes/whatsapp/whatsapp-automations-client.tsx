@@ -7,8 +7,33 @@ import { Switch } from "@/components/ui/switch";
 import { Textarea } from "@/components/ui/textarea";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogFooter,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogCancel,
+  AlertDialogAction,
+} from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Loader2, Save, Glasses, HeartHandshake, Cake, CalendarClock, Info } from "lucide-react";
+import { Loader2, Save, Glasses, HeartHandshake, Cake, CalendarClock, Info, Send } from "lucide-react";
+
+/** Rótulos por tipo para o resumo do disparo manual. */
+const RUN_TYPE_LABEL: Record<string, string> = {
+  OS_READY: "Óculos pronto",
+  POST_SALE: "Pós-venda",
+  BIRTHDAY: "Aniversário",
+  INSTALLMENT_DUE: "Crediário",
+};
+
+interface RunResult {
+  sent: number;
+  skipped: number;
+  failed: number;
+  byType: Record<string, { sent: number; skipped: number; failed: number }>;
+}
 
 interface AutomationState {
   enabled: boolean;
@@ -35,11 +60,18 @@ const PLACEHOLDER_HINT: Record<string, string> = {
   installmentDue: "{cliente}, {otica}, {valor}, {vencimento}, {parcela}",
 };
 
-export function WhatsappAutomationsClient() {
+interface WhatsappAutomationsClientProps {
+  /** Chamado após um disparo manual bem-sucedido (para recarregar o Histórico). */
+  onProcessed?: () => void;
+}
+
+export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsClientProps = {}) {
   const [data, setData] = useState<AutomationsData | null>(null);
   const [defaults, setDefaults] = useState<Record<string, string>>({});
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [confirmOpen, setConfirmOpen] = useState(false);
+  const [running, setRunning] = useState(false);
 
   const load = useCallback(async () => {
     try {
@@ -88,6 +120,42 @@ export function WhatsappAutomationsClient() {
     }
   }
 
+  async function handleRunNow() {
+    setConfirmOpen(false);
+    setRunning(true);
+    try {
+      const res = await fetch("/api/whatsapp/run-now", { method: "POST" });
+      const result = await res.json();
+      if (!result.success) {
+        toast.error(result.error?.message || "Erro ao processar mensagens");
+        return;
+      }
+      const r: RunResult = result.data;
+      if (r.sent === 0 && r.skipped === 0 && r.failed === 0) {
+        toast.info("Nada pendente para enviar agora.");
+      } else {
+        const byType = Object.entries(r.byType)
+          .map(([type, b]) => {
+            const label = RUN_TYPE_LABEL[type] ?? type;
+            const parts: string[] = [];
+            if (b.sent) parts.push(`${b.sent} enviada${b.sent > 1 ? "s" : ""}`);
+            if (b.skipped) parts.push(`${b.skipped} pulada${b.skipped > 1 ? "s" : ""}`);
+            if (b.failed) parts.push(`${b.failed} ${b.failed > 1 ? "falharam" : "falhou"}`);
+            return `${label}: ${parts.join(", ")}`;
+          })
+          .join(" · ");
+        toast.success(`${r.sent} enviada(s) · ${r.skipped} pulada(s) · ${r.failed} ${r.failed === 1 ? "falhou" : "falharam"}`, {
+          description: byType || undefined,
+        });
+      }
+      onProcessed?.();
+    } catch {
+      toast.error("Erro ao processar mensagens");
+    } finally {
+      setRunning(false);
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-16">
@@ -110,6 +178,43 @@ export function WhatsappAutomationsClient() {
           para clientes que aceitam receber.
         </p>
       </div>
+
+      <Card className="border-teal-200 bg-teal-50/40">
+        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
+          <div>
+            <p className="font-medium text-sm">Disparar mensagens agora</p>
+            <p className="text-sm text-muted-foreground">
+              Processa na hora tudo que está pendente hoje, sem esperar o envio automático das 9h.
+            </p>
+          </div>
+          <Button
+            onClick={() => setConfirmOpen(true)}
+            disabled={running}
+            variant="outline"
+            className="border-teal-300 text-teal-700 hover:bg-teal-100 hover:text-teal-800 shrink-0"
+          >
+            {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+            {running ? "Processando…" : "Processar agora"}
+          </Button>
+        </CardContent>
+      </Card>
+
+      <AlertDialog open={confirmOpen} onOpenChange={setConfirmOpen}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Enviar mensagens agora?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Isso vai enviar imediatamente todas as mensagens pendentes de hoje (óculos pronto,
+              aniversário, pós-venda, crediário) para os clientes elegíveis. Mensagens já enviadas
+              hoje não são repetidas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleRunNow}>Sim, enviar agora</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       {keys.map((key) => {
         const meta = TYPE_META[key];

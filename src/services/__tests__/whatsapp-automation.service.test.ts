@@ -74,6 +74,13 @@ describe("runWhatsappAutomations", () => {
     }));
   });
 
+  it("com options.companyId → restringe a varredura àquela ótica", async () => {
+    await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"), { companyId: "co1" });
+    expect(connFindMany).toHaveBeenCalledWith(expect.objectContaining({
+      where: { status: "CONNECTED", companyId: "co1" },
+    }));
+  });
+
   it("todas as flags OFF → não envia nada", async () => {
     const r = await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"));
     expect(r.companiesProcessed).toBe(1);

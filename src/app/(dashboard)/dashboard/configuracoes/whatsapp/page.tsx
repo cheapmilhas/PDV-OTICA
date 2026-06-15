@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { WhatsappConnectClient } from "./whatsapp-connect-client";
@@ -11,6 +12,8 @@ import { Loader2, MessageCircleOff, QrCode, Zap, History } from "lucide-react";
 
 function WhatsappPageGated() {
   const { enabled, loading } = useWhatsappEnabled();
+  // Incrementado após "Processar agora" → força o Histórico a recarregar.
+  const [historyRefreshKey, setHistoryRefreshKey] = useState(0);
 
   if (loading) {
     return (
@@ -51,10 +54,10 @@ function WhatsappPageGated() {
           <WhatsappConnectClient />
         </TabsContent>
         <TabsContent value="automacoes">
-          <WhatsappAutomationsClient />
+          <WhatsappAutomationsClient onProcessed={() => setHistoryRefreshKey((k) => k + 1)} />
         </TabsContent>
         <TabsContent value="historico">
-          <WhatsappHistoryClient />
+          <WhatsappHistoryClient refreshKey={historyRefreshKey} />
         </TabsContent>
       </Tabs>
     </div>
