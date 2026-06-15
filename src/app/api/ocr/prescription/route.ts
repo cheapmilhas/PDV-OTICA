@@ -1,7 +1,8 @@
 import { NextRequest, NextResponse } from "next/server";
 import Anthropic from "@anthropic-ai/sdk";
-import { requireAuth } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
+import { logAiUsage } from "@/services/ai-usage.service";
 import { rateLimitResponse } from "@/lib/rate-limit";
 
 // Limite de tamanho de base64: ~8MB de imagem (cobre fotos de receita de boa qualidade
@@ -75,6 +76,9 @@ export async function POST(request: NextRequest) {
     });
     if (limited) return limited;
 
+    // Para medição de IA (não bloqueia — só registra). getCompanyId lê a mesma sessão.
+    const companyId = await getCompanyId();
+
     const body = await request.json();
     const { imageBase64, mimeType } = body as {
       imageBase64: string;
@@ -134,6 +138,17 @@ export async function POST(request: NextRequest) {
           ],
         },
       ],
+    });
+
+    // Medição de tokens (C1) — fail-safe, não bloqueia o OCR.
+    await logAiUsage({
+      companyId,
+      feature: "ocr_prescription",
+      provider: "anthropic",
+      model: "claude-sonnet-4-20250514",
+      inputTokens: response.usage.input_tokens ?? 0,
+      outputTokens: response.usage.output_tokens ?? 0,
+      cacheTokens: response.usage.cache_read_input_tokens ?? 0,
     });
 
     const textBlock = response.content.find((block) => block.type === "text");
