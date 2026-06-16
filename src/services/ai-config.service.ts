@@ -1,6 +1,8 @@
 import { prisma } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/secret-cipher";
+import { logger } from "@/lib/logger";
 
+const log = logger.child({ service: "ai-config" });
 const SINGLETON_ID = "global";
 
 export interface AiConfigView {
@@ -55,8 +57,11 @@ export async function getAnthropicKey(): Promise<string | undefined> {
   if (c?.anthropicKeyEnc) {
     try {
       return decryptSecret(c.anthropicKeyEnc);
-    } catch {
-      /* fall through to env */
+    } catch (err) {
+      // Key cifrada corrompida (write parcial / ENCRYPTION_KEY trocada / edição manual).
+      // Cai na env, mas LOGA — senão a UI mostra "configurada" e a IA usa outra key
+      // silenciosamente, confundindo a operação numa rotação de chave.
+      log.warn("getAnthropicKey: falha ao decifrar a key do banco — usando env como fallback", { err });
     }
   }
   return process.env.ANTHROPIC_API_KEY;

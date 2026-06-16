@@ -99,6 +99,25 @@ describe("PUT /api/admin/ai-config", () => {
     expect(json.data).toEqual(updatedView);
   });
 
+  it("rejeita creditTokenFactor=0 (divisor → Infinity/NaN no medidor da ótica)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ creditTokenFactor: 0 }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty("creditTokenFactor"); // guard >= 1 barra o 0
+  });
+
+  it("rejeita usdBrlRate/markupPercent negativos (custo R$ negativo)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ usdBrlRate: -1, markupPercent: -5 }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty("usdBrlRate");
+    expect(callArg).not.toHaveProperty("markupPercent");
+  });
+
   it("200 only passes numeric fields that are present and valid", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);

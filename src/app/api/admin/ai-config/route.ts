@@ -34,9 +34,11 @@ export async function PUT(request: Request) {
   } = {};
 
   if (typeof body.anthropicKey === "string") patch.anthropicKey = body.anthropicKey;
-  if (typeof body.usdBrlRate === "number") patch.usdBrlRate = body.usdBrlRate;
-  if (typeof body.markupPercent === "number") patch.markupPercent = body.markupPercent;
-  if (typeof body.creditTokenFactor === "number") patch.creditTokenFactor = body.creditTokenFactor;
+  // Bounds no servidor (o min do input HTML é burlável por chamada direta):
+  if (typeof body.usdBrlRate === "number" && body.usdBrlRate >= 0) patch.usdBrlRate = body.usdBrlRate;
+  if (typeof body.markupPercent === "number" && body.markupPercent >= 0) patch.markupPercent = body.markupPercent;
+  // creditTokenFactor é divisor (tokensToCredits = tokens/fator) → 0 daria Infinity/NaN no medidor da ótica.
+  if (typeof body.creditTokenFactor === "number" && body.creditTokenFactor >= 1) patch.creditTokenFactor = body.creditTokenFactor;
 
   const data = await updateAiConfig(patch);
   return NextResponse.json({ data });
