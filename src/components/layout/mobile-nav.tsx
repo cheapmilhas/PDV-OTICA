@@ -39,6 +39,7 @@ import {
   CalendarClock,
   MessageCircle,
   Filter,
+  Sparkles,
 } from "lucide-react";
 
 const primaryNav = [
@@ -76,6 +77,7 @@ const moreNav = [
   { icon: CreditCard, label: "Cartões", href: "/dashboard/financeiro/cartoes", permission: "financial.view", feature: "card_receivables" },
   { icon: CalendarClock, label: "Desp. Recorrentes", href: "/dashboard/financeiro/despesas-recorrentes", permission: "financial.view", feature: "recurring_expenses" },
   { icon: MessageCircle, label: "WhatsApp", href: "/dashboard/configuracoes/whatsapp", permission: "settings.edit", flag: "whatsapp" as const },
+  { icon: Sparkles, label: "IA", href: "/dashboard/configuracoes/ia", permission: "settings.edit" },
   { icon: Settings, label: "Config", href: "/dashboard/configuracoes", permission: "settings.view" },
 ];
 

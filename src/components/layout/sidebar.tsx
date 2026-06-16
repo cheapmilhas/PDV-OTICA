@@ -323,6 +323,12 @@ const menuItems: MenuSection[] = [
         flag: "whatsapp"
       },
       {
+        name: "Inteligência Artificial",
+        href: "/dashboard/configuracoes/ia",
+        icon: Sparkles,
+        permission: "settings.edit",
+      },
+      {
         name: "Usuários",
         href: "/dashboard/usuarios",
         icon: Shield,

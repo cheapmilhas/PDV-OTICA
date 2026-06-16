@@ -19,6 +19,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+import type { NextRequest } from "next/server";
 import { PUT } from "./route";
 import { prisma } from "@/lib/prisma";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
@@ -31,7 +32,7 @@ function makeRequest(body: unknown) {
     method: "PUT",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(body),
-  });
+  }) as unknown as NextRequest;
 }
 
 describe("PUT /api/company/ai-settings", () => {
