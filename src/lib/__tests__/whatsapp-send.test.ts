@@ -125,6 +125,52 @@ describe("sendWhatsappMessage", () => {
     expect(sendText).not.toHaveBeenCalled();
   });
 
+  /**
+   * Com a fila anti-bloqueio, uma mensagem fica PENDING/PROCESSING ANTES de
+   * virar SENT. O dedupe precisa considerar os 3 estados, senão o cron recria a
+   * mesma mensagem. O mock devolve a linha existente só se o filtro de status da
+   * query incluir o estado dela — garantindo que a query realmente busque os 3.
+   */
+  const dedupeMockFor = (existingStatus: string) =>
+    async (...a: any[]) => {
+      const status = a[0]?.where?.status;
+      const queried =
+        status && typeof status === "object" && Array.isArray(status.in)
+          ? status.in
+          : [status];
+      return queried.includes(existingStatus) ? { id: "prev" } : null;
+    };
+
+  it("SKIP already_sent quando há PENDING com a mesma chave (fila)", async () => {
+    logFindFirst.mockImplementation(dedupeMockFor("PENDING"));
+    const r = await sendWhatsappMessage({
+      companyId: "co1", customer: baseCustomer, type: "BIRTHDAY",
+      template: "oi", referenceId: "cust1", periodKey: "2026-06-15",
+    });
+    expect(r.skipReason).toBe("already_sent");
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("SKIP already_sent quando há PROCESSING com a mesma chave (fila)", async () => {
+    logFindFirst.mockImplementation(dedupeMockFor("PROCESSING"));
+    const r = await sendWhatsappMessage({
+      companyId: "co1", customer: baseCustomer, type: "BIRTHDAY",
+      template: "oi", referenceId: "cust1", periodKey: "2026-06-15",
+    });
+    expect(r.skipReason).toBe("already_sent");
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
+  it("SKIP already_sent quando há SENT com a mesma chave (fila) — estado coberto", async () => {
+    logFindFirst.mockImplementation(dedupeMockFor("SENT"));
+    const r = await sendWhatsappMessage({
+      companyId: "co1", customer: baseCustomer, type: "BIRTHDAY",
+      template: "oi", referenceId: "cust1", periodKey: "2026-06-15",
+    });
+    expect(r.skipReason).toBe("already_sent");
+    expect(sendText).not.toHaveBeenCalled();
+  });
+
   it("envio manual (periodKey null) NÃO checa idempotência", async () => {
     await sendWhatsappMessage({
       companyId: "co1", customer: baseCustomer, type: "SHARE_LINK",

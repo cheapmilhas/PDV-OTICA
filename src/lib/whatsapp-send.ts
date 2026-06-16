@@ -117,11 +117,14 @@ export async function checkWhatsappEligibility(
     return { eligible: false, skipReason: "no_phone", content };
   }
 
-  // 5. Idempotência: já existe SENT com a mesma chave de dedupe?
+  // 5. Idempotência: já existe mensagem com a mesma chave de dedupe?
+  //    Considera PENDING/PROCESSING/SENT — com a fila anti-bloqueio a mensagem
+  //    fica PENDING/PROCESSING antes de virar SENT; se olhasse só SENT, o cron
+  //    recriaria a mesma mensagem ainda na fila.
   //    (Pula quando periodKey é null — envio manual nunca colide.)
   if (periodKey) {
     const dup = await prisma.whatsappMessageLog.findFirst({
-      where: { companyId, type, referenceId, periodKey, status: "SENT" },
+      where: { companyId, type, referenceId, periodKey, status: { in: ["PENDING", "PROCESSING", "SENT"] } },
       select: { id: true },
     });
     if (dup) {
