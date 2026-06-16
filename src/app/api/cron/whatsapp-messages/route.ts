@@ -1,10 +1,12 @@
 /**
- * Cron diário das automações de WhatsApp (Fase B2).
+ * Cron diário das automações de WhatsApp (Fase B2 + anti-bloqueio Fase 1).
  *
- * Varre as óticas habilitadas + conectadas e envia os 4 tipos cujas flags por
- * ótica estão ligadas (OS pronta, pós-venda, aniversário, crediário a vencer).
- * Idempotente via periodKey no WhatsappMessageLog — reexecução no mesmo dia não
- * reenvia.
+ * Varre as óticas habilitadas + conectadas e ENFILEIRA (status PENDING em
+ * WhatsappMessageLog) os 4 tipos cujas flags por ótica estão ligadas (OS pronta,
+ * pós-venda, aniversário, crediário a vencer). NÃO envia direto: o envio aos
+ * poucos (anti-bloqueio) fica a cargo do processador da fila, acionado pelo
+ * endpoint /api/cron/whatsapp-dispatch. Idempotente via periodKey no
+ * WhatsappMessageLog — reexecução no mesmo dia não reenfileira.
  *
  * Autenticação: header Authorization: Bearer <CRON_SECRET>.
  */
@@ -26,12 +28,10 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await runWhatsappAutomations();
-    log.info("Automações de WhatsApp processadas", {
+    // Modo enqueue: cria PENDING sem enviar. O envio aos poucos é do dispatch.
+    const result = await runWhatsappAutomations(new Date(), { enqueue: true });
+    log.info("Automações de WhatsApp enfileiradas", {
       companiesProcessed: result.companiesProcessed,
-      sent: result.sent,
-      skipped: result.skipped,
-      failed: result.failed,
     });
     return NextResponse.json({ ok: true, ...result });
   } catch (err) {
