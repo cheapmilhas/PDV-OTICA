@@ -5,11 +5,18 @@ import { logger } from "@/lib/logger";
 const log = logger.child({ service: "ai-config" });
 const SINGLETON_ID = "global";
 
+// Allowlist dos modelos Claude válidos para o qualificador de leads.
+// Exportado para reuso na rota/UI (defesa em profundidade: rota também valida).
+export const QUALIFIER_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"] as const;
+export type QualifierModel = (typeof QUALIFIER_MODELS)[number];
+
 export interface AiConfigView {
   hasKey: boolean;
   usdBrlRate: number;
   markupPercent: number;
   creditTokenFactor: number;
+  qualifierModel: string;
+  hasOpenaiKey: boolean;
 }
 
 export async function getAiConfig(): Promise<AiConfigView> {
@@ -23,6 +30,8 @@ export async function getAiConfig(): Promise<AiConfigView> {
     usdBrlRate: Number(c.usdBrlRate.toString()),
     markupPercent: Number(c.markupPercent.toString()),
     creditTokenFactor: c.creditTokenFactor,
+    qualifierModel: c.qualifierModel,
+    hasOpenaiKey: !!c.openaiKeyEnc,
   };
 }
 
@@ -31,6 +40,8 @@ export interface UpdateAiConfigInput {
   usdBrlRate?: number;
   markupPercent?: number;
   creditTokenFactor?: number;
+  qualifierModel?: string;
+  openaiKey?: string;
 }
 
 export async function updateAiConfig(patch: UpdateAiConfigInput): Promise<AiConfigView> {
@@ -40,6 +51,13 @@ export async function updateAiConfig(patch: UpdateAiConfigInput): Promise<AiConf
   if (typeof patch.creditTokenFactor === "number") data.creditTokenFactor = patch.creditTokenFactor;
   if (patch.anthropicKey && patch.anthropicKey.trim().length > 0) {
     data.anthropicKeyEnc = encryptSecret(patch.anthropicKey.trim());
+  }
+  // Só aceita modelos da allowlist (defesa em profundidade); ignora silenciosamente o resto.
+  if (patch.qualifierModel && (QUALIFIER_MODELS as readonly string[]).includes(patch.qualifierModel)) {
+    data.qualifierModel = patch.qualifierModel;
+  }
+  if (patch.openaiKey && patch.openaiKey.trim().length > 0) {
+    data.openaiKeyEnc = encryptSecret(patch.openaiKey.trim());
   }
   await prisma.aiGlobalConfig.upsert({
     where: { id: SINGLETON_ID },
@@ -65,4 +83,22 @@ export async function getAnthropicKey(): Promise<string | undefined> {
     }
   }
   return process.env.ANTHROPIC_API_KEY;
+}
+
+export async function getOpenaiKey(): Promise<string | undefined> {
+  const c = await prisma.aiGlobalConfig.findUnique({
+    where: { id: SINGLETON_ID },
+    select: { openaiKeyEnc: true },
+  });
+  if (c?.openaiKeyEnc) {
+    try {
+      return decryptSecret(c.openaiKeyEnc);
+    } catch (err) {
+      // Key cifrada corrompida (write parcial / ENCRYPTION_KEY trocada / edição manual).
+      // Cai na env, mas LOGA — senão a UI mostra "configurada" e a IA usa outra key
+      // silenciosamente, confundindo a operação numa rotação de chave.
+      log.warn("getOpenaiKey: falha ao decifrar a key do banco — usando env como fallback", { err });
+    }
+  }
+  return process.env.OPENAI_API_KEY;
 }
