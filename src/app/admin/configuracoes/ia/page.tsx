@@ -16,6 +16,8 @@ export default async function IaConfigPage() {
         usdBrlRate: config.usdBrlRate,
         markupPercent: config.markupPercent,
         creditTokenFactor: config.creditTokenFactor,
+        qualifierModel: config.qualifierModel,
+        hasOpenaiKey: config.hasOpenaiKey,
       }}
     />
   );

@@ -9,7 +9,15 @@ interface AiConfigView {
   usdBrlRate: number;
   markupPercent: number;
   creditTokenFactor: number;
+  qualifierModel: string;
+  hasOpenaiKey: boolean;
 }
+
+const QUALIFIER_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "claude-haiku-4-5", label: "Haiku 4.5 (mais barato — padrão)" },
+  { value: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilibrado)" },
+  { value: "claude-opus-4-8", label: "Opus 4.8 (mais capaz)" },
+];
 
 export function IaClient({ config }: { config: AiConfigView }) {
   const router = useRouter();
@@ -19,9 +27,11 @@ export function IaClient({ config }: { config: AiConfigView }) {
 
   // Controlled fields
   const [apiKey, setApiKey] = useState("");
+  const [openaiKey, setOpenaiKey] = useState("");
   const [usdBrlRate, setUsdBrlRate] = useState(String(config.usdBrlRate));
   const [markupPercent, setMarkupPercent] = useState(String(config.markupPercent));
   const [creditTokenFactor, setCreditTokenFactor] = useState(String(config.creditTokenFactor));
+  const [qualifierModel, setQualifierModel] = useState(config.qualifierModel);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -31,14 +41,21 @@ export function IaClient({ config }: { config: AiConfigView }) {
 
     const body: {
       anthropicKey?: string;
+      openaiKey?: string;
       usdBrlRate?: number;
       markupPercent?: number;
       creditTokenFactor?: number;
+      qualifierModel?: string;
     } = {};
 
     // Only send the key if the user typed something
     if (apiKey.trim().length > 0) {
       body.anthropicKey = apiKey.trim();
+    }
+
+    // Only send the OpenAI key if the user typed something
+    if (openaiKey.trim().length > 0) {
+      body.openaiKey = openaiKey.trim();
     }
 
     const parsedRate = parseFloat(usdBrlRate);
@@ -48,6 +65,7 @@ export function IaClient({ config }: { config: AiConfigView }) {
     if (!isNaN(parsedRate)) body.usdBrlRate = parsedRate;
     if (!isNaN(parsedMarkup)) body.markupPercent = parsedMarkup;
     if (!isNaN(parsedFactor)) body.creditTokenFactor = parsedFactor;
+    if (qualifierModel) body.qualifierModel = qualifierModel;
 
     try {
       const res = await fetch("/api/admin/ai-config", {
@@ -64,6 +82,7 @@ export function IaClient({ config }: { config: AiConfigView }) {
 
       setSuccess(true);
       setApiKey(""); // Clear the key input after save
+      setOpenaiKey(""); // Clear the OpenAI key input after save
       router.refresh();
     } catch {
       setError("Erro de rede ao salvar configuração");
@@ -131,6 +150,45 @@ export function IaClient({ config }: { config: AiConfigView }) {
           </div>
         </div>
 
+        {/* OpenAI API Key section */}
+        <div className="bg-muted border border-border rounded-lg p-5 space-y-4">
+          <div>
+            <p className="font-semibold text-foreground">Chave da API OpenAI</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Status:{" "}
+              {config.hasOpenaiKey ? (
+                <span className="font-medium text-emerald-700">🔑 Chave configurada</span>
+              ) : (
+                <span className="font-medium text-amber-700">⚠️ Nenhuma chave cadastrada</span>
+              )}
+            </p>
+          </div>
+
+          <div className="space-y-1.5">
+            <label htmlFor="openai-key" className="text-sm font-medium text-foreground">
+              Nova chave
+            </label>
+            <input
+              id="openai-key"
+              type="password"
+              autoComplete="new-password"
+              value={openaiKey}
+              onChange={(e) => setOpenaiKey(e.target.value)}
+              placeholder={
+                config.hasOpenaiKey
+                  ? "•••••••• (configurada — deixe em branco para manter)"
+                  : "sk-..."
+              }
+              className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+            />
+            {config.hasOpenaiKey && (
+              <p className="text-xs text-muted-foreground">
+                A chave fica cifrada e não é exibida. Deixe em branco para manter a atual.
+              </p>
+            )}
+          </div>
+        </div>
+
         {/* Pricing parameters section */}
         <div className="bg-muted border border-border rounded-lg p-5 space-y-4">
           <div>
@@ -188,6 +246,27 @@ export function IaClient({ config }: { config: AiConfigView }) {
               />
               <p className="text-xs text-muted-foreground">
                 Quantos tokens equivalem a 1 crédito vendido. Ex: 1000 = 1 crédito por mil tokens.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="qualifier-model" className="text-sm font-medium text-foreground">
+                Modelo de qualificação
+              </label>
+              <select
+                id="qualifier-model"
+                value={qualifierModel}
+                onChange={(e) => setQualifierModel(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {QUALIFIER_MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Modelo Claude usado para qualificar leads nas conversas de WhatsApp.
               </p>
             </div>
           </div>

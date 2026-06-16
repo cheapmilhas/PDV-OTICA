@@ -1,7 +1,7 @@
 "use client";
 
 import { useState, useEffect, useCallback, useId } from "react";
-import { Loader2, Sparkles, Zap, DollarSign, Save } from "lucide-react";
+import { Loader2, Sparkles, Zap, DollarSign, Save, Percent, TrendingUp, Tag } from "lucide-react";
 import { KPICard } from "@/components/admin/KPICard";
 import {
   Area,
@@ -35,7 +35,10 @@ interface DailyPoint {
 interface AiUsageData {
   usage: MonthlyUsage;
   daily: DailyPoint[];
-  costBrl: number;
+  costBrlReal: number;
+  markupPercent: number;
+  priceBrl: number;
+  lucroBrl: number;
   creditTokenFactor: number;
   settings: AiSettings | null;
 }
@@ -161,6 +164,10 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
   const [quotaInput, setQuotaInput] = useState("");
   const [savingQuota, setSavingQuota] = useState(false);
 
+  // Margem override input
+  const [markupInput, setMarkupInput] = useState("");
+  const [savingMarkup, setSavingMarkup] = useState(false);
+
   const fetchData = useCallback(async () => {
     try {
       setError(null);
@@ -183,7 +190,7 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
     fetchData();
   }, [fetchData]);
 
-  async function patchSettings(body: Partial<{ iaAvailable: boolean; iaEnabled: boolean; iaMonthlyTokenLimit: number | null }>) {
+  async function patchSettings(body: Partial<{ iaAvailable: boolean; iaEnabled: boolean; iaMonthlyTokenLimit: number | null; markupPercentOverride: number | null }>) {
     const res = await fetch(`/api/admin/companies/${companyId}/ai-settings`, {
       method: "PATCH",
       headers: { "Content-Type": "application/json" },
@@ -240,6 +247,32 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
     }
   }
 
+  async function handleSaveMarkup() {
+    if (!data) return;
+    setSavingMarkup(true);
+    try {
+      const trimmed = markupInput.trim();
+      let override: number | null;
+      if (trimmed === "") {
+        override = null;
+      } else {
+        const parsed = parseFloat(trimmed);
+        if (isNaN(parsed)) {
+          alert("Margem inválida. Use um número (negativo permitido = subsídio) ou deixe em branco para usar o global.");
+          return;
+        }
+        override = parsed;
+      }
+      await patchSettings({ markupPercentOverride: override });
+      setMarkupInput("");
+      await fetchData();
+    } catch (e) {
+      alert(e instanceof Error ? e.message : "Erro ao salvar");
+    } finally {
+      setSavingMarkup(false);
+    }
+  }
+
   // ── Loading / error ──────────────────────────────────────────────────────────
 
   if (loading) {
@@ -265,7 +298,7 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
     );
   }
 
-  const { usage, daily, costBrl, creditTokenFactor, settings } = data;
+  const { usage, daily, costBrlReal, markupPercent, priceBrl, lucroBrl, creditTokenFactor, settings } = data;
   const iaAvailable = settings?.iaAvailable ?? false;
   const iaEnabled = settings?.iaEnabled ?? false;
   const iaMonthlyTokenLimit = settings?.iaMonthlyTokenLimit ?? null;
@@ -336,6 +369,36 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
             </p>
           )}
         </div>
+
+        {/* Margem override */}
+        <div className="mt-4 pt-4 border-t border-border">
+          <p className="text-sm font-medium text-foreground mb-1">
+            Margem override (%) — vazio mantém o markup global atual
+          </p>
+          <p className="text-xs text-muted-foreground mb-3">
+            Define uma margem específica para esta empresa. Negativo é permitido (subsídio).
+            Salvar em branco remove o override e volta ao markup global.
+            Margem efetiva atual: <strong>{markupPercent}%</strong>.
+          </p>
+          <div className="flex items-center gap-2">
+            <input
+              type="number"
+              step="1"
+              value={markupInput}
+              onChange={(e) => setMarkupInput(e.target.value)}
+              placeholder="Ex: 50  (vazio = usa o global)"
+              className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+            <button
+              onClick={handleSaveMarkup}
+              disabled={savingMarkup}
+              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50 transition-colors"
+            >
+              {savingMarkup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar
+            </button>
+          </div>
+        </div>
       </div>
 
       {/* ── KPIs ───────────────────────────────────────────────────────────── */}
@@ -348,9 +411,27 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
         />
         <KPICard
           icon={DollarSign}
-          label="Custo (mês)"
-          value={`R$ ${costBrl.toFixed(2)}`}
-          hint="Custo em R$ com markup (mês corrente)"
+          label="Custo real (mês)"
+          value={`R$ ${costBrlReal.toFixed(2)}`}
+          hint="Custo bruto em R$ (sem margem)"
+        />
+        <KPICard
+          icon={Percent}
+          label="Margem"
+          value={`${markupPercent}%`}
+          hint="Margem efetiva aplicada (override ou global)"
+        />
+        <KPICard
+          icon={Tag}
+          label="Preço à ótica (mês)"
+          value={`R$ ${priceBrl.toFixed(2)}`}
+          hint="Valor cobrado da ótica (custo + margem)"
+        />
+        <KPICard
+          icon={TrendingUp}
+          label={lucroBrl < 0 ? "Subsídio (mês)" : "Lucro (mês)"}
+          value={`R$ ${lucroBrl.toFixed(2)}`}
+          hint={lucroBrl < 0 ? "Negativo = subsídio (custo > preço)" : "Preço cobrado − custo real"}
         />
       </div>
 

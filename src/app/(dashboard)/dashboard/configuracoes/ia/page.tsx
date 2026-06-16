@@ -20,7 +20,8 @@ interface AiUsageData {
   iaEnabled: boolean;
   creditsUsed: number;
   creditsLimit: number | null;
-  daily: { date: string; credits: number }[];
+  priceBrl: number;
+  daily: { date: string; credits: number; priceBrl: number }[];
 }
 
 // ─── Toggle ───────────────────────────────────────────────────────────────────
@@ -312,7 +313,17 @@ function IaConfigContent() {
             Cada ação de IA consome créditos. O limite é definido pelo suporte.
           </CardDescription>
         </CardHeader>
-        <CardContent>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="text-2xl font-bold text-foreground">
+              {data.priceBrl.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })}
+              <span className="text-sm font-normal text-muted-foreground"> este mês</span>
+            </p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Você usou {data.creditsUsed.toLocaleString("pt-BR", { maximumFractionDigits: 1 })} créditos —{" "}
+              {data.priceBrl.toLocaleString("pt-BR", { style: "currency", currency: "BRL" })} este mês.
+            </p>
+          </div>
           <CreditsMeter used={data.creditsUsed} limit={data.creditsLimit} />
         </CardContent>
       </Card>
