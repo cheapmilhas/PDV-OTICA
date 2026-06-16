@@ -1,5 +1,5 @@
 import Link from "next/link";
-import { Package, UserCog, ScrollText, RefreshCw, Mail, ShieldCheck, MessageCircle } from "lucide-react";
+import { Package, UserCog, ScrollText, RefreshCw, Mail, ShieldCheck, MessageCircle, BrainCircuit } from "lucide-react";
 import { Card } from "@/components/ui/card";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { requireAdmin } from "@/lib/admin-session";
@@ -12,6 +12,7 @@ const SECTIONS = [
   { href: "/admin/configuracoes/emails", icon: Mail, title: "Emails", desc: "Emails transacionais do SaaS" },
   { href: "/admin/configuracoes/seguranca", icon: ShieldCheck, title: "Segurança", desc: "MFA da sua conta admin" },
   { href: "/admin/configuracoes/whatsapp", icon: MessageCircle, title: "WhatsApp", desc: "Conexões de WhatsApp por ótica" },
+  { href: "/admin/configuracoes/ia", icon: BrainCircuit, title: "Inteligência Artificial", desc: "API key Anthropic e parâmetros de custo" },
 ];
 
 export default async function ConfiguracoesHubPage() {
