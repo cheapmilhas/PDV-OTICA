@@ -32,7 +32,10 @@ interface RunResult {
   sent: number;
   skipped: number;
   failed: number;
-  byType: Record<string, { sent: number; skipped: number; failed: number }>;
+  /** Mensagens ainda na fila após a 1ª leva (drenadas aos poucos). */
+  pendingRestantes: number;
+  /** true quando fora do horário comercial: enfileira mas não envia agora. */
+  skippedOutOfHours: boolean;
 }
 
 interface PreviewItem {
@@ -149,22 +152,23 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
         return;
       }
       const r: RunResult = result.data;
-      if (r.sent === 0 && r.skipped === 0 && r.failed === 0) {
+      const fila = r.pendingRestantes > 0
+        ? `${r.pendingRestantes} na fila (envio aos poucos)`
+        : "fila vazia";
+
+      if (r.skippedOutOfHours) {
+        // Fora do horário comercial: enfileirou, mas não envia agora.
+        toast.info("Mensagens enfileiradas — serão enviadas no horário comercial (8h–18h).", {
+          description: fila,
+        });
+      } else if (r.sent === 0 && r.skipped === 0 && r.failed === 0 && r.pendingRestantes === 0) {
         toast.info("Nada pendente para enviar agora.");
       } else {
-        const byType = Object.entries(r.byType)
-          .map(([type, b]) => {
-            const label = RUN_TYPE_LABEL[type] ?? type;
-            const parts: string[] = [];
-            if (b.sent) parts.push(`${b.sent} enviada${b.sent > 1 ? "s" : ""}`);
-            if (b.skipped) parts.push(`${b.skipped} pulada${b.skipped > 1 ? "s" : ""}`);
-            if (b.failed) parts.push(`${b.failed} ${b.failed > 1 ? "falharam" : "falhou"}`);
-            return `${label}: ${parts.join(", ")}`;
-          })
-          .join(" · ");
-        toast.success(`${r.sent} enviada(s) · ${r.skipped} pulada(s) · ${r.failed} ${r.failed === 1 ? "falhou" : "falharam"}`, {
-          description: byType || undefined,
-        });
+        // 1ª leva disparada (1 msg/ótica); o resto sai aos poucos.
+        toast.success(
+          `${r.sent} enviada(s) agora · ${r.skipped} pulada(s) · ${r.failed} ${r.failed === 1 ? "falhou" : "falharam"}`,
+          { description: fila },
+        );
       }
       setPreviewItems(null); // a prévia anterior ficou obsoleta após enviar
       onProcessed?.();
@@ -281,9 +285,9 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
           <AlertDialogHeader>
             <AlertDialogTitle>Enviar mensagens agora?</AlertDialogTitle>
             <AlertDialogDescription>
-              Isso vai enviar imediatamente todas as mensagens pendentes de hoje (óculos pronto,
-              aniversário, pós-venda, crediário) para os clientes elegíveis. Mensagens já enviadas
-              hoje não são repetidas.
+              Isso coloca na fila todas as mensagens pendentes de hoje (óculos pronto, aniversário,
+              pós-venda, crediário) e envia a 1ª já. As demais saem aos poucos, no horário comercial
+              (8h–18h), para proteger o número de bloqueio. Mensagens já enviadas hoje não se repetem.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>

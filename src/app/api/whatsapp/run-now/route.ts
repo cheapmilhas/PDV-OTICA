@@ -4,14 +4,16 @@ import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError, forbiddenError } from "@/lib/error-handler";
 import { isWhatsappEnabledForCompany } from "@/lib/whatsapp-flag";
 import { runWhatsappAutomations } from "@/services/whatsapp-automation.service";
+import { processWhatsappQueue } from "@/services/whatsapp-queue-processor";
 
 /**
  * POST /api/whatsapp/run-now
  *
- * Dispara as automações de WhatsApp na hora, SOMENTE para a ótica do usuário
- * logado (companyId vem da sessão, nunca do body). Mesma varredura do cron
- * diário /api/cron/whatsapp-messages — idempotente (não reenvia o que já saiu
- * hoje). Gated por settings.edit + feature flag por empresa.
+ * Para a ótica do usuário logado (companyId vem da sessão, nunca do body):
+ * (1) ENFILEIRA tudo que está pendente hoje (modo enqueue, idempotente) e
+ * (2) dispara a 1ª leva da fila (1 msg/ótica, respeitando horário/teto/lock).
+ * O restante da fila é drenado aos poucos pelo acionador externo (anti-bloqueio).
+ * Gated por settings.edit + feature flag por empresa.
  */
 
 export const runtime = "nodejs";
@@ -25,7 +27,9 @@ export async function POST() {
       throw forbiddenError("Integração de WhatsApp não está habilitada para esta empresa.");
     }
 
-    const result = await runWhatsappAutomations(new Date(), { companyId });
+    // 1) Enfileira tudo da ótica. 2) Solta a 1ª leva (anti-bloqueio: aos poucos).
+    await runWhatsappAutomations(new Date(), { companyId, enqueue: true });
+    const result = await processWhatsappQueue(new Date(), { companyId });
 
     return NextResponse.json({
       success: true,
@@ -33,7 +37,8 @@ export async function POST() {
         sent: result.sent,
         skipped: result.skipped,
         failed: result.failed,
-        byType: result.byType,
+        pendingRestantes: result.pendingRestantes,
+        skippedOutOfHours: result.skippedOutOfHours,
       },
     });
   } catch (error) {
