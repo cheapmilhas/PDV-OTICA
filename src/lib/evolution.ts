@@ -257,6 +257,9 @@ export const evolution = {
       `/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`,
       {
         method: "POST",
+        // Timeout p/ não travar um slot de transcrição se a Evolution
+        // pendurar a resposta da mídia (mesmo limite do fetch do Whisper).
+        signal: AbortSignal.timeout(30_000),
         body: JSON.stringify({
           message: { key: { id: evolutionId } },
           convertToMp4: false,

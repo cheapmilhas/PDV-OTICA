@@ -35,6 +35,32 @@ export function IaClient({ config }: { config: AiConfigView }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Validação client-side ANTES de enviar: o servidor descarta silenciosamente
+    // valores fora da faixa (usdBrlRate>=0, markupPercent>=0, creditTokenFactor>=1)
+    // e retorna 200, o que mostraria um falso "salvo". Avisamos o operador aqui.
+    if (markupPercent.trim().length > 0) {
+      const m = parseFloat(markupPercent);
+      if (!isNaN(m) && m < 0) {
+        setError("Markup não pode ser negativo.");
+        return;
+      }
+    }
+    if (usdBrlRate.trim().length > 0) {
+      const r = parseFloat(usdBrlRate);
+      if (!isNaN(r) && r < 0) {
+        setError("Câmbio não pode ser negativo.");
+        return;
+      }
+    }
+    if (creditTokenFactor.trim().length > 0) {
+      const f = parseInt(creditTokenFactor, 10);
+      if (!isNaN(f) && f < 1) {
+        setError("Fator de crédito deve ser ≥ 1.");
+        return;
+      }
+    }
+
     setSaving(true);
     setError("");
     setSuccess(false);
