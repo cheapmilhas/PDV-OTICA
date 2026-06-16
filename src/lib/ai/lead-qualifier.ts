@@ -1,5 +1,6 @@
 import { randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
+import { getAnthropicKey } from "@/services/ai-config.service";
 
 export const LEAD_QUALIFIER_MODEL = "claude-sonnet-4-6";
 export interface QualifierStage { id: string; name: string; }
@@ -19,14 +20,10 @@ SÃO lead: interesse em comprar óculos de grau, óculos de sol, lente de contat
 Responda SOMENTE com JSON válido (sem markdown):
 {"isLead": true|false, "reason": "frase curta", "interest": "grau"|"sol"|"lente_contato"|"exame"|"conserto"|"outro"|null, "suggestedStageName": "<nome EXATO de uma etapa fornecida>"|null, "confidence": 0.0-1.0}`;
 
-const anthropic = new Anthropic();
-
 export async function qualifyConversationText(conversationText: string, stages: QualifierStage[]): Promise<QualificationResult> {
-  // Falha legível se a env não estiver configurada (o SDK só erraria na chamada,
-  // com mensagem opaca). Evita 200 falhas mudas no cron por env faltando.
-  if (!process.env.ANTHROPIC_API_KEY) {
-    throw new Error("ANTHROPIC_API_KEY não configurada — qualificação de IA indisponível");
-  }
+  const apiKey = await getAnthropicKey();
+  if (!apiKey) throw new Error("Anthropic API key não configurada (super admin → config IA, ou env ANTHROPIC_API_KEY)");
+  const anthropic = new Anthropic({ apiKey });
   const nonce = randomBytes(8).toString("hex");
   const stageNames = stages.map((s) => s.name).join(", ");
   const system = SYSTEM_PROMPT.replaceAll("{nonce}", nonce);

@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import {
   computeCostUsd,
   tokensToCredits,
+  usdToBrl,
   CREDIT_TOKEN_FACTOR,
 } from "./ai-pricing";
 
@@ -55,5 +56,17 @@ describe("tokensToCredits", () => {
     expect(tokensToCredits(CREDIT_TOKEN_FACTOR)).toBe(1);
     expect(tokensToCredits(CREDIT_TOKEN_FACTOR * 2.5)).toBeCloseTo(2.5, 4);
     expect(tokensToCredits(0)).toBe(0);
+  });
+
+  it("tokensToCredits usa fator custom quando passado", () => {
+    expect(tokensToCredits(2000, 500)).toBe(4);
+    expect(tokensToCredits(2000)).toBe(2); // default 1000 mantido
+  });
+});
+
+describe("usdToBrl", () => {
+  it("usdToBrl usa rate custom quando passado", () => {
+    expect(usdToBrl(2, 6)).toBeCloseTo(12, 4);
+    expect(usdToBrl(2)).toBeCloseTo(11, 4); // default 5.5
   });
 });

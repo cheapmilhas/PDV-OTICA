@@ -1,11 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 const createMock = vi.fn();
-vi.mock("@anthropic-ai/sdk", () => ({ default: class { messages = { create: (...a: unknown[]) => createMock(...a) }; } }));
+vi.mock("@anthropic-ai/sdk", () => ({ default: class { constructor(_opts?: unknown) {} messages = { create: (...a: unknown[]) => createMock(...a) }; } }));
+vi.mock("@/services/ai-config.service", () => ({ getAnthropicKey: vi.fn() }));
+import { getAnthropicKey } from "@/services/ai-config.service";
 import { qualifyConversationText } from "./lead-qualifier";
 
 beforeEach(() => {
   vi.clearAllMocks();
-  process.env.ANTHROPIC_API_KEY = "test-key"; // guard exige a env (HIGH/IMPORTANT fix)
+  (getAnthropicKey as ReturnType<typeof vi.fn>).mockResolvedValue("test-key");
 });
 function mockJson(obj: unknown, usage = { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0 }) {
   createMock.mockResolvedValue({ content: [{ type: "text", text: JSON.stringify(obj) }], usage });
@@ -35,9 +37,9 @@ describe("qualifyConversationText", () => {
     const r = await qualifyConversationText("quero lente de contato", [{ id: "s_novo", name: "Novo" }, { id: "s2", name: "X" }]);
     expect(r.stageId).toBe("s_novo");
   });
-  it("lança erro legível se ANTHROPIC_API_KEY não está setada", async () => {
-    delete process.env.ANTHROPIC_API_KEY;
-    await expect(qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }])).rejects.toThrow(/ANTHROPIC_API_KEY/);
+  it("lança erro legível se getAnthropicKey retorna undefined (key ausente)", async () => {
+    (getAnthropicKey as ReturnType<typeof vi.fn>).mockResolvedValue(undefined);
+    await expect(qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }])).rejects.toThrow(/Anthropic API key|ANTHROPIC_API_KEY/);
   });
 
   it("JSON inválido → isLead=false defensivo (parseError, não lança)", async () => {

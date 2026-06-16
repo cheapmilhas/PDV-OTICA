@@ -78,14 +78,14 @@ export function computeCostUsd(input: CostInput): number {
   return 0; // modelo desconhecido — fail-safe
 }
 
-/** Converte custo USD em BRL (taxa fixa). Uso interno do super admin. */
-export function usdToBrl(usd: number): number {
-  return round6(usd * USD_BRL_RATE);
+/** Converte custo USD em BRL. Aceita taxa custom (ex: do banco); padrão = USD_BRL_RATE fixo. */
+export function usdToBrl(usd: number, rate: number = USD_BRL_RATE): number {
+  return round6(usd * rate);
 }
 
-/** Traduz tokens em créditos amigáveis para a ótica (sem R$). */
-export function tokensToCredits(tokens: number): number {
-  return tokens / CREDIT_TOKEN_FACTOR;
+/** Traduz tokens em créditos amigáveis para a ótica (sem R$). Aceita fator custom; padrão = CREDIT_TOKEN_FACTOR. */
+export function tokensToCredits(tokens: number, factor: number = CREDIT_TOKEN_FACTOR): number {
+  return tokens / factor;
 }
 
 function round6(n: number): number {
