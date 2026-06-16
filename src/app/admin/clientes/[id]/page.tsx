@@ -12,6 +12,7 @@ import { CompanyUsers } from "./company-users";
 import { CompanyBranches } from "./company-branches";
 import { CompanyDataForm } from "./company-data-form";
 import { CompanyNetwork } from "./company-network";
+import { CompanyAiPanel } from "./company-ai-panel";
 import { HealthBadge } from "@/components/health-badge";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { adminStatusLabel } from "@/lib/admin-status";
@@ -528,6 +529,11 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
         {/* TAB: REDE */}
         <TabPanel tabId="rede">
           <CompanyNetwork companyId={id} networkId={company.networkId} />
+        </TabPanel>
+
+        {/* TAB: IA */}
+        <TabPanel tabId="ia">
+          <CompanyAiPanel companyId={id} />
         </TabPanel>
       </CompanyTabs>
     </div>
