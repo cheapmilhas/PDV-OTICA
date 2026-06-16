@@ -6,6 +6,7 @@ vi.mock("@/lib/admin-session", () => ({
 vi.mock("@/services/ai-config.service", () => ({
   getAiConfig: vi.fn(),
   updateAiConfig: vi.fn(),
+  QUALIFIER_MODELS: ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"],
 }));
 
 import { GET, PUT } from "./route";
@@ -23,6 +24,8 @@ const viewFixture = {
   usdBrlRate: 5.5,
   markupPercent: 20,
   creditTokenFactor: 1000,
+  qualifierModel: "claude-haiku-4-5",
+  hasOpenaiKey: false,
 };
 
 function makeGetRequest() {
@@ -116,6 +119,33 @@ describe("PUT /api/admin/ai-config", () => {
     const callArg = mockUpdateAiConfig.mock.calls[0][0];
     expect(callArg).not.toHaveProperty("usdBrlRate");
     expect(callArg).not.toHaveProperty("markupPercent");
+  });
+
+  it("encaminha qualifierModel válido (allowlist) para updateAiConfig", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ qualifierModel: "claude-sonnet-4-6" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).toHaveProperty("qualifierModel", "claude-sonnet-4-6");
+  });
+
+  it("ignora qualifierModel fora da allowlist (ex: gpt-4)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ qualifierModel: "gpt-4" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty("qualifierModel");
+  });
+
+  it("encaminha openaiKey (string) para updateAiConfig", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ openaiKey: "sk-openai-test" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).toHaveProperty("openaiKey", "sk-openai-test");
   });
 
   it("200 only passes numeric fields that are present and valid", async () => {

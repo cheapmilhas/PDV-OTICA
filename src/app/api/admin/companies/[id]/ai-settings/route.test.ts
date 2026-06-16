@@ -93,6 +93,54 @@ describe("PATCH /api/admin/companies/[id]/ai-settings", () => {
     expect(callUpdate).toHaveProperty("iaMonthlyTokenLimit", null);
   });
 
+  it("200 grava markupPercentOverride (number) no update", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockRequireCompanyScope.mockResolvedValue(scopedAdmin);
+    mockUpsert.mockResolvedValue({ companyId: "c1", markupPercentOverride: 15 } as never);
+
+    const body = { markupPercentOverride: 15 };
+    await PATCH(makeRequest(body), makeParams("c1"));
+
+    const callUpdate = mockUpsert.mock.calls[0][0].update;
+    expect(callUpdate).toHaveProperty("markupPercentOverride", 15);
+  });
+
+  it("200 aceita markupPercentOverride: null (limpa o override)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockRequireCompanyScope.mockResolvedValue(scopedAdmin);
+    mockUpsert.mockResolvedValue({ companyId: "c1", markupPercentOverride: null } as never);
+
+    const body = { markupPercentOverride: null };
+    await PATCH(makeRequest(body), makeParams("c1"));
+
+    const callUpdate = mockUpsert.mock.calls[0][0].update;
+    expect(callUpdate).toHaveProperty("markupPercentOverride", null);
+  });
+
+  it("200 aceita markupPercentOverride negativo (subsídio)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockRequireCompanyScope.mockResolvedValue(scopedAdmin);
+    mockUpsert.mockResolvedValue({ companyId: "c1", markupPercentOverride: -10 } as never);
+
+    const body = { markupPercentOverride: -10 };
+    await PATCH(makeRequest(body), makeParams("c1"));
+
+    const callUpdate = mockUpsert.mock.calls[0][0].update;
+    expect(callUpdate).toHaveProperty("markupPercentOverride", -10);
+  });
+
+  it("markupPercentOverride ausente do body → não vai no update", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockRequireCompanyScope.mockResolvedValue(scopedAdmin);
+    mockUpsert.mockResolvedValue({ companyId: "c1", iaEnabled: true } as never);
+
+    const body = { iaEnabled: true };
+    await PATCH(makeRequest(body), makeParams("c1"));
+
+    const callUpdate = mockUpsert.mock.calls[0][0].update;
+    expect(callUpdate).not.toHaveProperty("markupPercentOverride");
+  });
+
   it("200 only writes fields present in body", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockRequireCompanyScope.mockResolvedValue(scopedAdmin);

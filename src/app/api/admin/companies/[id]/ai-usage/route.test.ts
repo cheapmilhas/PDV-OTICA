@@ -11,9 +11,14 @@ vi.mock("@/services/ai-usage.service", () => ({
   getMonthlyUsage: vi.fn(),
   getDailyUsage: vi.fn(),
 }));
-vi.mock("@/lib/ai-pricing", () => ({
-  usdToBrl: vi.fn(),
+vi.mock("@/services/ai-margin.service", () => ({
+  getEffectiveMarkup: vi.fn(),
 }));
+// ai-pricing: usdToBrl mocked; priceForCompany runs unmocked (pure fn) for real math.
+vi.mock("@/lib/ai-pricing", async (importOriginal) => {
+  const actual = await importOriginal<typeof import("@/lib/ai-pricing")>();
+  return { ...actual, usdToBrl: vi.fn() };
+});
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     companySettings: {
@@ -26,6 +31,7 @@ import { GET } from "./route";
 import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { getAiConfig } from "@/services/ai-config.service";
 import { getMonthlyUsage, getDailyUsage } from "@/services/ai-usage.service";
+import { getEffectiveMarkup } from "@/services/ai-margin.service";
 import { usdToBrl } from "@/lib/ai-pricing";
 import { prisma } from "@/lib/prisma";
 
@@ -34,6 +40,7 @@ const mockRequireCompanyScope = vi.mocked(requireCompanyScope);
 const mockGetAiConfig = vi.mocked(getAiConfig);
 const mockGetMonthlyUsage = vi.mocked(getMonthlyUsage);
 const mockGetDailyUsage = vi.mocked(getDailyUsage);
+const mockGetEffectiveMarkup = vi.mocked(getEffectiveMarkup);
 const mockUsdToBrl = vi.mocked(usdToBrl);
 const mockFindUnique = vi.mocked(prisma.companySettings.findUnique);
 
@@ -45,6 +52,8 @@ const configFixture = {
   usdBrlRate: 5.5,
   markupPercent: 20,
   creditTokenFactor: 1000,
+  qualifierModel: "claude-haiku-4-5",
+  hasOpenaiKey: false,
 };
 
 const monthlyFixture = {
@@ -79,6 +88,7 @@ describe("GET /api/admin/companies/[id]/ai-usage", () => {
     mockGetAiConfig.mockReset();
     mockGetMonthlyUsage.mockReset();
     mockGetDailyUsage.mockReset();
+    mockGetEffectiveMarkup.mockReset();
     mockUsdToBrl.mockReset();
     mockFindUnique.mockReset();
   });
@@ -98,20 +108,22 @@ describe("GET /api/admin/companies/[id]/ai-usage", () => {
     expect(mockGetMonthlyUsage).not.toHaveBeenCalled();
   });
 
-  it("200 returns costBrl computed from totalCostUsd × rate × (1 + markup/100)", async () => {
+  it("200 expõe os 4 números (custo real, margem efetiva, preço, lucro) com margem por empresa", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockRequireCompanyScope.mockResolvedValue(scopedAdmin);
     mockGetAiConfig.mockResolvedValue(configFixture);
     mockGetMonthlyUsage.mockResolvedValue(monthlyFixture);
     mockGetDailyUsage.mockResolvedValue(dailyFixture);
-    // usdToBrl(0.05, 5.5) = 0.275; with 20% markup = 0.275 * 1.2 = 0.33
+    // Margem efetiva por empresa = 50 (override), NÃO o markup global (20) da config.
+    mockGetEffectiveMarkup.mockResolvedValue(50);
+    // usdToBrl(0.05, 5.5) = 0.275 (custo real em R$, sem margem).
     mockUsdToBrl.mockReturnValue(0.275);
     mockFindUnique.mockResolvedValue(settingsFixture as never);
 
     const res = await GET(makeGetRequest(), makeParams("c1"));
     expect(res.status).toBe(200);
 
-    // Verify usdToBrl was called with correct args
+    expect(mockGetEffectiveMarkup).toHaveBeenCalledWith("c1");
     expect(mockUsdToBrl).toHaveBeenCalledWith(monthlyFixture.totalCostUsd, configFixture.usdBrlRate);
 
     const json = await res.json();
@@ -121,8 +133,37 @@ describe("GET /api/admin/companies/[id]/ai-usage", () => {
       creditTokenFactor: configFixture.creditTokenFactor,
       settings: settingsFixture,
     });
-    // costBrl = usdToBrl result * (1 + markupPercent/100) = 0.275 * 1.2 = 0.33
-    expect(json.data.costBrl).toBeCloseTo(0.33, 5);
+    // Não expõe mais o campo legado costBrl.
+    expect(json.data).not.toHaveProperty("costBrl");
+    // costBrlReal = usdToBrl(0.05, 5.5) = 0.275 (sem margem)
+    expect(json.data.costBrlReal).toBeCloseTo(0.275, 6);
+    // markupPercent = margem efetiva por empresa
+    expect(json.data.markupPercent).toBe(50);
+    // priceBrl = priceForCompany(0.05, 5.5, 50) = 0.05*5.5*1.5 = 0.4125
+    expect(json.data.priceBrl).toBeCloseTo(0.4125, 6);
+    // lucroBrl = priceBrl - costBrlReal = 0.4125 - 0.275 = 0.1375
+    expect(json.data.lucroBrl).toBeCloseTo(0.1375, 6);
+  });
+
+  it("200 lucroBrl negativo quando a margem efetiva é subsídio (negativa)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockRequireCompanyScope.mockResolvedValue(scopedAdmin);
+    mockGetAiConfig.mockResolvedValue(configFixture);
+    mockGetMonthlyUsage.mockResolvedValue(monthlyFixture);
+    mockGetDailyUsage.mockResolvedValue(dailyFixture);
+    // Subsídio: margem -50 → preço abaixo do custo real.
+    mockGetEffectiveMarkup.mockResolvedValue(-50);
+    mockUsdToBrl.mockReturnValue(0.275);
+    mockFindUnique.mockResolvedValue(settingsFixture as never);
+
+    const res = await GET(makeGetRequest(), makeParams("c1"));
+    expect(res.status).toBe(200);
+
+    const json = await res.json();
+    // priceBrl = priceForCompany(0.05, 5.5, -50) = 0.05*5.5*0.5 = 0.1375
+    expect(json.data.priceBrl).toBeCloseTo(0.1375, 6);
+    // lucroBrl = 0.1375 - 0.275 = -0.1375 (subsídio)
+    expect(json.data.lucroBrl).toBeCloseTo(-0.1375, 6);
   });
 
   it("200 calls services with companyId from params", async () => {
@@ -131,6 +172,7 @@ describe("GET /api/admin/companies/[id]/ai-usage", () => {
     mockGetAiConfig.mockResolvedValue(configFixture);
     mockGetMonthlyUsage.mockResolvedValue(monthlyFixture);
     mockGetDailyUsage.mockResolvedValue(dailyFixture);
+    mockGetEffectiveMarkup.mockResolvedValue(20);
     mockUsdToBrl.mockReturnValue(0.275);
     mockFindUnique.mockResolvedValue(settingsFixture as never);
 
@@ -138,6 +180,7 @@ describe("GET /api/admin/companies/[id]/ai-usage", () => {
 
     expect(mockGetMonthlyUsage).toHaveBeenCalledWith("company-xyz");
     expect(mockGetDailyUsage).toHaveBeenCalledWith("company-xyz");
+    expect(mockGetEffectiveMarkup).toHaveBeenCalledWith("company-xyz");
     expect(mockFindUnique).toHaveBeenCalledWith(
       expect.objectContaining({ where: { companyId: "company-xyz" } })
     );

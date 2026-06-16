@@ -26,6 +26,7 @@ export async function PATCH(
     iaAvailable?: boolean;
     iaEnabled?: boolean;
     iaMonthlyTokenLimit?: number | null;
+    markupPercentOverride?: number | null;
   } = {};
 
   if (typeof body.iaAvailable === "boolean") update.iaAvailable = body.iaAvailable;
@@ -33,6 +34,12 @@ export async function PATCH(
   if ("iaMonthlyTokenLimit" in body) {
     const v = body.iaMonthlyTokenLimit;
     if (v === null || typeof v === "number") update.iaMonthlyTokenLimit = v;
+  }
+  // markupPercentOverride: null limpa o override (cai no markup global); number define.
+  // Sem guard >= 0 — margem negativa é subsídio válido. Prisma aceita JS number num Decimal?.
+  if ("markupPercentOverride" in body) {
+    const v = body.markupPercentOverride;
+    if (v === null || typeof v === "number") update.markupPercentOverride = v;
   }
 
   const data = await prisma.companySettings.upsert({
