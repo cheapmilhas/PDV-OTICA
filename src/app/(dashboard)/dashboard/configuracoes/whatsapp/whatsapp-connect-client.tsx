@@ -12,6 +12,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
+import { Checkbox } from "@/components/ui/checkbox";
 import { toast } from "sonner";
 import {
   ArrowLeft,
@@ -23,6 +24,7 @@ import {
   Loader2,
   WifiOff,
   CheckCircle2,
+  ShieldCheck,
 } from "lucide-react";
 
 type ConnStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "FAILED";
@@ -33,6 +35,7 @@ interface StatusData {
   connectedAt?: string | null;
   lastEventAt?: string | null;
   evolutionReachable: boolean;
+  practicesAccepted?: boolean;
 }
 
 interface ConnectData {
@@ -69,6 +72,7 @@ export function WhatsappConnectClient() {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
+  const [practicesAccepted, setPracticesAccepted] = useState(false);
 
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -81,6 +85,7 @@ export function WhatsappConnectClient() {
         setStatus(d.status);
         setConnectedNumber(d.connectedNumber);
         setReachable(d.evolutionReachable);
+        if (d.practicesAccepted) setPracticesAccepted(true);
         // Conexão concluída pelo celular → limpa o QR.
         if (d.status === "CONNECTED") {
           setQrBase64(null);
@@ -116,6 +121,13 @@ export function WhatsappConnectClient() {
       }
     };
   }, [status, fetchStatus]);
+
+  // Marca o aceite das boas-práticas (otimista). Persiste no servidor; se falhar,
+  // não bloqueia a UI (o aceite reaparecerá no próximo carregamento se não gravou).
+  function acceptPractices() {
+    setPracticesAccepted(true);
+    fetch("/api/whatsapp/accept-practices", { method: "POST" }).catch(() => {});
+  }
 
   async function handleConnect() {
     setConnecting(true);
@@ -255,7 +267,12 @@ export function WhatsappConnectClient() {
               disconnecting={disconnecting}
             />
           ) : (
-            <DisconnectedView onConnect={handleConnect} connecting={connecting} />
+            <DisconnectedView
+              onConnect={handleConnect}
+              connecting={connecting}
+              practicesAccepted={practicesAccepted}
+              onAcceptPractices={acceptPractices}
+            />
           )}
         </CardContent>
       </Card>
@@ -306,15 +323,60 @@ function StatusBadge({
   return <Badge variant="secondary">Desconectado</Badge>;
 }
 
+/** Boas-práticas anti-bloqueio + checkbox de aceite, antes de conectar. */
+function PracticesCard({
+  accepted,
+  onAccept,
+}: {
+  accepted: boolean;
+  onAccept: () => void;
+}) {
+  return (
+    <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-4 text-left">
+      <div className="flex items-center gap-2 text-teal-900">
+        <ShieldCheck className="h-5 w-5 flex-shrink-0" />
+        <p className="font-semibold">Antes de conectar: boas práticas para não bloquear o número</p>
+      </div>
+      <ul className="mt-3 space-y-1.5 text-sm text-teal-900/90 list-disc pl-5">
+        <li>Use um número que <span className="font-medium">não envie spam</span> e que os clientes reconheçam.</li>
+        <li>As mensagens saem <span className="font-medium">aos poucos</span> e só no horário comercial (8h–18h, dias úteis).</li>
+        <li>Envie só para clientes que <span className="font-medium">esperam</span> seu contato (OS, crediário, pós-venda).</li>
+        <li>Respeite quem pedir para <span className="font-medium">parar</span> — o opt-out é automático.</li>
+        <li>Evite disparos em massa: começar devagar protege seu número de bloqueio.</li>
+      </ul>
+      <label className="mt-4 flex items-start gap-2 cursor-pointer select-none">
+        <Checkbox
+          checked={accepted}
+          onCheckedChange={(v) => {
+            if (v === true && !accepted) onAccept();
+          }}
+          disabled={accepted}
+          className="mt-0.5"
+        />
+        <span className="text-sm text-teal-900">
+          Li e entendo as boas práticas para manter meu WhatsApp seguro.
+        </span>
+      </label>
+    </div>
+  );
+}
+
 function DisconnectedView({
   onConnect,
   connecting,
+  practicesAccepted,
+  onAcceptPractices,
 }: {
   onConnect: () => void;
   connecting: boolean;
+  practicesAccepted: boolean;
+  onAcceptPractices: () => void;
 }) {
   return (
     <div className="flex flex-col items-center gap-4 py-6 text-center">
+      {!practicesAccepted && (
+        <PracticesCard accepted={practicesAccepted} onAccept={onAcceptPractices} />
+      )}
       <div className="flex h-16 w-16 items-center justify-center rounded-full bg-muted">
         <Smartphone className="h-7 w-7 text-muted-foreground" />
       </div>
@@ -324,7 +386,7 @@ function DisconnectedView({
           Clique em conectar e leia o QR Code com o WhatsApp do celular da ótica.
         </p>
       </div>
-      <Button onClick={onConnect} disabled={connecting} size="lg">
+      <Button onClick={onConnect} disabled={connecting || !practicesAccepted} size="lg">
         {connecting ? (
           <Loader2 className="h-4 w-4 mr-2 animate-spin" />
         ) : (
@@ -332,6 +394,11 @@ function DisconnectedView({
         )}
         {connecting ? "Iniciando…" : "Conectar WhatsApp"}
       </Button>
+      {!practicesAccepted && (
+        <p className="text-xs text-muted-foreground">
+          Marque a confirmação acima para liberar a conexão.
+        </p>
+      )}
     </div>
   );
 }

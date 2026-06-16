@@ -4332,7 +4332,10 @@ model WhatsappMessageLog {
   periodKey          String?
   createdAt          DateTime              @default(now())
   sentAt             DateTime?
-  /// Hora do claim PENDING→PROCESSING na fila anti-bloqueio (Fase 1). Null = não enfileirado/processado.
+  /// Quando a linha foi travada (claim PENDING→PROCESSING) pelo processador da
+  /// fila. Usado p/ detectar PROCESSING preso (recuperação de stale) — NÃO usar
+  /// createdAt (= hora do enfileiramento), senão linhas que esperaram na fila
+  /// >STALE_MIN seriam recuperadas mid-envio e reenviadas.
   processingAt       DateTime?
 
   company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)

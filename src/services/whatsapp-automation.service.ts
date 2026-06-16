@@ -14,6 +14,7 @@
  * Não lança: erros por ótica/registro são logados e a varredura continua.
  */
 
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { isWhatsappEnabledForCompany } from "@/lib/whatsapp-flag";
@@ -94,12 +95,17 @@ interface CompanyCtx {
  * @param options.dryRun quando true, NÃO envia e NÃO persiste — apenas coleta
  *   em `result.preview` a lista do que sairia (só os elegíveis). Usado pela
  *   prévia ("simular sem enviar").
+ * @param options.enqueue quando true, NÃO envia: cria uma linha PENDING em
+ *   WhatsappMessageLog para cada elegível (fila anti-bloqueio). O envio real
+ *   fica a cargo do processador da fila (processWhatsappQueue). Tem precedência
+ *   sobre o envio normal; `dryRun` tem precedência sobre `enqueue`.
  */
 export async function runWhatsappAutomations(
   now: Date = new Date(),
-  options?: { companyId?: string; dryRun?: boolean },
+  options?: { companyId?: string; dryRun?: boolean; enqueue?: boolean },
 ): Promise<AutomationRunResult> {
   const dryRun = options?.dryRun ?? false;
+  const enqueue = options?.enqueue ?? false;
   const result: AutomationRunResult = {
     companiesProcessed: 0,
     sent: 0,
@@ -163,10 +169,10 @@ export async function runWhatsappAutomations(
     result.companiesProcessed++;
 
     try {
-      if (ctx.settings.waOsReadyEnabled) await runOsReady(ctx, now, result, dryRun);
-      if (ctx.settings.waInstallmentDueEnabled) await runInstallmentDue(ctx, now, result, dryRun);
-      if (ctx.settings.waPostSaleEnabled) await runPostSale(ctx, now, result, dryRun);
-      if (ctx.settings.waBirthdayEnabled) await runBirthday(ctx, now, result, dryRun);
+      if (ctx.settings.waOsReadyEnabled) await runOsReady(ctx, now, result, dryRun, enqueue);
+      if (ctx.settings.waInstallmentDueEnabled) await runInstallmentDue(ctx, now, result, dryRun, enqueue);
+      if (ctx.settings.waPostSaleEnabled) await runPostSale(ctx, now, result, dryRun, enqueue);
+      if (ctx.settings.waBirthdayEnabled) await runBirthday(ctx, now, result, dryRun, enqueue);
     } catch (err) {
       log.error("Falha ao processar automações da ótica", {
         companyId,
@@ -186,16 +192,20 @@ function tally(result: AutomationRunResult, type: string, status: "SENT" | "FAIL
 }
 
 /**
- * Despacha um envio: em modo normal chama `sendWhatsappMessage` (envia + tally);
- * em `dryRun` chama `checkWhatsappEligibility` e, se elegível, coleta o item na
- * prévia (sem enviar, sem persistir). Os "não elegíveis" são omitidos da prévia
- * (decisão: a prévia mostra só quem vai receber de verdade).
+ * Despacha um envio. Três modos, nesta precedência:
+ * - `dryRun`: chama `checkWhatsappEligibility` e, se elegível, coleta o item na
+ *   prévia (sem enviar, sem persistir). Os "não elegíveis" são omitidos.
+ * - `enqueue`: chama `checkWhatsappEligibility` e, se elegível, cria uma linha
+ *   PENDING em WhatsappMessageLog (fila anti-bloqueio) — não envia, não faz tally
+ *   (a contagem real vem do processador da fila).
+ * - normal: chama `sendWhatsappMessage` (envia + tally).
  */
 async function dispatch(
   input: SendWhatsappInput,
   customerName: string,
   result: AutomationRunResult,
   dryRun: boolean,
+  enqueue: boolean,
 ) {
   if (dryRun) {
     const elig = await checkWhatsappEligibility(input);
@@ -209,12 +219,43 @@ async function dispatch(
     }
     return;
   }
+
+  if (enqueue) {
+    const elig = await checkWhatsappEligibility(input);
+    if (!elig.eligible) return;
+    try {
+      await prisma.whatsappMessageLog.create({
+        data: {
+          companyId: input.companyId,
+          customerId: input.customer.id ?? null,
+          type: input.type,
+          phone: elig.number ?? input.customer.phone ?? "",
+          content: elig.content,
+          status: "PENDING",
+          referenceId: input.referenceId ?? null,
+          periodKey: input.periodKey ?? null,
+        },
+      });
+    } catch (e) {
+      // P2002 = já enfileirado/enviado (corrida de duplicata) → idempotente, ignora.
+      // Qualquer outro erro é real: loga (não silencia).
+      if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) {
+        log.error("Falha ao enfileirar WhatsApp", {
+          companyId: input.companyId,
+          type: input.type,
+          error: e instanceof Error ? e.message : String(e),
+        });
+      }
+    }
+    return;
+  }
+
   const r = await sendWhatsappMessage(input);
   tally(result, input.type, r.status);
 }
 
 /** OS pronta: status READY com readyAt nas últimas 24h (a janela do cron). */
-async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
+async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean, enqueue: boolean) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const orders = await prisma.serviceOrder.findMany({
     where: { companyId: ctx.companyId, status: "READY", readyAt: { gte: since, lte: now } },
@@ -238,12 +279,12 @@ async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResul
       variables: { cliente: os.customer.name ?? "", otica: ctx.oticaName, validade: osDisplayNumber(os) },
       referenceId: os.id,
       periodKey: dayKey(os.readyAt ?? now),
-    }, os.customer.name ?? "", result, dryRun);
+    }, os.customer.name ?? "", result, dryRun, enqueue);
   }
 }
 
 /** Crediário a vencer: AccountReceivable PENDING com dueDate em até 3 dias. */
-async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
+async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean, enqueue: boolean) {
   const in3d = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
   const rows = await prisma.accountReceivable.findMany({
     where: {
@@ -278,12 +319,12 @@ async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationR
       referenceId: ar.id,
       // dedupe pela data de vencimento → 1 lembrete por parcela (não 3×).
       periodKey: dayKey(ar.dueDate),
-    }, ar.customer.name ?? "", result, dryRun);
+    }, ar.customer.name ?? "", result, dryRun, enqueue);
   }
 }
 
 /** Pós-venda: OS entregue há exatamente waPostSaleDays dias (janela do dia). */
-async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
+async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean, enqueue: boolean) {
   const days = ctx.settings.waPostSaleDays || 7;
   const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   const lo = new Date(start.getTime() - 12 * 60 * 60 * 1000);
@@ -309,12 +350,12 @@ async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResu
       variables: { cliente: os.customer.name ?? "", otica: ctx.oticaName },
       referenceId: os.id,
       periodKey: dayKey(now),
-    }, os.customer.name ?? "", result, dryRun);
+    }, os.customer.name ?? "", result, dryRun, enqueue);
   }
 }
 
 /** Aniversário: clientes que fazem aniversário hoje (mês+dia). */
-async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
+async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean, enqueue: boolean) {
   // Compara mês/dia em America/Sao_Paulo (evita o bug de -1 dia em UTC-3).
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   const [, mm, dd] = fmt.split("-");
@@ -345,6 +386,6 @@ async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResu
       variables: { cliente: c.name ?? "", otica: ctx.oticaName },
       referenceId: c.id,
       periodKey: dayKey(now),
-    }, c.name ?? "", result, dryRun);
+    }, c.name ?? "", result, dryRun, enqueue);
   }
 }

@@ -27,17 +27,24 @@ export async function GET() {
       throw forbiddenError("Integração de WhatsApp não está habilitada para esta empresa.");
     }
 
-    const conn = await prisma.whatsappConnection.findUnique({
-      where: { companyId },
-      select: {
-        status: true,
-        connectedNumber: true,
-        connectedAt: true,
-        disconnectedAt: true,
-        lastEventAt: true,
-        lastError: true,
-      },
-    });
+    const [conn, settings] = await Promise.all([
+      prisma.whatsappConnection.findUnique({
+        where: { companyId },
+        select: {
+          status: true,
+          connectedNumber: true,
+          connectedAt: true,
+          disconnectedAt: true,
+          lastEventAt: true,
+          lastError: true,
+        },
+      }),
+      prisma.companySettings.findUnique({
+        where: { companyId },
+        select: { waPracticesAcceptedAt: true },
+      }),
+    ]);
+    const practicesAccepted = Boolean(settings?.waPracticesAcceptedAt);
 
     // Sem registro local: nunca conectou.
     if (!conn) {
@@ -47,6 +54,7 @@ export async function GET() {
           status: "DISCONNECTED",
           connectedNumber: null,
           evolutionReachable: true,
+          practicesAccepted,
         },
       });
     }
@@ -87,6 +95,7 @@ export async function GET() {
         connectedAt: conn.connectedAt,
         lastEventAt: conn.lastEventAt,
         evolutionReachable,
+        practicesAccepted,
       },
     });
   } catch (error) {
