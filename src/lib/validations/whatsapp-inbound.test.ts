@@ -18,6 +18,7 @@ describe("parseInboundMessage", () => {
       text: "quanto custa um óculos de grau?",
       mediaUrl: null,
       receivedAt: new Date(1750000000 * 1000),
+      isGroup: false,
     });
   });
 
@@ -52,5 +53,21 @@ describe("parseInboundMessage", () => {
     });
     expect(r?.type).toBe("text");
     expect(r?.text).toBe("tem lente de contato?");
+  });
+
+  it("marca isGroup=true quando remoteJid termina em @g.us", () => {
+    const r = parseInboundMessage({
+      key: { id: "G1", remoteJid: "120363012345678901@g.us", fromMe: false },
+      message: { conversation: "oferta no grupo" }, messageTimestamp: 1750000000,
+    });
+    expect(r?.isGroup).toBe(true);
+  });
+
+  it("marca isGroup=false para 1:1 (@s.whatsapp.net)", () => {
+    const r = parseInboundMessage({
+      key: { id: "P1", remoteJid: "5585999998888@s.whatsapp.net", fromMe: false },
+      message: { conversation: "quanto custa?" }, messageTimestamp: 1750000000,
+    });
+    expect(r?.isGroup).toBe(false);
   });
 });

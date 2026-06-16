@@ -19,17 +19,19 @@ export async function persistInboundMessage(
     update: {
       lastMessageAt: msg.receivedAt,
       contactName: msg.contactName ?? undefined,
+      isGroup: msg.isGroup,
     },
     create: {
       companyId,
       contactNumber: msg.contactNumber,
       contactName: msg.contactName,
       lastMessageAt: msg.receivedAt,
+      isGroup: msg.isGroup,
     },
-    select: { id: true },
+    select: { id: true, analyzedAt: true },
   });
 
-  const created = await prisma.whatsappMessage.create({
+  const newMessage = await prisma.whatsappMessage.create({
     data: {
       conversationId: conversation.id,
       companyId,
@@ -43,5 +45,13 @@ export async function persistInboundMessage(
     select: { id: true },
   });
 
-  return { created: true, conversationId: conversation.id, messageId: created.id };
+  // R1: msg nova numa conversa JÁ analisada → marcar p/ re-qualificação.
+  if (conversation.analyzedAt) {
+    await prisma.whatsappConversation.update({
+      where: { id: conversation.id },
+      data: { needsAnalysis: true },
+    });
+  }
+
+  return { created: true, conversationId: conversation.id, messageId: newMessage.id };
 }

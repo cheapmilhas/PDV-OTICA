@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     whatsappMessage: { findUnique: vi.fn(), create: vi.fn() },
-    whatsappConversation: { upsert: vi.fn() },
+    whatsappConversation: { upsert: vi.fn(), update: vi.fn() },
   },
 }));
 import { prisma } from "@/lib/prisma";
@@ -19,6 +19,7 @@ const base: InboundMessage = {
   text: "oi",
   mediaUrl: null,
   receivedAt: new Date("2026-06-15T12:00:00Z"),
+  isGroup: false,
 };
 
 beforeEach(() => vi.clearAllMocks());
@@ -53,10 +54,39 @@ describe("persistInboundMessage", () => {
   });
 
   it("sem evolutionId, ainda cria (não dá pra deduplicar)", async () => {
-    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_2" });
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_2", analyzedAt: null });
     (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m2" });
     const r = await persistInboundMessage("co_1", { ...base, evolutionId: "" });
     expect(r.created).toBe(true);
     expect(prisma.whatsappMessage.findUnique).not.toHaveBeenCalled();
+  });
+
+  it("grava isGroup no create E no update do upsert (R3)", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: null });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", { ...base, isGroup: true });
+    const arg = (prisma.whatsappConversation.upsert as any).mock.calls[0][0];
+    expect(arg.create.isGroup).toBe(true);
+    expect(arg.update.isGroup).toBe(true);
+  });
+
+  it("seta needsAnalysis=true se a conversa já estava analisada (R1)", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: new Date("2026-06-10") });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", base);
+    const updCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsAnalysis === true);
+    expect(updCall).toBeTruthy();
+    expect(updCall[0].where).toEqual({ id: "conv_1" });
+  });
+
+  it("NÃO seta needsAnalysis se a conversa ainda não foi analisada", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: null });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", base);
+    const updCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsAnalysis === true);
+    expect(updCall).toBeUndefined();
   });
 });

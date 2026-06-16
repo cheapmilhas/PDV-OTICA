@@ -7,6 +7,7 @@ export interface InboundMessage {
   text: string | null;
   mediaUrl: string | null;
   receivedAt: Date;
+  isGroup: boolean;
 }
 
 /** Extrai uma mensagem inbound do payload data de um evento messages.upsert.
@@ -18,6 +19,7 @@ export function parseInboundMessage(data: unknown): InboundMessage | null {
   if (!key || typeof key.id !== "string" || typeof key.remoteJid !== "string") return null;
   if (key.fromMe === true) return null; // outbound — fora do escopo A'
 
+  const isGroup = String(key.remoteJid).endsWith("@g.us");
   const contactNumber = String(key.remoteJid).split("@")[0];
   if (!contactNumber) return null;
 
@@ -53,5 +55,6 @@ export function parseInboundMessage(data: unknown): InboundMessage | null {
     text,
     mediaUrl,
     receivedAt,
+    isGroup,
   };
 }
