@@ -23,9 +23,10 @@ export class UserService {
   async list(query: UserQuery, companyId: string) {
     const { search, page, pageSize, status, role, sortBy, sortOrder } = query;
 
-    // Build where clause
+    // Build where clause — exclui usuários-robô (isSystem) da tela de equipe
     const where: any = {
       companyId,
+      isSystem: false,
     };
 
     // Filtro de status (active/inactive/all)
