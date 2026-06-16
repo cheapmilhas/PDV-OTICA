@@ -28,6 +28,7 @@ const companyFindUnique = vi.fn();
 const soFindMany = vi.fn();
 const arFindMany = vi.fn();
 const custFindMany = vi.fn();
+const logCreate = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     whatsappConnection: { findMany: (...a: unknown[]) => connFindMany(...a) },
@@ -36,8 +37,32 @@ vi.mock("@/lib/prisma", () => ({
     serviceOrder: { findMany: (...a: unknown[]) => soFindMany(...a) },
     accountReceivable: { findMany: (...a: unknown[]) => arFindMany(...a) },
     customer: { findMany: (...a: unknown[]) => custFindMany(...a) },
+    whatsappMessageLog: { create: (...a: unknown[]) => logCreate(...a) },
   },
 }));
+
+// P2002 (Prisma) p/ provar que o enqueue só engole conflito de unique.
+// A classe vai DENTRO do factory: vi.mock é hoisted ao topo do arquivo, então
+// não pode referenciar variáveis de escopo externo.
+vi.mock("@prisma/client", () => {
+  class PrismaClientKnownRequestError extends Error {
+    code: string;
+    clientVersion: string;
+    constructor(message: string, opts: { code: string; clientVersion: string }) {
+      super(message);
+      this.code = opts.code;
+      this.clientVersion = opts.clientVersion;
+    }
+  }
+  return { Prisma: { PrismaClientKnownRequestError } };
+});
+
+import { Prisma } from "@prisma/client";
+const makeP2002 = () =>
+  new Prisma.PrismaClientKnownRequestError("Unique constraint failed", {
+    code: "P2002",
+    clientVersion: "test",
+  });
 
 import { runWhatsappAutomations } from "@/services/whatsapp-automation.service";
 
@@ -61,6 +86,7 @@ describe("runWhatsappAutomations", () => {
     soFindMany.mockReset().mockResolvedValue([]);
     arFindMany.mockReset().mockResolvedValue([]);
     custFindMany.mockReset().mockResolvedValue([]);
+    logCreate.mockReset().mockResolvedValue({ id: "log1" });
   });
 
   it("pula óticas não habilitadas pela flag", async () => {
@@ -189,5 +215,62 @@ describe("runWhatsappAutomations", () => {
     soFindMany.mockRejectedValueOnce(new Error("db blip"));
     const r = await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"));
     expect(r.companiesProcessed).toBe(2); // ambas processadas, sem throw
+  });
+
+  // --- Modo enqueue (fila anti-bloqueio): cria PENDING sem enviar ---
+
+  it("enqueue → NÃO envia; cria PENDING para o elegível", async () => {
+    settingsFindUnique.mockResolvedValue({ ...ALL_OFF, waOsReadyEnabled: true });
+    soFindMany.mockResolvedValueOnce([
+      { id: "os1", number: 1234, readyAt: new Date("2026-06-15T10:00:00Z"), customer },
+    ]);
+    checkElig.mockResolvedValue({ eligible: true, number: "5511999999999", content: "Seu óculos está pronto" });
+
+    const r = await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"), { enqueue: true });
+
+    expect(send).not.toHaveBeenCalled();        // não envia direto
+    expect(checkElig).toHaveBeenCalledTimes(1);   // checou elegibilidade
+    expect(logCreate).toHaveBeenCalledTimes(1);
+    expect(logCreate).toHaveBeenCalledWith(expect.objectContaining({
+      data: expect.objectContaining({
+        status: "PENDING",
+        type: "OS_READY",
+        referenceId: "os1",
+        periodKey: "2026-06-15",
+        phone: "5511999999999",
+        content: "Seu óculos está pronto",
+      }),
+    }));
+    // enqueue não faz tally (a contagem real vem do processador)
+    expect(r.sent).toBe(0);
+  });
+
+  it("enqueue → inelegível NÃO cria linha", async () => {
+    settingsFindUnique.mockResolvedValue({ ...ALL_OFF, waOsReadyEnabled: true });
+    soFindMany.mockResolvedValueOnce([
+      { id: "os1", number: 1234, readyAt: new Date("2026-06-15T10:00:00Z"), customer },
+    ]);
+    checkElig.mockResolvedValue({ eligible: false, skipReason: "no_phone", content: "x" });
+
+    await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"), { enqueue: true });
+
+    expect(send).not.toHaveBeenCalled();
+    expect(logCreate).not.toHaveBeenCalled();
+  });
+
+  it("enqueue → P2002 (duplicata em corrida) é engolido, não derruba a varredura", async () => {
+    connFindMany.mockResolvedValue([{ companyId: "co1" }, { companyId: "co2" }]);
+    settingsFindUnique
+      .mockResolvedValueOnce({ ...ALL_OFF, waOsReadyEnabled: true })
+      .mockResolvedValueOnce({ ...ALL_OFF, waOsReadyEnabled: true });
+    soFindMany
+      .mockResolvedValueOnce([{ id: "os1", number: 1, readyAt: new Date("2026-06-15T10:00:00Z"), customer }])
+      .mockResolvedValueOnce([{ id: "os2", number: 2, readyAt: new Date("2026-06-15T10:00:00Z"), customer }]);
+    checkElig.mockResolvedValue({ eligible: true, number: "5511999999999", content: "msg" });
+    logCreate.mockRejectedValue(makeP2002());
+
+    const r = await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"), { enqueue: true });
+
+    expect(r.companiesProcessed).toBe(2); // P2002 não interrompe ninguém
   });
 });
