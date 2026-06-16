@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   computeCostUsd,
+  priceForCompany,
   tokensToCredits,
   usdToBrl,
   CREDIT_TOKEN_FACTOR,
@@ -48,6 +49,58 @@ describe("computeCostUsd", () => {
       outputTokens: 1000,
     });
     expect(cost).toBe(0);
+  });
+
+  it("calcula custo do claude-haiku-4-5 (input+output)", () => {
+    // haiku-4-5: $1/M input, $5/M output → 1M+1M = $1 + $5 = $6
+    const cost = computeCostUsd({
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(6, 4);
+  });
+
+  it("inclui cache read do claude-haiku-4-5 ($0.10/M)", () => {
+    const cost = computeCostUsd({
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      cacheTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(0.1, 4);
+  });
+
+  it("calcula custo do claude-opus-4-8 (input+output)", () => {
+    // opus-4-8: $5/M input, $25/M output → 1M+1M = $5 + $25 = $30
+    const cost = computeCostUsd({
+      provider: "anthropic",
+      model: "claude-opus-4-8",
+      inputTokens: 1_000_000,
+      outputTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(30, 4);
+  });
+});
+
+describe("priceForCompany", () => {
+  it("aplica margem positiva (+50%)", () => {
+    // 2 * 5.5 * 1.5 = 16.5
+    expect(priceForCompany(2, 5.5, 50)).toBeCloseTo(16.5, 4);
+  });
+
+  it("margem 0% = custo USD × câmbio", () => {
+    // 2 * 5.5 * 1 = 11
+    expect(priceForCompany(2, 5.5, 0)).toBeCloseTo(11, 4);
+  });
+
+  it("aceita margem negativa (subsídio, -20%)", () => {
+    // 2 * 5.5 * 0.8 = 8.8
+    expect(priceForCompany(2, 5.5, -20)).toBeCloseTo(8.8, 4);
+  });
+
+  it("clampa em 0 quando a margem tornaria o preço negativo", () => {
+    expect(priceForCompany(2, 5.5, -150)).toBe(0);
   });
 });
 

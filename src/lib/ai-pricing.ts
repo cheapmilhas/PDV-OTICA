@@ -39,6 +39,18 @@ const TEXT_PRICING: Record<string, TokenPrice> = {
     outputPerMillion: 15,
     cacheReadPerMillion: 0.3,
   },
+  // Claude Haiku 4.5 — $1/M in, $5/M out, $0.10/M cache read
+  "claude-haiku-4-5": {
+    inputPerMillion: 1,
+    outputPerMillion: 5,
+    cacheReadPerMillion: 0.1,
+  },
+  // Claude Opus 4.8 — $5/M in, $25/M out, $0.50/M cache read
+  "claude-opus-4-8": {
+    inputPerMillion: 5,
+    outputPerMillion: 25,
+    cacheReadPerMillion: 0.5,
+  },
 };
 
 /** Preço por modelo de áudio (OpenAI Whisper). */
@@ -86,6 +98,14 @@ export function usdToBrl(usd: number, rate: number = USD_BRL_RATE): number {
 /** Traduz tokens em créditos amigáveis para a ótica (sem R$). Aceita fator custom; padrão = CREDIT_TOKEN_FACTOR. */
 export function tokensToCredits(tokens: number, factor: number = CREDIT_TOKEN_FACTOR): number {
   return tokens / factor;
+}
+
+/**
+ * Preço final em BRL que a ótica paga = custo USD × câmbio × (1 + margem%).
+ * markupPercent pode ser negativo (subsídio). Resultado nunca negativo (clamp >= 0).
+ */
+export function priceForCompany(costUsd: number, usdBrlRate: number, markupPercent: number): number {
+  return round6(Math.max(0, costUsd * usdBrlRate * (1 + markupPercent / 100)));
 }
 
 function round6(n: number): number {
