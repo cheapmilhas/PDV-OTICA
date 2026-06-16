@@ -10,7 +10,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { logAiUsage, getMonthlyUsage } from "./ai-usage.service";
+import { logAiUsage, getMonthlyUsage, getDailyUsage } from "./ai-usage.service";
 
 beforeEach(() => vi.clearAllMocks());
 
@@ -76,5 +76,24 @@ describe("getMonthlyUsage", () => {
     expect(r.totalTokens).toBe(0);
     expect(r.totalCostUsd).toBe(0);
     expect(r.byFeature).toEqual({});
+  });
+});
+
+describe("getDailyUsage", () => {
+  it("agrupa tokens e custo por dia do mês corrente", async () => {
+    (prisma.aiTokenUsage.findMany as any).mockResolvedValue([
+      { createdAt: new Date("2026-06-16T10:00:00Z"), inputTokens: 100, outputTokens: 50, cacheTokens: 0, costUsd: "0.01" },
+      { createdAt: new Date("2026-06-16T15:00:00Z"), inputTokens: 200, outputTokens: 0, cacheTokens: 0, costUsd: "0.02" },
+      { createdAt: new Date("2026-06-17T09:00:00Z"), inputTokens: 50, outputTokens: 50, cacheTokens: 0, costUsd: "0.005" },
+    ]);
+    const r = await getDailyUsage("co1");
+    expect(r.find(d => d.date === "2026-06-16")?.tokens).toBe(350);
+    expect(r.find(d => d.date === "2026-06-16")?.costUsd).toBeCloseTo(0.03, 6);
+    expect(r.find(d => d.date === "2026-06-17")?.tokens).toBe(100);
+    expect(Array.isArray(r)).toBe(true);
+    // multi-tenant + janela do mês no WHERE
+    const where = (prisma.aiTokenUsage.findMany as any).mock.calls[0][0].where;
+    expect(where.companyId).toBe("co1");
+    expect(where.createdAt.gte).toBeInstanceOf(Date);
   });
 });

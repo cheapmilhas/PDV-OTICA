@@ -56,6 +56,31 @@ function startOfCurrentMonth(): Date {
 }
 
 /**
+ * Uso de IA do mês corrente agrupado por dia (UTC), ordenado asc.
+ * Usado pelas telas C2/C3 para exibir o gráfico histórico diário.
+ * Multi-tenant por companyId.
+ */
+export async function getDailyUsage(companyId: string): Promise<{ date: string; tokens: number; costUsd: number }[]> {
+  const rows = await prisma.aiTokenUsage.findMany({
+    where: { companyId, createdAt: { gte: startOfCurrentMonth() } },
+    select: { createdAt: true, inputTokens: true, outputTokens: true, cacheTokens: true, costUsd: true },
+  });
+  const byDay = new Map<string, { tokens: number; costUsd: number }>();
+  for (const r of rows) {
+    const date = r.createdAt.toISOString().slice(0, 10);
+    const tokens = (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheTokens ?? 0);
+    const cost = Number(r.costUsd.toString());
+    const d = byDay.get(date) ?? { tokens: 0, costUsd: 0 };
+    d.tokens += tokens;
+    d.costUsd += cost;
+    byDay.set(date, d);
+  }
+  return [...byDay.entries()]
+    .map(([date, v]) => ({ date, tokens: v.tokens, costUsd: Math.round(v.costUsd * 1_000_000) / 1_000_000 }))
+    .sort((a, b) => a.date.localeCompare(b.date));
+}
+
+/**
  * Soma o uso de IA do mês corrente de uma empresa (tokens + custo + breakdown por feature).
  * Usado pelo guard (cota) e pelas telas (C2/C3). Multi-tenant por companyId.
  */
