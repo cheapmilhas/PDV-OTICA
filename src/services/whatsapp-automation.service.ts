@@ -17,7 +17,8 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { isWhatsappEnabledForCompany } from "@/lib/whatsapp-flag";
-import { sendWhatsappMessage } from "@/lib/whatsapp-send";
+import { sendWhatsappMessage, checkWhatsappEligibility } from "@/lib/whatsapp-send";
+import type { SendWhatsappInput } from "@/lib/whatsapp-send";
 import {
   DEFAULT_AUTOMATION_TEMPLATES,
 } from "@/lib/whatsapp-automation-templates";
@@ -50,12 +51,22 @@ function fmtBRL(value: number): string {
   return new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(value);
 }
 
+/** Um item da prévia (modo dryRun): o que seria enviado, sem enviar. */
+export interface AutomationPreviewItem {
+  type: string;
+  customerName: string;
+  phone: string;
+  content: string;
+}
+
 export interface AutomationRunResult {
   companiesProcessed: number;
   sent: number;
   skipped: number;
   failed: number;
   byType: Record<string, { sent: number; skipped: number; failed: number }>;
+  /** Preenchido só em dryRun: lista do que sairia (apenas os elegíveis). */
+  preview: AutomationPreviewItem[];
 }
 
 interface CompanyCtx {
@@ -80,17 +91,22 @@ interface CompanyCtx {
  * @param options.companyId quando informado, limita a varredura a essa ótica
  *   (usado pelo botão "Processar agora"). Sem ele, varre todas as conectadas
  *   (comportamento do cron diário). O escopo deve vir da sessão, nunca do body.
+ * @param options.dryRun quando true, NÃO envia e NÃO persiste — apenas coleta
+ *   em `result.preview` a lista do que sairia (só os elegíveis). Usado pela
+ *   prévia ("simular sem enviar").
  */
 export async function runWhatsappAutomations(
   now: Date = new Date(),
-  options?: { companyId?: string },
+  options?: { companyId?: string; dryRun?: boolean },
 ): Promise<AutomationRunResult> {
+  const dryRun = options?.dryRun ?? false;
   const result: AutomationRunResult = {
     companiesProcessed: 0,
     sent: 0,
     skipped: 0,
     failed: 0,
     byType: {},
+    preview: [],
   };
 
   // Óticas conectadas (status CONNECTED). A flag global+allowlist é checada
@@ -147,10 +163,10 @@ export async function runWhatsappAutomations(
     result.companiesProcessed++;
 
     try {
-      if (ctx.settings.waOsReadyEnabled) await runOsReady(ctx, now, result);
-      if (ctx.settings.waInstallmentDueEnabled) await runInstallmentDue(ctx, now, result);
-      if (ctx.settings.waPostSaleEnabled) await runPostSale(ctx, now, result);
-      if (ctx.settings.waBirthdayEnabled) await runBirthday(ctx, now, result);
+      if (ctx.settings.waOsReadyEnabled) await runOsReady(ctx, now, result, dryRun);
+      if (ctx.settings.waInstallmentDueEnabled) await runInstallmentDue(ctx, now, result, dryRun);
+      if (ctx.settings.waPostSaleEnabled) await runPostSale(ctx, now, result, dryRun);
+      if (ctx.settings.waBirthdayEnabled) await runBirthday(ctx, now, result, dryRun);
     } catch (err) {
       log.error("Falha ao processar automações da ótica", {
         companyId,
@@ -169,8 +185,36 @@ function tally(result: AutomationRunResult, type: string, status: "SENT" | "FAIL
   else { b.skipped++; result.skipped++; }
 }
 
+/**
+ * Despacha um envio: em modo normal chama `sendWhatsappMessage` (envia + tally);
+ * em `dryRun` chama `checkWhatsappEligibility` e, se elegível, coleta o item na
+ * prévia (sem enviar, sem persistir). Os "não elegíveis" são omitidos da prévia
+ * (decisão: a prévia mostra só quem vai receber de verdade).
+ */
+async function dispatch(
+  input: SendWhatsappInput,
+  customerName: string,
+  result: AutomationRunResult,
+  dryRun: boolean,
+) {
+  if (dryRun) {
+    const elig = await checkWhatsappEligibility(input);
+    if (elig.eligible) {
+      result.preview.push({
+        type: input.type,
+        customerName,
+        phone: elig.number ?? input.customer.phone ?? "",
+        content: elig.content,
+      });
+    }
+    return;
+  }
+  const r = await sendWhatsappMessage(input);
+  tally(result, input.type, r.status);
+}
+
 /** OS pronta: status READY com readyAt nas últimas 24h (a janela do cron). */
-async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResult) {
+async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
   const since = new Date(now.getTime() - 24 * 60 * 60 * 1000);
   const orders = await prisma.serviceOrder.findMany({
     where: { companyId: ctx.companyId, status: "READY", readyAt: { gte: since, lte: now } },
@@ -185,7 +229,7 @@ async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResul
 
   for (const os of orders) {
     if (!os.customer) continue;
-    const r = await sendWhatsappMessage({
+    await dispatch({
       companyId: ctx.companyId,
       customer: os.customer,
       type: "OS_READY",
@@ -194,13 +238,12 @@ async function runOsReady(ctx: CompanyCtx, now: Date, result: AutomationRunResul
       variables: { cliente: os.customer.name ?? "", otica: ctx.oticaName, validade: osDisplayNumber(os) },
       referenceId: os.id,
       periodKey: dayKey(os.readyAt ?? now),
-    });
-    tally(result, "OS_READY", r.status);
+    }, os.customer.name ?? "", result, dryRun);
   }
 }
 
 /** Crediário a vencer: AccountReceivable PENDING com dueDate em até 3 dias. */
-async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationRunResult) {
+async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
   const in3d = new Date(now.getTime() + 3 * 24 * 60 * 60 * 1000);
   const rows = await prisma.accountReceivable.findMany({
     where: {
@@ -219,7 +262,7 @@ async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationR
 
   for (const ar of rows) {
     if (!ar.customer) continue;
-    const r = await sendWhatsappMessage({
+    await dispatch({
       companyId: ctx.companyId,
       customer: ar.customer,
       type: "INSTALLMENT_DUE",
@@ -235,13 +278,12 @@ async function runInstallmentDue(ctx: CompanyCtx, now: Date, result: AutomationR
       referenceId: ar.id,
       // dedupe pela data de vencimento → 1 lembrete por parcela (não 3×).
       periodKey: dayKey(ar.dueDate),
-    });
-    tally(result, "INSTALLMENT_DUE", r.status);
+    }, ar.customer.name ?? "", result, dryRun);
   }
 }
 
 /** Pós-venda: OS entregue há exatamente waPostSaleDays dias (janela do dia). */
-async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResult) {
+async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
   const days = ctx.settings.waPostSaleDays || 7;
   const start = new Date(now.getTime() - days * 24 * 60 * 60 * 1000);
   const lo = new Date(start.getTime() - 12 * 60 * 60 * 1000);
@@ -258,7 +300,7 @@ async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResu
 
   for (const os of orders) {
     if (!os.customer) continue;
-    const r = await sendWhatsappMessage({
+    await dispatch({
       companyId: ctx.companyId,
       customer: os.customer,
       type: "POST_SALE",
@@ -267,13 +309,12 @@ async function runPostSale(ctx: CompanyCtx, now: Date, result: AutomationRunResu
       variables: { cliente: os.customer.name ?? "", otica: ctx.oticaName },
       referenceId: os.id,
       periodKey: dayKey(now),
-    });
-    tally(result, "POST_SALE", r.status);
+    }, os.customer.name ?? "", result, dryRun);
   }
 }
 
 /** Aniversário: clientes que fazem aniversário hoje (mês+dia). */
-async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResult) {
+async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResult, dryRun: boolean) {
   // Compara mês/dia em America/Sao_Paulo (evita o bug de -1 dia em UTC-3).
   const fmt = new Intl.DateTimeFormat("en-CA", { timeZone: "America/Sao_Paulo", year: "numeric", month: "2-digit", day: "2-digit" }).format(now);
   const [, mm, dd] = fmt.split("-");
@@ -295,7 +336,7 @@ async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResu
     const [, bmm, bdd] = bFmt.split("-");
     if (bmm !== mm || bdd !== dd) continue;
 
-    const r = await sendWhatsappMessage({
+    await dispatch({
       companyId: ctx.companyId,
       customer: c,
       type: "BIRTHDAY",
@@ -304,7 +345,6 @@ async function runBirthday(ctx: CompanyCtx, now: Date, result: AutomationRunResu
       variables: { cliente: c.name ?? "", otica: ctx.oticaName },
       referenceId: c.id,
       periodKey: dayKey(now),
-    });
-    tally(result, "BIRTHDAY", r.status);
+    }, c.name ?? "", result, dryRun);
   }
 }

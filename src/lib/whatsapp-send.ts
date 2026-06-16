@@ -67,6 +67,71 @@ export interface SendWhatsappResult {
   evolutionMessageId?: string;
 }
 
+/** Resultado da checagem de elegibilidade (sem enviar nem persistir). */
+export interface WhatsappEligibility {
+  /** true → passaria em todas as checagens e seria enviada. */
+  eligible: boolean;
+  /** preenchido quando eligible=false. */
+  skipReason?: SkipReason;
+  /** telefone normalizado (E.164 sem '+'), só quando eligible. */
+  number?: string;
+  /** texto renderizado que seria enviado. */
+  content: string;
+}
+
+/**
+ * Aplica as mesmas checagens do envio (feature → conexão → consentimento →
+ * telefone → dedupe) SEM enviar e SEM persistir. Fonte única de verdade usada
+ * tanto por `sendWhatsappMessage` quanto pela prévia ("simular sem enviar").
+ * Apenas LÊ o banco (conexão/dedupe), nunca escreve.
+ */
+export async function checkWhatsappEligibility(
+  input: SendWhatsappInput,
+): Promise<WhatsappEligibility> {
+  const { companyId, customer, type, template, variables, referenceId = null, periodKey = null } = input;
+  const transactional = input.transactional ?? TRANSACTIONAL_TYPES.has(type);
+  const content = variables ? replaceMessageVariables(template, variables) : template;
+
+  // 1. Feature flag por empresa.
+  if (!isWhatsappEnabledForCompany(companyId)) {
+    return { eligible: false, skipReason: "feature_off", content };
+  }
+
+  // 2. Conexão CONNECTED.
+  const conn = await prisma.whatsappConnection.findUnique({
+    where: { companyId },
+    select: { status: true },
+  });
+  if (conn?.status !== "CONNECTED") {
+    return { eligible: false, skipReason: "not_connected", content };
+  }
+
+  // 3. Consentimento (só para tipos de marketing).
+  if (!transactional && customer.acceptsMarketing !== true) {
+    return { eligible: false, skipReason: "no_consent", content };
+  }
+
+  // 4. Telefone normalizável.
+  const number = normalizePhoneBR(customer.phone ?? "");
+  if (!number) {
+    return { eligible: false, skipReason: "no_phone", content };
+  }
+
+  // 5. Idempotência: já existe SENT com a mesma chave de dedupe?
+  //    (Pula quando periodKey é null — envio manual nunca colide.)
+  if (periodKey) {
+    const dup = await prisma.whatsappMessageLog.findFirst({
+      where: { companyId, type, referenceId, periodKey, status: "SENT" },
+      select: { id: true },
+    });
+    if (dup) {
+      return { eligible: false, skipReason: "already_sent", content };
+    }
+  }
+
+  return { eligible: true, number, content };
+}
+
 /**
  * Envia (ou registra um SKIP/FAIL) uma mensagem de WhatsApp para um cliente.
  * Sempre persiste em WhatsappMessageLog. Nunca lança.
@@ -83,7 +148,6 @@ export async function sendWhatsappMessage(
     referenceId = null,
     periodKey = null,
   } = input;
-  const transactional = input.transactional ?? TRANSACTIONAL_TYPES.has(type);
 
   // Texto efetivamente enviado (render só se vierem variáveis; senão usa o pronto).
   const content = variables ? replaceMessageVariables(template, variables) : template;
@@ -119,42 +183,14 @@ export async function sendWhatsappMessage(
     }
   };
 
-  // 1. Feature flag por empresa.
-  if (!isWhatsappEnabledForCompany(companyId)) {
-    return persistSkip("feature_off");
+  // Checagens 1-5 (feature → conexão → consentimento → telefone → dedupe).
+  // Fonte única compartilhada com a prévia. Persiste o SKIP aqui (a checagem
+  // pura não toca o banco para escrita).
+  const elig = await checkWhatsappEligibility(input);
+  if (!elig.eligible) {
+    return persistSkip(elig.skipReason!);
   }
-
-  // 2. Conexão CONNECTED.
-  const conn = await prisma.whatsappConnection.findUnique({
-    where: { companyId },
-    select: { status: true },
-  });
-  if (conn?.status !== "CONNECTED") {
-    return persistSkip("not_connected");
-  }
-
-  // 3. Consentimento (só para tipos de marketing).
-  if (!transactional && customer.acceptsMarketing !== true) {
-    return persistSkip("no_consent");
-  }
-
-  // 4. Telefone normalizável.
-  const number = normalizePhoneBR(rawPhone);
-  if (!number) {
-    return persistSkip("no_phone");
-  }
-
-  // 5. Idempotência: já existe SENT com a mesma chave de dedupe?
-  //    (Pula quando periodKey é null — envio manual nunca colide.)
-  if (periodKey) {
-    const dup = await prisma.whatsappMessageLog.findFirst({
-      where: { companyId, type, referenceId, periodKey, status: "SENT" },
-      select: { id: true },
-    });
-    if (dup) {
-      return persistSkip("already_sent");
-    }
-  }
+  const number = elig.number!;
 
   // 6+7. Envia via Evolution.
   try {

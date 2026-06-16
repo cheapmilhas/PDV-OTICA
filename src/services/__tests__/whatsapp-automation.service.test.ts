@@ -12,8 +12,10 @@ vi.mock("@/lib/whatsapp-flag", () => ({
 }));
 
 const send = vi.fn();
+const checkElig = vi.fn();
 vi.mock("@/lib/whatsapp-send", () => ({
   sendWhatsappMessage: (...a: unknown[]) => send(...a),
+  checkWhatsappEligibility: (...a: unknown[]) => checkElig(...a),
 }));
 
 vi.mock("@/lib/logger", () => ({
@@ -52,6 +54,7 @@ describe("runWhatsappAutomations", () => {
   beforeEach(() => {
     isEnabled.mockReset().mockReturnValue(true);
     send.mockReset().mockResolvedValue({ status: "SENT" });
+    checkElig.mockReset().mockResolvedValue({ eligible: true, number: "5511999999999", content: "msg" });
     connFindMany.mockReset().mockResolvedValue([{ companyId: "co1" }]);
     settingsFindUnique.mockReset().mockResolvedValue({ ...ALL_OFF });
     companyFindUnique.mockReset().mockResolvedValue({ name: "Ótica X" });
@@ -79,6 +82,40 @@ describe("runWhatsappAutomations", () => {
     expect(connFindMany).toHaveBeenCalledWith(expect.objectContaining({
       where: { status: "CONNECTED", companyId: "co1" },
     }));
+  });
+
+  it("dryRun → NÃO envia, coleta a prévia só dos elegíveis", async () => {
+    settingsFindUnique.mockResolvedValue({ ...ALL_OFF, waOsReadyEnabled: true });
+    soFindMany.mockResolvedValueOnce([
+      { id: "os1", number: 1234, readyAt: new Date("2026-06-15T10:00:00Z"), customer },
+    ]);
+    checkElig.mockResolvedValue({ eligible: true, number: "5511999999999", content: "Seu óculos está pronto" });
+
+    const r = await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"), { dryRun: true });
+
+    expect(send).not.toHaveBeenCalled();      // não envia
+    expect(checkElig).toHaveBeenCalledTimes(1); // checou elegibilidade
+    expect(r.sent).toBe(0);
+    expect(r.preview).toHaveLength(1);
+    expect(r.preview[0]).toMatchObject({
+      type: "OS_READY",
+      customerName: "João",
+      phone: "5511999999999",
+      content: "Seu óculos está pronto",
+    });
+  });
+
+  it("dryRun → não elegível é OMITIDO da prévia", async () => {
+    settingsFindUnique.mockResolvedValue({ ...ALL_OFF, waOsReadyEnabled: true });
+    soFindMany.mockResolvedValueOnce([
+      { id: "os1", number: 1234, readyAt: new Date("2026-06-15T10:00:00Z"), customer },
+    ]);
+    checkElig.mockResolvedValue({ eligible: false, skipReason: "no_consent", content: "x" });
+
+    const r = await runWhatsappAutomations(new Date("2026-06-15T12:00:00Z"), { dryRun: true });
+
+    expect(send).not.toHaveBeenCalled();
+    expect(r.preview).toHaveLength(0);
   });
 
   it("todas as flags OFF → não envia nada", async () => {
