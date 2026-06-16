@@ -111,6 +111,21 @@ describe("isWithinBusinessHours", () => {
     expect(isWithinBusinessHours(new Date("2026-12-25T13:00:00Z"))).toBe(false);
   });
 });
+
+import { spDayRange } from "@/lib/whatsapp-business-hours";
+
+describe("spDayRange (dia civil em BRT, UTC-3)", () => {
+  it("um instante às 10h BRT → janela 03:00Z do mesmo dia a 03:00Z do dia seguinte", () => {
+    const { start, end } = spDayRange(new Date("2026-06-15T13:00:00Z")); // seg 10h BRT
+    expect(start.toISOString()).toBe("2026-06-15T03:00:00.000Z");
+    expect(end.toISOString()).toBe("2026-06-16T03:00:00.000Z");
+  });
+  it("23h BRT (já 02h UTC do dia seguinte) ainda cai no dia civil BRT correto", () => {
+    // 2026-06-15 23:00 BRT = 2026-06-16 02:00 UTC → dia civil BRT = 15/06
+    const { start } = spDayRange(new Date("2026-06-16T02:00:00Z"));
+    expect(start.toISOString()).toBe("2026-06-15T03:00:00.000Z");
+  });
+});
 ```
 
 - [ ] **Step 2: Rodar e ver falhar**
@@ -193,18 +208,34 @@ git commit -m "feat(whatsapp): helper de horário comercial + feriados fixos"
 - Modify: `src/lib/whatsapp-send.ts` (a query de dedupe em `checkWhatsappEligibility`)
 - Test: `src/lib/__tests__/whatsapp-send.test.ts`
 
-- [ ] **Step 1: Ajustar o teste de dedupe existente + adicionar caso PENDING**
+> ⚠️ **PRÉ-REQUISITO DE CORRETUDE (CRÍTICO — não pular):** o `@@unique([companyId,
+> type,referenceId,periodKey])` **NÃO** protege contra PENDING duplicado quando
+> `periodKey` é `null` — no Postgres, `NULL` é distinto em índice único, então duas
+> linhas com periodKey null NÃO colidem (P2002 nunca dispara). Além disso, o
+> `checkWhatsappEligibility` **só roda o dedupe quando `periodKey` existe**
+> (`if (periodKey)` em whatsapp-send.ts). Logo, a proteção da fila contra
+> duplicata **depende de as automações SEMPRE passarem `periodKey`**. Confirmado
+> hoje: os 4 `runXxx` passam `periodKey: dayKey(...)` ou `dayKey(dueDate)` — nunca
+> null. **Regra a manter:** qualquer envio enfileirável DEVE ter `periodKey`. Não
+> afirmar que "o unique impede a 2ª linha" como garantia geral — só vale com
+> periodKey presente.
 
-No arquivo de teste, garantir que uma linha `PENDING` da mesma chave faz `checkWhatsappEligibility` retornar `eligible:false, skipReason:"already_sent"`. (Espelhar o teste que hoje usa `SENT`, trocando para `PENDING`.)
+- [ ] **Step 1: Ajustar o teste de dedupe existente + adicionar casos**
+
+No arquivo de teste, com `periodKey` presente:
+- uma linha `PENDING` da mesma chave → `checkWhatsappEligibility` retorna
+  `eligible:false, skipReason:"already_sent"`.
+- idem para `PROCESSING`.
+(Espelhar o teste que hoje usa `SENT`.)
 
 - [ ] **Step 2: Rodar e ver falhar**
 
 Run: `npx vitest run src/lib/__tests__/whatsapp-send.test.ts`
-Expected: FAIL no caso novo (hoje só filtra `SENT`).
+Expected: FAIL nos casos novos (hoje só filtra `SENT`).
 
 - [ ] **Step 3: Implementar**
 
-Em `src/lib/whatsapp-send.ts`, na checagem 5 (dedupe), trocar `status: "SENT"` por um `in`:
+Em `src/lib/whatsapp-send.ts`, na checagem 5 (dedupe), trocar `status: "SENT"` por um `in`. **Manter o guard `if (periodKey)` existente** (não removê-lo):
 
 ```typescript
     const dup = await prisma.whatsappMessageLog.findFirst({
@@ -216,7 +247,7 @@ Em `src/lib/whatsapp-send.ts`, na checagem 5 (dedupe), trocar `status: "SENT"` p
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `npx vitest run src/lib/__tests__/whatsapp-send.test.ts`
-Expected: PASS (todos, incluindo o novo).
+Expected: PASS (todos, incluindo os novos).
 
 - [ ] **Step 5: Commit**
 
@@ -301,9 +332,19 @@ git commit -m "feat(whatsapp): sendExistingQueued (envia linha enfileirada exist
 
 Objetivo: `dispatch` ganha um modo `enqueue`. Hoje ele tem `dryRun` (simula) e normal (envia). O modo enqueue cria a linha `PENDING` (sem enviar), respeitando o dedupe. A varredura (`runWhatsappAutomations`) ganha `options.enqueue`.
 
+> ⚠️ **Trabalho de propagação (não subestimar):** `dispatch` hoje é **posicional**:
+> `dispatch(input, customerName, result, dryRun)`. Adicionar `enqueue` exige tocar
+> **5 lugares** e a compilação só fecha quando TODOS forem feitos:
+> 1. assinatura de `dispatch` → `dispatch(input, customerName, result, dryRun, enqueue)`;
+> 2-5. as 4 chamadas de `dispatch` dentro de `runOsReady`, `runInstallmentDue`,
+>    `runPostSale`, `runBirthday` (passar `enqueue` ao final);
+> 6. a assinatura dos 4 `runXxx` (recebem `enqueue: boolean`) e suas chamadas em
+>    `runWhatsappAutomations` (que lê `options.enqueue`).
+> Espelha exatamente o que já foi feito p/ `dryRun` — seguir o mesmo padrão.
+
 - [ ] **Step 1: Escrever teste**
 
-`runWhatsappAutomations(now, { enqueue: true })` com OS_READY ligado: NÃO chama `sendWhatsappMessage`; chama `prisma.whatsappMessageLog.create`/`createMany` com `status:"PENDING"`; respeita dedupe (não cria se `checkWhatsappEligibility` retornar inelegível por já existir). Mockar o create e checkElig.
+`runWhatsappAutomations(now, { enqueue: true })` com OS_READY ligado: NÃO chama `sendWhatsappMessage`; chama `prisma.whatsappMessageLog.create` com `status:"PENDING"`; se `checkWhatsappEligibility` retornar inelegível, NÃO cria. Mockar `prisma.whatsappMessageLog.create` e `checkElig`.
 
 - [ ] **Step 2: Rodar e ver falhar**
 
@@ -312,9 +353,11 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implementar**
 
-No `dispatch`, adicionar o ramo enqueue (antes do envio normal). Passar `enqueue` por `options` → `runWhatsappAutomations` → cada `runXxx` → `dispatch` (mesmo padrão do `dryRun`). No enqueue, primeiro `checkWhatsappEligibility`; se elegível, `prisma.whatsappMessageLog.create({ data: { ...PENDING } })` com try/catch para o conflito do `@@unique` (idempotência — ignora P2002). Não fazer `tally` de envio (a fila contabiliza depois).
+No `dispatch`, adicionar o ramo enqueue (antes do envio normal). Propagar `enqueue` pelos 5 lugares acima. No enqueue: primeiro `checkWhatsappEligibility`; se elegível, `create` com try/catch que **só engole P2002** (corrida de duplicata) e **re-lança/loga o resto** — não silenciar erros de banco legítimos (seguir o padrão de `persistSkip`, que loga). Não fazer `tally`.
 
 ```typescript
+import { Prisma } from "@prisma/client";
+
 // dentro de dispatch, antes do envio normal:
 if (enqueue) {
   const elig = await checkWhatsappEligibility(input);
@@ -333,7 +376,14 @@ if (enqueue) {
       },
     });
   } catch (e) {
-    // P2002 (já enfileirado/enviado) → idempotente, ignora.
+    // P2002 = já enfileirado/enviado (corrida) → idempotente, ignora.
+    // Qualquer outro erro é real: loga (não silencia).
+    if (!(e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002")) {
+      log.error("Falha ao enfileirar WhatsApp", {
+        companyId: input.companyId, type: input.type,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
   }
   return;
 }
@@ -388,32 +438,59 @@ git commit -m "feat(whatsapp): cron diário enfileira (não envia direto)"
 
 Objetivo: a função central, chamada pelo endpoint. 1 msg/ótica/invocação, sem sleep.
 
+**Assinatura (já prevendo o uso da Task 9):**
+```typescript
+export async function processWhatsappQueue(
+  now: Date = new Date(),
+  options?: { companyId?: string },  // quando setado, processa só essa ótica (run-now)
+): Promise<QueueResult>
+```
+
 Pseudo-fluxo:
 ```
-processWhatsappQueue(now):
-  if (!isWithinBusinessHours(now)) return { skippedOutOfHours: true }
-  recuperarProcessingPreso(now)   // PROCESSING > 10min → PENDING
+processWhatsappQueue(now, options):
+  if (!isWithinBusinessHours(now)) return { skippedOutOfHours: true, ...zeros }
+  recuperarProcessingPreso(now)   // PROCESSING > STALE_MIN → PENDING
   óticas = distinct companyId de WhatsappMessageLog status=PENDING, conectadas
+           (se options.companyId, filtra só essa)
   for cada ótica:
-    if contagem SENT no spDayRange(now) >= TETO: continue   // teto
-    claimed = updateMany({ where: {id: (1 PENDING mais antiga dessa ótica)}, data:{status:PROCESSING}})
-              // claim atômico — relê a linha
-    if (!claimed) continue
-    elig = checkWhatsappEligibility(...)   // reavalia (opt-out etc.)
-    if (!elig.eligible) marca SKIPPED; continue
-    sendExistingQueued(...)   // SENT ou FAILED
-  return métricas { claimed, sent, skipped, failed, pendingRestantes }
+    if contagem(status=SENT, sentAt ∈ spDayRange(now)) >= TETO: continue
+    // CLAIM ATÔMICO: trava 1 PENDING mais antiga dessa ótica.
+    // Padrão de 2 passos com guarda de status (mock não prova atomicidade real —
+    // a garantia vem do WHERE status=PENDING no updateMany do Postgres):
+    alvo = findFirst({ where:{companyId, status:"PENDING"}, orderBy:{createdAt:"asc"} })
+    if (!alvo) continue
+    claim = updateMany({ where:{ id: alvo.id, status:"PENDING" }, data:{ status:"PROCESSING" } })
+    if (claim.count === 0) continue   // outra invocação pegou antes
+    linha = findUnique(alvo.id)        // relê phone/content/customer da linha travada
+    elig = checkWhatsappEligibility(de linha)   // reavalia (opt-out etc.)
+    if (!elig.eligible) update(alvo.id → SKIPPED, skipReason); skipped++; continue
+    r = sendExistingQueued({ logId, companyId, number: elig.number, content: elig.content })
+    r==="SENT" ? sent++ : failed++
+  pendingRestantes = count(status="PENDING" [, companyId])
+  return { sent, skipped, failed, claimed, pendingRestantes, skippedOutOfHours:false }
 ```
+
+> **Atomicidade (honestidade do teste):** o claim de 2 passos com `updateMany ...
+> WHERE status="PENDING"` é atômico **no Postgres**. Os testes desta task são
+> **mockados** — eles provam que o `where.status="PENDING"` é passado e que
+> `count===0` aborta o envio, mas **não provam atomicidade sob concorrência real**
+> (isso depende do banco). Isso é aceitável p/ Fase 1; a garantia anti-duplo está
+> no WHERE com guarda de status, não no mock.
 
 - [ ] **Step 1: Escrever testes** (mockando prisma/checkElig/sendExistingQueued/isWithinBusinessHours)
 
 Casos:
-- fora do horário → retorna sem processar (nenhum claim).
+- fora do horário → retorna `skippedOutOfHours:true`, nenhum claim.
 - teto atingido → pula a ótica (não faz claim).
 - claim atômico: `updateMany` chamado com `where.status="PENDING"`; se count=0, não envia.
-- reavalia: inelegível → marca `SKIPPED`, não chama `sendExistingQueued`.
-- elegível → chama `sendExistingQueued` 1×.
-- PROCESSING preso > 10min → volta a PENDING.
+- reavalia: inelegível → marca `SKIPPED`, não chama `sendExistingQueued`, `skipped` incrementa.
+- elegível → chama `sendExistingQueued` 1×; `sent` incrementa em "SENT", `failed` em "FAILED".
+- PROCESSING preso > STALE_MIN → volta a PENDING (updateMany chamado no início).
+- **métrica `pendingRestantes`:** após processar, o retorno traz a contagem de
+  PENDING restantes (mockar o count final) — é o sinal de fila represada (M2).
+- **`options.companyId`:** quando setado, a query de óticas filtra só essa (usado
+  pela Task 9).
 
 - [ ] **Step 2: Rodar e ver falhar**
 
@@ -450,7 +527,13 @@ git commit -m "feat(whatsapp): processador da fila (claim atômico + 1 msg/ótic
 { "path": "/api/cron/whatsapp-dispatch", "schedule": "0 12 * * *" }
 ```
 
-> ⚠️ Será o 12º cron. Conferir se o Hobby aceita (o 11º passou). Se a Vercel bloquear no deploy, PARAR e reportar (consolidar crons num dispatcher).
+> ⚠️ Será o **12º cron** (hoje há 11). Se a Vercel bloquear no deploy por limite do
+> Hobby, **PLANO-B (sem novo cron):** NÃO adicionar esta entrada; em vez disso, o
+> cron diário existente `/api/cron/whatsapp-messages` (Task 6), após enfileirar,
+> chama `processWhatsappQueue()` uma vez no fim — drena a 1ª leva como rede de
+> segurança. O acionador externo continua sendo o processador principal. Assim não
+> aumenta a contagem de crons. Decidir no deploy; se couber o 12º, manter a entrada
+> dedicada (mais limpo).
 
 - [ ] **Step 3: Checar tipos + smoke local**
 
