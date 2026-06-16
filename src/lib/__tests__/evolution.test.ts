@@ -117,6 +117,33 @@ describe("evolution client", () => {
     expect(res.key?.id).toBe("EVO_MSG_1");
   });
 
+  it("getMediaBase64: POST /chat/getBase64FromMediaMessage/{instance} com key.id e convertToMp4:false", async () => {
+    fetchMock.mockResolvedValueOnce(
+      okJson({ base64: "QUFB", mimetype: "audio/ogg; codecs=opus", fileName: "audio.ogg" }),
+    );
+
+    const res = await evolution.getMediaBase64("vis_co1", "EVO_MSG_1");
+
+    const [url, init] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://evo.test/chat/getBase64FromMediaMessage/vis_co1");
+    expect(init.method).toBe("POST");
+    expect(init.headers.apikey).toBe("GLOBAL_KEY");
+    const body = JSON.parse(init.body);
+    expect(body).toEqual({ message: { key: { id: "EVO_MSG_1" } }, convertToMp4: false });
+    expect(res.base64).toBe("QUFB");
+    expect(res.mimetype).toBe("audio/ogg; codecs=opus");
+    expect(res.fileName).toBe("audio.ogg");
+  });
+
+  it("getMediaBase64: nome de instância com caracteres especiais é URL-encoded", async () => {
+    fetchMock.mockResolvedValueOnce(okJson({ base64: "QUFB" }));
+
+    await evolution.getMediaBase64("vis co/1", "EVO_MSG_1");
+
+    const [url] = fetchMock.mock.calls[0];
+    expect(url).toBe("https://evo.test/chat/getBase64FromMediaMessage/vis%20co%2F1");
+  });
+
   it("setWebhook: POST /webhook/set/{instance} com body ANINHADO sob 'webhook'", async () => {
     fetchMock.mockResolvedValueOnce(okJson({ ok: true }));
 

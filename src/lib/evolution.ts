@@ -75,6 +75,13 @@ export interface EvolutionSendResponse {
   message?: unknown;
 }
 
+/** Resposta de getBase64FromMediaMessage (campos relevantes). */
+export interface EvolutionMediaBase64 {
+  base64: string;
+  mimetype?: string;
+  fileName?: string;
+}
+
 interface WebhookConfigInput {
   url: string;
   /** Segredo compartilhado para a Evolution assinar o webhook (JWT HS256). */
@@ -232,6 +239,28 @@ export const evolution = {
       {
         method: "POST",
         body: JSON.stringify({ number, text }),
+      },
+    );
+  },
+
+  /**
+   * Baixa a mídia (áudio/imagem) de uma mensagem já recebida, em base64.
+   * `POST /chat/getBase64FromMediaMessage/{instance}` — só precisa do key.id
+   * (=evolutionId que já guardamos); a Evolution busca a mídia no store dela.
+   * convertToMp4:false → áudio OGG cru (o Whisper aceita direto).
+   */
+  async getMediaBase64(
+    instanceName: string,
+    evolutionId: string,
+  ): Promise<EvolutionMediaBase64> {
+    return evolutionFetch<EvolutionMediaBase64>(
+      `/chat/getBase64FromMediaMessage/${encodeURIComponent(instanceName)}`,
+      {
+        method: "POST",
+        body: JSON.stringify({
+          message: { key: { id: evolutionId } },
+          convertToMp4: false,
+        }),
       },
     );
   },
