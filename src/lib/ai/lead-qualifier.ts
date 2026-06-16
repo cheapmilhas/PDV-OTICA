@@ -22,6 +22,11 @@ Responda SOMENTE com JSON válido (sem markdown):
 const anthropic = new Anthropic();
 
 export async function qualifyConversationText(conversationText: string, stages: QualifierStage[]): Promise<QualificationResult> {
+  // Falha legível se a env não estiver configurada (o SDK só erraria na chamada,
+  // com mensagem opaca). Evita 200 falhas mudas no cron por env faltando.
+  if (!process.env.ANTHROPIC_API_KEY) {
+    throw new Error("ANTHROPIC_API_KEY não configurada — qualificação de IA indisponível");
+  }
   const nonce = randomBytes(8).toString("hex");
   const stageNames = stages.map((s) => s.name).join(", ");
   const system = SYSTEM_PROMPT.replaceAll("{nonce}", nonce);

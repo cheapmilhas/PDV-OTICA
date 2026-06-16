@@ -3,7 +3,10 @@ const createMock = vi.fn();
 vi.mock("@anthropic-ai/sdk", () => ({ default: class { messages = { create: (...a: unknown[]) => createMock(...a) }; } }));
 import { qualifyConversationText } from "./lead-qualifier";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  process.env.ANTHROPIC_API_KEY = "test-key"; // guard exige a env (HIGH/IMPORTANT fix)
+});
 function mockJson(obj: unknown, usage = { input_tokens: 100, output_tokens: 20, cache_read_input_tokens: 0 }) {
   createMock.mockResolvedValue({ content: [{ type: "text", text: JSON.stringify(obj) }], usage });
 }
@@ -32,6 +35,11 @@ describe("qualifyConversationText", () => {
     const r = await qualifyConversationText("quero lente de contato", [{ id: "s_novo", name: "Novo" }, { id: "s2", name: "X" }]);
     expect(r.stageId).toBe("s_novo");
   });
+  it("lança erro legível se ANTHROPIC_API_KEY não está setada", async () => {
+    delete process.env.ANTHROPIC_API_KEY;
+    await expect(qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }])).rejects.toThrow(/ANTHROPIC_API_KEY/);
+  });
+
   it("JSON inválido → isLead=false defensivo (parseError, não lança)", async () => {
     createMock.mockResolvedValue({ content: [{ type: "text", text: "não é json" }], usage: { input_tokens: 5, output_tokens: 5, cache_read_input_tokens: 0 } });
     const r = await qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }]);

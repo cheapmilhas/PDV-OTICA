@@ -38,7 +38,14 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     select: {
       id: true, companyId: true, isGroup: true, analyzedAt: true, needsAnalysis: true, leadId: true, analysisAttempts: true,
       contactNumber: true, contactName: true,
-      messages: { select: { direction: true, type: true, text: true, receivedAt: true } },
+      // Teto de mensagens: pega só as N mais recentes p/ não estourar o context
+      // window do Claude numa conversa longa (HIGH-1). buildConversationText
+      // reordena cronologicamente depois. 80 msgs cobrem o contexto de qualificação.
+      messages: {
+        select: { direction: true, type: true, text: true, receivedAt: true },
+        orderBy: { receivedAt: "desc" },
+        take: 80,
+      },
     },
   });
   if (!conv) return { conversationId, skipped: "not_found", leadId: null };
