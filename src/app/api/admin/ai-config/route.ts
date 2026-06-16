@@ -7,7 +7,7 @@ import { getAiConfig, updateAiConfig } from "@/services/ai-config.service";
  * Retorna a visão da config de IA (hasKey + câmbio + markup + fator).
  * Nunca expõe a chave Anthropic descriptografada.
  */
-export async function GET() {
+export async function GET(_request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
