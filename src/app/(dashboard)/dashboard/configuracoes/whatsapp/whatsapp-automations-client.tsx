@@ -18,7 +18,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Loader2, Save, Glasses, HeartHandshake, Cake, CalendarClock, Info, Send } from "lucide-react";
+import { Loader2, Save, Glasses, HeartHandshake, Cake, CalendarClock, Info, Send, Eye } from "lucide-react";
 
 /** Rótulos por tipo para o resumo do disparo manual. */
 const RUN_TYPE_LABEL: Record<string, string> = {
@@ -33,6 +33,22 @@ interface RunResult {
   skipped: number;
   failed: number;
   byType: Record<string, { sent: number; skipped: number; failed: number }>;
+}
+
+interface PreviewItem {
+  type: string;
+  customerName: string;
+  phone: string;
+  content: string;
+}
+
+/** Telefone "5511999999999" → "(11) 99999-9999" (best-effort, BR). */
+function fmtPhone(raw: string): string {
+  const d = raw.replace(/\D/g, "");
+  const n = d.startsWith("55") ? d.slice(2) : d;
+  if (n.length === 11) return `(${n.slice(0, 2)}) ${n.slice(2, 7)}-${n.slice(7)}`;
+  if (n.length === 10) return `(${n.slice(0, 2)}) ${n.slice(2, 6)}-${n.slice(6)}`;
+  return raw;
 }
 
 interface AutomationState {
@@ -72,6 +88,8 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
   const [saving, setSaving] = useState(false);
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [running, setRunning] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
+  const [previewItems, setPreviewItems] = useState<PreviewItem[] | null>(null);
 
   const load = useCallback(async () => {
     try {
@@ -148,11 +166,29 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
           description: byType || undefined,
         });
       }
+      setPreviewItems(null); // a prévia anterior ficou obsoleta após enviar
       onProcessed?.();
     } catch {
       toast.error("Erro ao processar mensagens");
     } finally {
       setRunning(false);
+    }
+  }
+
+  async function handlePreview() {
+    setPreviewing(true);
+    try {
+      const res = await fetch("/api/whatsapp/run-now/preview");
+      const result = await res.json();
+      if (!result.success) {
+        toast.error(result.error?.message || "Erro ao pré-visualizar");
+        return;
+      }
+      setPreviewItems(result.data.preview as PreviewItem[]);
+    } catch {
+      toast.error("Erro ao pré-visualizar");
+    } finally {
+      setPreviewing(false);
     }
   }
 
@@ -180,22 +216,63 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
       </div>
 
       <Card className="border-teal-200 bg-teal-50/40">
-        <CardContent className="flex flex-col gap-3 py-4 sm:flex-row sm:items-center sm:justify-between">
-          <div>
-            <p className="font-medium text-sm">Disparar mensagens agora</p>
-            <p className="text-sm text-muted-foreground">
-              Processa na hora tudo que está pendente hoje, sem esperar o envio automático das 9h.
-            </p>
+        <CardContent className="space-y-3 py-4">
+          <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
+            <div>
+              <p className="font-medium text-sm">Disparar mensagens agora</p>
+              <p className="text-sm text-muted-foreground">
+                Veja o que sairia hoje e dispare na hora, sem esperar o envio automático das 9h.
+              </p>
+            </div>
+            <div className="flex gap-2 shrink-0">
+              <Button
+                onClick={handlePreview}
+                disabled={previewing || running}
+                variant="outline"
+                className="border-teal-300 text-teal-700 hover:bg-teal-100 hover:text-teal-800"
+              >
+                {previewing ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Eye className="h-4 w-4 mr-2" />}
+                {previewing ? "Carregando…" : "Pré-visualizar"}
+              </Button>
+              <Button
+                onClick={() => setConfirmOpen(true)}
+                disabled={running || previewing}
+                className="bg-teal-600 hover:bg-teal-700 text-white"
+              >
+                {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
+                {running ? "Processando…" : "Processar agora"}
+              </Button>
+            </div>
           </div>
-          <Button
-            onClick={() => setConfirmOpen(true)}
-            disabled={running}
-            variant="outline"
-            className="border-teal-300 text-teal-700 hover:bg-teal-100 hover:text-teal-800 shrink-0"
-          >
-            {running ? <Loader2 className="h-4 w-4 mr-2 animate-spin" /> : <Send className="h-4 w-4 mr-2" />}
-            {running ? "Processando…" : "Processar agora"}
-          </Button>
+
+          {previewItems !== null && (
+            <div className="rounded-md border border-teal-200 bg-white">
+              {previewItems.length === 0 ? (
+                <p className="px-3 py-4 text-sm text-muted-foreground text-center">
+                  Nada pendente para enviar agora.
+                </p>
+              ) : (
+                <>
+                  <p className="border-b border-teal-100 px-3 py-2 text-xs font-medium text-teal-800">
+                    {previewItems.length} mensagem{previewItems.length > 1 ? "s" : ""} sairia{previewItems.length > 1 ? "m" : ""} agora:
+                  </p>
+                  <ul className="divide-y divide-gray-100 max-h-72 overflow-auto">
+                    {previewItems.map((it, i) => (
+                      <li key={i} className="px-3 py-2 text-sm">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="font-medium">{it.customerName || "—"}</span>
+                          <span className="text-xs text-muted-foreground shrink-0">
+                            {RUN_TYPE_LABEL[it.type] ?? it.type} · {fmtPhone(it.phone)}
+                          </span>
+                        </div>
+                        <p className="mt-0.5 text-xs text-muted-foreground line-clamp-2">{it.content}</p>
+                      </li>
+                    ))}
+                  </ul>
+                </>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
