@@ -249,3 +249,34 @@ export async function sendWhatsappMessage(
     }
   }
 }
+
+/**
+ * Envia uma mensagem JÁ enfileirada (linha existente em PROCESSING) via Evolution
+ * e atualiza a PRÓPRIA linha para SENT/FAILED. Usado pelo processador da fila
+ * anti-bloqueio. Não cria linha nova (ao contrário de sendWhatsappMessage).
+ * Nunca lança — sempre devolve o status final.
+ */
+export async function sendExistingQueued(args: {
+  logId: string;
+  companyId: string;
+  number: string; // já normalizado (E.164 sem '+')
+  content: string;
+}): Promise<"SENT" | "FAILED"> {
+  const { logId, companyId, number, content } = args;
+  try {
+    const instanceName = instanceNameForCompany(companyId);
+    const res = await evolution.sendText(instanceName, number, content);
+    await prisma.whatsappMessageLog.update({
+      where: { id: logId },
+      data: { status: "SENT", sentAt: new Date(), evolutionMessageId: res.key?.id ?? null },
+    });
+    return "SENT";
+  } catch (err) {
+    const errMsg = err instanceof Error ? err.message : String(err);
+    log.error("Falha ao enviar WhatsApp enfileirado", { companyId, logId, error: errMsg });
+    await prisma.whatsappMessageLog
+      .update({ where: { id: logId }, data: { status: "FAILED", error: errMsg } })
+      .catch(() => {});
+    return "FAILED";
+  }
+}

@@ -14,12 +14,14 @@ vi.mock("@/lib/whatsapp-flag", () => ({
 const connFindUnique = vi.fn();
 const logFindFirst = vi.fn();
 const logCreate = vi.fn();
+const logUpdate = vi.fn();
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     whatsappConnection: { findUnique: (...a: unknown[]) => connFindUnique(...a) },
     whatsappMessageLog: {
       findFirst: (...a: unknown[]) => logFindFirst(...a),
       create: (...a: unknown[]) => logCreate(...a),
+      update: (...a: unknown[]) => logUpdate(...a),
     },
   },
 }));
@@ -33,7 +35,7 @@ vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ warn: vi.fn(), error: vi.fn(), info: vi.fn() }) },
 }));
 
-import { sendWhatsappMessage } from "@/lib/whatsapp-send";
+import { sendWhatsappMessage, sendExistingQueued } from "@/lib/whatsapp-send";
 
 const baseCustomer = {
   id: "cust1",
@@ -48,6 +50,7 @@ describe("sendWhatsappMessage", () => {
     connFindUnique.mockReset().mockResolvedValue({ status: "CONNECTED" });
     logFindFirst.mockReset().mockResolvedValue(null);
     logCreate.mockReset().mockImplementation(async ({ data }: any) => ({ id: "log1", ...data }));
+    logUpdate.mockReset().mockImplementation(async ({ data }: any) => ({ id: "log1", ...data }));
     sendText.mockReset().mockResolvedValue({ key: { id: "EVO1" } });
   });
   afterEach(() => vi.clearAllMocks());
@@ -218,5 +221,54 @@ describe("sendWhatsappMessage", () => {
       template: "Texto já pronto {cliente}", // sem variables → não substitui
     });
     expect(sendText).toHaveBeenCalledWith("vis_co1", "5511999999999", "Texto já pronto {cliente}");
+  });
+});
+
+/**
+ * `sendExistingQueued`: envia uma linha JÁ enfileirada (PROCESSING) via Evolution
+ * e atualiza a PRÓPRIA linha para SENT/FAILED — não cria linha nova. Usado pelo
+ * processador da fila anti-bloqueio. Nunca lança.
+ */
+describe("sendExistingQueued", () => {
+  beforeEach(() => {
+    logUpdate.mockReset().mockImplementation(async ({ data }: any) => ({ id: "log1", ...data }));
+    sendText.mockReset().mockResolvedValue({ key: { id: "EVO1" } });
+    logCreate.mockReset();
+  });
+  afterEach(() => vi.clearAllMocks());
+
+  const baseArgs = {
+    logId: "log1",
+    companyId: "co1",
+    number: "5511999999999",
+    content: "Sua OS está pronta",
+  };
+
+  it("SENT: chama evolution.sendText e atualiza a linha existente (não cria)", async () => {
+    const r = await sendExistingQueued(baseArgs);
+    expect(r).toBe("SENT");
+    expect(sendText).toHaveBeenCalledWith("vis_co1", "5511999999999", "Sua OS está pronta");
+    expect(logCreate).not.toHaveBeenCalled();
+    expect(logUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "log1" },
+      data: expect.objectContaining({ status: "SENT", evolutionMessageId: "EVO1" }),
+    }));
+  });
+
+  it("FAILED: Evolution lança → atualiza a linha para FAILED com erro, NÃO propaga", async () => {
+    sendText.mockRejectedValue(new Error("network down"));
+    const r = await sendExistingQueued(baseArgs);
+    expect(r).toBe("FAILED");
+    expect(logUpdate).toHaveBeenCalledWith(expect.objectContaining({
+      where: { id: "log1" },
+      data: expect.objectContaining({ status: "FAILED", error: expect.stringContaining("network down") }),
+    }));
+  });
+
+  it("nunca lança mesmo se o update de FAILED também falhar", async () => {
+    sendText.mockRejectedValue(new Error("network down"));
+    logUpdate.mockRejectedValue(new Error("db down"));
+    const r = await sendExistingQueued(baseArgs);
+    expect(r).toBe("FAILED");
   });
 });
