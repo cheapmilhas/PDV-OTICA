@@ -1916,6 +1916,8 @@ model CompanySettings {
   waInstallmentDueTemplate String?
   // Dias após a entrega da OS para disparar o pós-venda (default 7).
   waPostSaleDays          Int     @default(7)
+  // Data em que a ótica aceitou as boas-práticas anti-bloqueio do WhatsApp.
+  waPracticesAcceptedAt DateTime?
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
@@ -4336,6 +4338,8 @@ enum WhatsappMessageType {
 }
 
 enum WhatsappMessageStatus {
+  PENDING
+  PROCESSING
   SENT
   FAILED
   SKIPPED
