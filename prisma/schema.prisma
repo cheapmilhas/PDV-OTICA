@@ -1925,6 +1925,8 @@ model CompanySettings {
   iaMonthlyTokenLimit   Int?
   // Markup de IA por ótica (Bloco D). null = usa o markup global.
   markupPercentOverride Decimal? @db.Decimal(6, 2)
+  // Aceite das boas-práticas anti-bloqueio do WhatsApp (Fase 1). null = não aceito.
+  waPracticesAcceptedAt DateTime?
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
@@ -4330,6 +4332,8 @@ model WhatsappMessageLog {
   periodKey          String?
   createdAt          DateTime              @default(now())
   sentAt             DateTime?
+  /// Hora do claim PENDING→PROCESSING na fila anti-bloqueio (Fase 1). Null = não enfileirado/processado.
+  processingAt       DateTime?
 
   company  Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
   customer Customer? @relation(fields: [customerId], references: [id])
@@ -4382,6 +4386,8 @@ enum WhatsappMessageType {
 }
 
 enum WhatsappMessageStatus {
+  PENDING
+  PROCESSING
   SENT
   FAILED
   SKIPPED
