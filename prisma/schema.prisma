@@ -310,6 +310,7 @@ model User {
   passwordHash               String
   role                       UserRole
   active                     Boolean                  @default(true)
+  isSystem                   Boolean                  @default(false)  // usuário-robô (IA). Excluído da tela de equipe.
   defaultCommissionPercent   Decimal?                 @db.Decimal(5, 2)
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
@@ -4253,7 +4254,10 @@ model WhatsappConversation {
   id            String    @id @default(cuid())
   companyId     String
   contactNumber String
-  contactName   String?
+  contactName      String?
+  isGroup          Boolean   @default(false)  // remoteJid terminava em @g.us; grupos NÃO viram lead
+  needsAnalysis    Boolean   @default(false)  // msg nova chegou após analyzedAt → re-qualificar (R1)
+  analysisAttempts Int       @default(0)      // anti-loop: cron só pega < 3 (R2)
   lastMessageAt DateTime  @default(now())
   analyzedAt    DateTime?
   leadId        String?
@@ -4266,6 +4270,7 @@ model WhatsappConversation {
   @@unique([companyId, contactNumber])
   @@index([companyId, lastMessageAt])
   @@index([companyId, analyzedAt])
+  @@index([companyId, isGroup, analyzedAt])
 }
 
 model WhatsappMessage {
