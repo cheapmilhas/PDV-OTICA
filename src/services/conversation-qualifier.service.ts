@@ -1,10 +1,13 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { logAiUsage } from "@/services/ai-usage.service";
-import { qualifyConversationText, LEAD_QUALIFIER_MODEL } from "@/lib/ai/lead-qualifier";
+import { qualifyConversationText } from "@/lib/ai/lead-qualifier";
 import { listStages } from "@/services/lead-stage.service";
 import { createLead } from "@/services/lead.service";
 import { getOrCreateAiSellerUser } from "@/services/ai-seller-user.service";
+import { transcribeAudio } from "@/services/audio-transcription.service";
+import { instanceNameForCompany } from "@/lib/whatsapp-instance";
+import { getAiConfig } from "@/services/ai-config.service";
 
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
@@ -16,6 +19,8 @@ export interface QualifyResult {
   isLead?: boolean;
   leadId: string | null;
 }
+
+interface ConvMessage { direction: string; type: string; text: string | null; evolutionId: string | null; receivedAt: Date }
 
 function buildConversationText(messages: { direction: string; type: string; text: string | null; receivedAt: Date }[]): string {
   return messages
@@ -42,7 +47,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       // window do Claude numa conversa longa (HIGH-1). buildConversationText
       // reordena cronologicamente depois. 80 msgs cobrem o contexto de qualificação.
       messages: {
-        select: { direction: true, type: true, text: true, receivedAt: true },
+        select: { direction: true, type: true, text: true, evolutionId: true, receivedAt: true },
         orderBy: { receivedAt: "desc" },
         take: 80,
       },
@@ -67,7 +72,30 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     return { conversationId, skipped: "already_analyzed", leadId: conv.leadId };
   }
 
-  const text = buildConversationText(conv.messages);
+  // Passe de transcrição (D8): áudios inbound sem texto viram texto via Whisper
+  // ANTES de montar o contexto, p/ que o check de no_text "enxergue" o áudio.
+  // Roda só aqui (após already_analyzed, antes do claim) — nunca p/ grupo (já
+  // finalizado acima) nem p/ conversa que vamos pular. transcribeAudio é fail-safe
+  // (retorna null), mas blindamos cada chamada: um áudio com erro não pode abortar
+  // a qualificação. Enriquecemos uma CÓPIA local; não persiste no banco.
+  const instanceName = instanceNameForCompany(conv.companyId);
+  const enriched: ConvMessage[] = await Promise.all(
+    (conv.messages as ConvMessage[]).map(async (m) => {
+      const needsTranscription =
+        m.direction === "inbound" && m.type === "audio" && (m.text == null || m.text.trim().length === 0) && !!m.evolutionId;
+      if (!needsTranscription) return m;
+      try {
+        const transcript = await transcribeAudio(conv.companyId, instanceName, m.evolutionId!);
+        if (transcript && transcript.trim().length > 0) return { ...m, text: transcript };
+        return m; // null → fica sem texto, filtrado por buildConversationText (fail-safe)
+      } catch (e) {
+        log.error("falha ao transcrever áudio (segue sem ele)", { conversationId, evolutionId: m.evolutionId, error: e });
+        return m;
+      }
+    }),
+  );
+
+  const text = buildConversationText(enriched);
   if (!text) { await finalize(null); return { conversationId, skipped: "no_text", leadId: null }; }
 
   // R5: claim otimista — reivindica a conversa condicionado ao estado lido.
@@ -83,10 +111,14 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   // fail-CLOSED por empresa em qualifyPendingConversations (R4). A rota manual
   // chama assertAiAllowed antes (ver Task 7) para o caminho 1-a-1.
   const stages = await listStages(conv.companyId);
-  const result = await qualifyConversationText(text, stages.map((s) => ({ id: s.id, name: s.name })));
+  // Modelo configurável (D8): o super admin escolhe o modelo do qualificador na
+  // config global de IA. Usado tanto na chamada quanto no logAiUsage (p/ o custo
+  // ser calculado com a tabela de preço do modelo realmente usado).
+  const cfg = await getAiConfig();
+  const result = await qualifyConversationText(text, stages.map((s) => ({ id: s.id, name: s.name })), cfg.qualifierModel);
 
   await logAiUsage({
-    companyId: conv.companyId, feature: "lead_qualification", provider: "anthropic", model: LEAD_QUALIFIER_MODEL,
+    companyId: conv.companyId, feature: "lead_qualification", provider: "anthropic", model: cfg.qualifierModel,
     inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens,
   });
 

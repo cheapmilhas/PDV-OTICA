@@ -17,6 +17,11 @@ const createLeadMock = vi.fn();
 vi.mock("@/services/lead.service", () => ({ createLead: (...a: unknown[]) => createLeadMock(...a) }));
 const getBotMock = vi.fn();
 vi.mock("@/services/ai-seller-user.service", () => ({ getOrCreateAiSellerUser: (...a: unknown[]) => getBotMock(...a) }));
+const transcribeAudioMock = vi.fn();
+vi.mock("@/services/audio-transcription.service", () => ({ transcribeAudio: (...a: unknown[]) => transcribeAudioMock(...a) }));
+vi.mock("@/lib/whatsapp-instance", () => ({ instanceNameForCompany: (companyId: string) => `inst_${companyId}` }));
+const getAiConfigMock = vi.fn();
+vi.mock("@/services/ai-config.service", () => ({ getAiConfig: (...a: unknown[]) => getAiConfigMock(...a) }));
 
 import { prisma } from "@/lib/prisma";
 import { qualifyConversation, qualifyPendingConversations } from "./conversation-qualifier.service";
@@ -25,8 +30,8 @@ const conv = {
   id: "c1", companyId: "co1", isGroup: false, analyzedAt: null, needsAnalysis: false, leadId: null, analysisAttempts: 0,
   contactNumber: "5585999", contactName: "Maria",
   messages: [
-    { direction: "inbound", type: "text", text: "quanto custa óculos de grau?", receivedAt: new Date("2026-06-15T10:00:00Z") },
-    { direction: "inbound", type: "text", text: "tenho receita", receivedAt: new Date("2026-06-15T10:01:00Z") },
+    { direction: "inbound", type: "text", text: "quanto custa óculos de grau?", evolutionId: "e1", receivedAt: new Date("2026-06-15T10:00:00Z") },
+    { direction: "inbound", type: "text", text: "tenho receita", evolutionId: "e2", receivedAt: new Date("2026-06-15T10:01:00Z") },
   ],
 };
 
@@ -34,6 +39,8 @@ beforeEach(() => {
   vi.clearAllMocks();
   listStagesMock.mockResolvedValue([{ id: "s_novo", name: "Novo" }]);
   getBotMock.mockResolvedValue("u_bot");
+  transcribeAudioMock.mockResolvedValue(null); // sem transcrição por padrão (conversas só-texto inalteradas)
+  getAiConfigMock.mockResolvedValue({ qualifierModel: "claude-haiku-4-5", hasKey: true, usdBrlRate: 5, markupPercent: 0, creditTokenFactor: 1, hasOpenaiKey: true });
   (prisma.whatsappConversation.updateMany as any).mockResolvedValue({ count: 1 }); // claim vence
 });
 
@@ -105,7 +112,7 @@ describe("qualifyConversation", () => {
     expect(companyId).toBe("co1");
     expect(userId).toBe("u_bot");
     expect(branchId).toBeNull();
-    expect(logAiUsageMock).toHaveBeenCalledWith(expect.objectContaining({ companyId: "co1", feature: "lead_qualification", inputTokens: 100 }));
+    expect(logAiUsageMock).toHaveBeenCalledWith(expect.objectContaining({ companyId: "co1", feature: "lead_qualification", inputTokens: 100, model: "claude-haiku-4-5" }));
     const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
     expect(upd.data.leadId).toBe("lead1");
     expect(upd.data.analyzedAt).toBeInstanceOf(Date);
@@ -130,6 +137,72 @@ describe("qualifyConversation", () => {
     const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
     expect(upd.data.analyzedAt).toBeInstanceOf(Date);
     expect(r.leadId).toBeNull();
+  });
+
+  it("áudio transcrito (text null) → texto entra no contexto + transcribeAudio(companyId, instance, evolutionId)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: "eAudio", receivedAt: new Date("2026-06-15T10:00:00Z") }],
+    });
+    transcribeAudioMock.mockResolvedValue("quero um óculos de grau");
+    qualifyTextMock.mockResolvedValue({ isLead: true, reason: "grau", interest: "grau", stageId: "s_novo", confidence: 0.9, parseError: false, usage: { inputTokens: 10, outputTokens: 5, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "leadA" }, duplicateWarning: false });
+
+    await qualifyConversation("c1");
+
+    expect(transcribeAudioMock).toHaveBeenCalledWith("co1", "inst_co1", "eAudio");
+    const [textArg] = qualifyTextMock.mock.calls[0];
+    expect(textArg).toContain("quero um óculos de grau");
+  });
+
+  it("transcribeAudio retorna null → áudio é excluído; se único → no_text (finalize null, sem IA)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: "eAudio", receivedAt: new Date() }],
+    });
+    transcribeAudioMock.mockResolvedValue(null);
+    const r = await qualifyConversation("c1");
+    expect(r.skipped).toBe("no_text");
+    expect(qualifyTextMock).not.toHaveBeenCalled();
+    expect(prisma.whatsappConversation.update).toHaveBeenCalled(); // finalize(null)
+  });
+
+  it("usa o modelo de getAiConfig em qualifyConversationText E em logAiUsage", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    getAiConfigMock.mockResolvedValue({ qualifierModel: "claude-opus-4-8", hasKey: true, usdBrlRate: 5, markupPercent: 0, creditTokenFactor: 1, hasOpenaiKey: true });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+
+    await qualifyConversation("c1");
+
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), "claude-opus-4-8");
+    expect(logAiUsageMock).toHaveBeenCalledWith(expect.objectContaining({ model: "claude-opus-4-8" }));
+  });
+
+  it("grupo → transcribeAudio NÃO é chamado (pulado como group)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      isGroup: true,
+      messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: "eAudio", receivedAt: new Date() }],
+    });
+    const r = await qualifyConversation("c1");
+    expect(r.skipped).toBe("group");
+    expect(transcribeAudioMock).not.toHaveBeenCalled();
+  });
+
+  it("erro numa transcrição não aborta a qualificação (defensivo)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      messages: [
+        { direction: "inbound", type: "audio", text: null, evolutionId: "eBoom", receivedAt: new Date("2026-06-15T10:00:00Z") },
+        { direction: "inbound", type: "text", text: "tenho receita", evolutionId: "e2", receivedAt: new Date("2026-06-15T10:01:00Z") },
+      ],
+    });
+    transcribeAudioMock.mockRejectedValue(new Error("whisper explodiu"));
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    const r = await qualifyConversation("c1");
+    expect(r.skipped).toBeUndefined();
+    const [textArg] = qualifyTextMock.mock.calls[0];
+    expect(textArg).toContain("tenho receita"); // texto segue mesmo com áudio falho
   });
 });
 
