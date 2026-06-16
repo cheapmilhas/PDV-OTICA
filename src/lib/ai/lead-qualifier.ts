@@ -20,7 +20,7 @@ SÃO lead: interesse em comprar óculos de grau, óculos de sol, lente de contat
 Responda SOMENTE com JSON válido (sem markdown):
 {"isLead": true|false, "reason": "frase curta", "interest": "grau"|"sol"|"lente_contato"|"exame"|"conserto"|"outro"|null, "suggestedStageName": "<nome EXATO de uma etapa fornecida>"|null, "confidence": 0.0-1.0}`;
 
-export async function qualifyConversationText(conversationText: string, stages: QualifierStage[]): Promise<QualificationResult> {
+export async function qualifyConversationText(conversationText: string, stages: QualifierStage[], model: string = LEAD_QUALIFIER_MODEL): Promise<QualificationResult> {
   const apiKey = await getAnthropicKey();
   if (!apiKey) throw new Error("Anthropic API key não configurada (super admin → config IA, ou env ANTHROPIC_API_KEY)");
   const anthropic = new Anthropic({ apiKey });
@@ -30,7 +30,7 @@ export async function qualifyConversationText(conversationText: string, stages: 
   const userPrompt = `Etapas do funil desta ótica: ${stageNames}\n\n«INICIO-${nonce}»\n${conversationText}\n«FIM-${nonce}»`;
 
   const response = await anthropic.messages.create({
-    model: LEAD_QUALIFIER_MODEL, max_tokens: 512, system,
+    model, max_tokens: 512, system,
     messages: [{ role: "user", content: [{ type: "text", text: userPrompt }] }],
   });
 

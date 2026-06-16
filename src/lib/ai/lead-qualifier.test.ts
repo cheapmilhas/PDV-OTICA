@@ -26,6 +26,16 @@ describe("qualifyConversationText", () => {
     expect(typeof arg.system).toBe("string");
     expect(arg.messages[0].role).toBe("user");
   });
+  it("sem arg de model → usa o default claude-sonnet-4-6", async () => {
+    mockJson({ isLead: false, reason: "x", confidence: 0.5 });
+    await qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }]);
+    expect(createMock.mock.calls[0][0].model).toBe("claude-sonnet-4-6");
+  });
+  it("com arg de model → usa o model passado", async () => {
+    mockJson({ isLead: false, reason: "x", confidence: 0.5 });
+    await qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }], "claude-haiku-4-5");
+    expect(createMock.mock.calls[0][0].model).toBe("claude-haiku-4-5");
+  });
   it("isLead=false → stageId null", async () => {
     mockJson({ isLead: false, reason: "horário", confidence: 0.8 });
     const r = await qualifyConversationText("que horas abrem?", [{ id: "s_novo", name: "Novo" }]);
