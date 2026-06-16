@@ -1923,6 +1923,8 @@ model CompanySettings {
   iaAvailable           Boolean  @default(false)
   iaEnabled             Boolean  @default(false)
   iaMonthlyTokenLimit   Int?
+  // Markup de IA por ótica (Bloco D). null = usa o markup global.
+  markupPercentOverride Decimal? @db.Decimal(6, 2)
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
@@ -4362,6 +4364,8 @@ model AiTokenUsage {
 model AiGlobalConfig {
   id              String   @id @default("global")
   anthropicKeyEnc String?
+  openaiKeyEnc    String?
+  qualifierModel  String   @default("claude-haiku-4-5")
   usdBrlRate      Decimal  @default(5.5) @db.Decimal(10, 4)
   markupPercent   Decimal  @default(0)   @db.Decimal(6, 2)
   creditTokenFactor Int    @default(1000)
