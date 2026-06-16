@@ -12,6 +12,10 @@ import { getAiConfig } from "@/services/ai-config.service";
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
 const SCAN_LIMIT = 200;
+// D8: teto de chamadas Whisper SIMULTÂNEAS por conversa. Com até 80 mensagens,
+// um Promise.all sobre todos os áudios dispararia 80 requisições de uma vez.
+// Processamos em lotes deste tamanho, preservando a ORDEM das mensagens.
+const TRANSCRIBE_CONCURRENCY = 4;
 
 export interface QualifyResult {
   conversationId: string;
@@ -72,40 +76,66 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     return { conversationId, skipped: "already_analyzed", leadId: conv.leadId };
   }
 
-  // Passe de transcrição (D8): áudios inbound sem texto viram texto via Whisper
-  // ANTES de montar o contexto, p/ que o check de no_text "enxergue" o áudio.
-  // Roda só aqui (após already_analyzed, antes do claim) — nunca p/ grupo (já
-  // finalizado acima) nem p/ conversa que vamos pular. transcribeAudio é fail-safe
-  // (retorna null), mas blindamos cada chamada: um áudio com erro não pode abortar
-  // a qualificação. Enriquecemos uma CÓPIA local; não persiste no banco.
-  const instanceName = instanceNameForCompany(conv.companyId);
-  const enriched: ConvMessage[] = await Promise.all(
-    (conv.messages as ConvMessage[]).map(async (m) => {
-      const needsTranscription =
-        m.direction === "inbound" && m.type === "audio" && (m.text == null || m.text.trim().length === 0) && !!m.evolutionId;
-      if (!needsTranscription) return m;
-      try {
-        const transcript = await transcribeAudio(conv.companyId, instanceName, m.evolutionId!);
-        if (transcript && transcript.trim().length > 0) return { ...m, text: transcript };
-        return m; // null → fica sem texto, filtrado por buildConversationText (fail-safe)
-      } catch (e) {
-        log.error("falha ao transcrever áudio (segue sem ele)", { conversationId, evolutionId: m.evolutionId, error: e });
-        return m;
-      }
-    }),
+  // Heurística pré-claim BARATA (D8): SEM Whisper, SEM IA, SEM rede. Decide se a
+  // conversa PODE produzir texto. Uma conversa que não tem texto inbound nem áudio
+  // transcritível NUNCA gerará contexto → finaliza como no_text sem gastar Whisper
+  // e SEM queimar um claim. transcribeAudio só roda DEPOIS de vencer o claim, p/
+  // que o perdedor da corrida gaste ZERO (Whisper e Anthropic).
+  const messages = conv.messages as ConvMessage[];
+  const hasText = messages.some(
+    (m) => m.direction === "inbound" && typeof m.text === "string" && m.text.trim().length > 0,
   );
-
-  const text = buildConversationText(enriched);
-  if (!text) { await finalize(null); return { conversationId, skipped: "no_text", leadId: null }; }
+  const hasTranscribableAudio = messages.some(
+    (m) => m.direction === "inbound" && m.type === "audio" && !!m.evolutionId,
+  );
+  if (!hasText && !hasTranscribableAudio) {
+    await finalize(null);
+    return { conversationId, skipped: "no_text", leadId: null };
+  }
 
   // R5: claim otimista — reivindica a conversa condicionado ao estado lido.
   // Incrementa attempts (R2) e limpa needsAnalysis. Se outra execução já pegou
-  // (count 0), aborta antes de gastar IA.
+  // (count 0), aborta antes de gastar Whisper/IA. O claim vem ANTES da transcrição:
+  // o perdedor da corrida não dispara nenhuma chamada paga.
   const claim = await prisma.whatsappConversation.updateMany({
     where: { id: conv.id, analysisAttempts: conv.analysisAttempts },
     data: { analysisAttempts: { increment: 1 }, needsAnalysis: false },
   });
   if (claim.count === 0) return { conversationId, skipped: "claimed_by_other", leadId: null };
+
+  // Passe de transcrição (D8): SÓ o vencedor do claim chega aqui. Áudios inbound
+  // sem texto viram texto via Whisper p/ que o contexto "enxergue" o áudio.
+  // transcribeAudio é fail-safe (retorna null), mas blindamos cada chamada: um
+  // áudio com erro não pode abortar a qualificação. Enriquecemos uma CÓPIA local;
+  // não persiste no banco. Concorrência limitada a TRANSCRIBE_CONCURRENCY: em vez
+  // de disparar todos os áudios de uma vez, processamos em lotes, aguardando cada
+  // lote. O fatiamento sequencial preserva a ORDEM das mensagens.
+  const instanceName = instanceNameForCompany(conv.companyId);
+  const transcribeOne = async (m: ConvMessage): Promise<ConvMessage> => {
+    const needsTranscription =
+      m.direction === "inbound" && m.type === "audio" && (m.text == null || m.text.trim().length === 0) && !!m.evolutionId;
+    if (!needsTranscription) return m;
+    try {
+      const transcript = await transcribeAudio(conv.companyId, instanceName, m.evolutionId!);
+      if (transcript && transcript.trim().length > 0) return { ...m, text: transcript };
+      return m; // null → fica sem texto, filtrado por buildConversationText (fail-safe)
+    } catch (e) {
+      log.error("falha ao transcrever áudio (segue sem ele)", { conversationId, evolutionId: m.evolutionId, error: e });
+      return m;
+    }
+  };
+  const enriched: ConvMessage[] = [];
+  for (let i = 0; i < messages.length; i += TRANSCRIBE_CONCURRENCY) {
+    const chunk = messages.slice(i, i + TRANSCRIBE_CONCURRENCY);
+    const done = await Promise.all(chunk.map(transcribeOne));
+    enriched.push(...done);
+  }
+
+  // Após transcrever, monta o texto. Se nada saiu (todo áudio transcreveu p/ nada),
+  // finaliza como no_text — o vencedor JÁ gastou Whisper, então é correto queimar
+  // o attempt; finalize() zera os attempts no sucesso de qualquer forma.
+  const text = buildConversationText(enriched);
+  if (!text) { await finalize(null); return { conversationId, skipped: "no_text", leadId: null }; }
 
   // NOTA: assertAiAllowed NÃO é chamado aqui — a checagem de IA é feita
   // fail-CLOSED por empresa em qualifyPendingConversations (R4). A rota manual

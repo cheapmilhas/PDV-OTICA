@@ -83,11 +83,15 @@ describe("qualifyConversation", () => {
     expect(qualifyTextMock).not.toHaveBeenCalled();
   });
 
-  it("sem texto inbound → marca analyzedAt, sem IA", async () => {
-    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, messages: [{ direction: "inbound", type: "audio", text: null, receivedAt: new Date() }] });
+  it("pré-claim no_text (sem texto, sem áudio transcritível) → finalize sem Whisper e sem claim", async () => {
+    // áudio SEM evolutionId não é transcritível → heurística barata decide no_text
+    // ANTES do claim: nenhuma chamada Whisper, nenhum updateMany (claim não tentado).
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: null, receivedAt: new Date() }] });
     const r = await qualifyConversation("c1");
     expect(r.skipped).toBe("no_text");
     expect(qualifyTextMock).not.toHaveBeenCalled();
+    expect(transcribeAudioMock).not.toHaveBeenCalled();
+    expect(prisma.whatsappConversation.updateMany).not.toHaveBeenCalled();
   });
 
   it("isLead=true → claim, IA, logAiUsage, cria lead (robô), seta leadId/analyzedAt, limpa needsAnalysis", async () => {
@@ -155,7 +159,9 @@ describe("qualifyConversation", () => {
     expect(textArg).toContain("quero um óculos de grau");
   });
 
-  it("transcribeAudio retorna null → áudio é excluído; se único → no_text (finalize null, sem IA)", async () => {
+  it("só-áudio, claim vence, transcribeAudio null → no_text APÓS o claim (finalize null, sem IA)", async () => {
+    // áudio transcritível (tem evolutionId) → vence o claim, transcreve (gasta
+    // Whisper), mas Whisper devolve null → buildConversationText fica vazio → no_text.
     (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
       ...conv,
       messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: "eAudio", receivedAt: new Date() }],
@@ -163,8 +169,42 @@ describe("qualifyConversation", () => {
     transcribeAudioMock.mockResolvedValue(null);
     const r = await qualifyConversation("c1");
     expect(r.skipped).toBe("no_text");
+    expect(prisma.whatsappConversation.updateMany).toHaveBeenCalled(); // claim foi tentado/vencido
+    expect(transcribeAudioMock).toHaveBeenCalled(); // vencedor transcreveu
     expect(qualifyTextMock).not.toHaveBeenCalled();
     expect(prisma.whatsappConversation.update).toHaveBeenCalled(); // finalize(null)
+  });
+
+  it("claim PERDIDO em conversa de áudio → ZERO Whisper e ZERO IA (perdedor não gasta)", async () => {
+    // Invariante D8: quem perde o CAS não pode disparar transcrição nem Anthropic.
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: "eAudio", receivedAt: new Date() }],
+    });
+    (prisma.whatsappConversation.updateMany as any).mockResolvedValue({ count: 0 });
+    const r = await qualifyConversation("c1");
+    expect(r.skipped).toBe("claimed_by_other");
+    expect(transcribeAudioMock).not.toHaveBeenCalled();
+    expect(qualifyTextMock).not.toHaveBeenCalled();
+  });
+
+  it("múltiplos áudios → transcrições entram em ordem cronológica no texto da IA", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      messages: [
+        { direction: "inbound", type: "audio", text: null, evolutionId: "eA", receivedAt: new Date("2026-06-15T10:00:00Z") },
+        { direction: "inbound", type: "audio", text: null, evolutionId: "eB", receivedAt: new Date("2026-06-15T10:05:00Z") },
+      ],
+    });
+    transcribeAudioMock.mockImplementation((_co: string, _inst: string, eid: string) =>
+      Promise.resolve(eid === "eA" ? "primeiro audio" : "segundo audio"),
+    );
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const [textArg] = qualifyTextMock.mock.calls[0];
+    expect(textArg).toContain("primeiro audio");
+    expect(textArg).toContain("segundo audio");
+    expect(textArg.indexOf("primeiro audio")).toBeLessThan(textArg.indexOf("segundo audio"));
   });
 
   it("usa o modelo de getAiConfig em qualifyConversationText E em logAiUsage", async () => {
