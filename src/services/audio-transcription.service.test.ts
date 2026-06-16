@@ -106,4 +106,26 @@ describe("transcribeAudio", () => {
 
     expect(result).toBeNull();
   });
+
+  it("fetch rejeita (erro de rede): retorna null (fail-safe), sem propagar erro", async () => {
+    getOpenaiKeyMock.mockResolvedValue("sk-test");
+    getMediaBase64Mock.mockResolvedValue({ base64: SAMPLE_BASE64, mimetype: "audio/ogg" });
+    fetchMock.mockRejectedValue(new Error("network error"));
+
+    const result = await transcribeAudio("co1", "inst1", "evo1");
+
+    expect(result).toBeNull();
+    expect(logAiUsageMock).not.toHaveBeenCalled();
+  });
+
+  it("media.base64 vazio: retorna null e NÃO chama o OpenAI", async () => {
+    getOpenaiKeyMock.mockResolvedValue("sk-test");
+    getMediaBase64Mock.mockResolvedValue({ base64: "" });
+
+    const result = await transcribeAudio("co1", "inst1", "evo1");
+
+    expect(result).toBeNull();
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(logAiUsageMock).not.toHaveBeenCalled();
+  });
 });

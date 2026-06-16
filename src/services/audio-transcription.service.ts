@@ -1,5 +1,5 @@
 import { getOpenaiKey } from "@/services/ai-config.service";
-import { evolution } from "@/lib/evolution";
+import { evolution, type EvolutionMediaBase64 } from "@/lib/evolution";
 import { logAiUsage } from "@/services/ai-usage.service";
 import { logger } from "@/lib/logger";
 
@@ -35,11 +35,15 @@ export async function transcribeAudio(
     }
 
     // 2. Baixa a mídia em base64 pela Evolution (pode lançar → fail-safe).
-    let media: { base64: string; mimetype?: string; fileName?: string };
+    let media: EvolutionMediaBase64;
     try {
       media = await evolution.getMediaBase64(instanceName, evolutionId);
     } catch (err) {
-      log.warn("falha ao baixar mídia da Evolution — sem transcrição", { err, companyId, evolutionId });
+      log.warn("falha ao baixar mídia da Evolution — sem transcrição", {
+        err: err instanceof Error ? { message: err.message, name: err.name } : String(err),
+        companyId,
+        evolutionId,
+      });
       return null;
     }
     if (!media?.base64) {
@@ -61,6 +65,7 @@ export async function transcribeAudio(
       method: "POST",
       headers: { Authorization: `Bearer ${key}` },
       body: form,
+      signal: AbortSignal.timeout(30_000),
     });
 
     if (!res.ok) {
@@ -69,6 +74,7 @@ export async function transcribeAudio(
       return null;
     }
 
+    // 5. Lê a resposta e extrai o texto transcrito.
     const data = (await res.json()) as WhisperResponse;
     const text = (data.text ?? "").trim();
     if (!text) {
@@ -94,7 +100,11 @@ export async function transcribeAudio(
     return text;
   } catch (err) {
     // Qualquer erro inesperado: loga e segue só com texto.
-    log.warn("erro inesperado na transcrição — sem transcrição", { err, companyId, evolutionId });
+    log.warn("erro inesperado na transcrição — sem transcrição", {
+      err: err instanceof Error ? { message: err.message, name: err.name } : String(err),
+      companyId,
+      evolutionId,
+    });
     return null;
   }
 }
