@@ -4,6 +4,9 @@
 --     PENDING (enfileirada, aguardando) e PROCESSING (travada por uma execução
 --     do processador — claim atômico). SENT/FAILED/SKIPPED já existem.
 -- (2) Coluna do aceite das boas-práticas anti-bloqueio (card + checkbox antes do QR).
+-- (3) Coluna processingAt: hora do claim (PENDING→PROCESSING) no WhatsappMessageLog.
+--     Usada p/ recuperar PROCESSING preso sem reenviar linhas que só esperaram
+--     muito na fila (createdAt = enfileiramento, não serve p/ stale).
 --
 -- ADD VALUE não pode rodar dentro de transação junto com o uso do valor em
 -- versões antigas do Postgres; o Neon (PG 15+) aceita IF NOT EXISTS, tornando o
@@ -15,3 +18,6 @@ ALTER TYPE "WhatsappMessageStatus" ADD VALUE IF NOT EXISTS 'PROCESSING';
 
 ALTER TABLE "CompanySettings"
   ADD COLUMN IF NOT EXISTS "waPracticesAcceptedAt" TIMESTAMP(3);
+
+ALTER TABLE "WhatsappMessageLog"
+  ADD COLUMN IF NOT EXISTS "processingAt" TIMESTAMP(3);
