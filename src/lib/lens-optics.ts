@@ -1,4 +1,4 @@
-import { INDEX_BANDS, THICKNESS_DISCLAIMER } from "./lens-optics.constants";
+import { INDEX_BANDS, THICKNESS_DISCLAIMER, INPUT_LIMITS, FRAME_LIMITS } from "./lens-optics.constants";
 
 export interface EyePower {
   sph: number;
@@ -59,4 +59,69 @@ export function estimateThickness(p: EyePower, frame: FrameSize | undefined): Th
   const min = Math.max(0, Math.round(sag(nHigh) * 10) / 10);
   const max = Math.max(min, Math.round(sag(nLow) * 10) / 10);
   return { thicknessMm: { min, max }, weight, disclaimer: THICKNESS_DISCLAIMER };
+}
+
+export interface LensInput {
+  od: EyePower;
+  oe: EyePower;
+}
+
+export interface EyeResult {
+  index: string[]; // [] quando entrada atípica (falha fechada)
+  thickness: ThicknessEstimate;
+}
+
+export interface LensAnalysis {
+  valid: boolean;
+  od: EyeResult;
+  oe: EyeResult;
+  alerts: string[];
+}
+
+function inputPlausible(p: EyePower): boolean {
+  if (p.sph < INPUT_LIMITS.sphMin || p.sph > INPUT_LIMITS.sphMax) return false;
+  if (p.cyl < INPUT_LIMITS.cylMin || p.cyl > INPUT_LIMITS.cylMax) return false;
+  if (p.axis != null && (p.axis < INPUT_LIMITS.axisMin || p.axis > INPUT_LIMITS.axisMax)) return false;
+  if (p.add != null && (p.add < INPUT_LIMITS.addMin || p.add > INPUT_LIMITS.addMax)) return false;
+  return true;
+}
+
+function framePlausible(f: FrameSize): boolean {
+  return (
+    f.lensWidthMm >= FRAME_LIMITS.lensWidthMin && f.lensWidthMm <= FRAME_LIMITS.lensWidthMax &&
+    f.bridgeMm >= FRAME_LIMITS.bridgeMin && f.bridgeMm <= FRAME_LIMITS.bridgeMax
+  );
+}
+
+function eyeResult(p: EyePower, frame: FrameSize | undefined): EyeResult {
+  return { index: recommendIndex(p), thickness: estimateThickness(p, frame) };
+}
+
+export function analyzeLens(input: LensInput, frame: FrameSize | undefined): LensAnalysis {
+  const alerts: string[] = [];
+  const safeFrame = frame && framePlausible(frame) ? frame : undefined;
+  if (frame && !safeFrame) alerts.push("Medida da armação atípica — confirme antes de estimar espessura.");
+
+  const odOk = inputPlausible(input.od);
+  const oeOk = inputPlausible(input.oe);
+  if (!odOk || !oeOk) {
+    alerts.push("Valor de grau atípico — confirme a receita.");
+    const empty: EyeResult = { index: [], thickness: estimateThickness({ sph: 0, cyl: 0 }, undefined) };
+    return { valid: false, od: odOk ? eyeResult(input.od, safeFrame) : empty, oe: oeOk ? eyeResult(input.oe, safeFrame) : empty, alerts };
+  }
+
+  // sanity-checks (não invalidam, só alertam)
+  for (const [label, p] of [["OD", input.od], ["OE", input.oe]] as const) {
+    if (Math.abs(p.cyl) >= 2 && (p.axis === 0 || p.axis === 180)) {
+      alerts.push(`${label}: cilíndrico alto com eixo ${p.axis} — confira o eixo.`);
+    }
+    if (p.add != null && p.add > 0) {
+      alerts.push(`${label}: adição informada — confirme se é multifocal/perto.`);
+    }
+  }
+  if (Math.abs(sphericalEquivalent(input.od) - sphericalEquivalent(input.oe)) >= 4) {
+    alerts.push("Assimetria grande entre OD e OE — confirme a receita.");
+  }
+
+  return { valid: true, od: eyeResult(input.od, safeFrame), oe: eyeResult(input.oe, safeFrame), alerts };
 }

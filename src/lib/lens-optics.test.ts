@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recommendIndex, estimateThickness } from "./lens-optics";
+import { recommendIndex, estimateThickness, analyzeLens } from "./lens-optics";
 import { THICKNESS_DISCLAIMER } from "./lens-optics.constants";
 
 describe("recommendIndex", () => {
@@ -46,5 +46,33 @@ describe("estimateThickness", () => {
   it("grau zero → não estima espessura (sem sagitta)", () => {
     const r = estimateThickness({ sph: 0, cyl: 0 }, { lensWidthMm: 55, bridgeMm: 18 });
     expect(r.thicknessMm).toBeNull();
+  });
+});
+
+describe("analyzeLens (entrada unificada + sanity-check + falha fechada)", () => {
+  const ok = { od: { sph: -2, cyl: -1, axis: 90 }, oe: { sph: -2, cyl: -1, axis: 90 } };
+
+  it("grau plausível → retorna índice + alertas (array) sem erro de validação", () => {
+    const r = analyzeLens(ok, undefined);
+    expect(r.valid).toBe(true);
+    expect(r.od.index.length).toBeGreaterThan(0);
+    expect(Array.isArray(r.alerts)).toBe(true);
+  });
+
+  it("FALHA FECHADA: esf fora da faixa (-40) → valid=false, sem números, pede conferir", () => {
+    const r = analyzeLens({ od: { sph: -40, cyl: 0 }, oe: { sph: -2, cyl: 0 } }, undefined);
+    expect(r.valid).toBe(false);
+    expect(r.od.index).toEqual([]); // não exibe recomendação em entrada atípica
+    expect(r.alerts.some((a) => /atípico|confir/i.test(a))).toBe(true);
+  });
+
+  it("sanity: cilíndrico alto com eixo 0 → alerta", () => {
+    const r = analyzeLens({ od: { sph: 0, cyl: -3, axis: 0 }, oe: { sph: 0, cyl: -3, axis: 0 } }, undefined);
+    expect(r.alerts.some((a) => /eixo/i.test(a))).toBe(true);
+  });
+
+  it("sanity: assimetria grande OD x OE → alerta", () => {
+    const r = analyzeLens({ od: { sph: -1, cyl: 0 }, oe: { sph: -7, cyl: 0 } }, undefined);
+    expect(r.alerts.some((a) => /assimetr/i.test(a))).toBe(true);
   });
 });
