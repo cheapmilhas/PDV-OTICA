@@ -4,7 +4,8 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronDown, Eye, AlertTriangle } from "lucide-react";
+import { ChevronDown, Eye, AlertTriangle, Sparkles } from "lucide-react";
+import { Button } from "@/components/ui/button";
 import {
   analyzeLens,
   type EyePower,
@@ -127,6 +128,49 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
         ? analysis.oe.thickness.disclaimer
         : null;
 
+  // Explicação opcional da IA — puramente incremental. O resultado do motor
+  // acima nunca depende deste estado; só renderiza ABAIXO quando o usuário pede.
+  const [aiText, setAiText] = useState<string | null>(null);
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiError, setAiError] = useState<string | null>(null);
+
+  async function handleExplainWithAi() {
+    setAiLoading(true);
+    setAiError(null);
+    // Serializa o MESMO od/oe/frame que o memo alimenta no motor.
+    const lw = toNum(lensWidthMm);
+    const br = toNum(bridgeMm);
+    const frame =
+      Number.isFinite(lw) && Number.isFinite(br)
+        ? { lensWidthMm: lw, bridgeMm: br }
+        : undefined;
+    const odPower = odHasGrau ? toEyePower(od) : { sph: 0, cyl: 0 };
+    const oePower = oeHasGrau ? toEyePower(oe) : { sph: 0, cyl: 0 };
+    try {
+      const res = await fetch("/api/company/lens-advisor", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ od: odPower, oe: oePower, frame }),
+      });
+      if (!res.ok) {
+        setAiError("IA indisponível no momento.");
+        return;
+      }
+      const json = await res.json();
+      const advice: unknown = json?.data?.advice;
+      const aiUnavailable: boolean = json?.data?.aiUnavailable === true;
+      if (typeof advice === "string" && advice.trim() !== "" && !aiUnavailable) {
+        setAiText(advice);
+      } else {
+        setAiError("IA indisponível no momento.");
+      }
+    } catch {
+      setAiError("Não foi possível falar com a IA.");
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
   return (
     <Card className="mb-6">
       <CardHeader
@@ -226,6 +270,38 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
                             <li key={a}>{a}</li>
                           ))}
                         </ul>
+                      </div>
+                    )}
+
+                    {/* IA opcional — incremental; o resultado do motor acima nunca depende disto. */}
+                    {analysis.valid && anyGrau && (
+                      <div className="space-y-2 border-t pt-3">
+                        <Button
+                          type="button"
+                          variant="outline"
+                          size="sm"
+                          disabled={aiLoading}
+                          onClick={handleExplainWithAi}
+                        >
+                          <Sparkles className="h-4 w-4" />
+                          {aiLoading ? "Consultando IA…" : "Explicar com IA"}
+                        </Button>
+
+                        <div aria-live="polite">
+                          {aiText && (
+                            <div className="rounded-lg border bg-muted/30 p-3">
+                              <div className="text-sm font-semibold text-foreground">
+                                Explicação da IA
+                              </div>
+                              <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                                {aiText}
+                              </p>
+                            </div>
+                          )}
+                          {aiError && (
+                            <p className="text-xs text-muted-foreground">{aiError}</p>
+                          )}
+                        </div>
                       </div>
                     )}
                   </>
