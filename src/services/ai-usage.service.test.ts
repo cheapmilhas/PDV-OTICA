@@ -35,6 +35,23 @@ describe("logAiUsage", () => {
     expect(Number(arg.data.costUsd.toString())).toBeCloseTo(3, 4);
   });
 
+  it("aceita companyId null (playground) e grava com companyId === null", async () => {
+    (prisma.aiTokenUsage.create as any).mockResolvedValue({ id: "u2" });
+
+    await logAiUsage({
+      companyId: null,
+      feature: "lens_advisor_playground",
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      inputTokens: 10,
+      outputTokens: 5,
+    });
+
+    const arg = (prisma.aiTokenUsage.create as any).mock.calls[0][0];
+    expect(arg.data.companyId).toBe(null);
+    expect(arg.data.feature).toBe("lens_advisor_playground");
+  });
+
   it("é fail-safe: erro do prisma NÃO propaga (retorna sem lançar)", async () => {
     (prisma.aiTokenUsage.create as any).mockRejectedValue(new Error("db down"));
     await expect(

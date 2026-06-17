@@ -6,7 +6,7 @@ import { computeCostUsd } from "@/lib/ai-pricing";
 const log = logger.child({ service: "ai-usage" });
 
 export interface LogAiUsageInput {
-  companyId: string;
+  companyId: string | null;
   feature: string;
   provider: string;
   model: string;
