@@ -41,7 +41,8 @@
 | `src/app/admin/configuracoes/ia/ia-client.tsx` | Modificar | `<select>` "Modelo do Assistente de Lentes" + envia no PUT. |
 | `src/app/admin/configuracoes/ia/page.tsx` | Modificar | Passar `lensAdvisorModel` na prop (server monta manual). |
 | `src/components/ordens-servico/lens-advisor-panel.tsx` | Criar | Painel React na OS: inputs de grau (+armação opcional) → chama o motor → mostra faixa/alertas/disclaimer. Client-side puro (motor é função importável, sem rede na Fase 1). |
-| (integração na tela de OS) | Modificar | Renderizar `<LensAdvisorPanel/>` na tela de OS em edição/criação. Identificar o arquivo exato na Task 8. |
+| `src/app/(dashboard)/dashboard/ordens-servico/nova/page.tsx` | Modificar | Renderizar `<LensAdvisorPanel/>` na criação de OS (Task 8b). |
+| `src/app/(dashboard)/dashboard/ordens-servico/[id]/editar/page.tsx` | Modificar | Renderizar `<LensAdvisorPanel/>` na edição de OS, pré-preenchendo a armação do `FrameMeasurement` (Task 8b). |
 
 > **Ordem:** Task 1 constantes/calibração → Task 2 motor (faixa índice) → Task 3 motor (espessura/peso faixa + disclaimer) → Task 4 motor (sanity-check + falha fechada) → Task 5 schema lensAdvisorModel → Task 6 ai-config.service → Task 7 rota admin PUT → Task 8 painel na OS + seletor na UI admin → Task 9 verificação.
 
