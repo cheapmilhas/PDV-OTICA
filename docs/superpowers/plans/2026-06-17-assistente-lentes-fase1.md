@@ -18,7 +18,8 @@
 - **Sem banco local:** migration via `node node_modules/prisma/build/index.js migrate diff` com `--script` (NÃO aplicar; aplicar com `migrate deploy` só no deploy).
 - **Build:** `TMPDIR=/Users/matheusreboucas/.cache/claude-tmp node node_modules/next/dist/bin/next build` (evita ENOSPC).
 - **Allowlist de modelos já existe:** `QUALIFIER_MODELS = ["claude-haiku-4-5","claude-sonnet-4-6","claude-opus-4-8"]` em `src/services/ai-config.service.ts:10`. IDs batem com `TEXT_PRICING` em `src/lib/ai-pricing.ts` (haiku-4-5, sonnet-4-6, opus-4-8). REUSAR — não inventar string nova (resolve M1 da spec).
-- **Medida da armação já existe no schema:** model `FrameMeasurement` (`lensWidth`, `bridgeSize`, `templeLength`, todos `Decimal? @db.Decimal(4,1)`) ligado a `ServiceOrder` (`frameMeasurements`). A Fase 1 NÃO precisa criar campo — a medida é entrada opcional do painel (manual ou lida da OS quando existir).
+- **Medida da armação já existe no schema:** model `FrameMeasurement` (`lensWidth`, `bridgeSize`, `templeLength`, todos `Decimal? @db.Decimal(4,1)`) ligado a `ServiceOrder` (`frameMeasurements`). A Fase 1 NÃO precisa criar campo — a medida é entrada opcional do painel (manual ou lida da OS quando existir). **Mapeamento exato (os nomes do schema ≠ nomes do tipo interno do motor):** `FrameMeasurement.lensWidth → FrameSize.lensWidthMm` e `FrameMeasurement.bridgeSize → FrameSize.bridgeMm`; ambos são `Decimal?` → converter com `Number(...)` e tratar null.
+- **DUAS telas de OS (não uma):** o painel deve entrar em AMBAS — `src/app/(dashboard)/dashboard/ordens-servico/nova/page.tsx` (criação) e `src/app/(dashboard)/dashboard/ordens-servico/[id]/editar/page.tsx` (edição). São client components grandes (~1.2–1.4k linhas) com padrão de Card recolhível (ex. `showPrescription`) a seguir. NÃO entra em OS finalizada (resolve I6).
 - **Padrão de tela de config de IA no super admin:** `src/app/admin/configuracoes/ia/ia-client.tsx` (form controlado) + `src/app/admin/configuracoes/ia/page.tsx` (server, monta a prop manualmente — ATENÇÃO: lembrar de passar o campo novo). Rota `src/app/api/admin/ai-config/route.ts` (GET/PUT, `getAdminSession`). O Bloco D já adicionou `qualifierModel` lá — seguir EXATAMENTE o mesmo padrão para `lensAdvisorModel`.
 - **`AiGlobalConfig`** singleton id="global" em `prisma/schema.prisma` (~linha 4362). Migrations recentes têm timestamp `20260616xxxxxx`. Usar timestamp posterior ao último (`20260616120000_whatsapp_queue`).
 
@@ -220,6 +221,14 @@ describe("estimateThickness", () => {
     const r = estimateThickness({ sph: -10, cyl: 0 }, { lensWidthMm: 60, bridgeMm: 18 });
     if (r.thicknessMm) expect(r.thicknessMm.min).toBeGreaterThanOrEqual(0);
   });
+  it("invariante: o mínimo da faixa (índice mais fino) é < ou = o máximo (índice mais grosso)", () => {
+    const r = estimateThickness({ sph: -6, cyl: 0 }, { lensWidthMm: 55, bridgeMm: 18 });
+    expect(r.thicknessMm!.min).toBeLessThanOrEqual(r.thicknessMm!.max);
+  });
+  it("grau zero → não estima espessura (sem sagitta)", () => {
+    const r = estimateThickness({ sph: 0, cyl: 0 }, { lensWidthMm: 55, bridgeMm: 18 });
+    expect(r.thicknessMm).toBeNull();
+  });
 });
 ```
 
@@ -246,26 +255,35 @@ export interface ThicknessEstimate {
 }
 
 /**
- * Estima a espessura de BORDA como FAIXA (ordem de grandeza via sagitta), nunca
- * número de produção. Sem medida da armação → não estima (thicknessMm=null).
+ * Estima a espessura de BORDA como FAIXA (ordem de grandeza), nunca número de
+ * produção. Sem medida da armação → não estima (thicknessMm=null).
+ *
+ * Modelo: sagitta s ≈ y²/(2R), com raio de curvatura R = (n-1)/|P| (P em
+ * dioptrias, R em metros). Espessura de borda cresce com a sagitta e cai quando
+ * o índice n sobe (lente mais fina). A FAIXA vai do índice mais ALTO da banda
+ * recomendada (min, mais fino) ao mais BAIXO (max, mais grosso). É ordem de
+ * grandeza — a saída é faixa + disclaimer, nunca número exato.
  */
 export function estimateThickness(p: EyePower, frame: FrameSize | undefined): ThicknessEstimate {
   const absEE = Math.abs(sphericalEquivalent(p));
   const weight: ThicknessEstimate["weight"] = absEE <= 2 ? "mais leve" : absEE <= 5 ? "médio" : "mais pesado";
-  if (!frame) {
+  if (!frame || absEE === 0) {
     return { thicknessMm: null, weight, disclaimer: THICKNESS_DISCLAIMER };
   }
-  // Sagitta aproximada: t ≈ (r²/2) * (n-1) * |P| / 1000, faixa entre índice baixo e alto.
-  // Mantém ORDEM DE GRANDEZA; a saída é faixa, não número exato.
-  const semiDiameter = Math.max(0, (frame.lensWidthMm + frame.bridgeMm) / 2); // mm efetivo aprox.
-  const base = ((semiDiameter * semiDiameter) / 2) * Math.abs(absEE) / 1000;
-  const min = Math.max(0, Math.round(base * 0.5 * 10) / 10); // índice mais alto = mais fino
-  const max = Math.max(min, Math.round(base * 1.0 * 10) / 10); // índice mais baixo = mais grosso
+  // semi-diâmetro efetivo da lente (mm) → metros
+  const yMeters = (Math.max(0, (frame.lensWidthMm + frame.bridgeMm) / 2)) / 1000;
+  const band = recommendIndex(p).map(Number); // ex [1.61, 1.67]
+  const nLow = Math.min(...band);  // índice mais baixo → mais grosso → max
+  const nHigh = Math.max(...band); // índice mais alto → mais fino → min
+  // sagitta(mm) = (y²/(2R))*1000, R=(n-1)/|P|  ⇒  sagitta = (y² * |P| / (2*(n-1))) * 1000
+  const sag = (n: number) => (yMeters * yMeters * absEE) / (2 * (n - 1)) * 1000;
+  const min = Math.max(0, Math.round(sag(nHigh) * 10) / 10);
+  const max = Math.max(min, Math.round(sag(nLow) * 10) / 10);
   return { thicknessMm: { min, max }, weight, disclaimer: THICKNESS_DISCLAIMER };
 }
 ```
 
-> Nota: os fatores 0.5/1.0 são placeholders de ordem de grandeza; a planilha de calibração da Task 1 (validada pelo óptico) deve ajustá-los. A saída sempre é FAIXA com disclaimer, então erro residual nunca vira número de produção.
+> **Calibração (resolve A1/A2):** a fórmula acima é física de sagitta de ordem de grandeza (com `(n-1)` real), não especificação de produção — por isso a saída é sempre FAIXA + disclaimer. **A calibração numérica fina da espessura fica PENDENTE de validação contra a fonte nomeada (tabela de um dos 4 labs), a ser conferida pelo dono/óptico antes de ativar a feature.** Nesta Fase 1 os testes de referência **ancorados** cobrem a **faixa de índice** (Task 2, que é a recomendação determinística confiável); os testes de espessura cobrem **invariantes** (min≤max, ≥0, índice alto ⇒ min menor) — não valores absolutos, que dependem da calibração do lab. O critério de saída da Fase 1 reflete isso (Task 9).
 
 - [ ] **Step 4: Rodar e ver passar**
 
@@ -430,14 +448,14 @@ Em `model AiGlobalConfig`, adicionar perto de `qualifierModel`:
 Run: `node node_modules/prisma/build/index.js generate`
 Expected: sucesso (schema válido).
 
-- [ ] **Step 3: Gerar a migration via diff (NÃO aplicar)**
+- [ ] **Step 3: Escrever o SQL da migration à mão (sem banco local — resolve M1)**
 
-Criar `prisma/migrations/20260617090000_lens_advisor_model/migration.sql` com o SQL gerado por:
-```bash
-node node_modules/prisma/build/index.js migrate diff \
-  --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --script
+O `migrate diff --from-migrations` exige shadow DB (indisponível aqui). Como o ALTER é trivial e determinístico, escrever o arquivo à mão. Criar `prisma/migrations/20260617090000_lens_advisor_model/migration.sql` com:
+```sql
+-- AlterTable
+ALTER TABLE "AiGlobalConfig" ADD COLUMN "lensAdvisorModel" TEXT NOT NULL DEFAULT 'claude-haiku-4-5';
 ```
-(se `--from-migrations` exigir shadow db, diffar `HEAD:prisma/schema.prisma` contra o working schema, como nos blocos anteriores.) O SQL deve ser EXATAMENTE 1 `ALTER TABLE "AiGlobalConfig" ADD COLUMN "lensAdvisorModel" TEXT NOT NULL DEFAULT 'claude-haiku-4-5';`.
+(Confirmar que o nome da coluna/tabela bate com o `@@map`/nome do model no schema — `AiGlobalConfig` não tem `@@map`, então o nome físico é `AiGlobalConfig`.)
 
 - [ ] **Step 4: Verificar additivo**
 
@@ -530,41 +548,55 @@ git commit --no-verify -m "feat(lens): rota admin PUT aceita lensAdvisorModel"
 
 ---
 
-## Task 8: UI — seletor no super admin + painel na OS
+## Task 8a: UI — seletor de modelo no super admin
 
 **Files:**
 - Modify: `src/app/admin/configuracoes/ia/ia-client.tsx`, `src/app/admin/configuracoes/ia/page.tsx`
-- Create: `src/components/ordens-servico/lens-advisor-panel.tsx`
-- Modify: a tela de OS em edição/criação (localizar o arquivo)
 
 - [ ] **Step 1: Seletor no super admin (espelhar o select de qualifierModel)**
 
 Em `ia-client.tsx`: estender a interface local com `lensAdvisorModel: string`; adicionar `<select>` "Modelo do Assistente de Lentes" (mesmas 3 opções/labels do qualifierModel); incluir no body do PUT.
-Em `page.tsx`: passar `lensAdvisorModel` na prop manual (igual ao qualifierModel).
+Em `page.tsx`: passar `lensAdvisorModel` na prop manual (igual ao qualifierModel — o server monta a prop campo a campo).
 
 - [ ] **Step 2: Verificar tipos**
 
 Run: `node node_modules/typescript/bin/tsc --noEmit`
 Expected: 0 erros.
 
-- [ ] **Step 3: Criar o painel da OS (client component, sem rede)**
+- [ ] **Step 3: Commit**
 
-`lens-advisor-panel.tsx`: inputs controlados de grau OD/OE (esf/cil/eixo/add) + campos opcionais de armação (lensWidthMm/bridgeMm; pré-preencher de `FrameMeasurement` da OS quando existir); ao mudar, chama `analyzeLens(...)` (import direto do motor — função pura, roda no client) e renderiza: faixa de índice por olho, faixa de espessura + peso + **disclaimer fixo**, lista de alertas. Quando `valid=false`, mostrar só os alertas ("valor atípico, confirme"). Estado vazio amigável. Usar tokens Tailwind/estilo dos componentes de OS existentes.
+```bash
+git add src/app/admin/configuracoes/ia/ia-client.tsx src/app/admin/configuracoes/ia/page.tsx
+git commit --no-verify -m "feat(lens): seletor de modelo do Assistente de Lentes no super admin"
+```
 
-- [ ] **Step 4: Integrar na tela de OS**
+---
 
-Localizar o componente da tela de OS em edição/criação (`grep -rl "FrameMeasurement\|frameMeasurement\|ordens-servico" src/app/(dashboard)/dashboard/ordens-servico src/components/ordens-servico`) e renderizar `<LensAdvisorPanel/>` (só em criação/edição — resolve I6; NÃO em OS finalizada). Confirmar o arquivo certo antes de editar.
+## Task 8b: UI — painel do Assistente de Lentes na OS (criação + edição)
 
-- [ ] **Step 5: Verificar tipos + build**
+**Files:**
+- Create: `src/components/ordens-servico/lens-advisor-panel.tsx`
+- Modify: `src/app/(dashboard)/dashboard/ordens-servico/nova/page.tsx`
+- Modify: `src/app/(dashboard)/dashboard/ordens-servico/[id]/editar/page.tsx`
+
+- [ ] **Step 1: Criar o painel (client component, sem rede)**
+
+`lens-advisor-panel.tsx`: inputs controlados de grau OD/OE (esf/cil/eixo/add) + campos opcionais de armação. **Mapeamento da armação (resolve C2):** quando a OS já tiver `FrameMeasurement`, pré-preencher `lensWidthMm = Number(m.lensWidth)` e `bridgeMm = Number(m.bridgeSize)` (ambos `Decimal?` → tratar null). Ao mudar qualquer campo, chama `analyzeLens(...)` (import direto do motor — função pura, roda no client, sem rede) e renderiza: faixa de índice por olho, faixa de espessura + peso + **disclaimer fixo** (`THICKNESS_DISCLAIMER`), e a lista de alertas. Quando `valid=false`, mostrar só os alertas ("valor atípico, confirme") sem números. Estado vazio amigável. Seguir o estilo/tokens Tailwind e o padrão de **Card recolhível** já usado nessas telas (ex. `showPrescription`).
+
+- [ ] **Step 2: Integrar nas DUAS telas (resolve C1/I6)**
+
+Renderizar `<LensAdvisorPanel/>` em `nova/page.tsx` E em `[id]/editar/page.tsx` (ambas são criação/edição). NÃO há tela de OS finalizada que renderize edição, então não aparece em OS entregue. Pré-preencher a armação a partir do `FrameMeasurement` da OS quando já existir (na tela de edição). Antes de editar, abrir cada arquivo e localizar o ponto onde o Card de prescrição/medição é renderizado, e inserir o painel ao lado seguindo o mesmo padrão.
+
+- [ ] **Step 3: Verificar tipos**
 
 Run: `node node_modules/typescript/bin/tsc --noEmit`
 Expected: 0 erros.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 4: Commit**
 
 ```bash
-git add src/app/admin/configuracoes/ia/ia-client.tsx src/app/admin/configuracoes/ia/page.tsx src/components/ordens-servico/lens-advisor-panel.tsx <arquivo-da-OS>
-git commit --no-verify -m "feat(lens): seletor de modelo no super admin + painel do assistente na OS"
+git add src/components/ordens-servico/lens-advisor-panel.tsx "src/app/(dashboard)/dashboard/ordens-servico/nova/page.tsx" "src/app/(dashboard)/dashboard/ordens-servico/[id]/editar/page.tsx"
+git commit --no-verify -m "feat(lens): painel do Assistente de Lentes na OS (criação + edição)"
 ```
 
 ---
@@ -591,9 +623,13 @@ Expected: vazio.
 Run: `TMPDIR=/Users/matheusreboucas/.cache/claude-tmp node node_modules/next/dist/bin/next build`
 Expected: "✓ Compiled successfully" + a tela de OS e `/admin/configuracoes/ia` no route table.
 
-- [ ] **Step 5: Resumo**
+- [ ] **Step 5: Resumo + critério de saída**
 
-Confirmar: motor funciona sem IA (custo zero), painel aparece só em OS em edição/criação, seletor de modelo salvo, migração aditiva. PARAR antes do deploy (igual aos blocos anteriores — deploy é decisão do dono, com `migrate status` contra o banco antes).
+Confirmar:
+- Motor funciona sem IA (custo zero); painel aparece nas DUAS telas de OS (nova + editar), nunca em OS finalizada; seletor de modelo salvo; migração aditiva.
+- **Faixa de índice** está coberta por testes de referência ancorados (recomendação determinística confiável — pronta para uso).
+- **Espessura/peso:** testes cobrem invariantes (faixa min≤max, ≥0, índice alto ⇒ mais fino) + sempre com disclaimer. **A calibração numérica fina da espessura está PENDENTE** de validação contra a tabela de um dos 4 labs (dono/óptico), a ser feita antes de ativar a feature — está OK exibir a faixa com disclaimer enquanto isso, mas anotar essa pendência no resumo final.
+PARAR antes do deploy (igual aos blocos anteriores — deploy é decisão do dono, com `migrate status` contra o banco antes).
 
 ---
 
