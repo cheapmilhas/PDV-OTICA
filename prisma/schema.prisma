@@ -4396,6 +4396,7 @@ model AiGlobalConfig {
   openaiKeyEnc    String?
   qualifierModel  String   @default("claude-haiku-4-5")
   lensAdvisorModel String  @default("claude-haiku-4-5")
+  ocrModel        String   @default("claude-sonnet-4-6")
   usdBrlRate      Decimal  @default(5.5) @db.Decimal(10, 4)
   markupPercent   Decimal  @default(0)   @db.Decimal(6, 2)
   creditTokenFactor Int    @default(1000)
