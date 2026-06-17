@@ -17,6 +17,7 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ModalNovoClienteSimples } from "@/components/ordens-servico/modal-novo-cliente-simples";
 import { PrescriptionImageUpload, type OcrPrescriptionData } from "@/components/ordens-servico/prescription-image-upload";
+import { LensAdvisorPanel } from "@/components/ordens-servico/lens-advisor-panel";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface ServiceItem {
@@ -1210,6 +1211,9 @@ function NovaOrdemServicoPageContent() {
             </CardContent>
           )}
         </Card>
+
+        {/* Assistente de Lentes */}
+        <LensAdvisorPanel od={prescriptionData.od} oe={prescriptionData.oe} />
 
         {/* Itens/Serviços */}
         <Card className="mb-6">
