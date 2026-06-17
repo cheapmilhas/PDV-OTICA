@@ -107,4 +107,24 @@ describe("ai-config.service", () => {
     process.env.OPENAI_API_KEY = "sk-openai-env-fallback";
     expect(await getOpenaiKey()).toBe("sk-openai-env-fallback");
   });
+
+  // --- Task 6: lensAdvisorModel (mesma allowlist QUALIFIER_MODELS) ---
+  it("getAiConfig retorna lensAdvisorModel (default haiku)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-haiku-4-5" });
+    const c = await getAiConfig();
+    expect(c.lensAdvisorModel).toBe("claude-haiku-4-5");
+  });
+  it("updateAiConfig seta lensAdvisorModel quando é um valor da allowlist", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-sonnet-4-6" });
+    await updateAiConfig({ lensAdvisorModel: "claude-sonnet-4-6" });
+    const arg = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0];
+    expect(arg.update.lensAdvisorModel).toBe("claude-sonnet-4-6");
+    expect(QUALIFIER_MODELS).toContain("claude-sonnet-4-6");
+  });
+  it("updateAiConfig IGNORA lensAdvisorModel inválido (fora da allowlist)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-haiku-4-5" });
+    await updateAiConfig({ lensAdvisorModel: "gpt-4" });
+    const arg = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0];
+    expect(arg.update.lensAdvisorModel).toBeUndefined();
+  });
 });
