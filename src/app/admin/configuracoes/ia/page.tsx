@@ -17,6 +17,7 @@ export default async function IaConfigPage() {
         markupPercent: config.markupPercent,
         creditTokenFactor: config.creditTokenFactor,
         qualifierModel: config.qualifierModel,
+        lensAdvisorModel: config.lensAdvisorModel,
         hasOpenaiKey: config.hasOpenaiKey,
       }}
     />

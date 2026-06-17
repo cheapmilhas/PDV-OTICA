@@ -25,6 +25,7 @@ const viewFixture = {
   markupPercent: 20,
   creditTokenFactor: 1000,
   qualifierModel: "claude-haiku-4-5",
+  lensAdvisorModel: "claude-haiku-4-5",
   hasOpenaiKey: false,
 };
 

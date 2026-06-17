@@ -10,6 +10,7 @@ interface AiConfigView {
   markupPercent: number;
   creditTokenFactor: number;
   qualifierModel: string;
+  lensAdvisorModel: string;
   hasOpenaiKey: boolean;
 }
 
@@ -32,6 +33,7 @@ export function IaClient({ config }: { config: AiConfigView }) {
   const [markupPercent, setMarkupPercent] = useState(String(config.markupPercent));
   const [creditTokenFactor, setCreditTokenFactor] = useState(String(config.creditTokenFactor));
   const [qualifierModel, setQualifierModel] = useState(config.qualifierModel);
+  const [lensAdvisorModel, setLensAdvisorModel] = useState(config.lensAdvisorModel);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -72,6 +74,7 @@ export function IaClient({ config }: { config: AiConfigView }) {
       markupPercent?: number;
       creditTokenFactor?: number;
       qualifierModel?: string;
+      lensAdvisorModel?: string;
     } = {};
 
     // Only send the key if the user typed something
@@ -92,6 +95,7 @@ export function IaClient({ config }: { config: AiConfigView }) {
     if (!isNaN(parsedMarkup)) body.markupPercent = parsedMarkup;
     if (!isNaN(parsedFactor)) body.creditTokenFactor = parsedFactor;
     if (qualifierModel) body.qualifierModel = qualifierModel;
+    if (lensAdvisorModel) body.lensAdvisorModel = lensAdvisorModel;
 
     try {
       const res = await fetch("/api/admin/ai-config", {
@@ -293,6 +297,27 @@ export function IaClient({ config }: { config: AiConfigView }) {
               </select>
               <p className="text-xs text-muted-foreground">
                 Modelo Claude usado para qualificar leads nas conversas de WhatsApp.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="lens-advisor-model" className="text-sm font-medium text-foreground">
+                Modelo do Assistente de Lentes
+              </label>
+              <select
+                id="lens-advisor-model"
+                value={lensAdvisorModel}
+                onChange={(e) => setLensAdvisorModel(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {QUALIFIER_MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Modelo Claude usado pelo Assistente de Lentes na ordem de serviço.
               </p>
             </div>
           </div>
