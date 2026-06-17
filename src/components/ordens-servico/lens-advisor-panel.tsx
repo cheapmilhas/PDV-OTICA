@@ -136,7 +136,7 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
         tabIndex={0}
         onClick={() => setOpen((v) => !v)}
         onKeyDown={(e) => {
-          if (e.key === "Enter") {
+          if (e.key === "Enter" || e.key === " ") {
             e.preventDefault();
             setOpen((v) => !v);
           }

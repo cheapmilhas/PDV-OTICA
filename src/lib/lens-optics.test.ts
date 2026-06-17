@@ -98,4 +98,9 @@ describe("cobertura adicional (hipermetropia, zero-cross, fail-closed parcial, t
     const r = analyzeLens({ od: { sph: -1, cyl: 0 }, oe: { sph: -5, cyl: 0 } }, undefined);
     expect(r.alerts.some((a) => /assimetr/i.test(a))).toBe(true);
   });
+  it("cilíndrico positivo → alerta específico de notação + valid false", () => {
+    const r = analyzeLens({ od: { sph: -2, cyl: 1 }, oe: { sph: -2, cyl: 0 } }, undefined);
+    expect(r.valid).toBe(false);
+    expect(r.alerts.some((a) => /notação positiva/i.test(a))).toBe(true);
+  });
 });

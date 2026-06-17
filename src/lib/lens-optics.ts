@@ -110,6 +110,9 @@ export function analyzeLens(input: LensInput, frame: FrameSize | undefined): Len
   const odOk = inputPlausible(input.od);
   const oeOk = inputPlausible(input.oe);
   if (!odOk || !oeOk) {
+    if (input.od.cyl > 0 || input.oe.cyl > 0) {
+      alerts.push("Cilíndrico em notação positiva detectado — o sistema usa notação negativa (ex.: -1,00).");
+    }
     alerts.push("Valor de grau atípico — confirme a receita.");
     const empty: EyeResult = { index: [], thickness: estimateThickness({ sph: 0, cyl: 0 }, undefined) };
     return { valid: false, od: odOk ? eyeResult(input.od, safeFrame) : empty, oe: oeOk ? eyeResult(input.oe, safeFrame) : empty, alerts };
