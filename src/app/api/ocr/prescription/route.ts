@@ -3,13 +3,12 @@ import Anthropic from "@anthropic-ai/sdk";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { logAiUsage } from "@/services/ai-usage.service";
+import { getAnthropicKey, getAiConfig } from "@/services/ai-config.service";
 import { rateLimitResponse } from "@/lib/rate-limit";
 
 // Limite de tamanho de base64: ~8MB de imagem (cobre fotos de receita de boa qualidade
 // mas previne DoS por payload gigante consumir API Anthropic caro)
 const MAX_BASE64_BYTES = 8 * 1024 * 1024 * 1.4; // ~11.5MB base64 = ~8MB binário
-
-const anthropic = new Anthropic();
 
 const OCR_PROMPT = `Você é um especialista em leitura de receitas oftalmológicas.
 Analise esta imagem de receita médica e extraia os dados da prescrição.
@@ -118,8 +117,24 @@ export async function POST(request: NextRequest) {
     // não fazer a leitura extra em requisições rejeitadas (400/413).
     const companyId = await getCompanyId();
 
+    const apiKey = await getAnthropicKey();
+    if (!apiKey) {
+      return NextResponse.json(
+        {
+          error: {
+            code: "AI_NOT_CONFIGURED",
+            message:
+              "IA não configurada. Cadastre a chave Anthropic no painel do super admin.",
+          },
+        },
+        { status: 503 }
+      );
+    }
+    const anthropic = new Anthropic({ apiKey });
+    const { ocrModel } = await getAiConfig();
+
     const response = await anthropic.messages.create({
-      model: "claude-sonnet-4-20250514",
+      model: ocrModel,
       max_tokens: 1024,
       messages: [
         {
@@ -147,7 +162,7 @@ export async function POST(request: NextRequest) {
       companyId,
       feature: "ocr_prescription",
       provider: "anthropic",
-      model: "claude-sonnet-4-20250514",
+      model: ocrModel,
       inputTokens: response.usage.input_tokens ?? 0,
       outputTokens: response.usage.output_tokens ?? 0,
       cacheTokens: response.usage.cache_read_input_tokens ?? 0,
