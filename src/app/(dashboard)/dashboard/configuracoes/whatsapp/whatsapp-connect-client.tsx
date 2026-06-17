@@ -25,6 +25,7 @@ import {
   WifiOff,
   CheckCircle2,
   ShieldCheck,
+  Lock,
 } from "lucide-react";
 
 type ConnStatus = "DISCONNECTED" | "CONNECTING" | "CONNECTED" | "FAILED";
@@ -332,19 +333,19 @@ function PracticesCard({
   onAccept: () => void;
 }) {
   return (
-    <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-4 text-left">
-      <div className="flex items-center gap-2 text-teal-900">
+    <div className="rounded-lg border border-teal-200 bg-teal-50/60 p-6 text-left">
+      <div className="flex items-center gap-2.5 text-teal-900">
         <ShieldCheck className="h-5 w-5 flex-shrink-0" />
         <p className="font-semibold">Antes de conectar: boas práticas para não bloquear o número</p>
       </div>
-      <ul className="mt-3 space-y-1.5 text-sm text-teal-900/90 list-disc pl-5">
+      <ul className="mt-4 space-y-2.5 text-sm leading-relaxed text-teal-900/90 list-disc pl-5 marker:text-teal-500">
         <li>Use um número que <span className="font-medium">não envie spam</span> e que os clientes reconheçam.</li>
-        <li>As mensagens saem <span className="font-medium">aos poucos</span> e só no horário comercial (8h–18h, dias úteis).</li>
+        <li>As mensagens saem <span className="font-medium">aos poucos</span> e só no horário comercial (8h às 18h, dias úteis).</li>
         <li>Envie só para clientes que <span className="font-medium">esperam</span> seu contato (OS, crediário, pós-venda).</li>
-        <li>Respeite quem pedir para <span className="font-medium">parar</span> — o opt-out é automático.</li>
+        <li>Respeite quem pedir para <span className="font-medium">parar</span>: o descadastro é automático.</li>
         <li>Evite disparos em massa: começar devagar protege seu número de bloqueio.</li>
       </ul>
-      <label className="mt-4 flex items-start gap-2 cursor-pointer select-none">
+      <label className="mt-5 flex items-start gap-2.5 cursor-pointer select-none rounded-md border border-transparent p-2 -mx-2 transition-colors hover:bg-teal-100/40">
         <Checkbox
           checked={accepted}
           onCheckedChange={(v) => {
@@ -353,7 +354,7 @@ function PracticesCard({
           disabled={accepted}
           className="mt-0.5"
         />
-        <span className="text-sm text-teal-900">
+        <span className="text-sm font-medium text-teal-900">
           Li e entendo as boas práticas para manter meu WhatsApp seguro.
         </span>
       </label>
@@ -395,7 +396,8 @@ function DisconnectedView({
         {connecting ? "Iniciando…" : "Conectar WhatsApp"}
       </Button>
       {!practicesAccepted && (
-        <p className="text-xs text-muted-foreground">
+        <p className="inline-flex items-center gap-1.5 text-xs text-muted-foreground">
+          <Lock className="h-3 w-3" />
           Marque a confirmação acima para liberar a conexão.
         </p>
       )}
@@ -420,10 +422,19 @@ function ConnectingView({
 }) {
   return (
     <div className="flex flex-col items-center gap-4 py-2 text-center">
-      <ol className="text-sm text-muted-foreground space-y-1 self-start">
-        <li>1. Abra o WhatsApp no celular da ótica</li>
-        <li>2. Toque em <span className="font-medium">Aparelhos conectados</span></li>
-        <li>3. Toque em <span className="font-medium">Conectar um aparelho</span> e aponte para o QR abaixo</li>
+      <ol className="space-y-3 self-start text-left">
+        {[
+          <>Abra o WhatsApp no celular da ótica</>,
+          <>Toque em <span className="font-medium text-foreground">Aparelhos conectados</span></>,
+          <>Toque em <span className="font-medium text-foreground">Conectar um aparelho</span> e aponte para o QR abaixo</>,
+        ].map((step, i) => (
+          <li key={i} className="flex items-center gap-3 text-sm text-muted-foreground">
+            <span className="flex h-6 w-6 flex-shrink-0 items-center justify-center rounded-full bg-teal-100 text-xs font-semibold text-teal-700">
+              {i + 1}
+            </span>
+            <span>{step}</span>
+          </li>
+        ))}
       </ol>
 
       <div className="flex h-64 w-64 items-center justify-center rounded-lg border-2 border-dashed border-border bg-white p-2">
