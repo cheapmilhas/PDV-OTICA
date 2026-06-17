@@ -179,7 +179,8 @@ Hoje `companyId` é NOT NULL com FK. Mudança aditiva: **`companyId` passa a ser
 
 - Motor óptico falha fechada; nunca exibe número de produção sem disclaimer.
 - Base de conhecimento por-ótica isolada por `companyId` obrigatório + teste anti-vazamento; sem PII de pacientes.
-- Playground não usa cota nem custo de cliente real (empresa-sentinela + feature própria).
+- Playground não usa cota nem custo de cliente real (`companyId = null` + `feature:"lens_advisor_playground"`).
+- **Pressuposto a validar no plano:** confirmar no código que os painéis C2/C3 agregam por `companyId` preenchido (filtram/iteram por ótica), e não fazem um `groupBy(companyId)` cego que criaria um bucket `null` com os registros do playground. Se necessário, adicionar `where: { companyId: { not: null } }` nas queries dos painéis.
 - Novo serviço e OCR usam `getAnthropicKey()` (respeita rotação de chave do super admin), `assertAiAllowed`, `logAiUsage`, rate-limit por usuário, defesa anti-injeção (nonce).
 - Migrações aditivas (sem DROP). `ENCRYPTION_KEY` já em produção (Bloco D).
 - **LGPD da receita (resolve M4):** a imagem da receita não é persistida além do necessário ao OCR; `logAiUsage` grava **só contadores** (tokens/custo), nunca o conteúdo; a transcrição vive apenas nos campos da OS, sob o consentimento já existente do cliente. (Coerente com a preocupação LGPD já registrada para o inbox de WhatsApp.)
