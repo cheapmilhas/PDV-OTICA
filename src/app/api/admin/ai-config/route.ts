@@ -33,6 +33,7 @@ export async function PUT(request: Request) {
     creditTokenFactor?: number;
     qualifierModel?: string;
     lensAdvisorModel?: string;
+    ocrModel?: string;
     openaiKey?: string;
   } = {};
 
@@ -49,6 +50,10 @@ export async function PUT(request: Request) {
   // lensAdvisorModel: mesma allowlist do qualifier (o serviço também valida; aqui ignora silenciosamente como os demais campos).
   if (typeof body.lensAdvisorModel === "string" && (QUALIFIER_MODELS as readonly string[]).includes(body.lensAdvisorModel)) {
     patch.lensAdvisorModel = body.lensAdvisorModel;
+  }
+  // ocrModel: mesma allowlist (o serviço também valida; aqui ignora silenciosamente como os demais).
+  if (typeof body.ocrModel === "string" && (QUALIFIER_MODELS as readonly string[]).includes(body.ocrModel)) {
+    patch.ocrModel = body.ocrModel;
   }
   if (typeof body.openaiKey === "string") patch.openaiKey = body.openaiKey;
 

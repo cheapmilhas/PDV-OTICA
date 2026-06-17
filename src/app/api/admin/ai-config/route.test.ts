@@ -159,6 +159,24 @@ describe("PUT /api/admin/ai-config", () => {
     expect(callArg).not.toHaveProperty("lensAdvisorModel");
   });
 
+  it("encaminha ocrModel válido (allowlist) para updateAiConfig", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ ocrModel: "claude-sonnet-4-6" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).toHaveProperty("ocrModel", "claude-sonnet-4-6");
+  });
+
+  it("ignora ocrModel fora da allowlist (ex: gpt-4)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ ocrModel: "gpt-4" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty("ocrModel");
+  });
+
   it("encaminha openaiKey (string) para updateAiConfig", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
