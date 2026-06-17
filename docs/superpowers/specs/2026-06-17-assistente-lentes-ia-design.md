@@ -67,7 +67,9 @@ VENDEDOR (tela de OS)                 SUPER ADMIN (/admin/configuracoes/ia, com 
 
 Função pura, sem IA, sem custo de token, testável. Funciona com IA desligada.
 
-**Entrada:** esf/cil/eixo/add (OD + OE) + tamanho da armação (largura da lente, ponte, maior diâmetro efetivo).
+**Entrada:** esf/cil/eixo/add (OD + OE) — **obrigatório**; tamanho da armação (largura da lente, ponte, maior diâmetro efetivo) — **opcional**.
+
+**Origem do tamanho da armação (resolve C1 da revisão):** a **faixa de índice e o sanity-check dependem apenas do grau** — funcionam sem a armação. **Espessura/peso só são calculados quando a medida da armação for informada** (campo manual opcional na tela de OS; pode pré-preencher do produto-armação selecionado se ele tiver medidas, mas hoje `Product` não tem — então é entrada manual opcional). Sem a medida, o motor degrada para "só faixa de índice + alertas" (coerente com a filosofia de falha-fechada: não inventa espessura sem dado).
 
 **Saída:**
 - **Faixa de índice recomendada** (a tabela do lab virada regra explícita em constante configurável): `|grau| até ~2 → 1.50/1.56 · ~2-4 → 1.56/1.61 · ~4-6 → 1.61/1.67 · >6 → 1.67/1.74`.
@@ -85,8 +87,12 @@ Função pura, sem IA, sem custo de token, testável. Funciona com IA desligada.
 Documentos que o super admin sobe, divididos em **global** (todas as óticas) e **por ótica** (companyId). Na resposta, a IA recebe os trechos relevantes (global + da ótica logada) como contexto, em blocos `system` com `cache_control: {type: "ephemeral"}` do Anthropic (≈90% de desconto no input cacheado; a tabela de pricing e o código de medição já leem `cache_read_input_tokens`).
 
 - **Fase inicial: texto/markdown** (colado ou `.txt`) guardado como texto no Postgres — sem infra nova. PDF/planilha com extração (Vercel Blob + parser) fica para fase posterior.
-- **Teto de contexto explícito** por requisição (ex: ~50k tokens de corpus global + da ótica). Acima disso, só então introduzir retrieval (tsvector → depois pgvector). Gatilho de migração documentado; pgvector é fase futura hipotética, não Fase 1/2.
-- **Isolamento de tenancy:** a função que monta o contexto recebe `companyId` **obrigatório e tipado** (falha fechada se ausente). Teste unitário explícito: "corpus da ótica A nunca aparece no prompt da ótica B". Cada chunk marca origem (global vs ótica X) para auditoria e citação. Corpus por-ótica restrito a material de produto/preço/política — **sem PII de pacientes**.
+- **Teto de contexto explícito** por requisição (default conservador, ex: ~20–30k tokens de corpus global + da ótica somados; ajustável). Acima disso, só então introduzir retrieval (tsvector → depois pgvector). Gatilho de migração documentado; pgvector é fase futura hipotética, não Fase 1/2.
+- **Custo (resolve I2/I3 da revisão):** o controle de custo real vem de **Haiku como default + teto de contexto + rate-limit por usuário**. O `cache_control` ephemeral (TTL ~5 min) **ajuda em rajadas** (várias consultas seguidas), mas o vendedor consulta de forma esparsa, então **não conte com o cache como economia garantida**. Validar TTL/preço exatos via skill `claude-api` na fase de planejamento. Ao selecionar Sonnet/Opus com corpus grande, alertar o super admin do impacto de custo.
+- **`tokensEstimate` do documento (resolve I5):** estimado no upload (token counting da API Anthropic, ou heurística declarada ~chars/4 como fallback). Se a soma dos docs ativos (global + ótica) exceder o teto de contexto, **alertar o super admin e não ativar docs além do teto** (não trunca silenciosamente).
+- **Isolamento de tenancy:** a função que monta o contexto **no fluxo do vendedor** recebe `companyId` **obrigatório e tipado** (falha fechada se ausente). Teste unitário explícito: "corpus da ótica A nunca aparece no prompt da ótica B". Cada chunk marca origem (global vs ótica X) para auditoria e citação. Corpus por-ótica restrito a material de produto/preço/política — **sem PII de pacientes**.
+- **Exceção do playground (resolve I4):** o super admin **é autorizado a inspecionar qualquer corpus** no playground (escolhe a ótica-alvo num dropdown). O isolamento "A não vê B" vale para o **fluxo do vendedor**, não para o super admin testando — sem contradição.
+- **Visibilidade (resolve C2):** a base de conhecimento é **exclusivamente leitura+escrita do super admin**. O admin cliente **não vê o conteúdo nem a existência** dos documentos (nem os globais nem os da própria ótica) — conteúdo por-ótica pode ter preço de custo/política comercial sensível.
 
 ### Camada 3 — Orquestrador (`src/services/lens-advisor.service.ts`)
 
@@ -96,8 +102,9 @@ Fluxo de uma consulta:
 3. Chama Claude (modelo = `lensAdvisorModel`, via `getAnthropicKey()` — **não** `new Anthropic()`), passando o resultado do motor como dado + a base de conhecimento. A IA traduz em linguagem de venda; nunca contradiz o motor.
 4. `assertAiAllowed(companyId)` antes (flags/cota) + `logAiUsage({feature:"lens_advisor", ...})` depois + **rate-limit por usuário** (como o OCR).
 5. **Defesa anti-injeção:** nonce markers (copiado de `src/lib/ai/lead-qualifier.ts`).
-6. **Degradação graciosa:** IA OFF ou sem chave → retorna só o motor determinístico (não some, não dá erro).
+6. **Degradação graciosa (resolve M5):** IA OFF, sem chave, **OU qualquer falha da chamada Claude (timeout / erro / rate-limit do provedor)** → retorna só o motor determinístico. Nunca some, nunca dá erro, **nunca bloqueia a OS**.
 7. **Modelo no caminho do vendedor:** Haiku por padrão (rápido/barato); Sonnet/Opus opção via seletor. Considerar streaming se latência incomodar (ou manter Haiku).
+8. **Rate-limit (resolve M2):** herda exatamente o mecanismo do OCR (`/api/ocr/prescription`, `src/lib/rate-limit.ts`) — por usuário. Confirmar na implementação que o mecanismo é **durável** (não memória de processo, que não persiste entre invocações serverless da Vercel); se o do OCR for em memória, migrar para durável (Postgres/Upstash) ao integrar.
 
 ### Gancho de adoção — foto da receita → preenche OS
 
@@ -117,7 +124,9 @@ Painel "Assistente de Lentes" embutido na **tela de OS** (não chat separado). A
 Lista de documentos (título, escopo Global/ótica, tokens estimados, data, ativo). Adicionar = título + escopo + conteúdo (texto/markdown). Origem marcada para auditoria.
 
 ### B) Aba "Playground / Testar" — novo
-Conversar com a IA e validar o motor antes de liberar. Simula "só global" ou "global + ótica X". **Isolado de produção:** não passa por `assertAiAllowed`; grava uso em uma **empresa-sentinela do sistema** com `feature:"lens_advisor_playground"` → nunca toca cota/custo de cliente real nem polui os painéis das óticas. Mostra resposta + tokens/custo do teste. É também onde o dono valida a planilha de calibração do motor e ativa a feature quando confiante.
+Conversar com a IA e validar o motor antes de liberar. Escolhe a ótica-alvo num dropdown (ou "só global"). **Isolado de produção (resolve I1):** não passa por `assertAiAllowed`; grava uso com `companyId = null` (ver Modelo de dados) + `feature:"lens_advisor_playground"` → nunca toca cota/custo de cliente real nem polui os painéis das óticas (que filtram por companyId preenchido). Mostra resposta + tokens/custo do teste. É também onde o dono valida a planilha de calibração do motor e ativa a feature quando confiante.
+
+**Faseamento do playground (resolve M3):** na Fase 2 (antes de existir `lens-advisor.service`), o playground testa **só o motor + a montagem de contexto** (sem chamada Claude). A parte "conversar com a IA" entra junto da Fase 3.
 
 ### C) Liga/Desliga — reuso + adição
 Reusa `iaAvailable` + `iaEnabled`. **Adição:** botão "ligar/desligar para TODOS os clientes" (ação em massa), além do controle individual por ótica. A feature respeita as flags (IA OFF → lado determinístico ainda funciona).
@@ -148,16 +157,18 @@ updatedAt        DateTime @updatedAt
 ```
 lensAdvisorModel String @default("claude-haiku-4-5")
 ```
+> Validar o ID exato contra o que `ai-pricing`/`qualifierModel` já mapeiam (resolve M1) — usar a mesma allowlist/constante, nunca uma string nova não-mapeada (senão o uso não é medido).
 
-### Empresa-sentinela do Playground
-Uma `Company` de sistema ("Vis — Playground IA"), criada por **script cirúrgico aditivo** (não seed destrutivo), usada apenas como `companyId` do `logAiUsage` do playground. Painéis filtram por companyId → isolada.
+### `AiTokenUsage` — tornar `companyId` opcional (aditivo, resolve I1)
+Hoje `companyId` é NOT NULL com FK. Mudança aditiva: **`companyId` passa a ser opcional** (`String?`, FK opcional). Uso do **playground grava `companyId = null` + `feature:"lens_advisor_playground"`** — sem empresa-fantasma, sem tocar cota/cobrança/métricas/crons (que iteram `Company`). Os painéis C2/C3 já filtram por companyId preenchido por ótica, então linhas com `companyId = null` **não aparecem** em nenhum painel de cliente nem no agregado por ótica. Migração aditiva (afrouxar NOT NULL é seguro; nenhuma linha existente quebra). **Não criamos `Company` de sistema** (evita o risco de a empresa-fantasma vazar em listagens/cobrança/crons).
 
 ### Sem mudança (reuso)
-`AiTokenUsage` (aceita qualquer `feature`), `CompanySettings` (flags ia*/cota/markup), toda a camada C1/C2/C3/D. `LabPriceRange` já existe (não criar) — comparativo de preço depende de populá-la, fase posterior.
+`AiTokenUsage` continua aceitando qualquer `feature` (só ganha `companyId` opcional), `CompanySettings` (flags ia*/cota/markup), toda a camada C1/C2/C3/D. `LabPriceRange` já existe (não criar) — comparativo de preço depende de populá-la, fase posterior.
 
 ## Faseamento
 
 - **Fase 1 — Motor óptico + governança base (sem IA no caminho crítico).** `lens-optics.ts` (faixas+disclaimer+sanity-check+falha fechada+guarda-corpos), testes de referência/calibração, painel na OS mostrando o motor, `lensAdvisorModel` no schema + seletor. Entrega: vendedor vê faixa de índice + alertas, custo zero, funciona com IA OFF.
+  - **Fonte de calibração (resolve I7):** as faixas de índice/espessura devem ser ancoradas numa **fonte de verdade nomeada** — a tabela de um dos 4 laboratórios já cadastrados, ou referência óptica publicada — **não inventada no playground**. A planilha de calibração é **artefato de entrada da Fase 1** (gerada a partir dessa fonte e conferida pelo dono/óptico), não algo a descobrir depois.
 - **Fase 2 — Governança de IA.** `LensKnowledgeDoc` + aba Base de Conhecimento; aba Playground (isolada); "ligar/desligar para todos".
 - **Fase 3 — A IA por cima.** `lens-advisor.service.ts` (motor + base de conhecimento com cache + Claude via getAnthropicKey + rate-limit + anti-injeção + logAiUsage + degradação graciosa).
 - **Fase 4 — Foto da receita → preenche OS.** Migrar OCR para getAnthropicKey + logAiUsage + modelo configurável; conectar foto → campos da OS → motor.
@@ -171,6 +182,8 @@ Uma `Company` de sistema ("Vis — Playground IA"), criada por **script cirúrgi
 - Playground não usa cota nem custo de cliente real (empresa-sentinela + feature própria).
 - Novo serviço e OCR usam `getAnthropicKey()` (respeita rotação de chave do super admin), `assertAiAllowed`, `logAiUsage`, rate-limit por usuário, defesa anti-injeção (nonce).
 - Migrações aditivas (sem DROP). `ENCRYPTION_KEY` já em produção (Bloco D).
+- **LGPD da receita (resolve M4):** a imagem da receita não é persistida além do necessário ao OCR; `logAiUsage` grava **só contadores** (tokens/custo), nunca o conteúdo; a transcrição vive apenas nos campos da OS, sob o consentimento já existente do cliente. (Coerente com a preocupação LGPD já registrada para o inbox de WhatsApp.)
+- **Painel só em OS em edição/criação (resolve I6):** o Assistente aparece apenas em OS sendo criadas/editadas; OS já finalizadas (as 40 existentes) não são afetadas nem recalculadas retroativamente.
 
 ## Fora de escopo (v2+)
 
