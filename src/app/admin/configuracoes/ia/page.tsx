@@ -23,6 +23,7 @@ export default async function IaConfigPage() {
         creditTokenFactor: config.creditTokenFactor,
         qualifierModel: config.qualifierModel,
         lensAdvisorModel: config.lensAdvisorModel,
+        ocrModel: config.ocrModel,
         hasOpenaiKey: config.hasOpenaiKey,
       }}
       companies={companies}

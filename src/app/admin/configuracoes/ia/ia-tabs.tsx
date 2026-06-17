@@ -12,6 +12,7 @@ interface AiConfigView {
   creditTokenFactor: number;
   qualifierModel: string;
   lensAdvisorModel: string;
+  ocrModel: string;
   hasOpenaiKey: boolean;
 }
 
