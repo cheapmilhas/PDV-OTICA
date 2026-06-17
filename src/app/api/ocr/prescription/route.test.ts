@@ -52,7 +52,16 @@ beforeEach(() => {
   getCompanyIdMock.mockResolvedValue("co1");
   rateLimitResponseMock.mockReturnValue(null);
   getAnthropicKeyMock.mockResolvedValue("k");
-  getAiConfigMock.mockResolvedValue({ ocrModel: "claude-sonnet-4-6" } as never);
+  getAiConfigMock.mockResolvedValue({
+    hasKey: true,
+    ocrModel: "claude-sonnet-4-6",
+    qualifierModel: "claude-haiku-4-5",
+    lensAdvisorModel: "claude-haiku-4-5",
+    usdBrlRate: 5.5,
+    markupPercent: 0,
+    creditTokenFactor: 1000,
+    hasOpenaiKey: false,
+  });
 });
 
 describe("POST /api/ocr/prescription", () => {

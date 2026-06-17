@@ -117,6 +117,8 @@ export async function POST(request: NextRequest) {
     // não fazer a leitura extra em requisições rejeitadas (400/413).
     const companyId = await getCompanyId();
 
+    // getAnthropicKey ANTES de getAiConfig: se não há chave, devolve 503 sem pagar
+    // o upsert do getAiConfig (que criaria o singleton). Reordenar mascara o 503.
     const apiKey = await getAnthropicKey();
     if (!apiKey) {
       return NextResponse.json(
