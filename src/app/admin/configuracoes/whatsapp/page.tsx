@@ -5,6 +5,8 @@ import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
 import { CheckCircle2, MinusCircle, Loader2, MessageCircle } from "lucide-react";
+import { getWhatsappGlobalConfig } from "@/services/whatsapp-config.service";
+import { WhatsappLimitsClient } from "./limits-client";
 
 export const dynamic = "force-dynamic";
 
@@ -25,6 +27,8 @@ function fmtPhone(raw: string | null): string {
 export default async function AdminWhatsappPage() {
   await requireAdmin();
 
+  const limits = await getWhatsappGlobalConfig();
+
   const connections = await prisma.whatsappConnection.findMany({
     orderBy: { updatedAt: "desc" },
     select: {
@@ -42,9 +46,16 @@ export default async function AdminWhatsappPage() {
   return (
     <div className="p-6">
       <PageHeader
-        title="Conexões de WhatsApp"
+        title="WhatsApp"
         subtitle={`${connections.length} óticas com instância · ${connectedCount} conectadas`}
       />
+
+      {/* Travas anti-bloqueio (global). Override por ótica fica no detalhe da ótica. */}
+      <div className="mb-8">
+        <WhatsappLimitsClient config={limits} />
+      </div>
+
+      <h2 className="text-lg font-semibold mb-3">Conexões</h2>
 
       {connections.length === 0 ? (
         <Card>

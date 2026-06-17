@@ -1927,6 +1927,12 @@ model CompanySettings {
   markupPercentOverride Decimal? @db.Decimal(6, 2)
   // Aceite das boas-práticas anti-bloqueio do WhatsApp (Fase 1). null = não aceito.
   waPracticesAcceptedAt DateTime?
+  // Overrides das travas anti-bloqueio por ótica (Fase 2). null = usa o global
+  // (WhatsappGlobalConfig); se o global também faltar, cai no default hardcoded.
+  waOpenHourOverride       Int?
+  waCloseHourOverride      Int?
+  waDailyCapOverride       Int?
+  waSkipSaturdayOverride   Boolean?
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
@@ -4395,6 +4401,20 @@ model AiGlobalConfig {
   creditTokenFactor Int    @default(1000)
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
+}
+
+/// Config global (singleton id="global") das travas anti-bloqueio do WhatsApp
+/// (Fase 2). Defaults = valores hardcoded da Fase 1 → comportamento idêntico até
+/// alguém editar. Override por ótica vive em CompanySettings.wa*Override.
+model WhatsappGlobalConfig {
+  id           String   @id @default("global")
+  openHour     Int      @default(8)
+  closeHour    Int      @default(18)
+  dailyCap     Int      @default(50)
+  skipSaturday Boolean  @default(false)
+  staleMin     Int      @default(10)
+  updatedAt    DateTime @updatedAt
+  createdAt    DateTime @default(now())
 }
 
 enum WhatsappMessageType {

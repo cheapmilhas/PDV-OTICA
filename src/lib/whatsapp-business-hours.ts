@@ -1,7 +1,11 @@
 /**
  * Horário comercial p/ envio de WhatsApp (anti-bloqueio): 8h–18h em
  * America/Sao_Paulo, pula domingo e feriados nacionais de DATA FIXA.
- * Feriados móveis (Carnaval etc.) ficam para a Fase 2.
+ * Feriados móveis (Carnaval etc.) ficam para a Fase 3.
+ *
+ * Fase 2: a janela (abertura/fechamento) e o pular-sábado podem ser
+ * configurados por ótica (ver getWhatsappLimits). Sem args, usa os defaults
+ * abaixo — comportamento idêntico ao da Fase 1.
  */
 
 const OPEN_HOUR = 8;
@@ -30,11 +34,26 @@ function partsInSP(d: Date): { weekday: number; hour: number; mmdd: string } {
   };
 }
 
-export function isWithinBusinessHours(now: Date = new Date()): boolean {
+/** Limites de janela usados por isWithinBusinessHours (subset de WhatsappLimits). */
+export interface BusinessHoursLimits {
+  openHour?: number;
+  closeHour?: number;
+  skipSaturday?: boolean;
+}
+
+export function isWithinBusinessHours(
+  now: Date = new Date(),
+  limits?: BusinessHoursLimits,
+): boolean {
+  const openHour = limits?.openHour ?? OPEN_HOUR;
+  const closeHour = limits?.closeHour ?? CLOSE_HOUR;
+  const skipSaturday = limits?.skipSaturday ?? false;
+
   const { weekday, hour, mmdd } = partsInSP(now);
-  if (weekday === 0) return false;          // domingo
-  if (FIXED_HOLIDAYS.has(mmdd)) return false;
-  return hour >= OPEN_HOUR && hour < CLOSE_HOUR;
+  if (weekday === 0) return false;                 // domingo (sempre)
+  if (skipSaturday && weekday === 6) return false; // sábado (opcional)
+  if (FIXED_HOLIDAYS.has(mmdd)) return false;      // feriado fixo (hardcoded)
+  return hour >= openHour && hour < closeHour;
 }
 
 /** Início e fim do dia civil em America/Sao_Paulo, em UTC (p/ contar o teto). */
