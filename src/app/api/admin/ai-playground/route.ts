@@ -2,6 +2,9 @@ import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
 import { analyzeLens } from "@/lib/lens-optics";
 import { buildKnowledgeContext, buildGlobalContext } from "@/services/lens-knowledge.service";
+import { explainLensRecommendation } from "@/lib/ai/lens-advisor";
+import { getAiConfig } from "@/services/ai-config.service";
+import { logAiUsage } from "@/services/ai-usage.service";
 
 export async function POST(request: Request) {
   const admin = await getAdminSession();
@@ -28,7 +31,26 @@ export async function POST(request: Request) {
   }, {});
   const context = { docCount: ctx.docs.length, tokens: ctx.tokens, scopes };
 
-  // TODO Fase 3: chamar Claude com o contexto + logAiUsage(companyId: null, feature: "lens_advisor_playground").
-  // F2: NÃO chama Claude e NÃO loga uso (sem custo real) — playground isolado da cota das óticas.
-  return NextResponse.json({ data: { analysis, context } });
+  // Fase 3: chama Claude para explicar o motor. Loga com companyId NULL (playground
+  // isolado — nunca toca a cota da ótica-alvo). Degrada: erro/sem chave → advice null.
+  let advice: string | null = null;
+  try {
+    const cfg = await getAiConfig();
+    const { text, usage } = await explainLensRecommendation({ motor: analysis, docs: ctx.docs }, cfg.lensAdvisorModel);
+    advice = text;
+    await logAiUsage({
+      companyId: null,
+      feature: "lens_advisor_playground",
+      provider: "anthropic",
+      model: cfg.lensAdvisorModel,
+      inputTokens: usage.inputTokens,
+      outputTokens: usage.outputTokens,
+      cacheTokens: usage.cacheTokens,
+    });
+  } catch {
+    // sem chave / erro de API → só motor+contexto; não loga (sem custo)
+    advice = null;
+  }
+
+  return NextResponse.json({ data: { analysis, context, advice } });
 }

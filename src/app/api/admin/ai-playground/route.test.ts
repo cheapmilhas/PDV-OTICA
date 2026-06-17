@@ -12,16 +12,31 @@ vi.mock("@/services/lens-knowledge.service", () => ({
 vi.mock("@/services/ai-usage.service", () => ({
   logAiUsage: vi.fn(),
 }));
+vi.mock("@/lib/ai/lens-advisor", () => ({
+  explainLensRecommendation: vi.fn(),
+}));
+vi.mock("@/services/ai-config.service", () => ({
+  getAiConfig: vi.fn(),
+}));
 
 import { POST } from "./route";
 import { getAdminSession } from "@/lib/admin-session";
 import { buildKnowledgeContext, buildGlobalContext } from "@/services/lens-knowledge.service";
 import { logAiUsage } from "@/services/ai-usage.service";
+import { explainLensRecommendation } from "@/lib/ai/lens-advisor";
+import { getAiConfig } from "@/services/ai-config.service";
 
 const mockGetAdminSession = vi.mocked(getAdminSession);
 const mockBuildKnowledgeContext = vi.mocked(buildKnowledgeContext);
 const mockBuildGlobalContext = vi.mocked(buildGlobalContext);
 const mockLogAiUsage = vi.mocked(logAiUsage);
+const mockExplainLensRecommendation = vi.mocked(explainLensRecommendation);
+const mockGetAiConfig = vi.mocked(getAiConfig);
+
+// advice neutro: NÃO pode conter "content"/"corpo cru" (anti-vazamento continua valendo).
+const MOCK_ADVICE = "Essas lentes ficam mais finas e leves.";
+const MOCK_USAGE = { inputTokens: 100, outputTokens: 50, cacheTokens: 10 };
+const MOCK_CFG = { lensAdvisorModel: "claude-haiku-4-5" } as Awaited<ReturnType<typeof getAiConfig>>;
 
 const adminPayload = { id: "admin-1", email: "a@a.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true };
 const nonSuperAdmin = { id: "admin-2", email: "b@b.com", name: "Admin Comum", role: "ADMIN", isAdmin: true };
@@ -53,6 +68,10 @@ describe("POST /api/admin/ai-playground", () => {
     mockBuildKnowledgeContext.mockReset();
     mockBuildGlobalContext.mockReset();
     mockLogAiUsage.mockReset();
+    mockExplainLensRecommendation.mockReset();
+    mockGetAiConfig.mockReset();
+    mockGetAiConfig.mockResolvedValue(MOCK_CFG);
+    mockExplainLensRecommendation.mockResolvedValue({ text: MOCK_ADVICE, usage: MOCK_USAGE });
   });
 
   it("401 quando getAdminSession retorna null", async () => {
@@ -62,6 +81,7 @@ describe("POST /api/admin/ai-playground", () => {
     expect(mockBuildKnowledgeContext).not.toHaveBeenCalled();
     expect(mockBuildGlobalContext).not.toHaveBeenCalled();
     expect(mockLogAiUsage).not.toHaveBeenCalled();
+    expect(mockExplainLensRecommendation).not.toHaveBeenCalled();
   });
 
   it("403 quando admin não é SUPER_ADMIN (não roda contexto)", async () => {
@@ -70,6 +90,8 @@ describe("POST /api/admin/ai-playground", () => {
     expect(res.status).toBe(403);
     expect(mockBuildKnowledgeContext).not.toHaveBeenCalled();
     expect(mockBuildGlobalContext).not.toHaveBeenCalled();
+    expect(mockExplainLensRecommendation).not.toHaveBeenCalled();
+    expect(mockLogAiUsage).not.toHaveBeenCalled();
   });
 
   it("com companyId: roda motor real + resume buildKnowledgeContext('A')", async () => {
@@ -100,8 +122,29 @@ describe("POST /api/admin/ai-playground", () => {
     expect(json.data.context.tokens).toBe(42);
     expect(json.data.context.scopes).toEqual({ global: 1, company: 1 });
 
-    // ISOLAMENTO: F2 NÃO loga uso (sem custo real)
-    expect(mockLogAiUsage).not.toHaveBeenCalled();
+    // F3: chama Claude com o motor + os docs do contexto da ótica A, no modelo do cfg
+    expect(mockExplainLensRecommendation).toHaveBeenCalledTimes(1);
+    expect(mockExplainLensRecommendation).toHaveBeenCalledWith(
+      { motor: json.data.analysis, docs: companyCtx.docs },
+      MOCK_CFG.lensAdvisorModel
+    );
+    expect(json.data.advice).toBe(MOCK_ADVICE);
+
+    // ISOLAMENTO F3: loga uso UMA vez, SEMPRE com companyId null + feature própria —
+    // NUNCA com a companyId-alvo "A" (não toca a cota da ótica).
+    expect(mockLogAiUsage).toHaveBeenCalledTimes(1);
+    const logArg = mockLogAiUsage.mock.calls[0][0];
+    expect(logArg.companyId).toBe(null);
+    expect(logArg).not.toMatchObject({ companyId: "A" });
+    expect(logArg).toMatchObject({
+      companyId: null,
+      feature: "lens_advisor_playground",
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      inputTokens: MOCK_USAGE.inputTokens,
+      outputTokens: MOCK_USAGE.outputTokens,
+      cacheTokens: MOCK_USAGE.cacheTokens,
+    });
 
     // ANTI-VAZAMENTO: resposta não pode conter o conteúdo cru dos docs
     const raw = JSON.stringify(json);
@@ -126,10 +169,48 @@ describe("POST /api/admin/ai-playground", () => {
     expect(json.data.context.tokens).toBe(11);
     expect(json.data.context.scopes).toEqual({ global: 1 });
 
-    // ISOLAMENTO
-    expect(mockLogAiUsage).not.toHaveBeenCalled();
+    // F3: advice presente; loga UMA vez com companyId null + feature própria
+    expect(mockExplainLensRecommendation).toHaveBeenCalledWith(
+      { motor: json.data.analysis, docs: globalCtx.docs },
+      MOCK_CFG.lensAdvisorModel
+    );
+    expect(json.data.advice).toBe(MOCK_ADVICE);
+    expect(mockLogAiUsage).toHaveBeenCalledTimes(1);
+    expect(mockLogAiUsage.mock.calls[0][0]).toMatchObject({
+      companyId: null,
+      feature: "lens_advisor_playground",
+    });
 
     // ANTI-VAZAMENTO
+    const raw = JSON.stringify(json);
+    expect(raw).not.toContain("content");
+    expect(raw).not.toContain("corpo cru");
+  });
+
+  it("degradação: explainLensRecommendation rejeita → advice null, não loga, ainda 200", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockBuildKnowledgeContext.mockResolvedValue(companyCtx);
+    mockExplainLensRecommendation.mockRejectedValue(new Error("Anthropic API key não configurada"));
+
+    const res = await POST(
+      makePostRequest({
+        od: { sph: -2, cyl: -1, axis: 90 },
+        oe: { sph: -2, cyl: -1, axis: 90 },
+        companyId: "A",
+      })
+    );
+
+    // motor + contexto SEMPRE voltam, mesmo sem IA
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.analysis.valid).toBe(true);
+    expect(json.data.context.docCount).toBe(2);
+    expect(json.data.advice).toBe(null);
+
+    // sem chave / erro → NÃO loga (sem custo)
+    expect(mockLogAiUsage).not.toHaveBeenCalled();
+
+    // ANTI-VAZAMENTO continua valendo
     const raw = JSON.stringify(json);
     expect(raw).not.toContain("content");
     expect(raw).not.toContain("corpo cru");
