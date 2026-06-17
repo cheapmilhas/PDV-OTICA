@@ -149,6 +149,28 @@ describe("POST /api/company/lens-advisor", () => {
     expect(adviseForCompanyMock.mock.calls[0][0].frame).toBeUndefined();
   });
 
+  it("frame com medida não-finita (Infinity) é REJEITADO → adviseForCompany sem frame", async () => {
+    await POST(
+      makeRequest({
+        od: { sph: -2, cyl: 0 },
+        oe: { sph: -2, cyl: 0 },
+        frame: { lensWidthMm: Infinity, bridgeMm: 18 },
+      }),
+    );
+    expect(adviseForCompanyMock.mock.calls[0][0].frame).toBeUndefined();
+  });
+
+  it("corpo não-JSON → tratado por handleApiError (>= 400, não crash sem catch)", async () => {
+    // ensure auth/rate-limit/guard mocks resolve so the JSON parse is what fails.
+    // NOTE: request.json() em corpo não-JSON lança SyntaxError (instanceof Error),
+    // que handleApiError mapeia para INTERNAL_ERROR/500 — então só asseguramos
+    // >= 400 (erro tratado, nunca uma exceção sem try/catch).
+    const res = await POST(new Request("http://localhost/api/company/lens-advisor", {
+      method: "POST", body: "not-json", headers: { "Content-Type": "text/plain" },
+    }));
+    expect(res.status).toBeGreaterThanOrEqual(400);
+  });
+
   it("CRITICAL: response body is ONLY { data: { analysis, advice, aiUnavailable } } — no cost/markup/tokens", async () => {
     adviseForCompanyMock.mockResolvedValue({
       analysis: analysisFixture,
