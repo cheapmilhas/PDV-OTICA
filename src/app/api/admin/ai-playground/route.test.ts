@@ -187,6 +187,42 @@ describe("POST /api/admin/ai-playground", () => {
     expect(raw).not.toContain("corpo cru");
   });
 
+  it("text:null de explainLensRecommendation → advice null, mas LOGA o uso (tokens consumidos)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockBuildGlobalContext.mockResolvedValue(globalCtx);
+    mockExplainLensRecommendation.mockResolvedValue({
+      text: null,
+      usage: { inputTokens: 9, outputTokens: 0, cacheTokens: 0 },
+    });
+
+    const res = await POST(makePostRequest({ od: { sph: -1, cyl: 0 }, oe: { sph: -1, cyl: 0 } }));
+    expect(res.status).toBe(200);
+    const json = await res.json();
+    expect(json.data.advice).toBe(null);
+
+    // chamada faturável real (resolveu com text null) → LOGA o uso mesmo assim
+    expect(mockLogAiUsage).toHaveBeenCalledTimes(1);
+    expect(mockLogAiUsage.mock.calls[0][0]).toMatchObject({
+      companyId: null,
+      feature: "lens_advisor_playground",
+    });
+  });
+
+  it("corpo não-JSON → 400, sem tocar IA nem log", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    const req = new Request("http://localhost/api/admin/ai-playground", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: "isto não é json {",
+    });
+    const res = await POST(req);
+    expect(res.status).toBe(400);
+    expect(mockBuildKnowledgeContext).not.toHaveBeenCalled();
+    expect(mockBuildGlobalContext).not.toHaveBeenCalled();
+    expect(mockExplainLensRecommendation).not.toHaveBeenCalled();
+    expect(mockLogAiUsage).not.toHaveBeenCalled();
+  });
+
   it("degradação: explainLensRecommendation rejeita → advice null, não loga, ainda 200", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockBuildKnowledgeContext.mockResolvedValue(companyCtx);

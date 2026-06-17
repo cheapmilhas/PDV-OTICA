@@ -1,27 +1,38 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
-import { analyzeLens } from "@/lib/lens-optics";
+import { analyzeLens, type EyePower, type FrameSize } from "@/lib/lens-optics";
 import { buildKnowledgeContext, buildGlobalContext } from "@/services/lens-knowledge.service";
 import { explainLensRecommendation } from "@/lib/ai/lens-advisor";
 import { getAiConfig } from "@/services/ai-config.service";
 import { logAiUsage } from "@/services/ai-usage.service";
+import { logger } from "@/lib/logger";
 
 export async function POST(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
-  const body = await request.json();
-  const od = body.od ?? { sph: 0, cyl: 0 };
-  const oe = body.oe ?? { sph: 0, cyl: 0 };
+  let body: unknown;
+  try {
+    body = await request.json();
+  } catch {
+    return NextResponse.json({ error: "Corpo inválido (JSON esperado)" }, { status: 400 });
+  }
+  const b = body != null && typeof body === "object" ? (body as Record<string, unknown>) : {};
+
+  const od = b.od ?? { sph: 0, cyl: 0 };
+  const oe = b.oe ?? { sph: 0, cyl: 0 };
   const frame =
-    body.frame && typeof body.frame.lensWidthMm === "number" && typeof body.frame.bridgeMm === "number"
-      ? body.frame
+    b.frame &&
+    typeof b.frame === "object" &&
+    typeof (b.frame as Record<string, unknown>).lensWidthMm === "number" &&
+    typeof (b.frame as Record<string, unknown>).bridgeMm === "number"
+      ? (b.frame as FrameSize)
       : undefined;
 
-  const analysis = analyzeLens({ od, oe }, frame);
+  const analysis = analyzeLens({ od: od as EyePower, oe: oe as EyePower }, frame);
 
-  const companyId = typeof body.companyId === "string" && body.companyId ? body.companyId : null;
+  const companyId = typeof b.companyId === "string" && b.companyId ? b.companyId : null;
   const ctx = companyId ? await buildKnowledgeContext(companyId) : await buildGlobalContext();
 
   // Resumo do contexto — NUNCA devolve o conteúdo cru dos documentos.
@@ -33,6 +44,9 @@ export async function POST(request: Request) {
 
   // Fase 3: chama Claude para explicar o motor. Loga com companyId NULL (playground
   // isolado — nunca toca a cota da ótica-alvo). Degrada: erro/sem chave → advice null.
+  // Variante "playground" de adviseForCompany (lens-advisor.service.ts): mesma chamada de
+  // IA, mas companyId=null + feature própria + usa buildGlobalContext quando não há ótica.
+  // Mantida separada de propósito — não fundir no service (que sempre cobra a ótica).
   let advice: string | null = null;
   try {
     const cfg = await getAiConfig();
@@ -47,8 +61,14 @@ export async function POST(request: Request) {
       outputTokens: usage.outputTokens,
       cacheTokens: usage.cacheTokens,
     });
-  } catch {
-    // sem chave / erro de API → só motor+contexto; não loga (sem custo)
+  } catch (error) {
+    // Sem chave / erro de API → degrada para só motor+contexto, sem custo logado.
+    // Loga o motivo para problemas de config de IA ficarem visíveis no servidor.
+    logger
+      .child({ route: "ai-playground" })
+      .warn("Claude indisponível no playground — degradando para só o motor", {
+        error: error instanceof Error ? error.message : String(error),
+      });
     advice = null;
   }
 
