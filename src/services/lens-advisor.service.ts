@@ -53,9 +53,10 @@ export async function adviseForCompany(input: AdviseInput): Promise<AdviseResult
   } catch (error) {
     // Degradação graciosa: o motor sempre volta; falha na IA (sem key / erro de
     // API / erro de config) → só o motor, sem custo registrado.
+    const message = error instanceof Error ? error.message : String(error);
     logger
       .child({ service: "lens-advisor" })
-      .warn("IA indisponível — caindo para só o motor", { error, companyId: input.companyId });
+      .error("IA indisponível — caindo para só o motor", { error: message, companyId: input.companyId });
     return { analysis, advice: null, aiUnavailable: true };
   }
 }
