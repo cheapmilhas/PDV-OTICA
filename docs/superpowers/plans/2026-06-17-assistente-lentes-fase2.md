@@ -20,7 +20,7 @@
 - **`AiTokenUsage`** hoje: `companyId String` (NOT NULL) + `company Company @relation(... onDelete: Cascade)` + índices `[companyId,createdAt]`/`[companyId,feature]`. Esta fase torna `companyId` **opcional** (`String?`, relação opcional) — migração aditiva (afrouxar NOT NULL é seguro; nenhuma linha existente quebra). **Confirmado seguro:** `getMonthlyUsage`/`getDailyUsage` filtram `where: { companyId }` com valor específico → linhas com `companyId = null` (playground) NUNCA aparecem nos painéis de nenhuma ótica.
 - **`logAiUsage`** (`src/services/ai-usage.service.ts`): `LogAiUsageInput.companyId: string` hoje → passa a `string | null`; o `prisma.aiTokenUsage.create` grava `companyId: input.companyId` (aceita null após o schema mudar).
 - **Tela admin de IA é UMA página só hoje** (`src/app/admin/configuracoes/ia/page.tsx` server `force-dynamic` + `requireAdminRole`/`getAiConfig` → `<IaClient/>`; `ia-client.tsx` é o form client com o select de modelo). Esta fase introduz **sub-abas** — o conteúdo atual vira a aba "Configuração".
-- **Rotas admin** usam `getAdminSession()` (retorna o admin ou null → 401). Padrão: `NextRequest`/`Request` + try/catch implícito + `NextResponse.json`. Ver `src/app/api/admin/ai-config/route.ts`.
+- **Rotas admin** usam `getAdminSession()` (retorna o admin ou null → 401). Padrão: `NextRequest`/`Request` + try/catch implícito + `NextResponse.json`. Ver `src/app/api/admin/ai-config/route.ts`. **A base de conhecimento é EXCLUSIVAMENTE super admin (spec).** A `page.tsx` já usa `requireAdminRole(["SUPER_ADMIN"])`. Para as rotas novas: usar o mesmo padrão das rotas admin existentes — se o codebase distingue role do admin, exigir SUPER_ADMIN; se `getAdminSession` já é só super admin neste projeto (confirmar lendo `admin-session.ts` / como `ai-config/route.ts` faz), `getAdminSession()` basta. Em caso de dúvida, espelhar EXATAMENTE a checagem que `ai-config/route.ts` usa (essa rota também é super-admin-only) — consistência > invenção.
 - **`AiGlobalConfig`** singleton id="global". `CompanySettings` tem `iaAvailable`/`iaEnabled` (o "ligar p/ todas" mexe em `iaAvailable` de todas as óticas).
 - **Estimativa de tokens:** usar heurística simples declarada (`Math.ceil(text.length / 4)`) na Fase 2; não depender da API de token-counting (evita custo/rede no upload). Documentar como aproximação.
 - **Empresa-listagem segura:** o "ligar p/ todas" faz `updateMany` em `CompanySettings` — NÃO cria Company nova, então não há risco de empresa-fantasma (decisão da spec: playground usa `companyId null`, não Company de sistema).
@@ -79,7 +79,8 @@ model LensKnowledgeDoc {
 }
 ```
 Em `model AiTokenUsage`: trocar `companyId String` por `companyId String?` e a relação `company Company @relation(...)` por `company Company? @relation(...)` (a FK passa a aceitar null). Manter os índices (Postgres indexa null normalmente).
-> NOTA: NÃO adicionar back-relation obrigatória em Company (a relação opcional não exige). Se o Prisma reclamar de relação ambígua/faltando, ajustar o lado de Company para opcional também — confirmar com `generate`.
+> NOTA (verificado): `Company` JÁ tem a back-relation `aiTokenUsages AiTokenUsage[]` (~linha 216) — ela PERMANECE INALTERADA (uma lista `[]` é válida com FK opcional ou obrigatória). Só o lado filho vira `Company?`. `generate` deve passar de primeira; NÃO há ambiguidade e nada muda em `Company`.
+> CONFIRMADO: nenhum consumidor faz `groupBy(companyId)` cego — `aiTokenUsage` é usado só em `ai-usage.service.ts` (`getMonthlyUsage`/`getDailyUsage` filtram `where: { companyId }` específico; `logAiUsage`). Logo, linhas com `companyId = null` (playground) não aparecem em painel algum sem guard extra.
 
 - [ ] **Step 2: generate**
 
@@ -107,7 +108,8 @@ CREATE INDEX "LensKnowledgeDoc_companyId_active_idx" ON "LensKnowledgeDoc"("comp
 -- AlterTable: AiTokenUsage.companyId passa a aceitar NULL (playground)
 ALTER TABLE "AiTokenUsage" ALTER COLUMN "companyId" DROP NOT NULL;
 ```
-> A FK `AiTokenUsage_companyId_fkey` existente já permite a coluna nula (uma FK aceita NULL por padrão). NÃO precisa dropar/recriar a FK — apenas `DROP NOT NULL`. Confirmar que o nome da constraint não precisa mudar (não precisa).
+> A FK `AiTokenUsage_companyId_fkey` existente já permite a coluna nula (uma FK aceita NULL por padrão). NÃO precisa dropar/recriar a FK — apenas `DROP NOT NULL`. É exatamente o que o Prisma geraria com `migrate diff` (não dropa/recria a FK). Confirmar que o nome da constraint não precisa mudar (não precisa).
+> ⚠️ Como é SQL à mão (sem shadow db), há risco de drift schema↔migration. No deploy: rodar `prisma migrate status`; idealmente, num ambiente com banco, `migrate diff` schema-vs-migrations para garantir 0 drift (lição recorrente do projeto).
 
 - [ ] **Step 4: Verificar additivo-seguro**
 
@@ -159,7 +161,8 @@ Criar `lens-knowledge.service.test.ts` (mockar `@/lib/prisma`). Casos:
 - `createDoc({title, content, companyId: null})` grava `tokensEstimate` calculado + active true.
 - `listDocs()` retorna todos (admin) ordenados.
 - `buildKnowledgeContext(companyId)`: retorna SÓ docs globais (companyId null, active) + docs daquele companyId (active) — **e NUNCA docs de outra ótica**. Teste explícito: doc da ótica "A" + doc global → `buildKnowledgeContext("B")` traz só o global, não o de A.
-- `buildKnowledgeContext` com companyId vazio/undefined → lança ou retorna só global de forma segura (falha fechada — escolher e testar: recomendado LANÇAR se companyId não for string não-vazia, pois no fluxo do vendedor é sempre obrigatório).
+- `buildKnowledgeContext` com companyId vazio/undefined → LANÇA (falha fechada; no fluxo do vendedor companyId é sempre obrigatório). Testar que lança.
+- `buildGlobalContext()` (helper separado p/ o playground "só global"): retorna só docs globais ativos (companyId null). Teste: não traz nenhum doc de ótica.
 
 - [ ] **Step 2: Run → FAIL.**
 
@@ -224,6 +227,17 @@ export async function buildKnowledgeContext(companyId: string): Promise<{ docs: 
   const tokens = docs.reduce((s, d) => s + estimateTokens(d.content), 0);
   return { docs, tokens };
 }
+
+/** Só os docs GLOBAIS ativos — usado pelo playground quando testa "só global". */
+export async function buildGlobalContext(): Promise<{ docs: { title: string; content: string; scope: "global" }[]; tokens: number }> {
+  const rows = await prisma.lensKnowledgeDoc.findMany({
+    where: { active: true, companyId: null },
+    orderBy: { createdAt: "asc" },
+  });
+  const docs = rows.map((r) => ({ title: r.title, content: r.content, scope: "global" as const }));
+  const tokens = docs.reduce((s, d) => s + estimateTokens(d.content), 0);
+  return { docs, tokens };
+}
 ```
 
 - [ ] **Step 4: Run → PASS (inclui o anti-vazamento).**
@@ -285,14 +299,11 @@ git commit --no-verify -m "feat(lens-f2): lens-knowledge.service (CRUD + context
   - 401 sem sessão.
   - POST {od, oe, frame?, companyId?} → retorna `{ analysis: <resultado de analyzeLens>, context: { docCount, tokens, scope } }`.
   - companyId fornecido → buildKnowledgeContext(companyId); sem companyId → só global (buildGlobalContext OU buildKnowledgeContext com um modo "global"; ver nota).
-  - **isolamento de cota/custo:** se a F2 registrar algo via logAiUsage, é com `companyId: null` + `feature:"lens_advisor_playground"` — assertar que NÃO passa o companyId-alvo no log. (Na F2 sem chamada Claude, pode-se NÃO logar nada — então o teste assegura que logAiUsage NÃO é chamado com um companyId de ótica real. Escolher: F2 não loga uso, pois não há custo real ainda; documentar.)
+  - **isolamento de cota/custo (DECISÃO FIXA):** a F2 **NÃO chama Claude e NÃO chama logAiUsage** (não há custo real ainda — a capacidade de logar com `companyId null` já é testada na Task 2). O teste asserta `expect(logAiUsage).not.toHaveBeenCalled()`. A Fase 3 adicionará a chamada Claude + `logAiUsage(companyId: null, feature: "lens_advisor_playground")`.
 - [ ] **Step 2: Run → FAIL.**
-- [ ] **Step 3: Implementar**: getAdminSession→401; ler body (od/oe no formato do motor — números, ou strings parseadas igual ao painel); `const analysis = analyzeLens({od, oe}, frame)`; montar contexto (se companyId → buildKnowledgeContext(companyId); senão listar só globais). Retornar análise + resumo do contexto (contagem/tokens/escopos), SEM expor conteúdo sensível além do necessário. **Na F2 não chama Claude e não loga custo** (não há gasto real) — deixar um TODO claro de que a Fase 3 adiciona a chamada + logAiUsage(companyId:null).
-  > Para "só global" sem companyId: adicionar um helper `buildGlobalContext()` no service (findMany where companyId null + active) OU permitir buildKnowledgeContext aceitar um sentinela — recomendado: criar `buildGlobalContext()` separado (mantém buildKnowledgeContext com companyId obrigatório/falha-fechada intacto p/ o fluxo do vendedor).
+- [ ] **Step 3: Implementar**: getAdminSession→401; ler body (od/oe no formato do motor — números, ou strings parseadas igual ao painel da OS); `const analysis = analyzeLens({od, oe}, frame)`; montar contexto: se `companyId` veio → `buildKnowledgeContext(companyId)`; senão → `buildGlobalContext()` (já existe na Task 3). Retornar `{ analysis, context: { docCount, tokens, scopes } }` — NÃO devolver o conteúdo cru dos docs (resumo só). **Não chama Claude, não loga.** Deixar `// TODO Fase 3: chamar Claude com o contexto + logAiUsage(companyId:null)`.
 - [ ] **Step 4: Run → PASS.**
 - [ ] **Step 5: Commit** `feat(lens-f2): rota admin ai-playground (motor + contexto, isolado, sem IA)`.
-
-> Se o Step 3 exigir `buildGlobalContext()`, adicioná-lo ao service na Task 3 retroativamente OU nesta task com seu próprio mini-teste — preferir adicionar aqui com 1 teste para manter a Task 3 já revisada intacta.
 
 ---
 
@@ -308,9 +319,13 @@ Criar `src/app/admin/configuracoes/ia/ia-tabs.tsx` (client): 3 abas (Configuraç
 
 Criar `knowledge-client.tsx` (client): lista docs (título, escopo Global/ótica, tokens, ativo) via GET; form de novo doc (título + escopo: select Global ou uma ótica da lista + textarea conteúdo) via POST; toggle ativo/inativo via PATCH; excluir via DELETE. Recebe a lista de óticas (id/nome) como prop p/ o select de escopo. Estados de loading/erro/sucesso amigáveis.
 
+- [ ] **Step 2b: Stub do Playground (p/ o typecheck da T8 passar)**
+
+Criar `src/app/admin/configuracoes/ia/playground-client.tsx` como STUB mínimo agora (a Task 9 o preenche): um client component `export function PlaygroundClient({ companies }: { companies: { id: string; name: string }[] })` que renderiza "Playground (em breve)". Isso evita tsc vermelho na T8.
+
 - [ ] **Step 3: page.tsx**
 
-Modificar o server `page.tsx`: além de `getAiConfig()`, buscar a lista de óticas (`prisma.company.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })`) e renderizar `<IaTabs>` com: aba Config = `<IaClient config={...}/>`; aba Base = `<KnowledgeClient companies={...}/>`; aba Playground = `<PlaygroundClient companies={...}/>` (criada na Task 9 — pode entrar como placeholder aqui e ser preenchida na T9, ou fazer T9 antes; manter ordem T8→T9 com placeholder simples).
+Modificar o server `page.tsx`: além de `getAiConfig()`, buscar a lista de óticas (`prisma.company.findMany({ select: { id: true, name: true }, orderBy: { name: "asc" } })`) e renderizar `<IaTabs>` com: aba Config = `<IaClient config={...}/>`; aba Base = `<KnowledgeClient companies={...}/>`; aba Playground = `<PlaygroundClient companies={...}/>` (stub criado no Step 2b, preenchido na Task 9).
 
 - [ ] **Step 4: Typecheck** `node node_modules/typescript/bin/tsc --noEmit` → 0 erros.
 - [ ] **Step 5: Commit** `feat(lens-f2): sub-abas de IA + tela Base de Conhecimento`.
