@@ -4349,7 +4349,7 @@ model WhatsappMessageLog {
 
 model AiTokenUsage {
   id           String   @id @default(cuid())
-  companyId    String
+  companyId    String?
   feature      String   // "ocr_prescription" | "lead_qualification" | "audio_transcription"
   provider     String   // "anthropic" | "openai"
   model        String
@@ -4360,10 +4360,26 @@ model AiTokenUsage {
   costUsd      Decimal  @default(0) @db.Decimal(12, 6)
   createdAt    DateTime @default(now())
 
-  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([companyId, createdAt])
   @@index([companyId, feature])
+}
+
+/// Base de conhecimento do Assistente de Lentes (Fase 2). Só super admin edita.
+/// companyId null = GLOBAL (vale p/ todas as óticas); preenchido = só daquela ótica.
+model LensKnowledgeDoc {
+  id               String   @id @default(cuid())
+  companyId        String?
+  title            String
+  content          String   @db.Text
+  tokensEstimate   Int      @default(0)
+  active           Boolean  @default(true)
+  createdByAdminId String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([companyId, active])
 }
 
 /// Config global de IA do SaaS (singleton: 1 linha, id fixo "global").
@@ -4373,6 +4389,7 @@ model AiGlobalConfig {
   anthropicKeyEnc String?
   openaiKeyEnc    String?
   qualifierModel  String   @default("claude-haiku-4-5")
+  lensAdvisorModel String  @default("claude-haiku-4-5")
   usdBrlRate      Decimal  @default(5.5) @db.Decimal(10, 4)
   markupPercent   Decimal  @default(0)   @db.Decimal(6, 2)
   creditTokenFactor Int    @default(1000)

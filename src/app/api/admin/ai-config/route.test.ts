@@ -25,6 +25,7 @@ const viewFixture = {
   markupPercent: 20,
   creditTokenFactor: 1000,
   qualifierModel: "claude-haiku-4-5",
+  lensAdvisorModel: "claude-haiku-4-5",
   hasOpenaiKey: false,
 };
 
@@ -137,6 +138,24 @@ describe("PUT /api/admin/ai-config", () => {
     expect(res.status).toBe(200);
     const callArg = mockUpdateAiConfig.mock.calls[0][0];
     expect(callArg).not.toHaveProperty("qualifierModel");
+  });
+
+  it("encaminha lensAdvisorModel válido (allowlist) para updateAiConfig", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ lensAdvisorModel: "claude-sonnet-4-6" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).toHaveProperty("lensAdvisorModel", "claude-sonnet-4-6");
+  });
+
+  it("ignora lensAdvisorModel fora da allowlist (ex: gpt-4)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ lensAdvisorModel: "gpt-4" }));
+    expect(res.status).toBe(200);
+    const callArg = mockUpdateAiConfig.mock.calls[0][0];
+    expect(callArg).not.toHaveProperty("lensAdvisorModel");
   });
 
   it("encaminha openaiKey (string) para updateAiConfig", async () => {

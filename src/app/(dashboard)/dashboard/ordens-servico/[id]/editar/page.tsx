@@ -3,6 +3,7 @@
 import { useState, useEffect } from "react";
 import { ConfirmReasonDialog } from "@/components/ui/confirm-reason-dialog";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { LensAdvisorPanel } from "@/components/ordens-servico/lens-advisor-panel";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
@@ -1120,6 +1121,9 @@ function EditarOrdemServicoContent() {
             </CardContent>
           )}
         </Card>
+
+        {/* Assistente de Lentes */}
+        <LensAdvisorPanel od={prescriptionData.od} oe={prescriptionData.oe} />
 
         {/* Itens/Serviços */}
         <Card className="mb-6">

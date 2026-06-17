@@ -16,6 +16,7 @@ export interface AiConfigView {
   markupPercent: number;
   creditTokenFactor: number;
   qualifierModel: string;
+  lensAdvisorModel: string;
   hasOpenaiKey: boolean;
 }
 
@@ -31,6 +32,7 @@ export async function getAiConfig(): Promise<AiConfigView> {
     markupPercent: Number(c.markupPercent.toString()),
     creditTokenFactor: c.creditTokenFactor,
     qualifierModel: c.qualifierModel,
+    lensAdvisorModel: c.lensAdvisorModel,
     hasOpenaiKey: !!c.openaiKeyEnc,
   };
 }
@@ -41,6 +43,7 @@ export interface UpdateAiConfigInput {
   markupPercent?: number;
   creditTokenFactor?: number;
   qualifierModel?: string;
+  lensAdvisorModel?: string;
   openaiKey?: string;
 }
 
@@ -55,6 +58,10 @@ export async function updateAiConfig(patch: UpdateAiConfigInput): Promise<AiConf
   // Só aceita modelos da allowlist (defesa em profundidade); ignora silenciosamente o resto.
   if (patch.qualifierModel && (QUALIFIER_MODELS as readonly string[]).includes(patch.qualifierModel)) {
     data.qualifierModel = patch.qualifierModel;
+  }
+  // Mesma allowlist do qualificador (defesa em profundidade); ignora silenciosamente o resto.
+  if (patch.lensAdvisorModel && (QUALIFIER_MODELS as readonly string[]).includes(patch.lensAdvisorModel)) {
+    data.lensAdvisorModel = patch.lensAdvisorModel;
   }
   if (patch.openaiKey && patch.openaiKey.trim().length > 0) {
     data.openaiKeyEnc = encryptSecret(patch.openaiKey.trim());
