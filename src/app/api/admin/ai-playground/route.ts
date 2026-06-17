@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
-import { analyzeLens, type EyePower, type FrameSize } from "@/lib/lens-optics";
+import { analyzeLens } from "@/lib/lens-optics";
+import { parseEye, parseFrame } from "@/lib/lens-input-parse";
 import { buildKnowledgeContext, buildGlobalContext } from "@/services/lens-knowledge.service";
 import { explainLensRecommendation } from "@/lib/ai/lens-advisor";
 import { getAiConfig } from "@/services/ai-config.service";
@@ -20,17 +21,11 @@ export async function POST(request: Request) {
   }
   const b = body != null && typeof body === "object" ? (body as Record<string, unknown>) : {};
 
-  const od = b.od ?? { sph: 0, cyl: 0 };
-  const oe = b.oe ?? { sph: 0, cyl: 0 };
-  const frame =
-    b.frame &&
-    typeof b.frame === "object" &&
-    typeof (b.frame as Record<string, unknown>).lensWidthMm === "number" &&
-    typeof (b.frame as Record<string, unknown>).bridgeMm === "number"
-      ? (b.frame as FrameSize)
-      : undefined;
+  const od = parseEye(b.od);
+  const oe = parseEye(b.oe);
+  const frame = parseFrame(b.frame);
 
-  const analysis = analyzeLens({ od: od as EyePower, oe: oe as EyePower }, frame);
+  const analysis = analyzeLens({ od, oe }, frame);
 
   const companyId = typeof b.companyId === "string" && b.companyId ? b.companyId : null;
   const ctx = companyId ? await buildKnowledgeContext(companyId) : await buildGlobalContext();
