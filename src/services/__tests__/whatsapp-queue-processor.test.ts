@@ -24,6 +24,13 @@ vi.mock("@/lib/whatsapp-send", () => ({
   sendExistingQueued: (...a: unknown[]) => sendExistingQueued(...a),
 }));
 
+// Travas resolvidas por ótica (Fase 2). Default no teste = valores da Fase 1.
+const getWhatsappLimits = vi.fn();
+vi.mock("@/services/whatsapp-limits.service", () => ({
+  getWhatsappLimits: (...a: unknown[]) => getWhatsappLimits(...a),
+  DEFAULT_WA_LIMITS: { openHour: 8, closeHour: 18, dailyCap: 50, skipSaturday: false, staleMin: 10 },
+}));
+
 vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
@@ -74,6 +81,7 @@ describe("processWhatsappQueue", () => {
     });
     checkElig.mockReset().mockResolvedValue({ eligible: true, number: "5511999999999", content: "Seu óculos está pronto" });
     sendExistingQueued.mockReset().mockResolvedValue("SENT");
+    getWhatsappLimits.mockReset().mockResolvedValue({ openHour: 8, closeHour: 18, dailyCap: 50, skipSaturday: false, staleMin: 10 });
 
     // óticas com PENDING (distinct companyId)
     logFindMany.mockReset().mockResolvedValue([{ companyId: "co1" }]);
@@ -89,13 +97,20 @@ describe("processWhatsappQueue", () => {
     custFindUnique.mockReset().mockResolvedValue({ id: "cust1", name: "João", phone: "5511999999999", acceptsMarketing: true });
   });
 
-  it("fora do horário comercial → não faz claim, retorna skippedOutOfHours", async () => {
+  it("fora do horário comercial → não faz claim nem envia, retorna skippedOutOfHours", async () => {
     isWithinBusinessHours.mockReturnValue(false);
     const r = await processWhatsappQueue(NOW);
     expect(r.skippedOutOfHours).toBe(true);
+    // não trava nem envia nenhuma mensagem...
     expect(logFindFirst).not.toHaveBeenCalled();
-    expect(logUpdateMany).not.toHaveBeenCalled();
     expect(sendExistingQueued).not.toHaveBeenCalled();
+    // ...mas a recuperação de PROCESSING preso (1º updateMany) ainda roda — ela
+    // INDEPENDE do horário (liberar linha presa pode acontecer a qualquer hora).
+    // O claim (que seria um 2º updateMany) é que não acontece.
+    const claimCalls = logUpdateMany.mock.calls.filter(
+      (c) => c[0]?.data?.status === "PROCESSING",
+    );
+    expect(claimCalls).toHaveLength(0);
   });
 
   it("recupera PROCESSING preso → PENDING no início, mirando processingAt (não createdAt)", async () => {
@@ -124,6 +139,24 @@ describe("processWhatsappQueue", () => {
     expect(logFindFirst).not.toHaveBeenCalled();
     expect(sendExistingQueued).not.toHaveBeenCalled();
     expect(r.sent).toBe(0);
+  });
+
+  // --- Fase 2: travas configuráveis por ótica ---
+
+  it("teto CONFIGURÁVEL menor (10) é respeitado: 10 enviados hoje → pula", async () => {
+    getWhatsappLimits.mockResolvedValue({ openHour: 8, closeHour: 18, dailyCap: 10, skipSaturday: false, staleMin: 10 });
+    logCount.mockResolvedValueOnce(10).mockResolvedValue(2); // 10 SENT hoje >= cap 10
+    const r = await processWhatsappQueue(NOW);
+    expect(sendExistingQueued).not.toHaveBeenCalled();
+    expect(r.sent).toBe(0);
+  });
+
+  it("horário resolvido da ótica é passado ao isWithinBusinessHours", async () => {
+    const limits = { openHour: 9, closeHour: 17, dailyCap: 30, skipSaturday: true, staleMin: 10 };
+    getWhatsappLimits.mockResolvedValue(limits);
+    await processWhatsappQueue(NOW);
+    // a checagem por ótica recebe (now, limitsDaOtica)
+    expect(isWithinBusinessHours).toHaveBeenCalledWith(NOW, limits);
   });
 
   it("claim atômico: updateMany com WHERE status=PENDING; se count=0, não envia", async () => {

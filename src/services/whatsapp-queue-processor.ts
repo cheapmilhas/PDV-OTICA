@@ -6,11 +6,16 @@
  * invocação — o RITMO vem do intervalo do acionador, sem sleep no código.
  *
  * Fluxo por invocação:
- *  1. Fora do horário comercial → não faz nada (skippedOutOfHours).
- *  2. Recupera linhas PROCESSING presas (> STALE_MIN) de volta para PENDING.
- *  3. Para cada ótica com PENDING (conectada): respeita o teto diário; faz
- *     CLAIM ATÔMICO de 1 PENDING (findFirst + updateMany WHERE status=PENDING);
- *     reavalia elegibilidade (opt-out/conexão na hora) e envia.
+ *  1. Recupera linhas PROCESSING presas (> staleMin) de volta para PENDING.
+ *  2. Para cada ótica com PENDING: resolve as travas DELA via getWhatsappLimits
+ *     (override da ótica → global → default da Fase 1); checa o horário comercial
+ *     dela; respeita o teto diário dela; faz CLAIM ATÔMICO de 1 PENDING
+ *     (findFirst + updateMany WHERE status=PENDING); reavalia elegibilidade
+ *     (opt-out/conexão na hora) e envia. skippedOutOfHours = nenhuma ótica no horário.
+ *
+ * Travas configuráveis (Fase 2): janela de horário, teto diário e pular-sábado
+ * vêm de WhatsappGlobalConfig + overrides por ótica. Sem config → defaults da
+ * Fase 1 (8h-18h, 50/dia, sábado útil). Fail-safe no serviço de limites.
  *
  * Claim atômico: o `updateMany({ where: { id, status: "PENDING" }, ... })` é
  * atômico NO POSTGRES — se duas invocações tentarem a mesma linha, só uma terá
@@ -30,13 +35,13 @@ import { logger } from "@/lib/logger";
 import { isWithinBusinessHours, spDayRange } from "@/lib/whatsapp-business-hours";
 import { checkWhatsappEligibility, sendExistingQueued } from "@/lib/whatsapp-send";
 import type { SendWhatsappInput } from "@/lib/whatsapp-send";
+import { getWhatsappLimits, DEFAULT_WA_LIMITS } from "@/services/whatsapp-limits.service";
 
 const log = logger.child({ service: "whatsapp-queue-processor" });
 
-/** Teto de mensagens enviadas por ótica por dia civil (BRT). Anti-bloqueio. */
-const DAILY_CAP = 50;
-/** Minutos após os quais uma linha PROCESSING é considerada presa (função morreu). */
-const STALE_MIN = 10;
+// As travas (horário, teto diário, pular sábado, stale) agora vêm de
+// getWhatsappLimits (override por ótica → global → default). Os defaults da Fase
+// 1 vivem em DEFAULT_WA_LIMITS. Por isso não há mais const fixa aqui.
 
 export interface QueueResult {
   /** true quando estava fora do horário comercial (nada foi processado). */
@@ -63,18 +68,22 @@ export async function processWhatsappQueue(
     pendingRestantes: 0,
   };
 
-  // 1. Horário comercial (8h-18h BRT, sem domingo/feriado fixo).
-  if (!isWithinBusinessHours(now)) {
-    return { ...zero, skippedOutOfHours: true };
-  }
+  // Travas globais (Fase 2): a janela de horário pode variar POR ÓTICA, então a
+  // checagem de horário foi movida para dentro do loop por ótica (cada uma resolve
+  // seus limites). Aqui resolvemos só o staleMin global (técnico, sem override por
+  // ótica) p/ a recuperação de PROCESSING preso. Sem config → defaults da Fase 1.
+  const globalLimits = await getWhatsappLimits(
+    options?.companyId ?? "__global__",
+  ).catch(() => DEFAULT_WA_LIMITS);
+  const staleMin = globalLimits.staleMin;
 
-  // 2. Recupera PROCESSING preso (função morreu antes de gravar SENT/FAILED).
+  // Recupera PROCESSING preso (função morreu antes de gravar SENT/FAILED).
   //    Mira processingAt (hora do claim), NÃO createdAt (hora do enfileiramento):
   //    uma linha que esperou muito na fila e acabou de ser travada tem createdAt
   //    antigo mas processingAt recente — usar createdAt a recuperaria mid-envio
   //    e reenviaria. processingAt null (linha enfileirada antes desta migração)
   //    nunca é recuperada por aqui — só linhas efetivamente travadas há > STALE.
-  const staleBefore = new Date(now.getTime() - STALE_MIN * 60 * 1000);
+  const staleBefore = new Date(now.getTime() - staleMin * 60 * 1000);
   await prisma.whatsappMessageLog
     .updateMany({
       where: {
@@ -104,15 +113,26 @@ export async function processWhatsappQueue(
   let sent = 0;
   let skipped = 0;
   let failed = 0;
+  // Rastreia se ALGUMA ótica estava dentro do seu horário. Se nenhuma estava,
+  // o retorno marca skippedOutOfHours (coerente com o comportamento da Fase 1).
+  let anyInBusinessHours = false;
 
   for (const { companyId } of pendingCompanies) {
     try {
-      // teto diário: já enviou DAILY_CAP hoje? pula.
+      // Travas resolvidas POR ÓTICA (override → global → default). Fail-safe no
+      // serviço: erro de banco → defaults da Fase 1.
+      const limits = await getWhatsappLimits(companyId);
+
+      // horário comercial DESTA ótica (janela + pular sábado configuráveis).
+      if (!isWithinBusinessHours(now, limits)) continue;
+      anyInBusinessHours = true;
+
+      // teto diário (resolvido) — já enviou o teto hoje? pula.
       const { start, end } = spDayRange(now);
       const sentToday = await prisma.whatsappMessageLog.count({
         where: { companyId, status: "SENT", sentAt: { gte: start, lt: end } },
       });
-      if (sentToday >= DAILY_CAP) continue;
+      if (sentToday >= limits.dailyCap) continue;
 
       // claim atômico de 1 PENDING mais antiga.
       const target = await prisma.whatsappMessageLog.findFirst({
@@ -197,5 +217,9 @@ export async function processWhatsappQueue(
     },
   });
 
-  return { skippedOutOfHours: false, claimed, sent, skipped, failed, pendingRestantes };
+  // skippedOutOfHours: havia ótica(s) com PENDING mas NENHUMA estava no seu
+  // horário → nada foi enviável por causa de horário. (Fila vazia não conta.)
+  const skippedOutOfHours = pendingCompanies.length > 0 && !anyInBusinessHours;
+
+  return { skippedOutOfHours, claimed, sent, skipped, failed, pendingRestantes };
 }
