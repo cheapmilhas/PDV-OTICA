@@ -24,6 +24,7 @@ const mockBuildGlobalContext = vi.mocked(buildGlobalContext);
 const mockLogAiUsage = vi.mocked(logAiUsage);
 
 const adminPayload = { id: "admin-1", email: "a@a.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true };
+const nonSuperAdmin = { id: "admin-2", email: "b@b.com", name: "Admin Comum", role: "ADMIN", isAdmin: true };
 
 const companyCtx = {
   docs: [
@@ -61,6 +62,14 @@ describe("POST /api/admin/ai-playground", () => {
     expect(mockBuildKnowledgeContext).not.toHaveBeenCalled();
     expect(mockBuildGlobalContext).not.toHaveBeenCalled();
     expect(mockLogAiUsage).not.toHaveBeenCalled();
+  });
+
+  it("403 quando admin não é SUPER_ADMIN (não roda contexto)", async () => {
+    mockGetAdminSession.mockResolvedValue(nonSuperAdmin);
+    const res = await POST(makePostRequest({ od: { sph: -2, cyl: -1 }, oe: { sph: -2, cyl: -1 } }));
+    expect(res.status).toBe(403);
+    expect(mockBuildKnowledgeContext).not.toHaveBeenCalled();
+    expect(mockBuildGlobalContext).not.toHaveBeenCalled();
   });
 
   it("com companyId: roda motor real + resume buildKnowledgeContext('A')", async () => {

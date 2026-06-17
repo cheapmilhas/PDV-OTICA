@@ -9,6 +9,7 @@ import { updateDoc, deleteDoc } from "@/services/lens-knowledge.service";
 export async function PATCH(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
   const { id } = await params;
   const body = await request.json();
@@ -29,6 +30,7 @@ export async function PATCH(request: Request, { params }: { params: Promise<{ id
 export async function DELETE(_request: Request, { params }: { params: Promise<{ id: string }> }) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
   const { id } = await params;
   await deleteDoc(id);

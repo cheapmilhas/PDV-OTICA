@@ -6,6 +6,7 @@ import { buildKnowledgeContext, buildGlobalContext } from "@/services/lens-knowl
 export async function POST(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
   const body = await request.json();
   const od = body.od ?? { sph: 0, cyl: 0 };

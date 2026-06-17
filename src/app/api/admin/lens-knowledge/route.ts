@@ -9,6 +9,7 @@ import { listDocs, createDoc } from "@/services/lens-knowledge.service";
 export async function GET() {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
   const data = await listDocs();
   return NextResponse.json({ data });
@@ -21,6 +22,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
   const body = await request.json();
 

@@ -17,6 +17,7 @@ const mockUpdateDoc = vi.mocked(updateDoc);
 const mockDeleteDoc = vi.mocked(deleteDoc);
 
 const adminPayload = { id: "admin-1", email: "a@a.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true };
+const nonSuperAdmin = { id: "admin-2", email: "b@b.com", name: "Admin Comum", role: "ADMIN", isAdmin: true };
 
 function makeParams(id: string): { params: Promise<{ id: string }> } {
   return { params: Promise.resolve({ id }) };
@@ -41,6 +42,13 @@ describe("PATCH /api/admin/lens-knowledge/[id]", () => {
     mockGetAdminSession.mockResolvedValue(null);
     const res = await PATCH(makeRequest({ active: false }), makeParams("doc-1"));
     expect(res.status).toBe(401);
+    expect(mockUpdateDoc).not.toHaveBeenCalled();
+  });
+
+  it("403 quando admin não é SUPER_ADMIN (updateDoc não chamado)", async () => {
+    mockGetAdminSession.mockResolvedValue(nonSuperAdmin);
+    const res = await PATCH(makeRequest({ active: false }), makeParams("doc-1"));
+    expect(res.status).toBe(403);
     expect(mockUpdateDoc).not.toHaveBeenCalled();
   });
 

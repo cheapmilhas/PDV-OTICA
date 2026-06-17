@@ -17,6 +17,7 @@ const mockListDocs = vi.mocked(listDocs);
 const mockCreateDoc = vi.mocked(createDoc);
 
 const adminPayload = { id: "admin-1", email: "a@a.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true };
+const nonSuperAdmin = { id: "admin-2", email: "b@b.com", name: "Admin Comum", role: "ADMIN", isAdmin: true };
 
 const docsFixture = [
   { id: "d1", title: "Global", content: "c1", companyId: null },
@@ -75,6 +76,13 @@ describe("POST /api/admin/lens-knowledge", () => {
     mockGetAdminSession.mockResolvedValue(null);
     const res = await POST(makePostRequest({ title: "T", content: "C", companyId: null }));
     expect(res.status).toBe(401);
+    expect(mockCreateDoc).not.toHaveBeenCalled();
+  });
+
+  it("403 quando admin não é SUPER_ADMIN (não chama createDoc)", async () => {
+    mockGetAdminSession.mockResolvedValue(nonSuperAdmin);
+    const res = await POST(makePostRequest({ title: "T", content: "C", companyId: null }));
+    expect(res.status).toBe(403);
     expect(mockCreateDoc).not.toHaveBeenCalled();
   });
 
