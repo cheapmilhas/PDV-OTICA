@@ -1,6 +1,7 @@
 import { requireAdminRole } from "@/lib/admin-session";
 import { getAiConfig } from "@/services/ai-config.service";
-import { IaClient } from "./ia-client";
+import { prisma } from "@/lib/prisma";
+import { IaTabs } from "./ia-tabs";
 
 export const dynamic = "force-dynamic";
 
@@ -8,9 +9,13 @@ export default async function IaConfigPage() {
   await requireAdminRole(["SUPER_ADMIN"]);
 
   const config = await getAiConfig();
+  const companies = await prisma.company.findMany({
+    select: { id: true, name: true },
+    orderBy: { name: "asc" },
+  });
 
   return (
-    <IaClient
+    <IaTabs
       config={{
         hasKey: config.hasKey,
         usdBrlRate: config.usdBrlRate,
@@ -20,6 +25,7 @@ export default async function IaConfigPage() {
         lensAdvisorModel: config.lensAdvisorModel,
         hasOpenaiKey: config.hasOpenaiKey,
       }}
+      companies={companies}
     />
   );
 }
