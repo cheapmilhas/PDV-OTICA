@@ -34,6 +34,7 @@ interface ContextView {
 interface PlaygroundResult {
   analysis: AnalysisView;
   context: ContextView;
+  advice: string | null;
 }
 
 const GLOBAL_SCOPE = "global";
@@ -212,6 +213,7 @@ export function PlaygroundClient({ companies }: { companies: Company[] }) {
 
   const analysis = result?.analysis;
   const context = result?.context;
+  const advice = result?.advice;
   const disclaimer = analysis?.od.thickness.thicknessMm
     ? analysis.od.thickness.disclaimer
     : analysis?.oe.thickness.thicknessMm
@@ -231,7 +233,8 @@ export function PlaygroundClient({ companies }: { companies: Company[] }) {
 
       <div className="rounded-lg border border-sky-200 bg-sky-50 p-3">
         <p className="text-sm text-sky-800">
-          Fase 2: testa o motor + o contexto. A resposta da IA entra na Fase 3.
+          Testa o motor + o contexto + a resposta da IA. O playground usa a chave e o
+          modelo configurados e NÃO consome a cota de nenhuma ótica.
         </p>
       </div>
 
@@ -360,6 +363,20 @@ export function PlaygroundClient({ companies }: { companies: Company[] }) {
                 )}
               </p>
             </div>
+          )}
+
+          {advice && advice.trim() !== "" ? (
+            <div
+              aria-live="polite"
+              className="rounded-lg border border-border bg-background p-3"
+            >
+              <p className="text-sm font-semibold text-foreground">Resposta da IA</p>
+              <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{advice}</p>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">
+              IA não respondeu (sem chave da Anthropic cadastrada ou erro na API).
+            </p>
           )}
         </div>
       )}
