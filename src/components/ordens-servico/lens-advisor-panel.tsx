@@ -1,10 +1,9 @@
 "use client";
 
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { Button } from "@/components/ui/button";
 import { ChevronDown, Eye, AlertTriangle } from "lucide-react";
 import {
   analyzeLens,
@@ -90,6 +89,14 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
     initialFrame?.bridgeMm != null ? String(initialFrame.bridgeMm) : ""
   );
 
+  // Sincroniza com initialFrame que chega async, sem sobrescrever o que o usuário já digitou.
+  useEffect(() => {
+    if (initialFrame?.lensWidthMm != null)
+      setLensWidthMm((cur) => (cur === "" ? String(initialFrame.lensWidthMm) : cur));
+    if (initialFrame?.bridgeMm != null)
+      setBridgeMm((cur) => (cur === "" ? String(initialFrame.bridgeMm) : cur));
+  }, [initialFrame]);
+
   const odHasGrau = hasGrau(od);
   const oeHasGrau = hasGrau(oe);
   const anyGrau = odHasGrau || oeHasGrau;
@@ -112,6 +119,7 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
     );
   }, [anyGrau, odHasGrau, oeHasGrau, od, oe, lensWidthMm, bridgeMm]);
 
+  // disclaimer é uma string constante; basta pegar a do primeiro olho que tiver espessura.
   const disclaimer =
     analysis?.od.thickness.thicknessMm
       ? analysis.od.thickness.disclaimer
@@ -123,7 +131,16 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
     <Card className="mb-6">
       <CardHeader
         className="cursor-pointer"
+        role="button"
+        aria-expanded={open}
+        tabIndex={0}
         onClick={() => setOpen((v) => !v)}
+        onKeyDown={(e) => {
+          if (e.key === "Enter") {
+            e.preventDefault();
+            setOpen((v) => !v);
+          }
+        }}
       >
         <CardTitle className="flex items-center justify-between">
           <span className="flex items-center gap-2">
@@ -181,8 +198,8 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
                     Confira a receita:
                   </p>
                   <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-amber-800 dark:text-amber-300">
-                    {analysis.alerts.map((a, i) => (
-                      <li key={i}>{a}</li>
+                    {analysis.alerts.map((a) => (
+                      <li key={a}>{a}</li>
                     ))}
                   </ul>
                 </div>
@@ -205,8 +222,8 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
                           Atenção:
                         </p>
                         <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-amber-800 dark:text-amber-300">
-                          {analysis.alerts.map((a, i) => (
-                            <li key={i}>{a}</li>
+                          {analysis.alerts.map((a) => (
+                            <li key={a}>{a}</li>
                           ))}
                         </ul>
                       </div>
