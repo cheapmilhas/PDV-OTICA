@@ -29,6 +29,7 @@ export interface FrameSize {
 export interface ThicknessEstimate {
   /** faixa em mm, ou null quando não há medida da armação (falha fechada parcial) */
   thicknessMm: { min: number; max: number } | null;
+  /** peso qualitativo; só é significativo quando thicknessMm !== null */
   weight: "mais leve" | "médio" | "mais pesado";
   disclaimer: string;
 }
@@ -50,6 +51,9 @@ export function estimateThickness(p: EyePower, frame: FrameSize | undefined): Th
     return { thicknessMm: null, weight, disclaimer: THICKNESS_DISCLAIMER };
   }
   // semi-diâmetro efetivo da lente (mm) → metros
+  // y = semi-corda nasal aproximada (lensWidth+bridge)/2 — sem PD monocular, esta é
+  // uma SUPERESTIMATIVA conservadora (mais espesso = expectativa segura na venda).
+  // NÃO trocar por lensWidth/2 sem reconsiderar: a saída é faixa + disclaimer de propósito.
   const yMeters = (Math.max(0, (frame.lensWidthMm + frame.bridgeMm) / 2)) / 1000;
   const band = recommendIndex(p).map(Number); // ex [1.61, 1.67]
   const nLow = Math.min(...band);  // índice mais baixo → mais grosso → max
@@ -67,7 +71,8 @@ export interface LensInput {
 }
 
 export interface EyeResult {
-  index: string[]; // [] quando entrada atípica (falha fechada)
+  /** índices recomendados (elemento 0 = índice mais baixo/grosso, último = mais alto/fino); [] quando entrada atípica (falha fechada) */
+  index: string[];
   thickness: ThicknessEstimate;
 }
 

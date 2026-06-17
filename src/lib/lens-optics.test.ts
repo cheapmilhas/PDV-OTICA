@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { recommendIndex, estimateThickness, analyzeLens } from "./lens-optics";
+import { recommendIndex, estimateThickness, analyzeLens, sphericalEquivalent } from "./lens-optics";
 import { THICKNESS_DISCLAIMER } from "./lens-optics.constants";
 
 describe("recommendIndex", () => {
@@ -73,6 +73,29 @@ describe("analyzeLens (entrada unificada + sanity-check + falha fechada)", () =>
 
   it("sanity: assimetria grande OD x OE → alerta", () => {
     const r = analyzeLens({ od: { sph: -1, cyl: 0 }, oe: { sph: -7, cyl: 0 } }, undefined);
+    expect(r.alerts.some((a) => /assimetr/i.test(a))).toBe(true);
+  });
+});
+
+describe("cobertura adicional (hipermetropia, zero-cross, fail-closed parcial, threshold)", () => {
+  it("hipermetropia +4.00 esf -1.00 cil → EE=3.5 → banda [1.56, 1.61]", () => {
+    expect(recommendIndex({ sph: 4, cyl: -1 })).toEqual(["1.56", "1.61"]);
+  });
+  it("esf +2 cil -4 → EE=0 → espessura null mesmo com armação", () => {
+    const r = estimateThickness({ sph: 2, cyl: -4 }, { lensWidthMm: 55, bridgeMm: 18 });
+    expect(r.thicknessMm).toBeNull();
+  });
+  it("equivalente esférico direto: sph=-4, cyl=-2 → -5", () => {
+    expect(sphericalEquivalent({ sph: -4, cyl: -2 })).toBe(-5);
+  });
+  it("OE inválido, OD válido → valid=false, od tem índice, oe não tem", () => {
+    const r = analyzeLens({ od: { sph: -2, cyl: 0 }, oe: { sph: -40, cyl: 0 } }, undefined);
+    expect(r.valid).toBe(false);
+    expect(r.od.index.length).toBeGreaterThan(0);
+    expect(r.oe.index).toEqual([]);
+  });
+  it("assimetria exatamente 4D → dispara alerta", () => {
+    const r = analyzeLens({ od: { sph: -1, cyl: 0 }, oe: { sph: -5, cyl: 0 } }, undefined);
     expect(r.alerts.some((a) => /assimetr/i.test(a))).toBe(true);
   });
 });
