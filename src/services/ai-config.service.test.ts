@@ -127,4 +127,24 @@ describe("ai-config.service", () => {
     const arg = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0];
     expect(arg.update.lensAdvisorModel).toBeUndefined();
   });
+
+  // --- Task F4: ocrModel (mesma allowlist QUALIFIER_MODELS) ---
+  it("getAiConfig retorna ocrModel do registro", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-haiku-4-5", ocrModel: "claude-opus-4-8" });
+    const c = await getAiConfig();
+    expect(c.ocrModel).toBe("claude-opus-4-8");
+  });
+  it("updateAiConfig seta ocrModel quando é um valor da allowlist", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-haiku-4-5", ocrModel: "claude-sonnet-4-6" });
+    await updateAiConfig({ ocrModel: "claude-sonnet-4-6" });
+    const arg = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0];
+    expect(arg.update.ocrModel).toBe("claude-sonnet-4-6");
+    expect(QUALIFIER_MODELS).toContain("claude-sonnet-4-6");
+  });
+  it("updateAiConfig IGNORA ocrModel inválido (fora da allowlist)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-haiku-4-5", ocrModel: "claude-sonnet-4-6" });
+    await updateAiConfig({ ocrModel: "modelo-invalido" });
+    const arg = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0];
+    expect(arg.update.ocrModel).toBeUndefined();
+  });
 });

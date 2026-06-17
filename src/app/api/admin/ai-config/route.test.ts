@@ -26,6 +26,7 @@ const viewFixture = {
   creditTokenFactor: 1000,
   qualifierModel: "claude-haiku-4-5",
   lensAdvisorModel: "claude-haiku-4-5",
+  ocrModel: "claude-sonnet-4-6",
   hasOpenaiKey: false,
 };
 
