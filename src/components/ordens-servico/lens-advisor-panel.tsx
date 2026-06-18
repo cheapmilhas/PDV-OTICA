@@ -4,7 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
-import { ChevronDown, Eye, AlertTriangle, Sparkles } from "lucide-react";
+import { ChevronDown, Eye, AlertTriangle, Sparkles, Loader2 } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import {
   analyzeLens,
@@ -134,6 +134,13 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
   const [aiLoading, setAiLoading] = useState(false);
   const [aiError, setAiError] = useState<string | null>(null);
 
+  // Limpa a explicação da IA quando o grau/armação muda — ela foi gerada para os
+  // valores anteriores e não pode ficar contradizendo o motor recalculado.
+  useEffect(() => {
+    setAiText(null);
+    setAiError(null);
+  }, [od, oe, lensWidthMm, bridgeMm]);
+
   async function handleExplainWithAi() {
     setAiLoading(true);
     setAiError(null);
@@ -153,7 +160,9 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
         body: JSON.stringify({ od: odPower, oe: oePower, frame }),
       });
       if (!res.ok) {
-        setAiError("IA indisponível no momento.");
+        setAiError(
+          "Não foi possível gerar a explicação agora. Os dados acima (índice e espessura) continuam válidos."
+        );
         return;
       }
       const json = await res.json();
@@ -162,10 +171,14 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
       if (typeof advice === "string" && advice.trim() !== "" && !aiUnavailable) {
         setAiText(advice);
       } else {
-        setAiError("IA indisponível no momento.");
+        setAiError(
+          "Não foi possível gerar a explicação agora. Os dados acima (índice e espessura) continuam válidos."
+        );
       }
     } catch {
-      setAiError("Não foi possível falar com a IA.");
+      setAiError(
+        "Não foi possível gerar a explicação agora. Os dados acima (índice e espessura) continuam válidos."
+      );
     } finally {
       setAiLoading(false);
     }
@@ -241,6 +254,9 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
                     <AlertTriangle className="h-4 w-4" />
                     Confira a receita:
                   </p>
+                  <p className="mt-1 text-sm text-amber-800 dark:text-amber-300">
+                    Não consigo recomendar uma lente com estes dados:
+                  </p>
                   <ul className="mt-1 list-inside list-disc space-y-0.5 text-sm text-amber-800 dark:text-amber-300">
                     {analysis.alerts.map((a) => (
                       <li key={a}>{a}</li>
@@ -283,23 +299,40 @@ export function LensAdvisorPanel({ od, oe, initialFrame }: LensAdvisorPanelProps
                           disabled={aiLoading}
                           onClick={handleExplainWithAi}
                         >
-                          <Sparkles className="h-4 w-4" />
+                          {aiLoading ? (
+                            <Loader2 className="h-4 w-4 animate-spin" aria-hidden="true" />
+                          ) : (
+                            <Sparkles className="h-4 w-4" aria-hidden="true" />
+                          )}
                           {aiLoading ? "Consultando IA…" : "Explicar com IA"}
                         </Button>
 
                         <div aria-live="polite">
-                          {aiText && (
-                            <div className="rounded-lg border bg-muted/30 p-3">
-                              <div className="text-sm font-semibold text-foreground">
-                                Explicação da IA
+                          {aiLoading && (
+                            <div className="space-y-2 border-t pt-3">
+                              <div className="h-3 w-full animate-pulse rounded bg-muted" />
+                              <div className="h-3 w-2/3 animate-pulse rounded bg-muted" />
+                            </div>
+                          )}
+                          {!aiLoading && aiText && (
+                            <div className="border-t pt-3">
+                              <div className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                                <Sparkles className="h-3.5 w-3.5" aria-hidden="true" />
+                                Sugestão da IA · apoio à venda
                               </div>
-                              <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">
+                              <p className="mt-1 whitespace-pre-wrap text-sm text-muted-foreground">
                                 {aiText}
+                              </p>
+                              <p className="mt-1 text-xs text-muted-foreground">
+                                Texto gerado por IA — confira sempre os dados acima.
                               </p>
                             </div>
                           )}
-                          {aiError && (
-                            <p className="text-xs text-muted-foreground">{aiError}</p>
+                          {!aiLoading && aiError && (
+                            <p className="flex items-center gap-1.5 text-xs text-amber-700 dark:text-amber-400">
+                              <AlertTriangle className="h-3.5 w-3.5" aria-hidden="true" />
+                              {aiError}
+                            </p>
                           )}
                         </div>
                       </div>
