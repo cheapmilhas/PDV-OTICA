@@ -78,6 +78,12 @@ O painel embutido na OS é **removido** (migra para a bolinha).
 3. Puxar receita de uma OS/orçamento existente (vendedor digita no widget; atalho futuro).
 4. Comparar preço/estoque real dos produtos (a IA fala de disponibilidade na grade/dioptria, não preço/estoque — depende de popular outras tabelas).
 
+## Notas técnicas para o plano (do spec-review)
+- **Camada de serviço é o orquestrador real:** a rota `/api/company/lens-advisor` delega para `adviseForCompany` em `src/services/lens-advisor.service.ts`, que é quem chama `buildKnowledgeContext` + `explainLensRecommendation` + `logAiUsage`. A rota em si fica **intocada**; a mudança de comportamento (grade) é só no prompt de `lens-advisor.ts` (e o playground do super admin chama `explainLensRecommendation` direto — pegar a mudança de prompt "de graça"). 3 arquivos no caminho: prompt → service → route, mas só o prompt muda.
+- **Extração do núcleo:** o `LensAdvisorPanel` atual tem `initialFrame` + um `useEffect` que sincroniza a armação async — isso é **específico da OS** (pré-preenche de uma `FrameMeasurement` existente). O núcleo extraído deve tornar o pré-preenchimento **opcional**, para o widget standalone não carregar lógica morta acoplada à OS.
+- **Ponto de montagem da bolinha:** montar `<LensAdvisorFab />` como filho direto do provider em `(dashboard)/layout.tsx` (sibling do container de scroll), **NÃO dentro de `<main id="main-scroll" overflow-y-auto>`** — senão a bolinha `fixed` rola junto / some. Admin tem layout separado (`src/app/admin/layout.tsx`), então a bolinha não vaza pro admin/login.
+- **Persistência (10 min):** estado em **memória do componente** (vive enquanto não há reload; navegação client-side entre páginas do dashboard preserva, pois o FAB mora no layout). NÃO usar localStorage — é session-scoped por design.
+
 ## Notas de implementação / deploy
 - **Sem migração, sem env nova** — reusa toda a infra F1-F4.
 - Trabalhar no worktree `.worktrees/integra-lentes` (branch `feat/integra-lentes`). Conferir drift antes de deploy.
