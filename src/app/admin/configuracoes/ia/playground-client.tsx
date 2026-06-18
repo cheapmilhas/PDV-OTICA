@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useId, useState } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
 
 interface Company {
@@ -83,13 +83,18 @@ function EyeFields({
   const set = (field: keyof EyeForm) => (e: React.ChangeEvent<HTMLInputElement>) =>
     onChange({ ...eye, [field]: e.target.value });
 
+  const baseId = useId();
+
   return (
     <fieldset className="space-y-3 rounded-lg border border-border p-4">
       <legend className="px-1 text-sm font-semibold text-foreground">{legend}</legend>
       <div className="grid grid-cols-2 gap-3 sm:grid-cols-4">
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Esférico</label>
+          <label htmlFor={`${baseId}-esf`} className="text-xs font-medium text-muted-foreground">
+            Esférico
+          </label>
           <input
+            id={`${baseId}-esf`}
             type="text"
             inputMode="decimal"
             placeholder="-2,00"
@@ -99,8 +104,11 @@ function EyeFields({
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Cilíndrico</label>
+          <label htmlFor={`${baseId}-cil`} className="text-xs font-medium text-muted-foreground">
+            Cilíndrico
+          </label>
           <input
+            id={`${baseId}-cil`}
             type="text"
             inputMode="decimal"
             placeholder="-0,75"
@@ -110,8 +118,11 @@ function EyeFields({
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Eixo</label>
+          <label htmlFor={`${baseId}-eixo`} className="text-xs font-medium text-muted-foreground">
+            Eixo
+          </label>
           <input
+            id={`${baseId}-eixo`}
             type="text"
             inputMode="numeric"
             placeholder="90"
@@ -121,8 +132,11 @@ function EyeFields({
           />
         </div>
         <div className="space-y-1">
-          <label className="text-xs font-medium text-muted-foreground">Adição</label>
+          <label htmlFor={`${baseId}-add`} className="text-xs font-medium text-muted-foreground">
+            Adição
+          </label>
           <input
+            id={`${baseId}-add`}
             type="text"
             inputMode="decimal"
             placeholder="2,00"
@@ -248,10 +262,14 @@ export function PlaygroundClient({ companies }: { companies: Company[] }) {
           </legend>
           <div className="grid grid-cols-2 gap-3">
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">
+              <label
+                htmlFor="frame-lens-width"
+                className="text-xs font-medium text-muted-foreground"
+              >
                 Largura da lente (mm)
               </label>
               <input
+                id="frame-lens-width"
                 type="text"
                 inputMode="decimal"
                 placeholder="opcional"
@@ -261,8 +279,11 @@ export function PlaygroundClient({ companies }: { companies: Company[] }) {
               />
             </div>
             <div className="space-y-1">
-              <label className="text-xs font-medium text-muted-foreground">Ponte (mm)</label>
+              <label htmlFor="frame-bridge" className="text-xs font-medium text-muted-foreground">
+                Ponte (mm)
+              </label>
               <input
+                id="frame-bridge"
                 type="text"
                 inputMode="decimal"
                 placeholder="opcional"
