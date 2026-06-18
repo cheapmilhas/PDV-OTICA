@@ -31,6 +31,8 @@
 | Arquivo | Ação | Responsabilidade |
 |---|---|---|
 | `src/lib/lens-widget-expiry.ts` | Criar | Função pura `isExpired(lastEditedAt, now, ttlMs)` p/ a regra de 10 min. Testável isolada. |
+| `src/components/lens-advisor/eye-power.ts` | Criar | Utils PUROS extraídos do painel: `EyeGrau` (interface), `toNum`, `toEyePower`, `hasGrau`. **O painel (único lar atual deles) será DELETADO no T7 → extrair p/ cá ANTES, e o hook/form importam DAQUI, nunca do painel.** |
+| `src/components/lens-advisor/eye-report.tsx` | Criar | Componente `EyeReport` extraído do painel (mesma razão: o painel some no T7). |
 | `src/components/lens-advisor/use-lens-advisor.ts` | Criar | Hook que POSSUI os inputs de receita (od/oe `EyeGrau`) + armação + motor (`analyzeLens`) + estados de IA + `handleExplainWithAi` + limpar-IA-on-change + reset. Núcleo extraído do painel, sem JSX. |
 | `src/components/lens-advisor/lens-advisor-form.tsx` | Criar | UI compartilhada: campos de receita OD/OE + armação + resultado do motor (EyeReport) + botão IA + bloco de sugestão/erro/skeleton. Consome o hook. Reusa os achados do pacote OURO (labels associados, IA subordinada, spinner). |
 | `src/components/lens-advisor/lens-advisor-fab.tsx` | Criar | A bolinha (FAB) + o balão (`LensAdvisorChat` inline ou separado). Controla aberto/fechado + expiração 10min. Renderiza `lens-advisor-form`. |
@@ -40,7 +42,9 @@
 | `src/app/(dashboard)/dashboard/ordens-servico/[id]/editar/page.tsx` | Modificar | Remover `<LensAdvisorPanel>` + import. |
 | `src/components/ordens-servico/lens-advisor-panel.tsx` | Remover | Substituído pelo widget (após confirmar que nada mais o usa). |
 
-> **Ordem:** T1 expiry (pura) → T2 prompt de grade → T3 hook núcleo → T4 form compartilhado → T5 FAB+balão → T6 montar no layout → T7 remover da OS + deletar painel → T8 verificação.
+> **Ordem:** T1 expiry (pura) → T1b extrair `eye-power.ts`+`eye-report.tsx` do painel (sem deletar o painel ainda) → T2 prompt de grade → T3 hook núcleo (importa de `eye-power.ts`) → T4 form compartilhado (usa `eye-report.tsx`) → T5 FAB+balão → T6 montar no layout → T7 remover da OS + deletar painel → T8 verificação.
+>
+> **⚠️ Ordem importa (do plan-review):** extrair `eye-power.ts` e `eye-report.tsx` ANTES do hook/form, e o hook/form importam DESSES novos arquivos — NUNCA do `lens-advisor-panel.tsx`, que é deletado no T7. Senão fica um import pendurado.
 
 ---
 
@@ -153,7 +157,7 @@ export function isExpired(lastEditedAt: number | null, now: number, ttlMs: numbe
   - **Bolinha:** `<button>` real, `fixed bottom-4 right-4 z-40` (abaixo de modais que usam z-50), circular (`h-14 w-14 rounded-full`), acento `bg-primary text-primary-foreground shadow-lg`, ícone lucide `Glasses` (`h-6 w-6`), `aria-label="Assistente de Lentes"`, `aria-expanded`, `focus-visible:ring`, hover com transição de cor (não scale). Alvo ≥44px (14×4=56px ✓). `cursor-pointer`.
   - **Estado:** `open` (boolean). O hook `useLensAdvisor()` vive AQUI (no FAB), p/ o estado da receita persistir enquanto o FAB estiver montado (= durante a navegação client-side, pois mora no layout).
   - **Expiração 10 min:** ao ABRIR (`open` vira true), checar `isExpired(lastEditedAt, Date.now())` → se expirou, chamar `reset()` antes de mostrar. (Assim, reabrir após 10min zera; reabrir antes mantém.)
-  - **Balão:** quando `open`, renderizar um card `fixed bottom-20 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-xl border bg-background shadow-xl` (acima da bolinha). Header com título + botão X (`aria-label="Fechar"`). Corpo = `<LensAdvisorForm/>`. Transição via `transform`/`opacity` (respeitar `prefers-reduced-motion`). Fechar no X, `Esc` (keydown listener), e clique fora (overlay transparente OU detectar click-outside — preferir um listener simples no document enquanto aberto).
+  - **Balão:** quando `open`, renderizar um card `fixed bottom-20 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-xl border bg-background shadow-xl` (acima da bolinha). Header com título + botão X (`aria-label="Fechar"`). Corpo = `<LensAdvisorForm/>`. Transição via `transform`/`opacity` (respeitar `prefers-reduced-motion`). Fechar no X, `Esc` (keydown listener), e clique fora. **Click-outside (do plan-review):** anexar o listener no `document` SÓ enquanto `open` (e remover no cleanup do `useEffect`); usar um `ref` no balão+bolinha e só fechar se o clique foi FORA de ambos — assim o próprio clique na bolinha (que abre) não dispara um fechamento imediato. Esc e keydown também só enquanto aberto.
   - Mobile: o `max-w-[calc(100vw-2rem)]` já encaixa; em telas pequenas o balão fica quase full-width — aceitável (o spec não pediu full-screen).
 - [ ] **Step 2: Typecheck** → 0.
 - [ ] **Step 3: Commit** `feat(lens-widget): bolinha (FAB) + balão de chat com expiração de 10 min`.
