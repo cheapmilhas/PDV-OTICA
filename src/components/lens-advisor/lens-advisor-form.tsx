@@ -5,7 +5,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import { Sparkles, Loader2, AlertTriangle, Glasses } from "lucide-react";
-import { useLensAdvisor } from "./use-lens-advisor";
+import { type UseLensAdvisor } from "./use-lens-advisor";
 import { EyeReport } from "./eye-report";
 import { type EyeGrau } from "./eye-power";
 
@@ -88,13 +88,15 @@ function EyeFields({
 }
 
 /**
- * Corpo do balão flutuante do Assistente de Lentes. Consome o hook useLensAdvisor
- * (que é dono de TODO o estado da receita); este componente só guarda useId() para
- * associar labels. Renderiza receita OD/OE + armação opcional + resultado do motor
- * óptico determinístico + botão/sugestão da IA + "Nova consulta".
+ * Corpo do balão flutuante do Assistente de Lentes. RECEBE o resultado do hook
+ * useLensAdvisor (que é dono de TODO o estado da receita) via prop — o hook vive
+ * uma única vez no FAB (fonte única), permitindo o expiry de 10 min. Este
+ * componente só guarda useId() para associar labels. Renderiza receita OD/OE +
+ * armação opcional + resultado do motor óptico determinístico + botão/sugestão da
+ * IA + "Nova consulta".
  */
-export function LensAdvisorForm() {
-  const a = useLensAdvisor();
+export function LensAdvisorForm({ advisor }: { advisor: UseLensAdvisor }) {
+  const a = advisor;
   const widthId = useId();
   const bridgeId = useId();
 
