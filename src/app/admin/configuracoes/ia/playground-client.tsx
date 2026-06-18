@@ -35,7 +35,6 @@ interface PlaygroundResult {
   analysis: AnalysisView;
   context: ContextView;
   advice: string | null;
-  aiError?: string | null;
 }
 
 const GLOBAL_SCOPE = "global";
@@ -396,16 +395,9 @@ export function PlaygroundClient({ companies }: { companies: Company[] }) {
               <p className="mt-1 whitespace-pre-wrap text-sm text-foreground">{advice}</p>
             </div>
           ) : (
-            <div className="space-y-1">
-              <p className="text-xs text-muted-foreground">
-                IA não respondeu (sem chave da Anthropic cadastrada ou erro na API).
-              </p>
-              {result?.aiError && (
-                <p className="rounded-md border border-amber-200 bg-amber-50 px-2 py-1 font-mono text-xs text-amber-800">
-                  Motivo: {result.aiError}
-                </p>
-              )}
-            </div>
+            <p className="text-xs text-muted-foreground">
+              IA não respondeu (sem chave da Anthropic cadastrada ou erro na API).
+            </p>
           )}
         </div>
       )}

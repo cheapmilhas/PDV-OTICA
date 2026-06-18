@@ -43,9 +43,6 @@ export async function POST(request: Request) {
   // IA, mas companyId=null + feature própria + usa buildGlobalContext quando não há ótica.
   // Mantida separada de propósito — não fundir no service (que sempre cobra a ótica).
   let advice: string | null = null;
-  // Diagnóstico (SÓ super admin vê): motivo da falha da IA, SEM nunca expor a chave.
-  // Sanitizado para não vazar segredo: só o nome/mensagem do erro (ex.: authTag, 401 da API).
-  let aiError: string | null = null;
   try {
     const cfg = await getAiConfig();
     const { text, usage } = await explainLensRecommendation({ motor: analysis, docs: ctx.docs }, cfg.lensAdvisorModel);
@@ -62,18 +59,13 @@ export async function POST(request: Request) {
   } catch (error) {
     // Sem chave / erro de API → degrada para só motor+contexto, sem custo logado.
     // Loga o motivo para problemas de config de IA ficarem visíveis no servidor.
-    const rawMessage = error instanceof Error ? error.message : String(error);
-    // Redação defensiva: remove qualquer ocorrência de "sk-..." caso a mensagem do
-    // SDK ecoe parte da chave. Nunca devolve o segredo.
-    aiError = rawMessage.replace(/sk-[A-Za-z0-9_-]+/g, "sk-***");
     logger
       .child({ route: "ai-playground" })
       .warn("Claude indisponível no playground — degradando para só o motor", {
-        error: rawMessage,
-        name: error instanceof Error ? error.name : undefined,
+        error: error instanceof Error ? error.message : String(error),
       });
     advice = null;
   }
 
-  return NextResponse.json({ data: { analysis, context, advice, aiError } });
+  return NextResponse.json({ data: { analysis, context, advice } });
 }
