@@ -10,6 +10,7 @@ import { SubscriptionBanner } from "@/components/subscription/subscription-banne
 import { SubscriptionBlocked } from "@/components/subscription/subscription-blocked";
 import { BranchProviderWrapper } from "@/components/providers/branch-provider-wrapper";
 import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
+import { LensAdvisorFab } from "@/components/lens-advisor/lens-advisor-fab";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
 import { findBlockedFeature } from "@/lib/plan-feature-catalog";
 
@@ -122,6 +123,9 @@ export default async function DashboardLayout({
 
         {/* Navegação inferior — apenas mobile */}
         <MobileNav />
+
+        {/* Assistente de Lentes — bolinha flutuante global (irmã do MobileNav, FORA do <main>) */}
+        <LensAdvisorFab />
 
         {/* Atalhos de teclado globais */}
         <KeyboardShortcuts />
