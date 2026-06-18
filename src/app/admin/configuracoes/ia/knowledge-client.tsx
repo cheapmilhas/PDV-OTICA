@@ -24,6 +24,7 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
   const [docs, setDocs] = useState<KnowledgeDoc[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
+  const [pendingId, setPendingId] = useState<string | null>(null);
 
   // novo documento
   const [title, setTitle] = useState("");
@@ -66,6 +67,8 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
 
   async function handleToggle(doc: KnowledgeDoc) {
     setError("");
+    if (pendingId) return;
+    setPendingId(doc.id);
     try {
       const res = await fetch(`/api/admin/lens-knowledge/${doc.id}`, {
         method: "PATCH",
@@ -80,6 +83,8 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
       await fetchDocs();
     } catch {
       setError("Erro de rede ao atualizar documento");
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -87,6 +92,8 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
     if (!window.confirm(`Excluir o documento "${doc.title}"? Esta ação não pode ser desfeita.`)) {
       return;
     }
+    if (pendingId) return;
+    setPendingId(doc.id);
     setError("");
     try {
       const res = await fetch(`/api/admin/lens-knowledge/${doc.id}`, {
@@ -100,6 +107,8 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
       await fetchDocs();
     } catch {
       setError("Erro de rede ao excluir documento");
+    } finally {
+      setPendingId(null);
     }
   }
 
@@ -191,21 +200,25 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
                         </span>
                       )}
                     </td>
-                    <td className="py-2 text-right whitespace-nowrap">
-                      <button
-                        type="button"
-                        onClick={() => handleToggle(doc)}
-                        className="text-xs font-medium text-primary hover:underline"
-                      >
-                        {doc.active ? "Desativar" : "Ativar"}
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => handleDelete(doc)}
-                        className="ml-3 text-xs font-medium text-rose-600 hover:underline"
-                      >
-                        Excluir
-                      </button>
+                    <td className="py-2 whitespace-nowrap">
+                      <div className="flex justify-end gap-1">
+                        <button
+                          type="button"
+                          onClick={() => handleToggle(doc)}
+                          disabled={pendingId === doc.id}
+                          className="inline-flex items-center px-2 py-1.5 rounded-md text-xs font-medium text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          {pendingId === doc.id ? "Salvando…" : doc.active ? "Desativar" : "Ativar"}
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handleDelete(doc)}
+                          disabled={pendingId === doc.id}
+                          className="inline-flex items-center px-2 py-1.5 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        >
+                          Excluir
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
