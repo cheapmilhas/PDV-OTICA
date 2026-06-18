@@ -39,6 +39,8 @@ describe("explainLensRecommendation", () => {
     expect(typeof arg.system).toBe("string");
     // system instrui a explicar SEM recalcular nem contradizer o motor
     expect(arg.system).toMatch(/NUNCA recalcule|contradiga/i);
+    // system instrui a cruzar o grau com as tabelas de grade (disponibilidade de produto)
+    expect(arg.system).toMatch(/grade|disponibilidade|cobre|dioptria/i);
     // markers de nonce presentes no system e no user, com o mesmo nonce
     const m = arg.system.match(/«INICIO-([0-9a-f]{16})»/);
     expect(m).toBeTruthy();
