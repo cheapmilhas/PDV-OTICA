@@ -73,8 +73,15 @@ export function ModalPagarConta({
 
   const selected = accounts.find((a) => a.id === selectedId) ?? null;
 
+  // Rotina 21/06: "não existe caixa negativo". Pagar em DINHEIRO (conta CASH)
+  // sem saldo é bloqueado (espelha a trava do backend). Outros tipos só avisam.
+  const isCashAccount = selected?.type === "CASH";
+  const insufficient =
+    !!selected && !!account && selected.balance < account.amount;
+  const blockedByNegativeCash = isCashAccount && insufficient;
+
   const handleConfirm = async () => {
-    if (!selectedId) return;
+    if (!selectedId || blockedByNegativeCash) return;
     await onConfirm(selectedId);
   };
 
@@ -131,9 +138,16 @@ export function ModalPagarConta({
                 </SelectContent>
               </Select>
 
-              {selected && account && selected.balance < account.amount && (
+              {insufficient && blockedByNegativeCash && (
+                <div className="rounded-lg border border-red-300 bg-red-50 p-2 text-xs text-red-900">
+                  Saldo insuficiente neste caixa ({formatCurrency(selected!.balance)}).
+                  O caixa não pode ficar negativo — faça um reforço de caixa ou
+                  escolha outra conta de saída.
+                </div>
+              )}
+              {insufficient && !blockedByNegativeCash && (
                 <div className="rounded-lg border border-amber-300 bg-amber-50 p-2 text-xs text-amber-900">
-                  Atenção: o saldo desta conta ({formatCurrency(selected.balance)})
+                  Atenção: o saldo desta conta ({formatCurrency(selected!.balance)})
                   é menor que o valor da conta. O saldo ficará negativo.
                 </div>
               )}
@@ -153,7 +167,7 @@ export function ModalPagarConta({
           <Button
             className="flex-1"
             onClick={handleConfirm}
-            disabled={!selectedId || loading}
+            disabled={!selectedId || loading || blockedByNegativeCash}
           >
             {loading ? (
               <>

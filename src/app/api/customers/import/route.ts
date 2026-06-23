@@ -6,6 +6,7 @@ import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { parse, isValid } from "date-fns";
+import { parseSpreadsheetDate } from "@/lib/import-utils";
 
 /**
  * POST /api/customers/import
@@ -78,6 +79,9 @@ export async function POST(request: NextRequest) {
         const estadoRaw = row["Estado"];
         const dataNascRaw = row["Data de Nascimento"];
         const generoRaw = row["Gênero"] || row["Sexo"];
+        // Data de cadastro original do cliente (sistema antigo). Suporta os
+        // dois rótulos de coluna usados nas planilhas.
+        const dataCadastroRaw = row["Data de Cadastro"] || row["Data do Cadastro"];
         const ativoRaw = row["Ativo"];
         const obsRaw = row["Observações"] || row["Observação"];
         const externalIdRaw = row["Cliente ID"] || row["Codigo Externo"];
@@ -127,6 +131,10 @@ export async function POST(request: NextRequest) {
             }
           }
         }
+
+        // Data de cadastro original (dd/MM/yyyy ou serial Excel). Aplicada SÓ
+        // na criação — nunca sobrescreve a data de clientes já existentes.
+        const registeredAt = parseSpreadsheetDate(dataCadastroRaw);
 
         // Parsear gênero
         let gender = null;
@@ -243,11 +251,14 @@ export async function POST(request: NextRequest) {
           });
           results.updated.push(nome);
         } else {
-          // Criar novo cliente
+          // Criar novo cliente. Se a planilha trouxe a data de cadastro
+          // original, preserva-a (senão o Prisma usa @default(now()) = data da
+          // importação, que distorcia o "Cliente desde").
           await prisma.customer.create({
             data: {
               companyId,
               ...customerData,
+              ...(registeredAt ? { createdAt: registeredAt } : {}),
             },
           });
           results.created.push(nome);

@@ -23,6 +23,7 @@ import { validateCreditLimit, sumOnCreditAmount } from "@/lib/installment-utils"
 import { getProductPrice } from "@/lib/product-price";
 import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
 import { SystemRuleService } from "@/services/system-rule.service";
+import { autoOpenShiftWithInheritedFloat } from "@/services/cash.service";
 import {
   applyStockDebitInTx,
   applyPaymentsInTx,
@@ -768,16 +769,13 @@ export class QuoteService {
       });
 
       try {
-        openShift = await prisma.cashShift.create({
-          data: {
-            companyId,
-            branchId,
-            openedByUserId: userId,
-            openingFloatAmount: 0,
-            status: "OPEN",
-            openedAt: new Date(),
-            ...(defaultRegister && { cashRegisterId: defaultRegister.id }),
-          },
+        // Rotina 21/06: herda o fundo de troco do último caixa fechado (paridade
+        // com sale.service) em vez de abrir sempre com R$0.
+        openShift = await autoOpenShiftWithInheritedFloat({
+          companyId,
+          branchId,
+          userId,
+          cashRegisterId: defaultRegister?.id ?? null,
         });
 
         // Auditoria SÓ quando este request realmente abriu o caixa — dentro do
@@ -795,6 +793,7 @@ export class QuoteService {
                 shiftId: openShift.id,
                 branchId,
                 cashRegisterId: defaultRegister?.id ?? null,
+                inheritedFloatAmount: Number(openShift.openingFloatAmount),
                 triggeredBy: "quote.service.convertToSale",
               },
               actorId: userId,

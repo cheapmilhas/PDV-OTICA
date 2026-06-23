@@ -24,6 +24,7 @@ export async function GET() {
         "Telefone 2": "(11) 3456-7890",
         Email: "joao.silva@email.com",
         "Data de Nascimento": "15/03/1985",
+        "Data de Cadastro": "10/01/2020",
         Gênero: "M",
         Endereço: "Rua das Flores",
         Número: "123",
@@ -45,6 +46,7 @@ export async function GET() {
         "Telefone 2": "",
         Email: "maria.santos@email.com",
         "Data de Nascimento": "22/07/1990",
+        "Data de Cadastro": "05/06/2018",
         Gênero: "F",
         Endereço: "Av. Paulista",
         Número: "1000",
@@ -74,6 +76,7 @@ export async function GET() {
       { wch: 18 }, // Telefone 2
       { wch: 30 }, // Email
       { wch: 18 }, // Data de Nascimento
+      { wch: 18 }, // Data de Cadastro
       { wch: 10 }, // Gênero
       { wch: 40 }, // Endereço
       { wch: 10 }, // Número
@@ -97,6 +100,7 @@ export async function GET() {
       { Campo: "Telefone 2", Obrigatório: "Não", Formato: "(99) 99999-9999", Descrição: "Telefone secundário" },
       { Campo: "Email", Obrigatório: "Não", Formato: "email@exemplo.com", Descrição: "Email do cliente" },
       { Campo: "Data de Nascimento", Obrigatório: "Não", Formato: "dd/MM/yyyy", Descrição: "Data de nascimento" },
+      { Campo: "Data de Cadastro", Obrigatório: "Não", Formato: "dd/MM/yyyy", Descrição: "Data em que o cliente foi cadastrado originalmente (define o \"Cliente desde\"). Se vazio, usa a data da importação." },
       { Campo: "Gênero", Obrigatório: "Não", Formato: "M, F ou Outro", Descrição: "Gênero do cliente" },
       { Campo: "Endereço", Obrigatório: "Não", Formato: "Texto", Descrição: "Nome da rua/avenida" },
       { Campo: "Número", Obrigatório: "Não", Formato: "Texto", Descrição: "Número do endereço" },

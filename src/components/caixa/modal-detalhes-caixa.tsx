@@ -23,6 +23,7 @@ import {
   MovimentacoesTable,
   type MovRow,
 } from "@/components/caixa/movimentacoes-table";
+import { buildPrintHtml } from "@/components/caixa/cash-print";
 
 interface CashRegister {
   id: string;
@@ -105,37 +106,14 @@ export function ModalDetalhesCaixa({
 
   function handlePrint() {
     if (!caixa) return;
-    const printContent = document.getElementById(`print-caixa-${caixa.id}`);
-    if (!printContent) return;
 
     const win = window.open("", "_blank");
     if (!win) return;
-    win.document.write(`
-      <html>
-        <head>
-          <title>Relatório de Caixa</title>
-          <style>
-            body { font-family: Arial, sans-serif; font-size: 12px; margin: 20px; }
-            h1 { font-size: 16px; margin-bottom: 4px; }
-            h2 { font-size: 14px; margin: 12px 0 4px; border-bottom: 1px solid #ccc; padding-bottom: 4px; }
-            table { width: 100%; border-collapse: collapse; margin-top: 8px; }
-            th, td { border: 1px solid #ddd; padding: 6px 8px; text-align: left; font-size: 11px; }
-            th { background: #f5f5f5; font-weight: bold; }
-            .text-right { text-align: right; }
-            .green { color: #16a34a; } .red { color: #dc2626; } .orange { color: #d97706; }
-            .summary { display: flex; gap: 24px; margin: 8px 0; flex-wrap: wrap; }
-            .summary-item { background: #f9f9f9; border: 1px solid #e5e5e5; padding: 8px 12px; border-radius: 4px; }
-            .summary-label { font-size: 10px; color: #666; }
-            .summary-value { font-size: 14px; font-weight: bold; }
-            @media print { button { display: none !important; } }
-          </style>
-        </head>
-        <body>
-          ${printContent.innerHTML}
-          <script>window.onload = function() { window.print(); }</script>
-        </body>
-      </html>
-    `);
+
+    // Rotina 21/06: o relatório saía "desestruturado" porque copiava o innerHTML
+    // (classes Tailwind) para uma janela SEM Tailwind. Aqui montamos o HTML a
+    // partir dos DADOS com CSS próprio — independente do Tailwind.
+    win.document.write(buildPrintHtml(caixa, transactions, salesByMethod));
     win.document.close();
   }
 

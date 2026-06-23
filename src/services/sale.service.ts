@@ -11,6 +11,7 @@ import { METHODS_IN_CASH, METHODS_WITH_RECEIVABLE } from "@/lib/payment-methods"
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { assertValidManagerOverride, overrideAllows } from "@/lib/manager-override";
 import { atomicStockDebit } from "@/services/stock.service";
+import { autoOpenShiftWithInheritedFloat } from "@/services/cash.service";
 import { getNextSequence } from "@/lib/counter";
 import { shouldRestockOnCancel } from "@/lib/stock-operation";
 import { reverseBonusForSale, reactivateBonusForSale } from "@/services/product-campaign.service";
@@ -631,16 +632,13 @@ export class SaleService {
           select: { id: true },
         });
 
-        openShift = await prisma.cashShift.create({
-          data: {
-            companyId: branch.companyId,
-            branchId,
-            openedByUserId: userId,
-            openingFloatAmount: 0,
-            status: "OPEN",
-            openedAt: new Date(),
-            ...(defaultRegister && { cashRegisterId: defaultRegister.id }),
-          },
+        // Rotina 21/06: herda o fundo de troco do último caixa fechado em vez
+        // de abrir sempre com R$0 (o fundo permanece na gaveta entre os dias).
+        openShift = await autoOpenShiftWithInheritedFloat({
+          companyId: branch.companyId,
+          branchId,
+          userId,
+          cashRegisterId: defaultRegister?.id ?? null,
         });
 
         // Auditoria — registra a auto-abertura para que admins possam rastrear
@@ -656,6 +654,7 @@ export class SaleService {
                 shiftId: openShift.id,
                 branchId,
                 cashRegisterId: defaultRegister?.id ?? null,
+                inheritedFloatAmount: Number(openShift.openingFloatAmount),
                 triggeredBy: "sale.service.createSale",
               },
               actorId: userId,

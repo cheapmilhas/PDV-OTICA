@@ -456,6 +456,96 @@ export class CashService {
 export const cashService = new CashService();
 
 /**
+ * Resolve o fundo de troco a herdar quando um caixa é auto-aberto.
+ *
+ * Rotina 21/06: o sócio estranhou o caixa "abrir sozinho com R$0" enquanto o
+ * caixa anterior havia fechado com R$200. Em ótica o fundo de troco normalmente
+ * permanece na gaveta de um dia para o outro. Então a auto-abertura passa a
+ * herdar o saldo declarado no fechamento do último caixa (closingDeclaredCash).
+ *
+ * Função pura para ser testável: recebe o valor declarado no último fechamento
+ * (ou null) e devolve um fundo não-negativo (nunca herda valor negativo).
+ */
+export function resolveInheritedFloat(
+  lastClosingDeclaredCash: number | null | undefined
+): number {
+  if (lastClosingDeclaredCash == null) return 0;
+  if (!Number.isFinite(lastClosingDeclaredCash)) return 0;
+  return lastClosingDeclaredCash > 0 ? lastClosingDeclaredCash : 0;
+}
+
+/**
+ * Cria um turno de caixa auto-aberto herdando o fundo de troco do último caixa
+ * fechado da filial. Cria também o CashMovement OPENING_FLOAT correspondente
+ * (senão o saldo em caixa não bate com o fundo herdado).
+ *
+ * Usado por sale.service e quote.service quando uma venda/conversão acontece
+ * sem caixa aberto. DEVE ser chamado fora de uma transação concorrente — o
+ * índice único parcial CashShift_branchId_open_unique protege contra corrida
+ * (o chamador trata P2002 rebuscando o turno OPEN).
+ */
+export async function autoOpenShiftWithInheritedFloat(params: {
+  companyId: string;
+  branchId: string;
+  userId: string;
+  cashRegisterId?: string | null;
+}): Promise<CashShift> {
+  const { companyId, branchId, userId, cashRegisterId } = params;
+
+  // Último caixa fechado da filial — fonte do fundo herdado. Filtra companyId
+  // (isolamento multi-tenant) e closedAt não-nulo (no Postgres, NULLS FIRST em
+  // DESC poderia trazer um turno sem closedAt para o topo).
+  const lastClosed = await prisma.cashShift.findFirst({
+    where: { companyId, branchId, status: "CLOSED", closedAt: { not: null } },
+    orderBy: { closedAt: "desc" },
+    select: { closingDeclaredCash: true },
+  });
+
+  const inheritedFloat = resolveInheritedFloat(
+    lastClosed?.closingDeclaredCash != null
+      ? Number(lastClosed.closingDeclaredCash)
+      : null
+  );
+
+  return prisma.$transaction(
+    async (tx) => {
+      const shift = await tx.cashShift.create({
+        data: {
+          companyId,
+          branchId,
+          openedByUserId: userId,
+          openingFloatAmount: inheritedFloat,
+          status: "OPEN",
+          openedAt: new Date(),
+          ...(cashRegisterId && { cashRegisterId }),
+        },
+      });
+
+      // Espelha a abertura manual: fundo > 0 gera o movimento de entrada.
+      if (inheritedFloat > 0) {
+        await tx.cashMovement.create({
+          data: {
+            cashShiftId: shift.id,
+            branchId,
+            type: "OPENING_FLOAT",
+            direction: "IN",
+            method: "CASH",
+            amount: inheritedFloat,
+            originType: "CASH_SHIFT",
+            originId: shift.id,
+            createdByUserId: userId,
+            note: "Fundo de troco herdado do caixa anterior (auto-abertura)",
+          },
+        });
+      }
+
+      return shift;
+    },
+    { timeout: 30_000 }
+  );
+}
+
+/**
  * Estorna, de forma IDEMPOTENTE, o caixa de um AccountReceivable.
  *
  * Soma todos os CashMovement IN deste AR por shift e subtrai os REFUND OUT

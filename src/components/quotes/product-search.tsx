@@ -93,7 +93,14 @@ export function ProductSearch({ onSelectProduct }: ProductSearchProps) {
             {products.map((product) => (
               <button
                 key={product.id}
-                onClick={() => handleSelectProduct(product)}
+                // BUG rotina 21/06: clicar no resultado não inseria o item.
+                // Causa: o onBlur do input (setTimeout 200ms) desmontava o
+                // dropdown antes do `click` disparar. onMouseDown roda ANTES
+                // do blur; preventDefault evita o input perder o foco/timing.
+                onMouseDown={(e) => {
+                  e.preventDefault();
+                  handleSelectProduct(product);
+                }}
                 className="w-full p-3 hover:bg-muted transition-colors text-left flex items-start gap-3"
               >
                 <Package className="h-5 w-5 text-muted-foreground mt-0.5" />

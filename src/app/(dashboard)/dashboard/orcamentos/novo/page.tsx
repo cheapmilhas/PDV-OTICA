@@ -184,7 +184,8 @@ function NovoOrcamentoPage() {
       stockQty: product.stockQty,
     };
 
-    setItems([...items, newItem]);
+    // Atualização funcional: evita perder item em cliques rápidos (closure stale).
+    setItems((prev) => [...prev, newItem]);
     toast.success("Produto adicionado");
   };
 

@@ -3,10 +3,14 @@ import { auth } from "@/auth";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, AppError, ERROR_CODES, unauthorizedError } from "@/lib/error-handler";
-import { paymentExceedsPayable } from "@/lib/finance-validation";
+import { paymentExceedsPayable, withdrawalExceedsCash } from "@/lib/finance-validation";
+import {
+  postPayableCashWithdrawal,
+  reversePayableCashWithdrawal,
+} from "@/services/payable-cash-sync";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { z } from "zod";
-import { AccountPayableStatus, AccountCategory } from "@prisma/client";
+import { AccountPayableStatus, AccountCategory, FinanceAccountType } from "@prisma/client";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import { requireWriteAccess } from "@/lib/subscription";
 import {
@@ -420,6 +424,11 @@ export async function PATCH(request: Request) {
             );
           }
 
+          // Lock de linha (FOR UPDATE) antes de ler/decrementar o saldo —
+          // serializa pagamentos concorrentes na mesma conta para que a trava
+          // de saldo negativo (abaixo) não seja burlada por corrida.
+          await tx.$queryRaw`SELECT id FROM "FinanceAccount" WHERE id = ${data.financeAccountId} AND "companyId" = ${companyId} FOR UPDATE`;
+
           // Validar que a conta financeira pertence à empresa
           const acc = await tx.financeAccount.findFirst({
             where: { id: data.financeAccountId, companyId },
@@ -428,6 +437,21 @@ export async function PATCH(request: Request) {
             throw new AppError(
               ERROR_CODES.VALIDATION_ERROR,
               "Conta financeira inválida",
+              400
+            );
+          }
+
+          // Rotina 21/06: "não existe caixa negativo". Bloqueia pagar em
+          // DINHEIRO (conta tipo CASH) quando o saldo não cobre o valor — antes
+          // só havia um aviso visual que não impedia nada. Demais tipos (banco,
+          // cartão, etc.) podem ficar negativos (limite/cheque especial).
+          if (
+            acc.type === FinanceAccountType.CASH &&
+            withdrawalExceedsCash(paidAmount, Number(acc.balance))
+          ) {
+            throw new AppError(
+              ERROR_CODES.VALIDATION_ERROR,
+              `Saldo insuficiente em "${acc.name}" (R$ ${Number(acc.balance).toFixed(2)}) para pagar R$ ${paidAmount.toFixed(2)}. O caixa não pode ficar negativo — faça um reforço de caixa ou escolha outra conta de saída.`,
               400
             );
           }
@@ -449,6 +473,19 @@ export async function PATCH(request: Request) {
             existing.branchId,
             acc.id
           );
+
+          // Rotina 21/06: a baixa de despesa em DINHEIRO precisa aparecer no
+          // Caixa do PDV (Fluxo de Caixa), não só no ledger financeiro.
+          // No-op se a conta não for CASH, sem filial, ou sem caixa aberto.
+          await postPayableCashWithdrawal(tx, {
+            companyId,
+            payableId: data.id,
+            branchId: existing.branchId,
+            accountType: acc.type,
+            amount: paidAmount,
+            description: existing.description,
+            userId,
+          });
         }
 
         const updated = await tx.accountPayable.findUnique({
@@ -468,6 +505,16 @@ export async function PATCH(request: Request) {
         // Remove o lançamento EXPENSE e re-credita o saldo se ele tinha
         // financeAccountId registrado. Sem catch silencioso: erro reverte tudo.
         await deleteAccountPayableExpenseEntry(tx, data.id, companyId);
+
+        // Rotina 21/06: se o pagamento gerou uma sangria no Caixa do PDV (conta
+        // CASH), o estorno precisa compensá-la com uma entrada equivalente nos
+        // turnos ainda abertos (idempotente). Turnos fechados não são tocados.
+        await reversePayableCashWithdrawal(tx, {
+          companyId,
+          payableId: data.id,
+          description: existing.description,
+          userId,
+        });
 
         return updated;
       }
