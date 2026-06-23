@@ -5,7 +5,6 @@ import { prisma } from "@/lib/prisma";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 import * as XLSX from "xlsx";
-import { parse, isValid } from "date-fns";
 import { parseSpreadsheetDate } from "@/lib/import-utils";
 
 /**
@@ -116,21 +115,9 @@ export async function POST(request: NextRequest) {
           ? cepRaw.toString().replace(/\D/g, "")
           : null;
 
-        // Parsear data de nascimento (dd/MM/yyyy ou serial Excel)
-        let birthDate = null;
-        if (dataNascRaw) {
-          if (typeof dataNascRaw === "number") {
-            // Serial Excel: dias desde 1900-01-01
-            const excelEpoch = new Date(1899, 11, 30);
-            birthDate = new Date(excelEpoch.getTime() + dataNascRaw * 86400000);
-          } else {
-            const dateStr = dataNascRaw.toString();
-            const parsedDate = parse(dateStr, "dd/MM/yyyy", new Date());
-            if (isValid(parsedDate)) {
-              birthDate = parsedDate;
-            }
-          }
-        }
+        // Data de nascimento (dd/MM/yyyy, serial Excel ou Date) — fixada em
+        // meia-noite UTC pelo helper, evitando o shift de fuso (-1 dia em BRT).
+        const birthDate = parseSpreadsheetDate(dataNascRaw);
 
         // Data de cadastro original (dd/MM/yyyy ou serial Excel). Aplicada SÓ
         // na criação — nunca sobrescreve a data de clientes já existentes.

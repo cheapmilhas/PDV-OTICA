@@ -425,6 +425,19 @@ function ClienteDetalhesPage() {
     }
   };
 
+  // Formata o DIA CIVIL (UTC) de um timestamp, evitando o shift de fuso que
+  // mostraria 1 dia antes em BRT (UTC-3) — mesmo cuidado do birthDate. Usado no
+  // "Cliente desde": datas importadas são gravadas em meia-noite UTC, então o
+  // dia precisa ser lido em UTC para não recuar.
+  const formatCivilDate = (value: any): string => {
+    try {
+      const iso = typeof value === "string" ? value : new Date(value).toISOString();
+      return format(parseISO(iso.slice(0, 10)), "dd/MM/yyyy", { locale: ptBR });
+    } catch {
+      return "-";
+    }
+  };
+
   // Helper para label de movimentação de cashback
   const getMovementLabel = (type: string): string => {
     const labels: Record<string, string> = {
@@ -696,7 +709,7 @@ function ClienteDetalhesPage() {
             <div>
               <h1 className="text-3xl font-bold">{customer.name}</h1>
               <p className="text-sm text-muted-foreground">
-                Cliente desde {format(safeDate(customer.createdAt), "dd/MM/yyyy", { locale: ptBR })}
+                Cliente desde {formatCivilDate(customer.createdAt)}
               </p>
             </div>
           </div>

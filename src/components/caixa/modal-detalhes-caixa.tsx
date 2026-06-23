@@ -107,8 +107,19 @@ export function ModalDetalhesCaixa({
   function handlePrint() {
     if (!caixa) return;
 
+    // Guard de race: as movimentações são carregadas de forma assíncrona ao
+    // abrir o modal. Imprimir antes disso geraria um relatório SEM movimentações
+    // (cabeçalho/resumo certos, tabela vazia). Aguarda o carregamento terminar.
+    if (isLoading) {
+      toast.info("Aguarde o carregamento das movimentações para imprimir.");
+      return;
+    }
+
     const win = window.open("", "_blank");
-    if (!win) return;
+    if (!win) {
+      toast.error("Não foi possível abrir a janela de impressão. Permita pop-ups e tente novamente.");
+      return;
+    }
 
     // Rotina 21/06: o relatório saía "desestruturado" porque copiava o innerHTML
     // (classes Tailwind) para uma janela SEM Tailwind. Aqui montamos o HTML a
@@ -275,9 +286,9 @@ export function ModalDetalhesCaixa({
               Fechar
             </Button>
             {caixa.status === "CLOSED" && (
-              <Button onClick={handlePrint}>
+              <Button onClick={handlePrint} disabled={isLoading}>
                 <Download className="mr-2 h-4 w-4" />
-                Imprimir Relatório
+                {isLoading ? "Carregando..." : "Imprimir Relatório"}
               </Button>
             )}
           </div>

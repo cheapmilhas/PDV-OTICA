@@ -84,13 +84,16 @@ export function buildPrintHtml(
       : transactions
           .map((m) => {
             const isOut = m.kind === "MOVEMENT" && m.direction === "OUT";
-            const sign = isOut ? "-" : "+";
-            const colorClass = m.kind === "VOIDED" ? "red" : isOut ? "red" : "green";
+            // Venda CANCELADA é informativa (nem entrada nem saída de caixa):
+            // sem sinal e em cinza, igual à tela. IN → +verde, OUT → −vermelho.
+            const isVoided = m.kind === "VOIDED";
+            const sign = isVoided ? "" : isOut ? "- " : "+ ";
+            const colorClass = isVoided ? "muted-amount" : isOut ? "red" : "green";
             return `<tr>
               <td>${dt(m.createdAt)}</td>
               <td>${movTipoLabel(m)}</td>
               <td>${movDescription(m)}</td>
-              <td class="text-right ${colorClass}">${sign} ${brl(m.amount)}</td>
+              <td class="text-right ${colorClass}">${sign}${brl(m.amount)}</td>
             </tr>`;
           })
           .join("");
@@ -153,6 +156,7 @@ export function buildPrintHtml(
       th { background: #f5f5f5; font-weight: bold; }
       .text-right { text-align: right; }
       .green { color: #16a34a; } .red { color: #dc2626; }
+      .muted-amount { color: #94a3b8; }
       .summary { display: flex; gap: 16px; margin: 8px 0; flex-wrap: wrap; }
       .summary-item { background: #f9f9f9; border: 1px solid #e5e5e5; padding: 8px 12px; border-radius: 4px; min-width: 140px; }
       .summary-label { font-size: 10px; color: #666; }

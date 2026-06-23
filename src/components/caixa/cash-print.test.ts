@@ -93,6 +93,42 @@ describe("buildPrintHtml", () => {
     expect(html).toContain("&lt;script&gt;");
   });
 
+  it("venda CANCELADA (VOIDED) imprime sem sinal e em cinza (igual à tela)", () => {
+    const movs: MovRow[] = [
+      {
+        kind: "VOIDED",
+        id: "v1",
+        method: "CASH",
+        amount: 100,
+        saleNumber: 10591,
+        sellerName: "mirabou",
+        createdAt: "2026-06-03T10:00:00.000Z",
+      },
+    ];
+    const html = buildPrintHtml(CAIXA_FECHADO, movs, []);
+    // sem "+ " nem "- " grudado no valor da cancelada; usa a cor neutra.
+    expect(html).toContain("muted-amount");
+    expect(html).not.toMatch(/[+\-]\s*R\$\s*100,00/);
+  });
+
+  it("movimento de SAÍDA imprime com sinal negativo vermelho", () => {
+    const movs: MovRow[] = [
+      {
+        kind: "MOVEMENT",
+        id: "m1",
+        type: "WITHDRAWAL",
+        direction: "OUT",
+        method: "CASH",
+        amount: 50,
+        note: "Sangria",
+        createdAt: "2026-06-03T11:00:00.000Z",
+      },
+    ];
+    const html = buildPrintHtml(CAIXA_FECHADO, movs, []);
+    expect(html).toMatch(/- ?R\$\s*50,00|-\s*R\$/);
+    expect(html).toContain("class=\"text-right red\"");
+  });
+
   it("conferência por forma de pagamento aparece quando há dados", () => {
     const sbm: SalesByMethodEntry[] = [{ method: "CASH", amount: 539.9, count: 1 }];
     const html = buildPrintHtml(CAIXA_FECHADO, [], sbm);

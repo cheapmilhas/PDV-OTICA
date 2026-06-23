@@ -8,9 +8,9 @@ import {
 
 function makeTx(opts: {
   openShift?: { id: string } | null;
-  withdrawals?: any[];
+  /** Movimentos desta conta (WITHDRAWAL/OUT e SUPPLY/IN) — usados pelo estorno. */
+  movements?: any[];
   shiftStatusById?: Record<string, "OPEN" | "CLOSED">;
-  alreadyReversedCount?: number;
 }) {
   const shiftLookup = async ({ where }: any) => {
     const status = opts.shiftStatusById?.[where.id];
@@ -23,8 +23,7 @@ function makeTx(opts: {
   });
   const cashShiftFindUnique = vi.fn(shiftLookup);
   const cashMovementCreate = vi.fn(async () => ({ id: "mov-new" }));
-  const cashMovementFindMany = vi.fn(async () => opts.withdrawals ?? []);
-  const cashMovementCount = vi.fn(async () => opts.alreadyReversedCount ?? 0);
+  const cashMovementFindMany = vi.fn(async () => opts.movements ?? []);
 
   return {
     tx: {
@@ -32,12 +31,10 @@ function makeTx(opts: {
       cashMovement: {
         create: cashMovementCreate,
         findMany: cashMovementFindMany,
-        count: cashMovementCount,
       },
     } as never,
     cashShiftFindFirst,
     cashMovementCreate,
-    cashMovementCount,
   };
 }
 
@@ -111,14 +108,21 @@ describe("postPayableCashWithdrawal", () => {
   });
 });
 
+const OUT = (over: any = {}) => ({
+  cashShiftId: "shift_1",
+  branchId: "b1",
+  amount: 15,
+  method: "CASH",
+  direction: "OUT",
+  ...over,
+});
+const IN = (over: any = {}) => ({ ...OUT(), direction: "IN", ...over });
+
 describe("reversePayableCashWithdrawal", () => {
   it("compensa sangria de turno aberto com SUPPLY/IN", async () => {
     const { tx, cashMovementCreate } = makeTx({
-      withdrawals: [
-        { id: "w1", cashShiftId: "shift_1", branchId: "b1", amount: 15, method: "CASH" },
-      ],
+      movements: [OUT()],
       shiftStatusById: { shift_1: "OPEN" },
-      alreadyReversedCount: 0,
     });
     const n = await reversePayableCashWithdrawal(tx, BASE);
     expect(n).toBe(1);
@@ -130,9 +134,7 @@ describe("reversePayableCashWithdrawal", () => {
 
   it("turno FECHADO → não compensa (fechamento já contabilizou)", async () => {
     const { tx, cashMovementCreate } = makeTx({
-      withdrawals: [
-        { id: "w1", cashShiftId: "shift_1", branchId: "b1", amount: 15, method: "CASH" },
-      ],
+      movements: [OUT()],
       shiftStatusById: { shift_1: "CLOSED" },
     });
     const n = await reversePayableCashWithdrawal(tx, BASE);
@@ -140,21 +142,41 @@ describe("reversePayableCashWithdrawal", () => {
     expect(cashMovementCreate).not.toHaveBeenCalled();
   });
 
-  it("idempotente: já compensado → não duplica", async () => {
+  it("idempotente: já compensado (OUT+IN net 0) → não duplica", async () => {
     const { tx, cashMovementCreate } = makeTx({
-      withdrawals: [
-        { id: "w1", cashShiftId: "shift_1", branchId: "b1", amount: 15, method: "CASH" },
-      ],
+      movements: [OUT(), IN()], // sangria 15 + estorno 15 = net 0
       shiftStatusById: { shift_1: "OPEN" },
-      alreadyReversedCount: 1,
     });
     const n = await reversePayableCashWithdrawal(tx, BASE);
     expect(n).toBe(0);
     expect(cashMovementCreate).not.toHaveBeenCalled();
   });
 
+  it("CRÍTICO: ciclo pagar→estornar→pagar→estornar compensa a 2ª sangria", async () => {
+    // Estado após pagar#1 (OUT), estornar#1 (IN), pagar#2 (OUT): net = +15.
+    // O 2º estorno DEVE criar um SUPPLY de 15 (antes deixava sem compensação).
+    const { tx, cashMovementCreate } = makeTx({
+      movements: [OUT(), IN(), OUT()],
+      shiftStatusById: { shift_1: "OPEN" },
+    });
+    const n = await reversePayableCashWithdrawal(tx, BASE);
+    expect(n).toBe(1);
+    const call = (cashMovementCreate.mock.calls as any[])[0][0];
+    expect(call.data.amount).toBe(15);
+    expect(call.data.direction).toBe("IN");
+  });
+
+  it("net por método: CASH e PIX são compensados separadamente", async () => {
+    const { tx, cashMovementCreate } = makeTx({
+      movements: [OUT({ method: "CASH", amount: 10 }), OUT({ method: "PIX", amount: 5 })],
+      shiftStatusById: { shift_1: "OPEN" },
+    });
+    const n = await reversePayableCashWithdrawal(tx, BASE);
+    expect(n).toBe(2);
+  });
+
   it("sem sangrias registradas → no-op", async () => {
-    const { tx, cashMovementCreate } = makeTx({ withdrawals: [] });
+    const { tx, cashMovementCreate } = makeTx({ movements: [] });
     const n = await reversePayableCashWithdrawal(tx, BASE);
     expect(n).toBe(0);
     expect(cashMovementCreate).not.toHaveBeenCalled();
@@ -162,11 +184,8 @@ describe("reversePayableCashWithdrawal", () => {
 
   it("isolamento: shift de outra empresa (findFirst com companyId retorna null) → não compensa", async () => {
     const { tx, cashMovementCreate } = makeTx({
-      withdrawals: [
-        { id: "w1", cashShiftId: "shift_outra_empresa", branchId: "b1", amount: 15, method: "CASH" },
-      ],
-      // shiftStatusById não mapeia esse id → o findFirst com companyId devolve null.
-      shiftStatusById: {},
+      movements: [OUT({ cashShiftId: "shift_outra_empresa" })],
+      shiftStatusById: {}, // findFirst com companyId devolve null
     });
     const n = await reversePayableCashWithdrawal(tx, BASE);
     expect(n).toBe(0);

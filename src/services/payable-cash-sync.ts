@@ -1,4 +1,4 @@
-import { Prisma, FinanceAccountType } from "@prisma/client";
+import { Prisma, FinanceAccountType, CashMovement } from "@prisma/client";
 
 /**
  * Sincronização entre o pagamento de Contas a Pagar e o Caixa do PDV.
@@ -73,9 +73,15 @@ interface ReverseWithdrawalParams {
 
 /**
  * Compensa, de forma IDEMPOTENTE, sangrias de pagamento desta conta cujo turno
- * AINDA está aberto, criando um SUPPLY/IN equivalente. Turnos já fechados não
- * são tocados (o fechamento já contabilizou a sangria). Chamar 2x não duplica
- * a compensação. Retorna a quantidade de movimentos de estorno criados.
+ * AINDA está aberto. Turnos já fechados não são tocados (o fechamento já
+ * contabilizou a sangria). Retorna a quantidade de movimentos de estorno criados.
+ *
+ * Idempotência por NET (espelha reverseAccountReceivableCash): agrupa o líquido
+ * OUT(WITHDRAWAL) − IN(SUPPLY) por (shift, método) e cria um SUPPLY só do
+ * remanescente. Isso cobre o ciclo pagar→estornar→pagar→estornar na MESMA
+ * conta/turno — antes a checagem "já estornei?" era por (conta, shift), então a
+ * 2ª sangria via o SUPPLY da 1ª e ficava sem compensação, deixando o caixa a
+ * menos. Com o net, cada nova sangria não-compensada gera seu próprio estorno.
  */
 export async function reversePayableCashWithdrawal(
   tx: Prisma.TransactionClient,
@@ -83,52 +89,59 @@ export async function reversePayableCashWithdrawal(
 ): Promise<number> {
   const { companyId, payableId, description, userId } = params;
 
-  const withdrawals = await tx.cashMovement.findMany({
+  // Todos os movimentos desta conta (sangrias OUT e estornos IN já feitos),
+  // restritos aos caixas desta empresa (defesa em profundidade).
+  const movements = await tx.cashMovement.findMany({
     where: {
       originType: ORIGIN_TYPE,
       originId: payableId,
-      type: "WITHDRAWAL",
-      direction: "OUT",
-      // Defesa em profundidade: só movimentos de caixas desta empresa.
       cashShift: { companyId },
     },
-    select: {
-      id: true,
-      cashShiftId: true,
-      branchId: true,
-      amount: true,
-      method: true,
-    },
+    select: { cashShiftId: true, branchId: true, amount: true, method: true, direction: true },
   });
+
+  // Líquido a estornar por (shift, método) = OUT − IN já compensado.
+  const netByKey = new Map<
+    string,
+    { cashShiftId: string; branchId: string; method: CashMovement["method"]; net: number }
+  >();
+  for (const mov of movements) {
+    const amount = Number(mov.amount);
+    // WITHDRAWAL/OUT soma positivo (a estornar); SUPPLY/IN abate.
+    const signed = mov.direction === "OUT" ? amount : -amount;
+    const key = `${mov.cashShiftId}:${mov.method}`;
+    const prev = netByKey.get(key);
+    if (prev) {
+      prev.net = Math.round((prev.net + signed) * 100) / 100;
+    } else {
+      netByKey.set(key, {
+        cashShiftId: mov.cashShiftId,
+        branchId: mov.branchId,
+        method: mov.method,
+        net: signed,
+      });
+    }
+  }
 
   let created = 0;
 
-  for (const w of withdrawals) {
+  for (const info of netByKey.values()) {
+    if (info.net < 0.01) continue; // nada a estornar (já compensado)
+
     const shift = await tx.cashShift.findFirst({
-      where: { id: w.cashShiftId, companyId },
+      where: { id: info.cashShiftId, companyId },
       select: { status: true },
     });
     if (shift?.status !== "OPEN") continue; // turno fechado — não toca
 
-    const alreadyReversed = await tx.cashMovement.count({
-      where: {
-        originType: ORIGIN_TYPE,
-        originId: payableId,
-        type: "SUPPLY",
-        direction: "IN",
-        cashShiftId: w.cashShiftId,
-      },
-    });
-    if (alreadyReversed > 0) continue;
-
     await tx.cashMovement.create({
       data: {
-        cashShiftId: w.cashShiftId,
-        branchId: w.branchId,
+        cashShiftId: info.cashShiftId,
+        branchId: info.branchId,
         type: "SUPPLY",
         direction: "IN",
-        method: w.method,
-        amount: w.amount,
+        method: info.method,
+        amount: info.net,
         originType: ORIGIN_TYPE,
         originId: payableId,
         createdByUserId: userId,

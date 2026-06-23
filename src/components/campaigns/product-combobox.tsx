@@ -36,25 +36,19 @@ export function ProductCombobox({ onSelect }: ProductComboboxProps) {
     try {
       setLoading(true);
 
-      console.log(`[ProductCombobox] Buscando produtos com termo: "${term}"`);
-
       const response = await fetch(`/api/products/search?search=${encodeURIComponent(term)}`);
-      console.log("[ProductCombobox] Response status:", response.status);
-
       const result = await response.json();
-      console.log("[ProductCombobox] Result:", result);
 
       if (result.success && Array.isArray(result.data)) {
-        console.log(`[ProductCombobox] ✅ ${result.data.length} produtos encontrados`);
         setProducts(result.data);
         setShowDropdown(true);
       } else {
-        console.error("[ProductCombobox] ❌ Formato inesperado:", result);
+        console.error("[ProductCombobox] Formato inesperado:", result);
         setProducts([]);
         setShowDropdown(false);
       }
     } catch (err) {
-      console.error("[ProductCombobox] ❌ Exception:", err);
+      console.error("[ProductCombobox] Exception:", err);
       setProducts([]);
       setShowDropdown(false);
     } finally {
@@ -63,7 +57,6 @@ export function ProductCombobox({ onSelect }: ProductComboboxProps) {
   };
 
   const handleSelect = (product: Product) => {
-    console.log("[ProductCombobox] Produto selecionado:", product);
     onSelect(product);
     setSearch("");
     setShowDropdown(false);
@@ -100,7 +93,13 @@ export function ProductCombobox({ onSelect }: ProductComboboxProps) {
             <button
               key={product.id}
               type="button"
-              onClick={() => handleSelect(product)}
+              // Mesmo fix do orçamento (rotina 21/06): onMouseDown roda antes do
+              // onBlur do input (que fecha o dropdown em 200ms), garantindo a
+              // seleção; onClick podia perder o alvo na corrida.
+              onMouseDown={(e) => {
+                e.preventDefault();
+                handleSelect(product);
+              }}
               className="w-full px-4 py-2 text-left hover:bg-gray-50 flex items-center justify-between border-b border-gray-100 last:border-0"
             >
               <div>
