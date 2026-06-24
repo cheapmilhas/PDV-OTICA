@@ -269,6 +269,17 @@ export type UpdateProductDTO = z.infer<typeof updateProductSchema>;
 export type ProductQuery = z.infer<typeof productQuerySchema>;
 
 /**
+ * Sanitiza o que o usuário digita no campo SKU: maiúsculas + remove qualquer
+ * caractere fora de [A-Z0-9-_] (espaço, ponto, barra, acento). Espelha o regex
+ * de validação do createProductSchema para que o campo nunca aceite algo que o
+ * backend recusaria — evita o atrito de "não consigo cadastrar" por SKU com
+ * espaço/caractere inválido (caso PS VISION).
+ */
+export function sanitizeSkuInput(raw: string): string {
+  return raw.toUpperCase().replace(/[^A-Z0-9\-_]/g, "");
+}
+
+/**
  * Helper para limpar campos vazios do DTO
  */
 export function sanitizeProductDTO(

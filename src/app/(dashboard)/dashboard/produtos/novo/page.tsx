@@ -20,7 +20,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import Link from "next/link";
-import { calculateMargin } from "@/lib/validations/product.schema";
+import { calculateMargin, sanitizeSkuInput } from "@/lib/validations/product.schema";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 function NovoProdutoPageContent() {
@@ -289,9 +289,12 @@ function NovoProdutoPageContent() {
                   id="sku"
                   required
                   value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                  onChange={(e) => setFormData({ ...formData, sku: sanitizeSkuInput(e.target.value) })}
                   placeholder="Ex: ARM-001"
                 />
+                <p className="text-xs text-muted-foreground">
+                  Use letras, números, hífen (-) e underscore (_). Sem espaços, pontos ou acentos.
+                </p>
               </div>
 
               <div className="space-y-2">

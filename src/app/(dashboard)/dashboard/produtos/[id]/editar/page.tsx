@@ -13,6 +13,7 @@ import toast from "react-hot-toast";
 import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { sanitizeSkuInput } from "@/lib/validations/product.schema";
 
 function EditarProdutoContent() {
   const router = useRouter();
@@ -255,8 +256,11 @@ function EditarProdutoContent() {
                   id="sku"
                   required
                   value={formData.sku}
-                  onChange={(e) => setFormData({ ...formData, sku: e.target.value.toUpperCase() })}
+                  onChange={(e) => setFormData({ ...formData, sku: sanitizeSkuInput(e.target.value) })}
                 />
+                <p className="text-xs text-muted-foreground">
+                  Use letras, números, hífen (-) e underscore (_). Sem espaços, pontos ou acentos.
+                </p>
               </div>
 
               <div className="space-y-2">

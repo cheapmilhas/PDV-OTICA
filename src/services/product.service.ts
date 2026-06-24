@@ -315,7 +315,15 @@ export class ProductService {
     });
 
     if (existingSKU) {
-      throw duplicateError("SKU já cadastrado nesta empresa", "sku");
+      // Distingue produto INATIVO: ele não aparece na listagem padrão, então a
+      // mensagem genérica confundia ("SKU já cadastrado" para um produto que o
+      // usuário não vê). Orienta a reativar/usar outro código.
+      throw duplicateError(
+        existingSKU.active
+          ? `SKU já cadastrado no produto "${existingSKU.name}". Use outro código.`
+          : `Já existe um produto INATIVO ("${existingSKU.name}") com este SKU. Reative-o ou use outro código.`,
+        "sku"
+      );
     }
 
     // Validação: Barcode duplicado (se fornecido)
@@ -328,7 +336,12 @@ export class ProductService {
       });
 
       if (existingBarcode) {
-        throw duplicateError("Código de barras já cadastrado", "barcode");
+        throw duplicateError(
+          existingBarcode.active
+            ? `Código de barras já cadastrado no produto "${existingBarcode.name}". Use outro código.`
+            : `Já existe um produto INATIVO ("${existingBarcode.name}") com este código de barras. Reative-o ou use outro.`,
+          "barcode"
+        );
       }
     }
 
