@@ -5,6 +5,11 @@ import { prisma } from "@/lib/prisma";
 import { ProductType } from "@prisma/client";
 import * as XLSX from "xlsx";
 import { parseBooleanField } from "@/lib/import-utils";
+import {
+  validateImportNumbers,
+  createProductWithStock,
+  updateProductWithStock,
+} from "@/services/product-import.service";
 
 /**
  * POST /api/products/import
@@ -50,6 +55,9 @@ export async function POST(request: NextRequest) {
       deactivated: 0,
       reactivated: 0,
     };
+
+    // Cache da filial principal por empresa (reusado pelo helper de estoque).
+    const mainBranchCache = new Map<string, string>();
 
     // Processar cada linha
     for (let i = 0; i < rawData.length; i++) {
@@ -160,20 +168,28 @@ export async function POST(request: NextRequest) {
 
         // Preparar dados do produto
         const sku = String(skuRaw || "").trim() || `PROD-${Date.now()}-${i}`;
-        const costPrice = parseFloat(String(precoCusto)) || 0;
-        const salePrice = parseFloat(String(precoVenda)) || 0;
-        const promoPrice = row["Preço Promocional"]
-          ? parseFloat(row["Preço Promocional"])
-          : null;
+
+        // C3: valida e parseia os números (preço/estoque) — rejeita preço ≤0,
+        // estoque negativo/fracionário e texto inválido (antes virava 0 calado).
+        const numbers = validateImportNumbers({
+          precoVenda,
+          precoCusto,
+          precoPromocional: row["Preço Promocional"],
+          estoqueAtual,
+          estoqueMin,
+          estoqueMax,
+        });
+        if (!numbers.ok) {
+          const detalhe = numbers.errors.map((e) => `${e.field}: ${e.message}`).join("; ");
+          results.errors.push(`Linha ${rowNum}: ${detalhe}`);
+          continue;
+        }
+        const { costPrice, salePrice, promoPrice, stockQty, stockMin, stockMax } = numbers.values;
 
         // Tipos que NÃO controlam estoque por padrão
         const noStockTypes: string[] = ["OPHTHALMIC_LENS", "CONTACT_LENS", "SERVICE", "LENS_SERVICE"];
         const stockControlledParsed = parseBooleanField(controleEstoque, true);
         const stockControlled = noStockTypes.includes(type) ? false : stockControlledParsed.value;
-
-        const stockQty = parseInt(String(estoqueAtual)) || 0;
-        const stockMin = parseInt(String(estoqueMin)) || 0;
-        const stockMax = estoqueMax ? parseInt(String(estoqueMax)) : null;
 
         const activeParsed = parseBooleanField(ativoRaw, true);
         const active = activeParsed.value;
@@ -204,64 +220,41 @@ export async function POST(request: NextRequest) {
           });
         }
 
+        // C2: cria/atualiza Product JUNTO com BranchStock, atomicamente, via
+        // helper compartilhado (mesma lógica do importador data-management e do
+        // cadastro manual) — sem isso o produto importado nascia "Disponível: 0".
+        const importData = {
+          companyId,
+          sku,
+          name: String(nome),
+          type,
+          barcode: barcodeValue ? String(barcodeValue) : null,
+          manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
+          description: row["Descrição"] || null,
+          categoryId,
+          brandId,
+          supplierId,
+          costPrice,
+          salePrice,
+          promoPrice,
+          stockControlled,
+          stockQty,
+          stockMin,
+          stockMax,
+          ncm: ncmRaw ? String(ncmRaw) : null,
+          cest: cestRaw ? String(cestRaw) : null,
+          active,
+          featured,
+          launch,
+        };
+
         if (existingProduct) {
-          // Atualizar produto existente
-          await prisma.product.update({
-            where: { id: existingProduct.id },
-            data: {
-              barcode: barcodeValue,
-              manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
-              name: nome,
-              description: row["Descrição"] || null,
-              type,
-              categoryId,
-              brandId,
-              supplierId,
-              costPrice,
-              salePrice,
-              promoPrice,
-              stockControlled,
-              stockQty,
-              stockMin,
-              stockMax,
-              ncm: ncmRaw ? String(ncmRaw) : null,
-              cest: cestRaw ? String(cestRaw) : null,
-              active,
-              featured,
-              launch,
-            },
-          });
+          await updateProductWithStock(existingProduct.id, importData, mainBranchCache);
           if (existingProduct.active && !active) results.deactivated++;
           if (!existingProduct.active && active) results.reactivated++;
           results.updated.push(nome);
         } else {
-          // Criar novo produto
-          await prisma.product.create({
-            data: {
-              companyId,
-              sku,
-              barcode: barcodeValue,
-              manufacturerCode: row["Código do Fabricante"] || row["Código Importação"] || null,
-              name: nome,
-              description: row["Descrição"] || null,
-              type,
-              categoryId,
-              brandId,
-              supplierId,
-              costPrice,
-              salePrice,
-              promoPrice,
-              stockControlled,
-              stockQty,
-              stockMin,
-              stockMax,
-              ncm: ncmRaw ? String(ncmRaw) : null,
-              cest: cestRaw ? String(cestRaw) : null,
-              active,
-              featured,
-              launch,
-            },
-          });
+          await createProductWithStock(importData, mainBranchCache);
           results.created.push(nome);
         }
 

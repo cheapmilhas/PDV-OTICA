@@ -4,6 +4,7 @@ import { getCompanyId } from "@/lib/auth-helpers";
 import { auth } from "@/auth";
 import { ProductType } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { createProductWithStock } from "@/services/product-import.service";
 
 const log = logger.child({ route: "data-management/import/products" });
 
@@ -22,39 +23,6 @@ interface ProductRow {
   active: boolean;
   createdAt: string | null;
   branchId: string;
-}
-
-/**
- * Resolve a filial onde gravar o BranchStock do produto importado, garantindo
- * que pertença à empresa (multi-tenant). Aceita o branchId da linha só se for
- * uma filial ATIVA da própria empresa; senão cai na filial principal (mais
- * antiga). Retorna null se a empresa não tiver filial ativa. Cacheia a filial
- * principal por empresa para evitar lookups repetidos no loop de importação.
- */
-async function resolveOwnedBranchId(
-  rowBranchId: string | null | undefined,
-  companyId: string,
-  mainBranchCache: Map<string, string>
-): Promise<string | null> {
-  if (rowBranchId) {
-    const owned = await prisma.branch.findFirst({
-      where: { id: rowBranchId, companyId, active: true },
-      select: { id: true },
-    });
-    if (owned) return owned.id;
-    // branchId inválido/de outra empresa: ignora e usa a filial principal.
-  }
-
-  const cached = mainBranchCache.get(companyId);
-  if (cached) return cached;
-
-  const main = await prisma.branch.findFirst({
-    where: { companyId, active: true },
-    orderBy: { createdAt: "asc" },
-    select: { id: true },
-  });
-  if (main) mainBranchCache.set(companyId, main.id);
-  return main?.id ?? null;
 }
 
 export async function POST(req: NextRequest) {
@@ -148,49 +116,29 @@ export async function POST(req: NextRequest) {
           }
         }
 
-        // Resolve a filial-alvo do estoque ANTES de criar o produto. row.branchId
-        // é validado contra a empresa (multi-tenant: nunca gravar BranchStock em
-        // filial de outra empresa); se inválido/ausente, usa a filial principal.
-        // Resolvido aqui fora para que, se não houver filial, ainda criemos o
-        // produto sem BranchStock (em vez de abortar a linha toda).
-        const targetBranchId = row.stockControlled
-          ? await resolveOwnedBranchId(row.branchId, companyId, branchIdCache)
-          : null;
-
-        // Cria produto + BranchStock na MESMA transação. Atomicidade é o ponto:
-        // se a sincronização do BranchStock falhar, o produto NÃO pode ficar
-        // gravado sem estoque por filial — isso recriaria o bug "estoque
-        // fantasma" (tela mostra estoque, venda falha "Disponível: 0") que esta
-        // própria correção existe para evitar. Atingiu os produtos importados
-        // da P.S Vision.
-        await prisma.$transaction(async (tx) => {
-          const createdProduct = await tx.product.create({
-            data: {
-              companyId,
-              name: row.name,
-              sku: row.sku,
-              type: row.type,
-              brandId,
-              supplierId,
-              costPrice: row.costPrice,
-              salePrice: row.salePrice,
-              ncm: row.ncm,
-              stockControlled: row.stockControlled,
-              stockQty: row.stockQty,
-              stockMin: row.stockMin,
-              active: row.active,
-              createdAt: row.createdAt ? new Date(row.createdAt) : undefined,
-            },
-          });
-
-          if (targetBranchId) {
-            await tx.branchStock.upsert({
-              where: { branchId_productId: { branchId: targetBranchId, productId: createdProduct.id } },
-              create: { branchId: targetBranchId, productId: createdProduct.id, quantity: row.stockQty },
-              update: { quantity: row.stockQty },
-            });
-          }
-        });
+        // Cria produto + BranchStock atomicamente via helper compartilhado
+        // (mesma lógica do importador da tela de produtos). Evita o bug "estoque
+        // fantasma" (tela mostra estoque, venda falha "Disponível: 0").
+        await createProductWithStock(
+          {
+            companyId,
+            name: row.name,
+            sku: row.sku,
+            type: row.type,
+            brandId,
+            supplierId,
+            costPrice: row.costPrice,
+            salePrice: row.salePrice,
+            ncm: row.ncm,
+            stockControlled: row.stockControlled,
+            stockQty: row.stockQty,
+            stockMin: row.stockMin,
+            active: row.active,
+            branchId: row.branchId,
+            createdAt: row.createdAt ? new Date(row.createdAt) : undefined,
+          },
+          branchIdCache
+        );
 
         imported++;
       } catch (err) {
