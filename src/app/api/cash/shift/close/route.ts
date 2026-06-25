@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { cashService } from "@/services/cash.service";
 import { closeShiftSchema, type CloseShiftDTO } from "@/lib/validations/cash.schema";
-import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, unauthorizedError } from "@/lib/error-handler";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
@@ -27,6 +27,7 @@ export async function POST(request: Request) {
     if (rlBlocked) return rlBlocked;
 
     const companyId = await getCompanyId();
+    const branchId = await getBranchId();
     await requirePermission("cash_shift.close");
     const userId = session.user.id;
 
@@ -39,7 +40,7 @@ export async function POST(request: Request) {
 
     const closeData = closeShiftSchema.parse(data) as CloseShiftDTO;
 
-    const shift = await cashService.closeShift(shiftId, closeData, companyId, userId);
+    const shift = await cashService.closeShift(shiftId, closeData, companyId, userId, branchId);
 
     // Serializar Decimals
     const serializedShift = {

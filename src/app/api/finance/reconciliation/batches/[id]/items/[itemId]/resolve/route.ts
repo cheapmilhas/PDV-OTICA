@@ -32,6 +32,7 @@ export const POST = withPlanFeatureGuard(async (
     await prisma.$transaction(async (tx) => {
       await resolveItem(
         tx as any,
+        batchId,
         itemId,
         {
           matchedSalePaymentId,

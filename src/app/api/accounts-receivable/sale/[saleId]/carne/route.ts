@@ -4,6 +4,7 @@ import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { saleDisplayNumber } from "@/lib/sale-number";
 import { companyHeaderHtml } from "@/lib/pdf-header";
+import { escapeHtml } from "@/lib/escape-html";
 
 /**
  * GET /api/accounts-receivable/sale/[saleId]/carne
@@ -50,10 +51,9 @@ export async function GET(
       email: settings?.email,
     });
     // Escapa o nome para uso direto em HTML nas páginas por-parcela (anti-XSS).
-    const displayNameHtml = displayName
-      .replace(/&/g, "&amp;")
-      .replace(/</g, "&lt;")
-      .replace(/>/g, "&gt;");
+    // Usa o helper único escapeHtml (cobre também " e ', que o escape manual
+    // anterior deixava passar).
+    const displayNameHtml = escapeHtml(displayName);
 
     const installments = await prisma.accountReceivable.findMany({
       where: { saleId, companyId },
@@ -78,7 +78,7 @@ export async function GET(
 <html lang="pt-BR">
 <head>
 <meta charset="UTF-8">
-<title>Carnê — Venda ${saleDisplayNumber(sale)}</title>
+<title>Carnê — Venda ${escapeHtml(saleDisplayNumber(sale))}</title>
 <style>
   @page { size: A4; margin: 12mm; }
   body { font-family: -apple-system, BlinkMacSystemFont, sans-serif; color: #1a1a1a; font-size: 13px; }
@@ -114,14 +114,14 @@ export async function GET(
   <div class="grid">
     <div>
       <div class="label">Cliente</div>
-      <div class="value">${sale.customer?.name ?? "—"}</div>
-      ${sale.customer?.cpf ? `<div class="small">CPF ${sale.customer.cpf}</div>` : ""}
-      ${sale.customer?.phone ? `<div class="small">${sale.customer.phone}</div>` : ""}
+      <div class="value">${escapeHtml(sale.customer?.name ?? "—")}</div>
+      ${sale.customer?.cpf ? `<div class="small">CPF ${escapeHtml(sale.customer.cpf)}</div>` : ""}
+      ${sale.customer?.phone ? `<div class="small">${escapeHtml(sale.customer.phone)}</div>` : ""}
     </div>
     <div>
       <div class="label">Venda</div>
-      <div class="value">${saleDisplayNumber(sale)}</div>
-      <div class="small">Filial: ${sale.branch.name}</div>
+      <div class="value">${escapeHtml(saleDisplayNumber(sale))}</div>
+      <div class="small">Filial: ${escapeHtml(sale.branch.name)}</div>
     </div>
   </div>
 
@@ -192,12 +192,12 @@ ${installments
         </div>
         <div>
           <div class="label">Cliente</div>
-          <div class="value">${sale.customer?.name ?? "—"}</div>
+          <div class="value">${escapeHtml(sale.customer?.name ?? "—")}</div>
         </div>
       </div>
 
       <div style="margin-top:16px">
-        <div class="barra">Venda ${saleDisplayNumber(sale)} — Parcela ${inst.installmentNumber}/${inst.totalInstallments}</div>
+        <div class="barra">Venda ${escapeHtml(saleDisplayNumber(sale))} — Parcela ${inst.installmentNumber}/${inst.totalInstallments}</div>
       </div>
 
       <p class="small" style="margin-top:16px">

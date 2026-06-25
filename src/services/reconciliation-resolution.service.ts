@@ -1,4 +1,5 @@
 import { PrismaClient, ReconciliationResolutionType } from "@prisma/client";
+import { notFoundError } from "@/lib/error-handler";
 
 type TransactionClient = Omit<
   PrismaClient,
@@ -13,17 +14,28 @@ interface ResolveItemData {
 
 /**
  * Resolve um item de conciliação manualmente.
+ *
+ * `batchId` é obrigatório e o item DEVE pertencer a ele: a rota já validou que
+ * o batch é da empresa do usuário, então amarrar item→batch fecha o IDOR
+ * pai-vs-filho (antes um itemId de outra empresa era resolvido, pois o
+ * companyId era derivado do próprio item). Espelha o padrão da rota PATCH irmã
+ * (`where: { id: itemId, batchId }`).
  */
 export async function resolveItem(
   tx: TransactionClient,
+  batchId: string,
   itemId: string,
   data: ResolveItemData,
   userId: string
 ): Promise<void> {
-  const item = await tx.reconciliationItem.findUniqueOrThrow({
-    where: { id: itemId },
+  const item = await tx.reconciliationItem.findFirst({
+    where: { id: itemId, batchId },
     include: { batch: { select: { companyId: true } } },
   });
+
+  if (!item) {
+    throw notFoundError("Item de conciliação não encontrado neste batch");
+  }
 
   const companyId = item.batch.companyId;
   let internalAmount: number | null = null;

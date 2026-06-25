@@ -113,7 +113,12 @@ export class CashService {
     shiftId: string,
     data: CloseShiftDTO,
     companyId: string,
-    userId: string
+    userId: string,
+    // Filial do usuário que está fechando. Quando informado, o turno SÓ pode ser
+    // fechado se for desta filial — impede que um usuário multi-filial feche o
+    // caixa de OUTRA filial da mesma empresa (isolamento por filial). Opcional
+    // para não quebrar chamadas internas/administrativas sem contexto de filial.
+    expectedBranchId?: string
   ): Promise<CashShift> {
     const { closingDeclaredCash, differenceJustification, notes } = data;
 
@@ -126,13 +131,21 @@ export class CashService {
     const closedShift = await prisma.$transaction(async (tx) => {
       // Lock de linha: serializa fechamentos concorrentes do MESMO shift e
       // bloqueia até esta tx terminar. Filtra por companyId (multi-tenant).
-      const locked = await tx.$queryRaw<{ id: string; status: string; notes: string | null }[]>`
-        SELECT id, status, notes FROM "CashShift"
+      const locked = await tx.$queryRaw<{ id: string; status: string; notes: string | null; branchId: string }[]>`
+        SELECT id, status, notes, "branchId" FROM "CashShift"
         WHERE id = ${shiftId} AND "companyId" = ${companyId}
         FOR UPDATE
       `;
       if (!locked[0]) {
         throw notFoundError("Turno de caixa não encontrado");
+      }
+      // Isolamento por filial: só fecha o caixa da própria filial do usuário.
+      if (expectedBranchId && locked[0].branchId !== expectedBranchId) {
+        throw new AppError(
+          ERROR_CODES.FORBIDDEN,
+          "Este caixa pertence a outra filial. Você só pode fechar o caixa da sua filial.",
+          403,
+        );
       }
       if (locked[0].status !== "OPEN") {
         throw new AppError(

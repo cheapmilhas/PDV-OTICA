@@ -18,7 +18,7 @@ export async function PATCH(
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const { noteId } = await params;
+  const { id: companyId, noteId } = await params;
 
   try {
     const body = await request.json();
@@ -28,10 +28,16 @@ export async function PATCH(
     if (content !== undefined) updateData.content = content.trim();
     if (isPinned !== undefined) updateData.isPinned = isPinned;
 
-    const note = await prisma.companyNote.update({
-      where: { id: noteId },
+    // Amarra a nota à empresa do path (defesa em profundidade): updateMany com
+    // {id, companyId} não altera nota de outra empresa mesmo com noteId forjado.
+    const result = await prisma.companyNote.updateMany({
+      where: { id: noteId, companyId },
       data: updateData,
     });
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
+    }
+    const note = await prisma.companyNote.findUnique({ where: { id: noteId } });
 
     return NextResponse.json(note);
   } catch (error) {
@@ -53,12 +59,17 @@ export async function DELETE(
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
 
-  const { noteId } = await params;
+  const { id: companyId, noteId } = await params;
 
   try {
-    await prisma.companyNote.delete({
-      where: { id: noteId },
+    // Amarra a nota à empresa do path (deleteMany com {id, companyId} não apaga
+    // nota de outra empresa mesmo com noteId forjado).
+    const result = await prisma.companyNote.deleteMany({
+      where: { id: noteId, companyId },
     });
+    if (result.count === 0) {
+      return NextResponse.json({ error: "Nota não encontrada" }, { status: 404 });
+    }
 
     return NextResponse.json({ success: true });
   } catch (error) {

@@ -5,6 +5,7 @@ import { handleApiError } from "@/lib/error-handler";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { saleDisplayNumber } from "@/lib/sale-number";
+import { escapeHtml } from "@/lib/escape-html";
 
 function getPaymentMethodLabel(method?: string): string {
   const labels: Record<string, string> = {
@@ -99,10 +100,10 @@ export async function GET(
 </head>
 <body>
   <div class="header">
-    ${logoUrl ? `<img src="${logoUrl}" alt="Logo" class="logo" />` : ""}
-    <div class="company-name">${companyName}</div>
-    ${company?.cnpj ? `<div class="company-info">CNPJ: ${company.cnpj}</div>` : ""}
-    ${company?.phone ? `<div class="company-info">Tel: ${company.phone}</div>` : ""}
+    ${logoUrl ? `<img src="${escapeHtml(logoUrl)}" alt="Logo" class="logo" />` : ""}
+    <div class="company-name">${escapeHtml(companyName)}</div>
+    ${company?.cnpj ? `<div class="company-info">CNPJ: ${escapeHtml(company.cnpj)}</div>` : ""}
+    ${company?.phone ? `<div class="company-info">Tel: ${escapeHtml(company.phone)}</div>` : ""}
     <div class="title">Recibo de Pagamento</div>
     <div class="receipt-number">Nº ${receiptNumber}</div>
   </div>
@@ -114,21 +115,21 @@ export async function GET(
     </div>
     <div class="row">
       <span class="label">Cliente:</span>
-      <span class="value">${receivable.customer?.name || receivable.description}</span>
+      <span class="value">${escapeHtml(receivable.customer?.name || receivable.description)}</span>
     </div>
     ${receivable.customer?.cpf ? `
     <div class="row">
       <span class="label">CPF:</span>
-      <span class="value">${receivable.customer.cpf}</span>
+      <span class="value">${escapeHtml(receivable.customer.cpf)}</span>
     </div>` : ""}
     ${receivable.sale?.id ? `
     <div class="row">
       <span class="label">Ref. Venda:</span>
-      <span class="value">${saleDisplayNumber(receivable.sale)}</span>
+      <span class="value">${escapeHtml(saleDisplayNumber(receivable.sale))}</span>
     </div>` : ""}
     <div class="row">
       <span class="label">Descrição:</span>
-      <span class="value">${receivable.description}</span>
+      <span class="value">${escapeHtml(receivable.description)}</span>
     </div>
     <div class="row">
       <span class="label">Parcela:</span>
@@ -169,7 +170,7 @@ export async function GET(
   <div class="section">
     <div class="row">
       <span class="label">Recebido por:</span>
-      <span class="value">${receivable.receivedBy?.name || "-"}</span>
+      <span class="value">${escapeHtml(receivable.receivedBy?.name || "-")}</span>
     </div>
     <div class="row">
       <span class="label">Data Pagamento:</span>
@@ -189,7 +190,7 @@ export async function GET(
   </div>
 
   <div class="footer">
-    <p>${companyName} — Este recibo comprova o pagamento da parcela indicada.</p>
+    <p>${escapeHtml(companyName)} — Este recibo comprova o pagamento da parcela indicada.</p>
     <p style="margin-top:4px;">Gerado em ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</p>
   </div>
 
