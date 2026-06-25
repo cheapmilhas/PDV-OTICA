@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { startOfMonth, endOfMonth, eachMonthOfInterval, format } from "date-fns";
+import { realizedRevenueSaleStatusFilter } from "./realized-revenue";
 
 export interface DREFilters {
   startDate: Date;
@@ -54,11 +55,17 @@ export class DREService {
       const monthStart = startOfMonth(month);
       const monthEnd = endOfMonth(month);
 
-      // 1. RECEITA BRUTA - Total de vendas do período
+      // 1. RECEITA BRUTA - Total de vendas REALIZADAS do período.
+      // C1 (Bloco 3): antes filtrava `status: { not: "CANCELED" }`, o que
+      // deixava passar vendas REFUNDED (devolvidas) e inflava receita + CMV.
+      // Agora usa o filtro compartilhado `realizedRevenueSaleStatusFilter`
+      // (= COMPLETED), a MESMA noção de receita realizada que o DRE dinâmico
+      // (ledger) aplica — os dois relatórios passam a bater. Ver
+      // realized-revenue.ts.
       const sales = await prisma.sale.findMany({
         where: {
           companyId,
-          status: { not: "CANCELED" },
+          status: realizedRevenueSaleStatusFilter,
           createdAt: {
             gte: monthStart,
             lte: monthEnd,
