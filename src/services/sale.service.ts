@@ -25,6 +25,7 @@ import {
   reverseCommissionForSaleInTx,
   reverseCashbackForSaleInTx,
 } from "@/services/sale-side-effects.service";
+import { isLegacyCommissionEngine } from "@/lib/commission-flag";
 import { getProductPrice } from "@/lib/product-price";
 import { calculateTotals, itemLineTotal } from "@/lib/sale-totals";
 import { assertSalePricing, discountRuleKeyForRole } from "@/lib/sale-price-guard";
@@ -818,11 +819,15 @@ export class SaleService {
         });
       }
 
-      // 7. Comissão (helper)
-      await applyCommissionInTx(tx, {
-        sale: { id: newSale.id, companyId, total: newSale.total },
-        sellerUserId: effectiveSellerId,
-      });
+      // 7. Comissão (helper) — gateado pelo kill-switch COMMISSION_ENGINE.
+      // Em "new" (default) a fonte é o motor por vendedor/mês e NÃO gravamos a
+      // Commission velha por venda. Em "legacy" (emergência) volta a gravar.
+      if (isLegacyCommissionEngine()) {
+        await applyCommissionInTx(tx, {
+          sale: { id: newSale.id, companyId, total: newSale.total },
+          sellerUserId: effectiveSellerId,
+        });
+      }
 
       // 8. FinanceEntry / DRE (helper — log estruturado, não bloqueia)
       await applyFinanceEntriesInTx(tx, {

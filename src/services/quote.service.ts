@@ -31,6 +31,7 @@ import {
   applyFinanceEntriesInTx,
   applyPostCommitSideEffects,
 } from "@/services/sale-side-effects.service";
+import { isLegacyCommissionEngine } from "@/lib/commission-flag";
 
 const systemRuleService = new SystemRuleService();
 
@@ -964,11 +965,14 @@ export class QuoteService {
         note: `Venda #${sale.id.substring(0, 8)} (convertida de orçamento #${quoteId.substring(0, 8)})`,
       });
 
-      // 9.5. Comissão (helper)
-      await applyCommissionInTx(tx, {
-        sale: { id: sale.id, companyId, total: sale.total },
-        sellerUserId: userId,
-      });
+      // 9.5. Comissão (helper) — gateado pelo kill-switch COMMISSION_ENGINE.
+      // "new" (default): fonte é o motor, não grava Commission velha. "legacy": grava.
+      if (isLegacyCommissionEngine()) {
+        await applyCommissionInTx(tx, {
+          sale: { id: sale.id, companyId, total: sale.total },
+          sellerUserId: userId,
+        });
+      }
 
       // 9.6. FinanceEntry / DRE (helper — log estruturado, não bloqueia)
       await applyFinanceEntriesInTx(tx, {
