@@ -32,6 +32,8 @@ import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { useBranchContext } from "@/hooks/use-branch-context";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CommissionPreviewTab } from "./commission-preview-tab";
 import {
   BarChart,
   Bar,
@@ -266,6 +268,15 @@ function RelatorioComissoesPageContent() {
           disabled={!data}
         />
       </div>
+
+      <Tabs defaultValue="atual" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="atual">Atual</TabsTrigger>
+          <TabsTrigger value="preview">Preview regra nova</TabsTrigger>
+        </TabsList>
+
+        {/* Aba ATUAL: o relatório de comissões existente (INTOCADO) */}
+        <TabsContent value="atual" className="space-y-6">
 
       {/* Filtros */}
       <Card>
@@ -587,6 +598,13 @@ function RelatorioComissoesPageContent() {
           </CardContent>
         </Card>
       )}
+        </TabsContent>
+
+        {/* Aba PREVIEW: comparação atual × regra nova (read-only) — Fase 2/3a */}
+        <TabsContent value="preview">
+          <CommissionPreviewTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
