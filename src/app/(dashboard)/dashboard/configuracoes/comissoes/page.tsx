@@ -8,6 +8,8 @@ import { Button } from "@/components/ui/button";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, Percent, DollarSign, Award } from "lucide-react";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { CommissionTiersTab } from "./commission-tiers-tab";
 
 function CommissionConfigPageContent() {
   const { toast } = useToast();
@@ -80,23 +82,32 @@ function CommissionConfigPageContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold flex items-center gap-2">
-            <Percent className="h-6 w-6" />
-            Configuração de Comissões
-          </h1>
-          <p className="text-muted-foreground">
-            Defina os percentuais de comissão da equipe
-          </p>
-        </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
-          Salvar Configurações
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold flex items-center gap-2">
+          <Percent className="h-6 w-6" />
+          Configuração de Comissões
+        </h1>
+        <p className="text-muted-foreground">
+          Defina os percentuais de comissão da equipe
+        </p>
       </div>
 
-      <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+      <Tabs defaultValue="base" className="space-y-6">
+        <TabsList>
+          <TabsTrigger value="base">Base + Bônus</TabsTrigger>
+          <TabsTrigger value="tiers">Metas por níveis</TabsTrigger>
+        </TabsList>
+
+        {/* Aba LEGADA (intocada): comissão base + bônus por meta */}
+        <TabsContent value="base" className="space-y-6">
+          <div className="flex justify-end">
+            <Button onClick={handleSave} disabled={saving}>
+              {saving && <Loader2 className="h-4 w-4 mr-2 animate-spin" />}
+              Salvar Configurações
+            </Button>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {/* Comissão Base */}
         <Card>
           <CardHeader>
@@ -195,6 +206,13 @@ function CommissionConfigPageContent() {
           </div>
         </CardContent>
       </Card>
+        </TabsContent>
+
+        {/* Aba NOVA: metas por níveis (mini/meta/mega) — Fase 2 */}
+        <TabsContent value="tiers">
+          <CommissionTiersTab />
+        </TabsContent>
+      </Tabs>
     </div>
   );
 }
