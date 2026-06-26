@@ -5,6 +5,7 @@ import { useRouter } from "next/navigation";
 import { Building2, Loader2, Package, Pencil, Plus, Star, Users, X } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { FEATURES, FEATURE_REGISTRY } from "@/lib/plan-feature-catalog";
 
 interface PlanFeature {
   id: string;
@@ -34,14 +35,16 @@ interface Plan {
   _count: { subscriptions: number };
 }
 
-const AVAILABLE_FEATURES = [
-  { key: "crm", label: "CRM" },
-  { key: "goals", label: "Metas & Comissões" },
-  { key: "campaigns", label: "Campanhas" },
-  { key: "cashback", label: "Cashback" },
-  { key: "multi_branch", label: "Multi-filial" },
-  { key: "reports_advanced", label: "Relatórios Avançados" },
-];
+// FONTE ÚNICA: deriva do catálogo real (plan-feature-catalog). Antes esta lista
+// era hardcoded com 6 keys que NÃO batiam com o catálogo (crm/multi_branch/
+// reports_advanced nem existem; faltavam 11 reais). Como o salvar do plano faz
+// deleteMany+createMany SÓ com estas keys, salvar zerava as 15 features reais e
+// quebrava os planos pagos (DRE/lotes/refunds passavam a "não disponível"). Ao
+// derivar do FEATURE_REGISTRY, a tela passa a cobrir exatamente as 15 keys reais.
+const AVAILABLE_FEATURES = Object.values(FEATURES).map((key) => ({
+  key,
+  label: FEATURE_REGISTRY[key].label,
+}));
 
 const emptyForm = {
   name: "",

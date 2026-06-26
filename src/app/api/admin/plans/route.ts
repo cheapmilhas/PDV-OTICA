@@ -5,8 +5,13 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
+import { FEATURES } from "@/lib/plan-feature-catalog";
 
 const log = logger.child({ route: "admin/plans" });
+
+// Keys válidas = catálogo real (mesma blindagem do PATCH). Rejeita key fora do
+// catálogo antes de gravar PlanFeature.
+const FEATURE_KEYS = Object.values(FEATURES) as [string, ...string[]];
 
 const createPlanSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -24,8 +29,8 @@ const createPlanSchema = z.object({
   status: z.enum(["ACTIVE", "COMING_SOON"]).optional(),
   highlightFeatures: z.array(z.string()).optional().nullable(),
   features: z.array(z.object({
-    key: z.string(),
-    value: z.string(),
+    key: z.enum(FEATURE_KEYS),
+    value: z.enum(["true", "false"]),
   })).default([]),
 });
 

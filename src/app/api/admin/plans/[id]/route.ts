@@ -6,8 +6,15 @@ import { getAdminSession } from "@/lib/admin-session";
 import { propagatePlanLimits } from "@/services/plan-propagation.service";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
+import { FEATURES } from "@/lib/plan-feature-catalog";
 
 const log = logger.child({ route: "admin/plans/[id]" });
+
+// Keys válidas = catálogo real. Blindagem: o salvar do plano faz
+// deleteMany+createMany das features; aceitar uma key fora do catálogo gravaria
+// linha morta e (pior) zerar as keys reais quebraria o gating dos planos pagos.
+// Aqui rejeitamos qualquer key inexistente antes de gravar.
+const FEATURE_KEYS = Object.values(FEATURES) as [string, ...string[]];
 
 const updatePlanSchema = z.object({
   name: z.string().min(1).optional(),
@@ -25,8 +32,8 @@ const updatePlanSchema = z.object({
   status: z.enum(["ACTIVE", "COMING_SOON"]).optional(),
   highlightFeatures: z.array(z.string()).optional().nullable(),
   features: z.array(z.object({
-    key: z.string(),
-    value: z.string(),
+    key: z.enum(FEATURE_KEYS),
+    value: z.enum(["true", "false"]),
   })).optional(),
 });
 

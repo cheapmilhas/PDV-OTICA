@@ -197,6 +197,21 @@ const menuItems: MenuSection[] = [
         feature: "goals"
       },
       {
+        // Relatório de comissões a pagar. Gateado só por permissão (reports.sales),
+        // não por feature de plano — já acessível no Básico, só faltava no menu.
+        name: "Comissões",
+        href: "/dashboard/relatorios/comissoes",
+        icon: Receipt,
+        permission: "reports.sales"
+      },
+      {
+        // Configuração de comissões (% base, bônus). Gateado por settings.edit.
+        name: "Config. Comissões",
+        href: "/dashboard/configuracoes/comissoes",
+        icon: Settings,
+        permission: "settings.edit"
+      },
+      {
         name: "Campanhas",
         href: "/dashboard/campanhas",
         icon: TrendingUp,
