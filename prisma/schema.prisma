@@ -148,6 +148,7 @@ model Company {
   colors                  Color[]
   commissions             Commission[]
   commissionRules         CommissionRule[]
+  sellerCommissionTiers   SellerCommissionTier[]
   network                 Network?                 @relation("NetworkCompanies", fields: [networkId], references: [id])
   companySettings         CompanySettings?         @relation("CompanySettings")
   counters                Counter[]
@@ -339,6 +340,7 @@ model User {
   salesAsSeller              Sale[]                   @relation("SaleSeller")
   paymentsReceived           SalePayment[]            @relation("PaymentReceiver")
   sellerCommissions          SellerCommission[]       @relation("SellerCommissions")
+  sellerCommissionTiers      SellerCommissionTier[]   @relation("SellerCommissionTiers")
   sellerGoals                SellerGoal[]
   serviceOrdersCreated       ServiceOrder[]           @relation("SOCreator")
   serviceOrdersDelivered     ServiceOrder[]           @relation("SODeliverer")
@@ -1385,6 +1387,59 @@ model CommissionRule {
   company          Company  @relation(fields: [companyId], references: [id])
 
   @@index([companyId, active])
+}
+
+// ============================================================================
+// COMISSÃO POR NÍVEIS (mini/meta/mega) — Bloco 4 / Comissão Fase 1
+// ============================================================================
+//
+// Estrutura nova (não existia): guarda os 3 níveis de meta por vendedor que
+// definem a "comissão de meta". O vendedor atinge um nível quando o total
+// vendido líquido no mês ≥ targetAmount; vale o % do MAIOR nível atingido,
+// aplicado RETROATIVAMENTE sobre tudo que vendeu.
+//
+// Padrão default+override (espelha AiGlobalConfig/getEffectiveMarkup):
+//   - userId = null  → DEFAULT da ótica (companyId): vale p/ todo vendedor
+//                      sem config própria.
+//   - userId = <id>  → OVERRIDE daquele vendedor: tem precedência sobre o
+//                      default da ótica.
+// Os 3 níveis de um mesmo escopo (default ou um vendedor) são 3 linhas, uma
+// por `level`. A unicidade garante no máximo 1 linha por (empresa, escopo,
+// nível).
+//
+// NÃO substitui SellerGoal/SalesGoal (meta de venda exibida na tela) nem
+// CommissionConfig (% por filial legado) — convive. A unificação/limpeza das
+// fontes antigas é fase posterior; aqui só se CRIA a fundação. O motor de
+// cálculo (commission-engine) lê desta tabela; nenhuma tela grava nela ainda.
+model SellerCommissionTier {
+  id           String              @id @default(cuid())
+  companyId    String
+  // null = default da ótica; preenchido = override do vendedor.
+  userId       String?
+  level        CommissionTierLevel
+  // Valor-alvo em R$ que precisa ser atingido (total vendido líquido no mês).
+  targetAmount Decimal             @db.Decimal(12, 2)
+  // % aplicado retroativamente sobre TUDO que o vendedor vendeu no mês quando
+  // este é o maior nível atingido.
+  percent      Decimal             @db.Decimal(5, 2)
+  createdAt    DateTime            @default(now())
+  updatedAt    DateTime            @updatedAt
+  company      Company             @relation(fields: [companyId], references: [id])
+  user         User?               @relation("SellerCommissionTiers", fields: [userId], references: [id])
+
+  // 1 linha por (empresa, escopo, nível). NULL em userId conta como um valor
+  // distinto no índice único do Postgres → o default da ótica ocupa um slot
+  // próprio por nível, sem colidir com os overrides dos vendedores.
+  @@unique([companyId, userId, level])
+  @@index([companyId])
+  @@index([userId])
+}
+
+// Os 3 níveis individuais de meta (ordem crescente de exigência).
+enum CommissionTierLevel {
+  MINI
+  META
+  MEGA
 }
 
 model Commission {
