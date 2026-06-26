@@ -25,6 +25,7 @@ const createCampaignSchema = z.object({
     "MINIMUM_PER_UNIT",
     "PER_PACKAGE",
     "TIERED",
+    "PERCENT_OF_VALUE",
   ]),
   countMode: z.enum(["BY_QUANTITY", "BY_ITEM", "BY_SALE"]),
   allowStacking: z.boolean().optional(),
@@ -32,6 +33,8 @@ const createCampaignSchema = z.object({
 
   // Campos específicos por tipo
   bonusPerUnit: z.number().optional(),
+  // Fase 2: % do tipo PERCENT_OF_VALUE (0–100).
+  bonusPercent: z.number().min(0).max(100).optional(),
   minimumCount: z.number().int().optional(),
   minimumCountMode: z.enum(["AFTER_MINIMUM", "FROM_MINIMUM"]).optional(),
   fixedBonusAmount: z.number().optional(),

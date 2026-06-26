@@ -21,6 +21,7 @@ const updateCampaignSchema = z.object({
 
   // Campos de regras (bloqueados se há bônus gerados)
   bonusPerUnit: z.number().optional(),
+  bonusPercent: z.number().min(0).max(100).optional(), // Fase 2: PERCENT_OF_VALUE
   minimumCount: z.number().int().optional(),
   minimumCountMode: z.enum(["AFTER_MINIMUM", "FROM_MINIMUM"]).optional(),
   fixedBonusAmount: z.number().optional(),

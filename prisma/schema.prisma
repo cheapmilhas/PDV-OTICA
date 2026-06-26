@@ -2714,6 +2714,9 @@ model ProductCampaign {
   bonusType            CampaignBonusType
   countMode            CampaignCountMode        @default(BY_QUANTITY)
   bonusPerUnit         Decimal?                 @db.Decimal(10, 2)
+  // Comissão Fase 2: % sobre o valor vendido dos produtos da campanha
+  // (tipo PERCENT_OF_VALUE). Nullable e aditivo — não afeta os tipos existentes.
+  bonusPercent         Decimal?                 @db.Decimal(5, 2)
   minimumUnits         Int?
   minimumCountMode     MinimumCountMode         @default(FROM_MINIMUM)
   bonusFixedOnMin      Decimal?                 @db.Decimal(10, 2)
@@ -3902,6 +3905,7 @@ enum CampaignBonusType {
   MINIMUM_PER_UNIT
   PER_PACKAGE
   TIERED
+  PERCENT_OF_VALUE // Comissão Fase 2: % sobre o valor vendido dos produtos (desde a 1ª unidade)
 }
 
 enum CampaignCountMode {

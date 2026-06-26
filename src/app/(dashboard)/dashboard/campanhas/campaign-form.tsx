@@ -38,13 +38,14 @@ const campaignSchema = z.object({
   scope: z.enum(["SELLER", "BRANCH", "BOTH"]),
   startDate: z.string().min(1, "Data inicial é obrigatória"),
   endDate: z.string().min(1, "Data final é obrigatória"),
-  bonusType: z.enum(["PER_UNIT", "MINIMUM_FIXED", "MINIMUM_PER_UNIT", "PER_PACKAGE", "TIERED"]),
+  bonusType: z.enum(["PER_UNIT", "MINIMUM_FIXED", "MINIMUM_PER_UNIT", "PER_PACKAGE", "TIERED", "PERCENT_OF_VALUE"]),
   countMode: z.enum(["BY_QUANTITY", "BY_ITEM", "BY_SALE"]),
   allowStacking: z.boolean().default(false),
   priority: z.number().int().default(0),
 
   // Campos específicos
   bonusPerUnit: z.number().optional(),
+  bonusPercent: z.number().min(0).max(100).optional(), // Fase 2: PERCENT_OF_VALUE
   minimumCount: z.number().int().optional(),
   minimumCountMode: z.enum(["AFTER_MINIMUM", "FROM_MINIMUM"]).optional(),
   fixedBonusAmount: z.number().optional(),
@@ -83,6 +84,7 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
           allowStacking: campaign.allowStacking,
           priority: campaign.priority,
           bonusPerUnit: campaign.bonusPerUnit || undefined,
+          bonusPercent: campaign.bonusPercent || undefined,
           minimumCount: campaign.minimumCount || undefined,
           minimumCountMode: campaign.minimumCountMode || undefined,
           fixedBonusAmount: campaign.fixedBonusAmount || undefined,
@@ -491,6 +493,7 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
                   </FormControl>
                   <SelectContent>
                     <SelectItem value="PER_UNIT">Por Unidade</SelectItem>
+                    <SelectItem value="PERCENT_OF_VALUE">% do Valor Vendido</SelectItem>
                     <SelectItem value="MINIMUM_FIXED">Mínimo Fixo</SelectItem>
                     <SelectItem value="MINIMUM_PER_UNIT">Mínimo por Unidade</SelectItem>
                     <SelectItem value="PER_PACKAGE">Por Pacote</SelectItem>
@@ -521,6 +524,33 @@ export function CampaignForm({ campaign, onSuccess }: CampaignFormProps) {
                   </FormControl>
                   <FormDescription>
                     Valor de bônus para cada unidade vendida
+                  </FormDescription>
+                  <FormMessage />
+                </FormItem>
+              )}
+            />
+          )}
+
+          {bonusType === "PERCENT_OF_VALUE" && (
+            <FormField
+              control={form.control}
+              name="bonusPercent"
+              render={({ field }) => (
+                <FormItem>
+                  <FormLabel>Percentual sobre o valor (%)</FormLabel>
+                  <FormControl>
+                    <Input
+                      type="number"
+                      step="0.01"
+                      min="0"
+                      max="100"
+                      placeholder="0.00"
+                      {...field}
+                      onChange={(e) => field.onChange(parseFloat(e.target.value))}
+                    />
+                  </FormControl>
+                  <FormDescription>
+                    Bônus = % × valor vendido dos produtos da campanha, desde a 1ª unidade (sem mínimo)
                   </FormDescription>
                   <FormMessage />
                 </FormItem>

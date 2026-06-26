@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { Prisma } from "@prisma/client";
+import Decimal from "decimal.js";
 import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 // ============================================================================
@@ -14,13 +15,14 @@ export interface CreateCampaignDTO {
   description?: string;
   startDate: Date;
   endDate: Date;
-  bonusType: "PER_UNIT" | "MINIMUM_FIXED" | "MINIMUM_PER_UNIT" | "PER_PACKAGE" | "TIERED";
+  bonusType: "PER_UNIT" | "MINIMUM_FIXED" | "MINIMUM_PER_UNIT" | "PER_PACKAGE" | "TIERED" | "PERCENT_OF_VALUE";
   countMode: "BY_QUANTITY" | "BY_ITEM" | "BY_SALE";
   allowStacking?: boolean;
   priority?: number;
 
   // Campos específicos por tipo
   bonusPerUnit?: number;
+  bonusPercent?: number; // Fase 2: % do tipo PERCENT_OF_VALUE
   minimumUnits?: number;
   minimumCountMode?: "AFTER_MINIMUM" | "FROM_MINIMUM";
   bonusFixedOnMin?: number;
@@ -75,6 +77,7 @@ export async function createCampaign(data: CreateCampaignDTO) {
         allowStacking: data.allowStacking ?? false,
         priority: data.priority ?? 0,
         bonusPerUnit: data.bonusPerUnit,
+        bonusPercent: data.bonusPercent,
         minimumUnits: data.minimumUnits,
         minimumCountMode: data.minimumCountMode,
         bonusFixedOnMin: data.bonusFixedOnMin,
@@ -214,6 +217,7 @@ export async function updateCampaign(
       "bonusType",
       "countMode",
       "bonusPerUnit",
+      "bonusPercent",
       "minimumCount",
       "minimumCountMode",
       "fixedBonusAmount",
@@ -242,6 +246,7 @@ export async function updateCampaign(
         allowStacking: data.allowStacking,
         priority: data.priority,
         bonusPerUnit: data.bonusPerUnit,
+        bonusPercent: data.bonusPercent,
         minimumUnits: data.minimumUnits,
         minimumCountMode: data.minimumCountMode,
         bonusFixedOnMin: data.bonusFixedOnMin,
@@ -391,6 +396,7 @@ export function calculateBonus(
     bonusType: string;
     countMode: string;
     bonusPerUnit?: number | null | Prisma.Decimal;
+    bonusPercent?: number | null | Prisma.Decimal;
     minimumUnits?: number | null;
     minimumCountMode?: string | null;
     bonusFixedOnMin?: number | null | Prisma.Decimal;
@@ -399,9 +405,26 @@ export function calculateBonus(
     bonusPerPackage?: number | null | Prisma.Decimal;
     tiers?: Prisma.JsonValue | null;
   },
-  quantity: number
+  quantity: number,
+  // Comissão Fase 2: valor vendido (R$) dos itens elegíveis. Usado SÓ pelo tipo
+  // PERCENT_OF_VALUE. Os tipos antigos ignoram este parâmetro (default 0), então
+  // adicioná-lo é puramente aditivo — não muda o cálculo de nenhum tipo atual.
+  eligibleValue: number = 0
 ): BonusCalculationResult {
   const { bonusType, countMode } = campaign;
+
+  // TIPO E (Fase 2): PERCENT_OF_VALUE — % sobre o valor vendido dos produtos da
+  // campanha, desde a 1ª unidade, SEM mínimo. decimal.js para não acumular erro.
+  if (bonusType === "PERCENT_OF_VALUE") {
+    const percent = new Decimal(campaign.bonusPercent?.toString() ?? "0");
+    const value = new Decimal(eligibleValue.toString());
+    const bonus = value.mul(percent).div(100).toDecimalPlaces(2, Decimal.ROUND_HALF_UP);
+    return {
+      bonusAmount: bonus.toNumber(),
+      eligibleQuantity: quantity,
+      details: `${percent.toFixed(2)}% × R$ ${value.toFixed(2)} = R$ ${bonus.toFixed(2)}`,
+    };
+  }
 
   // TIPO A: PER_UNIT
   if (bonusType === "PER_UNIT") {
@@ -774,8 +797,16 @@ export async function processaSaleForCampaigns(
       totalCount = 1;
     }
 
+    // Valor vendido (R$) dos itens elegíveis — usado SÓ pelo tipo
+    // PERCENT_OF_VALUE. Base = SaleItem.lineTotal (qty × preço − desconto), o
+    // valor que o cliente pagou pela linha, consistente com o resto do sistema.
+    const eligibleValue = eligibleItems.reduce(
+      (sum, item) => sum + Number(item.lineTotal ?? 0),
+      0
+    );
+
     // Calcular bônus
-    const result = calculateBonus(campaign, totalCount);
+    const result = calculateBonus(campaign, totalCount, eligibleValue);
 
     if (result.bonusAmount <= 0) continue;
 
