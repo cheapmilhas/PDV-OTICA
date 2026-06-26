@@ -9,8 +9,10 @@
  *                 Commission por venda, a tela mostra o relatório legado com
  *                 lifecycle PENDENTE→APROVADA→PAGA.
  *
- * DEFAULT (env não setada) = "new". A regra nova é a oficial; "legacy" é só o
- * botão de pânico: trocar a env para `legacy` reverte sem precisar de deploy.
+ * DEFAULT FAIL-SAFE = "legacy". SÓ `COMMISSION_ENGINE=new` (exato) liga a regra
+ * nova; QUALQUER outro valor (ausente, "", "newx", "News", inválido) cai em
+ * "legacy" (comportamento de hoje). Assim, se a env falhar/sumir num deploy
+ * futuro, o sistema NÃO liga a regra nova sozinho e não zera os vendedores.
  *
  * Espelha o padrão de flags por env do sistema (ex.: DISABLE_PLAN_FEATURE_GATING,
  * whatsapp-flag.ts). Lido no SERVIDOR (gravador + rotas) e propagado à UI por uma
@@ -19,9 +21,12 @@
 
 export type CommissionEngine = "new" | "legacy";
 
-/** Modo efetivo do motor de comissão (default "new"). */
+/**
+ * Modo efetivo do motor de comissão. FAIL-SAFE: só "new" exato liga a regra
+ * nova; todo o resto (ausente/inválido) → "legacy".
+ */
 export function getCommissionEngine(): CommissionEngine {
-  return process.env.COMMISSION_ENGINE === "legacy" ? "legacy" : "new";
+  return process.env.COMMISSION_ENGINE === "new" ? "new" : "legacy";
 }
 
 /** true quando a regra nova está ativa (default). */
