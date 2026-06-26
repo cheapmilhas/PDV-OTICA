@@ -40,12 +40,21 @@ CREATE INDEX "SellerCommissionTier_companyId_idx" ON "SellerCommissionTier"("com
 CREATE INDEX "SellerCommissionTier_userId_idx" ON "SellerCommissionTier"("userId");
 
 -- CreateIndex
--- 1 linha por (empresa, escopo, nível). NULL em userId é um valor distinto no
--- índice único do Postgres → o default da ótica ocupa um slot próprio por nível.
+-- Unicidade dos OVERRIDES de vendedor: 1 linha por (empresa, vendedor, nível).
+-- NULL em userId é "distinto" no Postgres → este índice NÃO cobre o default da
+-- ótica (ver o índice parcial abaixo).
 CREATE UNIQUE INDEX "SellerCommissionTier_companyId_userId_level_key" ON "SellerCommissionTier"("companyId", "userId", "level");
+
+-- CreateIndex
+-- Unicidade do DEFAULT da ótica (userId IS NULL). Como dois NULL não colidem no
+-- índice único normal, sem este índice PARCIAL daria p/ cadastrar dois defaults
+-- (empresa, NULL, MINI). Garante no máximo 1 default por (empresa, nível).
+CREATE UNIQUE INDEX "SellerCommissionTier_companyId_level_default_key" ON "SellerCommissionTier"("companyId", "level") WHERE "userId" IS NULL;
 
 -- AddForeignKey
 ALTER TABLE "SellerCommissionTier" ADD CONSTRAINT "SellerCommissionTier_companyId_fkey" FOREIGN KEY ("companyId") REFERENCES "Company"("id") ON DELETE RESTRICT ON UPDATE CASCADE;
 
 -- AddForeignKey
-ALTER TABLE "SellerCommissionTier" ADD CONSTRAINT "SellerCommissionTier_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE SET NULL ON UPDATE CASCADE;
+-- ON DELETE CASCADE: apagar o vendedor APAGA as metas dele (nunca vira default
+-- da ótica). Decisão do Matheus na revisão da Fase 1.
+ALTER TABLE "SellerCommissionTier" ADD CONSTRAINT "SellerCommissionTier_userId_fkey" FOREIGN KEY ("userId") REFERENCES "User"("id") ON DELETE CASCADE ON UPDATE CASCADE;

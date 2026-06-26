@@ -1425,11 +1425,20 @@ model SellerCommissionTier {
   createdAt    DateTime            @default(now())
   updatedAt    DateTime            @updatedAt
   company      Company             @relation(fields: [companyId], references: [id])
-  user         User?               @relation("SellerCommissionTiers", fields: [userId], references: [id])
+  // onDelete: Cascade — apagar um vendedor APAGA as metas dele. NUNCA virar
+  // userId=null (que seria "promover" o override do vendedor a default da
+  // ótica). Decisão do Matheus na revisão da Fase 1.
+  user         User?               @relation("SellerCommissionTiers", fields: [userId], references: [id], onDelete: Cascade)
 
   // 1 linha por (empresa, escopo, nível). NULL em userId conta como um valor
   // distinto no índice único do Postgres → o default da ótica ocupa um slot
   // próprio por nível, sem colidir com os overrides dos vendedores.
+  //
+  // ⚠️ Esse @@unique NÃO protege o DEFAULT da ótica: no Postgres dois NULL são
+  // "distintos", então (co, NULL, MINI) pode duplicar. A migração adiciona um
+  // ÍNDICE ÚNICO PARCIAL (WHERE userId IS NULL) p/ fechar esse buraco — ele não
+  // é expressável aqui (Prisma não tem unique parcial declarativo), por isso o
+  // schema documenta e a migração materializa.
   @@unique([companyId, userId, level])
   @@index([companyId])
   @@index([userId])
