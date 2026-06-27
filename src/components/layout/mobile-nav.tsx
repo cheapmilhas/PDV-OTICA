@@ -57,7 +57,7 @@ const moreNav = [
   { icon: FileText, label: "Contas Pagar/Receber", href: "/dashboard/financeiro", permission: "financial.view" },
   { icon: Wallet, label: "Caixa", href: "/dashboard/caixa", permission: "cash_shift.view" },
   { icon: Wallet, label: "Cashback", href: "/dashboard/cashback", permission: "cashback.view" },
-  { icon: Target, label: "Metas", href: "/dashboard/metas", permission: "goals.view", feature: "goals" },
+  { icon: Target, label: "Metas", href: "/dashboard/metas", permissionAny: ["goals.view", "reports.sales", "settings.edit"] },
   { icon: BarChart3, label: "Relatórios", href: "/dashboard/relatorios", permission: "reports.sales" },
   { icon: TrendingUp, label: "Rel. Avançados", href: "/dashboard/relatorios/avancados", permission: "reports.sales" },
   { icon: DollarSign, label: "Dashboard Fin.", href: "/dashboard/financeiro/dashboard", permission: "financial.view" },
@@ -93,8 +93,12 @@ export function MobileNav() {
     return pathname === href || pathname.startsWith(href + "/");
   }
 
-  const isVisible = (item: { permission?: string; feature?: string; flag?: "whatsapp" }) => {
-    const permissionOk = !item.permission || isAdmin || hasPermission(item.permission);
+  const isVisible = (item: { permission?: string; permissionAny?: string[]; feature?: string; flag?: "whatsapp" }) => {
+    const permissionOk =
+      isAdmin ||
+      (!item.permission && !item.permissionAny) ||
+      (item.permission ? hasPermission(item.permission) : false) ||
+      (item.permissionAny ? item.permissionAny.some((p) => hasPermission(p)) : false);
     const featureOk = !item.feature || hasFeature(item.feature);
     const flagOk = item.flag !== "whatsapp" || whatsappEnabled;
     return permissionOk && featureOk && flagOk;
