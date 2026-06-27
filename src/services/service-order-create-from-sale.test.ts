@@ -19,10 +19,17 @@ const soCreate = vi.fn();
 const soHistoryCreate = vi.fn();
 const saleUpdate = vi.fn();
 
+const prescriptionFindUnique = vi.fn();
+const serviceOrderUpdate = vi.fn();
+
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     sale: { findFirst: (...a: unknown[]) => saleFindFirst(...a) },
-    serviceOrder: { findUnique: (...a: unknown[]) => serviceOrderFindUnique(...a) },
+    serviceOrder: {
+      findUnique: (...a: unknown[]) => serviceOrderFindUnique(...a),
+      update: (...a: unknown[]) => serviceOrderUpdate(...a),
+    },
+    prescription: { findUnique: (...a: unknown[]) => prescriptionFindUnique(...a) },
     $transaction: (...a: unknown[]) => transaction(...a),
   },
 }));
@@ -53,6 +60,8 @@ beforeEach(() => {
   soItemCreate.mockResolvedValue({});
   soHistoryCreate.mockResolvedValue({});
   saleUpdate.mockResolvedValue({});
+  prescriptionFindUnique.mockResolvedValue(null);
+  serviceOrderUpdate.mockResolvedValue({});
   // getNextNumber chama tx.serviceOrder? Não — usa getNextSequence (mockado).
   transaction.mockImplementation(async (cb: any) => cb(makeTx()));
 });
@@ -163,5 +172,34 @@ describe("createFromSale — armação na OS", () => {
     const descricoes = soItemCreate.mock.calls.map((c: any) => c[0].data.description);
     expect(descricoes).toContain("Lente Ultra");
     expect(descricoes).not.toContain("Estojo");
+  });
+
+  it("Livro de Receitas: OS aponta pra receita da venda quando ela existe", async () => {
+    saleFindFirst.mockResolvedValue(
+      saleWith([{ qty: 1, description: "Lente Ultra", product: LENS }])
+    );
+    prescriptionFindUnique.mockResolvedValue({ id: "rx-42" });
+
+    const res = await serviceOrderService.createFromSale("sale-1", "comp-1", "user-1");
+
+    expect(res.created).toBe(true);
+    expect(prescriptionFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { saleId: "sale-1" } })
+    );
+    expect(serviceOrderUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "os-1" }, data: { prescriptionId: "rx-42" } })
+    );
+  });
+
+  it("Livro de Receitas: sem receita da venda, OS não tenta vincular (sem erro)", async () => {
+    saleFindFirst.mockResolvedValue(
+      saleWith([{ qty: 1, description: "Lente Ultra", product: LENS }])
+    );
+    prescriptionFindUnique.mockResolvedValue(null);
+
+    const res = await serviceOrderService.createFromSale("sale-1", "comp-1", "user-1");
+
+    expect(res.created).toBe(true);
+    expect(serviceOrderUpdate).not.toHaveBeenCalled();
   });
 });

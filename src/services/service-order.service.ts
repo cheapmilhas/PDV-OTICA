@@ -8,6 +8,9 @@ import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } 
 import { getNextSequence } from "@/lib/counter";
 import { saleDisplayNumber } from "@/lib/sale-number";
 import { resolveRootOrderId } from "@/lib/os-root";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "service-order" });
 
 /**
  * H1: máquina de estados das transições PARA FRENTE de uma OS.
@@ -453,6 +456,24 @@ export class ServiceOrderService {
 
       return newOrder;
     }, { timeout: 30_000 });
+
+    // Livro de Receitas: a receita pertence à VENDA (criada no fechamento da
+    // venda, ANTES desta OS). Aqui a OS passa a APONTAR pra essa receita.
+    // À prova de falha — não bloqueia a criação da OS.
+    try {
+      const rx = await prisma.prescription.findUnique({
+        where: { saleId: sale.id },
+        select: { id: true },
+      });
+      if (rx) {
+        await prisma.serviceOrder.update({
+          where: { id: order.id },
+          data: { prescriptionId: rx.id },
+        });
+      }
+    } catch (rxErr) {
+      log.error("Falha ao vincular OS à receita do Livro (OS segue)", { serviceOrderId: order.id, err: String(rxErr) });
+    }
 
     return { created: true, serviceOrderId: order.id, number: order.number };
     } catch (err) {
