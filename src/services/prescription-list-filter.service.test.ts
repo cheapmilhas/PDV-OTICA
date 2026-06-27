@@ -27,4 +27,18 @@ describe("prescriptionService.list — filtros do Livro", () => {
     expect(whereArg.status).toBeUndefined();
     expect(whereArg.companyId).toBe("co-1");
   });
+
+  it("busca por nome do cliente (contains insensitive)", async () => {
+    await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, "maria");
+    const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
+    expect(whereArg.customer).toEqual({ name: { contains: "maria", mode: "insensitive" } });
+  });
+
+  it("filtro de validade monta expiresAt gte/lte", async () => {
+    const de = new Date("2026-01-01");
+    const ate = new Date("2026-12-31");
+    await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, undefined, de, ate);
+    const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
+    expect(whereArg.expiresAt).toEqual({ gte: de, lte: ate });
+  });
 });

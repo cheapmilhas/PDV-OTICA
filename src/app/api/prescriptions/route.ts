@@ -18,6 +18,9 @@ export async function GET(request: NextRequest) {
       customerId: searchParams.get("customerId") || undefined,
       page: searchParams.get("page") || 1,
       pageSize: searchParams.get("pageSize") || 10,
+      search: searchParams.get("search") || undefined,
+      validadeDe: searchParams.get("validadeDe") || undefined,
+      validadeAte: searchParams.get("validadeAte") || undefined,
     });
 
     const qBranchId = searchParams.get("branchId");
@@ -34,7 +37,10 @@ export async function GET(request: NextRequest) {
       query.pageSize,
       query.customerId,
       branchId,
-      status
+      status,
+      query.search,
+      query.validadeDe,
+      query.validadeAte
     );
 
     return NextResponse.json({
