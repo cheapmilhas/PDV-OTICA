@@ -269,9 +269,9 @@ function RelatorioComissoesPageContent() {
       </div>
 
       <Tabs defaultValue="atual" className="space-y-6">
-        <TabsList>
-          <TabsTrigger value="atual">Atual</TabsTrigger>
-          <TabsTrigger value="preview">Preview regra nova</TabsTrigger>
+        <TabsList className="h-8 bg-muted/50">
+          <TabsTrigger value="atual" className="text-xs">Atual</TabsTrigger>
+          <TabsTrigger value="preview" className="text-xs">Preview regra nova</TabsTrigger>
         </TabsList>
 
         {/* Aba ATUAL: o relatório de comissões existente (INTOCADO) */}
