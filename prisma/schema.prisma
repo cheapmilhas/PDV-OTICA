@@ -838,17 +838,45 @@ model Prescription {
   createdAt        DateTime            @default(now())
   updatedAt        DateTime            @updatedAt
   branchId         String?             @map("branch_id")
+
+  // ── Livro de Receitas (Fase 1) ───────────────────────────────────────────
+  // Estado de preenchimento do grau. Default seguro: receita nova sem grau.
+  status                PrescriptionStatus @default(AGUARDANDO_GRAU)
+  // Foto arquivada da receita (1 por enquanto). Guarda o CAMINHO/URL da imagem.
+  // Storage NÃO é implementado nesta fase — só o campo. Ver imageUrl (legado do
+  // model dormente) que segue existindo; este é o campo oficial do Livro.
+  prescriptionImageUrl  String?
+  // Paciente/dependente: quem USA a receita pode não ser quem paga (titular).
+  isDependente          Boolean         @default(false)
+  patientName           String?
+  patientBirthDate      DateTime?
+  // Vínculos de ORIGEM (nullable). A origem da receita é inferida por qual
+  // vínculo está preenchido: veio de uma OS (serviceOrderId), de uma venda
+  // direta (saleId), ou foi avulsa (ambos null). onDelete: SetNull — a receita
+  // PERSISTE no Livro mesmo que a OS/venda de origem seja apagada.
+  serviceOrderId   String?
+  saleId           String?
+
   branch           Branch?             @relation(fields: [branchId], references: [id])
   company          Company             @relation(fields: [companyId], references: [id])
   createdByUser    User?               @relation("PrescriptionCreator", fields: [createdByUserId], references: [id])
   customer         Customer            @relation(fields: [customerId], references: [id])
   doctor           Doctor?             @relation(fields: [doctorId], references: [id])
   values           PrescriptionValues?
+  // Vínculo histórico já existente (1 receita → N OS que a referenciam por
+  // prescriptionId). Mantido intacto. NÃO confundir com serviceOrderId acima,
+  // que é o vínculo de ORIGEM (a OS que gerou esta receita no Livro).
   serviceOrders    ServiceOrder[]      @relation("SOPrescription")
+  // Vínculo de origem (SetNull on delete) — back-relations dedicadas.
+  originServiceOrder ServiceOrder?     @relation("PrescriptionOriginSO", fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  originSale         Sale?             @relation("PrescriptionOriginSale", fields: [saleId], references: [id], onDelete: SetNull)
 
   @@index([companyId, customerId])
   @@index([customerId, expiresAt])
   @@index([branchId])
+  @@index([companyId, status])
+  @@index([serviceOrderId])
+  @@index([saleId])
 }
 
 model PrescriptionValues {
@@ -934,6 +962,8 @@ model ServiceOrder {
   originalOrder     ServiceOrder?         @relation("OrderRework", fields: [originalOrderId], references: [id])
   reworkOrders      ServiceOrder[]        @relation("OrderRework")
   prescriptionRel   Prescription?         @relation("SOPrescription", fields: [prescriptionId], references: [id])
+  // Livro de Receitas: receitas cuja ORIGEM foi esta OS (SetNull on delete).
+  originPrescriptions Prescription[]      @relation("PrescriptionOriginSO")
   history           ServiceOrderHistory[]
   items             ServiceOrderItem[]
   reservations      StockReservation[]
@@ -1249,6 +1279,8 @@ model Sale {
   warranties           Warranty[]
   cardReceivables      CardReceivable[]
   idempotencyKeys      SaleIdempotency[]
+  // Livro de Receitas: receitas cuja ORIGEM foi esta venda (SetNull on delete).
+  originPrescriptions  Prescription[]       @relation("PrescriptionOriginSale")
 
   @@unique([companyId, number])
   @@index([companyId, branchId, createdAt])
@@ -3604,6 +3636,14 @@ enum ServiceOrderStatus {
   READY
   DELIVERED
   CANCELED
+}
+
+/// Livro de Receitas (Fase 1): estado de preenchimento do grau de uma receita.
+/// AGUARDANDO_GRAU = receita criada mas sem nenhum valor de grau ainda
+/// (ex.: nasceu junto da OS em DRAFT). COMPLETA = já tem grau digitado.
+enum PrescriptionStatus {
+  AGUARDANDO_GRAU
+  COMPLETA
 }
 
 enum ServiceOrderPriority {
