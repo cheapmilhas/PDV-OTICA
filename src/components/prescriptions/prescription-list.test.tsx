@@ -1,9 +1,9 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi } from "vitest";
 import { render, screen } from "@testing-library/react";
-import { PrescriptionList } from "./prescription-list";
+import { PrescriptionList, type PrescriptionListItem } from "./prescription-list";
 
-const base = {
+const base: PrescriptionListItem = {
   id: "rx-1",
   issuedAt: "2026-06-01T00:00:00.000Z",
   expiresAt: "2027-06-01T00:00:00.000Z",
