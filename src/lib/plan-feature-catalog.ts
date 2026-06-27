@@ -160,7 +160,10 @@ export const FEATURE_REGISTRY: Record<FeatureKey, FeatureMeta> = {
   [FEATURES.GOALS]: {
     label: "Metas",
     description: "Metas de venda e comissão por vendedor/loja.",
-    pageMatchers: ["/dashboard/metas"],
+    // pageMatchers vazio de propósito: o gating de `goals` na página /dashboard/metas
+    // é POR ABA (FeatureGate na aba Ranking), não por URL — a página hospeda também
+    // Comissões/Config (só-permissão). NÃO re-adicionar "/dashboard/metas" aqui.
+    pageMatchers: [],
     apiMatchers: ["/api/goals"],
     sidebarKey: "metas",
   },

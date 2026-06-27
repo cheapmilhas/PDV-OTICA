@@ -74,13 +74,16 @@ describe("findBlockedFeature — features=false bloqueiam", () => {
     ["/api/finance/card-receivables", FEATURES.CARD_RECEIVABLES],
     ["/api/recurring-expenses", FEATURES.RECURRING_EXPENSES],
     // Q7.4 P2-2: features que faltavam na cobertura
-    ["/dashboard/metas", FEATURES.GOALS],
     ["/dashboard/financeiro/lotes-estoque", FEATURES.INVENTORY_LOTS],
     ["/api/goals", FEATURES.GOALS],
     ["/api/inventory/lots", FEATURES.INVENTORY_LOTS],
   ])("bloqueia %s → %s", (path, expectedKey) => {
     expect(findBlockedFeature(path, ALL_FALSE)).toBe(expectedKey);
   });
+});
+
+it("NÃO bloqueia /dashboard/metas por plano (gating de goals é por-aba agora)", () => {
+  expect(findBlockedFeature("/dashboard/metas", ALL_FALSE)).toBeNull();
 });
 
 describe("findBlockedFeature — features=true liberam", () => {
