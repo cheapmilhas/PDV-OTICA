@@ -723,6 +723,10 @@ model Product {
   promoPrice        Decimal?              @db.Decimal(12, 2)
   marginPercent     Decimal?              @db.Decimal(5, 2)
   stockControlled   Boolean               @default(true)
+  // Livro de Receitas: marca um produto-serviço como "Exame de Vista". Uma venda
+  // com item isEyeExam gera receita no Livro mesmo sem lente (e sem OS). Marcação
+  // resistente a rename — não depende do nome do produto.
+  isEyeExam         Boolean               @default(false)
   stockQty          Int                   @default(0)
   stockMin          Int                   @default(0)
   stockMax          Int?
@@ -855,7 +859,10 @@ model Prescription {
   // direta (saleId), ou foi avulsa (ambos null). onDelete: SetNull — a receita
   // PERSISTE no Livro mesmo que a OS/venda de origem seja apagada.
   serviceOrderId   String?
-  saleId           String?
+  // saleId é a CHAVE DE UNICIDADE do Livro: 1 venda → no máximo 1 receita.
+  // @unique impede duplicidade em corrida (NULL não colide no Postgres, então
+  // receitas avulsas sem venda convivem). Habilita upsert por saleId.
+  saleId           String?             @unique
 
   branch           Branch?             @relation(fields: [branchId], references: [id])
   company          Company             @relation(fields: [companyId], references: [id])
@@ -876,7 +883,6 @@ model Prescription {
   @@index([branchId])
   @@index([companyId, status])
   @@index([serviceOrderId])
-  @@index([saleId])
 }
 
 model PrescriptionValues {
