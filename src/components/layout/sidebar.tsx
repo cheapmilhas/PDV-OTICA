@@ -99,6 +99,12 @@ const menuItems: MenuSection[] = [
         permission: "service_orders.view"
       },
       {
+        name: "Livro de Receitas",
+        href: "/dashboard/livro-receitas",
+        icon: BookOpen,
+        permission: "prescriptions.view"
+      },
+      {
         name: "Funil",
         href: "/dashboard/funil",
         icon: Filter,

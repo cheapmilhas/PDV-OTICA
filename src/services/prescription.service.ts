@@ -95,11 +95,31 @@ export const prescriptionService = {
   /**
    * Listar receitas com paginação
    */
-  async list(companyId: string, page = 1, pageSize = 10, customerId?: string, branchId?: string) {
+  async list(
+    companyId: string,
+    page = 1,
+    pageSize = 10,
+    customerId?: string,
+    branchId?: string,
+    status?: "AGUARDANDO_GRAU" | "COMPLETA",
+    search?: string,
+    validadeDe?: Date,
+    validadeAte?: Date
+  ) {
     const where = {
       companyId,
       ...(customerId && { customerId }),
       ...(branchId && { branchId }),
+      ...(status && { status }),
+      ...(search && {
+        customer: { name: { contains: search, mode: "insensitive" as const } },
+      }),
+      ...((validadeDe || validadeAte) && {
+        expiresAt: {
+          ...(validadeDe && { gte: validadeDe }),
+          ...(validadeAte && { lte: validadeAte }),
+        },
+      }),
     };
 
     const [data, total] = await Promise.all([

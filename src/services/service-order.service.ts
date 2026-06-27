@@ -8,6 +8,9 @@ import type { ServiceOrderQuery, CreateServiceOrderDTO, UpdateServiceOrderDTO } 
 import { getNextSequence } from "@/lib/counter";
 import { saleDisplayNumber } from "@/lib/sale-number";
 import { resolveRootOrderId } from "@/lib/os-root";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ service: "service-order" });
 
 /**
  * H1: máquina de estados das transições PARA FRENTE de uma OS.
@@ -312,6 +315,11 @@ export class ServiceOrderService {
       return newOrder;
     }, { timeout: 30_000 });
 
+    // Livro de Receitas: OS criada manualmente já com grau → espelhar.
+    if (prescriptionData) {
+      await this.mirrorPrescriptionToBook(order.id, companyId, prescriptionData, userId);
+    }
+
     return this.getById(order.id, companyId, true);
   }
 
@@ -454,6 +462,24 @@ export class ServiceOrderService {
       return newOrder;
     }, { timeout: 30_000 });
 
+    // Livro de Receitas: a receita pertence à VENDA (criada no fechamento da
+    // venda, ANTES desta OS). Aqui a OS passa a APONTAR pra essa receita.
+    // À prova de falha — não bloqueia a criação da OS.
+    try {
+      const rx = await prisma.prescription.findUnique({
+        where: { saleId: sale.id },
+        select: { id: true },
+      });
+      if (rx) {
+        await prisma.serviceOrder.update({
+          where: { id: order.id },
+          data: { prescriptionId: rx.id },
+        });
+      }
+    } catch (rxErr) {
+      log.error("Falha ao vincular OS à receita do Livro (OS segue)", { serviceOrderId: order.id, err: String(rxErr) });
+    }
+
     return { created: true, serviceOrderId: order.id, number: order.number };
     } catch (err) {
       // Race: a auto-criação (pós-venda) e o clique manual "Gerar OS" podem
@@ -559,7 +585,54 @@ export class ServiceOrderService {
       });
     }, { timeout: 30_000 });
 
+    // Livro de Receitas: se o grau foi (re)digitado, espelhar na receita.
+    if (hasPrescription && prescriptionData) {
+      await this.mirrorPrescriptionToBook(id, companyId, prescriptionData, userId);
+    }
+
     return this.getById(id, companyId, true);
+  }
+
+  /**
+   * Espelha o grau digitado numa OS para a receita do Livro (relacional).
+   * Resolve a receita por `saleId` (origem = venda) ou, se a OS não tem venda,
+   * por `serviceOrderId`. À prova de falha — nunca quebra o save da OS.
+   */
+  private async mirrorPrescriptionToBook(
+    serviceOrderId: string,
+    companyId: string,
+    prescriptionData: { od?: unknown; oe?: unknown; adicao?: unknown },
+    userId?: string
+  ) {
+    try {
+      const os = await prisma.serviceOrder.findUnique({
+        where: { id: serviceOrderId },
+        select: { customerId: true, branchId: true, sale: { select: { id: true } } },
+      });
+      if (!os) return;
+
+      const saleId = os.sale?.id ?? null;
+      // Resolve a receita-alvo: por venda (preferido) ou pela própria OS.
+      const existing = saleId
+        ? await prisma.prescription.findUnique({ where: { saleId }, select: { id: true } })
+        : await prisma.prescription.findFirst({ where: { serviceOrderId, companyId }, select: { id: true } });
+
+      const { upsertPrescription } = await import("./livro-receitas.service");
+      await upsertPrescription({
+        id: existing?.id ?? undefined,
+        companyId,
+        customerId: os.customerId,
+        branchId: os.branchId,
+        saleId: saleId ?? undefined,
+        serviceOrderId: saleId ? undefined : serviceOrderId,
+        createdByUserId: userId,
+        od: (prescriptionData.od ?? undefined) as never,
+        oe: (prescriptionData.oe ?? undefined) as never,
+        adicao: (prescriptionData.adicao ?? undefined) as never,
+      });
+    } catch (err) {
+      log.error("Falha ao espelhar grau da OS no Livro (OS segue)", { serviceOrderId, err: String(err) });
+    }
   }
 
   /**

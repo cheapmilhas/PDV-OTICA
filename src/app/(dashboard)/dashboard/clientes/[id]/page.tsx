@@ -61,6 +61,8 @@ import { format, parseISO } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import toast from "react-hot-toast";
 import { usePermissions } from "@/hooks/usePermissions";
+import { PrescriptionList, type PrescriptionListItem } from "@/components/prescriptions/prescription-list";
+import { PrescriptionGradeDialog } from "@/components/prescriptions/prescription-grade-dialog";
 
 interface Customer {
   id: string;
@@ -219,6 +221,9 @@ function ClienteDetalhesPage() {
   // CRM state
   const [crmContacts, setCrmContacts] = useState<CrmContact[]>([]);
   const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
+  // Livro de Receitas: receitas do cliente (titular + dependentes).
+  const [prescriptions, setPrescriptions] = useState<PrescriptionListItem[]>([]);
+  const [grauEditId, setGrauEditId] = useState<string | null>(null);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
   const [contactForm, setContactForm] = useState({
@@ -287,6 +292,19 @@ function ClienteDetalhesPage() {
         } catch (err) {
           console.error("Erro ao buscar ordens de serviço:", err);
           setServiceOrders([]);
+        }
+
+        // Buscar receitas do cliente (Livro de Receitas) — titular + dependentes.
+        try {
+          const rxRes = await fetch(`/api/prescriptions/customer/${customerId}`);
+          if (rxRes.ok) {
+            const rxData = await rxRes.json();
+            setPrescriptions(rxData.data?.prescriptions || []);
+          } else {
+            setPrescriptions([]);
+          }
+        } catch {
+          setPrescriptions([]);
         }
 
         // Buscar parcelas do cliente
@@ -834,6 +852,11 @@ function ClienteDetalhesPage() {
           <TabsTrigger value="ordens">
             OS ({serviceOrders.length})
           </TabsTrigger>
+          {hasPermission("prescriptions.view") && (
+            <TabsTrigger value="receitas">
+              Receitas ({prescriptions.length})
+            </TabsTrigger>
+          )}
           <TabsTrigger value="parcelas">
             Parcelas ({receivables.length})
           </TabsTrigger>
@@ -1141,6 +1164,26 @@ function ClienteDetalhesPage() {
             </CardContent>
           </Card>
         </TabsContent>
+
+        {/* Tab: Receitas (Livro de Receitas) */}
+        {hasPermission("prescriptions.view") && (
+          <TabsContent value="receitas">
+            <Card>
+              <CardHeader>
+                <CardTitle>Receitas</CardTitle>
+                <p className="text-sm text-muted-foreground">
+                  Receitas oftálmicas deste cliente e de seus dependentes.
+                </p>
+              </CardHeader>
+              <CardContent>
+                <PrescriptionList
+                  prescriptions={prescriptions}
+                  onDigitarGrau={hasPermission("prescriptions.edit") ? setGrauEditId : undefined}
+                />
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
 
         {/* Tab: Cashback */}
         <TabsContent value="cashback">
@@ -1733,6 +1776,26 @@ function ClienteDetalhesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {grauEditId && (
+        <PrescriptionGradeDialog
+          prescriptionId={grauEditId}
+          open={!!grauEditId}
+          onClose={() => setGrauEditId(null)}
+          onSaved={async () => {
+            setGrauEditId(null);
+            try {
+              const r = await fetch(`/api/prescriptions/customer/${customerId}`);
+              if (r.ok) {
+                const d = await r.json();
+                setPrescriptions(d.data?.prescriptions || []);
+              }
+            } catch {
+              /* mantém lista atual */
+            }
+          }}
+        />
+      )}
     </div>
   );
 }

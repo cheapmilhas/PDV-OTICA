@@ -87,6 +87,10 @@ export enum Permission {
   SERVICE_ORDERS_VIEW = "service_orders.view",
   SERVICE_ORDERS_CREATE = "service_orders.create",
   SERVICE_ORDERS_EDIT = "service_orders.edit",
+
+  // Livro de Receitas (dado clínico sensível — LGPD)
+  PRESCRIPTIONS_VIEW = "prescriptions.view",
+  PRESCRIPTIONS_EDIT = "prescriptions.edit",
   SUPPLIERS_VIEW = "suppliers.view",
   SUPPLIERS_MANAGE = "suppliers.manage",
   LABORATORIES_VIEW = "laboratories.view",
@@ -421,6 +425,8 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.SERVICE_ORDERS_VIEW]: "Visualizar ordens de serviço",
   [Permission.SERVICE_ORDERS_CREATE]: "Criar ordens de serviço",
   [Permission.SERVICE_ORDERS_EDIT]: "Editar ordens de serviço",
+  [Permission.PRESCRIPTIONS_VIEW]: "Visualizar receitas (Livro de Receitas)",
+  [Permission.PRESCRIPTIONS_EDIT]: "Digitar/editar grau de receitas",
   [Permission.SUPPLIERS_VIEW]: "Visualizar fornecedores",
   [Permission.SUPPLIERS_MANAGE]: "Gerenciar fornecedores",
   [Permission.LABORATORIES_VIEW]: "Visualizar laboratórios",

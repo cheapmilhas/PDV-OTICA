@@ -9,6 +9,8 @@ import { prescriptionSchema, prescriptionQuerySchema } from "@/lib/validations/p
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
+    // LGPD: receita é dado clínico sensível — exige permissão de leitura.
+    await requirePermission("prescriptions.view");
     const companyId = await getCompanyId();
 
     const { searchParams } = new URL(request.url);
@@ -16,17 +18,29 @@ export async function GET(request: NextRequest) {
       customerId: searchParams.get("customerId") || undefined,
       page: searchParams.get("page") || 1,
       pageSize: searchParams.get("pageSize") || 10,
+      search: searchParams.get("search") || undefined,
+      validadeDe: searchParams.get("validadeDe") || undefined,
+      validadeAte: searchParams.get("validadeAte") || undefined,
     });
 
     const qBranchId = searchParams.get("branchId");
     const branchId = qBranchId && qBranchId !== "ALL" ? qBranchId : undefined;
+
+    // Livro de Receitas: filtro opcional por status (AGUARDANDO_GRAU | COMPLETA).
+    const qStatus = searchParams.get("status");
+    const status =
+      qStatus === "AGUARDANDO_GRAU" || qStatus === "COMPLETA" ? qStatus : undefined;
 
     const result = await prescriptionService.list(
       companyId,
       query.page,
       query.pageSize,
       query.customerId,
-      branchId
+      branchId,
+      status,
+      query.search,
+      query.validadeDe,
+      query.validadeAte
     );
 
     return NextResponse.json({
