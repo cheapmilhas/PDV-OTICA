@@ -47,22 +47,16 @@
 
 - [ ] **Step 1: Ajustar o teste do catálogo (RED por mudança de expectativa)**
 
-Em `find-blocked-feature.test.ts`, remover a linha:
+Edição precisa em `find-blocked-feature.test.ts` (M-B — NÃO re-digitar o fechamento do `it.each`):
+1. **Deletar a linha 77** exata: `["/dashboard/metas", FEATURES.GOALS],` (de dentro do array do `it.each`).
+2. **Manter a linha 79**: `["/api/goals", FEATURES.GOALS],`.
+3. **Adicionar um `it(...)` novo e independente**, logo após o bloco `describe` existente (depois do `});` que fecha o `it.each`, por volta da linha 84):
 ```ts
-    ["/dashboard/metas", FEATURES.GOALS],
-```
-Manter `["/api/goals", FEATURES.GOALS]`. Adicionar um caso garantindo que a página NÃO é mais bloqueada por plano:
-```ts
-    // Consolidação Metas: a PÁGINA não é mais gateada por plano (gating vira por-aba).
-    // /api/goals continua gateado.
-  ])("bloqueia %s → %s", (path, expectedKey) => {
-    expect(findBlockedFeature(path, ALL_FALSE)).toBe(expectedKey);
-  });
-
   it("NÃO bloqueia /dashboard/metas por plano (gating de goals é por-aba agora)", () => {
     expect(findBlockedFeature("/dashboard/metas", ALL_FALSE)).toBeNull();
   });
 ```
+> Não tocar no array do `it.each` além de remover a linha 77. `ALL_FALSE` e `FEATURES` já estão definidos no arquivo.
 
 - [ ] **Step 2: Rodar o teste e ver falhar**
 
@@ -116,7 +110,8 @@ export function CommissionConfigTab() {
   // corpo idêntico ao CommissionConfigPageContent atual
 }
 ```
-> Nota: mantemos `commission-tiers-tab.tsx` no lugar atual e só re-importamos — evita mover arquivo e quebrar histórico. O `<h1>` "Configuração de Comissões" interno pode ficar (vira título da aba) ou ser rebaixado para `<h2>`; manter por ora.
+> Nota: mantemos `commission-tiers-tab.tsx` no lugar atual e só re-importamos — evita mover arquivo e quebrar histórico.
+> **M-C (decisão):** rebaixar o `<h1>` "Configuração de Comissões" para `<h2>` (a página de abas não pode ter 2+ `<h1>`). Mesma regra vale para o título interno do RankingTab (Task 3) e o da CommissionNewView/LegacyView se houver — só 1 `<h1>` por página. Se preferir, remover o título interno da Config (a aba já se identifica).
 
 - [ ] **Step 2: Verificar tipos**
 
@@ -268,7 +263,7 @@ export function MetasTabs({
   );
 }
 ```
-> Permissão por aba preservada; aba Comissões escolhe a view pelo `mode`; gating de `goals` mora no `RankingTab` (FeatureGate). ADMIN: o `usePermission` já trata ADMIN como tendo tudo (mesma base do ProtectedRoute) — confirmar no hook; se não, usar `isAdmin`.
+> Permissão por aba preservada; aba Comissões escolhe a view pelo `mode`; gating de `goals` mora no `RankingTab` (FeatureGate). ADMIN: confirmado que `usePermission` (`use-permission.ts:80-92`) trata `role === "ADMIN"` como tendo toda permissão em `hasPermission`/`hasAnyPermission` → ADMIN vê as 3 abas. Não precisa de fallback `isAdmin`.
 
 - [ ] **Step 2: Verificar tipos**
 
@@ -414,6 +409,10 @@ const permissionOk =
   (item.permission ? hasPermission(item.permission) : false) ||
   (item.permissionAny ? item.permissionAny.some((p) => hasPermission(p)) : false);
 ```
+> ⚠️ **H-A:** usar `item.permissionAny.some((p) => hasPermission(p))` com o `hasPermission`
+> JÁ desestruturado de `usePermissions` (`sidebar.tsx:369`). **NÃO** usar
+> `hasAnyPermission` (a redação do spec menciona, mas esse símbolo NÃO está
+> desestruturado aqui — referenciá-lo quebra o build). `isAdmin` já está em escopo.
 
 - [ ] **Step 2: Remover os itens "Comissões" e "Config. Comissões"; ajustar "Metas"**
 
@@ -449,7 +448,7 @@ git commit -m "feat(metas): sidebar com item único Metas (permissionAny das 3 p
 
 - [ ] **Step 1: Suportar `permissionAny` e ajustar o item**
 
-Adicionar `permissionAny?: string[]` ao tipo dos itens e ao filtro (mesma lógica do Task 7). Trocar o item Metas:
+Adicionar `permissionAny?: string[]` ao tipo dos itens e ao filtro (mesma lógica do Task 7 — usar `.some(hasPermission)` com o `hasPermission` desestruturado em `mobile-nav.tsx:87`; NÃO referenciar `hasAnyPermission`). Trocar o item Metas:
 ```ts
 { icon: Target, label: "Metas", href: "/dashboard/metas", permissionAny: ["goals.view", "reports.sales", "settings.edit"] },
 ```
@@ -472,7 +471,7 @@ git commit -m "feat(metas): mobile-nav item Metas com permissionAny"
 ## Task 9: Rebaixar a sub-barra de abas da Comissões legacy (H1)
 
 **Files:**
-- Modify: `src/app/(dashboard)/dashboard/relatorios/comissoes/commission-legacy-view.tsx:271-274`
+- Modify: `src/app/(dashboard)/dashboard/relatorios/comissoes/commission-legacy-view.tsx:271-275`
 
 - [ ] **Step 1: Reduzir o peso visual da `TabsList` interna**
 
@@ -517,6 +516,24 @@ Mockar `usePermission` e renderizar `MetasTabs`. Casos:
 7. **modo**: `mode="new"` → aba Comissões usa `CommissionNewView`; `mode="legacy"` → `CommissionLegacyView` (mockar as duas views com texto sentinela).
 
 Mockar `next/navigation` (`useRouter`, `useSearchParams`) e as views/`RankingTab`/`CommissionConfigTab` com stubs simples para isolar a lógica de abas.
+
+> ⚠️ **H-B (obrigatório):** `vi.mock` as duas views de comissão para componentes
+> sentinela — elas NUNCA podem ser renderizadas de verdade no teste, pois
+> `CommissionLegacyView` usa `useCompanySettings` e `useBranchContext`
+> (`commission-legacy-view.tsx:4,33`), providers que não existem no vitest (não há
+> layout). Mockar também `RankingTab` (usa muitos hooks/fetch) e
+> `CommissionConfigTab`. Ex.:
+> ```ts
+> vi.mock("../relatorios/comissoes/commission-new-view", () => ({
+>   CommissionNewView: () => <div>NEW_VIEW</div>,
+> }));
+> vi.mock("../relatorios/comissoes/commission-legacy-view", () => ({
+>   CommissionLegacyView: () => <div>LEGACY_VIEW</div>,
+> }));
+> vi.mock("./ranking-tab", () => ({ RankingTab: () => <div>RANKING</div> }));
+> vi.mock("./commission-config-tab", () => ({ CommissionConfigTab: () => <div>CONFIG</div> }));
+> ```
+> O teste de `mode` checa qual sentinela aparece (`NEW_VIEW` vs `LEGACY_VIEW`).
 
 - [ ] **Step 2: Rodar e ver falhar**
 
