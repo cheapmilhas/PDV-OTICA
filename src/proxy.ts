@@ -21,16 +21,23 @@ function nextWithCurrentPath(request: NextRequest): NextResponse {
   return NextResponse.next({ request: { headers: requestHeaders } });
 }
 
-const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
-const JWT_SECRET = new TextEncoder().encode(authSecret);
+// Lazy: lê o secret em runtime (não no import do módulo). O middleware é
+// importado durante `next build`, mas só roda por requisição — um throw no
+// top-level quebrava o build em ambientes sem o secret (ex.: Preview). A
+// checagem dentro das funções preserva a segurança em runtime (ainda lança/barra
+// se o secret faltar quando uma rota é acessada). Ver admin-session.ts.
+function getAuthSecret(): string {
+  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
+  return authSecret;
+}
 
 const SESSION_COOKIE_NAME = "next-auth.session-token";
 const SECURE_SESSION_COOKIE_NAME = "__Secure-next-auth.session-token";
 
 async function verifyAdminToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(getAuthSecret()));
     return payload;
   } catch {
     return null;
@@ -41,7 +48,7 @@ async function verifyPdvSession(token: string, cookieName: string) {
   try {
     const payload = await decode({
       token,
-      secret: authSecret!,
+      secret: getAuthSecret(),
       salt: cookieName,
     });
     return payload && typeof payload === "object" ? payload : null;

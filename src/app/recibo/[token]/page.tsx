@@ -6,9 +6,14 @@ import { PrintButton } from "./print-button";
 
 export const dynamic = "force-dynamic";
 
-const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-if (!authSecret) throw new Error("AUTH_SECRET is required");
-const SECRET = new TextEncoder().encode(authSecret);
+// Lazy: lê o secret em runtime (não no import). `next build` importa a página
+// ao coletar dados, mas só roda decode() em requisição — assim o build não
+// precisa do secret (ex.: Preview). Ver admin-session.ts getJwtSecret().
+function getJwtSecret(): Uint8Array {
+  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!authSecret) throw new Error("AUTH_SECRET is required");
+  return new TextEncoder().encode(authSecret);
+}
 
 interface TokenPayload {
   saleId: string;
@@ -18,7 +23,7 @@ interface TokenPayload {
 
 async function decode(token: string): Promise<TokenPayload | null> {
   try {
-    const { payload } = await jwtVerify(token, SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     if (payload.type !== "receipt" || !payload.saleId || !payload.companyId) {
       return null;
     }

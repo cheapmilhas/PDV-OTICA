@@ -4,9 +4,19 @@ import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canAccessCompany } from "@/lib/admin-scope";
 
-const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
-const JWT_SECRET = new TextEncoder().encode(authSecret);
+/**
+ * Lê o segredo JWT em TEMPO DE REQUISIÇÃO (não no carregamento do módulo).
+ * Lazy de propósito: o `next build` importa este módulo ao coletar dados das
+ * páginas/rotas, mas NÃO executa os handlers — então um throw aqui no top-level
+ * quebrava o build em ambientes sem o secret (ex.: Preview da Vercel). Movendo a
+ * checagem pra dentro da função, a segurança em runtime é idêntica (ainda lança
+ * se o secret faltar quando a rota roda) e o build não precisa mais do secret.
+ */
+function getJwtSecret(): Uint8Array {
+  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
+  return new TextEncoder().encode(authSecret);
+}
 
 export interface AdminPayload {
   id: string;
@@ -21,7 +31,7 @@ export async function getAdminSession(): Promise<AdminPayload | null> {
   const token = cookieStore.get("admin.session-token")?.value;
   if (!token) return null;
   try {
-    const { payload } = await jwtVerify(token, JWT_SECRET);
+    const { payload } = await jwtVerify(token, getJwtSecret());
     if (!payload.isAdmin) return null;
     return payload as unknown as AdminPayload;
   } catch {

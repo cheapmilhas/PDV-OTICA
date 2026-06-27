@@ -9,9 +9,13 @@ import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "sales/share-link" });
 
-const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-if (!authSecret) throw new Error("AUTH_SECRET is required");
-const SECRET = new TextEncoder().encode(authSecret);
+// Lazy: lê o secret em runtime (não no import) p/ não quebrar `next build` em
+// ambientes sem o secret (ex.: Preview). Ver admin-session.ts getJwtSecret().
+function getJwtSecret(): Uint8Array {
+  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!authSecret) throw new Error("AUTH_SECRET is required");
+  return new TextEncoder().encode(authSecret);
+}
 
 /**
  * POST /api/sales/[id]/share-link
@@ -46,7 +50,7 @@ export async function POST(
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("7d")
-      .sign(SECRET);
+      .sign(getJwtSecret());
 
     const baseUrl = process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000";
     const receiptUrl = `${baseUrl}/recibo/${token}`;

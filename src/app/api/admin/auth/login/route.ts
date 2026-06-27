@@ -9,9 +9,14 @@ import { verifyTotp, matchRecoveryCode } from "@/lib/totp";
 
 const log = logger.child({ route: "admin/auth/login" });
 
-const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
-const JWT_SECRET = new TextEncoder().encode(authSecret);
+// Lazy: lê o secret em runtime (não no import) p/ não quebrar `next build` em
+// ambientes sem o secret (ex.: Preview). Segurança idêntica — lança se faltar
+// quando a rota roda. Ver admin-session.ts getJwtSecret().
+function getJwtSecret(): Uint8Array {
+  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
+  return new TextEncoder().encode(authSecret);
+}
 
 export async function POST(request: Request) {
   try {
@@ -138,7 +143,7 @@ export async function POST(request: Request) {
       .setProtectedHeader({ alg: "HS256" })
       .setIssuedAt()
       .setExpirationTime("8h")
-      .sign(JWT_SECRET);
+      .sign(getJwtSecret());
 
     // Setar cookie
     const cookieStore = await cookies();
