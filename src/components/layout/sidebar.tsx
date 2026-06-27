@@ -51,6 +51,8 @@ interface MenuItem {
   icon: React.ElementType;
   hotkey?: string;
   permission?: string;
+  // Mostra o item se tiver QUALQUER uma destas permissões.
+  permissionAny?: string[];
   feature?: string;
   /** Flag de integração ligada por empresa via env (não é gating de plano). */
   flag?: "whatsapp";
@@ -193,23 +195,7 @@ const menuItems: MenuSection[] = [
         name: "Metas",
         href: "/dashboard/metas",
         icon: Target,
-        permission: "goals.view",
-        feature: "goals"
-      },
-      {
-        // Relatório de comissões a pagar. Gateado só por permissão (reports.sales),
-        // não por feature de plano — já acessível no Básico, só faltava no menu.
-        name: "Comissões",
-        href: "/dashboard/relatorios/comissoes",
-        icon: Receipt,
-        permission: "reports.sales"
-      },
-      {
-        // Configuração de comissões (% base, bônus). Gateado por settings.edit.
-        name: "Config. Comissões",
-        href: "/dashboard/configuracoes/comissoes",
-        icon: Settings,
-        permission: "settings.edit"
+        permissionAny: ["goals.view", "reports.sales", "settings.edit"],
       },
       {
         name: "Campanhas",
@@ -433,7 +419,11 @@ export function Sidebar({ onNavigate }: SidebarProps = {}) {
       <nav className="flex-1 overflow-y-auto px-3 py-4">
         {menuItems.map((section) => {
           const visibleItems = section.items.filter((item) => {
-            const permissionOk = !item.permission || isAdmin || hasPermission(item.permission);
+            const permissionOk =
+              isAdmin ||
+              (!item.permission && !item.permissionAny) ||
+              (item.permission ? hasPermission(item.permission) : false) ||
+              (item.permissionAny ? item.permissionAny.some((p) => hasPermission(p)) : false);
             // Esconder 100% itens cuja feature está desativada no plano.
             // hasFeature retorna true por default (sem dados ou loading) — evita flash.
             const featureOk = !item.feature || hasFeature(item.feature);
