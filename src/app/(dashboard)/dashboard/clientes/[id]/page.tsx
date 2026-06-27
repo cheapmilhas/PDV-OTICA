@@ -62,6 +62,7 @@ import { ptBR } from "date-fns/locale";
 import toast from "react-hot-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PrescriptionList, type PrescriptionListItem } from "@/components/prescriptions/prescription-list";
+import { PrescriptionGradeDialog } from "@/components/prescriptions/prescription-grade-dialog";
 
 interface Customer {
   id: string;
@@ -222,6 +223,7 @@ function ClienteDetalhesPage() {
   const [crmReminders, setCrmReminders] = useState<CrmReminder[]>([]);
   // Livro de Receitas: receitas do cliente (titular + dependentes).
   const [prescriptions, setPrescriptions] = useState<PrescriptionListItem[]>([]);
+  const [grauEditId, setGrauEditId] = useState<string | null>(null);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
   const [contactForm, setContactForm] = useState({
@@ -1174,7 +1176,10 @@ function ClienteDetalhesPage() {
                 </p>
               </CardHeader>
               <CardContent>
-                <PrescriptionList prescriptions={prescriptions} />
+                <PrescriptionList
+                  prescriptions={prescriptions}
+                  onDigitarGrau={hasPermission("prescriptions.edit") ? setGrauEditId : undefined}
+                />
               </CardContent>
             </Card>
           </TabsContent>
@@ -1771,6 +1776,26 @@ function ClienteDetalhesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {grauEditId && (
+        <PrescriptionGradeDialog
+          prescriptionId={grauEditId}
+          open={!!grauEditId}
+          onClose={() => setGrauEditId(null)}
+          onSaved={async () => {
+            setGrauEditId(null);
+            try {
+              const r = await fetch(`/api/prescriptions/customer/${customerId}`);
+              if (r.ok) {
+                const d = await r.json();
+                setPrescriptions(d.data?.prescriptions || []);
+              }
+            } catch {
+              /* mantém lista atual */
+            }
+          }}
+        />
+      )}
     </div>
   );
 }
