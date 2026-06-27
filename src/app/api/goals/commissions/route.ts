@@ -1,9 +1,10 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getBranchId, getCompanyId, requirePermission } from "@/lib/auth-helpers";
-import { handleApiError } from "@/lib/error-handler";
+import { handleApiError, forbiddenError } from "@/lib/error-handler";
 import { goalsService } from "@/services/goals.service";
 import { closeMonthSchema } from "@/lib/validations/goals.schema";
 import { requirePlanFeature } from "@/lib/plan-features";
+import { isNewCommissionEngine } from "@/lib/commission-flag";
 
 export async function GET(request: NextRequest) {
   try {
@@ -31,6 +32,14 @@ export async function POST(request: NextRequest) {
     const companyId = await getCompanyId();
     await requirePlanFeature(companyId, "goals");
     await requirePermission("goals.manage");
+    // Kill-switch COMMISSION_ENGINE: "Fechar Mês" calcula/grava a comissão legada
+    // (SellerCommission). Em modo "new" isso fica desligado — a comissão vive só em
+    // Relatórios → Comissões pela regra nova. A tela esconde o botão e o backend recusa.
+    if (isNewCommissionEngine()) {
+      throw forbiddenError(
+        "Comissão pela regra nova: fechar mês para calcular comissão legada está desativado."
+      );
+    }
     const body = await request.json();
     const data = closeMonthSchema.parse(body);
     const result = await goalsService.closeMonth(branchId, data);
