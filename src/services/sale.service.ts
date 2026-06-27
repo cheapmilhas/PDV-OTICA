@@ -877,6 +877,16 @@ export class SaleService {
         });
     }
 
+    // 9.5 Espelhar receita no Livro de Receitas (pós-commit, à prova de falha).
+    // ANTES da OS, para a OS poder apontar pra receita da venda (vínculo).
+    // Import dinâmico evita ciclo. Falha aqui NÃO bloqueia a venda nem a OS.
+    try {
+      const { createPrescriptionFromSale } = await import("@/services/prescription-from-sale.service");
+      await createPrescriptionFromSale(sale.id, companyId, userId);
+    } catch (rxError) {
+      log.error("Falha ao espelhar receita no Livro (venda segue)", { saleId: sale.id, err: String(rxError) });
+    }
+
     // 10. Auto-gerar Ordem de Serviço se a venda tiver lente (pós-commit).
     // NUNCA dentro da transação da venda — falha aqui não pode reverter a venda.
     // Import dinâmico evita ciclo sale.service <-> service-order.service.
