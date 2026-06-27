@@ -21,12 +21,18 @@ export async function GET(request: NextRequest) {
     const qBranchId = searchParams.get("branchId");
     const branchId = qBranchId && qBranchId !== "ALL" ? qBranchId : undefined;
 
+    // Livro de Receitas: filtro opcional por status (AGUARDANDO_GRAU | COMPLETA).
+    const qStatus = searchParams.get("status");
+    const status =
+      qStatus === "AGUARDANDO_GRAU" || qStatus === "COMPLETA" ? qStatus : undefined;
+
     const result = await prescriptionService.list(
       companyId,
       query.page,
       query.pageSize,
       query.customerId,
-      branchId
+      branchId,
+      status
     );
 
     return NextResponse.json({
