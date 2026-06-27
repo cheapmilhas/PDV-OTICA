@@ -107,7 +107,11 @@
 - [ ] **Step 4: Rodar — PASSA.**
 - [ ] **Step 5: Commit** (`feat(livro-receitas): PrescriptionGradeForm reutilizável`).
 
-## Task 7: OS consome o componente (nova + editar) — ⚠️ NÃO APAGAR EXTRAS (revisão C3)
+## Task 7: ❌ NÃO EXECUTADA — decisão do dono (2026-06-27)
+
+> **Decisão:** ao inspecionar o código real, a OS provou ter um form de grau **legitimamente diferente** do Livro: duas tabelas ("Visão de Longe" esf/cil/eixo/dnp/altura + "Adição / Visão de Perto" com `add`/`dnpPertoOd/Oe` por olho). Esses campos (`dnpPerto*`) **nem existem no model** do Livro. Encaixar o `PrescriptionGradeForm` (grade consolidada do Livro) na OS **mudaria o layout da OS e removeria campos** — regressão numa tela de produção. O dono optou por **NÃO mexer na OS**: o componente serve só o Livro; layouts diferentes são legítimos (usos diferentes). DRY-total da OS fica como possível fatia 2c futura (componente mais rico). **Risco zero na OS preservado.**
+
+### (Plano original mantido para referência) — ⚠️ NÃO APAGAR EXTRAS (revisão C3)
 
 **Files:** Modify `ordens-servico/nova/page.tsx`, `[id]/editar/page.tsx`
 
