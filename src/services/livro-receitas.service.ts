@@ -165,32 +165,56 @@ export async function upsertPrescription(input: UpsertPrescriptionInput) {
     saleId: input.saleId ?? undefined,
   };
 
-  if (input.id) {
-    // UPDATE: receita já existente. Atualiza campos + valores (upsert do 1:1).
-    return prisma.prescription.update({
-      where: { id: input.id },
+  const doUpdate = (id: string) =>
+    prisma.prescription.update({
+      where: { id },
       data: {
         ...base,
-        values: {
-          upsert: {
-            create: values,
-            update: values,
-          },
-        },
+        values: { upsert: { create: values, update: values } },
       },
       include: { values: true },
     });
+
+  const doCreate = () =>
+    prisma.prescription.create({
+      data: {
+        companyId: input.companyId,
+        customerId: input.customerId,
+        createdByUserId: input.createdByUserId ?? undefined,
+        ...base,
+        values: { create: values },
+      },
+      include: { values: true },
+    });
+
+  // 1) id explícito → UPDATE direto.
+  if (input.id) return doUpdate(input.id);
+
+  // 2) Upsert por saleId: 1 venda → 1 receita. Procura antes de criar para não
+  //    duplicar (reedição, lente+exame, disparos concorrentes pós-commit).
+  if (input.saleId) {
+    const found = await prisma.prescription.findUnique({
+      where: { saleId: input.saleId },
+      select: { id: true },
+    });
+    if (found) return doUpdate(found.id);
+
+    try {
+      return await doCreate();
+    } catch (e) {
+      // Corrida: outro disparo criou a receita desta venda entre o find e o create.
+      // P2002 no unique de saleId → tratar como idempotente e atualizar a existente.
+      if (e && typeof e === "object" && (e as { code?: string }).code === "P2002") {
+        const racer = await prisma.prescription.findUnique({
+          where: { saleId: input.saleId },
+          select: { id: true },
+        });
+        if (racer) return doUpdate(racer.id);
+      }
+      throw e;
+    }
   }
 
-  // CREATE: nova receita + valores no mesmo create aninhado.
-  return prisma.prescription.create({
-    data: {
-      companyId: input.companyId,
-      customerId: input.customerId,
-      createdByUserId: input.createdByUserId ?? undefined,
-      ...base,
-      values: { create: values },
-    },
-    include: { values: true },
-  });
+  // 3) Sem id e sem saleId (receita avulsa) → CREATE simples.
+  return doCreate();
 }

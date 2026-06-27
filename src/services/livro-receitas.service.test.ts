@@ -5,6 +5,7 @@ vi.mock("@/lib/prisma", () => ({
     prescription: {
       create: vi.fn(),
       update: vi.fn(),
+      findUnique: vi.fn(),
     },
   },
 }));
@@ -23,6 +24,8 @@ beforeEach(() => {
     id: args.where.id,
     ...args.data,
   }));
+  // Default: nenhuma receita pré-existente por saleId (testes de CREATE não regridem).
+  (prisma.prescription.findUnique as any).mockResolvedValue(null);
 });
 
 describe("upsertPrescription (Livro de Receitas — camada de dados)", () => {
@@ -112,5 +115,21 @@ describe("upsertPrescription (Livro de Receitas — camada de dados)", () => {
   it("multi-tenant: exige companyId e customerId", async () => {
     await expect(upsertPrescription({ companyId: "", customerId: "c" } as any)).rejects.toThrow(/companyId/);
     await expect(upsertPrescription({ companyId: "co", customerId: "" } as any)).rejects.toThrow(/customerId/);
+  });
+
+  it("upsert por saleId: se já existe receita pra venda, ATUALIZA (não duplica)", async () => {
+    (prisma.prescription.findUnique as any).mockResolvedValue({ id: "rx-existing" });
+    await upsertPrescription({ companyId: "co-1", customerId: "cust-1", saleId: "sale-1", od: { esf: "-1.00" } });
+    expect(prisma.prescription.findUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { saleId: "sale-1" } })
+    );
+    expect(prisma.prescription.update).toHaveBeenCalledTimes(1);
+    expect(prisma.prescription.create).not.toHaveBeenCalled();
+  });
+
+  it("upsert por saleId: se NÃO existe, cria nova", async () => {
+    (prisma.prescription.findUnique as any).mockResolvedValue(null);
+    await upsertPrescription({ companyId: "co-1", customerId: "cust-1", saleId: "sale-2", od: { esf: "-1.00" } });
+    expect(prisma.prescription.create).toHaveBeenCalledTimes(1);
   });
 });
