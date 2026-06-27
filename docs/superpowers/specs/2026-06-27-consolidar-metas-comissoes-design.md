@@ -99,11 +99,13 @@ acesso a Comissões/Config. O `?tab=` não protege porque o matcher ignora a que
   "Definir metas"), via `<FeatureGate feature="goals">` em volta do conteúdo da
   aba Ranking, com upsell.
 - **Camada 3:** trocar o `<ProtectedRoute permission="goals.view">` da página por
-  um guard de **qualquer uma das três** permissões. Usar
-  `<ProtectedRoute requireAny={["goals.view","reports.sales","settings.edit"]}>`
-  (ou o equivalente via `usePermission().hasAnyPermission(...)`). A permissão de
-  cada aba é então reaplicada por aba (ver "Permissão por aba"). Assim, um usuário
-  com só `reports.sales` passa pelo guard da página e vê a aba Comissões.
+  um guard de **qualquer uma das três** permissões. O `ProtectedRoute` **já
+  suporta** isso nativamente (`permission: string | string[]` + `requireAny?:
+  boolean`, ver `ProtectedRoute.tsx:14,20`):
+  `<ProtectedRoute permission={["goals.view","reports.sales","settings.edit"]} requireAny>`.
+  A permissão de cada aba é então reaplicada por aba (ver "Permissão por aba").
+  Assim, um usuário com só `reports.sales` passa pelo guard da página e vê a aba
+  Comissões.
 - Rede de segurança (testes): (a) garante que a aba Ranking está envolta em
   `FeatureGate feature="goals"`; (b) usuário só com `reports.sales` alcança a aba
   Comissões; usuário só com `settings.edit` alcança a aba Config.
@@ -114,11 +116,10 @@ acesso a Comissões/Config. O `?tab=` não protege porque o matcher ignora a que
 > Ranking com upsell. Isso é intencional (decisão 5) — é o que mantém
 > Comissões/Config acessíveis.
 
-> **Confirmar `requireAny` no `ProtectedRoute`:** se o componente não aceitar
-> `requireAny`/array hoje, a implementação adiciona esse suporte (o hook
-> `usePermission()` já expõe `hasAnyPermission`), ou a página usa um guard inline
-> com `hasAnyPermission` + estado de loading. Não deixar a página sem guard
-> algum.
+> **Nota:** `ProtectedRoute` já trata o estado de loading internamente (spinner
+> enquanto `usePermission().isLoading`, ver `ProtectedRoute.tsx:76`), então o
+> guard `requireAny` da página não pisca. (A `metas-tabs.tsx`, por ser client e
+> usar o hook direto, é que precisa do cuidado de loading do H3.)
 
 ---
 
