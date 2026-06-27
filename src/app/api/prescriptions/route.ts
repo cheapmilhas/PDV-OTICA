@@ -9,6 +9,8 @@ import { prescriptionSchema, prescriptionQuerySchema } from "@/lib/validations/p
 export async function GET(request: NextRequest) {
   try {
     await requireAuth();
+    // LGPD: receita é dado clínico sensível — exige permissão de leitura.
+    await requirePermission("prescriptions.view");
     const companyId = await getCompanyId();
 
     const { searchParams } = new URL(request.url);

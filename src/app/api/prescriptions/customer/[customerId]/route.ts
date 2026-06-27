@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId } from "@/lib/auth-helpers";
+import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { prescriptionService } from "@/services/prescription.service";
 
@@ -11,6 +12,8 @@ interface Params {
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
+    // LGPD: receita é dado clínico sensível — exige permissão de leitura.
+    await requirePermission("prescriptions.view");
     const companyId = await getCompanyId();
     const { customerId } = await params;
 
