@@ -33,7 +33,10 @@ describe("FEATURE_REGISTRY", () => {
       expect(FEATURE_REGISTRY[key]).toBeDefined();
       expect(FEATURE_REGISTRY[key].label).toBeTruthy();
       expect(FEATURE_REGISTRY[key].description).toBeTruthy();
-      expect(FEATURE_REGISTRY[key].pageMatchers.length).toBeGreaterThan(0);
+      // pageMatchers pode ser vazio quando o gating da feature é por-aba/componente
+      // em vez de por-URL (ex.: GOALS — a página /dashboard/metas hospeda também
+      // Comissões/Config só-permissão, então o gate de goals vive na aba Ranking).
+      // O que NÃO pode faltar é o gate de API: toda feature gateia ao menos uma rota.
       expect(FEATURE_REGISTRY[key].apiMatchers.length).toBeGreaterThan(0);
     }
   });
