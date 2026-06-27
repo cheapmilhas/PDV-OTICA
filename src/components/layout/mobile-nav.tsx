@@ -47,6 +47,7 @@ const primaryNav = [
   { icon: ShoppingCart, label: "PDV", href: "/dashboard/pdv", permission: "sales.create" },
   { icon: Users, label: "Clientes", href: "/dashboard/clientes", permission: "customers.view" },
   { icon: ClipboardList, label: "OS", href: "/dashboard/ordens-servico", permission: "service_orders.view" },
+  { icon: BookOpen, label: "Receitas", href: "/dashboard/livro-receitas", permission: "prescriptions.view" },
 ];
 
 const moreNav = [
