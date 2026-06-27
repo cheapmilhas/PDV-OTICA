@@ -6,45 +6,90 @@ import {
 } from "@/lib/commission-flag";
 
 /**
- * Kill-switch COMMISSION_ENGINE — Comissão Fase 2.
+ * Kill-switch COMMISSION_ENGINE — Comissão Fase 2, agora POR ÓTICA (companyId).
  *
- * Default (env não setada) = "new" (regra nova é a oficial). "legacy" só quando
- * explicitamente setado — é o botão de emergência que reverte sem deploy.
+ * Resolução: companyId ausente → legacy; companyId na lista
+ * COMMISSION_ENGINE_NEW_COMPANIES → new; senão cai no global COMMISSION_ENGINE
+ * (legacy por default). FAIL-SAFE: sem config = todos em legacy; lixo na lista
+ * nunca liga new; a regra nova só liga por companyId explícito (ou global "new").
  */
 
-const ORIGINAL = process.env.COMMISSION_ENGINE;
+const ORIGINAL_ENGINE = process.env.COMMISSION_ENGINE;
+const ORIGINAL_LIST = process.env.COMMISSION_ENGINE_NEW_COMPANIES;
+
+function restore(key: string, original: string | undefined) {
+  if (original === undefined) delete process.env[key];
+  else process.env[key] = original;
+}
 
 afterEach(() => {
-  if (ORIGINAL === undefined) delete process.env.COMMISSION_ENGINE;
-  else process.env.COMMISSION_ENGINE = ORIGINAL;
+  restore("COMMISSION_ENGINE", ORIGINAL_ENGINE);
+  restore("COMMISSION_ENGINE_NEW_COMPANIES", ORIGINAL_LIST);
 });
 
-describe("commission-flag (kill-switch) — FAIL-SAFE default legacy", () => {
-  it("default (env ausente) = legacy (fail-safe)", () => {
+describe("commission-flag (kill-switch POR ÓTICA) — FAIL-SAFE default legacy", () => {
+  it("sem config nenhuma (env ausentes) → qualquer ótica = legacy", () => {
     delete process.env.COMMISSION_ENGINE;
-    expect(getCommissionEngine()).toBe("legacy");
-    expect(isLegacyCommissionEngine()).toBe(true);
-    expect(isNewCommissionEngine()).toBe(false);
+    delete process.env.COMMISSION_ENGINE_NEW_COMPANIES;
+    expect(getCommissionEngine("comp_qualquer")).toBe("legacy");
+    expect(isLegacyCommissionEngine("comp_qualquer")).toBe(true);
+    expect(isNewCommissionEngine("comp_qualquer")).toBe(false);
   });
 
-  it("COMMISSION_ENGINE=legacy → modo legado", () => {
-    process.env.COMMISSION_ENGINE = "legacy";
-    expect(getCommissionEngine()).toBe("legacy");
-    expect(isLegacyCommissionEngine()).toBe(true);
-    expect(isNewCommissionEngine()).toBe(false);
+  it("companyId NA lista → new; FORA da lista → legacy", () => {
+    delete process.env.COMMISSION_ENGINE;
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = "comp_piloto,comp_outra";
+    expect(getCommissionEngine("comp_piloto")).toBe("new");
+    expect(isNewCommissionEngine("comp_piloto")).toBe(true);
+    expect(getCommissionEngine("comp_fora")).toBe("legacy");
+    expect(isNewCommissionEngine("comp_fora")).toBe(false);
   });
 
-  it("COMMISSION_ENGINE=new (exato) → modo novo (único jeito de ligar)", () => {
+  it("lista VAZIA → ninguém em new (todos legacy)", () => {
+    delete process.env.COMMISSION_ENGINE;
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = "";
+    expect(getCommissionEngine("comp_a")).toBe("legacy");
+    expect(getCommissionEngine("comp_b")).toBe("legacy");
+  });
+
+  it("lista com LIXO/espaços → só os companyIds válidos ligam new; lixo é ignorado", () => {
+    delete process.env.COMMISSION_ENGINE;
+    // vírgulas soltas, espaços, itens vazios — nada disso pode ligar new indevido.
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = " , ,  comp_piloto  , ,,";
+    expect(getCommissionEngine("comp_piloto")).toBe("new"); // trim funciona
+    expect(getCommissionEngine("")).toBe("legacy"); // string vazia nunca casa
+    expect(getCommissionEngine(" ")).toBe("legacy");
+    expect(getCommissionEngine("comp_outra")).toBe("legacy");
+  });
+
+  it("companyId AUSENTE/indefinido → legacy (nunca new), mesmo com lista cheia", () => {
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = "comp_piloto";
+    expect(getCommissionEngine(undefined)).toBe("legacy");
+    expect(getCommissionEngine(null)).toBe("legacy");
+    expect(getCommissionEngine()).toBe("legacy");
+    expect(isNewCommissionEngine(undefined)).toBe(false);
+  });
+
+  it("global COMMISSION_ENGINE=new → liga new para óticas FORA da lista (override global explícito)", () => {
     process.env.COMMISSION_ENGINE = "new";
-    expect(getCommissionEngine()).toBe("new");
-    expect(isNewCommissionEngine()).toBe(true);
-    expect(isLegacyCommissionEngine()).toBe(false);
+    delete process.env.COMMISSION_ENGINE_NEW_COMPANIES;
+    expect(getCommissionEngine("comp_qualquer")).toBe("new");
+    // mas companyId ausente continua legacy (fail-safe vence o global)
+    expect(getCommissionEngine(undefined)).toBe("legacy");
   });
 
-  it("valor inválido/typo/vazio → cai em legacy (fail-safe)", () => {
+  it("global inválido/typo → legacy para quem não está na lista", () => {
+    delete process.env.COMMISSION_ENGINE_NEW_COMPANIES;
     for (const v of ["", "NEW", "News", "newx", "qualquer-coisa", " new "]) {
       process.env.COMMISSION_ENGINE = v;
-      expect(getCommissionEngine(), `'${v}' deveria cair em legacy`).toBe("legacy");
+      expect(getCommissionEngine("comp_x"), `'${v}' deveria cair em legacy`).toBe("legacy");
     }
+  });
+
+  it("lista tem precedência sobre global legacy: ótica na lista = new mesmo com global legacy", () => {
+    process.env.COMMISSION_ENGINE = "legacy";
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = "comp_piloto";
+    expect(getCommissionEngine("comp_piloto")).toBe("new");
+    expect(getCommissionEngine("comp_fora")).toBe("legacy");
   });
 });

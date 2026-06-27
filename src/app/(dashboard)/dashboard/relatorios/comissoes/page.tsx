@@ -1,5 +1,6 @@
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { isNewCommissionEngine } from "@/lib/commission-flag";
+import { getCompanyId } from "@/lib/auth-helpers";
 import { CommissionLegacyView } from "./commission-legacy-view";
 import { CommissionNewView } from "./commission-new-view";
 
@@ -11,10 +12,11 @@ import { CommissionNewView } from "./commission-new-view";
  *   - "legacy" (emergência) → o relatório antigo + a aba de preview/comparação,
  *     com o lifecycle PENDENTE→APROVADA→PAGA (CommissionLegacyView).
  *
- * Trocar a env new↔legacy reverte sem deploy.
+ * A decisão é POR ÓTICA (companyId, lido no servidor). Trocar a env reverte sem deploy.
  */
-export default function RelatorioComissoesPage() {
-  const showNew = isNewCommissionEngine();
+export default async function RelatorioComissoesPage() {
+  const companyId = await getCompanyId();
+  const showNew = isNewCommissionEngine(companyId);
   return (
     <ProtectedRoute permission="reports.sales">
       {showNew ? <CommissionNewView /> : <CommissionLegacyView />}

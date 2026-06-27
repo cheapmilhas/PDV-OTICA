@@ -35,7 +35,7 @@ export async function POST(request: NextRequest) {
     // Kill-switch COMMISSION_ENGINE: "Fechar Mês" calcula/grava a comissão legada
     // (SellerCommission). Em modo "new" isso fica desligado — a comissão vive só em
     // Relatórios → Comissões pela regra nova. A tela esconde o botão e o backend recusa.
-    if (isNewCommissionEngine()) {
+    if (isNewCommissionEngine(companyId)) {
       throw forbiddenError(
         "Comissão pela regra nova: fechar mês para calcular comissão legada está desativado."
       );

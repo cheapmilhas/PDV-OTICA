@@ -35,7 +35,8 @@ vi.mock("@/services/goals.service", () => ({
 
 import { POST } from "./route";
 
-const ORIGINAL = process.env.COMMISSION_ENGINE;
+const ORIGINAL_ENGINE = process.env.COMMISSION_ENGINE;
+const ORIGINAL_LIST = process.env.COMMISSION_ENGINE_NEW_COMPANIES;
 
 function req(body: unknown = { year: 2026, month: 6 }) {
   return new Request("http://x/api/goals/commissions", {
@@ -45,7 +46,7 @@ function req(body: unknown = { year: 2026, month: 6 }) {
   }) as never;
 }
 
-describe("POST /api/goals/commissions (Fechar Mês) — respeita o kill-switch", () => {
+describe("POST /api/goals/commissions (Fechar Mês) — respeita o kill-switch POR ÓTICA", () => {
   beforeEach(() => {
     requireAuth.mockReset().mockResolvedValue({ user: { id: "u1" } });
     getBranchId.mockReset().mockResolvedValue("branch-1");
@@ -53,29 +54,32 @@ describe("POST /api/goals/commissions (Fechar Mês) — respeita o kill-switch",
     requirePermission.mockReset().mockResolvedValue({ user: { id: "u1", role: "GERENTE" } });
     requirePlanFeature.mockReset().mockResolvedValue(undefined);
     closeMonth.mockReset().mockResolvedValue({ message: "Mês fechado" });
+    delete process.env.COMMISSION_ENGINE;
+    delete process.env.COMMISSION_ENGINE_NEW_COMPANIES;
   });
 
   afterEach(() => {
-    if (ORIGINAL === undefined) delete process.env.COMMISSION_ENGINE;
-    else process.env.COMMISSION_ENGINE = ORIGINAL;
+    if (ORIGINAL_ENGINE === undefined) delete process.env.COMMISSION_ENGINE;
+    else process.env.COMMISSION_ENGINE = ORIGINAL_ENGINE;
+    if (ORIGINAL_LIST === undefined) delete process.env.COMMISSION_ENGINE_NEW_COMPANIES;
+    else process.env.COMMISSION_ENGINE_NEW_COMPANIES = ORIGINAL_LIST;
   });
 
-  it("modo new → 403 e NÃO calcula/grava comissão legada", async () => {
-    process.env.COMMISSION_ENGINE = "new";
+  it("ótica NA lista (new) → 403 e NÃO calcula/grava comissão legada", async () => {
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = "company-1";
     const res = await POST(req());
     expect(res.status).toBe(403);
     expect(closeMonth).not.toHaveBeenCalled();
   });
 
-  it("modo legacy → fecha o mês normalmente", async () => {
-    process.env.COMMISSION_ENGINE = "legacy";
+  it("ótica FORA da lista (legacy) → fecha o mês normalmente", async () => {
+    process.env.COMMISSION_ENGINE_NEW_COMPANIES = "outra-company";
     const res = await POST(req());
     expect(res.status).toBe(200);
     expect(closeMonth).toHaveBeenCalledOnce();
   });
 
-  it("default fail-safe (env ausente = legacy) → fecha o mês", async () => {
-    delete process.env.COMMISSION_ENGINE;
+  it("default fail-safe (sem lista = legacy) → fecha o mês", async () => {
     const res = await POST(req());
     expect(res.status).toBe(200);
     expect(closeMonth).toHaveBeenCalledOnce();

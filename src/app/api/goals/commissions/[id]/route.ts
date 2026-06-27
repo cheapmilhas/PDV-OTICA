@@ -19,7 +19,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
     // Kill-switch COMMISSION_ENGINE: em modo "new" a comissão legada (SellerCommission)
     // não é operada por aqui — a tela esconde o "Pagar", mas o backend também recusa
     // para ninguém marcar pago via API direto. Em "legacy" funciona normal.
-    if (isNewCommissionEngine()) {
+    if (isNewCommissionEngine(companyId)) {
       throw forbiddenError(
         "Comissão pela regra nova: pagamento manual de comissão legada está desativado."
       );

@@ -967,7 +967,7 @@ export class QuoteService {
 
       // 9.5. Comissão (helper) — gateado pelo kill-switch COMMISSION_ENGINE.
       // "new" (default): fonte é o motor, não grava Commission velha. "legacy": grava.
-      if (isLegacyCommissionEngine()) {
+      if (isLegacyCommissionEngine(companyId)) {
         await applyCommissionInTx(tx, {
           sale: { id: sale.id, companyId, total: sale.total },
           sellerUserId: userId,

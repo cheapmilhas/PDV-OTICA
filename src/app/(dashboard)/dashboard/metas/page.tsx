@@ -1,4 +1,5 @@
 import { isNewCommissionEngine } from "@/lib/commission-flag";
+import { getCompanyId } from "@/lib/auth-helpers";
 import { MetasContent } from "./metas-content";
 
 /**
@@ -9,11 +10,12 @@ import { MetasContent } from "./metas-content";
  *     Relatórios → Comissões. Restam Ranking + cards de vendas/metas.
  *   - "legacy" → tela idêntica a hoje (comissão visível e operável).
  *
- * `showCommission = isLegacyCommissionEngine()`. A flag é GLOBAL (não por-ótica)
- * e fail-safe legacy. Esconder a UI não basta — o backend recusa as gravações
- * de comissão em modo new (POST/PUT /api/goals/commissions).
+ * `showCommission = !isNewCommissionEngine(companyId)`. A flag é POR ÓTICA
+ * (companyId, lido no servidor) e fail-safe legacy. Esconder a UI não basta — o
+ * backend recusa as gravações de comissão em modo new (POST/PUT /api/goals/commissions).
  */
-export default function GoalsPage() {
-  const showCommission = !isNewCommissionEngine();
+export default async function GoalsPage() {
+  const companyId = await getCompanyId();
+  const showCommission = !isNewCommissionEngine(companyId);
   return <MetasContent showCommission={showCommission} />;
 }
