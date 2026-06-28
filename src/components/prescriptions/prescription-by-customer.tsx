@@ -1,5 +1,6 @@
 "use client";
 
+import { useMemo } from "react";
 import Link from "next/link";
 
 import { Badge } from "@/components/ui/badge";
@@ -30,12 +31,16 @@ function grauResumo(values: Record<string, unknown> | null | undefined): string 
   const od = values.odSph;
   const oe = values.oeSph;
   const parts: string[] = [];
-  if (od !== undefined && od !== null && od !== "") parts.push(`OD ${od}`);
-  if (oe !== undefined && oe !== null && oe !== "") parts.push(`OE ${oe}`);
+  if (od !== undefined && od !== null && od !== "") parts.push(`OD ${String(od)}`);
+  if (oe !== undefined && oe !== null && oe !== "") parts.push(`OE ${String(oe)}`);
   return parts.join(" · ");
 }
 
 export function PrescriptionByCustomer({ prescriptions, onVer, onDigitarGrau }: Props) {
+  // useMemo ANTES de qualquer return condicional (regra dos hooks). Evita
+  // reagrupar a cada render do pai (que muda por viewing/editId etc).
+  const groups = useMemo(() => groupByCustomer(prescriptions), [prescriptions]);
+
   if (prescriptions.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-6 text-center">
@@ -43,8 +48,6 @@ export function PrescriptionByCustomer({ prescriptions, onVer, onDigitarGrau }: 
       </p>
     );
   }
-
-  const groups = groupByCustomer(prescriptions);
 
   return (
     <div className="space-y-4">
