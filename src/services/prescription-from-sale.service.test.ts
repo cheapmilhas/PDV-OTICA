@@ -11,10 +11,12 @@ vi.mock("@/lib/logger", () => ({ logger: { child: () => ({ warn: warnMock, error
 import { prisma } from "@/lib/prisma";
 import { createPrescriptionFromSale } from "./prescription-from-sale.service";
 
+const SALE_DATE = new Date("2026-06-02T12:00:00.000Z");
 const saleWith = (items: any[], customerId: string | null = "cust-1") => ({
   id: "sale-1",
   customerId,
   branchId: "br-1",
+  createdAt: SALE_DATE,
   items,
 });
 
@@ -33,6 +35,16 @@ describe("createPrescriptionFromSale", () => {
       expect.objectContaining({ saleId: "sale-1", customerId: "cust-1", companyId: "co-1" })
     );
     expect(r.created).toBe(true);
+  });
+
+  it("emite a receita na DATA DA VENDA (issuedAt = Sale.createdAt), não 'agora'", async () => {
+    (prisma.sale.findFirst as any).mockResolvedValue(
+      saleWith([{ product: { type: "OPHTHALMIC_LENS", isEyeExam: false } }])
+    );
+    await createPrescriptionFromSale("sale-1", "co-1", "user-1");
+    expect(upsertMock).toHaveBeenCalledWith(
+      expect.objectContaining({ issuedAt: SALE_DATE })
+    );
   });
 
   it("venda com EXAME (isEyeExam) sem lente + cliente → cria receita", async () => {

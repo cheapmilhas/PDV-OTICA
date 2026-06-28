@@ -60,4 +60,16 @@ describe("PrescriptionDetailDialog", () => {
     );
     expect(screen.getByRole("button", { name: /editar/i })).toBeTruthy();
   });
+
+  it("origem mostra 'OS' quando a receita tem OS apontando (mesmo com saleId)", () => {
+    const rxComOS = { ...rx, saleId: "sale-1", hasServiceOrder: true };
+    render(<PrescriptionDetailDialog prescription={rxComOS} open onClose={() => {}} />);
+    expect(screen.getByText(/Origem: OS/)).toBeTruthy();
+  });
+
+  it("origem mostra 'Venda' quando tem venda e NÃO tem OS", () => {
+    const rxVenda = { ...rx, saleId: "sale-1", hasServiceOrder: false };
+    render(<PrescriptionDetailDialog prescription={rxVenda} open onClose={() => {}} />);
+    expect(screen.getByText(/Origem: Venda/)).toBeTruthy();
+  });
 });

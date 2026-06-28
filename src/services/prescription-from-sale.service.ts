@@ -30,6 +30,7 @@ export async function createPrescriptionFromSale(
       id: true,
       customerId: true,
       branchId: true,
+      createdAt: true,
       items: {
         select: { product: { select: { type: true, isEyeExam: true } } },
       },
@@ -59,6 +60,9 @@ export async function createPrescriptionFromSale(
     customerId: sale.customerId,
     branchId: sale.branchId,
     saleId: sale.id,
+    // A receita é emitida na data da VENDA, não na data em que este disparo roda
+    // (pós-commit pode ocorrer noutro instante). Mantém o Livro com a data real.
+    issuedAt: sale.createdAt,
     createdByUserId: userId,
   });
 

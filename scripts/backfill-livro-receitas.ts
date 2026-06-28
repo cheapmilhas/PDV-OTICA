@@ -50,9 +50,10 @@ async function main() {
       customerId: true,
       branchId: true,
       createdByUserId: true,
+      createdAt: true,
       prescriptionData: true,
       prescriptionImageUrl: true,
-      sale: { select: { id: true } },
+      sale: { select: { id: true, createdAt: true } },
     },
   });
 
@@ -75,6 +76,9 @@ async function main() {
 
     const saleId = os.sale?.id ?? null;
     const imageUrl = os.prescriptionImageUrl ?? undefined;
+    // Data real de emissão: da venda se houver, senão da OS. NÃO usar "agora"
+    // (senão toda receita histórica fica com a data do backfill).
+    const issuedAt = os.sale?.createdAt ?? os.createdAt;
 
     if (saleId) {
       const existing = await prisma.prescription.findUnique({ where: { saleId }, select: { id: true } });
@@ -89,6 +93,7 @@ async function main() {
           customerId: os.customerId,
           branchId: os.branchId,
           saleId,
+          issuedAt,
           createdByUserId: os.createdByUserId,
           prescriptionImageUrl: imageUrl,
           od: data.od as never,
@@ -116,6 +121,7 @@ async function main() {
           customerId: os.customerId,
           branchId: os.branchId,
           serviceOrderId: os.id,
+          issuedAt,
           createdByUserId: os.createdByUserId,
           prescriptionImageUrl: imageUrl,
           od: data.od as never,

@@ -36,8 +36,10 @@ function fmtDate(d: string | Date): string {
 }
 
 function origemLabel(p: PrescriptionListItem): string {
+  // Receita com OS apontando (mesmo vinda de venda) é "OS". Só é "Venda" quando
+  // é exame/lente avulso SEM nenhuma OS. Avulsa = sem venda e sem OS.
+  if (p.hasServiceOrder) return "OS";
   if (p.saleId) return "Venda";
-  if (p.serviceOrderId) return "OS";
   return "Avulsa";
 }
 

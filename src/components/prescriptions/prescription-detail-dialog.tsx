@@ -55,7 +55,13 @@ export function PrescriptionDetailDialog({ prescription, open, onClose, canEdit,
     prescription.isDependente && prescription.patientName
       ? prescription.patientName
       : prescription.customer?.name ?? "—";
-  const origem = prescription.saleId ? "Venda" : prescription.serviceOrderId ? "OS" : "Avulsa";
+  // Receita com OS apontando (mesmo vinda de venda) é "OS"; só "Venda" se exame/
+  // lente avulso sem OS. (mesma regra da lista — ver origemLabel)
+  const origem = prescription.hasServiceOrder
+    ? "OS"
+    : prescription.saleId
+      ? "Venda"
+      : "Avulsa";
 
   return (
     <Dialog open={open} onOpenChange={(o) => !o && onClose()}>

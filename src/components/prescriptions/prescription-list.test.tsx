@@ -55,6 +55,33 @@ describe("PrescriptionList", () => {
     expect(onVer).toHaveBeenCalledWith(expect.objectContaining({ id: "rx-1" }));
   });
 
+  it("origem é 'OS' quando a receita tem OS apontando (mesmo vinda de venda)", () => {
+    render(
+      <PrescriptionList
+        prescriptions={[{ ...base, saleId: "sale-1", hasServiceOrder: true }]}
+      />
+    );
+    expect(screen.getByText(/Origem: OS/)).toBeTruthy();
+  });
+
+  it("origem é 'Venda' quando tem venda e NÃO tem OS (exame/lente avulso)", () => {
+    render(
+      <PrescriptionList
+        prescriptions={[{ ...base, saleId: "sale-1", hasServiceOrder: false }]}
+      />
+    );
+    expect(screen.getByText(/Origem: Venda/)).toBeTruthy();
+  });
+
+  it("origem é 'Avulsa' sem venda e sem OS", () => {
+    render(
+      <PrescriptionList
+        prescriptions={[{ ...base, saleId: null, serviceOrderId: null, hasServiceOrder: false }]}
+      />
+    );
+    expect(screen.getByText(/Origem: Avulsa/)).toBeTruthy();
+  });
+
   it("clicar em 'Digitar grau' NÃO dispara onVer (stopPropagation)", () => {
     const onVer = vi.fn();
     const onDigitar = vi.fn();
