@@ -21,6 +21,8 @@ export async function GET(request: NextRequest) {
       search: searchParams.get("search") || undefined,
       validadeDe: searchParams.get("validadeDe") || undefined,
       validadeAte: searchParams.get("validadeAte") || undefined,
+      emitidaDe: searchParams.get("emitidaDe") || undefined,
+      emitidaAte: searchParams.get("emitidaAte") || undefined,
     });
 
     const qBranchId = searchParams.get("branchId");
@@ -40,7 +42,9 @@ export async function GET(request: NextRequest) {
       status,
       query.search,
       query.validadeDe,
-      query.validadeAte
+      query.validadeAte,
+      query.emitidaDe,
+      query.emitidaAte
     );
 
     return NextResponse.json({
