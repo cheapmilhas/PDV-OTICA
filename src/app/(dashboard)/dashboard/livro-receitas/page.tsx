@@ -19,6 +19,7 @@ import { PrescriptionGradeDialog } from "@/components/prescriptions/prescription
 import { PrescriptionDetailDialog } from "@/components/prescriptions/prescription-detail-dialog";
 import { usePermissions } from "@/hooks/usePermissions";
 import { chipToDateParams, type DateChip } from "@/lib/livro-receitas-filters";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 interface BranchOption {
   id: string;
@@ -83,8 +84,10 @@ export default function LivroReceitasPage() {
         if (dp.emitidaDe) params.set("emitidaDe", dp.emitidaDe.toISOString());
         if (dp.emitidaAte) params.set("emitidaAte", dp.emitidaAte.toISOString());
       } else {
-        if (emitidaDe) params.set("emitidaDe", new Date(emitidaDe).toISOString());
-        if (emitidaAte) params.set("emitidaAte", new Date(emitidaAte).toISOString());
+        // <input type="date"> dá "YYYY-MM-DD" sem fuso → new Date() interpreta como
+        // meia-noite UTC e desloca 3h. Ancorar no fuso BRT (início/fim do dia local).
+        if (emitidaDe) params.set("emitidaDe", startOfLocalDay(emitidaDe).toISOString());
+        if (emitidaAte) params.set("emitidaAte", endOfLocalDay(emitidaAte).toISOString());
       }
 
       const res = await fetch(`/api/prescriptions?${params.toString()}`);

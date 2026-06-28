@@ -14,6 +14,10 @@ export async function GET(request: NextRequest) {
     const companyId = await getCompanyId();
 
     const { searchParams } = new URL(request.url);
+    // Sentinelas "ALL"/"" da UI viram undefined ANTES do parse (o schema valida
+    // branchId como cuid e status como enum — "ALL" não passaria a validação).
+    const rawBranchId = searchParams.get("branchId");
+    const rawStatus = searchParams.get("status");
     const query = prescriptionQuerySchema.parse({
       customerId: searchParams.get("customerId") || undefined,
       page: searchParams.get("page") || 1,
@@ -23,23 +27,17 @@ export async function GET(request: NextRequest) {
       validadeAte: searchParams.get("validadeAte") || undefined,
       emitidaDe: searchParams.get("emitidaDe") || undefined,
       emitidaAte: searchParams.get("emitidaAte") || undefined,
+      branchId: rawBranchId && rawBranchId !== "ALL" && rawBranchId !== "all" ? rawBranchId : undefined,
+      status: rawStatus && rawStatus !== "ALL" ? rawStatus : undefined,
     });
-
-    const qBranchId = searchParams.get("branchId");
-    const branchId = qBranchId && qBranchId !== "ALL" ? qBranchId : undefined;
-
-    // Livro de Receitas: filtro opcional por status (AGUARDANDO_GRAU | COMPLETA).
-    const qStatus = searchParams.get("status");
-    const status =
-      qStatus === "AGUARDANDO_GRAU" || qStatus === "COMPLETA" ? qStatus : undefined;
 
     const result = await prescriptionService.list(
       companyId,
       query.page,
       query.pageSize,
       query.customerId,
-      branchId,
-      status,
+      query.branchId,
+      query.status,
       query.search,
       query.validadeDe,
       query.validadeAte,

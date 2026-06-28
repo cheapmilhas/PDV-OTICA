@@ -51,4 +51,7 @@ export const prescriptionQuerySchema = z.object({
   // Faixa de EMISSÃO (issuedAt). Usada pelos chips "1 a 2 anos" / "2+ anos" e pelo período manual.
   emitidaDe: z.coerce.date().optional(),
   emitidaAte: z.coerce.date().optional(),
+  // Validados no schema (antes só checados manualmente na rota): filial e status.
+  branchId: z.string().cuid().optional(),
+  status: z.enum(["AGUARDANDO_GRAU", "COMPLETA"]).optional(),
 });

@@ -1,4 +1,4 @@
-import { startOfLocalDay } from "@/lib/date-utils";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import { addDays, subYears } from "date-fns";
 
 /** Atalhos de data do Livro de Receitas. Single-select. */
@@ -23,9 +23,12 @@ export function chipToDateParams(chip: DateChip, now: Date = new Date()): DatePa
     case "todas":
       return {};
     case "vence30":
-      return { validadeDe: hoje, validadeAte: addDays(hoje, 30) };
+      // Limite superior = FIM do dia +30 (BRT), senão exclui quem vence no próprio dia 30.
+      return { validadeDe: hoje, validadeAte: endOfLocalDay(addDays(hoje, 30)) };
     case "vencidas":
-      return { validadeAte: hoje };
+      // "Vencida" = já passou da validade. Inclui quem vence hoje → fim do dia de ontem
+      // como teto seria estrito; usamos fim de HOJE para abarcar quem expira hoje.
+      return { validadeAte: endOfLocalDay(now) };
     case "idade1a2":
       return { emitidaDe: subYears(hoje, 2), emitidaAte: subYears(hoje, 1) };
     case "idade2mais":

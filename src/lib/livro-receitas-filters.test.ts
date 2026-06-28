@@ -10,20 +10,24 @@ describe("chipToDateParams", () => {
     expect(r).toEqual({});
   });
 
-  it("'vence30' seta validadeDe=hoje e validadeAte=hoje+30d", () => {
+  it("'vence30' vai de início de hoje até FIM do dia +30 (inclui quem vence no dia 30)", () => {
     const r = chipToDateParams("vence30", HOJE);
     expect(r.validadeDe).toBeInstanceOf(Date);
     expect(r.validadeAte).toBeInstanceOf(Date);
+    // janela ~30 dias + fração do último dia (fim do dia) → entre 30 e 31 dias.
     const dias = (r.validadeAte!.getTime() - r.validadeDe!.getTime()) / (1000 * 60 * 60 * 24);
-    expect(Math.round(dias)).toBe(30);
+    expect(dias).toBeGreaterThan(30);
+    expect(dias).toBeLessThan(31);
     expect(r.emitidaDe).toBeUndefined();
     expect(r.emitidaAte).toBeUndefined();
   });
 
-  it("'vencidas' seta validadeAte=hoje (sem validadeDe)", () => {
+  it("'vencidas' usa FIM do dia de hoje como teto (inclui quem vence hoje); sem validadeDe", () => {
     const r = chipToDateParams("vencidas", HOJE);
     expect(r.validadeAte).toBeInstanceOf(Date);
     expect(r.validadeDe).toBeUndefined();
+    // fim do dia BRT de 2026-06-27 = 2026-06-28T02:59:59.999Z
+    expect(r.validadeAte!.toISOString()).toBe("2026-06-28T02:59:59.999Z");
   });
 
   it("'idade1a2' é faixa exclusiva: emitidaDe=hoje-2a, emitidaAte=hoje-1a", () => {
