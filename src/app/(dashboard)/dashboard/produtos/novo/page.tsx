@@ -52,6 +52,8 @@ function NovoProdutoPageContent() {
     costPrice: "",
     promoPrice: "",
     marginPercent: "",
+    // Livro de Receitas: serviço de exame de vista gera receita ao ser vendido.
+    isEyeExam: false,
     // Estoque
     stockControlled: true,
     stockQty: "0",
@@ -166,6 +168,7 @@ function NovoProdutoPageContent() {
         salePrice: parseFloat(formData.salePrice),
         stockControlled: formData.stockControlled,
         stockQty: parseInt(formData.stockQty) || 0,
+        isEyeExam: formData.isEyeExam,
       };
 
       // Campos opcionais
@@ -222,6 +225,7 @@ function NovoProdutoPageContent() {
   };
 
   const isLensType = formData.type === "LENS_SERVICE" || formData.type === "CONTACT_LENS";
+  const isServiceType = formData.type === "SERVICE";
 
   return (
     <div className="space-y-6">
@@ -478,6 +482,23 @@ function NovoProdutoPageContent() {
                 </div>
               </div>
             </div>
+
+            {/* Livro de Receitas: serviço de exame de vista */}
+            {isServiceType && (
+              <div className="flex items-center space-x-2 rounded-md border p-3">
+                <Switch
+                  id="isEyeExam"
+                  checked={formData.isEyeExam}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isEyeExam: checked })}
+                />
+                <Label htmlFor="isEyeExam" className="cursor-pointer">
+                  É exame de vista
+                </Label>
+                <span className="text-sm text-muted-foreground">
+                  (Ao vender, gera uma receita no Livro de Receitas)
+                </span>
+              </div>
+            )}
 
             {/* Estoque */}
             <div>

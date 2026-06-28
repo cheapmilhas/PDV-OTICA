@@ -169,6 +169,11 @@ export const createProductSchema = z.object({
 
   launch: z.boolean()
     .default(false),
+
+  // Livro de Receitas: marca um produto/serviço como "exame de vista". Vendas
+  // com este produto geram receita no Livro (mesmo gatilho da lente).
+  isEyeExam: z.boolean()
+    .default(false),
 });
 
 /**

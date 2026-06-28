@@ -43,6 +43,8 @@ function EditarProdutoContent() {
     costPrice: "",
     promoPrice: "",
     marginPercent: "",
+    // Livro de Receitas: serviço de exame de vista gera receita ao ser vendido.
+    isEyeExam: false,
     // Estoque
     stockControlled: true,
     stockQty: "",
@@ -100,6 +102,7 @@ function EditarProdutoContent() {
           costPrice: data.costPrice ? data.costPrice.toString() : "",
           promoPrice: data.promoPrice ? data.promoPrice.toString() : "",
           marginPercent: data.marginPercent ? data.marginPercent.toString() : "",
+          isEyeExam: data.isEyeExam ?? false,
           stockControlled: data.stockControlled ?? true,
           stockQty: data.stockQty !== null ? data.stockQty.toString() : "",
           stockMin: data.stockMin ? data.stockMin.toString() : "",
@@ -144,6 +147,8 @@ function EditarProdutoContent() {
       if (formData.marginPercent) sanitizedData.marginPercent = parseFloat(formData.marginPercent);
       // stockControlled e boolean — sempre enviar (if (formData.x) descarta false).
       sanitizedData.stockControlled = formData.stockControlled;
+      // isEyeExam é boolean — sempre enviar para que desmarcar (false) persista.
+      sanitizedData.isEyeExam = formData.isEyeExam;
       if (formData.stockQty !== "") sanitizedData.stockQty = parseInt(formData.stockQty);
       if (formData.stockMin) sanitizedData.stockMin = parseInt(formData.stockMin);
       if (formData.stockMax) sanitizedData.stockMax = parseInt(formData.stockMax);
@@ -189,6 +194,7 @@ function EditarProdutoContent() {
   }
 
   const isLensType = formData.type === "LENS_SERVICE" || formData.type === "CONTACT_LENS";
+  const isServiceType = formData.type === "SERVICE";
 
   return (
     <div className="space-y-6">
@@ -409,6 +415,23 @@ function EditarProdutoContent() {
                 </div>
               </div>
             </div>
+
+            {/* Livro de Receitas: serviço de exame de vista */}
+            {isServiceType && (
+              <div className="flex items-center space-x-2 rounded-md border p-3">
+                <Switch
+                  id="isEyeExam"
+                  checked={formData.isEyeExam}
+                  onCheckedChange={(checked) => setFormData({ ...formData, isEyeExam: checked })}
+                />
+                <Label htmlFor="isEyeExam" className="cursor-pointer">
+                  É exame de vista
+                </Label>
+                <span className="text-sm text-muted-foreground">
+                  (Ao vender, gera uma receita no Livro de Receitas)
+                </span>
+              </div>
+            )}
 
             {/* Estoque */}
             <div>
