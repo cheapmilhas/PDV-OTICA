@@ -277,20 +277,16 @@ git commit -m "feat(livro-receitas): helper de chips de data com fuso fixo BRT"
 Em `src/services/prescription-list-filter.service.test.ts`, dentro do `describe("prescriptionService.list — filtros do Livro", ...)`, adicionar:
 
 ```typescript
-  it("busca ampliada casa nome OU cpf OU telefone (OR)", async () => {
+  it("busca SÓ texto (sem dígitos) usa apenas o ramo name no OR", async () => {
     await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, "maria");
     const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
-    // agora é um OR sobre o customer, não só name
+    // "maria" não tem dígitos → searchDigits="" → ramos cpf/phone omitidos.
     expect(whereArg.customer).toEqual({
-      OR: [
-        { name: { contains: "maria", mode: "insensitive" } },
-        { cpf: { contains: "maria", mode: "insensitive" } },
-        { phone: { contains: "maria", mode: "insensitive" } },
-      ],
+      OR: [{ name: { contains: "maria", mode: "insensitive" } }],
     });
   });
 
-  it("busca por dígitos normaliza a entrada (remove pontuação) nos ramos cpf/phone", async () => {
+  it("busca com dígitos casa nome OU cpf OU telefone (3 ramos)", async () => {
     await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, "123.456");
     const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
     const orArr = whereArg.customer.OR;
@@ -377,7 +373,7 @@ Trocar o bloco do `search` (hoje `customer: { name: { contains: search, ... } }`
     };
 ```
 
-> Se `searchDigits` for `""` (busca puramente textual sem dígitos), os ramos cpf/phone são omitidos — evita `contains: ""` que casaria tudo. O teste "busca ampliada casa nome OU cpf OU telefone" usa "maria" (sem dígitos) → `searchDigits=""` → só o ramo `name`. **AJUSTE o primeiro teste** para refletir isso: com "maria" o OR tem só `[{ name: ... }]`. Use um termo COM dígitos (ex.: o segundo teste) para exercitar os 3 ramos. Corrija o teste 1 conforme essa regra antes do GREEN.
+> Se `searchDigits` for `""` (busca puramente textual sem dígitos), os ramos cpf/phone são omitidos — evita `contains: ""` que casaria tudo. Por isso os testes do Step 1 são coerentes: "maria" (sem dígitos) → OR só com `name`; um termo com dígitos → os 3 ramos. Sem ajuste posterior necessário.
 
 - [ ] **Step 4: Rodar para ver passar (GREEN)**
 
