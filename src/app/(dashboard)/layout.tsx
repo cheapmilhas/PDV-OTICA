@@ -13,6 +13,7 @@ import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import { LensAdvisorFab } from "@/components/lens-advisor/lens-advisor-fab";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
 import { findBlockedFeature } from "@/lib/plan-feature-catalog";
+import { prisma } from "@/lib/prisma";
 
 export default async function DashboardLayout({
   children,
@@ -26,6 +27,21 @@ export default async function DashboardLayout({
   }
 
   const companyId = (session.user as any).companyId as string | undefined;
+
+  // Perf: branding (cor/logo) do SERVIDOR p/ o sidebar pintar no 1º paint,
+  // sem flash escuro/"PDV Ótica". Isolado por companyId (multi-tenant).
+  // Fail-safe: erro de DB não quebra o layout (branding fica null → hook resolve).
+  let initialBranding: { logoUrl: string | null; displayName: string | null; primaryColor: string | null } | null = null;
+  if (companyId) {
+    try {
+      initialBranding = await prisma.companySettings.findUnique({
+        where: { companyId },
+        select: { logoUrl: true, displayName: true, primaryColor: true },
+      });
+    } catch {
+      initialBranding = null;
+    }
+  }
 
   // Se não tiver companyId, deixa passar (será tratado por cada página)
   let subscriptionCheck = companyId
@@ -107,7 +123,7 @@ export default async function DashboardLayout({
           <div className="flex flex-1 min-h-0 overflow-hidden">
             {/* Sidebar - esconde em mobile */}
             <div className="hidden md:flex">
-              <Sidebar />
+              <Sidebar initialBranding={initialBranding ?? undefined} />
             </div>
 
             {/* Main content */}

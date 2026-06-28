@@ -351,13 +351,28 @@ const menuItems: MenuSection[] = [
   },
 ];
 
-interface SidebarProps {
-  onNavigate?: () => void;
+interface SidebarBranding {
+  logoUrl?: string | null;
+  displayName?: string | null;
+  primaryColor?: string | null;
 }
 
-export function Sidebar({ onNavigate }: SidebarProps = {}) {
+interface SidebarProps {
+  onNavigate?: () => void;
+  /** Perf: branding vindo do SERVIDOR (layout) para o PRIMEIRO PAINT já vir
+   *  pintado (cor + logo certas), sem o flash escuro/"PDV Ótica". O hook
+   *  client revalida depois. */
+  initialBranding?: SidebarBranding;
+}
+
+export function Sidebar({ onNavigate, initialBranding }: SidebarProps = {}) {
   const pathname = usePathname();
-  const { logoUrl, displayName, primaryColor } = useCompanySettings();
+  const settings = useCompanySettings();
+  // Prioriza o valor do hook (fresco) e cai no initialBranding do servidor
+  // enquanto o fetch client não resolve → mata o flash.
+  const logoUrl = settings.logoUrl ?? initialBranding?.logoUrl ?? null;
+  const displayName = settings.displayName ?? initialBranding?.displayName ?? null;
+  const primaryColor = settings.primaryColor ?? initialBranding?.primaryColor ?? null;
   const { hasPermission, isAdmin } = usePermissions();
   const { hasFeature } = usePlanFeatures();
   const { enabled: whatsappEnabled } = useWhatsappEnabled();
