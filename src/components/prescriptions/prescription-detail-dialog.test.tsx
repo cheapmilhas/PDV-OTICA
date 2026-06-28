@@ -72,4 +72,11 @@ describe("PrescriptionDetailDialog", () => {
     render(<PrescriptionDetailDialog prescription={rxVenda} open onClose={() => {}} />);
     expect(screen.getByText(/Origem: Venda/)).toBeTruthy();
   });
+
+  it("nome do cliente no detalhe é link para a ficha (nova aba)", () => {
+    render(<PrescriptionDetailDialog prescription={rx} open onClose={() => {}} />);
+    const link = screen.getByRole("link", { name: /Lucas Conrado/i });
+    expect(link.getAttribute("href")).toBe("/dashboard/clientes/c1");
+    expect(link.getAttribute("target")).toBe("_blank");
+  });
 });

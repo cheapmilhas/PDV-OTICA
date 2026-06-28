@@ -7,6 +7,7 @@ import {
   DialogTitle,
   DialogFooter,
 } from "@/components/ui/dialog";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import type { PrescriptionListItem } from "./prescription-list";
@@ -68,7 +69,18 @@ export function PrescriptionDetailDialog({ prescription, open, onClose, canEdit,
       <DialogContent className="max-w-2xl">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            {paciente}
+            {prescription.customer?.id ? (
+              <Link
+                href={`/dashboard/clientes/${prescription.customer.id}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="underline-offset-2 hover:underline"
+              >
+                {paciente}
+              </Link>
+            ) : (
+              paciente
+            )}
             {prescription.isDependente && (
               <Badge variant="secondary" className="text-xs">Dependente</Badge>
             )}
