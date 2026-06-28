@@ -30,10 +30,31 @@ describe("prescriptionService.list — filtros do Livro", () => {
     expect(whereArg.companyId).toBe("co-1");
   });
 
-  it("busca por nome do cliente (contains insensitive)", async () => {
+  it("busca SÓ texto (sem dígitos) usa apenas o ramo name no OR", async () => {
     await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, "maria");
     const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
-    expect(whereArg.customer).toEqual({ name: { contains: "maria", mode: "insensitive" } });
+    expect(whereArg.customer).toEqual({
+      OR: [{ name: { contains: "maria", mode: "insensitive" } }],
+    });
+  });
+
+  it("busca com dígitos casa nome OU cpf OU telefone (3 ramos)", async () => {
+    await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, "123.456");
+    const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
+    const orArr = whereArg.customer.OR;
+    expect(orArr).toContainEqual({ name: { contains: "123.456", mode: "insensitive" } });
+    expect(orArr).toContainEqual({ cpf: { contains: "123456", mode: "insensitive" } });
+    expect(orArr).toContainEqual({ phone: { contains: "123456", mode: "insensitive" } });
+  });
+
+  it("filtro de emissão monta issuedAt gte/lte", async () => {
+    const de = new Date("2024-06-27");
+    const ate = new Date("2025-06-27");
+    await prescriptionService.list(
+      "co-1", 1, 10, undefined, undefined, undefined, undefined, undefined, undefined, de, ate
+    );
+    const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
+    expect(whereArg.issuedAt).toEqual({ gte: de, lte: ate });
   });
 
   it("filtro de validade monta expiresAt gte/lte", async () => {

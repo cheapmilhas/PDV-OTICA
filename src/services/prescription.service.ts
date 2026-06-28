@@ -118,20 +118,39 @@ export const prescriptionService = {
     status?: "AGUARDANDO_GRAU" | "COMPLETA",
     search?: string,
     validadeDe?: Date,
-    validadeAte?: Date
+    validadeAte?: Date,
+    emitidaDe?: Date,
+    emitidaAte?: Date
   ) {
+    const searchDigits = search?.replace(/\D/g, "");
     const where = {
       companyId,
       ...(customerId && { customerId }),
       ...(branchId && { branchId }),
       ...(status && { status }),
       ...(search && {
-        customer: { name: { contains: search, mode: "insensitive" as const } },
+        customer: {
+          OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            ...(searchDigits
+              ? [
+                  { cpf: { contains: searchDigits, mode: "insensitive" as const } },
+                  { phone: { contains: searchDigits, mode: "insensitive" as const } },
+                ]
+              : []),
+          ],
+        },
       }),
       ...((validadeDe || validadeAte) && {
         expiresAt: {
           ...(validadeDe && { gte: validadeDe }),
           ...(validadeAte && { lte: validadeAte }),
+        },
+      }),
+      ...((emitidaDe || emitidaAte) && {
+        issuedAt: {
+          ...(emitidaDe && { gte: emitidaDe }),
+          ...(emitidaAte && { lte: emitidaAte }),
         },
       }),
     };
