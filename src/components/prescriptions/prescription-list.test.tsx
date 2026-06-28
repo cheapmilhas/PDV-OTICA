@@ -51,7 +51,9 @@ describe("PrescriptionList", () => {
   it("clicar no card chama onVer com a receita inteira", () => {
     const onVer = vi.fn();
     render(<PrescriptionList prescriptions={[base]} onVer={onVer} />);
-    fireEvent.click(screen.getByText("Maria Silva"));
+    // O nome agora é um link para a ficha (stopPropagation), então clicamos
+    // numa parte neutra do card (a linha de metadados) para abrir o detalhe.
+    fireEvent.click(screen.getByText(/Emitida/));
     expect(onVer).toHaveBeenCalledWith(expect.objectContaining({ id: "rx-1" }));
   });
 
@@ -94,6 +96,16 @@ describe("PrescriptionList", () => {
     );
     fireEvent.click(screen.getByText(/Digitar grau/i));
     expect(onDigitar).toHaveBeenCalled();
+    expect(onVer).not.toHaveBeenCalled();
+  });
+
+  it("nome do cliente é link para a ficha e NÃO dispara onVer (stopPropagation)", () => {
+    const onVer = vi.fn();
+    render(<PrescriptionList prescriptions={[base]} onVer={onVer} />);
+    const link = screen.getByRole("link", { name: /Maria Silva/i });
+    expect(link.getAttribute("href")).toBe("/dashboard/clientes/c1");
+    expect(link.getAttribute("target")).toBe("_blank");
+    fireEvent.click(link);
     expect(onVer).not.toHaveBeenCalled();
   });
 });

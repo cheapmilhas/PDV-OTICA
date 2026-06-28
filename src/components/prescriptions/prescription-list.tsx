@@ -1,5 +1,7 @@
 "use client";
 
+import Link from "next/link";
+
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 
@@ -70,7 +72,19 @@ export function PrescriptionList({ prescriptions, onDigitarGrau, onVer }: Props)
         >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
-              <span className="font-medium truncate">{pacienteNome(p)}</span>
+              {p.customer?.id ? (
+                <Link
+                  href={`/dashboard/clientes/${p.customer.id}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="font-medium truncate underline-offset-2 hover:underline"
+                  onClick={(e) => e.stopPropagation()}
+                >
+                  {pacienteNome(p)}
+                </Link>
+              ) : (
+                <span className="font-medium truncate">{pacienteNome(p)}</span>
+              )}
               {p.isDependente && (
                 <Badge variant="secondary" className="text-xs">Dependente</Badge>
               )}
