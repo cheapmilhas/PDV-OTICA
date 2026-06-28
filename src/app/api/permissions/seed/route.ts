@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { requireRole } from "@/lib/auth-helpers";
+import { getAdminSession } from "@/lib/admin-session";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
 import { PERMISSIONS, ROLE_PERMISSIONS_MAP } from "./catalog";
@@ -7,16 +7,28 @@ import { PERMISSIONS, ROLE_PERMISSIONS_MAP } from "./catalog";
 /**
  * POST /api/permissions/seed
  * Popula o catálogo de permissões e permissões padrão por role.
- * Apenas ADMIN pode executar.
  *
- * IMPORTANTE: O catálogo + grant por role vivem em ./catalog.ts (módulo puro,
- * testável). Os códigos DEVEM bater com o enum Permission (fonte de verdade).
+ * SEGURANÇA (pentest 2026-06-27): `Permission` e `RolePermission` são tabelas
+ * GLOBAIS (sem companyId) — o seed afeta TODOS os tenants. Antes, o guard era
+ * `requireRole(["ADMIN"])` de TENANT, então qualquer dono de ótica disparava um
+ * `rolePermission.deleteMany()` global e zerava as permissões de todo o SaaS.
+ * Agora exige SUPER_ADMIN do portal admin, e o clear+recreate roda numa única
+ * transação para não deixar janela com permissões vazias.
+ *
+ * O catálogo + grant por role vivem em ./catalog.ts (módulo puro, testável).
+ * Os códigos DEVEM bater com o enum Permission (fonte de verdade).
  */
 
 
 export async function POST() {
   try {
-    await requireRole(["ADMIN"]);
+    const admin = await getAdminSession();
+    if (!admin) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
+    if (admin.role !== "SUPER_ADMIN") {
+      return NextResponse.json({ error: "Apenas SUPER_ADMIN" }, { status: 403 });
+    }
 
     // 1. Desativar permissões antigas que não estão mais no catálogo
     const validCodes = PERMISSIONS.map(p => p.code);
@@ -53,30 +65,28 @@ export async function POST() {
       }
     }
 
-    // 3. Seed role permissions (clear + recreate)
-    await prisma.rolePermission.deleteMany();
+    // 3. Seed role permissions (clear + recreate) — numa ÚNICA transação para
+    //    nunca deixar a tabela global de RolePermission vazia entre o delete e
+    //    o recreate (evita janela onde todo tenant fica sem permissões de role).
+    const codeToId = new Map(
+      (await prisma.permission.findMany({ select: { id: true, code: true } })).map(
+        (p) => [p.code, p.id] as const
+      )
+    );
 
-    let rolePermissionsCreated = 0;
+    const rolePermissionRows = Object.entries(ROLE_PERMISSIONS_MAP).flatMap(
+      ([role, permissionCodes]) =>
+        permissionCodes
+          .map((code) => codeToId.get(code))
+          .filter((id): id is string => Boolean(id))
+          .map((permissionId) => ({ role, permissionId, granted: true }))
+    );
 
-    for (const [role, permissionCodes] of Object.entries(ROLE_PERMISSIONS_MAP)) {
-      for (const code of permissionCodes) {
-        const permission = await prisma.permission.findUnique({
-          where: { code },
-        });
-
-        if (!permission) continue;
-
-        await prisma.rolePermission.create({
-          data: {
-            role,
-            permissionId: permission.id,
-            granted: true,
-          },
-        });
-
-        rolePermissionsCreated++;
-      }
-    }
+    const rolePermissionsCreated = await prisma.$transaction(async (tx) => {
+      await tx.rolePermission.deleteMany();
+      const result = await tx.rolePermission.createMany({ data: rolePermissionRows });
+      return result.count;
+    });
 
     return NextResponse.json({
       success: true,

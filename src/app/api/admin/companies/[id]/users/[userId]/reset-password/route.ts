@@ -1,8 +1,9 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
+import { randomInt } from "crypto";
 import { adminRateLimit } from "@/lib/rate-limit";
 
 const resetSchema = z.object({
@@ -27,6 +28,13 @@ export async function POST(
 
   const { id: companyId, userId } = await context.params;
 
+  // Escopo: este admin pode operar nesta empresa? (fecha takeover cross-tenant —
+  // reset de senha é ação sensível, exige papel ADMIN/SUPER_ADMIN + escopo.)
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
+
   // Verificar que o usuário pertence à empresa
   const user = await prisma.user.findFirst({
     where: { id: userId, companyId },
@@ -46,13 +54,14 @@ export async function POST(
     );
   }
 
-  // Gerar senha automática se não fornecida
+  // Gerar senha automática se não fornecida. Usa CSPRNG (crypto.randomInt) e
+  // 10 chars aleatórios sem prefixo fixo previsível (entropia ~59 bits).
   let password = parsed.data?.newPassword;
   if (!password) {
     const chars = "ABCDEFGHJKLMNPQRSTUVWXYZabcdefghjkmnpqrstuvwxyz23456789";
-    password = "Otica@";
-    for (let i = 0; i < 4; i++) {
-      password += chars.charAt(Math.floor(Math.random() * chars.length));
+    password = "";
+    for (let i = 0; i < 10; i++) {
+      password += chars.charAt(randomInt(chars.length));
     }
   }
 

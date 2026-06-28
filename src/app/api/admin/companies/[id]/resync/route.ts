@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { resyncCompanySetup } from "@/services/company-resync.service";
 import { logger } from "@/lib/logger";
 
@@ -29,11 +29,12 @@ export async function POST(
 ) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
-  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
-    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
-  }
 
   const { id: companyId } = await params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+
   try {
     const result = await resyncCompanySetup(companyId, {
       actorType: "ADMIN_USER",

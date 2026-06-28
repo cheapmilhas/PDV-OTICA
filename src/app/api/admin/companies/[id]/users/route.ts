@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
@@ -21,6 +21,9 @@ export async function GET(
   }
 
   const { id: companyId } = await context.params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   const company = await prisma.company.findUnique({
     where: { id: companyId },
@@ -98,6 +101,9 @@ export async function POST(
   }
 
   const { id: companyId } = await context.params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   const body = await request.json();
   const parsed = createUserSchema.safeParse(body);

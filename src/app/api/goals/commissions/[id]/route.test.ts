@@ -69,12 +69,12 @@ describe("PUT /api/goals/commissions/[id] (Pagar) — respeita o kill-switch POR
     process.env.COMMISSION_ENGINE_NEW_COMPANIES = "outra-company";
     const res = await PUT(req(), ctx);
     expect(res.status).toBe(200);
-    expect(markCommissionAsPaid).toHaveBeenCalledWith("c1");
+    expect(markCommissionAsPaid).toHaveBeenCalledWith("c1", "company-1");
   });
 
   it("default fail-safe (sem lista = legacy) → marca como paga", async () => {
     const res = await PUT(req(), ctx);
     expect(res.status).toBe(200);
-    expect(markCommissionAsPaid).toHaveBeenCalledWith("c1");
+    expect(markCommissionAsPaid).toHaveBeenCalledWith("c1", "company-1");
   });
 });

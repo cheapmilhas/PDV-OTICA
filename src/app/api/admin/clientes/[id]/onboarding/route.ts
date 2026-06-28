@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { completeOnboardingStep } from "@/services/onboarding-checklist.service";
 
 // GET /api/admin/clientes/[id]/onboarding — retorna checklist da empresa
@@ -12,6 +12,10 @@ export async function GET(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId } = await params;
+
+  if (!(await requireCompanyScope(admin.id, companyId))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   const checklist = await prisma.onboardingChecklist.findUnique({
     where: { companyId },
@@ -36,6 +40,11 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId } = await params;
+
+  if (!(await requireCompanyScope(admin.id, companyId))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
+
   const { stepKey } = await request.json();
 
   if (!stepKey) return NextResponse.json({ error: "stepKey é obrigatório" }, { status: 400 });

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 
 /**
  * GET /api/admin/clientes
@@ -10,6 +10,9 @@ import { getAdminSession } from "@/lib/admin-session";
 export async function GET(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  // Escopo de listagem: null = sem restrição (SUPER_ADMIN/scopeAll); senão filtra por id in ids.
+  const accessibleIds = await getAccessibleCompanyIds(admin.id);
 
   const { searchParams } = new URL(request.url);
   const search   = searchParams.get("search") ?? "";
@@ -31,6 +34,7 @@ export async function GET(request: Request) {
       status
         ? { subscriptions: { some: { status: status as any } } }
         : {},
+      accessibleIds !== null ? { id: { in: accessibleIds } } : {},
     ],
   };
 

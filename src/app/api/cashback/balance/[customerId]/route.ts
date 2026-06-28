@@ -17,6 +17,18 @@ export async function GET(
     const branchId = await getBranchId();
     const { customerId } = await params;
 
+    // IDOR: garantir que o cliente pertence à empresa antes de ler o saldo.
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, companyId },
+      select: { id: true },
+    });
+    if (!customer) {
+      return NextResponse.json(
+        { error: "Cliente não encontrado" },
+        { status: 404 }
+      );
+    }
+
     // Buscar saldo
     const cashback = await prisma.customerCashback.findUnique({
       where: {
