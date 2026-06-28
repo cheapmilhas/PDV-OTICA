@@ -1,5 +1,25 @@
 import { describe, it, expect } from "vitest";
-import { whereHasCompanyId } from "./prisma-tenant-guard";
+import { whereHasCompanyId, resolveTenantGuardMode } from "./prisma-tenant-guard";
+
+describe("resolveTenantGuardMode", () => {
+  it("default em development é throw (vazamento estoura local)", () => {
+    expect(resolveTenantGuardMode(undefined, "development")).toBe("throw");
+  });
+  it("default em production é warn (nunca derruba request legítima)", () => {
+    expect(resolveTenantGuardMode(undefined, "production")).toBe("warn");
+  });
+  it("default em test é warn", () => {
+    expect(resolveTenantGuardMode(undefined, "test")).toBe("warn");
+  });
+  it("TENANT_GUARD_MODE explícito vence o default", () => {
+    expect(resolveTenantGuardMode("throw", "production")).toBe("throw");
+    expect(resolveTenantGuardMode("warn", "development")).toBe("warn");
+  });
+  it("valor inválido cai no default do ambiente", () => {
+    expect(resolveTenantGuardMode("banana", "development")).toBe("throw");
+    expect(resolveTenantGuardMode("", "production")).toBe("warn");
+  });
+});
 
 describe("whereHasCompanyId — detecção de filtro multi-tenant", () => {
   it("detecta companyId no topo do where", () => {
