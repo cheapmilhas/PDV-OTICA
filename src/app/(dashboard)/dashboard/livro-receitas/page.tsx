@@ -15,13 +15,18 @@ import {
   type PrescriptionListItem,
 } from "@/components/prescriptions/prescription-list";
 import { PrescriptionGradeDialog } from "@/components/prescriptions/prescription-grade-dialog";
+import { PrescriptionDetailDialog } from "@/components/prescriptions/prescription-detail-dialog";
+import { usePermissions } from "@/hooks/usePermissions";
 
 export default function LivroReceitasPage() {
+  const { hasPermission } = usePermissions();
+  const canEdit = hasPermission("prescriptions.edit");
   const [prescriptions, setPrescriptions] = useState<PrescriptionListItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [search, setSearch] = useState("");
   const [status, setStatus] = useState<string>("ALL");
   const [editId, setEditId] = useState<string | null>(null);
+  const [viewing, setViewing] = useState<PrescriptionListItem | null>(null);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -91,10 +96,27 @@ export default function LivroReceitasPage() {
           {loading ? (
             <p className="text-sm text-muted-foreground py-6 text-center">Carregando…</p>
           ) : (
-            <PrescriptionList prescriptions={prescriptions} onDigitarGrau={setEditId} />
+            <PrescriptionList
+              prescriptions={prescriptions}
+              onDigitarGrau={canEdit ? setEditId : undefined}
+              onVer={setViewing}
+            />
           )}
         </CardContent>
       </Card>
+
+      {viewing && (
+        <PrescriptionDetailDialog
+          prescription={viewing}
+          open={!!viewing}
+          onClose={() => setViewing(null)}
+          canEdit={canEdit}
+          onEdit={(id) => {
+            setViewing(null);
+            setEditId(id);
+          }}
+        />
+      )}
 
       {editId && (
         <PrescriptionGradeDialog

@@ -1,0 +1,111 @@
+"use client";
+
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import { Button } from "@/components/ui/button";
+import { Badge } from "@/components/ui/badge";
+import type { PrescriptionListItem } from "./prescription-list";
+
+/**
+ * Detalhe (leitura) de uma receita do Livro: grau OD/OE + paciente/datas/origem.
+ * Recebe a receita já carregada (a lista já traz `values`) — sem fetch extra.
+ * Oferece "Editar" quando canEdit.
+ */
+
+interface Props {
+  prescription: PrescriptionListItem & { values?: Record<string, unknown> | null };
+  open: boolean;
+  onClose: () => void;
+  canEdit?: boolean;
+  onEdit?: (id: string) => void;
+}
+
+function fmtDate(d: string | Date | undefined): string {
+  if (!d) return "—";
+  const date = typeof d === "string" ? new Date(d) : d;
+  return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
+}
+
+function val(v: unknown): string {
+  if (v === null || v === undefined || v === "") return "—";
+  return String(v);
+}
+
+const EYE_COLS: Array<{ keys: [string, string]; label: string }> = [
+  { keys: ["odSph", "oeSph"], label: "Esférico" },
+  { keys: ["odCyl", "oeCyl"], label: "Cilíndrico" },
+  { keys: ["odAxis", "oeAxis"], label: "Eixo" },
+  { keys: ["pdFar", "pdNear"], label: "DNP" },
+  { keys: ["fittingHeightOd", "fittingHeightOe"], label: "Altura" },
+  { keys: ["odAdd", "oeAdd"], label: "Adição" },
+];
+
+export function PrescriptionDetailDialog({ prescription, open, onClose, canEdit, onEdit }: Props) {
+  const v = (prescription.values ?? {}) as Record<string, unknown>;
+  const paciente =
+    prescription.isDependente && prescription.patientName
+      ? prescription.patientName
+      : prescription.customer?.name ?? "—";
+  const origem = prescription.saleId ? "Venda" : prescription.serviceOrderId ? "OS" : "Avulsa";
+
+  return (
+    <Dialog open={open} onOpenChange={(o) => !o && onClose()}>
+      <DialogContent className="max-w-2xl">
+        <DialogHeader>
+          <DialogTitle className="flex items-center gap-2">
+            {paciente}
+            {prescription.isDependente && (
+              <Badge variant="secondary" className="text-xs">Dependente</Badge>
+            )}
+            <Badge variant={prescription.status === "COMPLETA" ? "default" : "outline"} className="text-xs">
+              {prescription.status === "COMPLETA" ? "Completa" : "Aguardando grau"}
+            </Badge>
+          </DialogTitle>
+        </DialogHeader>
+
+        <div className="space-y-3 text-sm">
+          <div className="text-muted-foreground">
+            Emitida {fmtDate(prescription.issuedAt)} · Validade {fmtDate(prescription.expiresAt)} · Origem: {origem}
+          </div>
+
+          <table className="w-full border-collapse text-sm">
+            <thead>
+              <tr>
+                <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
+                {EYE_COLS.map((c) => (
+                  <th key={c.label} className="border p-1.5 text-center font-semibold">{c.label}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {(["od", "oe"] as const).map((eye, i) => (
+                <tr key={eye}>
+                  <td className="border p-1.5 font-bold bg-gray-50 text-center">
+                    {eye === "od" ? "OD" : "OE"}
+                  </td>
+                  {EYE_COLS.map((c) => (
+                    <td key={c.label} className="border p-1.5 text-center">
+                      {val(v[c.keys[i]])}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>Fechar</Button>
+          {canEdit && onEdit && (
+            <Button onClick={() => onEdit(prescription.id)}>Editar</Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}

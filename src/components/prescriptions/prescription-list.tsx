@@ -24,6 +24,8 @@ export interface PrescriptionListItem {
 interface Props {
   prescriptions: PrescriptionListItem[];
   onDigitarGrau?: (id: string) => void;
+  /** Clicar no card abre o detalhe (recebe a receita inteira — a lista já traz values). */
+  onVer?: (prescription: PrescriptionListItem) => void;
 }
 
 function fmtDate(d: string | Date): string {
@@ -42,7 +44,7 @@ function pacienteNome(p: PrescriptionListItem): string {
   return p.customer?.name ?? "—";
 }
 
-export function PrescriptionList({ prescriptions, onDigitarGrau }: Props) {
+export function PrescriptionList({ prescriptions, onDigitarGrau, onVer }: Props) {
   if (prescriptions.length === 0) {
     return (
       <p className="text-sm text-muted-foreground py-6 text-center">
@@ -54,7 +56,14 @@ export function PrescriptionList({ prescriptions, onDigitarGrau }: Props) {
   return (
     <div className="space-y-2">
       {prescriptions.map((p) => (
-        <div key={p.id} className="flex items-center justify-between rounded-md border p-3">
+        <div
+          key={p.id}
+          onClick={onVer ? () => onVer(p) : undefined}
+          className={
+            "flex items-center justify-between rounded-md border p-3" +
+            (onVer ? " cursor-pointer hover:bg-muted/50 transition-colors" : "")
+          }
+        >
           <div className="min-w-0">
             <div className="flex items-center gap-2">
               <span className="font-medium truncate">{pacienteNome(p)}</span>
@@ -70,7 +79,14 @@ export function PrescriptionList({ prescriptions, onDigitarGrau }: Props) {
             </div>
           </div>
           {p.status === "AGUARDANDO_GRAU" && onDigitarGrau && (
-            <Button size="sm" variant="outline" onClick={() => onDigitarGrau(p.id)}>
+            <Button
+              size="sm"
+              variant="outline"
+              onClick={(e) => {
+                e.stopPropagation(); // não dispara o onVer do card
+                onDigitarGrau(p.id);
+              }}
+            >
               Digitar grau
             </Button>
           )}

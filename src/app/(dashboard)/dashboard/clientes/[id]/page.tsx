@@ -63,6 +63,7 @@ import toast from "react-hot-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import { PrescriptionList, type PrescriptionListItem } from "@/components/prescriptions/prescription-list";
 import { PrescriptionGradeDialog } from "@/components/prescriptions/prescription-grade-dialog";
+import { PrescriptionDetailDialog } from "@/components/prescriptions/prescription-detail-dialog";
 
 interface Customer {
   id: string;
@@ -224,6 +225,7 @@ function ClienteDetalhesPage() {
   // Livro de Receitas: receitas do cliente (titular + dependentes).
   const [prescriptions, setPrescriptions] = useState<PrescriptionListItem[]>([]);
   const [grauEditId, setGrauEditId] = useState<string | null>(null);
+  const [viewingRx, setViewingRx] = useState<PrescriptionListItem | null>(null);
   const [showContactDialog, setShowContactDialog] = useState(false);
   const [contactSaving, setContactSaving] = useState(false);
   const [contactForm, setContactForm] = useState({
@@ -1179,6 +1181,7 @@ function ClienteDetalhesPage() {
                 <PrescriptionList
                   prescriptions={prescriptions}
                   onDigitarGrau={hasPermission("prescriptions.edit") ? setGrauEditId : undefined}
+                  onVer={setViewingRx}
                 />
               </CardContent>
             </Card>
@@ -1776,6 +1779,19 @@ function ClienteDetalhesPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {viewingRx && (
+        <PrescriptionDetailDialog
+          prescription={viewingRx}
+          open={!!viewingRx}
+          onClose={() => setViewingRx(null)}
+          canEdit={hasPermission("prescriptions.edit")}
+          onEdit={(id) => {
+            setViewingRx(null);
+            setGrauEditId(id);
+          }}
+        />
+      )}
 
       {grauEditId && (
         <PrescriptionGradeDialog

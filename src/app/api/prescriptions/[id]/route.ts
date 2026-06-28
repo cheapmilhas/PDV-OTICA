@@ -13,6 +13,8 @@ interface Params {
 export async function GET(request: NextRequest, { params }: Params) {
   try {
     await requireAuth();
+    // LGPD: receita é dado clínico sensível.
+    await requirePermission("prescriptions.view");
     const companyId = await getCompanyId();
     const { id } = await params;
 
