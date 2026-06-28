@@ -18,7 +18,11 @@ import type { PrescriptionListItem } from "./prescription-list";
  */
 
 interface Props {
-  prescription: PrescriptionListItem & { values?: Record<string, unknown> | null };
+  prescription: PrescriptionListItem & {
+    values?: Record<string, unknown> | null;
+    /** True se a receita está vinculada a uma OS → grau só edita na OS. */
+    hasServiceOrder?: boolean;
+  };
   open: boolean;
   onClose: () => void;
   canEdit?: boolean;
@@ -99,9 +103,15 @@ export function PrescriptionDetailDialog({ prescription, open, onClose, canEdit,
           </table>
         </div>
 
+        {prescription.hasServiceOrder && (
+          <p className="text-xs text-muted-foreground">
+            Esta receita veio de uma Ordem de Serviço. Para alterar o grau, edite o grau na Ordem de Serviço — a alteração reflete aqui automaticamente.
+          </p>
+        )}
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>Fechar</Button>
-          {canEdit && onEdit && (
+          {canEdit && onEdit && !prescription.hasServiceOrder && (
             <Button onClick={() => onEdit(prescription.id)}>Editar</Button>
           )}
         </DialogFooter>

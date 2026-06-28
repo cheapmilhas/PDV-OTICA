@@ -2,6 +2,18 @@ import { prisma } from "@/lib/prisma";
 import type { PrescriptionDTO } from "@/lib/validations/prescription.schema";
 import { addMonths } from "date-fns";
 
+/**
+ * Deriva `hasServiceOrder`: a receita está vinculada a uma OS se há OS que a
+ * referenciam (`serviceOrders` count > 0) OU ela é a origem de uma OS
+ * (`serviceOrderId` set). Receita com OS = grau só editável NA OS (não no Livro).
+ */
+export function mapHasServiceOrder<T extends { _count?: { serviceOrders?: number }; serviceOrderId?: string | null }>(
+  rx: T
+): T & { hasServiceOrder: boolean } {
+  const count = rx._count?.serviceOrders ?? 0;
+  return { ...rx, hasServiceOrder: count > 0 || !!rx.serviceOrderId };
+}
+
 export const prescriptionService = {
   /**
    * Criar nova receita
@@ -80,7 +92,7 @@ export const prescriptionService = {
    * Listar receitas do cliente
    */
   async listByCustomer(customerId: string, companyId: string) {
-    return prisma.prescription.findMany({
+    const rows = await prisma.prescription.findMany({
       where: { customerId, companyId },
       orderBy: { issuedAt: "desc" },
       include: {
@@ -88,8 +100,10 @@ export const prescriptionService = {
           select: { id: true, name: true, crm: true },
         },
         values: true,
+        _count: { select: { serviceOrders: true } },
       },
     });
+    return rows.map(mapHasServiceOrder);
   },
 
   /**
@@ -136,13 +150,14 @@ export const prescriptionService = {
             select: { id: true, name: true },
           },
           values: true,
+          _count: { select: { serviceOrders: true } },
         },
       }),
       prisma.prescription.count({ where }),
     ]);
 
     return {
-      data,
+      data: data.map(mapHasServiceOrder),
       pagination: {
         page,
         pageSize,

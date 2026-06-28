@@ -17,6 +17,8 @@ export interface PrescriptionListItem {
   patientName?: string | null;
   saleId?: string | null;
   serviceOrderId?: string | null;
+  /** True se vinculada a uma OS → grau só edita na OS, não no Livro. */
+  hasServiceOrder?: boolean;
   customer?: { id: string; name: string } | null;
   values?: Record<string, unknown> | null;
 }
@@ -78,7 +80,7 @@ export function PrescriptionList({ prescriptions, onDigitarGrau, onVer }: Props)
               Emitida {fmtDate(p.issuedAt)} · Validade {fmtDate(p.expiresAt)} · Origem: {origemLabel(p)}
             </div>
           </div>
-          {p.status === "AGUARDANDO_GRAU" && onDigitarGrau && (
+          {p.status === "AGUARDANDO_GRAU" && onDigitarGrau && !p.hasServiceOrder && (
             <Button
               size="sm"
               variant="outline"

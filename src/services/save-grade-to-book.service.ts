@@ -1,6 +1,7 @@
+import { prisma } from "@/lib/prisma";
 import { prescriptionService } from "./prescription.service";
 import { upsertPrescription, type EyeValuesInput } from "./livro-receitas.service";
-import { notFoundError } from "@/lib/error-handler";
+import { notFoundError, AppError, ERROR_CODES } from "@/lib/error-handler";
 
 export interface SaveGradeInput {
   od?: EyeValuesInput | null;
@@ -27,6 +28,22 @@ export async function saveGradeToBook(
   const existing = await prescriptionService.getById(prescriptionId, companyId);
   if (!existing) {
     throw notFoundError("Receita não encontrada");
+  }
+
+  // Defesa de backend: receita vinculada a uma OS tem o grau editado NA OS
+  // (que espelha pro Livro). Editar pelo Livro divergiria do documento de
+  // produção — recusamos, mesmo que a UI já esconda o botão.
+  const link = await prisma.prescription.findFirst({
+    where: { id: prescriptionId, companyId },
+    select: { serviceOrderId: true, _count: { select: { serviceOrders: true } } },
+  });
+  const hasOS = !!link?.serviceOrderId || (link?._count?.serviceOrders ?? 0) > 0;
+  if (hasOS) {
+    throw new AppError(
+      ERROR_CODES.VALIDATION_ERROR,
+      "Esta receita veio de uma Ordem de Serviço. Edite o grau na Ordem de Serviço.",
+      400
+    );
   }
 
   return upsertPrescription({

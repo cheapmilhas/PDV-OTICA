@@ -4,6 +4,10 @@ const { getByIdMock } = vi.hoisted(() => ({ getByIdMock: vi.fn() }));
 vi.mock("./prescription.service", () => ({
   prescriptionService: { getById: getByIdMock },
 }));
+const { rxFindMock } = vi.hoisted(() => ({ rxFindMock: vi.fn() }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: { prescription: { findFirst: rxFindMock } },
+}));
 const { upsertMock } = vi.hoisted(() => ({ upsertMock: vi.fn() }));
 vi.mock("./livro-receitas.service", () => ({ upsertPrescription: upsertMock }));
 
@@ -12,6 +16,8 @@ import { saveGradeToBook } from "./save-grade-to-book.service";
 beforeEach(() => {
   vi.clearAllMocks();
   upsertMock.mockResolvedValue({ id: "rx-1", status: "COMPLETA" });
+  // default: receita SEM OS vinculada (editável).
+  rxFindMock.mockResolvedValue({ _count: { serviceOrders: 0 }, serviceOrderId: null });
 });
 
 describe("saveGradeToBook", () => {
@@ -20,6 +26,15 @@ describe("saveGradeToBook", () => {
     await expect(
       saveGradeToBook("rx-x", "co-1", { od: { esf: "-1,00" } })
     ).rejects.toThrow(/não encontrada|not found|404/i);
+    expect(upsertMock).not.toHaveBeenCalled();
+  });
+
+  it("RECUSA editar receita vinculada a OS (grau edita na OS)", async () => {
+    getByIdMock.mockResolvedValue({ id: "rx-1", customerId: "c", companyId: "co-1" });
+    rxFindMock.mockResolvedValue({ _count: { serviceOrders: 1 }, serviceOrderId: null });
+    await expect(
+      saveGradeToBook("rx-1", "co-1", { od: { esf: "-1,00" } })
+    ).rejects.toThrow(/Ordem de Serviço/i);
     expect(upsertMock).not.toHaveBeenCalled();
   });
 

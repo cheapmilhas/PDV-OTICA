@@ -12,6 +12,7 @@ const rx = {
   patientName: null,
   saleId: "sale-1",
   serviceOrderId: null,
+  hasServiceOrder: false,
   customer: { id: "c1", name: "Lucas Conrado" },
   values: {
     odSph: "-1.75", odCyl: "-0.75", odAxis: 90,
@@ -41,5 +42,22 @@ describe("PrescriptionDetailDialog", () => {
   it("sem canEdit não mostra botão Editar", () => {
     render(<PrescriptionDetailDialog prescription={rx} open onClose={() => {}} />);
     expect(screen.queryByRole("button", { name: /editar/i })).toBeNull();
+  });
+
+  it("receita VINCULADA A UMA OS é só-leitura: NÃO mostra Editar mesmo com canEdit", () => {
+    const rxComOS = { ...rx, hasServiceOrder: true };
+    render(
+      <PrescriptionDetailDialog prescription={rxComOS} open onClose={() => {}} canEdit onEdit={() => {}} />
+    );
+    expect(screen.queryByRole("button", { name: /editar/i })).toBeNull();
+    expect(screen.getByText(/edite o grau na Ordem de Serviço/i)).toBeTruthy();
+  });
+
+  it("receita SEM OS (exame avulso) com canEdit MOSTRA Editar", () => {
+    const rxSemOS = { ...rx, hasServiceOrder: false };
+    render(
+      <PrescriptionDetailDialog prescription={rxSemOS} open onClose={() => {}} canEdit onEdit={() => {}} />
+    );
+    expect(screen.getByRole("button", { name: /editar/i })).toBeTruthy();
   });
 });

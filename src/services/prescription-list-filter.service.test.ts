@@ -9,6 +9,8 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 
+import { mapHasServiceOrder } from "./prescription.service";
+
 import { prisma } from "@/lib/prisma";
 import { prescriptionService } from "./prescription.service";
 
@@ -40,5 +42,20 @@ describe("prescriptionService.list — filtros do Livro", () => {
     await prescriptionService.list("co-1", 1, 10, undefined, undefined, undefined, undefined, de, ate);
     const whereArg = (prisma.prescription.findMany as any).mock.calls[0][0].where;
     expect(whereArg.expiresAt).toEqual({ gte: de, lte: ate });
+  });
+});
+
+describe("mapHasServiceOrder", () => {
+  it("hasServiceOrder=true quando há OS vinculada (count>0)", () => {
+    const r = mapHasServiceOrder({ id: "rx", _count: { serviceOrders: 1 }, serviceOrderId: null });
+    expect(r.hasServiceOrder).toBe(true);
+  });
+  it("hasServiceOrder=true quando é OS de origem (serviceOrderId set)", () => {
+    const r = mapHasServiceOrder({ id: "rx", _count: { serviceOrders: 0 }, serviceOrderId: "os-1" });
+    expect(r.hasServiceOrder).toBe(true);
+  });
+  it("hasServiceOrder=false quando não há OS (exame avulso)", () => {
+    const r = mapHasServiceOrder({ id: "rx", _count: { serviceOrders: 0 }, serviceOrderId: null });
+    expect(r.hasServiceOrder).toBe(false);
   });
 });
