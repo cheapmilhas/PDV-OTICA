@@ -7,10 +7,13 @@ import {
   type CreateStockMovementDTO,
 } from "@/lib/validations/stock-movement.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
+import { Permission } from "@/lib/permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { logActivity } from "@/services/activity-log.service";
+import { ActorType, StockMovementType } from "@prisma/client";
 
 const log = logger.child({ route: "stock-movements" });
 
@@ -64,7 +67,7 @@ export async function POST(request: Request) {
     // Requer autenticação
     const session = await requireAuth();
     const companyId = await getCompanyId();
-    await requirePermission("stock.adjust");
+    await requirePermission(Permission.STOCK_ADJUST);
 
     // Verificar se o usuário existe no banco antes de associá-lo
     let userId: string | undefined;
@@ -89,6 +92,35 @@ export async function POST(request: Request) {
       companyId,
       userId
     );
+
+    // Trilha de auditoria (decisão do dono: mínimo atrito, registrar TUDO — sem
+    // aprovação nem bloqueio). Toda movimentação criada por esta rota credita/
+    // ajusta estoque na hora; aqui fica o rastro de quem fez, o quê e quanto.
+    // logActivity falha silenciosamente — nunca quebra a movimentação.
+    const isPurchase = sanitizedData.type === StockMovementType.PURCHASE;
+    await logActivity({
+      companyId,
+      type: "DATA_UPDATED",
+      title: `Movimentação de estoque (${sanitizedData.type})`,
+      detail: {
+        source: "stock-movements-api",
+        movementId: movement.id,
+        movementType: sanitizedData.type,
+        productId: sanitizedData.productId,
+        productSku: movement.audit.productSku,
+        productName: movement.audit.productName,
+        quantity: sanitizedData.quantity,
+        branchId: sanitizedData.branchId ?? null,
+        supplierId: sanitizedData.supplierId ?? null,
+        stockBefore: movement.audit.stockBefore,
+        stockAfter: movement.audit.stockAfter,
+        // PURCHASE sem fornecedor: só sinaliza (recomendado, não obrigatório).
+        ...(isPurchase && !sanitizedData.supplierId ? { semFornecedor: true } : {}),
+      },
+      actorId: userId,
+      actorType: ActorType.ADMIN,
+      actorName: session.user.name ?? session.user.email ?? undefined,
+    });
 
     // Retorna 201 Created
     return createdResponse(movement);

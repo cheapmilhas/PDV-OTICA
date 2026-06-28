@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, getBranchId, requirePermission } from "@/lib/auth-helpers";
+import { Permission } from "@/lib/permissions";
 import { handleApiError } from "@/lib/error-handler";
 import { paginatedResponse, createdResponse, createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { generateManualExpenseEntry } from "@/services/finance-entry.service";
@@ -76,6 +77,11 @@ export const GET = withPlanFeatureGuard(async (req: Request) => {
 export const POST = withPlanFeatureGuard(async (req: Request) => {
   try {
     await requireAuth();
+    // Segurança (pentest 2026-06-27): postar um lançamento manual no ledger
+    // (que debita FinanceAccount.balance e move a DRE) é ação financeira
+    // sensível — exige finance.manage. Antes só pedia requireAuth, então
+    // VENDEDOR/CAIXA podiam fabricar despesa ou sumir com receita.
+    await requirePermission(Permission.FINANCIAL_MANAGE);
     const companyId = await getCompanyId();
     const body = await req.json();
 
@@ -93,6 +99,15 @@ export const POST = withPlanFeatureGuard(async (req: Request) => {
       return handleApiError(
         new Error("description, amount, debitAccountCode e creditAccountCode são obrigatórios")
       );
+    }
+
+    // Valor deve ser positivo — bloqueia lançamento negativo/zero que
+    // poderia inverter o efeito no saldo da conta.
+    if (typeof amount !== "number" && typeof amount !== "string") {
+      return handleApiError(new Error("amount inválido"));
+    }
+    if (!(Number(amount) > 0)) {
+      return handleApiError(new Error("amount deve ser maior que zero"));
     }
 
     // SEC-004: lançamento manual grava branchId vindo do body — valida posse

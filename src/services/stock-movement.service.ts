@@ -168,7 +168,12 @@ export class StockMovementService {
   }
 
   /**
-   * Cria uma nova movimentação de estoque e atualiza o estoque do produto
+   * Cria uma nova movimentação de estoque e atualiza o estoque do produto.
+   *
+   * Retorna a movimentação criada acrescida de `audit`, com o estoque ANTES e
+   * DEPOIS da operação (saldo da filial quando há branchId; senão o cache
+   * global Product.stockQty). A rota usa esses valores para a trilha de
+   * auditoria sem precisar reconsultar o banco — ver POST /api/stock-movements.
    */
   async create(
     data: CreateStockMovementDTO,
@@ -185,6 +190,23 @@ export class StockMovementService {
 
     if (!product) {
       throw notFoundError("Produto não encontrado");
+    }
+
+    // Snapshot do estoque ANTES da operação para a trilha de auditoria. Quando
+    // há filial, o saldo relevante é o do BranchStock (de onde o PDV lê); sem
+    // filial, cai no cache global Product.stockQty.
+    let stockBefore: number = product.stockQty;
+    if (data.branchId) {
+      const branchStockBefore = await prisma.branchStock.findUnique({
+        where: {
+          branchId_productId: {
+            branchId: data.branchId,
+            productId: data.productId,
+          },
+        },
+        select: { quantity: true },
+      });
+      stockBefore = branchStockBefore?.quantity ?? 0;
     }
 
     // T9: valida que a filial pertence à empresa (anti-leak multi-tenant).
@@ -306,7 +328,37 @@ export class StockMovementService {
       return createdMovement;
     }, { timeout: 30_000 });
 
-    return movement;
+    // Snapshot do estoque DEPOIS da operação (mesma fonte do "antes": saldo da
+    // filial quando há branchId, senão o cache global) para a trilha de
+    // auditoria. Leitura pós-transação — best-effort, não afeta a operação.
+    let stockAfter: number | null = null;
+    if (data.branchId) {
+      const branchStockAfter = await prisma.branchStock.findUnique({
+        where: {
+          branchId_productId: {
+            branchId: data.branchId,
+            productId: data.productId,
+          },
+        },
+        select: { quantity: true },
+      });
+      stockAfter = branchStockAfter?.quantity ?? null;
+    } else {
+      const productAfter = await prisma.product.findUnique({
+        where: { id: data.productId },
+        select: { stockQty: true },
+      });
+      stockAfter = productAfter?.stockQty ?? null;
+    }
+
+    return Object.assign(movement, {
+      audit: {
+        productSku: product.sku,
+        productName: product.name,
+        stockBefore,
+        stockAfter,
+      },
+    });
   }
 
   /**

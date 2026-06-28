@@ -9,7 +9,7 @@ import { addDays, isBefore, startOfDay, isSameDay } from "date-fns";
 import { Decimal } from "@prisma/client/runtime/library";
 import { Prisma } from "@prisma/client";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
-import { applyCashbackAdjustment, expirableAmount } from "@/lib/cashback-math";
+import { applyCashbackAdjustment, expirableAmount, assertCashbackLimits } from "@/lib/cashback-math";
 
 export const cashbackService = {
   /**
@@ -239,26 +239,24 @@ export const cashbackService = {
       );
     }
 
-    // Validar compra mínima para usar
-    const minPurchaseToUse =
-      amount * Number(config.minPurchaseMultiplier);
-    if (saleTotal < minPurchaseToUse) {
-      errors.push(
-        `Compra mínima para usar R$ ${amount.toFixed(
-          2
-        )} de cashback: R$ ${minPurchaseToUse.toFixed(2)}`
-      );
+    // Validar compra mínima para usar + percentual máximo de uso.
+    // Regra centralizada em assertCashbackLimits (lógica pura compartilhada com
+    // o débito real da venda em applyCashbackUsageInTx). Respeita null/0 = sem limite.
+    const limitError = assertCashbackLimits(
+      {
+        maxUsagePercent: Number(config.maxUsagePercent ?? 0),
+        minPurchaseMultiplier: Number(config.minPurchaseMultiplier ?? 0),
+      },
+      saleTotal,
+      amount
+    );
+    if (limitError) {
+      errors.push(limitError);
     }
 
-    // Validar percentual máximo de uso
-    const maxUsage = (saleTotal * Number(config.maxUsagePercent)) / 100;
-    if (amount > maxUsage) {
-      errors.push(
-        `Cashback não pode ultrapassar ${Number(
-          config.maxUsagePercent
-        )}% do valor da venda (R$ ${maxUsage.toFixed(2)})`
-      );
-    }
+    // Teto de uso permitido (para a UI): respeita o % máximo só se configurado.
+    const maxPercent = Number(config.maxUsagePercent ?? 0);
+    const maxUsage = maxPercent > 0 ? (saleTotal * maxPercent) / 100 : saleTotal;
 
     return {
       isValid: errors.length === 0,
