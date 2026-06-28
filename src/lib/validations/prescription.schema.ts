@@ -44,8 +44,11 @@ export const prescriptionQuerySchema = z.object({
   customerId: z.string().cuid().optional(),
   page: z.coerce.number().int().positive().default(1),
   pageSize: z.coerce.number().int().positive().max(50).default(10),
-  // Livro de Receitas: busca por nome do cliente + faixa de validade.
+  // Livro de Receitas: busca por nome/CPF/telefone do cliente + faixa de validade + faixa de emissão.
   search: z.string().trim().min(1).optional(),
   validadeDe: z.coerce.date().optional(),
   validadeAte: z.coerce.date().optional(),
+  // Faixa de EMISSÃO (issuedAt). Usada pelos chips "1 a 2 anos" / "2+ anos" e pelo período manual.
+  emitidaDe: z.coerce.date().optional(),
+  emitidaAte: z.coerce.date().optional(),
 });
