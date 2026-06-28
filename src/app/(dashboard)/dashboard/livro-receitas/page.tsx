@@ -15,6 +15,7 @@ import {
   PrescriptionList,
   type PrescriptionListItem,
 } from "@/components/prescriptions/prescription-list";
+import { PrescriptionByCustomer } from "@/components/prescriptions/prescription-by-customer";
 import { PrescriptionGradeDialog } from "@/components/prescriptions/prescription-grade-dialog";
 import { PrescriptionDetailDialog } from "@/components/prescriptions/prescription-detail-dialog";
 import { usePermissions } from "@/hooks/usePermissions";
@@ -50,6 +51,8 @@ export default function LivroReceitasPage() {
   const [showPeriodo, setShowPeriodo] = useState(false);
   const [editId, setEditId] = useState<string | null>(null);
   const [viewing, setViewing] = useState<PrescriptionListItem | null>(null);
+  const [view, setView] = useState<"lista" | "cliente">("lista");
+  const [total, setTotal] = useState(0);
 
   // Carrega filiais uma vez no mount.
   useEffect(() => {
@@ -94,13 +97,16 @@ export default function LivroReceitasPage() {
       if (res.ok) {
         const data = await res.json();
         setPrescriptions(data.data || []);
+        setTotal(data.pagination?.total ?? (data.data?.length || 0));
         setError(false);
       } else {
         setPrescriptions([]);
+        setTotal(0);
         setError(true);
       }
     } catch {
       setPrescriptions([]);
+      setTotal(0);
       setError(true);
     } finally {
       setLoading(false);
@@ -257,6 +263,11 @@ export default function LivroReceitasPage() {
         </CardContent>
       </Card>
 
+      <div className="flex gap-2">
+        <Button type="button" size="sm" variant={view === "lista" ? "default" : "outline"} onClick={() => setView("lista")}>Lista</Button>
+        <Button type="button" size="sm" variant={view === "cliente" ? "default" : "outline"} onClick={() => setView("cliente")}>Por cliente</Button>
+      </div>
+
       <Card>
         <CardContent className="pt-6">
           {loading ? (
@@ -270,6 +281,19 @@ export default function LivroReceitasPage() {
                 Tentar de novo
               </Button>
             </div>
+          ) : view === "cliente" ? (
+            <>
+              {total > prescriptions.length && (
+                <p className="text-xs text-muted-foreground mb-3">
+                  Mostrando os {prescriptions.length} mais recentes de {total}. Busque pelo cliente para ver todas as receitas dele.
+                </p>
+              )}
+              <PrescriptionByCustomer
+                prescriptions={prescriptions}
+                onVer={setViewing}
+                onDigitarGrau={canEdit ? setEditId : undefined}
+              />
+            </>
           ) : (
             <PrescriptionList
               prescriptions={prescriptions}
