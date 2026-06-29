@@ -16,12 +16,47 @@ const LEAD_INCLUDE = {
   quote: { select: { id: true, total: true, status: true } },
 } as const;
 
+/**
+ * Valida que cada FK referenciada por um lead pertence à MESMA empresa, fechando
+ * IDOR cross-tenant: sem isto, a empresa A poderia gravar customerId/quoteId/
+ * sellerUserId/stageId de outra empresa (vínculo/vazamento cross-tenant). Lança
+ * notFoundError no primeiro inválido. Cada checagem só roda se o campo veio.
+ */
+async function assertLeadFksOwnedByCompany(
+  data: { customerId?: string; quoteId?: string; sellerUserId?: string; stageId?: string },
+  companyId: string,
+): Promise<void> {
+  if (data.customerId) {
+    const c = await prisma.customer.findFirst({ where: { id: data.customerId, companyId }, select: { id: true } });
+    if (!c) throw notFoundError("Cliente inválido");
+  }
+  if (data.quoteId) {
+    const q = await prisma.quote.findFirst({ where: { id: data.quoteId, companyId }, select: { id: true } });
+    if (!q) throw notFoundError("Orçamento inválido");
+  }
+  if (data.sellerUserId) {
+    const u = await prisma.user.findFirst({ where: { id: data.sellerUserId, companyId }, select: { id: true } });
+    if (!u) throw notFoundError("Vendedor inválido");
+  }
+  if (data.stageId) {
+    const s = await prisma.leadStage.findFirst({ where: { id: data.stageId, companyId }, select: { id: true } });
+    if (!s) throw notFoundError("Etapa inválida");
+  }
+}
+
 export async function createLead(
   data: CreateLeadDTO,
   companyId: string,
   userId: string,
   branchId: string | null
 ) {
+  // Fecha IDOR cross-tenant: customerId/quoteId/sellerUserId precisam ser da
+  // mesma empresa (stageId é validado logo abaixo no fluxo de resolução da etapa).
+  await assertLeadFksOwnedByCompany(
+    { customerId: data.customerId, quoteId: data.quoteId, sellerUserId: data.sellerUserId },
+    companyId,
+  );
+
   // Resolve a etapa: usa a fornecida (validada por empresa) ou a 1ª (menor order)
   let stageId = data.stageId;
   if (stageId) {
@@ -155,11 +190,31 @@ export async function updateLead(id: string, data: UpdateLeadDTO, companyId: str
     select: { id: true },
   });
   if (!lead) throw notFoundError("Lead não encontrado");
+
+  // Fecha IDOR cross-tenant: valida que qualquer FK editável é da mesma empresa.
+  await assertLeadFksOwnedByCompany(
+    { customerId: data.customerId, quoteId: data.quoteId, sellerUserId: data.sellerUserId, stageId: data.stageId },
+    companyId,
+  );
+
+  // Allowlist EXPLÍCITA (nunca `...data`): só campos editáveis conhecidos chegam
+  // ao update — evita que um campo inesperado do DTO vaze para o Prisma. Cada
+  // chave só entra se veio no payload (undefined = Prisma ignora).
   return prisma.lead.update({
     where: { id },
     data: {
-      ...data,
+      name: data.name,
+      phone: data.phone,
       email: data.email === "" ? null : data.email,
+      interest: data.interest,
+      source: data.source,
+      estimatedValue: data.estimatedValue,
+      notes: data.notes,
+      lostReason: data.lostReason,
+      stageId: data.stageId,
+      sellerUserId: data.sellerUserId,
+      customerId: data.customerId,
+      quoteId: data.quoteId,
       lastActivityAt: new Date(),
     },
   });

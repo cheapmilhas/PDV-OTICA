@@ -4,12 +4,21 @@ vi.mock("@/lib/prisma", () => ({
   prisma: {
     leadStage: { findFirst: vi.fn() },
     lead: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    customer: { findFirst: vi.fn() },
+    quote: { findFirst: vi.fn() },
+    user: { findFirst: vi.fn() },
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead, listLeads, moveLead, getLeadStats } from "./lead.service";
+import { createLead, listLeads, moveLead, getLeadStats, updateLead } from "./lead.service";
 
-beforeEach(() => vi.clearAllMocks());
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Por padrão, FKs válidas (da mesma empresa) — testes cross-tenant sobrescrevem.
+  (prisma.customer.findFirst as any).mockResolvedValue({ id: "cust_ok" });
+  (prisma.quote.findFirst as any).mockResolvedValue({ id: "quote_ok" });
+  (prisma.user.findFirst as any).mockResolvedValue({ id: "user_ok" });
+});
 
 describe("createLead", () => {
   it("cria lead só com nome, usando a 1ª etapa quando stageId não é dado", async () => {
@@ -34,6 +43,65 @@ describe("createLead", () => {
 
     const r = await createLead({ name: "Maria", phone: "85999" }, "co_1", "u", "b");
     expect(r.duplicateWarning).toBe(true);
+  });
+});
+
+describe("createLead — IDOR cross-tenant (Fase 0b)", () => {
+  it("rejeita customerId de outra empresa", async () => {
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_novo" });
+    (prisma.customer.findFirst as any).mockResolvedValue(null); // não é da empresa
+    await expect(
+      createLead({ name: "X", customerId: "cust_de_outra" }, "co_1", "u", "b")
+    ).rejects.toThrow(/cliente/i);
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+  });
+
+  it("rejeita quoteId de outra empresa", async () => {
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_novo" });
+    (prisma.quote.findFirst as any).mockResolvedValue(null);
+    await expect(
+      createLead({ name: "X", quoteId: "q_de_outra" }, "co_1", "u", "b")
+    ).rejects.toThrow(/orçamento/i);
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+  });
+
+  it("rejeita sellerUserId de outra empresa", async () => {
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_novo" });
+    (prisma.user.findFirst as any).mockResolvedValue(null);
+    await expect(
+      createLead({ name: "X", sellerUserId: "u_de_outra" }, "co_1", "u", "b")
+    ).rejects.toThrow(/vendedor/i);
+    expect(prisma.lead.create).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateLead — IDOR cross-tenant (Fase 0b)", () => {
+  it("rejeita customerId de outra empresa", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.customer.findFirst as any).mockResolvedValue(null);
+    await expect(
+      updateLead("l1", { customerId: "cust_de_outra" } as any, "co_1")
+    ).rejects.toThrow(/cliente/i);
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
+  it("rejeita stageId de outra empresa", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.leadStage.findFirst as any).mockResolvedValue(null);
+    await expect(
+      updateLead("l1", { stageId: "stg_de_outra" } as any, "co_1")
+    ).rejects.toThrow(/etapa/i);
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
+  it("NÃO espalha campos inesperados — só allowlist chega ao update", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    await updateLead("l1", { name: "Novo", companyId: "HACK", id: "HACK" } as any, "co_1");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.name).toBe("Novo");
+    expect(data.companyId).toBeUndefined(); // não vaza p/ o update
+    expect(data.id).toBeUndefined();
   });
 });
 
