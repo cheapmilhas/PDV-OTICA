@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { phoneMatchKey } from "@/lib/lead-phone-match";
+import { logCustomerAccess } from "@/lib/lgpd";
 
 /**
  * Reconhecimento de cliente para o funil de IA: dado o telefone de um contato
@@ -76,6 +77,16 @@ export async function matchCustomerByPhone(
 
   const c = candidates[0];
   const summary = await buildSafeSummary(companyId, c.id);
+  // LGPD (Art. 33 — transferência internacional): o resumo identificado será
+  // enviado à Anthropic (EUA) para classificação. Registra o acesso (autor =
+  // usuário-robô da IA = null). Não-bloqueante (logCustomerAccess engole erro).
+  await logCustomerAccess({
+    companyId,
+    customerId: c.id,
+    userId: null,
+    resourceType: "ai_summary",
+    action: "send_external",
+  });
   return { kind: "single", customerId: c.id, customerName: c.name, summary, candidateCount: 1 };
 }
 

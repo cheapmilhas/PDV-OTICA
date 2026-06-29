@@ -10,7 +10,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead, listLeads, moveLead, getLeadStats, updateLead } from "./lead.service";
+import { createLead, listLeads, moveLead, getLeadStats, updateLead, setLeadCustomer } from "./lead.service";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -18,6 +18,37 @@ beforeEach(() => {
   (prisma.customer.findFirst as any).mockResolvedValue({ id: "cust_ok" });
   (prisma.quote.findFirst as any).mockResolvedValue({ id: "quote_ok" });
   (prisma.user.findFirst as any).mockResolvedValue({ id: "user_ok" });
+});
+
+describe("setLeadCustomer — writer dedicado de vínculo", () => {
+  it("vincula quando lead e customer são da mesma empresa", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.customer.findFirst as any).mockResolvedValue({ id: "cust1" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1", customerId: "cust1" });
+    await setLeadCustomer("l1", "cust1", "co_1");
+    expect((prisma.lead.update as any).mock.calls[0][0].data.customerId).toBe("cust1");
+  });
+
+  it("rejeita customer de outra empresa (IDOR)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.customer.findFirst as any).mockResolvedValue(null);
+    await expect(setLeadCustomer("l1", "cust_de_outra", "co_1")).rejects.toThrow(/cliente/i);
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
+  it("customerId=null DESVINCULA (não valida customer)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1", customerId: null });
+    await setLeadCustomer("l1", null, "co_1");
+    expect(prisma.customer.findFirst).not.toHaveBeenCalled();
+    expect((prisma.lead.update as any).mock.calls[0][0].data.customerId).toBeNull();
+  });
+
+  it("lead de outra empresa → 404, não grava", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue(null);
+    await expect(setLeadCustomer("l_outra", "cust1", "co_1")).rejects.toThrow(/lead/i);
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
 });
 
 describe("createLead", () => {

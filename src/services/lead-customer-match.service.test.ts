@@ -7,6 +7,8 @@ vi.mock("@/lib/prisma", () => ({
     serviceOrder: { findFirst: vi.fn() },
   },
 }));
+const logAccessMock = vi.fn();
+vi.mock("@/lib/lgpd", () => ({ logCustomerAccess: (...a: unknown[]) => logAccessMock(...a) }));
 
 import { prisma } from "@/lib/prisma";
 import { matchCustomerByPhone, buildSafeSummary } from "./lead-customer-match.service";
@@ -72,6 +74,20 @@ describe("matchCustomerByPhone", () => {
     expect(r.summary?.daysSinceLastPurchase).toBe(40);
     expect(r.summary?.openServiceOrder).toBe("pronta_para_retirada");
     expect(r.summary?.isRecurring).toBe(true);
+  });
+
+  it("match único → registra acesso LGPD (ai_summary/send_external)", async () => {
+    findMany.mockResolvedValue([{ id: "c1", name: "Maria" }]);
+    await matchCustomerByPhone("co1", "85999887766");
+    expect(logAccessMock).toHaveBeenCalledWith(expect.objectContaining({
+      companyId: "co1", customerId: "c1", resourceType: "ai_summary", action: "send_external",
+    }));
+  });
+
+  it("match ambíguo → NÃO registra acesso (não montou resumo)", async () => {
+    findMany.mockResolvedValue([{ id: "c1", name: "A" }, { id: "c2", name: "B" }]);
+    await matchCustomerByPhone("co1", "85999887766");
+    expect(logAccessMock).not.toHaveBeenCalled();
   });
 });
 

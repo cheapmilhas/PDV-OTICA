@@ -215,6 +215,38 @@ export async function updateLead(id: string, data: UpdateLeadDTO, companyId: str
   });
 }
 
+/**
+ * Writer DEDICADO do vínculo lead↔cliente (confirmação humana do match da IA).
+ * Valida que o lead E o customer são da MESMA empresa (fecha IDOR cross-tenant).
+ * Passar customerId=null DESVINCULA (vendedor desfaz). Caminho separado do
+ * updateLead genérico de propósito: vincular ficha é ação sensível (LGPD) e o
+ * match por telefone pode ser falso-positivo — por isso exige clique explícito.
+ */
+export async function setLeadCustomer(
+  id: string,
+  customerId: string | null,
+  companyId: string,
+) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+
+  if (customerId) {
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, companyId },
+      select: { id: true },
+    });
+    if (!customer) throw notFoundError("Cliente inválido");
+  }
+
+  return prisma.lead.update({
+    where: { id },
+    data: { customerId, lastActivityAt: new Date() },
+  });
+}
+
 export async function deleteLead(id: string, companyId: string) {
   const lead = await prisma.lead.findFirst({
     where: { id, companyId, deletedAt: null },

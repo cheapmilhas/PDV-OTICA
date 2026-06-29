@@ -69,8 +69,8 @@ export async function revokeConsent(customerId: string): Promise<void> {
   log.info("Consent revogado", { customerId });
 }
 
-export type AccessResourceType = "prescription" | "personal_data" | "export";
-export type AccessAction = "view" | "edit" | "export" | "delete";
+export type AccessResourceType = "prescription" | "personal_data" | "export" | "ai_summary";
+export type AccessAction = "view" | "edit" | "export" | "delete" | "send_external";
 
 export interface LogAccessInput {
   companyId: string;
