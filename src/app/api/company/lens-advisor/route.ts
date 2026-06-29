@@ -39,6 +39,7 @@ export async function POST(request: Request) {
         analysis: result.analysis,
         advice: result.advice,
         aiUnavailable: result.aiUnavailable ?? false,
+        aiUnavailableReason: result.aiUnavailableReason ?? null,
       },
     });
   } catch (error) {

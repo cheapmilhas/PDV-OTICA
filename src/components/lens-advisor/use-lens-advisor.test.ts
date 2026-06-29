@@ -97,6 +97,38 @@ describe("useLensAdvisor", () => {
     expect(result.current.aiText).toBeNull();
   });
 
+  it("resposta não-ok COM error.message: mostra a mensagem do backend (ex: cota)", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn(async () => ({
+        ok: false,
+        json: async () => ({ error: { code: "BUSINESS_RULE", message: "Cota mensal de IA atingida. Aumente o limite ou aguarde o próximo mês." } }),
+      })) as unknown as typeof fetch,
+    );
+
+    const { result } = renderHook(() => useLensAdvisor());
+    act(() => result.current.setOdField("esf", "-2"));
+    await act(async () => {
+      await result.current.explain();
+    });
+
+    expect(result.current.aiError).toContain("Cota mensal de IA atingida");
+    expect(result.current.aiText).toBeNull();
+  });
+
+  it("aiUnavailable com reason=no_credit: mensagem específica de saldo", async () => {
+    vi.stubGlobal("fetch", mockFetchOk({ advice: null, aiUnavailable: true, aiUnavailableReason: "no_credit" }));
+
+    const { result } = renderHook(() => useLensAdvisor());
+    act(() => result.current.setOdField("esf", "-2"));
+    await act(async () => {
+      await result.current.explain();
+    });
+
+    expect(result.current.aiError).toContain("sem saldo");
+    expect(result.current.aiText).toBeNull();
+  });
+
   it("limpa a IA quando o grau muda", async () => {
     vi.stubGlobal("fetch", mockFetchOk({ advice: "texto da ia", aiUnavailable: false }));
 

@@ -9,7 +9,7 @@ import { buildKnowledgeContext } from "@/services/lens-knowledge.service";
 import { explainLensRecommendation } from "@/lib/ai/lens-advisor";
 import { logAiUsage } from "@/services/ai-usage.service";
 import { getAiConfig } from "@/services/ai-config.service";
-import { adviseForCompany } from "./lens-advisor.service";
+import { adviseForCompany, classifyAiError } from "./lens-advisor.service";
 
 const mockBuildCtx = buildKnowledgeContext as ReturnType<typeof vi.fn>;
 const mockExplain = explainLensRecommendation as ReturnType<typeof vi.fn>;
@@ -117,5 +117,52 @@ describe("adviseForCompany — degradação graciosa", () => {
     expect(r.advice).toBeNull();
     expect(r.aiUnavailable).toBe(true);
     expect(mockLog).not.toHaveBeenCalled();
+  });
+
+  it("sem chave → aiUnavailableReason = no_key", async () => {
+    mockExplain.mockRejectedValue(new Error("Anthropic API key não configurada"));
+    const r = await adviseForCompany({ companyId: "co1", od, oe, frame });
+    expect(r.aiUnavailableReason).toBe("no_key");
+  });
+
+  it("erro 400 sem saldo → aiUnavailableReason = no_credit", async () => {
+    const err = Object.assign(new Error("credit balance is too low"), { status: 400 });
+    mockExplain.mockRejectedValue(err);
+    const r = await adviseForCompany({ companyId: "co1", od, oe, frame });
+    expect(r.aiUnavailableReason).toBe("no_credit");
+  });
+
+  it("erro 401 chave inválida → aiUnavailableReason = invalid_key", async () => {
+    const err = Object.assign(new Error("invalid x-api-key"), { status: 401 });
+    mockExplain.mockRejectedValue(err);
+    const r = await adviseForCompany({ companyId: "co1", od, oe, frame });
+    expect(r.aiUnavailableReason).toBe("invalid_key");
+  });
+});
+
+describe("classifyAiError", () => {
+  it("mensagem de 'api key não configurada' → no_key", () => {
+    expect(classifyAiError(new Error("Anthropic API key não configurada"))).toBe("no_key");
+  });
+  it("status 401 → invalid_key", () => {
+    expect(classifyAiError(Object.assign(new Error("x"), { status: 401 }))).toBe("invalid_key");
+  });
+  it("status 403 → invalid_key", () => {
+    expect(classifyAiError(Object.assign(new Error("x"), { status: 403 }))).toBe("invalid_key");
+  });
+  it("status 400 + 'credit balance' → no_credit", () => {
+    expect(classifyAiError(Object.assign(new Error("credit balance too low"), { status: 400 }))).toBe("no_credit");
+  });
+  it("'insufficient credit' sem status → no_credit", () => {
+    expect(classifyAiError(new Error("insufficient credit on account"))).toBe("no_credit");
+  });
+  it("erro genérico (rede) → generic", () => {
+    expect(classifyAiError(new Error("network timeout"))).toBe("generic");
+  });
+  it("não-Error → generic", () => {
+    expect(classifyAiError("algo")).toBe("generic");
+  });
+  it("NÃO classifica 400 genérico como no_credit (precisa da pista textual)", () => {
+    expect(classifyAiError(Object.assign(new Error("bad request"), { status: 400 }))).toBe("generic");
   });
 });

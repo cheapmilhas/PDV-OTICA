@@ -171,7 +171,7 @@ describe("POST /api/company/lens-advisor", () => {
     expect(res.status).toBeGreaterThanOrEqual(400);
   });
 
-  it("CRITICAL: response body is ONLY { data: { analysis, advice, aiUnavailable } } — no cost/markup/tokens", async () => {
+  it("CRITICAL: response body is ONLY { data: { analysis, advice, aiUnavailable, aiUnavailableReason } } — no cost/markup/tokens", async () => {
     adviseForCompanyMock.mockResolvedValue({
       analysis: analysisFixture,
       advice: "texto",
@@ -182,7 +182,9 @@ describe("POST /api/company/lens-advisor", () => {
 
     // Top-level shape is exactly { data: {...} }
     expect(Object.keys(json)).toEqual(["data"]);
-    expect(Object.keys(json.data).sort()).toEqual(["advice", "aiUnavailable", "analysis"]);
+    // aiUnavailableReason é uma CATEGORIA de erro segura (ex: "no_credit"),
+    // nunca custo/markup/token — segue coberto pela asserção FORBIDDEN_KEYS abaixo.
+    expect(Object.keys(json.data).sort()).toEqual(["advice", "aiUnavailable", "aiUnavailableReason", "analysis"]);
 
     const keys = collectKeys(json);
     for (const forbidden of FORBIDDEN_KEYS) {

@@ -18,6 +18,21 @@ const AI_DEGRADATION =
   "Não foi possível gerar a explicação agora. Os dados acima (índice e espessura) continuam válidos.";
 
 /**
+ * Traduz o motivo (seguro) devolvido pelo backend numa mensagem acionável para
+ * o vendedor. O motor (índice/espessura) continua sempre válido — por isso toda
+ * mensagem reforça isso. Fallback = genérica.
+ */
+const REASON_MESSAGE: Record<string, string> = {
+  no_credit:
+    "A IA está temporariamente sem saldo na conta. Avise o suporte. Os dados acima (índice e espessura) continuam válidos.",
+  no_key:
+    "A IA ainda não foi configurada para esta ótica. Avise o suporte. Os dados acima (índice e espessura) continuam válidos.",
+  invalid_key:
+    "A chave de acesso da IA precisa ser atualizada. Avise o suporte. Os dados acima (índice e espessura) continuam válidos.",
+  generic: AI_DEGRADATION,
+};
+
+/**
  * Núcleo reutilizável do Assistente de Lentes. Diferente do painel antigo (que
  * RECEBIA od/oe por prop), este hook é DONO da receita: o vendedor digita os
  * valores no próprio widget. Roda o motor óptico determinístico, gerencia a
@@ -146,16 +161,30 @@ export function useLensAdvisor(): UseLensAdvisor {
         body: JSON.stringify({ od: odPower, oe: oePower, frame }),
       });
       if (!res.ok) {
-        setAiError(AI_DEGRADATION);
+        // O backend já manda um motivo específico e seguro (ex.: cota mensal
+        // atingida, IA desligada). Mostra-o em vez da frase genérica.
+        let backendMsg: string | null = null;
+        try {
+          const errJson = await res.json();
+          const m: unknown = errJson?.error?.message;
+          if (typeof m === "string" && m.trim() !== "") backendMsg = m.trim();
+        } catch {
+          // corpo não-JSON — cai no genérico
+        }
+        setAiError(backendMsg ?? AI_DEGRADATION);
         return;
       }
       const json = await res.json();
       const advice: unknown = json?.data?.advice;
       const aiUnavailable: boolean = json?.data?.aiUnavailable === true;
+      const reason: unknown = json?.data?.aiUnavailableReason;
       if (typeof advice === "string" && advice.trim() !== "" && !aiUnavailable) {
         setAiText(advice);
       } else {
-        setAiError(AI_DEGRADATION);
+        // Degradação graciosa (sem saldo / chave / etc.): mostra a mensagem
+        // acionável correspondente ao motivo, com fallback genérico.
+        const key = typeof reason === "string" ? reason : "generic";
+        setAiError(REASON_MESSAGE[key] ?? AI_DEGRADATION);
       }
     } catch {
       setAiError(AI_DEGRADATION);
