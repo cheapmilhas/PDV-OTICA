@@ -1220,6 +1220,15 @@ model Lead {
   quoteId        String?
   lostReason     String?
   notes          String?
+  // IA contexto cliente (Fase 1/2): intenção classificada + estado do match de
+  // cliente. intent/contactNotPatient/urgent são SUGESTÃO da IA; o vínculo só
+  // vira customerId após confirmação humana (customerMatchConfirmedBy/At).
+  intent                     ContactIntent?
+  contactNotPatient          Boolean           @default(false)
+  urgent                     Boolean           @default(false)
+  customerMatchKind          CustomerMatchKind @default(NONE)
+  customerMatchConfirmedById String?
+  customerMatchConfirmedAt   DateTime?
   lastActivityAt DateTime    @default(now())
   deletedAt      DateTime?
   createdAt      DateTime    @default(now())
@@ -4139,6 +4148,29 @@ enum LeadFunnelSource {
   REFERRAL
   WALK_IN
   OTHER
+}
+
+/// Intenção do contato classificada pela IA (Fase 1/2 — IA contexto cliente).
+enum ContactIntent {
+  NOVA_COMPRA
+  ORCAMENTO_PRECO
+  RENOVACAO
+  COMPROU_RECENTE
+  AGUARDANDO_OS
+  AGENDAMENTO_INFO
+  CONVENIO_PLANO
+  SEGUNDA_VIA_RECEITA
+  GARANTIA_CONSERTO
+  RECLAMACAO
+  COBRANCA_FINANCEIRO
+  OUTRO
+}
+
+/// Como a IA casou o contato com um Customer (revisável pelo vendedor).
+enum CustomerMatchKind {
+  NONE
+  SINGLE
+  AMBIGUOUS
 }
 
 enum TagCategory {

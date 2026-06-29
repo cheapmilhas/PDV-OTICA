@@ -243,6 +243,21 @@ describe("qualifyConversation", () => {
     expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), null);
   });
 
+  it("ao criar lead, persiste intent/contactNotPatient/urgent/customerMatchKind", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    matchCustomerMock.mockResolvedValue({ kind: "single", customerId: "cust1", customerName: "Maria", summary: { purchaseCount: 3, daysSinceLastPurchase: 400, openServiceOrder: null, isRecurring: true }, candidateCount: 1 });
+    qualifyTextMock.mockResolvedValue({ isLead: true, intent: "RENOVACAO", reason: "renova", interest: "grau", stageId: "s_novo", confidence: 0.9, contactNotPatient: false, urgent: false, parseError: false, usage: { inputTokens: 100, outputTokens: 20, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "lead1" }, duplicateWarning: false });
+
+    await qualifyConversation("c1");
+
+    const aiFields = createLeadMock.mock.calls[0][4]; // 5º arg = aiFields
+    expect(aiFields.intent).toBe("RENOVACAO");
+    expect(aiFields.customerMatchKind).toBe("SINGLE");
+    expect(aiFields.contactNotPatient).toBe(false);
+    expect(aiFields.urgent).toBe(false);
+  });
+
   it("grupo → transcribeAudio NÃO é chamado (pulado como group)", async () => {
     (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
       ...conv,

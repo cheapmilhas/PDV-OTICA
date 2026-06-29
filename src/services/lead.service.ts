@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { softDelete, softDeleteFilter } from "@/lib/soft-delete";
 import { notFoundError, businessRuleError, duplicateError } from "@/lib/error-handler";
 import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
+import type { ContactIntent, CustomerMatchKind } from "@prisma/client";
 import type {
   CreateLeadDTO,
   LeadQuery,
@@ -44,11 +45,20 @@ async function assertLeadFksOwnedByCompany(
   }
 }
 
+/** Campos classificados pela IA (não vêm do DTO público de criação manual). */
+export interface LeadAiFields {
+  intent?: ContactIntent;
+  contactNotPatient?: boolean;
+  urgent?: boolean;
+  customerMatchKind?: CustomerMatchKind;
+}
+
 export async function createLead(
   data: CreateLeadDTO,
   companyId: string,
   userId: string,
-  branchId: string | null
+  branchId: string | null,
+  aiFields?: LeadAiFields,
 ) {
   // Fecha IDOR cross-tenant: TODOS os 4 FKs (incl. stageId quando fornecido)
   // passam pela MESMA validação por empresa — sem caminho duplicado (evita que
@@ -95,6 +105,11 @@ export async function createLead(
       customerId: data.customerId,
       quoteId: data.quoteId,
       notes: data.notes,
+      // Campos da IA (quando o lead nasce da qualificação automática).
+      ...(aiFields?.intent ? { intent: aiFields.intent } : {}),
+      ...(aiFields?.contactNotPatient != null ? { contactNotPatient: aiFields.contactNotPatient } : {}),
+      ...(aiFields?.urgent != null ? { urgent: aiFields.urgent } : {}),
+      ...(aiFields?.customerMatchKind ? { customerMatchKind: aiFields.customerMatchKind } : {}),
     },
   });
 

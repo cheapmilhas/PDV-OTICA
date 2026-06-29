@@ -182,6 +182,8 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   if (!result.isLead) { await finalize(null); return { conversationId, isLead: false, leadId: null }; }
 
   const sellerUserId = await getOrCreateAiSellerUser(conv.companyId);
+  // Mapeia o kind do match (minúsculo no serviço) → enum do banco (maiúsculo).
+  const matchKind = match.kind === "single" ? "SINGLE" : match.kind === "ambiguous" ? "AMBIGUOUS" : "NONE";
   const { lead } = await createLead(
     {
       name: conv.contactName ?? conv.contactNumber,
@@ -191,7 +193,13 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       stageId: result.stageId ?? undefined,
       notes: `Lead criado pela IA do funil. Motivo: ${result.reason}`.slice(0, 500),
     },
-    conv.companyId, sellerUserId, null
+    conv.companyId, sellerUserId, null,
+    {
+      intent: result.intent,
+      contactNotPatient: result.contactNotPatient,
+      urgent: result.urgent,
+      customerMatchKind: matchKind,
+    },
   );
   await finalize(lead.id);
   log.info("lead criado pela IA", { conversationId, leadId: lead.id, companyId: conv.companyId });
