@@ -10,7 +10,7 @@ vi.mock("@/lib/prisma", () => ({
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead, listLeads, moveLead, getLeadStats, updateLead, setLeadCustomer } from "./lead.service";
+import { createLead, listLeads, moveLead, getLeadStats, updateLead, setLeadCustomer, correctLeadIntent } from "./lead.service";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -86,6 +86,17 @@ describe("createLead", () => {
 
     const r = await createLead({ name: "Maria", phone: "85999" }, "co_1", "u", "b");
     expect(r.duplicateWarning).toBe(true);
+  });
+
+  it("grava intentPredicted = intent quando a IA classifica (base da telemetria)", async () => {
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_novo" });
+    (prisma.lead.findFirst as any).mockResolvedValue(null);
+    (prisma.lead.create as any).mockResolvedValue({ id: "lead_3", name: "Ana" });
+
+    await createLead({ name: "Ana" }, "co_1", "u", "b", { intent: "RENOVACAO" });
+    const data = (prisma.lead.create as any).mock.calls[0][0].data;
+    expect(data.intent).toBe("RENOVACAO");
+    expect(data.intentPredicted).toBe("RENOVACAO");
   });
 });
 
@@ -226,5 +237,48 @@ describe("getLeadStats", () => {
     expect(s.conversionRate).toBeCloseTo(1 / 3);
     expect(s.byLostReason["Preço"]).toBe(1);
     expect(s.bySource["WHATSAPP"]).toBe(2);
+  });
+});
+
+describe("correctLeadIntent — correção humana da intenção (telemetria Fase 3)", () => {
+  it("grava o novo intent + autor/data quando o lead é da empresa", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", intentPredicted: "NOVA_COMPRA" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1", intent: "RECLAMACAO" });
+    await correctLeadIntent("l1", "RECLAMACAO", "co_1", "user_9");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.intent).toBe("RECLAMACAO");
+    expect(data.intentCorrectedById).toBe("user_9");
+    expect(data.intentCorrectedAt).toBeInstanceOf(Date);
+  });
+
+  it("NÃO sobrescreve intentPredicted (preserva o palpite original da IA)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", intentPredicted: "NOVA_COMPRA" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    await correctLeadIntent("l1", "RECLAMACAO", "co_1", "user_9");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.intentPredicted).toBeUndefined(); // nunca tocado pelo writer
+  });
+
+  it("se o lead nunca teve predição da IA, registra a predição = intent atual (mantém auditável)", async () => {
+    // Lead criado manualmente (sem IA) que o humano agora rotula: intentPredicted
+    // ainda null → não inventa acurácia (a correção não conta como erro da IA).
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", intentPredicted: null });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    await correctLeadIntent("l1", "ORCAMENTO_PRECO", "co_1", "user_9");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.intent).toBe("ORCAMENTO_PRECO");
+    expect("intentPredicted" in data).toBe(false); // não fabrica predição
+  });
+
+  it("rejeita lead de outra empresa (cross-tenant)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue(null);
+    await expect(correctLeadIntent("l_outra", "RECLAMACAO", "co_1", "user_9")).rejects.toThrow(/lead/i);
+    expect((prisma.lead.update as any)).not.toHaveBeenCalled();
+  });
+
+  it("rejeita intent fora do enum (entrada inválida)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", intentPredicted: "NOVA_COMPRA" });
+    await expect(correctLeadIntent("l1", "INTENT_INEXISTENTE" as any, "co_1", "user_9")).rejects.toThrow();
+    expect((prisma.lead.update as any)).not.toHaveBeenCalled();
   });
 });

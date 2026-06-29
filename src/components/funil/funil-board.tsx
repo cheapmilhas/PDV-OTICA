@@ -171,6 +171,24 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
     }
   }
 
+  async function handleCorrectIntent(leadId: string, intent: string) {
+    try {
+      const res = await fetch(`/api/leads/${leadId}/intent`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ intent }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error?.message || "Erro ao corrigir intenção");
+      }
+      toast.success("Intenção corrigida.");
+      onRefresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao corrigir intenção");
+    }
+  }
+
   async function handleWon(lead: Lead) {
     try {
       const res = await fetch(`/api/leads/${lead.id}/convert`, {
@@ -238,7 +256,7 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
                 totalValue={totalValue}
               >
                 {shown.map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} />
+                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} onCorrectIntent={handleCorrectIntent} />
                 ))}
 
                 {stageLeads.length === 0 && (

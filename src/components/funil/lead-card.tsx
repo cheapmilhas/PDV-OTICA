@@ -18,7 +18,8 @@ import {
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { differenceInCalendarDays } from "date-fns";
-import { intentLabel } from "@/lib/contact-intent-label";
+import { intentLabel, INTENT_OPTIONS } from "@/lib/contact-intent-label";
+import { useState } from "react";
 
 /** Estrutura do lead consumida do GET /api/leads (envelope `.data`). */
 export interface Lead {
@@ -37,6 +38,8 @@ export interface Lead {
   seller?: { id: string; name: string } | null;
   // IA contexto cliente (Fase 1/2)
   intent?: string | null;
+  /** Palpite ORIGINAL da IA (telemetria de acurácia, Fase 3) — preservado. */
+  intentPredicted?: string | null;
   urgent?: boolean | null;
   contactNotPatient?: boolean | null;
   customerMatchKind?: string | null;
@@ -48,6 +51,8 @@ interface LeadCardProps {
   lead: Lead;
   /** Confirma/recusa o vínculo de cliente sugerido (chama PATCH + refresh). */
   onConfirmCustomer?: (leadId: string, customerId: string | null) => void;
+  /** Corrige a intenção classificada pela IA em 1 clique (telemetria). */
+  onCorrectIntent?: (leadId: string, intent: string) => void;
 }
 
 const SOURCE_ICON: Record<string, React.ElementType> = {
@@ -68,9 +73,10 @@ const SOURCE_LABEL: Record<string, string> = {
   OTHER: "Outro",
 };
 
-export function LeadCard({ lead, onConfirmCustomer }: LeadCardProps) {
+export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent }: LeadCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: lead.id, data: { lead } });
+  const [intentMenuOpen, setIntentMenuOpen] = useState(false);
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -109,16 +115,61 @@ export function LeadCard({ lead, onConfirmCustomer }: LeadCardProps) {
       {(intent || lead.urgent || lead.contactNotPatient || lead.customer || lead.customerMatchKind === "SINGLE") && (
         <div className="mt-1.5 flex flex-wrap gap-1">
           {intent && (
-            <span
-              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
-                intent.kind === "venda"
-                  ? "bg-blue-100 text-blue-700"
-                  : "bg-amber-100 text-amber-800"
-              }`}
-              title="Sugerido pela IA"
-            >
-              <Sparkles className="h-2.5 w-2.5" />
-              {intent.label}
+            <span className="relative inline-flex">
+              <button
+                type="button"
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => {
+                  e.stopPropagation();
+                  if (onCorrectIntent) setIntentMenuOpen((v) => !v);
+                }}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                  intent.kind === "venda"
+                    ? "bg-blue-100 text-blue-700"
+                    : "bg-amber-100 text-amber-800"
+                } ${onCorrectIntent ? "cursor-pointer hover:ring-1 hover:ring-current" : ""}`}
+                title={onCorrectIntent ? "Sugerido pela IA — clique p/ corrigir" : "Sugerido pela IA"}
+              >
+                <Sparkles className="h-2.5 w-2.5" />
+                {intent.label}
+              </button>
+              {intentMenuOpen && onCorrectIntent && (
+                // Overlay invisível: clicar em qualquer lugar fora fecha o menu
+                // (o z-20 do menu supera o z-10 do overlay). stopPropagation no
+                // onPointerDown evita que o clique vire arrasto do card (dnd-kit).
+                <div
+                  className="fixed inset-0 z-10"
+                  onPointerDown={(e) => { e.stopPropagation(); setIntentMenuOpen(false); }}
+                />
+              )}
+              {intentMenuOpen && onCorrectIntent && (
+                <div
+                  onPointerDown={(e) => e.stopPropagation()}
+                  className="absolute left-0 top-full z-20 mt-1 max-h-56 w-44 overflow-y-auto rounded-md border border-border bg-popover p-1 shadow-lg"
+                >
+                  <p className="px-2 py-1 text-[9px] font-semibold uppercase text-muted-foreground">
+                    Corrigir intenção
+                  </p>
+                  {INTENT_OPTIONS.map((opt) => (
+                    <button
+                      key={opt.value}
+                      type="button"
+                      onPointerDown={(e) => e.stopPropagation()}
+                      onClick={(e) => {
+                        e.stopPropagation();
+                        setIntentMenuOpen(false);
+                        if (opt.value !== lead.intent) onCorrectIntent(lead.id, opt.value);
+                      }}
+                      className={`flex w-full items-center gap-1 rounded px-2 py-1 text-left text-[11px] hover:bg-muted ${
+                        opt.value === lead.intent ? "font-semibold text-primary" : ""
+                      }`}
+                    >
+                      {opt.value === lead.intent && "✓ "}
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              )}
             </span>
           )}
           {lead.urgent && (

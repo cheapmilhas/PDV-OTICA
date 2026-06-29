@@ -1234,6 +1234,12 @@ model Lead {
   suggestedCustomerId        String?
   customerMatchConfirmedById String?
   customerMatchConfirmedAt   DateTime?
+  // Telemetria de acurácia (Fase 3): intentPredicted guarda o palpite ORIGINAL
+  // da IA; intent vira a "verdade atual" quando o humano corrige. Acurácia =
+  // comparar os dois. intentCorrectedBy/At registra quem/quando corrigiu.
+  intentPredicted            ContactIntent?
+  intentCorrectedById        String?
+  intentCorrectedAt          DateTime?
   lastActivityAt DateTime    @default(now())
   deletedAt      DateTime?
   createdAt      DateTime    @default(now())
@@ -1250,6 +1256,7 @@ model Lead {
   @@index([companyId, stageId])
   @@index([companyId, sellerUserId])
   @@index([companyId, deletedAt])
+  @@index([companyId, intentPredicted])
 }
 
 model Sale {

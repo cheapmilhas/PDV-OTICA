@@ -3,6 +3,7 @@ import { softDelete, softDeleteFilter } from "@/lib/soft-delete";
 import { notFoundError, businessRuleError, duplicateError } from "@/lib/error-handler";
 import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
 import type { ContactIntent, CustomerMatchKind } from "@prisma/client";
+import { INTENT_VALUES } from "@/lib/contact-intent-label";
 import type {
   CreateLeadDTO,
   LeadQuery,
@@ -109,7 +110,10 @@ export async function createLead(
       quoteId: data.quoteId,
       notes: data.notes,
       // Campos da IA (quando o lead nasce da qualificação automática).
-      ...(aiFields?.intent ? { intent: aiFields.intent } : {}),
+      // intent E intentPredicted nascem iguais (o palpite original da IA); o
+      // intent pode divergir depois se o humano corrigir, mas intentPredicted
+      // preserva o que a IA disse — base da telemetria de acurácia (Fase 3).
+      ...(aiFields?.intent ? { intent: aiFields.intent, intentPredicted: aiFields.intent } : {}),
       ...(aiFields?.contactNotPatient != null ? { contactNotPatient: aiFields.contactNotPatient } : {}),
       ...(aiFields?.urgent != null ? { urgent: aiFields.urgent } : {}),
       ...(aiFields?.customerMatchKind ? { customerMatchKind: aiFields.customerMatchKind } : {}),
@@ -273,6 +277,48 @@ export async function setLeadCustomer(
       suggestedCustomerId: null, // decisão tomada — limpa o palpite
       lastActivityAt: new Date(),
     },
+  });
+}
+
+/** Allowlist do enum ContactIntent — fonte única em contact-intent-label. */
+const VALID_INTENTS: ReadonlySet<string> = new Set(INTENT_VALUES);
+
+/**
+ * Writer DEDICADO da correção HUMANA de intenção (telemetria de acurácia, Fase 3).
+ * O vendedor/gerente corrige o palpite da IA em 1 clique no card. Grava o novo
+ * `intent` (verdade atual) + quem/quando corrigiu, SEM tocar `intentPredicted`
+ * (o palpite original da IA é preservado — é a base p/ medir acurácia depois).
+ * Caminho separado do updateLead de propósito: é o evento que alimenta o placar
+ * "a IA acertou X de Y", então precisa registrar autor/timestamp de forma limpa.
+ * Multi-tenant: valida que o lead é da empresa (fecha IDOR).
+ */
+export async function correctLeadIntent(
+  id: string,
+  intent: ContactIntent,
+  companyId: string,
+  correctedByUserId: string,
+) {
+  if (!VALID_INTENTS.has(intent)) {
+    throw businessRuleError("Intenção inválida");
+  }
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+
+  return prisma.lead.update({
+    where: { id },
+    data: {
+      intent,
+      intentCorrectedById: correctedByUserId,
+      intentCorrectedAt: new Date(),
+      lastActivityAt: new Date(),
+      // intentPredicted NÃO entra aqui — preserva o palpite original da IA.
+    },
+    // select mínimo: o PATCH de intenção não precisa devolver phone/email/userId
+    // (minimização LGPD); só o que o card usa p/ refletir a correção.
+    select: { id: true, intent: true, intentPredicted: true, lastActivityAt: true },
   });
 }
 
