@@ -96,10 +96,13 @@ export function WhatsappInbox({ active }: { active: boolean }) {
     [status],
   );
 
-  // Carga inicial + recarrega ao trocar filtro.
+  // Carga inicial + recarrega ao trocar filtro. Só busca quando a aba está
+  // ativa — o componente monta junto com o funil (quando WhatsApp habilitado),
+  // mas não deve consultar o banco enquanto o usuário está na aba "Funil".
   useEffect(() => {
+    if (!active) return;
     void fetchConversations(true);
-  }, [fetchConversations]);
+  }, [active, fetchConversations]);
 
   // Polling: só quando a aba está ativa E o documento visível.
   useEffect(() => {
@@ -120,6 +123,7 @@ export function WhatsappInbox({ active }: { active: boolean }) {
   useEffect(() => {
     if (!selectedId) {
       setMessages([]);
+      setMessagesLoading(false);
       return;
     }
     const controller = new AbortController();

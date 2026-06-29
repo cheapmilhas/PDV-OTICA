@@ -19,7 +19,12 @@ const SCAN_LIMIT = 200;
 // Default 3 min. Setar 0 reproduz o comportamento antigo (sem cooldown) — usado
 // pelo cron diário, onde o atraso é irrelevante.
 const COOLDOWN_MIN = (() => {
-  const raw = Number(process.env.WHATSAPP_QUALIFY_COOLDOWN_MIN);
+  // ATENÇÃO: Number("") === 0. Uma env AUSENTE/VAZIA (a Vercel deixa Sensitive
+  // como "" ao remover) NÃO pode ser lida como 0 (que desligaria o cooldown).
+  // Só aceitamos um número quando há texto não-vazio; senão default 3 min.
+  const rawStr = process.env.WHATSAPP_QUALIFY_COOLDOWN_MIN?.trim();
+  if (!rawStr) return 3;
+  const raw = Number(rawStr);
   return Number.isFinite(raw) && raw >= 0 ? raw : 3;
 })();
 // D8: teto de chamadas Whisper SIMULTÂNEAS por conversa. Com até 80 mensagens,

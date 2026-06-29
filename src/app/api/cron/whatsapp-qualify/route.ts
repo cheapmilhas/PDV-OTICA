@@ -12,7 +12,10 @@ export async function GET(request: Request) {
     return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
   }
   try {
-    const result = await qualifyPendingConversations();
+    // Cron DIÁRIO: ignora o cooldown (cooldownMin: 0) — roda 1x/dia, qualquer
+    // conversa já estará fria, e assim varre TUDO mesmo que o cron externo de
+    // alta frequência (cron-job.org) falhe. O debounce é só para o cron externo.
+    const result = await qualifyPendingConversations(undefined, { cooldownMin: 0 });
     log.info("varredura de qualificação concluída", result);
     return NextResponse.json({ ok: true, ...result });
   } catch (error) {
