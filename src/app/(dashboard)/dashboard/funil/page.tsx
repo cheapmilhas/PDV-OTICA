@@ -21,6 +21,7 @@ import {
   ThumbsDown,
   Sparkles,
   Clock,
+  AlertTriangle,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useBranchContext } from "@/hooks/use-branch-context";
@@ -36,6 +37,7 @@ import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { ACCURACY_MIN_SAMPLE } from "@/lib/intent-accuracy";
 import { intentLabel } from "@/lib/contact-intent-label";
+import { countNeedsAttention, leadNeedsAttention } from "@/lib/lead-needs-attention";
 
 interface LeadStats {
   total: number;
@@ -90,6 +92,7 @@ function FunilPage() {
   const [search, setSearch] = useState("");
   const [sourceFilter, setSourceFilter] = useState<string>(ALL);
   const [sellerFilter, setSellerFilter] = useState<string>(ALL);
+  const [attentionOnly, setAttentionOnly] = useState(false);
 
   const branchParam = useMemo(
     () => (activeBranchId !== "ALL" ? activeBranchId : null),
@@ -169,6 +172,21 @@ function FunilPage() {
     if (!stats?.byIntent) return [];
     return Object.entries(stats.byIntent).sort((a, b) => b[1] - a[1]);
   }, [stats]);
+
+  // "Precisa de atenção" (Item 1, read-only): conta sobre TODOS os leads
+  // carregados; o board recebe a lista filtrada quando o toggle está ativo.
+  const attentionCount = useMemo(() => countNeedsAttention(leads), [leads]);
+  const visibleLeads = useMemo(
+    () => (attentionOnly ? leads.filter(leadNeedsAttention) : leads),
+    [leads, attentionOnly],
+  );
+
+  // Evita estado "preso": se o filtro está ativo mas sumiram os leads de atenção
+  // (troca de filial/refresh), o botão desapareceria deixando o board vazio sem
+  // saída — então desliga o toggle automaticamente.
+  useEffect(() => {
+    if (attentionOnly && attentionCount === 0) setAttentionOnly(false);
+  }, [attentionOnly, attentionCount]);
 
   const funilContent = (
     <>
@@ -357,6 +375,21 @@ function FunilPage() {
             ))}
           </SelectContent>
         </Select>
+
+        {/* Toggle "Precisa de atenção" (Item 1, read-only): filtra reclamação/
+            cobrança/garantia/urgente. Só aparece quando há algum. */}
+        {attentionCount > 0 && (
+          <Button
+            type="button"
+            variant={attentionOnly ? "default" : "outline"}
+            size="sm"
+            onClick={() => setAttentionOnly((v) => !v)}
+            className={attentionOnly ? "" : "border-amber-300 text-amber-800 hover:bg-amber-50"}
+          >
+            <AlertTriangle className="mr-1 h-4 w-4" />
+            Precisa de atenção ({attentionCount})
+          </Button>
+        )}
       </div>
 
       {/* Board */}
@@ -371,7 +404,7 @@ function FunilPage() {
           </CardContent>
         </Card>
       ) : (
-        <FunilBoard stages={stages} leads={leads} onRefresh={handleRefresh} />
+        <FunilBoard stages={stages} leads={visibleLeads} onRefresh={handleRefresh} />
       )}
     </>
   );
