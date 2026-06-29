@@ -6,6 +6,7 @@ import Link from "next/link";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { groupByCustomer } from "@/lib/group-prescriptions-by-customer";
+import { formatGrau } from "@/lib/format-grau";
 import type { PrescriptionListItem } from "./prescription-list";
 
 /**
@@ -31,8 +32,8 @@ function grauResumo(values: Record<string, unknown> | null | undefined): string 
   const od = values.odSph;
   const oe = values.oeSph;
   const parts: string[] = [];
-  if (od !== undefined && od !== null && od !== "") parts.push(`OD ${String(od)}`);
-  if (oe !== undefined && oe !== null && oe !== "") parts.push(`OE ${String(oe)}`);
+  if (od !== undefined && od !== null && od !== "") parts.push(`OD ${formatGrau(od as string | number | null | undefined, "dioptria")}`);
+  if (oe !== undefined && oe !== null && oe !== "") parts.push(`OE ${formatGrau(oe as string | number | null | undefined, "dioptria")}`);
   return parts.join(" · ");
 }
 

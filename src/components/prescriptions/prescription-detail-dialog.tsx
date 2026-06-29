@@ -10,6 +10,7 @@ import {
 import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
+import { formatGrau, type GrauTipo } from "@/lib/format-grau";
 import type { PrescriptionListItem } from "./prescription-list";
 
 /**
@@ -36,18 +37,13 @@ function fmtDate(d: string | Date | undefined): string {
   return Number.isNaN(date.getTime()) ? "—" : date.toLocaleDateString("pt-BR");
 }
 
-function val(v: unknown): string {
-  if (v === null || v === undefined || v === "") return "—";
-  return String(v);
-}
-
-const EYE_COLS: Array<{ keys: [string, string]; label: string }> = [
-  { keys: ["odSph", "oeSph"], label: "Esférico" },
-  { keys: ["odCyl", "oeCyl"], label: "Cilíndrico" },
-  { keys: ["odAxis", "oeAxis"], label: "Eixo" },
-  { keys: ["pdFar", "pdNear"], label: "DNP" },
-  { keys: ["fittingHeightOd", "fittingHeightOe"], label: "Altura" },
-  { keys: ["odAdd", "oeAdd"], label: "Adição" },
+const EYE_COLS: Array<{ keys: [string, string]; label: string; tipo: GrauTipo }> = [
+  { keys: ["odSph", "oeSph"], label: "Esférico", tipo: "dioptria" },
+  { keys: ["odCyl", "oeCyl"], label: "Cilíndrico", tipo: "dioptria" },
+  { keys: ["odAxis", "oeAxis"], label: "Eixo", tipo: "eixo" },
+  { keys: ["pdFar", "pdNear"], label: "DNP", tipo: "medida" },
+  { keys: ["fittingHeightOd", "fittingHeightOe"], label: "Altura", tipo: "medida" },
+  { keys: ["odAdd", "oeAdd"], label: "Adição", tipo: "dioptria" },
 ];
 
 export function PrescriptionDetailDialog({ prescription, open, onClose, canEdit, onEdit }: Props) {
@@ -112,7 +108,7 @@ export function PrescriptionDetailDialog({ prescription, open, onClose, canEdit,
                   </td>
                   {EYE_COLS.map((c) => (
                     <td key={c.label} className="border p-1.5 text-center">
-                      {val(v[c.keys[i]])}
+                      {formatGrau(v[c.keys[i]] as string | number | null | undefined, c.tipo)}
                     </td>
                   ))}
                 </tr>

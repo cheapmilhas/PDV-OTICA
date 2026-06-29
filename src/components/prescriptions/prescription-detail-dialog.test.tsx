@@ -30,6 +30,14 @@ describe("PrescriptionDetailDialog", () => {
     expect(screen.getByText(/-2[.,]00/)).toBeTruthy();
   });
 
+  it("formata grau dioptria com 2 casas e vírgula (-1 → -1,00)", () => {
+    const rxFmt = { ...rx, values: { odSph: -1, oeSph: "0.75", odAxis: 90 } };
+    render(<PrescriptionDetailDialog prescription={rxFmt} open onClose={() => {}} />);
+    expect(screen.getByText("-1,00")).toBeTruthy();   // esférico OD
+    expect(screen.getByText("+0,75")).toBeTruthy();   // esférico OE ganha +
+    expect(screen.getByText("90")).toBeTruthy();      // eixo inteiro, sem casas
+  });
+
   it("mostra botão Editar quando canEdit e dispara onEdit", () => {
     const onEdit = vi.fn();
     render(
