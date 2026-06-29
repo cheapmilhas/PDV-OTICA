@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
+import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { assertAiAllowed } from "@/lib/ai-guard";
 import { prisma } from "@/lib/prisma";
 import { qualifyConversation } from "@/services/conversation-qualifier.service";
@@ -7,6 +7,7 @@ import { handleApiError, notFoundError, forbiddenError } from "@/lib/error-handl
 
 export async function POST(_request: Request, ctx: { params: Promise<{ id: string }> }) {
   try {
+    await requireAuth();
     await requirePermission("leads.create");
     const companyId = await getCompanyId();
     const { id } = await ctx.params;

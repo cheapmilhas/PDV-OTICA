@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 const getCompanyIdMock = vi.fn();
 const requirePermissionMock = vi.fn();
-vi.mock("@/lib/auth-helpers", () => ({ getCompanyId: (...a: unknown[]) => getCompanyIdMock(...a), requirePermission: (...a: unknown[]) => requirePermissionMock(...a) }));
+const requireAuthMock = vi.fn();
+vi.mock("@/lib/auth-helpers", () => ({ requireAuth: (...a: unknown[]) => requireAuthMock(...a), getCompanyId: (...a: unknown[]) => getCompanyIdMock(...a), requirePermission: (...a: unknown[]) => requirePermissionMock(...a) }));
 const assertAiAllowedMock = vi.fn();
 vi.mock("@/lib/ai-guard", () => ({ assertAiAllowed: (...a: unknown[]) => assertAiAllowedMock(...a) }));
 const qualifyMock = vi.fn();
@@ -15,6 +16,7 @@ const req = () => new Request("https://x", { method: "POST" });
 
 beforeEach(() => {
   vi.clearAllMocks();
+  requireAuthMock.mockResolvedValue({ user: { id: "u1" } });
   getCompanyIdMock.mockResolvedValue("co1");
   assertAiAllowedMock.mockResolvedValue(undefined);
   // default: IA disponível e ligada (checagem fail-closed própria da rota)

@@ -274,4 +274,19 @@ describe("qualifyPendingConversations (R4 fail-closed por empresa)", () => {
     expect(arg.orderBy).toEqual({ lastMessageAt: "asc" });
     expect(arg.take).toBeGreaterThan(0);
   });
+
+  it("cooldownMin > 0 → filtra lastMessageAt.lt (esfriar a conversa)", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([]);
+    await qualifyPendingConversations("co1", { cooldownMin: 4 });
+    const arg = (prisma.whatsappConversation.findMany as any).mock.calls[0][0];
+    expect(arg.where.lastMessageAt).toBeDefined();
+    expect(arg.where.lastMessageAt.lt).toBeInstanceOf(Date);
+  });
+
+  it("cooldownMin = 0 → NÃO filtra lastMessageAt (não-regressão do cron diário)", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([]);
+    await qualifyPendingConversations("co1", { cooldownMin: 0 });
+    const arg = (prisma.whatsappConversation.findMany as any).mock.calls[0][0];
+    expect(arg.where.lastMessageAt).toBeUndefined();
+  });
 });

@@ -29,6 +29,9 @@ import {
   type Seller,
 } from "@/components/funil/novo-lead-modal";
 import { Can } from "@/components/permissions/can";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
+import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 
 interface LeadStats {
   total: number;
@@ -55,6 +58,8 @@ const ALL = "__all__";
 
 function FunilPage() {
   const { activeBranchId } = useBranchContext();
+  const { enabled: whatsappEnabled } = useWhatsappEnabled();
+  const [activeTab, setActiveTab] = useState("funil");
 
   const [stages, setStages] = useState<LeadStage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -142,24 +147,8 @@ function FunilPage() {
     return Object.entries(stats.bySource).sort((a, b) => b[1] - a[1]);
   }, [stats]);
 
-  return (
-    <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-wrap items-center justify-between gap-3">
-        <div>
-          <h1 className="text-2xl font-bold md:text-3xl">Funil de Leads</h1>
-          <p className="hidden text-sm text-muted-foreground sm:block">
-            Acompanhe seus interessados do primeiro contato até a venda
-          </p>
-        </div>
-        <Can permission="leads.create">
-          <Button onClick={() => setShowNewLead(true)}>
-            <Plus className="mr-2 h-4 w-4" />
-            Novo Lead
-          </Button>
-        </Can>
-      </div>
-
+  const funilContent = (
+    <>
       {/* Métricas */}
       <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
         <Card>
@@ -280,6 +269,43 @@ function FunilPage() {
         </Card>
       ) : (
         <FunilBoard stages={stages} leads={leads} onRefresh={handleRefresh} />
+      )}
+    </>
+  );
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h1 className="text-2xl font-bold md:text-3xl">Funil de Leads</h1>
+          <p className="hidden text-sm text-muted-foreground sm:block">
+            Acompanhe seus interessados do primeiro contato até a venda
+          </p>
+        </div>
+        <Can permission="leads.create">
+          <Button onClick={() => setShowNewLead(true)}>
+            <Plus className="mr-2 h-4 w-4" />
+            Novo Lead
+          </Button>
+        </Can>
+      </div>
+
+      {whatsappEnabled ? (
+        <Tabs value={activeTab} onValueChange={setActiveTab}>
+          <TabsList>
+            <TabsTrigger value="funil">Funil</TabsTrigger>
+            <TabsTrigger value="conversas">Conversas</TabsTrigger>
+          </TabsList>
+          <TabsContent value="funil" className="mt-4 space-y-6">
+            {funilContent}
+          </TabsContent>
+          <TabsContent value="conversas" className="mt-4">
+            <WhatsappInbox active={activeTab === "conversas"} />
+          </TabsContent>
+        </Tabs>
+      ) : (
+        funilContent
       )}
 
       <NovoLeadModal
