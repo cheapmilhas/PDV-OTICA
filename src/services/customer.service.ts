@@ -12,7 +12,23 @@ import { endOfLocalDay } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import { recordConsent, type ConsentScope } from "@/lib/lgpd";
 import { logger } from "@/lib/logger";
+import { phoneMatchKey } from "@/lib/lead-phone-match";
 import type { Customer } from "@prisma/client";
+
+/**
+ * Deriva as chaves canônicas de telefone p/ o match com leads do WhatsApp.
+ * Só inclui a chave quando o campo de telefone correspondente veio no payload
+ * (undefined = Prisma ignora, preserva o valor atual no update).
+ */
+function derivePhoneKeys(data: { phone?: string | null; phone2?: string | null }): {
+  phoneNormalized?: string | null;
+  phone2Normalized?: string | null;
+} {
+  const out: { phoneNormalized?: string | null; phone2Normalized?: string | null } = {};
+  if (data.phone !== undefined) out.phoneNormalized = phoneMatchKey(data.phone);
+  if (data.phone2 !== undefined) out.phone2Normalized = phoneMatchKey(data.phone2);
+  return out;
+}
 
 const customerLog = logger.child({ service: "customer" });
 
@@ -292,6 +308,7 @@ export class CustomerService {
       customer = await prisma.customer.create({
         data: {
           ...customerFields,
+          ...derivePhoneKeys(customerFields),
           companyId,
           ...(originBranchId && { originBranchId }),
         },
@@ -389,6 +406,7 @@ export class CustomerService {
         where: { id },
         data: {
           ...rest,
+          ...derivePhoneKeys(rest),
           ...(emailProvided && { email: normalizedEmail }),
         },
       });
