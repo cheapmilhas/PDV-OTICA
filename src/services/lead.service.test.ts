@@ -225,11 +225,12 @@ describe("moveLead", () => {
 });
 
 describe("getLeadStats", () => {
+  const NOW = new Date();
   it("calcula conversão = ganhos / total e agrega lostReason e source", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
-      { stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
-      { stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço", intent: null, intentPredicted: null },
-      { stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "a", lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "b", lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço", intent: null, intentPredicted: null },
+      { id: "c", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
     ]);
     const s = await getLeadStats("co_1", null);
     expect(s.total).toBe(3);
@@ -241,14 +242,29 @@ describe("getLeadStats", () => {
 
   it("inclui acurácia da IA (pares predito×atual; ignora leads sem palpite)", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
-      { stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "NOVA_COMPRA", intent: "NOVA_COMPRA" }, // acerto
-      { stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "RENOVACAO", intent: "RECLAMACAO" },  // erro
-      { stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: null, intent: null },                 // fora da amostra
+      { id: "a", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "NOVA_COMPRA", intent: "NOVA_COMPRA" }, // acerto
+      { id: "b", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "RENOVACAO", intent: "RECLAMACAO" },  // erro
+      { id: "c", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: null, intent: null },                 // fora da amostra
     ]);
     const s = await getLeadStats("co_1", null);
     expect(s.aiAccuracy.total).toBe(2);
     expect(s.aiAccuracy.correct).toBe(1);
     expect(s.aiAccuracy.rate).toBeCloseTo(0.5);
+  });
+
+  it("inclui volume por intenção (byIntent) e SLA dos leads abertos", async () => {
+    const old = new Date(Date.now() - 48 * 3600_000); // 48h parado = atrasado
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { id: "a", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+      { id: "b", lastActivityAt: old, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+      { id: "c", lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: null, lostReason: null, intent: "RENOVACAO", intentPredicted: null },
+    ]);
+    const s = await getLeadStats("co_1", null);
+    expect(s.byIntent["NOVA_COMPRA"]).toBe(2);  // 'a' e 'b' abertos
+    expect(s.byIntent["RENOVACAO"]).toBeUndefined(); // 'c' ganho → fora do volume vivo
+    expect(s.sla.totalOpen).toBe(2);   // 'c' está ganho → fora
+    expect(s.sla.late).toBe(1);        // 'b' parado 48h
+    expect(s.sla.lateLeads[0].id).toBe("b");
   });
 });
 

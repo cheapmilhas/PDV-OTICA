@@ -5,6 +5,7 @@ import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
 import type { ContactIntent, CustomerMatchKind } from "@prisma/client";
 import { INTENT_VALUES } from "@/lib/contact-intent-label";
 import { computeIntentAccuracy } from "@/lib/intent-accuracy";
+import { computeLeadSla } from "@/lib/lead-sla";
 import type {
   CreateLeadDTO,
   LeadQuery,
@@ -343,9 +344,11 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
   const leads = await prisma.lead.findMany({
     where,
     select: {
+      id: true,
       source: true,
       lostReason: true,
-      // Telemetria de acurácia da IA (Fase 3): par palpite-original × atual.
+      lastActivityAt: true,
+      // Telemetria de acurácia (par palpite×atual) + volume por intenção (Fase 3).
       intent: true,
       intentPredicted: true,
       stage: { select: { isWon: true, isLost: true } },
@@ -355,12 +358,28 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
   const won = leads.filter((l) => l.stage.isWon).length;
   const byLostReason: Record<string, number> = {};
   const bySource: Record<string, number> = {};
+  const byIntent: Record<string, number> = {};
   for (const l of leads) {
     if (l.stage.isLost && l.lostReason) {
       byLostReason[l.lostReason] = (byLostReason[l.lostReason] ?? 0) + 1;
     }
     if (l.source) bySource[l.source] = (bySource[l.source] ?? 0) + 1;
+    // Volume por intenção = demanda VIVA (só leads abertos): um lead ganho/perdido
+    // de meses atrás não representa o que os contatos pedem AGORA.
+    if (l.intent && !l.stage.isWon && !l.stage.isLost) {
+      byIntent[l.intent] = (byIntent[l.intent] ?? 0) + 1;
+    }
   }
   const aiAccuracy = computeIntentAccuracy(leads);
-  return { total, won, conversionRate: total ? won / total : 0, byLostReason, bySource, aiAccuracy };
+  const sla = computeLeadSla(leads, new Date());
+  return {
+    total,
+    won,
+    conversionRate: total ? won / total : 0,
+    byLostReason,
+    bySource,
+    byIntent,
+    aiAccuracy,
+    sla,
+  };
 }

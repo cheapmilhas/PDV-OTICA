@@ -20,6 +20,7 @@ import {
   Trophy,
   ThumbsDown,
   Sparkles,
+  Clock,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useBranchContext } from "@/hooks/use-branch-context";
@@ -34,6 +35,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { ACCURACY_MIN_SAMPLE } from "@/lib/intent-accuracy";
+import { intentLabel } from "@/lib/contact-intent-label";
 
 interface LeadStats {
   total: number;
@@ -46,6 +48,14 @@ interface LeadStats {
     correct: number;
     rate: number;
     hasEnoughSample: boolean;
+  };
+  byIntent?: Record<string, number>;
+  sla?: {
+    totalOpen: number;
+    onTime: number;
+    warning: number;
+    late: number;
+    lateLeads: { id: string; hoursWaiting: number }[];
   };
 }
 
@@ -155,8 +165,43 @@ function FunilPage() {
     return Object.entries(stats.bySource).sort((a, b) => b[1] - a[1]);
   }, [stats]);
 
+  const intentVolume = useMemo(() => {
+    if (!stats?.byIntent) return [];
+    return Object.entries(stats.byIntent).sort((a, b) => b[1] - a[1]);
+  }, [stats]);
+
   const funilContent = (
     <>
+      {/* SLA — a dor nº1: leads aguardando resposta. Só aparece se há atraso/atenção. */}
+      {stats?.sla && (stats.sla.late > 0 || stats.sla.warning > 0) && (
+        <div
+          className={`flex items-center gap-3 rounded-lg border p-3 text-sm ${
+            stats.sla.late > 0
+              ? "border-red-200 bg-red-50 text-red-800"
+              : "border-amber-200 bg-amber-50 text-amber-800"
+          }`}
+        >
+          <Clock className="h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {stats.sla.late > 0
+                ? `${stats.sla.late} lead${stats.sla.late > 1 ? "s" : ""} sem resposta há mais de 1 dia`
+                : `${stats.sla.warning} lead${stats.sla.warning > 1 ? "s" : ""} aguardando resposta`}
+            </p>
+            <p className="text-xs opacity-80">
+              {[
+                stats.sla.onTime > 0 ? `${stats.sla.onTime} no prazo` : null,
+                stats.sla.warning > 0 ? `${stats.sla.warning} em atenção` : null,
+                stats.sla.late > 0 ? `${stats.sla.late} atrasado${stats.sla.late > 1 ? "s" : ""}` : null,
+              ]
+                .filter(Boolean)
+                .join(" · ")}{" "}
+              — de {stats.sla.totalOpen} em aberto
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Métricas */}
       <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -252,6 +297,28 @@ function FunilPage() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Volume por intenção (4c): o que os contatos mais pedem. Só com dados. */}
+      {intentVolume.length > 0 && (
+        <div className="flex flex-wrap items-center gap-1.5">
+          <span className="text-xs font-medium text-muted-foreground">O que pedem:</span>
+          {intentVolume.map(([intent, count]) => {
+            const lbl = intentLabel(intent);
+            if (!lbl) return null;
+            return (
+              <span
+                key={intent}
+                className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-xs ${
+                  lbl.kind === "venda" ? "bg-blue-50 text-blue-700" : "bg-amber-50 text-amber-800"
+                }`}
+              >
+                {lbl.label}
+                <span className="font-semibold">{count}</span>
+              </span>
+            );
+          })}
+        </div>
+      )}
 
       {/* Filtros */}
       <div className="flex flex-wrap items-center gap-2">
