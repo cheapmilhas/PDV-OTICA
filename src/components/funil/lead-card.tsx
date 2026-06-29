@@ -12,9 +12,13 @@ import {
   User as UserIcon,
   Clock,
   Tag,
+  Sparkles,
+  AlertTriangle,
+  UserCheck,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { differenceInCalendarDays } from "date-fns";
+import { intentLabel } from "@/lib/contact-intent-label";
 
 /** Estrutura do lead consumida do GET /api/leads (envelope `.data`). */
 export interface Lead {
@@ -31,6 +35,12 @@ export interface Lead {
   lastActivityAt: string;
   updatedAt: string;
   seller?: { id: string; name: string } | null;
+  // IA contexto cliente (Fase 1/2)
+  intent?: string | null;
+  urgent?: boolean | null;
+  contactNotPatient?: boolean | null;
+  customerMatchKind?: string | null;
+  customer?: { id: string; name: string } | null;
 }
 
 const SOURCE_ICON: Record<string, React.ElementType> = {
@@ -69,6 +79,8 @@ export function LeadCard({ lead }: LeadCardProps) {
     new Date(),
     new Date(lead.lastActivityAt)
   );
+  // intentLabel já é defensivo (fallback p/ desconhecido, null p/ ausente).
+  const intent = intentLabel(lead.intent);
 
   return (
     <div
@@ -89,6 +101,47 @@ export function LeadCard({ lead }: LeadCardProps) {
           </span>
         )}
       </div>
+
+      {/* Badges da IA: intenção + urgente + contato≠paciente + cliente reconhecido */}
+      {(intent || lead.urgent || lead.contactNotPatient || lead.customer || lead.customerMatchKind === "SINGLE") && (
+        <div className="mt-1.5 flex flex-wrap gap-1">
+          {intent && (
+            <span
+              className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium ${
+                intent.kind === "venda"
+                  ? "bg-blue-100 text-blue-700"
+                  : "bg-amber-100 text-amber-800"
+              }`}
+              title="Sugerido pela IA"
+            >
+              <Sparkles className="h-2.5 w-2.5" />
+              {intent.label}
+            </span>
+          )}
+          {lead.urgent && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">
+              <AlertTriangle className="h-2.5 w-2.5" />
+              Urgente
+            </span>
+          )}
+          {lead.customer ? (
+            <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700" title={`Vinculado a ${lead.customer.name}`}>
+              <UserCheck className="h-2.5 w-2.5" />
+              Cliente
+            </span>
+          ) : lead.customerMatchKind === "SINGLE" ? (
+            <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-green-400 px-2 py-0.5 text-[10px] font-medium text-green-700" title="A IA encontrou um cliente parecido — confirme na ficha">
+              <UserCheck className="h-2.5 w-2.5" />
+              Cliente? confirmar
+            </span>
+          ) : null}
+          {lead.contactNotPatient && (
+            <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 text-[10px] font-medium text-purple-700" title="O contato fala em nome de outra pessoa">
+              fala por outro
+            </span>
+          )}
+        </div>
+      )}
 
       {lead.interest && (
         <p className="mt-1 flex items-start gap-1 text-xs text-muted-foreground">
