@@ -153,6 +153,24 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
     }
   }
 
+  async function handleConfirmCustomer(leadId: string, customerId: string | null) {
+    try {
+      const res = await fetch(`/api/leads/${leadId}/customer`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ customerId }),
+      });
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error?.message || "Erro ao vincular cliente");
+      }
+      toast.success(customerId ? "Cliente vinculado!" : "Sugestão dispensada.");
+      onRefresh();
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao vincular cliente");
+    }
+  }
+
   async function handleWon(lead: Lead) {
     try {
       const res = await fetch(`/api/leads/${lead.id}/convert`, {
@@ -220,7 +238,7 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
                 totalValue={totalValue}
               >
                 {shown.map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} />
+                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} />
                 ))}
 
                 {stageLeads.length === 0 && (

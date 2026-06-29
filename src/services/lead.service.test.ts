@@ -44,6 +44,18 @@ describe("setLeadCustomer — writer dedicado de vínculo", () => {
     expect((prisma.lead.update as any).mock.calls[0][0].data.customerId).toBeNull();
   });
 
+  it("confirmar registra quem/quando e LIMPA a sugestão", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.customer.findFirst as any).mockResolvedValue({ id: "cust1" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    await setLeadCustomer("l1", "cust1", "co_1", "user_99");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.customerId).toBe("cust1");
+    expect(data.customerMatchConfirmedById).toBe("user_99");
+    expect(data.customerMatchConfirmedAt).toBeInstanceOf(Date);
+    expect(data.suggestedCustomerId).toBeNull(); // decisão tomada, palpite some
+  });
+
   it("lead de outra empresa → 404, não grava", async () => {
     (prisma.lead.findFirst as any).mockResolvedValue(null);
     await expect(setLeadCustomer("l_outra", "cust1", "co_1")).rejects.toThrow(/lead/i);

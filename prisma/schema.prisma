@@ -461,6 +461,7 @@ model Customer {
   consentRecords     ConsentRecord[]
   accessLogs         CustomerAccessLog[]
   leads              Lead[]                 @relation("LeadCustomer")
+  leadsSuggested     Lead[]                 @relation("LeadSuggestedCustomer")
 
   @@unique([companyId, cpf])
   // cnpj: único POR EMPRESA via índice PARCIAL (WHERE cnpj IS NOT NULL) criado na
@@ -1227,6 +1228,10 @@ model Lead {
   contactNotPatient          Boolean           @default(false)
   urgent                     Boolean           @default(false)
   customerMatchKind          CustomerMatchKind @default(NONE)
+  // Cliente SUGERIDO pela IA (match único, ainda não confirmado). O vendedor
+  // confirma ("É o João ✓") promovendo-o a customerId, ou recusa. SetNull p/
+  // não prender exclusão de cliente. NUNCA é o vínculo efetivo — esse é customerId.
+  suggestedCustomerId        String?
   customerMatchConfirmedById String?
   customerMatchConfirmedAt   DateTime?
   lastActivityAt DateTime    @default(now())
@@ -1239,6 +1244,7 @@ model Lead {
   stage    LeadStage @relation(fields: [stageId], references: [id])
   seller   User?     @relation("LeadSeller", fields: [sellerUserId], references: [id])
   customer Customer? @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  suggestedCustomer Customer? @relation("LeadSuggestedCustomer", fields: [suggestedCustomerId], references: [id], onDelete: SetNull)
   quote    Quote?    @relation("LeadQuote", fields: [quoteId], references: [id], onDelete: SetNull)
 
   @@index([companyId, stageId])

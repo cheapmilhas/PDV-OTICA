@@ -41,6 +41,13 @@ export interface Lead {
   contactNotPatient?: boolean | null;
   customerMatchKind?: string | null;
   customer?: { id: string; name: string } | null;
+  suggestedCustomer?: { id: string; name: string } | null;
+}
+
+interface LeadCardProps {
+  lead: Lead;
+  /** Confirma/recusa o vínculo de cliente sugerido (chama PATCH + refresh). */
+  onConfirmCustomer?: (leadId: string, customerId: string | null) => void;
 }
 
 const SOURCE_ICON: Record<string, React.ElementType> = {
@@ -61,11 +68,7 @@ const SOURCE_LABEL: Record<string, string> = {
   OTHER: "Outro",
 };
 
-interface LeadCardProps {
-  lead: Lead;
-}
-
-export function LeadCard({ lead }: LeadCardProps) {
+export function LeadCard({ lead, onConfirmCustomer }: LeadCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: lead.id, data: { lead } });
 
@@ -127,12 +130,27 @@ export function LeadCard({ lead }: LeadCardProps) {
           {lead.customer ? (
             <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2 py-0.5 text-[10px] font-medium text-green-700" title={`Vinculado a ${lead.customer.name}`}>
               <UserCheck className="h-2.5 w-2.5" />
-              Cliente
+              {lead.customer.name}
             </span>
-          ) : lead.customerMatchKind === "SINGLE" ? (
-            <span className="inline-flex items-center gap-1 rounded-full border border-dashed border-green-400 px-2 py-0.5 text-[10px] font-medium text-green-700" title="A IA encontrou um cliente parecido — confirme na ficha">
-              <UserCheck className="h-2.5 w-2.5" />
-              Cliente? confirmar
+          ) : lead.suggestedCustomer && onConfirmCustomer ? (
+            // Botões de 1 clique: o cancelamento do drag é o stopPropagation no
+            // onPointerDown (o card é draggable; sem isso o clique vira arrasto).
+            <span className="inline-flex items-center gap-1 text-[10px]">
+              <span className="text-green-700">É {lead.suggestedCustomer.name}?</span>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onConfirmCustomer(lead.id, lead.suggestedCustomer!.id); }}
+                className="rounded-full bg-green-600 px-2 py-0.5 font-medium text-white hover:bg-green-700"
+              >
+                Sim ✓
+              </button>
+              <button
+                onPointerDown={(e) => e.stopPropagation()}
+                onClick={(e) => { e.stopPropagation(); onConfirmCustomer(lead.id, null); }}
+                className="rounded-full border border-border px-2 py-0.5 font-medium text-muted-foreground hover:bg-muted"
+              >
+                Não
+              </button>
             </span>
           ) : null}
           {lead.contactNotPatient && (

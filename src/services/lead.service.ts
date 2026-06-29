@@ -14,6 +14,7 @@ const LEAD_INCLUDE = {
   stage: true,
   seller: { select: { id: true, name: true } },
   customer: { select: { id: true, name: true } },
+  suggestedCustomer: { select: { id: true, name: true } },
   quote: { select: { id: true, total: true, status: true } },
 } as const;
 
@@ -51,6 +52,8 @@ export interface LeadAiFields {
   contactNotPatient?: boolean;
   urgent?: boolean;
   customerMatchKind?: CustomerMatchKind;
+  /** Cliente sugerido pela IA (match único, a confirmar). */
+  suggestedCustomerId?: string | null;
 }
 
 export async function createLead(
@@ -110,6 +113,7 @@ export async function createLead(
       ...(aiFields?.contactNotPatient != null ? { contactNotPatient: aiFields.contactNotPatient } : {}),
       ...(aiFields?.urgent != null ? { urgent: aiFields.urgent } : {}),
       ...(aiFields?.customerMatchKind ? { customerMatchKind: aiFields.customerMatchKind } : {}),
+      ...(aiFields?.suggestedCustomerId ? { suggestedCustomerId: aiFields.suggestedCustomerId } : {}),
     },
   });
 
@@ -241,6 +245,7 @@ export async function setLeadCustomer(
   id: string,
   customerId: string | null,
   companyId: string,
+  confirmedByUserId?: string | null,
 ) {
   const lead = await prisma.lead.findFirst({
     where: { id, companyId, deletedAt: null },
@@ -256,9 +261,18 @@ export async function setLeadCustomer(
     if (!customer) throw notFoundError("Cliente inválido");
   }
 
+  // Registra a CONFIRMAÇÃO humana e limpa a sugestão (a decisão do vendedor
+  // substitui o palpite da IA). Confirmar → marca quem/quando; desvincular
+  // (customerId=null) → limpa o vínculo mas mantém o registro de que foi humano.
   return prisma.lead.update({
     where: { id },
-    data: { customerId, lastActivityAt: new Date() },
+    data: {
+      customerId,
+      customerMatchConfirmedById: confirmedByUserId ?? null,
+      customerMatchConfirmedAt: new Date(),
+      suggestedCustomerId: null, // decisão tomada — limpa o palpite
+      lastActivityAt: new Date(),
+    },
   });
 }
 

@@ -20,12 +20,12 @@ export async function PATCH(
   { params }: { params: Promise<{ id: string }> },
 ) {
   try {
-    await requireAuth();
+    const session = await requireAuth();
     await requirePermission("leads.edit");
     const companyId = await getCompanyId();
     const { id } = await params;
     const { customerId } = bodySchema.parse(await request.json());
-    const lead = await setLeadCustomer(id, customerId, companyId);
+    const lead = await setLeadCustomer(id, customerId, companyId, session.user.id);
     return successResponse(lead);
   } catch (error) {
     return handleApiError(error);

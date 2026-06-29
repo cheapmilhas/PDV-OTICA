@@ -199,6 +199,8 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       contactNotPatient: result.contactNotPatient,
       urgent: result.urgent,
       customerMatchKind: matchKind,
+      // Guarda o candidato (match único) p/ o vendedor confirmar com 1 clique.
+      suggestedCustomerId: match.kind === "single" ? match.customerId : null,
     },
   );
   await finalize(lead.id);
