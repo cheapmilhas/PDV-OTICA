@@ -24,6 +24,9 @@ export function phoneMatchKey(phone: string | null | undefined): string | null {
   if (!phone) return null;
   let digits = phone.replace(/\D/g, "");
   if (!digits) return null;
+  // Linhas de serviço (0800/0300 etc.) nunca são telefone pessoal de cliente —
+  // não devem virar chave de match (DDD não começa com 0 no Brasil).
+  if (digits.startsWith("0")) return null;
 
   // Remove DDI 55 (Brasil) quando o tamanho indica que ele está presente.
   if (digits.startsWith("55") && (digits.length === 12 || digits.length === 13)) {

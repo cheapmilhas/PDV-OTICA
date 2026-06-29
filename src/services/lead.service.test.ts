@@ -94,6 +94,24 @@ describe("updateLead — IDOR cross-tenant (Fase 0b)", () => {
     expect(prisma.lead.update).not.toHaveBeenCalled();
   });
 
+  it("rejeita quoteId de outra empresa", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.quote.findFirst as any).mockResolvedValue(null);
+    await expect(
+      updateLead("l1", { quoteId: "q_de_outra" } as any, "co_1")
+    ).rejects.toThrow(/orçamento/i);
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
+  it("rejeita sellerUserId de outra empresa", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.user.findFirst as any).mockResolvedValue(null);
+    await expect(
+      updateLead("l1", { sellerUserId: "u_de_outra" } as any, "co_1")
+    ).rejects.toThrow(/vendedor/i);
+    expect(prisma.lead.update).not.toHaveBeenCalled();
+  });
+
   it("NÃO espalha campos inesperados — só allowlist chega ao update", async () => {
     (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
     (prisma.lead.update as any).mockResolvedValue({ id: "l1" });

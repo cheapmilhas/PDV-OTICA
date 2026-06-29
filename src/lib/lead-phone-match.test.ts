@@ -31,6 +31,11 @@ describe("phoneMatchKey — chave canônica DDD+8díg", () => {
     expect(phoneMatchKey("")).toBeNull();
     expect(phoneMatchKey("abc")).toBeNull();
   });
+
+  it("linha de serviço 0800/0300 → null (não é telefone de cliente)", () => {
+    expect(phoneMatchKey("08001234567")).toBeNull();
+    expect(phoneMatchKey("0300 123 4567")).toBeNull();
+  });
 });
 
 describe("phoneMatches — comparação por chave canônica", () => {

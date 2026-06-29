@@ -50,22 +50,17 @@ export async function createLead(
   userId: string,
   branchId: string | null
 ) {
-  // Fecha IDOR cross-tenant: customerId/quoteId/sellerUserId precisam ser da
-  // mesma empresa (stageId é validado logo abaixo no fluxo de resolução da etapa).
+  // Fecha IDOR cross-tenant: TODOS os 4 FKs (incl. stageId quando fornecido)
+  // passam pela MESMA validação por empresa — sem caminho duplicado (evita que
+  // um refator silencie a checagem de stageId).
   await assertLeadFksOwnedByCompany(
-    { customerId: data.customerId, quoteId: data.quoteId, sellerUserId: data.sellerUserId },
+    { customerId: data.customerId, quoteId: data.quoteId, sellerUserId: data.sellerUserId, stageId: data.stageId },
     companyId,
   );
 
-  // Resolve a etapa: usa a fornecida (validada por empresa) ou a 1ª (menor order)
+  // Resolve a etapa: usa a fornecida (já validada acima) ou a 1ª (menor order).
   let stageId = data.stageId;
-  if (stageId) {
-    const stage = await prisma.leadStage.findFirst({
-      where: { id: stageId, companyId },
-      select: { id: true },
-    });
-    if (!stage) throw notFoundError("Etapa inválida");
-  } else {
+  if (!stageId) {
     const first = await prisma.leadStage.findFirst({
       where: { companyId },
       orderBy: { order: "asc" },
