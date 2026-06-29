@@ -8,6 +8,7 @@ import { getOrCreateAiSellerUser } from "@/services/ai-seller-user.service";
 import { transcribeAudio } from "@/services/audio-transcription.service";
 import { instanceNameForCompany } from "@/lib/whatsapp-instance";
 import { getAiConfig } from "@/services/ai-config.service";
+import { matchCustomerByPhone } from "@/services/lead-customer-match.service";
 
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
@@ -160,7 +161,18 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   // config global de IA. Usado tanto na chamada quanto no logAiUsage (p/ o custo
   // ser calculado com a tabela de preço do modelo realmente usado).
   const cfg = await getAiConfig();
-  const result = await qualifyConversationText(text, stages.map((s) => ({ id: s.id, name: s.name })), cfg.qualifierModel);
+  // Reconhecimento de cliente (Fase 1): casa o telefone do contato com um
+  // Customer da MESMA empresa e passa um resumo SEGURO (só agregados) à IA p/
+  // classificar melhor (renovação vs nova compra etc.). Match único = sugestão
+  // revisável; o vínculo customerId só grava após confirmação humana (writer
+  // dedicado), NÃO aqui — aqui o resumo é só dica de classificação.
+  const match = await matchCustomerByPhone(conv.companyId, conv.contactNumber);
+  const result = await qualifyConversationText(
+    text,
+    stages.map((s) => ({ id: s.id, name: s.name })),
+    cfg.qualifierModel,
+    match.kind === "single" ? match.summary : null,
+  );
 
   await logAiUsage({
     companyId: conv.companyId, feature: "lead_qualification", provider: "anthropic", model: cfg.qualifierModel,

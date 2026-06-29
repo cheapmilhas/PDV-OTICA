@@ -22,6 +22,8 @@ vi.mock("@/services/audio-transcription.service", () => ({ transcribeAudio: (...
 vi.mock("@/lib/whatsapp-instance", () => ({ instanceNameForCompany: (companyId: string) => `inst_${companyId}` }));
 const getAiConfigMock = vi.fn();
 vi.mock("@/services/ai-config.service", () => ({ getAiConfig: (...a: unknown[]) => getAiConfigMock(...a) }));
+const matchCustomerMock = vi.fn();
+vi.mock("@/services/lead-customer-match.service", () => ({ matchCustomerByPhone: (...a: unknown[]) => matchCustomerMock(...a) }));
 
 import { prisma } from "@/lib/prisma";
 import { qualifyConversation, qualifyPendingConversations } from "./conversation-qualifier.service";
@@ -41,6 +43,7 @@ beforeEach(() => {
   getBotMock.mockResolvedValue("u_bot");
   transcribeAudioMock.mockResolvedValue(null); // sem transcrição por padrão (conversas só-texto inalteradas)
   getAiConfigMock.mockResolvedValue({ qualifierModel: "claude-haiku-4-5", hasKey: true, usdBrlRate: 5, markupPercent: 0, creditTokenFactor: 1, hasOpenaiKey: true });
+  matchCustomerMock.mockResolvedValue({ kind: "none", customerId: null, customerName: null, summary: null, candidateCount: 0 });
   (prisma.whatsappConversation.updateMany as any).mockResolvedValue({ count: 1 }); // claim vence
 });
 
@@ -214,8 +217,30 @@ describe("qualifyConversation", () => {
 
     await qualifyConversation("c1");
 
-    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), "claude-opus-4-8");
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), "claude-opus-4-8", null);
     expect(logAiUsageMock).toHaveBeenCalledWith(expect.objectContaining({ model: "claude-opus-4-8" }));
+  });
+
+  it("cliente reconhecido (match único) → passa o resumo seguro como hint à IA", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    const summary = { purchaseCount: 3, daysSinceLastPurchase: 400, openServiceOrder: null, isRecurring: true };
+    matchCustomerMock.mockResolvedValue({ kind: "single", customerId: "cust1", customerName: "Maria", summary, candidateCount: 1 });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+
+    await qualifyConversation("c1");
+
+    // 4º arg = o resumo seguro do cliente (hint)
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), summary);
+  });
+
+  it("match ambíguo (2+ fichas) → NÃO passa hint (null), não vaza resumo de ninguém", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    matchCustomerMock.mockResolvedValue({ kind: "ambiguous", customerId: null, customerName: null, summary: null, candidateCount: 2 });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+
+    await qualifyConversation("c1");
+
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), null);
   });
 
   it("grupo → transcribeAudio NÃO é chamado (pulado como group)", async () => {
