@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
@@ -21,9 +21,32 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
   const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    valorAbertura: "200.00",
+    valorAbertura: "0.00",
     observacoes: "",
   });
+
+  // Ao abrir o modal, sugere o fundo de troco a partir do último caixa fechado.
+  // Permanece editável; em caso de falha, mantém o valor atual (fallback).
+  useEffect(() => {
+    if (!open) return;
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch("/api/cash/shift/suggested-float");
+        if (!res.ok) return;
+        const data = await res.json();
+        const suggested = Number(data?.suggestedFloat);
+        if (!cancelled && Number.isFinite(suggested)) {
+          setFormData((prev) => ({ ...prev, valorAbertura: suggested.toFixed(2) }));
+        }
+      } catch {
+        // mantém o valor atual em caso de erro de rede
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [open]);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -51,7 +74,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
 
       // Limpar formulário
       setFormData({
-        valorAbertura: "200.00",
+        valorAbertura: "0.00",
         observacoes: "",
       });
 
@@ -124,6 +147,9 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
             </div>
             <p className="text-xs text-muted-foreground">
               Valor em dinheiro que será utilizado como troco inicial
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Sugerido a partir do último fechamento — ajuste se necessário.
             </p>
           </div>
 

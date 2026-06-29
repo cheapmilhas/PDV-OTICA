@@ -488,6 +488,22 @@ export function resolveInheritedFloat(
 }
 
 /**
+ * Fundo de troco SUGERIDO para a próxima abertura manual: o dinheiro declarado
+ * no último caixa fechado da filial (não-negativo). 0 se não houver caixa anterior.
+ * Multi-tenant: sempre filtra companyId + branchId.
+ */
+export async function getSuggestedOpeningFloat(companyId: string, branchId: string): Promise<number> {
+  const lastClosed = await prisma.cashShift.findFirst({
+    where: { companyId, branchId, status: "CLOSED", closedAt: { not: null } },
+    orderBy: { closedAt: "desc" },
+    select: { closingDeclaredCash: true },
+  });
+  return resolveInheritedFloat(
+    lastClosed?.closingDeclaredCash != null ? Number(lastClosed.closingDeclaredCash) : null
+  );
+}
+
+/**
  * Cria um turno de caixa auto-aberto herdando o fundo de troco do último caixa
  * fechado da filial. Cria também o CashMovement OPENING_FLOAT correspondente
  * (senão o saldo em caixa não bate com o fundo herdado).
