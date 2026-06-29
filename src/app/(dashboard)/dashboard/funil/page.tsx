@@ -19,6 +19,7 @@ import {
   TrendingUp,
   Trophy,
   ThumbsDown,
+  Sparkles,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useBranchContext } from "@/hooks/use-branch-context";
@@ -32,6 +33,7 @@ import { Can } from "@/components/permissions/can";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
+import { ACCURACY_MIN_SAMPLE } from "@/lib/intent-accuracy";
 
 interface LeadStats {
   total: number;
@@ -39,6 +41,12 @@ interface LeadStats {
   conversionRate: number;
   byLostReason: Record<string, number>;
   bySource: Record<string, number>;
+  aiAccuracy?: {
+    total: number;
+    correct: number;
+    rate: number;
+    hasEnoughSample: boolean;
+  };
 }
 
 const SOURCE_OPTIONS: { value: string; label: string }[] = [
@@ -150,7 +158,7 @@ function FunilPage() {
   const funilContent = (
     <>
       {/* Métricas */}
-      <div className="grid gap-3 grid-cols-1 md:grid-cols-3">
+      <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <Card>
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
@@ -212,6 +220,34 @@ function FunilPage() {
                   </li>
                 ))}
               </ul>
+            )}
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
+              <Sparkles className="h-4 w-4" />
+              Precisão da IA
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {stats?.aiAccuracy?.hasEnoughSample ? (
+              <>
+                <p className="text-2xl font-bold text-primary">
+                  {(stats.aiAccuracy.rate * 100).toFixed(0)}%
+                </p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  acertou {stats.aiAccuracy.correct} de {stats.aiAccuracy.total} intenções
+                </p>
+              </>
+            ) : (
+              <>
+                <p className="text-sm text-muted-foreground">Calibrando…</p>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  {stats?.aiAccuracy?.total ?? 0} de {ACCURACY_MIN_SAMPLE} classificações p/ medir
+                </p>
+              </>
             )}
           </CardContent>
         </Card>

@@ -227,9 +227,9 @@ describe("moveLead", () => {
 describe("getLeadStats", () => {
   it("calcula conversão = ganhos / total e agrega lostReason e source", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
-      { stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null },
-      { stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço" },
-      { stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null },
+      { stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço", intent: null, intentPredicted: null },
+      { stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
     ]);
     const s = await getLeadStats("co_1", null);
     expect(s.total).toBe(3);
@@ -237,6 +237,18 @@ describe("getLeadStats", () => {
     expect(s.conversionRate).toBeCloseTo(1 / 3);
     expect(s.byLostReason["Preço"]).toBe(1);
     expect(s.bySource["WHATSAPP"]).toBe(2);
+  });
+
+  it("inclui acurácia da IA (pares predito×atual; ignora leads sem palpite)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "NOVA_COMPRA", intent: "NOVA_COMPRA" }, // acerto
+      { stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "RENOVACAO", intent: "RECLAMACAO" },  // erro
+      { stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: null, intent: null },                 // fora da amostra
+    ]);
+    const s = await getLeadStats("co_1", null);
+    expect(s.aiAccuracy.total).toBe(2);
+    expect(s.aiAccuracy.correct).toBe(1);
+    expect(s.aiAccuracy.rate).toBeCloseTo(0.5);
   });
 });
 

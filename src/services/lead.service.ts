@@ -4,6 +4,7 @@ import { notFoundError, businessRuleError, duplicateError } from "@/lib/error-ha
 import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
 import type { ContactIntent, CustomerMatchKind } from "@prisma/client";
 import { INTENT_VALUES } from "@/lib/contact-intent-label";
+import { computeIntentAccuracy } from "@/lib/intent-accuracy";
 import type {
   CreateLeadDTO,
   LeadQuery,
@@ -341,7 +342,14 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
   if (branchId) where.branchId = branchId;
   const leads = await prisma.lead.findMany({
     where,
-    select: { source: true, lostReason: true, stage: { select: { isWon: true, isLost: true } } },
+    select: {
+      source: true,
+      lostReason: true,
+      // Telemetria de acurácia da IA (Fase 3): par palpite-original × atual.
+      intent: true,
+      intentPredicted: true,
+      stage: { select: { isWon: true, isLost: true } },
+    },
   });
   const total = leads.length;
   const won = leads.filter((l) => l.stage.isWon).length;
@@ -353,5 +361,6 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
     }
     if (l.source) bySource[l.source] = (bySource[l.source] ?? 0) + 1;
   }
-  return { total, won, conversionRate: total ? won / total : 0, byLostReason, bySource };
+  const aiAccuracy = computeIntentAccuracy(leads);
+  return { total, won, conversionRate: total ? won / total : 0, byLostReason, bySource, aiAccuracy };
 }

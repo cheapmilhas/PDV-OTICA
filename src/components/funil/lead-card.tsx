@@ -15,6 +15,7 @@ import {
   Sparkles,
   AlertTriangle,
   UserCheck,
+  Flame,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { differenceInCalendarDays } from "date-fns";
@@ -90,6 +91,11 @@ export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent }: LeadCardP
   );
   // intentLabel já é defensivo (fallback p/ desconhecido, null p/ ausente).
   const intent = intentLabel(lead.intent);
+  // Mostra o bloco de badges se QUALQUER sinal existe — extraído p/ legibilidade
+  // (cada badge tem seu próprio && interno; esta é só a condição do contêiner).
+  const hasBadges =
+    !!intent || !!lead.urgent || !!lead.contactNotPatient || !!lead.customer ||
+    lead.customerMatchKind === "SINGLE" || lead.source === "REFERRAL";
 
   return (
     <div
@@ -112,8 +118,16 @@ export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent }: LeadCardP
       </div>
 
       {/* Badges da IA: intenção + urgente + contato≠paciente + cliente reconhecido */}
-      {(intent || lead.urgent || lead.contactNotPatient || lead.customer || lead.customerMatchKind === "SINGLE") && (
+      {hasBadges && (
         <div className="mt-1.5 flex flex-wrap gap-1">
+          {/* Indicação = lead quente (veio por recomendação de outro cliente).
+              Ícone Flame (≠ do UserPlus da fonte, no canto) reforça "quente". */}
+          {lead.source === "REFERRAL" && (
+            <span className="inline-flex items-center gap-1 rounded-full bg-rose-100 px-2 py-0.5 text-[10px] font-medium text-rose-700" title="Veio por indicação — lead quente">
+              <Flame className="h-2.5 w-2.5" />
+              Indicação
+            </span>
+          )}
           {intent && (
             <span className="relative inline-flex">
               <button
