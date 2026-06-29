@@ -967,3 +967,87 @@ export async function generateManualExpenseEntry(
 
   return entry.id;
 }
+
+// ============================================================
+// LANÇAMENTO DE PAGAMENTO DE COMISSÃO (Bloco 4)
+// ============================================================
+
+/**
+ * Lança a despesa de comissão no ledger QUANDO a comissão é PAGA (regime de
+ * caixa). Sem este lançamento o DRE lia COMMISSION_EXPENSE = R$0 e o lucro
+ * aparecia inflado (a comissão era calculada mas nunca virava despesa contábil).
+ *
+ * DÉBITO  5.1.02 "Comissões de Vendedores" (EXPENSE)  → vira despesa no DRE.
+ * CRÉDITO 1.1.01 "Caixa" (ASSET)                       → saída real de dinheiro.
+ *
+ * IDEMPOTENTE: a chave única (companyId, sourceType, sourceId, type, side) +
+ * upsert garante que pagar/reprocessar a MESMA comissão nunca duplica a despesa.
+ * `sourceType="SellerCommission"` (motor novo, por vendedor/mês) + `sourceId`.
+ *
+ * NÃO lança nada se amount <= 0 (comissão zerada não vira despesa).
+ */
+export async function generateCommissionPaymentEntry(
+  tx: TransactionClient,
+  params: {
+    companyId: string;
+    branchId: string;
+    commissionId: string;
+    amount: number;
+    paidAt: Date;
+    sellerName?: string | null;
+    /** Discrimina a origem no ledger: "CommissionPayment" (motor novo) ou
+     *  "SellerCommission" (legado). Default novo. */
+    sourceType?: "CommissionPayment" | "SellerCommission";
+  }
+): Promise<void> {
+  const { companyId, branchId, commissionId, amount, paidAt, sellerName } = params;
+  const sourceType = params.sourceType ?? "CommissionPayment";
+  if (amount <= 0) return;
+
+  // Idempotência: se a despesa deste pagamento JÁ existe, não relança nem
+  // re-decrementa o caixa (evita inflar/deflar 2×). A chave única é a fonte.
+  const existing = await tx.financeEntry.findUnique({
+    where: {
+      companyId_sourceType_sourceId_type_side: {
+        companyId,
+        sourceType,
+        sourceId: commissionId,
+        type: "COMMISSION_EXPENSE",
+        side: "DEBIT",
+      },
+    },
+    select: { id: true },
+  });
+  if (existing) return;
+
+  const despesaComissao = await getChartAccountByCode(tx, companyId, "5.1.02");
+  const caixa = await getChartAccountByCode(tx, companyId, "1.1.01");
+
+  // Saída real de dinheiro: decrementa o saldo operacional do Caixa (FinanceAccount),
+  // igual ao padrão de despesa manual. Sem isto, o Caixa PDV ficaria inflado.
+  const caixaAccount = await getFinanceAccountByType(tx, companyId, "CASH");
+  if (caixaAccount) {
+    await tx.financeAccount.update({
+      where: { id: caixaAccount.id },
+      data: { balance: { decrement: amount } },
+    });
+  }
+
+  await tx.financeEntry.create({
+    data: {
+      companyId,
+      branchId,
+      type: "COMMISSION_EXPENSE",
+      side: "DEBIT",
+      amount,
+      debitAccountId: despesaComissao.id,
+      creditAccountId: caixa.id,
+      financeAccountId: caixaAccount?.id,
+      sourceType,
+      sourceId: commissionId,
+      description: `Comissão paga${sellerName ? ` - ${sellerName}` : ""}`,
+      entryDate: paidAt,
+      cashDate: paidAt,
+    },
+  });
+}

@@ -8,6 +8,7 @@ import type {
   GoalsQueryDTO,
 } from "@/lib/validations/goals.schema";
 import { startOfMonth, endOfMonth } from "date-fns";
+import { generateCommissionPaymentEntry } from "@/services/finance-entry.service";
 
 export const goalsService = {
   // =====================
@@ -446,20 +447,41 @@ export const goalsService = {
     // Sem esse guard, uma ótica marcaria como paga a comissão de outra empresa.
     const existing = await prisma.sellerCommission.findFirst({
       where: { id: commissionId, branch: { companyId } },
-      select: { id: true },
+      select: {
+        id: true,
+        branchId: true,
+        totalCommission: true,
+        user: { select: { name: true } },
+      },
     });
 
     if (!existing) {
       throw new Error("Comissão não encontrada");
     }
 
-    return prisma.sellerCommission.update({
-      where: { id: commissionId },
-      data: {
-        status: "PAID",
-        paidAt: new Date(),
-      },
+    const paidAt = new Date();
+    // ATOMICIDADE (Bloco 4): marcar PAID E lançar a despesa no ledger na MESMA
+    // transação. Se o ledger falhar (ex.: conta 5.1.02 ausente), o PAID reverte
+    // junto — não marca como pago se a despesa não pôde ser lançada (senão volta
+    // o bug original: pago na tela mas DRE=R$0). Idempotente por SellerCommission.id.
+    const updated = await prisma.$transaction(async (tx) => {
+      const row = await tx.sellerCommission.update({
+        where: { id: commissionId },
+        data: { status: "PAID", paidAt },
+      });
+      await generateCommissionPaymentEntry(tx, {
+        companyId,
+        branchId: existing.branchId,
+        commissionId: existing.id,
+        amount: Number(existing.totalCommission),
+        paidAt,
+        sellerName: existing.user?.name ?? null,
+        sourceType: "SellerCommission", // legado — discrimina do motor novo no ledger
+      });
+      return row;
     });
+
+    return updated;
   },
 
   // =====================

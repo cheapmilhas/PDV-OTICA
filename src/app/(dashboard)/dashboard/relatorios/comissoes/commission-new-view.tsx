@@ -21,6 +21,7 @@ import {
 } from "@/components/ui/table";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, DollarSign } from "lucide-react";
+import { Can } from "@/components/permissions/can";
 
 /**
  * Tela de Comissões — REGRA NOVA (modo "new" do kill-switch COMMISSION_ENGINE).
@@ -38,6 +39,7 @@ interface Row {
   metaCommission: string;
   campaignBonus: string;
   appliedPercent: string;
+  paid: boolean;
 }
 interface Report {
   year: number;
@@ -80,6 +82,31 @@ export function CommissionNewView() {
       setLoading(false);
     }
   }, [year, month, toast]);
+
+  const [payingId, setPayingId] = useState<string | null>(null);
+  const payCommission = useCallback(async (userId: string) => {
+    setPayingId(userId);
+    try {
+      const res = await fetch(`/api/reports/commissions/pay`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, year, month }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
+        toast({ title: "Comissão paga", description: json.message });
+        await fetchReport();
+      } else {
+        // handleApiError devolve { error: { code, message } }; cobre ambas as formas.
+        const msg = json?.error?.message ?? json?.message ?? "Não foi possível pagar";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Erro ao pagar a comissão", variant: "destructive" });
+    } finally {
+      setPayingId(null);
+    }
+  }, [year, month, toast, fetchReport]);
 
   useEffect(() => {
     fetchReport();
@@ -165,6 +192,7 @@ export function CommissionNewView() {
                       <TableHead className="text-right">Vendido (líq.)</TableHead>
                       <TableHead className="text-right">Comissão</TableHead>
                       <TableHead className="text-right">Detalhe</TableHead>
+                      <TableHead className="text-right">Pagamento</TableHead>
                     </TableRow>
                   </TableHeader>
                   <TableBody>
@@ -177,6 +205,27 @@ export function CommissionNewView() {
                           meta {brl(r.metaCommission)} ({r.appliedPercent}%)
                           <br />
                           campanha {brl(r.campaignBonus)}
+                        </TableCell>
+                        <TableCell className="text-right">
+                          {r.paid ? (
+                            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                              ✓ Pago
+                            </span>
+                          ) : Number(r.total) > 0 ? (
+                            <Can permission="goals.manage">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={payingId === r.userId}
+                                onClick={() => payCommission(r.userId)}
+                              >
+                                {payingId === r.userId && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                                Marcar paga
+                              </Button>
+                            </Can>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                       </TableRow>
                     ))}

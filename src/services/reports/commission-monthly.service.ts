@@ -25,6 +25,8 @@ export interface MonthlyCommissionRow {
   metaCommission: string;
   campaignBonus: string;
   appliedPercent: string;
+  /** Já pago (existe CommissionPayment do vendedor/mês) — Bloco 4. */
+  paid: boolean;
 }
 
 export interface MonthlyCommissionReport {
@@ -70,6 +72,13 @@ export async function generateMonthlyCommission(
     if (s.sellerUserId) sellers.set(s.sellerUserId, s.sellerUser?.name ?? "—");
   }
 
+  // Quem já foi pago neste mês (Bloco 4) — 1 query, depois lookup em memória.
+  const paidRows = await prisma.commissionPayment.findMany({
+    where: { companyId, year, month },
+    select: { userId: true },
+  });
+  const paidSet = new Set(paidRows.map((p) => p.userId));
+
   const rows: MonthlyCommissionRow[] = [];
   let total = money(0);
 
@@ -84,6 +93,7 @@ export async function generateMonthlyCommission(
       metaCommission: r.metaCommission,
       campaignBonus: r.campaignBonus,
       appliedPercent: r.meta.appliedPercent,
+      paid: paidSet.has(userId),
     });
   }
 

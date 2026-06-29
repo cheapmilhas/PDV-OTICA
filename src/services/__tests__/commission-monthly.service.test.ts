@@ -12,6 +12,7 @@ const mock = vi.hoisted(() => {
     sales: [] as any[], // {sellerUserId, sellerName, status, total, createdAt}
     bonus: [] as any[], // {sellerUserId, totalBonus, status, saleStatus, saleCreatedAt}
     tiers: [] as any[],
+    payments: [] as any[], // {userId} — vendedores já pagos (Bloco 4)
   };
   const inWin = (d: Date, w: any) => {
     if (w?.gte && d < w.gte) return false;
@@ -52,6 +53,10 @@ const mock = vi.hoisted(() => {
         state.tiers.filter((t) => t.userId === where.OR[0].userId || t.userId === null)
       ),
     },
+    // Bloco 4: estado de pagamento. Default vazio = ninguém pago.
+    commissionPayment: {
+      findMany: vi.fn(async () => state.payments ?? []),
+    },
   };
   return { state, prisma };
 });
@@ -66,6 +71,7 @@ beforeEach(() => {
   vi.clearAllMocks();
   mock.state.sales = [];
   mock.state.bonus = [];
+  mock.state.payments = [];
   mock.state.tiers = [
     { userId: null, level: "MINI", targetAmount: "10000", percent: "1" },
     { userId: null, level: "META", targetAmount: "20000", percent: "2" },
@@ -87,6 +93,22 @@ describe("generateMonthlyCommission (regra nova, read-only)", () => {
     expect(r.rows[0]).toMatchObject({ userName: "Ana", total: "440.00", appliedPercent: "2.00" });
     expect(r.rows[1]).toMatchObject({ userName: "Bia", total: "150.00", appliedPercent: "1.00" });
     expect(r.total).toBe("590.00");
+    // Bloco 4: sem pagamento registrado → ambos paid=false.
+    expect(r.rows.every((x) => x.paid === false)).toBe(true);
+  });
+
+  it("marca paid=true para quem já tem CommissionPayment no mês (Bloco 4)", async () => {
+    mock.state.sales = [
+      { sellerUserId: "U1", sellerName: "Ana", status: "COMPLETED", total: 22000, createdAt: JUL },
+      { sellerUserId: "U2", sellerName: "Bia", status: "COMPLETED", total: 15000, createdAt: JUL },
+    ];
+    mock.state.payments = [{ userId: "U1" }]; // só Ana foi paga
+
+    const r = await generateMonthlyCommission("co1", 2026, 7);
+    const ana = r.rows.find((x) => x.userName === "Ana");
+    const bia = r.rows.find((x) => x.userName === "Bia");
+    expect(ana?.paid).toBe(true);
+    expect(bia?.paid).toBe(false);
   });
 
   it("inclui campanha no total e no detalhe", async () => {
