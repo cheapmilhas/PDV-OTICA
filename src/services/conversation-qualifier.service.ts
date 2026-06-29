@@ -12,6 +12,16 @@ import { getAiConfig } from "@/services/ai-config.service";
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
 const SCAN_LIMIT = 200;
+// "Esfriar a conversa" (debounce): quando o cron roda em alta frequência (ex.
+// cron-job.org a cada 1-2 min), não queremos qualificar no MEIO de uma rajada de
+// mensagens — o cliente ainda está digitando. Só consideramos uma conversa pronta
+// quando a última mensagem tem mais de WHATSAPP_QUALIFY_COOLDOWN_MIN minutos.
+// Default 3 min. Setar 0 reproduz o comportamento antigo (sem cooldown) — usado
+// pelo cron diário, onde o atraso é irrelevante.
+const COOLDOWN_MIN = (() => {
+  const raw = Number(process.env.WHATSAPP_QUALIFY_COOLDOWN_MIN);
+  return Number.isFinite(raw) && raw >= 0 ? raw : 3;
+})();
 // D8: teto de chamadas Whisper SIMULTÂNEAS por conversa. Com até 80 mensagens,
 // um Promise.all sobre todos os áudios dispararia 80 requisições de uma vez.
 // Processamos em lotes deste tamanho, preservando a ORDEM das mensagens.
@@ -176,12 +186,19 @@ export async function qualifyConversation(conversationId: string, opts?: { force
  * R4: checa as flags de IA UMA vez por empresa (fail-CLOSED: erro de leitura OU
  * desligada → pula a empresa). Erro numa conversa não interrompe as outras.
  */
-export async function qualifyPendingConversations(companyId?: string): Promise<{ processed: number; leads: number; errors: number; skippedCompanies: number }> {
+export async function qualifyPendingConversations(
+  companyId?: string,
+  opts?: { cooldownMin?: number },
+): Promise<{ processed: number; leads: number; errors: number; skippedCompanies: number }> {
+  // Cooldown: ignora conversas com mensagem nos últimos N min (ainda "quentes").
+  const cooldownMin = opts?.cooldownMin ?? COOLDOWN_MIN;
+  const coldBefore = new Date(Date.now() - cooldownMin * 60_000);
   const pending = await prisma.whatsappConversation.findMany({
     where: {
       isGroup: false,
       analysisAttempts: { lt: MAX_ATTEMPTS },
       OR: [{ analyzedAt: null }, { needsAnalysis: true }],
+      ...(cooldownMin > 0 ? { lastMessageAt: { lt: coldBefore } } : {}),
       ...(companyId ? { companyId } : {}),
     },
     select: { id: true, companyId: true },
