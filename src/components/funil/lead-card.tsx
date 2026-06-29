@@ -16,6 +16,7 @@ import {
   AlertTriangle,
   UserCheck,
   Flame,
+  FileText,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { differenceInCalendarDays } from "date-fns";
@@ -54,6 +55,8 @@ interface LeadCardProps {
   onConfirmCustomer?: (leadId: string, customerId: string | null) => void;
   /** Corrige a intenção classificada pela IA em 1 clique (telemetria). */
   onCorrectIntent?: (leadId: string, intent: string) => void;
+  /** Busca a última receita do cliente vinculado (gancho de 2ª via). */
+  onPrescriptionHint?: (leadId: string) => void;
 }
 
 const SOURCE_ICON: Record<string, React.ElementType> = {
@@ -74,7 +77,7 @@ const SOURCE_LABEL: Record<string, string> = {
   OTHER: "Outro",
 };
 
-export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent }: LeadCardProps) {
+export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent, onPrescriptionHint }: LeadCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: lead.id, data: { lead } });
   const [intentMenuOpen, setIntentMenuOpen] = useState(false);
@@ -185,6 +188,20 @@ export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent }: LeadCardP
                 </div>
               )}
             </span>
+          )}
+          {/* Gancho de 2ª via: só p/ lead de SEGUNDA_VIA_RECEITA já vinculado a
+              cliente. Busca a receita sob demanda (não engorda o funil). */}
+          {lead.intent === "SEGUNDA_VIA_RECEITA" && lead.customer && onPrescriptionHint && (
+            <button
+              type="button"
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={(e) => { e.stopPropagation(); onPrescriptionHint(lead.id); }}
+              className="inline-flex items-center gap-1 rounded-full bg-indigo-100 px-2 py-0.5 text-[10px] font-medium text-indigo-700 hover:bg-indigo-200"
+              title="Ver a última receita deste cliente"
+            >
+              <FileText className="h-2.5 w-2.5" />
+              Ver receita
+            </button>
           )}
           {lead.urgent && (
             <span className="inline-flex items-center gap-1 rounded-full bg-red-100 px-2 py-0.5 text-[10px] font-medium text-red-700">

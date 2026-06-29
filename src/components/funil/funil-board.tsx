@@ -189,6 +189,33 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
     }
   }
 
+  async function handlePrescriptionHint(leadId: string) {
+    try {
+      const res = await fetch(`/api/leads/${leadId}/prescription-hint`);
+      if (!res.ok) {
+        const err = await res.json().catch(() => null);
+        throw new Error(err?.error?.message || "Erro ao buscar receita");
+      }
+      const json = await res.json();
+      const hint = json?.data;
+      if (!hint) {
+        toast("Sem receita registrada para este cliente.", { icon: "📋" });
+        return;
+      }
+      // Guard contra datas nulas (linha legada) — evita "Invalid Date"/epoch 1970.
+      const issued = hint.issuedAt ? new Date(hint.issuedAt).toLocaleDateString("pt-BR") : "—";
+      const expires = hint.expiresAt ? new Date(hint.expiresAt).toLocaleDateString("pt-BR") : "—";
+      // Deriva isExpired no cliente (relógio do browser, sem staleness se cachear).
+      const isExpired = hint.expiresAt ? new Date(hint.expiresAt).getTime() < Date.now() : false;
+      toast(
+        `Receita de ${issued} — válida até ${expires}${isExpired ? " (VENCIDA)" : ""}`,
+        { icon: "📋", duration: 7000 },
+      );
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Erro ao buscar receita");
+    }
+  }
+
   async function handleWon(lead: Lead) {
     try {
       const res = await fetch(`/api/leads/${lead.id}/convert`, {
@@ -256,7 +283,7 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
                 totalValue={totalValue}
               >
                 {shown.map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} onCorrectIntent={handleCorrectIntent} />
+                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} onCorrectIntent={handleCorrectIntent} onPrescriptionHint={handlePrescriptionHint} />
                 ))}
 
                 {stageLeads.length === 0 && (

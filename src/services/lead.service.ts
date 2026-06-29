@@ -324,6 +324,40 @@ export async function correctLeadIntent(
   });
 }
 
+/**
+ * Gancho de "2ª via de receita" (Fase 3, Item 2): dado um lead com cliente
+ * vinculado, devolve a ÚLTIMA receita (grau) desse cliente — para o vendedor
+ * responder "sua receita é de DD/MM, válida até DD/MM" sem sair do funil.
+ *
+ * Multi-tenant em DOIS níveis (fecha IDOR cross-feature): o lead é validado por
+ * companyId E a receita é buscada com companyId (nunca casa receita de outra
+ * empresa). Retorna null quando: lead sem cliente vinculado, ou cliente sem
+ * receita. Só lê dados de grau de quem JÁ foi confirmado como cliente do lead.
+ */
+export async function getLeadPrescriptionHint(id: string, companyId: string) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true, customerId: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+  if (!lead.customerId) return null; // sem cliente confirmado → sem grau a mostrar
+
+  const rx = await prisma.prescription.findFirst({
+    where: { customerId: lead.customerId, companyId },
+    orderBy: { issuedAt: "desc" },
+    select: { id: true, issuedAt: true, expiresAt: true, status: true },
+  });
+  if (!rx) return null;
+  return {
+    id: rx.id,
+    issuedAt: rx.issuedAt,
+    expiresAt: rx.expiresAt,
+    status: rx.status,
+    // Guard defensivo: linha legada pré-migração pode ter expiresAt null.
+    isExpired: rx.expiresAt ? rx.expiresAt.getTime() < Date.now() : false,
+  };
+}
+
 export async function deleteLead(id: string, companyId: string) {
   const lead = await prisma.lead.findFirst({
     where: { id, companyId, deletedAt: null },

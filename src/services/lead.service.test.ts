@@ -7,10 +7,11 @@ vi.mock("@/lib/prisma", () => ({
     customer: { findFirst: vi.fn() },
     quote: { findFirst: vi.fn() },
     user: { findFirst: vi.fn() },
+    prescription: { findFirst: vi.fn() },
   },
 }));
 import { prisma } from "@/lib/prisma";
-import { createLead, listLeads, moveLead, getLeadStats, updateLead, setLeadCustomer, correctLeadIntent } from "./lead.service";
+import { createLead, listLeads, moveLead, getLeadStats, updateLead, setLeadCustomer, correctLeadIntent, getLeadPrescriptionHint } from "./lead.service";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -308,5 +309,53 @@ describe("correctLeadIntent — correção humana da intenção (telemetria Fase
     (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", intentPredicted: "NOVA_COMPRA" });
     await expect(correctLeadIntent("l1", "INTENT_INEXISTENTE" as any, "co_1", "user_9")).rejects.toThrow();
     expect((prisma.lead.update as any)).not.toHaveBeenCalled();
+  });
+});
+
+describe("getLeadPrescriptionHint — gancho de 2ª via de receita (Fase 3, Item 2)", () => {
+  it("retorna a última receita do cliente vinculado (multi-tenant nos 2 níveis)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", customerId: "cust1" });
+    const issued = new Date("2025-01-10");
+    const expires = new Date("2026-01-10");
+    (prisma.prescription.findFirst as any).mockResolvedValue({
+      id: "rx1", issuedAt: issued, expiresAt: expires, status: "COMPLETA",
+    });
+    const hint = await getLeadPrescriptionHint("l1", "co_1");
+    expect(hint?.id).toBe("rx1");
+    expect(hint?.status).toBe("COMPLETA");
+    // a busca da receita SEMPRE passa companyId (fecha IDOR cross-feature).
+    expect((prisma.prescription.findFirst as any).mock.calls[0][0].where.companyId).toBe("co_1");
+    expect((prisma.prescription.findFirst as any).mock.calls[0][0].where.customerId).toBe("cust1");
+  });
+
+  it("marca isExpired quando a validade já passou", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", customerId: "cust1" });
+    (prisma.prescription.findFirst as any).mockResolvedValue({
+      id: "rx1", issuedAt: new Date("2020-01-01"), expiresAt: new Date("2021-01-01"), status: "COMPLETA",
+    });
+    const hint = await getLeadPrescriptionHint("l1", "co_1");
+    expect(hint?.isExpired).toBe(true);
+  });
+
+  it("retorna null quando o lead não tem cliente vinculado", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", customerId: null });
+    const hint = await getLeadPrescriptionHint("l1", "co_1");
+    expect(hint).toBeNull();
+    expect((prisma.prescription.findFirst as any)).not.toHaveBeenCalled();
+  });
+
+  it("retorna null quando o cliente não tem receita", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", customerId: "cust1" });
+    (prisma.prescription.findFirst as any).mockResolvedValue(null);
+    const hint = await getLeadPrescriptionHint("l1", "co_1");
+    expect(hint).toBeNull();
+  });
+
+  it("IDOR cross-feature: lead de outra empresa NÃO consulta receita", async () => {
+    // co_1 não enxerga lead de co_2 → o guard de tenant barra ANTES de tocar a
+    // tabela de receitas (dado clínico nunca vaza cross-tenant/cross-feature).
+    (prisma.lead.findFirst as any).mockResolvedValue(null);
+    await expect(getLeadPrescriptionHint("l_co2", "co_1")).rejects.toThrow(/lead/i);
+    expect((prisma.prescription.findFirst as any)).not.toHaveBeenCalled();
   });
 });
