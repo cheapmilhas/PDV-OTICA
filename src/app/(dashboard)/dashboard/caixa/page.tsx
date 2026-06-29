@@ -33,7 +33,7 @@ import ConferenciaFormas, {
 import { usePermissions } from "@/hooks/usePermissions";
 import { useBranchContext } from "@/hooks/use-branch-context";
 import toast from "react-hot-toast";
-import { METHODS_A_PRAZO } from "@/lib/payment-methods";
+import { computeCashOnHand } from "@/lib/cash-on-hand";
 
 type CashShift = {
   id: string;
@@ -163,12 +163,9 @@ function CaixaPage() {
     .filter((m) => m.type === "SUPPLY" && m.direction === "IN")
     .reduce((sum, m) => sum + m.amount, 0);
 
-  // Saldo do caixa: apenas pagamentos à vista (exclui crediário e cartão crédito)
-  const methodsAPrazo: readonly string[] = METHODS_A_PRAZO;
-  const valorAtual = movements.reduce((sum, m) => {
-    if (m.type === "SALE_PAYMENT" && methodsAPrazo.includes(m.method)) return sum; // Ignora a prazo
-    return sum + (m.direction === "IN" ? m.amount : -m.amount);
-  }, 0);
+  // Saldo do caixa: apenas DINHEIRO FÍSICO (method="CASH").
+  // PIX/débito/cartão aparecem na "Conferência por forma de pagamento", não na gaveta.
+  const valorAtual = computeCashOnHand(movements);
 
   const caixaStatus = shift
     ? {
@@ -462,7 +459,7 @@ function CaixaPage() {
                 <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">
                   {formatCurrency(caixaStatus.valorAtual)}
                 </p>
-                <p className="text-[11px] text-muted-foreground">Saldo em gaveta · Dinheiro · PIX · Débito</p>
+                <p className="text-[11px] text-muted-foreground">Saldo em gaveta · Dinheiro</p>
               </div>
             </div>
           </CardContent>
