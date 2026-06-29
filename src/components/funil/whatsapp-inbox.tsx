@@ -1,6 +1,6 @@
 "use client";
 
-import { useCallback, useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
@@ -28,6 +28,10 @@ interface InboxConversation {
   leadId: string | null;
   messageCount: number;
   lastMessageText: string | null;
+  analysisIsLead: boolean | null;
+  analysisIntent: string | null;
+  analysisCustomerKind: string | null;
+  analysisReason: string | null;
 }
 
 interface InboxMessage {
@@ -79,6 +83,10 @@ export function WhatsappInbox({ active }: { active: boolean }) {
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [qualifyingId, setQualifyingId] = useState<string | null>(null);
+  const selectedConv = useMemo(
+    () => conversations.find((c) => c.id === selectedId) ?? null,
+    [conversations, selectedId],
+  );
 
   const fetchConversations = useCallback(
     async (showSpinner = false) => {
@@ -268,6 +276,37 @@ export function WhatsappInbox({ active }: { active: boolean }) {
                   </Button>
                 </Can>
               </div>
+
+              {/* Resultado da análise da IA — mostra o PORQUÊ, inclusive quando
+                  NÃO virou lead (antes só havia o badge cinza mudo). */}
+              {selectedConv?.analyzedAt && selectedConv.analysisIsLead != null && (
+                <div
+                  className={`rounded-md border p-2.5 text-xs ${
+                    selectedConv.analysisIsLead
+                      ? "border-green-200 bg-green-50"
+                      : "border-border bg-muted/40"
+                  }`}
+                >
+                  <div className="flex flex-wrap items-center gap-1.5">
+                    <span className="font-semibold">
+                      {selectedConv.analysisIsLead ? "✓ Virou lead" : "Não é lead"}
+                    </span>
+                    {selectedConv.analysisIntent && (
+                      <span className="inline-flex items-center rounded-full bg-blue-100 px-2 py-0.5 font-medium text-blue-700">
+                        {selectedConv.analysisIntent}
+                      </span>
+                    )}
+                    {selectedConv.analysisCustomerKind && (
+                      <span className="inline-flex items-center rounded-full bg-purple-100 px-2 py-0.5 font-medium text-purple-700">
+                        {selectedConv.analysisCustomerKind}
+                      </span>
+                    )}
+                  </div>
+                  {selectedConv.analysisReason && (
+                    <p className="mt-1 text-muted-foreground">{selectedConv.analysisReason}</p>
+                  )}
+                </div>
+              )}
 
               {messagesLoading ? (
                 <div className="flex items-center justify-center py-10">

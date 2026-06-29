@@ -9,6 +9,9 @@ import { transcribeAudio } from "@/services/audio-transcription.service";
 import { instanceNameForCompany } from "@/lib/whatsapp-instance";
 import { getAiConfig } from "@/services/ai-config.service";
 import { matchCustomerByPhone } from "@/services/lead-customer-match.service";
+import { customerKind } from "@/lib/customer-kind-label";
+import { intentLabel } from "@/lib/contact-intent-label";
+import { sanitizeAiReason } from "@/lib/sanitize-ai-reason";
 
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
@@ -79,13 +82,34 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   // o contador é anti-loop de FALHA — 3 falhas SEM finalizar congelam a conversa,
   // mas um ciclo que conclui (lead ou não-lead) reseta p/ que clientes recorrentes
   // legítimos (que vão e voltam) sigam sendo re-qualificados pelo cron (R1).
-  const finalize = (leadId: string | null) =>
+  // analysis = resultado p/ o dono ver no inbox (motivo/intenção/tipo cliente),
+  // preenchido SEMPRE — inclusive quando NÃO vira lead (era descartado antes).
+  const finalize = (
+    leadId: string | null,
+    analysis?: { isLead: boolean; intent?: string | null; customerKind?: string | null; reason?: string | null },
+  ) =>
     prisma.whatsappConversation.update({
       where: { id: conv.id },
-      data: { analyzedAt: new Date(), needsAnalysis: false, analysisAttempts: 0, ...(leadId ? { leadId } : {}) },
+      data: {
+        analyzedAt: new Date(),
+        needsAnalysis: false,
+        analysisAttempts: 0,
+        ...(leadId ? { leadId } : {}),
+        ...(analysis
+          ? {
+              analysisIsLead: analysis.isLead,
+              analysisIntent: analysis.intent ?? null,
+              analysisCustomerKind: analysis.customerKind ?? null,
+              analysisReason: analysis.reason ? analysis.reason.slice(0, 500) : null,
+            }
+          : {}),
+      },
     });
 
-  if (conv.isGroup) { await finalize(null); return { conversationId, skipped: "group", leadId: null }; }
+  if (conv.isGroup) {
+    await finalize(null, { isLead: false, reason: "Conversa em grupo — não vira lead." });
+    return { conversationId, skipped: "group", leadId: null };
+  }
 
   const force = opts?.force === true;
   if (conv.analyzedAt && !conv.needsAnalysis && !force) {
@@ -179,7 +203,23 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens,
   });
 
-  if (!result.isLead) { await finalize(null); return { conversationId, isLead: false, leadId: null }; }
+  // Tipo de cliente p/ exibição. single → deriva das compras; ambiguous → há
+  // 2+ fichas conhecidas (NÃO é "novo" — seria factualmente errado); none → novo.
+  const customerKindLabel =
+    match.kind === "single"
+      ? customerKind(match.summary?.purchaseCount ?? 0).label
+      : match.kind === "ambiguous"
+        ? "Múltiplos clientes"
+        : customerKind(0).label;
+  const intentLbl = intentLabel(result.intent)?.label ?? null;
+  // LGPD: sanitiza o motivo (vem livre da IA, pode capturar PII/valor) antes de
+  // persistir/exibir no inbox a todo usuário com acesso a leads.
+  const safeReason = sanitizeAiReason(result.reason);
+
+  if (!result.isLead) {
+    await finalize(null, { isLead: false, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
+    return { conversationId, isLead: false, leadId: null };
+  }
 
   const sellerUserId = await getOrCreateAiSellerUser(conv.companyId);
   // Mapeia o kind do match (minúsculo no serviço) → enum do banco (maiúsculo).
@@ -191,7 +231,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       source: "WHATSAPP",
       interest: result.interest ?? undefined,
       stageId: result.stageId ?? undefined,
-      notes: `Lead criado pela IA do funil. Motivo: ${result.reason}`.slice(0, 500),
+      notes: `Lead criado pela IA do funil. Motivo: ${safeReason}`.slice(0, 500),
     },
     conv.companyId, sellerUserId, null,
     {
@@ -203,7 +243,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       suggestedCustomerId: match.kind === "single" ? match.customerId : null,
     },
   );
-  await finalize(lead.id);
+  await finalize(lead.id, { isLead: true, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
   log.info("lead criado pela IA", { conversationId, leadId: lead.id, companyId: conv.companyId });
   return { conversationId, isLead: true, leadId: lead.id };
 }

@@ -4470,6 +4470,14 @@ model WhatsappConversation {
   lastMessageAt DateTime  @default(now())
   analyzedAt    DateTime?
   leadId        String?
+  // Resultado da última análise da IA — preenchido SEMPRE (vire lead ou não),
+  // p/ o dono ver no inbox POR QUE a conversa foi classificada assim. Antes o
+  // motivo era descartado no caminho não-lead. analysisIntent/CustomerKind são
+  // strings (rótulos) p/ exibição — não acoplam ao enum.
+  analysisIsLead       Boolean?
+  analysisIntent       String?
+  analysisCustomerKind String?
+  analysisReason       String?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 

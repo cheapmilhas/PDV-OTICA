@@ -17,6 +17,11 @@ export interface InboxConversation {
   leadId: string | null;
   messageCount: number;
   lastMessageText: string | null;
+  // Resultado da análise da IA (p/ o dono ver o porquê — inclusive não-lead).
+  analysisIsLead: boolean | null;
+  analysisIntent: string | null;
+  analysisCustomerKind: string | null;
+  analysisReason: string | null;
 }
 
 export interface InboxMessage {
@@ -70,6 +75,10 @@ export async function listInboxConversations(
       analyzedAt: true,
       needsAnalysis: true,
       leadId: true,
+      analysisIsLead: true,
+      analysisIntent: true,
+      analysisCustomerKind: true,
+      analysisReason: true,
       _count: { select: { messages: true } },
       messages: {
         where: { direction: "inbound" },
@@ -90,6 +99,10 @@ export async function listInboxConversations(
     leadId: c.leadId,
     messageCount: c._count.messages,
     lastMessageText: c.messages[0]?.text ?? null,
+    analysisIsLead: c.analysisIsLead,
+    analysisIntent: c.analysisIntent,
+    analysisCustomerKind: c.analysisCustomerKind,
+    analysisReason: c.analysisReason,
   }));
 }
 

@@ -146,6 +146,17 @@ describe("qualifyConversation", () => {
     expect(r.leadId).toBeNull();
   });
 
+  it("PERSISTE o resultado da análise mesmo NÃO sendo lead (motivo p/ o dono ver)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: false, intent: "OUTRO", reason: "conversa pessoal, não é cliente de ótica", interest: null, stageId: null, confidence: 0.9, parseError: false, usage: { inputTokens: 50, outputTokens: 10, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data.analysisIsLead).toBe(false);
+    expect(upd.data.analysisReason).toContain("conversa pessoal");
+    expect(upd.data.analysisIntent).toBeTruthy(); // rótulo PT da intenção
+    expect(upd.data.analysisCustomerKind).toBe("Cliente novo"); // sem match → novo
+  });
+
   it("áudio transcrito (text null) → texto entra no contexto + transcribeAudio(companyId, instance, evolutionId)", async () => {
     (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
       ...conv,
