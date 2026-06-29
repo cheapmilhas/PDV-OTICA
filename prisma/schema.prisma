@@ -406,6 +406,11 @@ model Customer {
   rg                 String?
   phone              String?
   phone2             String?
+  // Chave canônica do telefone (DDD+8díg) p/ casar contato do WhatsApp↔cliente.
+  // Derivada de phone (e phone2) via phoneMatchKey no write + backfill. Índice
+  // COMPOSTO com companyId — nunca buscar por phoneNormalized sem companyId.
+  phoneNormalized    String?
+  phone2Normalized   String?
   email              String?
   birthDate          DateTime?
   gender             String?
@@ -467,6 +472,9 @@ model Customer {
   @@index([companyId, phone])
   @@index([companyId, email])
   @@index([originBranchId])
+  // Match de contato↔cliente: SEMPRE composto com companyId (multi-tenant).
+  @@index([companyId, phoneNormalized])
+  @@index([companyId, phone2Normalized])
 }
 
 /// Registro de consentimento LGPD (Art. 8º). Auditável e imutável após criação.
