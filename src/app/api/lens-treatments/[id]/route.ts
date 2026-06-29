@@ -104,6 +104,10 @@ export async function PUT(
       }
     }
 
+    // IDOR: o update usa `where: { id }` (id é a única chave unique do modelo —
+    // não há unique composto id+companyId), mas a posse já foi validada acima
+    // pelo findFirst({ id, companyId }) que retorna 404 se o tratamento não for
+    // da empresa. Este update só é alcançado após esse guard.
     const treatment = await prisma.lensTreatment.update({
       where: { id },
       data,

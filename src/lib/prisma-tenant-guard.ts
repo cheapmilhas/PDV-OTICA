@@ -71,8 +71,26 @@ export function whereHasCompanyId(where: unknown, depth = 0): boolean {
   return false;
 }
 
+/**
+ * Resolve o modo do guard. Em DESENVOLVIMENTO local o default é `throw`: uma
+ * query sem companyId num model escopado estoura na hora, então o vazamento
+ * aparece enquanto se usa o app (mapeamento ativo). Em produção o default é
+ * `warn` (só loga, nunca derruba uma request legítima). TENANT_GUARD_MODE
+ * explícito sempre vence o default — defina-o para forçar o modo num ambiente.
+ */
+export function resolveTenantGuardMode(
+  explicitMode: string | undefined,
+  nodeEnv: string | undefined
+): "throw" | "warn" {
+  if (explicitMode === "throw" || explicitMode === "warn") return explicitMode;
+  return nodeEnv === "development" ? "throw" : "warn";
+}
+
 export function registerTenantGuard(client: PrismaClient): void {
-  const mode = process.env.TENANT_GUARD_MODE ?? "warn";
+  const mode = resolveTenantGuardMode(
+    process.env.TENANT_GUARD_MODE,
+    process.env.NODE_ENV
+  );
 
   client.$use(async (params, next) => {
     const { model, action, args } = params;

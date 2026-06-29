@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 
 // POST /api/admin/clientes/[id]/tags — associa tag à empresa
 export async function POST(
@@ -11,6 +11,11 @@ export async function POST(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId } = await params;
+
+  if (!(await requireSupportScope(admin.id, companyId))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
+
   const { tagId } = await request.json();
 
   if (!tagId) return NextResponse.json({ error: "tagId é obrigatório" }, { status: 400 });
@@ -43,6 +48,11 @@ export async function DELETE(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId } = await params;
+
+  if (!(await requireSupportScope(admin.id, companyId))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
+
   const { tagId } = await request.json();
 
   if (!tagId) return NextResponse.json({ error: "tagId é obrigatório" }, { status: 400 });

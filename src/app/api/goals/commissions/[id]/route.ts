@@ -25,7 +25,7 @@ export async function PUT(request: NextRequest, { params }: Params) {
       );
     }
     const { id } = await params;
-    const commission = await goalsService.markCommissionAsPaid(id);
+    const commission = await goalsService.markCommissionAsPaid(id, companyId);
     return NextResponse.json({ success: true, data: commission, message: "Comissão marcada como paga" });
   } catch (error) {
     return handleApiError(error);

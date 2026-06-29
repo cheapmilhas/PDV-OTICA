@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { SignJWT } from "jose";
 import { cookies, headers } from "next/headers";
 import { rateLimitResponse } from "@/lib/rate-limit";
+import { getAdminJwtSecret } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
 import { verifyTotp, matchRecoveryCode } from "@/lib/totp";
 
@@ -11,11 +12,10 @@ const log = logger.child({ route: "admin/auth/login" });
 
 // Lazy: lê o secret em runtime (não no import) p/ não quebrar `next build` em
 // ambientes sem o secret (ex.: Preview). Segurança idêntica — lança se faltar
-// quando a rota roda. Ver admin-session.ts getJwtSecret().
+// quando a rota roda. Fonte única do segredo de admin em admin-session.ts
+// (ADMIN_JWT_SECRET dedicado, com fallback p/ AUTH_SECRET durante a rotação).
 function getJwtSecret(): Uint8Array {
-  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-  if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
-  return new TextEncoder().encode(authSecret);
+  return getAdminJwtSecret();
 }
 
 export async function POST(request: Request) {

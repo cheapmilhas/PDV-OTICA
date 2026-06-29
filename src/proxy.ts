@@ -32,12 +32,23 @@ function getAuthSecret(): string {
   return authSecret;
 }
 
+/**
+ * Segredo do cookie de ADMIN. Deve casar com admin-session.ts getAdminJwtSecret()
+ * (não importável aqui pois o proxy roda no edge sem next/headers/prisma).
+ * Prefere ADMIN_JWT_SECRET dedicado; fallback p/ AUTH_SECRET durante a rotação.
+ */
+function getAdminSecret(): string {
+  return (
+    process.env.ADMIN_JWT_SECRET || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET || ""
+  );
+}
+
 const SESSION_COOKIE_NAME = "next-auth.session-token";
 const SECURE_SESSION_COOKIE_NAME = "__Secure-next-auth.session-token";
 
 async function verifyAdminToken(token: string) {
   try {
-    const { payload } = await jwtVerify(token, new TextEncoder().encode(getAuthSecret()));
+    const { payload } = await jwtVerify(token, new TextEncoder().encode(getAdminSecret()));
     return payload;
   } catch {
     return null;

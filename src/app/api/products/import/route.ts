@@ -3,7 +3,7 @@ import { getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
 import { ProductType } from "@prisma/client";
-import * as XLSX from "xlsx";
+import { readXlsxRows } from "@/lib/xlsx-read";
 import { parseBooleanField } from "@/lib/import-utils";
 import {
   validateImportNumbers,
@@ -29,15 +29,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Anti-OOM/zip-bomb: rejeita antes de carregar o arrayBuffer em memória.
+    const MAX_IMPORT_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_IMPORT_SIZE) {
+      return NextResponse.json(
+        { error: "Arquivo muito grande (máx 5MB)" },
+        { status: 400 }
+      );
+    }
+
     // Converter File para Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     // Ler arquivo Excel
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const rawData: any[] = XLSX.utils.sheet_to_json(worksheet);
+    const rawData: any[] = await readXlsxRows(buffer);
 
     if (rawData.length === 0) {
       return NextResponse.json(

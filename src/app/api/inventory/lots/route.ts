@@ -1,4 +1,4 @@
-import { NextRequest } from "next/server";
+import { NextRequest, NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { requireAuth, getCompanyId, getUserId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
@@ -72,6 +72,19 @@ export async function POST(req: NextRequest) {
     // Validação de segurança: branchId deve pertencer à empresa do usuário
     if (branchId) {
       await validateBranchOwnership(branchId, companyId);
+    }
+
+    // IDOR: garantir que o produto pertence à empresa do usuário antes de
+    // creditar estoque / alterar custo. Sem isso uma ótica creditaria lote
+    // no produto de outra empresa.
+    const prod = await prisma.product.findFirst({
+      where: { id: productId, companyId },
+    });
+    if (!prod) {
+      return NextResponse.json(
+        { error: "Produto não encontrado" },
+        { status: 404 }
+      );
     }
 
     const result = await prisma.$transaction(async (tx) => {

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -19,6 +19,10 @@ export async function GET(
   }
 
   const { id } = await params;
+
+  if (!(await requireSupportScope(admin.id, id))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   try {
     const notes = await prisma.companyNote.findMany({
@@ -50,6 +54,10 @@ export async function POST(
   }
 
   const { id } = await params;
+
+  if (!(await requireSupportScope(admin.id, id))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   try {
     const body = await request.json();

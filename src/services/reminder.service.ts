@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { notFoundError } from "@/lib/error-handler";
 import type {
   ReminderConfigDTO,
   UpdateReminderDTO,
@@ -430,7 +431,23 @@ export const reminderService = {
   // ATUALIZAR LEMBRETE
   // =====================
 
-  async updateReminder(id: string, data: UpdateReminderDTO, userId: string) {
+  async updateReminder(
+    id: string,
+    data: UpdateReminderDTO,
+    userId: string,
+    companyId: string
+  ) {
+    // IDOR: Reminder não tem companyId — escopar via branch.companyId.
+    // Sem esse guard, uma ótica alteraria o lembrete de outra empresa.
+    const existing = await prisma.reminder.findFirst({
+      where: { id, branch: { companyId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw notFoundError("Lembrete não encontrado");
+    }
+
     const updateData: any = {
       status: data.status,
     };
@@ -452,7 +469,17 @@ export const reminderService = {
     });
   },
 
-  async startReminder(id: string) {
+  async startReminder(id: string, companyId: string) {
+    // IDOR: escopar via branch.companyId (Reminder não tem companyId).
+    const existing = await prisma.reminder.findFirst({
+      where: { id, branch: { companyId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw notFoundError("Lembrete não encontrado");
+    }
+
     return prisma.reminder.update({
       where: { id },
       data: { status: "IN_PROGRESS" },

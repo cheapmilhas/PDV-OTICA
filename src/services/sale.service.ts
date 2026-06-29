@@ -816,6 +816,9 @@ export class SaleService {
           customerId,
           cashbackUsed,
           userId,
+          // Anti-fraude: reaplica teto %/compra mínima no débito real (não só no preview).
+          saleTotal: total,
+          companyId,
         });
       }
 

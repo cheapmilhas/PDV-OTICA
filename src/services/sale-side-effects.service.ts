@@ -24,6 +24,7 @@ import { atomicStockDebit } from "@/services/stock.service";
 import { cashbackService } from "@/services/cashback.service";
 import { processaSaleForCampaigns } from "@/services/product-campaign.service";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
+import { assertCashbackLimits } from "@/lib/cashback-math";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ service: "sale-side-effects" });
@@ -346,6 +347,12 @@ export async function applyPaymentsInTx(
 /**
  * Debita cashback usado na venda.
  * Caller deve já ter validado que o cliente tem saldo suficiente.
+ *
+ * Anti-fraude: reaplica DENTRO da transação os limites de uso de cashback
+ * (maxUsagePercent + minPurchaseMultiplier). Antes, essas travas só eram
+ * checadas no preview (validateUsage / /api/cashback/validate); um POST direto
+ * em /api/sales com cashbackUsed alto resgatava acima do teto. Agora a mesma
+ * regra (assertCashbackLimits) roda no caminho de débito real.
  */
 export async function applyCashbackUsageInTx(
   tx: Tx,
@@ -354,11 +361,42 @@ export async function applyCashbackUsageInTx(
     customerId: string;
     cashbackUsed: number;
     userId: string;
+    /** Total da venda — base do teto %/compra mínima. Omitido = pula a reverificação. */
+    saleTotal?: number;
+    companyId?: string;
   }
 ): Promise<void> {
-  const { sale, customerId, cashbackUsed, userId } = params;
+  const { sale, customerId, cashbackUsed, userId, saleTotal } = params;
 
   if (cashbackUsed <= 0) return;
+
+  // Anti-fraude: reaplica os limites de uso (teto % e compra mínima) com a
+  // config da filial. Só roda se o caller passou saleTotal (sempre passa hoje).
+  // assertCashbackLimits respeita null/0 = sem limite.
+  if (typeof saleTotal === "number") {
+    const config = await tx.cashbackConfig.findFirst({
+      where: { branchId: sale.branchId },
+      select: { maxUsagePercent: true, minPurchaseMultiplier: true },
+    });
+
+    if (config) {
+      const limitError = assertCashbackLimits(
+        {
+          maxUsagePercent:
+            config.maxUsagePercent != null ? Number(config.maxUsagePercent) : null,
+          minPurchaseMultiplier:
+            config.minPurchaseMultiplier != null
+              ? Number(config.minPurchaseMultiplier)
+              : null,
+        },
+        saleTotal,
+        cashbackUsed
+      );
+      if (limitError) {
+        throw new AppError(ERROR_CODES.VALIDATION_ERROR, limitError, 400);
+      }
+    }
+  }
 
   // Q7.1 P1-5: race fix — antes era update direto (sem validar balance),
   // permitindo balance negativo se 2 vendas paralelas usassem o mesmo

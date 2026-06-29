@@ -1,15 +1,20 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getCompanyId } from "@/lib/auth-helpers";
+import { getCompanyId, requireAuth, requireRole } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { prisma } from "@/lib/prisma";
-import * as XLSX from "xlsx";
+import { readXlsxRows } from "@/lib/xlsx-read";
 
 /**
  * POST /api/suppliers/import
- * Importa fornecedores a partir de arquivo Excel
+ * Importa fornecedores a partir de arquivo Excel.
+ *
+ * Import em massa: restrito a ADMIN/GERENTE (espelha customers/import). Antes
+ * qualquer papel logado importava sem restrição.
  */
 export async function POST(request: NextRequest) {
   try {
+    await requireAuth();
+    await requireRole(["ADMIN", "GERENTE"]);
     const companyId = await getCompanyId();
     const formData = await request.formData();
     const file = formData.get("file") as File;
@@ -21,15 +26,21 @@ export async function POST(request: NextRequest) {
       );
     }
 
+    // Anti-OOM/zip-bomb: rejeita antes de carregar o arrayBuffer em memória.
+    const MAX_IMPORT_SIZE = 5 * 1024 * 1024; // 5MB
+    if (file.size > MAX_IMPORT_SIZE) {
+      return NextResponse.json(
+        { error: "Arquivo muito grande (máx 5MB)" },
+        { status: 400 }
+      );
+    }
+
     // Converter File para Buffer
     const bytes = await file.arrayBuffer();
     const buffer = Buffer.from(bytes);
 
     // Ler arquivo Excel
-    const workbook = XLSX.read(buffer, { type: "buffer" });
-    const sheetName = workbook.SheetNames[0];
-    const worksheet = workbook.Sheets[sheetName];
-    const rawData: any[] = XLSX.utils.sheet_to_json(worksheet);
+    const rawData: any[] = await readXlsxRows(buffer);
 
     if (rawData.length === 0) {
       return NextResponse.json(
@@ -86,18 +97,15 @@ export async function POST(request: NextRequest) {
           ? row["Ativo"].toString().toLowerCase() === "sim" || row["Ativo"] === "1"
           : true;
 
-        // Verificar se fornecedor já existe (por CNPJ ou nome)
-        const whereConditions: any[] = [{ name: row["Nome"] }];
-        if (cnpj) {
-          whereConditions.push({ cnpj });
-        }
-
-        const existingSupplier = await prisma.supplier.findFirst({
-          where: {
-            companyId,
-            OR: whereConditions,
-          },
-        });
+        // Casar SÓ por CNPJ — nunca por nome. Antes o match era OR [{name},{cnpj}],
+        // então dois fornecedores homônimos viravam o mesmo registro e o import
+        // SOBRESCREVIA os dados de um com os do outro. Sem CNPJ na linha, CRIA
+        // novo (não arrisca casar fornecedor errado por nome).
+        const existingSupplier = cnpj
+          ? await prisma.supplier.findFirst({
+              where: { companyId, cnpj },
+            })
+          : null;
 
         const supplierData = {
           name: row["Nome"],

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 
 // DELETE /api/admin/clientes/[id]/tags/[tagId]
 export async function DELETE(
@@ -11,6 +11,10 @@ export async function DELETE(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId, tagId } = await params;
+
+  if (!(await requireSupportScope(admin.id, companyId))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   const existing = await prisma.companyTag.findUnique({
     where: { companyId_tagId: { companyId, tagId } },

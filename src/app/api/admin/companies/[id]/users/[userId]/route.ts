@@ -1,5 +1,5 @@
 import { NextRequest, NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
@@ -19,6 +19,9 @@ export async function GET(request: NextRequest, context: Params) {
   }
 
   const { id: companyId, userId } = await context.params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   const user = await prisma.user.findFirst({
     where: { id: userId, companyId },
@@ -67,6 +70,9 @@ export async function PATCH(request: NextRequest, context: Params) {
   }
 
   const { id: companyId, userId } = await context.params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   // Verificar que o usuário pertence à empresa
   const user = await prisma.user.findFirst({
@@ -166,6 +172,9 @@ export async function DELETE(request: NextRequest, context: Params) {
   }
 
   const { id: companyId, userId } = await context.params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   const user = await prisma.user.findFirst({
     where: { id: userId, companyId },

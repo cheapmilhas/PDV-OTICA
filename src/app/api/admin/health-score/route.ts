@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { saveHealthScore, recalcAllActiveHealthScores } from "@/lib/health-score";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
@@ -27,6 +27,11 @@ export async function POST(request: Request) {
     }
 
     if (companyId) {
+      // Escopo: só recalcula empresa que o admin pode acessar (ADMIN/SUPER_ADMIN).
+      if (!(await requireCompanyScope(admin.id, companyId))) {
+        return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+      }
+
       // Recalcular para uma empresa específica
       await saveHealthScore(companyId);
 
@@ -45,6 +50,11 @@ export async function POST(request: Request) {
         message: "Health score recalculado",
       });
     } else {
+      // Batch (todas as empresas): operação global, exige SUPER_ADMIN.
+      if (admin.role !== "SUPER_ADMIN") {
+        return NextResponse.json({ error: "Apenas SUPER_ADMIN pode recalcular em lote" }, { status: 403 });
+      }
+
       // Recalcular para todas as empresas ativas (fonte única compartilhada
       // com o cron diário — recalcAllActiveHealthScores).
       const { total, successCount, errorCount } = await recalcAllActiveHealthScores(

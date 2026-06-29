@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "admin/companies/[id]/branches/[branchId]" });
@@ -17,6 +17,9 @@ export async function PATCH(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId, branchId } = await params;
+
+  const scoped = await requireCompanyScope(admin.id, companyId);
+  if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   try {
     const body = await request.json();

@@ -12,10 +12,24 @@ import { canAccessCompany } from "@/lib/admin-scope";
  * checagem pra dentro da função, a segurança em runtime é idêntica (ainda lança
  * se o secret faltar quando a rota roda) e o build não precisa mais do secret.
  */
+/**
+ * Segredo do cookie de admin. SEGURANÇA (pentest 2026-06-27): admin e tenant
+ * assinavam JWT com o MESMO segredo (AUTH_SECRET), então quem o obtivesse podia
+ * forjar um cookie de admin. Agora preferimos um ADMIN_JWT_SECRET dedicado; o
+ * fallback para AUTH_SECRET mantém a compatibilidade até a env nova ser setada
+ * em produção (rotação sem downtime). Defina ADMIN_JWT_SECRET ≠ AUTH_SECRET na
+ * Vercel e invalide os cookies admin antigos.
+ */
+export function getAdminJwtSecret(): Uint8Array {
+  const secret =
+    process.env.ADMIN_JWT_SECRET || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
+  if (!secret) throw new Error("ADMIN_JWT_SECRET (ou AUTH_SECRET) é obrigatório");
+  return new TextEncoder().encode(secret);
+}
+
+// Mantido como alias interno para minimizar o diff nas funções abaixo.
 function getJwtSecret(): Uint8Array {
-  const authSecret = process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-  if (!authSecret) throw new Error("AUTH_SECRET environment variable is required");
-  return new TextEncoder().encode(authSecret);
+  return getAdminJwtSecret();
 }
 
 export interface AdminPayload {
@@ -103,4 +117,50 @@ export async function getAccessibleCompanyIds(adminId: string): Promise<string[]
   if (!admin || !admin.active) return [];
   if (admin.role === "SUPER_ADMIN" || admin.scopeAllCompanies) return null;
   return admin.scopedCompanyIds;
+}
+
+/**
+ * Status HTTP + mensagem padronizados para falha de autorização de admin.
+ * Use o campo `status` para montar a resposta na rota (mantém este módulo
+ * desacoplado de NextResponse e testável sem o runtime do Next).
+ */
+export interface AdminAuthFailure {
+  ok: false;
+  status: 401 | 403;
+  message: string;
+}
+
+export interface AdminAuthSuccess {
+  ok: true;
+  admin: { id: string; role: string };
+}
+
+export type AdminAuthResult = AdminAuthSuccess | AdminAuthFailure;
+
+/**
+ * Combina autenticação de admin + verificação de escopo de empresa numa única
+ * chamada. Fecha a classe inteira de bugs "esqueci o requireCompanyScope":
+ * uma rota por-empresa passa a precisar de UMA linha em vez de copiar o bloco
+ * de 5 linhas (que foi aplicado em algumas rotas e esquecido em muitas).
+ *
+ * - `mode: "scope"` (default) exige papel ADMIN/SUPER_ADMIN (ações sensíveis).
+ * - `mode: "support"` aceita também SUPPORT/BILLING (operações de suporte).
+ *
+ * Retorna `{ ok: true, admin }` ou `{ ok: false, status, message }`. A rota
+ * converte a falha em NextResponse — ex.:
+ *   const r = await requireAdminAndScope(companyId);
+ *   if (!r.ok) return NextResponse.json({ error: r.message }, { status: r.status });
+ */
+export async function requireAdminAndScope(
+  companyId: string,
+  mode: "scope" | "support" = "scope"
+): Promise<AdminAuthResult> {
+  const session = await getAdminSession();
+  if (!session) return { ok: false, status: 401, message: "Não autorizado" };
+  const scoped =
+    mode === "support"
+      ? await requireSupportScope(session.id, companyId)
+      : await requireCompanyScope(session.id, companyId);
+  if (!scoped) return { ok: false, status: 403, message: "Sem permissão para esta empresa" };
+  return { ok: true, admin: scoped };
 }

@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
@@ -18,6 +18,11 @@ export async function POST(
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
 
   const { id: companyId } = await params;
+
+  if (!(await requireCompanyScope(admin.id, companyId))) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
+
   const body = await request.json();
   const { action } = body;
 

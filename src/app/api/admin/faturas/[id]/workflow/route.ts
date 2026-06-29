@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "admin/faturas/[id]/workflow" });
@@ -26,6 +26,10 @@ export async function POST(
 
     if (!invoice) {
       return NextResponse.json({ error: "Fatura não encontrada" }, { status: 404 });
+    }
+
+    if (!(await requireCompanyScope(admin.id, invoice.subscription.companyId))) {
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
     }
 
     switch (action) {

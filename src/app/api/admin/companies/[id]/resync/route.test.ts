@@ -2,7 +2,19 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import { DEFAULT_MESSAGES } from "@/lib/default-messages";
 
 const getAdminSession = vi.fn();
-vi.mock("@/lib/admin-session", () => ({ getAdminSession: () => getAdminSession() }));
+vi.mock("@/lib/admin-session", () => ({
+  getAdminSession: () => getAdminSession(),
+  // Fase 1 segurança: a rota agora exige escopo de empresa. O mock espelha a
+  // lógica real de requireCompanyScope — só ADMIN/SUPER_ADMIN passam (escopo ok);
+  // SUPPORT/BILLING retornam null (403), preservando o teste de papel insuficiente.
+  requireCompanyScope: async (adminId: string) => {
+    const session = await getAdminSession();
+    if (session && ["ADMIN", "SUPER_ADMIN"].includes(session.role)) {
+      return { id: adminId, role: session.role };
+    }
+    return null;
+  },
+}));
 
 const setupCompanyFinance = vi.fn();
 // Mock PARCIAL: o service de resync importa também os seeds (CHART_OF_ACCOUNTS_SEED etc.)

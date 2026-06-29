@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 import { requireAuth, getCompanyId, getBranchId } from "@/lib/auth-helpers";
 import { requirePermission } from "@/lib/auth-permissions";
 import { handleApiError } from "@/lib/error-handler";
+import { prisma } from "@/lib/prisma";
 import { cashbackService } from "@/services/cashback.service";
 import {
   adjustCashbackSchema,
@@ -18,6 +19,18 @@ export async function GET(request: NextRequest, { params }: Params) {
     await requireAuth();
     const companyId = await getCompanyId();
     const { customerId } = await params;
+
+    // IDOR: garantir que o cliente pertence à empresa antes de ler cashback/histórico.
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, companyId },
+      select: { id: true },
+    });
+    if (!customer) {
+      return NextResponse.json(
+        { error: "Cliente não encontrado" },
+        { status: 404 }
+      );
+    }
 
     const { searchParams } = new URL(request.url);
     const query = cashbackHistoryQuerySchema.parse({
@@ -54,6 +67,18 @@ export async function POST(request: NextRequest, { params }: Params) {
     const companyId = await getCompanyId();
     const branchId = await getBranchId();
     const { customerId } = await params;
+
+    // IDOR: garantir que o cliente pertence à empresa antes do ajuste manual.
+    const customer = await prisma.customer.findFirst({
+      where: { id: customerId, companyId },
+      select: { id: true },
+    });
+    if (!customer) {
+      return NextResponse.json(
+        { error: "Cliente não encontrado" },
+        { status: 404 }
+      );
+    }
 
     const body = await request.json();
     const data = adjustCashbackSchema.parse({

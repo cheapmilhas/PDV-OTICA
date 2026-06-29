@@ -441,7 +441,18 @@ export const goalsService = {
     }));
   },
 
-  async markCommissionAsPaid(commissionId: string) {
+  async markCommissionAsPaid(commissionId: string, companyId: string) {
+    // IDOR: SellerCommission não tem companyId — escopar via branch.companyId.
+    // Sem esse guard, uma ótica marcaria como paga a comissão de outra empresa.
+    const existing = await prisma.sellerCommission.findFirst({
+      where: { id: commissionId, branch: { companyId } },
+      select: { id: true },
+    });
+
+    if (!existing) {
+      throw new Error("Comissão não encontrada");
+    }
+
     return prisma.sellerCommission.update({
       where: { id: commissionId },
       data: {

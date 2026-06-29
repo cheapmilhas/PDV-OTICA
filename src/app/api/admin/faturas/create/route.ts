@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ route: "admin/faturas/create" });
@@ -25,6 +25,10 @@ export async function POST(request: Request) {
 
     if (!subscription) {
       return NextResponse.json({ error: "Assinatura não encontrada" }, { status: 404 });
+    }
+
+    if (!(await requireCompanyScope(admin.id, subscription.companyId))) {
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
     }
 
     // Calcular valor

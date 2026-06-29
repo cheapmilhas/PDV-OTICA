@@ -46,3 +46,64 @@ export function applyCashbackAdjustment(
 export function expirableAmount(movementAmount: number, currentBalance: number): number {
   return Math.min(movementAmount, Math.max(0, currentBalance));
 }
+
+/**
+ * Limites de USO de cashback numa venda, em forma pura (testável sem banco).
+ *
+ * Existem duas travas anti-fraude, ambas configuráveis por filial:
+ *  - `maxUsagePercent`: o cashback usado não pode passar de X% do total da venda.
+ *  - `minPurchaseMultiplier`: o total da venda precisa ser >= cashbackUsado × N
+ *    (compra mínima proporcional ao resgate).
+ *
+ * IMPORTANTE — valor `null`/`0`/negativo = "sem limite" (não aplica a trava).
+ * Respeitar isso evita bloquear óticas que deixaram o campo zerado de propósito.
+ *
+ * Originalmente essas regras só viviam em `validateUsage` (preview). O débito
+ * real da venda não as reaplicava, então um POST direto em /api/sales com
+ * `cashbackUsed` alto resgatava acima do teto. Esta função centraliza a regra
+ * para que preview E débito usem exatamente a mesma lógica.
+ */
+export interface CashbackLimitsConfig {
+  /** % máximo do total da venda que pode ser pago em cashback. null/0 = sem teto. */
+  maxUsagePercent: number | null;
+  /** Multiplicador de compra mínima (total >= cashbackUsed × mult). null/0 = sem mínimo. */
+  minPurchaseMultiplier: number | null;
+}
+
+/**
+ * Verifica os limites de uso de cashback. Retorna a mensagem de erro do PRIMEIRO
+ * limite violado, ou `null` se está tudo dentro das regras (caminho feliz).
+ *
+ * @example assertCashbackLimits({maxUsagePercent: 50, minPurchaseMultiplier: 2}, 100, 60) =>
+ *   "Cashback não pode ultrapassar 50% do valor da venda (R$ 50.00)"
+ * @example assertCashbackLimits({maxUsagePercent: null, minPurchaseMultiplier: 0}, 10, 10) => null (sem limites)
+ */
+export function assertCashbackLimits(
+  config: CashbackLimitsConfig,
+  saleTotal: number,
+  cashbackUsed: number
+): string | null {
+  if (cashbackUsed <= 0) return null;
+
+  const minMultiplier = Number(config.minPurchaseMultiplier ?? 0);
+  if (minMultiplier > 0) {
+    const minPurchaseToUse = cashbackUsed * minMultiplier;
+    if (saleTotal < minPurchaseToUse) {
+      return `Compra mínima para usar R$ ${cashbackUsed.toFixed(
+        2
+      )} de cashback: R$ ${minPurchaseToUse.toFixed(2)}`;
+    }
+  }
+
+  const maxPercent = Number(config.maxUsagePercent ?? 0);
+  if (maxPercent > 0) {
+    const maxUsage = (saleTotal * maxPercent) / 100;
+    if (cashbackUsed > maxUsage) {
+      return `Cashback não pode ultrapassar ${maxPercent}% do valor da venda (R$ ${maxUsage.toFixed(
+        2
+      )})`;
+    }
+  }
+
+  return null;
+}
