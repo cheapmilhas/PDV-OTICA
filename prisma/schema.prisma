@@ -1243,6 +1243,9 @@ model Lead {
   intentPredicted            ContactIntent?
   intentCorrectedById        String?
   intentCorrectedAt          DateTime?
+  // Confiança (0-1) da última classificação da IA. Persistida p/ auditar por que
+  // o auto-move (Fatia 3) avançou ou segurou um card (régua exige >= limiar).
+  intentConfidence           Float?
   // Funil Inteligente — Fatia 3 (auto-move): autoria do último movimento + trava
   // humana inteligente. lastMovedBy=USER + lastHumanMoveAt registram que um
   // humano mexeu; aiLockUntilMessageAt guarda o lastMessageAt da conversa no

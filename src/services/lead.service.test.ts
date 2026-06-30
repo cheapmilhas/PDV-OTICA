@@ -257,6 +257,16 @@ describe("moveLead", () => {
     expect(prisma.whatsappConversation.findFirst).not.toHaveBeenCalled();
   });
 
+  it("updateLeadAiFields persiste intentConfidence (observabilidade Fatia 3)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1" });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    const { updateLeadAiFields } = await import("./lead.service");
+    await updateLeadAiFields("l1", "co_1", { intent: "NOVA_COMPRA", confidence: 0.83 });
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.intentConfidence).toBe(0.83);
+    expect(data.intent).toBe("NOVA_COMPRA");
+  });
+
   it("RACE: humano carimbou no meio (count=0) → IA aborta com erro (não sobrescreve)", async () => {
     (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
     (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });

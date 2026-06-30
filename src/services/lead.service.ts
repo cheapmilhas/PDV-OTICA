@@ -54,6 +54,8 @@ export interface LeadAiFields {
   intent?: ContactIntent;
   contactNotPatient?: boolean;
   urgent?: boolean;
+  /** Confiança (0-1) da classificação — persistida p/ auditar o auto-move. */
+  confidence?: number;
   customerMatchKind?: CustomerMatchKind;
   /** Cliente sugerido pela IA (match único, a confirmar). */
   suggestedCustomerId?: string | null;
@@ -118,6 +120,7 @@ export async function createLead(
       ...(aiFields?.intent ? { intent: aiFields.intent, intentPredicted: aiFields.intent } : {}),
       ...(aiFields?.contactNotPatient != null ? { contactNotPatient: aiFields.contactNotPatient } : {}),
       ...(aiFields?.urgent != null ? { urgent: aiFields.urgent } : {}),
+      ...(aiFields?.confidence != null ? { intentConfidence: aiFields.confidence } : {}),
       ...(aiFields?.customerMatchKind ? { customerMatchKind: aiFields.customerMatchKind } : {}),
       ...(aiFields?.suggestedCustomerId ? { suggestedCustomerId: aiFields.suggestedCustomerId } : {}),
     },
@@ -399,6 +402,7 @@ export async function updateLeadAiFields(
     intent?: ContactIntent;
     contactNotPatient?: boolean;
     urgent?: boolean;
+    confidence?: number;
   },
 ) {
   const lead = await prisma.lead.findFirst({
@@ -414,6 +418,7 @@ export async function updateLeadAiFields(
       ...(aiFields.intent ? { intent: aiFields.intent } : {}),
       ...(aiFields.contactNotPatient !== undefined ? { contactNotPatient: aiFields.contactNotPatient } : {}),
       ...(aiFields.urgent !== undefined ? { urgent: aiFields.urgent } : {}),
+      ...(aiFields.confidence !== undefined ? { intentConfidence: aiFields.confidence } : {}),
       lastActivityAt: new Date(),
     },
     select: { id: true },

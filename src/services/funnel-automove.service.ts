@@ -37,20 +37,35 @@ export interface AutoAdvanceResult {
   reason: string;
 }
 
-const skip = (reason: string): AutoAdvanceResult => ({ moved: false, reason });
-
 export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<AutoAdvanceResult> {
   const { conversationId, leadId, companyId, intent, confidence } = input;
+  const killSwitchOn = isFunnelAutoMoveOn(companyId);
+
+  // OBSERVABILIDADE (Fatia 3): loga TODA decisão — inclusive os "não-moveu" —
+  // com o motivo, a confiança e o estado do kill-switch. Sem isso era impossível
+  // saber no pós-morte por que um card não avançou (todos os early-returns eram
+  // mudos). `decide()` centraliza: computa o resultado, loga 1×, devolve.
+  const decide = (
+    r: AutoAdvanceResult,
+    extra?: Record<string, unknown>,
+  ): AutoAdvanceResult => {
+    log.info("auto_move_decision", {
+      leadId, companyId, intent, confidence, killSwitchOn,
+      moved: r.moved, action: r.action ?? null, reason: r.reason,
+      ...extra,
+    });
+    return r;
+  };
 
   // 1. Kill-switch por ótica (OFF por padrão).
-  if (!isFunnelAutoMoveOn(companyId)) return skip("auto-move desligado p/ esta ótica");
+  if (!killSwitchOn) return decide({ moved: false, reason: "auto-move desligado p/ esta ótica" });
 
   try {
     const lead = await prisma.lead.findFirst({
       where: { id: leadId, companyId, deletedAt: null },
       select: { id: true, stageId: true, lastMovedBy: true, aiLockUntilMessageAt: true },
     });
-    if (!lead) return skip("lead não encontrado");
+    if (!lead) return decide({ moved: false, reason: "lead não encontrado" });
 
     const conv = await prisma.whatsappConversation.findFirst({
       where: { id: conversationId, companyId },
@@ -67,7 +82,7 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
         !!lead.aiLockUntilMessageAt &&
         !!conv?.lastMessageAt &&
         conv.lastMessageAt.getTime() > lead.aiLockUntilMessageAt.getTime();
-      if (!evolved) return skip("trava humana ativa (humano moveu, sem msg nova)");
+      if (!evolved) return decide({ moved: false, reason: "trava humana ativa (humano moveu, sem msg nova)" });
     }
 
     // 3. Sinais da conversa (lib pura) a partir das mensagens.
@@ -80,28 +95,32 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
       select: { id: true, order: true, isWon: true, isLost: true },
     });
 
+    const engaged = clientEngaged(messages);
+    const sentValue = oticaSentValue(messages);
+
     // 4. Régua.
     const decision = decideFunnelAdvance({
-      intent,
-      confidence,
-      currentStageId: lead.stageId,
-      stages,
-      clientEngaged: clientEngaged(messages),
-      oticaSentValue: oticaSentValue(messages),
+      intent, confidence, currentStageId: lead.stageId, stages,
+      clientEngaged: engaged, oticaSentValue: sentValue,
     });
 
     if (decision.action !== "move" || !decision.targetStageId) {
       // hold/flag → não move. (flag é sinalizado pela telemetria/inbox existente.)
-      return { moved: false, action: decision.action, reason: decision.reason };
+      return decide(
+        { moved: false, action: decision.action, reason: decision.reason },
+        { currentStageId: lead.stageId, clientEngaged: engaged, oticaSentValue: sentValue },
+      );
     }
 
     // 5. Move via moveLead(AI) — passa pelas validações do writer único.
     await moveLead(lead.id, { stageId: decision.targetStageId }, companyId, "AI");
-    log.info("auto_move_lead", { leadId: lead.id, companyId, from: lead.stageId, to: decision.targetStageId });
-    return { moved: true, action: "move", reason: decision.reason };
+    return decide(
+      { moved: true, action: "move", reason: decision.reason },
+      { from: lead.stageId, to: decision.targetStageId },
+    );
   } catch (e) {
     // NÃO propaga — o cron de qualificação não pode quebrar por causa do auto-move.
     log.error("auto_move_failed", { leadId, companyId, error: e instanceof Error ? e.message : String(e) });
-    return skip("erro no auto-move (fail-safe)");
+    return { moved: false, reason: "erro no auto-move (fail-safe)" };
   }
 }

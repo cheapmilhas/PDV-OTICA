@@ -240,6 +240,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       intent: result.intent,
       contactNotPatient: result.contactNotPatient,
       urgent: result.urgent,
+      confidence: result.confidence,
     });
     leadId = conv.leadId;
     log.info("lead re-qualificado pela IA", { conversationId, leadId, companyId: conv.companyId });
@@ -261,6 +262,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
         intent: result.intent,
         contactNotPatient: result.contactNotPatient,
         urgent: result.urgent,
+        confidence: result.confidence,
         customerMatchKind: matchKind,
         // Guarda o candidato (match único) p/ o vendedor confirmar com 1 clique.
         suggestedCustomerId: match.kind === "single" ? match.customerId : null,
