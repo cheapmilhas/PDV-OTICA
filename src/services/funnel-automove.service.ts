@@ -40,6 +40,11 @@ export interface AutoAdvanceResult {
 export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<AutoAdvanceResult> {
   const { conversationId, leadId, companyId, intent, confidence } = input;
   const killSwitchOn = isFunnelAutoMoveOn(companyId);
+  // DIAG TEMP (auto-move): console.log cru. Remover após diagnosticar.
+  console.log("[DIAG automove] motor entrou", JSON.stringify({
+    leadId, companyId, intent, confidence, killSwitchOn,
+    envRaw: process.env.FUNNEL_AUTOMOVE_COMPANIES ?? null,
+  }));
 
   // OBSERVABILIDADE (Fatia 3): loga TODA decisão — inclusive os "não-moveu" —
   // com o motivo, a confiança e o estado do kill-switch. Sem isso era impossível

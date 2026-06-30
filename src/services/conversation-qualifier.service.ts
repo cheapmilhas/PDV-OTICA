@@ -277,11 +277,18 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   // JÁ era lead) — não no nascimento (card nasce em "Novo" e avança no próximo
   // ciclo, quando a conversa evoluir). O motor é fail-safe e gateado por
   // kill-switch por ótica (OFF por padrão), então é inerte até o dono ligar.
+  // DIAG TEMP (auto-move): console.log cru — sai no Vercel mesmo no cron, ao
+  // contrário do logger estruturado. Remover após diagnosticar.
+  console.log("[DIAG automove] qualifier pré-chamada", JSON.stringify({
+    conversationId, leadId, convLeadId: conv.leadId, willCall: !!conv.leadId,
+    intent: result.intent, confidence: result.confidence, companyId: conv.companyId,
+  }));
   if (conv.leadId) {
-    await maybeAutoAdvanceLead({
+    const amr = await maybeAutoAdvanceLead({
       conversationId, leadId, companyId: conv.companyId,
       intent: result.intent, confidence: result.confidence,
     });
+    console.log("[DIAG automove] resultado", JSON.stringify(amr));
   }
   return { conversationId, isLead: true, leadId };
 }
