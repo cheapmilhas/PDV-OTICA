@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { clientEngaged, oticaSentValue } from "./funnel-signals";
+import { clientEngaged, oticaSentValue, shopReplied } from "./funnel-signals";
 import type { SignalMessage } from "./funnel-signals";
 
 const inbound = (text: string | null, type = "text"): SignalMessage => ({ direction: "inbound", type, text });
@@ -62,5 +62,27 @@ describe("oticaSentValue — a ÓTICA mandou R$ (orçamento)", () => {
 
   it("conversa mista: pega o R$ da ótica mesmo com inbound junto", () => {
     expect(oticaSentValue([inbound("quanto custa?"), outbound("o multifocal fica R$ 1.290")])).toBe(true);
+  });
+});
+
+describe("shopReplied — a ÓTICA respondeu (outbound com conteúdo)", () => {
+  it("outbound com conteúdo real → respondeu", () => {
+    expect(shopReplied([inbound("quero um orçamento"), outbound("claro! qual o grau?")])).toBe(true);
+  });
+
+  it("só saudação automática da ótica → NÃO conta (evita flip falso)", () => {
+    expect(shopReplied([outbound("olá"), outbound("bom dia")])).toBe(false);
+  });
+
+  it("só o cliente falou (ótica em silêncio) → NÃO respondeu", () => {
+    expect(shopReplied([inbound("oi, tem armação?")])).toBe(false);
+  });
+
+  it("outbound sticker/áudio sem texto → NÃO conta", () => {
+    expect(shopReplied([outbound(null, "image"), outbound(null, "audio")])).toBe(false);
+  });
+
+  it("mistura: saudação + resposta real → respondeu", () => {
+    expect(shopReplied([outbound("oi"), outbound("temos sim, a partir de 199")])).toBe(true);
   });
 });

@@ -17,7 +17,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { moveLead } from "@/services/lead.service";
 import { decideFunnelAdvance, type FunnelAction } from "@/lib/funnel-advance";
-import { clientEngaged, oticaSentValue } from "@/lib/funnel-signals";
+import { clientEngaged, oticaSentValue, shopReplied } from "@/lib/funnel-signals";
 import { isFunnelAutoMoveOn } from "@/lib/funnel-automove-flag";
 import { recordAutoMoveTrace } from "@/services/funnel-automove-trace.service";
 import type { ContactIntent } from "@/lib/ai/lead-qualifier";
@@ -115,11 +115,12 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
 
     const engaged = clientEngaged(messages);
     const sentValue = oticaSentValue(messages);
+    const replied = shopReplied(messages);
 
     // 4. Régua.
     const decision = decideFunnelAdvance({
       intent, confidence, currentStageId: lead.stageId, stages,
-      clientEngaged: engaged, oticaSentValue: sentValue,
+      clientEngaged: engaged, shopReplied: replied, oticaSentValue: sentValue,
     });
 
     if (decision.action !== "move" || !decision.targetStageId) {
@@ -130,7 +131,7 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
       return decide(
         { moved: false, action: decision.action, reason: decision.reason },
         persist,
-        { currentStageId: lead.stageId, clientEngaged: engaged, oticaSentValue: sentValue },
+        { currentStageId: lead.stageId, clientEngaged: engaged, shopReplied: replied, oticaSentValue: sentValue },
       );
     }
 

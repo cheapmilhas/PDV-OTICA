@@ -60,3 +60,22 @@ export function oticaSentValue(messages: SignalMessage[]): boolean {
   }
   return false;
 }
+
+/**
+ * A ótica RESPONDEU: existe ao menos 1 mensagem outbound com conteúdo real (não
+ * só saudação automática). Sinal OBJETIVO de "está sendo atendido" — gatilho de
+ * Novo→Em atendimento (substitui o gate de confiança da IA no trecho 0). Espelha
+ * `clientEngaged` no lado da ótica: ignora saudação/sticker p/ uma saudação
+ * automática não promover todo card de "Novo" sozinha.
+ */
+export function shopReplied(messages: SignalMessage[]): boolean {
+  for (const m of messages) {
+    if (m.direction !== "outbound") continue;
+    if (m.type !== "text") continue;
+    const t = m.text ? normalize(m.text) : "";
+    if (t.length === 0) continue;
+    if (GREETINGS.has(t)) continue;
+    return true;
+  }
+  return false;
+}

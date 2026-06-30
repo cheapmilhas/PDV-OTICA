@@ -38,7 +38,10 @@ function setup(over: {
     over.conv ?? { id: "conv_1", lastMessageAt: new Date("2026-06-30T10:00:00Z") },
   );
   (prisma.whatsappMessage.findMany as any).mockResolvedValue(
-    over.messages ?? [{ direction: "inbound", type: "text", text: "quero óculos de grau" }],
+    over.messages ?? [
+      { direction: "inbound", type: "text", text: "quero óculos de grau" },
+      { direction: "outbound", type: "text", text: "claro! me passa seu grau?" }, // ótica respondeu
+    ],
   );
   (prisma.leadStage.findMany as any).mockResolvedValue(over.stages ?? STAGES);
 }
@@ -137,6 +140,27 @@ describe("maybeAutoAdvanceLead — motor de auto-move (travas + régua)", () => 
     await call();
     const where = (prisma.lead.findFirst as any).mock.calls[0][0].where;
     expect(where).toMatchObject({ id: "lead_1", companyId: "co_1" });
+  });
+
+  describe("régua nova: exige ótica respondida p/ Novo→Em atendimento", () => {
+    it("cliente engajou MAS ótica NÃO respondeu (só inbound) → NÃO move (lead recém-nascido)", async () => {
+      setup({ messages: [{ direction: "inbound", type: "text", text: "quero um orçamento" }] });
+      const r = await call();
+      expect(r.moved).toBe(false);
+      expect(moveLeadMock).not.toHaveBeenCalled();
+    });
+
+    it("cliente engajou E ótica respondeu → move (mesmo com confiança 0)", async () => {
+      setup({
+        messages: [
+          { direction: "inbound", type: "text", text: "quero um orçamento" },
+          { direction: "outbound", type: "text", text: "claro, me manda seu grau" },
+        ],
+      });
+      const r = await call({ confidence: 0 }); // confiança não trava o trecho 0
+      expect(r.moved).toBe(true);
+      expect(moveLeadMock).toHaveBeenCalledWith("lead_1", { stageId: "s_atend" }, "co_1", "AI");
+    });
   });
 
   describe("trilha de telemetria (gated)", () => {

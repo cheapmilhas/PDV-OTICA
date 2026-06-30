@@ -278,35 +278,31 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   }
   await finalize(leadId, { isLead: true, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
 
-  // Funil Inteligente — Fatia 3: auto-move. Só roda em RE-QUALIFICAÇÃO (a conversa
-  // JÁ era lead) — não no nascimento (card nasce em "Novo" e avança no próximo
-  // ciclo, quando a conversa evoluir). O motor é fail-safe (não propaga) e gateado
-  // por kill-switch por ótica (OFF por padrão), então é inerte até o dono ligar.
-  // A observabilidade vive na trilha `FunnelAutoMoveLog` (gravada dentro do motor).
-  // Try/catch DEDICADO cobre ESTRITAMENTE a chamada do motor: o motor já é
-  // fail-safe (catch interno), então este catch só pega o caso raro de ele lançar
-  // PASSANDO do próprio catch (ex.: o writer de trilha falhar). Sem isto, tal
-  // exceção subiria ao catch MUDO do loop do cron e a causa ficaria invisível.
-  // (`finalize`, acima, NÃO está coberto aqui de propósito: a falha dele é uma
-  // falha genérica de qualificação, tratada pelo catch do loop — não é auto-move.)
+  // Funil Inteligente — Fatia 3: auto-move. Roda em TODA qualificação — inclusive
+  // no NASCIMENTO do lead (não só re-qualificação). É SEGURO avaliar no nascimento
+  // porque a régua de Novo→Em atendimento exige que a ÓTICA TENHA RESPONDIDO: um
+  // lead recém-nascido sem resposta da ótica fica em "Novo" corretamente; só move
+  // quando há atendimento real. (Antes só rodava em re-qualificação `if conv.leadId`,
+  // e leads sem mensagem nova depois ficavam presos em "Novo" pra sempre — o bug.)
+  // O motor é fail-safe (não propaga) e gateado por kill-switch por ótica (OFF por
+  // padrão). A observabilidade vive na trilha `FunnelAutoMoveLog`. Try/catch
+  // DEDICADO cobre o caso raro de o motor lançar passando do próprio catch interno.
   let autoMove: QualifyResult["autoMove"];
-  if (conv.leadId) {
-    try {
-      const r = await maybeAutoAdvanceLead({
-        conversationId, leadId, companyId: conv.companyId,
-        intent: result.intent, confidence: result.confidence,
-      });
-      autoMove = { evaluated: true, moved: r.moved, errored: false };
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      log.error("auto-move lançou (segue, não quebra a qualificação)", { conversationId, leadId, error: msg });
-      await recordAutoMoveTrace({
-        companyId: conv.companyId, leadId, action: "error", moved: false,
-        reason: "exceção fora do motor (qualifier)", error: msg,
-        envSeen: process.env.FUNNEL_AUTOMOVE_COMPANIES ? "set" : "unset",
-      });
-      autoMove = { evaluated: true, moved: false, errored: true };
-    }
+  try {
+    const r = await maybeAutoAdvanceLead({
+      conversationId, leadId, companyId: conv.companyId,
+      intent: result.intent, confidence: result.confidence,
+    });
+    autoMove = { evaluated: true, moved: r.moved, errored: false };
+  } catch (e) {
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error("auto-move lançou (segue, não quebra a qualificação)", { conversationId, leadId, error: msg });
+    await recordAutoMoveTrace({
+      companyId: conv.companyId, leadId, action: "error", moved: false,
+      reason: "exceção fora do motor (qualifier)", error: msg,
+      envSeen: process.env.FUNNEL_AUTOMOVE_COMPANIES ? "set" : "unset",
+    });
+    autoMove = { evaluated: true, moved: false, errored: true };
   }
   return { conversationId, isLead: true, leadId, autoMove };
 }

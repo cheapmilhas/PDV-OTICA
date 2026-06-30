@@ -30,6 +30,7 @@ function base(over: Partial<Parameters<typeof decideFunnelAdvance>[0]> = {}) {
     currentStageId: "s_novo",
     stages: STAGES,
     clientEngaged: true,
+    shopReplied: true,
     oticaSentValue: false,
     ...over,
   });
@@ -55,6 +56,21 @@ describe("decideFunnelAdvance — régua de avanço do funil", () => {
   it("Novo + cliente NÃO engajou (só saudação) → hold", () => {
     const r = base({ currentStageId: "s_novo", clientEngaged: false });
     expect(r.action).toBe("hold");
+  });
+
+  it("Novo + engajou MAS ótica NÃO respondeu → hold (lead recém-nascido sem atendimento)", () => {
+    // O FIX estrutural: card nasce em Novo e só vai p/ Em atendimento quando a
+    // ótica responde. Sem resposta da ótica, fica em Novo (não infla).
+    const r = base({ currentStageId: "s_novo", clientEngaged: true, shopReplied: false });
+    expect(r.action).toBe("hold");
+  });
+
+  it("Novo + engajou + ótica respondeu + confiança 0.0 → MOVE (confiança NÃO trava o trecho 0)", () => {
+    // Repro do bug NORBERTO/Matheus: IA devolvia conf=0.0 e travava. Agora o
+    // gatilho é objetivo (ótica respondeu), confiança não barra Novo→Em atendimento.
+    const r = base({ currentStageId: "s_novo", clientEngaged: true, shopReplied: true, confidence: 0 });
+    expect(r.action).toBe("move");
+    expect(r.targetStageId).toBe("s_atend");
   });
 
   // ---- Em atendimento → Orçamento enviado ----
@@ -119,10 +135,16 @@ describe("decideFunnelAdvance — régua de avanço do funil", () => {
     },
   );
 
-  // ---- confiança baixa → hold silencioso ----
-  it("confiança abaixo do limiar → hold (não move, silencioso)", () => {
-    const r = base({ confidence: FUNNEL_CONFIDENCE_MIN - 0.01, currentStageId: "s_novo", clientEngaged: true });
+  // ---- confiança: agora SÓ gateia o trecho 1 (Em atendimento→Orçamento) ----
+  it("trecho 1: confiança abaixo do limiar → hold mesmo com R$ da ótica", () => {
+    const r = base({ confidence: FUNNEL_CONFIDENCE_MIN - 0.01, currentStageId: "s_atend", oticaSentValue: true });
     expect(r.action).toBe("hold");
+    expect(r.reason).toMatch(/confian/i);
+  });
+
+  it("trecho 0: confiança baixa NÃO bloqueia (gatilho é objetivo: engajou+ótica respondeu)", () => {
+    const r = base({ confidence: 0.1, currentStageId: "s_novo", clientEngaged: true, shopReplied: true });
+    expect(r.action).toBe("move");
   });
 
   it("confiança baixa NÃO vira flag mesmo em reclamação? — reclamação sempre sinaliza", () => {
@@ -149,7 +171,7 @@ describe("decideFunnelAdvance — régua de avanço do funil", () => {
     // card no 3º aberto (Proposta) com R$ → NÃO move (estágio avançado = humano)
     const r = decideFunnelAdvance({
       intent: "ORCAMENTO_PRECO", confidence: 0.9, currentStageId: "s_proposta",
-      stages: FOUR, clientEngaged: true, oticaSentValue: true,
+      stages: FOUR, clientEngaged: true, shopReplied: true, oticaSentValue: true,
     });
     expect(r.action).toBe("hold");
     expect(r.reason).toMatch(/avançad/i);
@@ -164,7 +186,7 @@ describe("decideFunnelAdvance — régua de avanço do funil", () => {
     ];
     const r = decideFunnelAdvance({
       intent: "NOVA_COMPRA", confidence: 0.9, currentStageId: "s_atend",
-      stages: FOUR, clientEngaged: true, oticaSentValue: true,
+      stages: FOUR, clientEngaged: true, shopReplied: true, oticaSentValue: true,
     });
     expect(r.action).toBe("move");
     expect(r.targetStageId).toBe("s_proposta");
@@ -177,7 +199,7 @@ describe("decideFunnelAdvance — régua de avanço do funil", () => {
     ];
     const r = decideFunnelAdvance({
       intent: "NOVA_COMPRA", confidence: 0.9, currentStageId: "s_novo",
-      stages: onlyNovo, clientEngaged: true, oticaSentValue: false,
+      stages: onlyNovo, clientEngaged: true, shopReplied: true, oticaSentValue: false,
     });
     // próximo seria o Fechado (terminal) → não move
     expect(r.action).toBe("hold");

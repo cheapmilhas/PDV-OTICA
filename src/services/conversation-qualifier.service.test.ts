@@ -139,6 +139,9 @@ describe("qualifyConversation", () => {
     expect(upd.data.analyzedAt).toBeInstanceOf(Date);
     expect(upd.data.analysisAttempts).toBe(0); // R2-fix: sucesso zera o contador (não congela recorrente)
     expect(r.leadId).toBe("lead1");
+    // FIX (cards presos em Novo): o motor de auto-move roda TAMBÉM no NASCIMENTO
+    // do lead, não só em re-qualificação. Com o leadId recém-criado.
+    expect(autoAdvanceMock).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead1" }));
   });
 
   it("análise concluída (mesmo não-lead) zera analysisAttempts — cliente recorrente não congela", async () => {
