@@ -25,7 +25,9 @@ export interface LeadStage {
   isLost: boolean;
 }
 
-const PAGE_SIZE = 8;
+// Cards visíveis por coluna antes do "Carregar mais". 25 evita a confusão de
+// "lead sumiu" quando a coluna tem 9-20 leads (o servidor já manda até 200).
+const PAGE_SIZE = 25;
 
 interface FunilBoardProps {
   stages: LeadStage[];
