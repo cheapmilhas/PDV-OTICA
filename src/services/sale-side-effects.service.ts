@@ -804,6 +804,69 @@ export async function linkLeadAndMaybeWinInTx(
   }
 }
 
+/**
+ * Funil Inteligente — desfaz o auto-Ganho quando a venda é estornada/cancelada.
+ *
+ * Sem isso o funil MENTE: um card fica em "Ganho" por uma venda que não existe
+ * mais. Chamado dentro da tx de cancel() (que refundFull reusa), então cobre
+ * estorno E cancelamento direto.
+ *
+ * Regras (espelham a cautela do link):
+ *  - só age se a venda tem leadId;
+ *  - só reverte se o lead AINDA está em estágio isWon — se um humano já moveu
+ *    o card p/ outro lugar (ou p/ Perdido), respeita e não mexe;
+ *  - volta p/ o 1º estágio NÃO-terminal (menor order) da ótica;
+ *  - se a ótica não tem estágio aberto, no-op seguro;
+ *  - fail-safe: erro NÃO propaga (não pode travar o cancelamento da venda);
+ *  - multi-tenant: companyId em todo filtro e no updateMany.
+ */
+export async function reverseLeadWinForSaleInTx(
+  tx: Tx,
+  params: { saleId: string; companyId: string }
+): Promise<void> {
+  const { saleId, companyId } = params;
+  try {
+    const sale = await tx.sale.findUnique({
+      where: { id: saleId },
+      select: { leadId: true },
+    });
+    if (!sale?.leadId) return; // venda sem vínculo de lead → nada a reverter
+
+    const lead = await tx.lead.findFirst({
+      where: { id: sale.leadId, companyId, deletedAt: null },
+      select: { id: true, stage: { select: { id: true, isWon: true, isLost: true } } },
+    });
+    // Só reverte se o card AINDA está em Ganho. Se humano já moveu (incl. p/
+    // Perdido), respeita — não reabre nem arrasta o que a pessoa decidiu.
+    if (!lead || !lead.stage.isWon) return;
+
+    // Tradeoff de produto (consciente): o lead não guarda de ONDE veio antes do
+    // auto-Ganho, então volta p/ o 1º estágio aberto (menor order). Para o caso
+    // comum (lead nasce no estágio 1 e a venda o ganha) isso é exato. Um lead
+    // que estava num estágio avançado perde esse contexto — aceitável p/ a
+    // Fatia 1 (raro: o auto-Ganho só move quem ainda estava aberto).
+    const firstOpen = await tx.leadStage.findFirst({
+      where: { companyId, isWon: false, isLost: false },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    if (!firstOpen) return; // ótica sem estágio aberto p/ onde voltar → no-op
+
+    await tx.lead.updateMany({
+      where: { id: lead.id, companyId },
+      data: { stageId: firstOpen.id, lastActivityAt: new Date() },
+    });
+    log.info("lead_win_reversed_by_refund", { saleId, companyId, leadId: lead.id, stageId: firstOpen.id });
+  } catch (reverseError) {
+    // NÃO propaga — o cancelamento da venda não pode travar por causa do funil.
+    log.error("lead_win_reverse_failed", {
+      saleId,
+      companyId,
+      error: reverseError instanceof Error ? reverseError.message : String(reverseError),
+    });
+  }
+}
+
 // ============================================================================
 // Side-effects pós-transação
 // ============================================================================

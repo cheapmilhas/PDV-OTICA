@@ -3,7 +3,7 @@ const createMock = vi.fn();
 vi.mock("@anthropic-ai/sdk", () => ({ default: class { constructor(_opts?: unknown) {} messages = { create: (...a: unknown[]) => createMock(...a) }; } }));
 vi.mock("@/services/ai-config.service", () => ({ getAnthropicKey: vi.fn() }));
 import { getAnthropicKey } from "@/services/ai-config.service";
-import { qualifyConversationText } from "./lead-qualifier";
+import { qualifyConversationText, SYSTEM_PROMPT } from "./lead-qualifier";
 
 beforeEach(() => {
   vi.clearAllMocks();
@@ -101,5 +101,14 @@ describe("qualifyConversationText", () => {
     const r = await qualifyConversationText("oi", [{ id: "s_novo", name: "Novo" }]);
     expect(r.isLead).toBe(false);
     expect(r.parseError).toBe(true);
+  });
+
+  // LGPD: o prompt DEVE instruir a IA a não colocar PII/saúde no "reason"
+  // (o motivo é exibido a funcionários da ótica). Regressão p/ não remover.
+  it("SYSTEM_PROMPT instrui a não incluir nome/saúde no reason (LGPD)", () => {
+    expect(SYSTEM_PROMPT).toContain("LGPD");
+    expect(SYSTEM_PROMPT.toLowerCase()).toContain("nomes de");
+    expect(SYSTEM_PROMPT.toLowerCase()).toContain("saúde");
+    expect(SYSTEM_PROMPT.toLowerCase()).toContain("nunca inclua");
   });
 });

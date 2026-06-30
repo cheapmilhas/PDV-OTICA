@@ -22,6 +22,7 @@ import {
   applyCommissionInTx,
   applyFinanceEntriesInTx,
   linkLeadAndMaybeWinInTx,
+  reverseLeadWinForSaleInTx,
   applyPostCommitSideEffects,
   reverseCommissionForSaleInTx,
   reverseCashbackForSaleInTx,
@@ -1133,6 +1134,12 @@ export class SaleService {
           data: { status: "CANCELED", canceledAt: new Date() },
         });
       }
+
+      // 8c. Funil Inteligente: desfaz o auto-Ganho. Se esta venda levou um lead
+      // p/ "Ganho", o card volta p/ o 1º estágio aberto (a venda não existe mais).
+      // Fail-safe interno: não trava o cancelamento. Cobre estorno (refundFull
+      // reusa cancel) e cancelamento direto.
+      await reverseLeadWinForSaleInTx(tx, { saleId: id, companyId });
     }, { timeout: 30_000 });
 
     // 9. Cancelar lembrete pós-venda (se existir)
