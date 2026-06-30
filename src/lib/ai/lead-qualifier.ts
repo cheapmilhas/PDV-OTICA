@@ -3,7 +3,27 @@ import Anthropic from "@anthropic-ai/sdk";
 import { getAnthropicKey } from "@/services/ai-config.service";
 
 export const LEAD_QUALIFIER_MODEL = "claude-sonnet-4-6";
-export interface QualifierStage { id: string; name: string; }
+// order/isWon/isLost são opcionais p/ compat, mas quando presentes permitem
+// escolher o 1º estágio ABERTO (não-terminal) de menor ordem no nascimento.
+export interface QualifierStage { id: string; name: string; order?: number; isWon?: boolean; isLost?: boolean; }
+
+/**
+ * O estágio em que um lead criado pela IA NASCE: o 1º estágio ABERTO por ordem
+ * (tipicamente "Novo"). NÃO usa o chute da IA (`suggestedStageName`) — o avanço
+ * é responsabilidade EXCLUSIVA da régua objetiva (decideFunnelAdvance), que exige
+ * sinais reais (ótica respondeu / ótica mandou R$). Isso fecha o furo de a IA
+ * cravar um estágio adiantado lendo errado a conversa (ex.: cliente cotou um
+ * valor e a IA achou que a ótica enviou orçamento). Fallback: se os campos de
+ * ordem não vierem, usa o 1º da lista (que já chega ordenada por `listStages`).
+ */
+function firstOpenStageId(stages: QualifierStage[]): string | null {
+  const open = stages.filter((s) => !s.isWon && !s.isLost);
+  const hasOrder = open.every((s) => typeof s.order === "number");
+  if (open.length > 0 && hasOrder) {
+    return [...open].sort((a, b) => (a.order! - b.order!))[0].id;
+  }
+  return stages[0]?.id ?? null;
+}
 
 /** Intenções fechadas (Fase 1: string validada por zod/allowlist no servidor). */
 export const CONTACT_INTENTS = [
@@ -69,7 +89,7 @@ remédio), CPF/telefone/valores. Descreva a SITUAÇÃO de forma genérica ("Clie
 renovar óculos", "Pergunta sobre garantia"), sem dados pessoais nem de saúde.
 
 Responda SOMENTE com JSON válido (sem markdown):
-{"intent":"<UMA das opções>","isLead":true|false,"reason":"frase curta","interest":"grau"|"sol"|"lente_contato"|"exame"|"conserto"|"outro"|null,"suggestedStageName":"<nome EXATO de etapa fornecida>"|null,"contactNotPatient":true|false,"urgent":true|false,"confidence":0.0-1.0}`;
+{"intent":"<UMA das opções>","isLead":true|false,"reason":"frase curta","interest":"grau"|"sol"|"lente_contato"|"exame"|"conserto"|"outro"|null,"contactNotPatient":true|false,"urgent":true|false,"confidence":0.0-1.0}`;
 
 /** Serializa o resumo seguro como bloco de DICA (fora dos marcadores de conversa). */
 function hintBlock(hint: SafeCustomerHint | null | undefined): string {
@@ -123,12 +143,9 @@ export async function qualifyConversationText(
     : "OUTRO";
   const isLead = !NON_SALE_INTENTS.has(intent) && parsed.isLead === true;
 
-  let stageId: string | null = null;
-  if (isLead) {
-    const suggested = typeof parsed.suggestedStageName === "string" ? parsed.suggestedStageName : null;
-    const match = suggested ? stages.find((s) => s.name === suggested) : null;
-    stageId = match?.id ?? stages[0]?.id ?? null;
-  }
+  // Nascimento: SEMPRE no 1º estágio aberto (Novo). Ignora qualquer "chute" de
+  // estágio da IA — o avanço é só pela régua objetiva (ver firstOpenStageId).
+  const stageId: string | null = isLead ? firstOpenStageId(stages) : null;
   const confidenceRaw = typeof parsed.confidence === "number" ? parsed.confidence : 0;
   const confidence = Math.max(0, Math.min(1, confidenceRaw)); // clamp 0-1
   return {

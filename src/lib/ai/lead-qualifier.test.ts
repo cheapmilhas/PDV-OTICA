@@ -43,9 +43,29 @@ describe("qualifyConversationText", () => {
     expect(r.isLead).toBe(false);
     expect(r.stageId).toBeNull();
   });
-  it("stage sugerida inexistente → primeira etapa", async () => {
-    mockJson({ intent: "NOVA_COMPRA", isLead: true, reason: "lead", suggestedStageName: "Inexistente", confidence: 0.7 });
-    const r = await qualifyConversationText("quero lente de contato", [{ id: "s_novo", name: "Novo" }, { id: "s2", name: "X" }]);
+  it("lead SEMPRE nasce no 1º estágio aberto — IGNORA o chute de stage da IA", async () => {
+    // 🐛 Bug Delene: o cliente cotou "220,00" e a IA cravou "Orçamento enviado" no
+    // nascimento, pulando etapas. Agora o nascimento ignora suggestedStageName e
+    // usa o 1º estágio ABERTO (Novo); o avanço fica SÓ com a régua objetiva.
+    const STAGES = [
+      { id: "s_novo", name: "Novo", order: 0, isWon: false, isLost: false },
+      { id: "s_atend", name: "Em atendimento", order: 1, isWon: false, isLost: false },
+      { id: "s_orc", name: "Orçamento enviado", order: 2, isWon: false, isLost: false },
+      { id: "s_fechado", name: "Fechado", order: 3, isWon: true, isLost: false },
+    ];
+    mockJson({ intent: "ORCAMENTO_PRECO", isLead: true, reason: "lead", suggestedStageName: "Orçamento enviado", confidence: 0.9 });
+    const r = await qualifyConversationText("220,00 a vista ou no Pix", STAGES);
+    expect(r.stageId).toBe("s_novo"); // NÃO "s_orc"
+  });
+
+  it("1º estágio aberto = menor order NÃO-terminal (mesmo desordenado)", async () => {
+    const STAGES = [
+      { id: "s_fechado", name: "Fechado", order: 3, isWon: true, isLost: false },
+      { id: "s_atend", name: "Em atendimento", order: 1, isWon: false, isLost: false },
+      { id: "s_novo", name: "Novo", order: 0, isWon: false, isLost: false },
+    ];
+    mockJson({ intent: "NOVA_COMPRA", isLead: true, reason: "lead", confidence: 0.7 });
+    const r = await qualifyConversationText("quero lente de contato", STAGES);
     expect(r.stageId).toBe("s_novo");
   });
 

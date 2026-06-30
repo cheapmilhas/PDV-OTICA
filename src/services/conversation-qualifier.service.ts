@@ -207,7 +207,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   const fewShotBlock = buildFewShotBlock(corrections);
   const result = await qualifyConversationText(
     text,
-    stages.map((s) => ({ id: s.id, name: s.name })),
+    stages.map((s) => ({ id: s.id, name: s.name, order: s.order, isWon: s.isWon, isLost: s.isLost })),
     cfg.qualifierModel,
     match.kind === "single" ? match.summary : null,
     fewShotBlock,
