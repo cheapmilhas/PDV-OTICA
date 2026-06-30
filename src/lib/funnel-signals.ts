@@ -62,15 +62,22 @@ export function oticaSentValue(messages: SignalMessage[]): boolean {
 }
 
 /**
- * A ótica RESPONDEU: existe ao menos 1 mensagem outbound com conteúdo real (não
- * só saudação automática). Sinal OBJETIVO de "está sendo atendido" — gatilho de
- * Novo→Em atendimento (substitui o gate de confiança da IA no trecho 0). Espelha
- * `clientEngaged` no lado da ótica: ignora saudação/sticker p/ uma saudação
- * automática não promover todo card de "Novo" sozinha.
+ * A ótica RESPONDEU: existe ao menos 1 mensagem outbound com conteúdo real.
+ * Sinal OBJETIVO de "está sendo atendido" — gatilho de Novo→Em atendimento
+ * (substitui o gate de confiança da IA no trecho 0).
+ *
+ * Conta como resposta:
+ *  - texto outbound com conteúdo (ignora saudação isolada, p/ uma saudação
+ *    automática não promover todo card de "Novo" sozinha);
+ *  - ÁUDIO outbound (mensagem de voz É atendimento real — a atendente respondeu
+ *    por áudio; não conta como saudação). Casos reais da ótica respondem por voz.
+ * NÃO conta: sticker/imagem isolada sem texto (ruído, não atendimento).
  */
 export function shopReplied(messages: SignalMessage[]): boolean {
   for (const m of messages) {
     if (m.direction !== "outbound") continue;
+    // Áudio outbound = resposta de voz da atendente → atendimento real.
+    if (m.type === "audio") return true;
     if (m.type !== "text") continue;
     const t = m.text ? normalize(m.text) : "";
     if (t.length === 0) continue;

@@ -78,8 +78,13 @@ describe("shopReplied — a ÓTICA respondeu (outbound com conteúdo)", () => {
     expect(shopReplied([inbound("oi, tem armação?")])).toBe(false);
   });
 
-  it("outbound sticker/áudio sem texto → NÃO conta", () => {
-    expect(shopReplied([outbound(null, "image"), outbound(null, "audio")])).toBe(false);
+  it("outbound sticker/imagem sem texto → NÃO conta (ruído)", () => {
+    expect(shopReplied([outbound(null, "image"), outbound(null, "sticker")])).toBe(false);
+  });
+
+  it("ÁUDIO outbound (resposta de voz da atendente) → respondeu (atendimento real)", () => {
+    // Caso real (Rodrigo): a ótica respondeu por áudio. Voz É atendimento.
+    expect(shopReplied([inbound("me liga"), outbound(null, "audio")])).toBe(true);
   });
 
   it("mistura: saudação + resposta real → respondeu", () => {
