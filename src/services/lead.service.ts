@@ -238,11 +238,16 @@ export async function moveLead(
   }
 
   // Auto-move da IA: NUNCA sobrescreve uma correção humana. updateMany com guard
-  // `lastMovedBy != USER` fecha a janela de corrida (humano move entre a leitura
-  // do motor e este update) — se um USER carimbou no meio, count=0 e a IA aborta.
+  // que fecha a janela de corrida (humano move entre a leitura do motor e este
+  // update) — se um USER carimbou no meio, count=0 e a IA aborta.
+  // 🐛 NULL (lógica de 3 valores do SQL): NÃO usar `{ not: "USER" }` — `NULL <>
+  // 'USER'` é NULL (não TRUE), então excluiria as linhas com lastMovedBy=NULL, que
+  // é o PADRÃO de TODO lead nunca-tocado-por-humano (o caso comum). Resultado: a IA
+  // nunca movia card nenhum em prod. O guard tem de INCLUIR a linha NULL e ainda
+  // BARRAR a linha USER → OR explícito (null OU AI), nunca a negação direta.
   if (movedBy === "AI") {
     const res = await prisma.lead.updateMany({
-      where: { id, companyId, lastMovedBy: { not: "USER" } },
+      where: { id, companyId, OR: [{ lastMovedBy: null }, { lastMovedBy: "AI" }] },
       data: {
         stageId: data.stageId,
         lostReason: stage.isLost ? data.lostReason : null,

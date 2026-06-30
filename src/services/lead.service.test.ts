@@ -242,7 +242,7 @@ describe("moveLead", () => {
     expect(data.aiLockUntilMessageAt).toEqual(new Date("2026-06-20T08:00:00Z"));
   });
 
-  it("movimento por IA usa updateMany com guard lastMovedBy!=USER + carimba AI", async () => {
+  it("movimento por IA usa updateMany com guard (null OU AI) + carimba AI", async () => {
     (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
     (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
     (prisma.lead.updateMany as any).mockResolvedValue({ count: 1 });
@@ -251,10 +251,36 @@ describe("moveLead", () => {
     await moveLead("l1", { stageId: "stg2" } as any, "co_1", "AI");
 
     const arg = (prisma.lead.updateMany as any).mock.calls[0][0];
-    expect(arg.where).toMatchObject({ id: "l1", companyId: "co_1", lastMovedBy: { not: "USER" } });
+    expect(arg.where).toMatchObject({ id: "l1", companyId: "co_1" });
     expect(arg.data.lastMovedBy).toBe("AI");
     // IA não consulta conversa p/ trava humana
     expect(prisma.whatsappConversation.findFirst).not.toHaveBeenCalled();
+  });
+
+  // 🐛 BUG NULL (lógica de 3 valores do SQL): `lastMovedBy != 'USER'` exclui as
+  // linhas com lastMovedBy=NULL (null<>'USER' = NULL, não TRUE). Como NULL é o
+  // PADRÃO de todo lead nunca-tocado-por-humano, o guard barrava o caso COMUM e a
+  // IA NUNCA movia card nenhum em prod (provado contra o banco real). O guard tem
+  // de incluir explicitamente a linha NULL e ainda barrar a linha USER (corrida).
+  it("BUG NULL: guard da IA inclui a linha lastMovedBy=NULL (lead nunca tocado)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    (prisma.lead.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.lead.findUniqueOrThrow as any).mockResolvedValue({ id: "l1", stageId: "stg2" });
+
+    await moveLead("l1", { stageId: "stg2" } as any, "co_1", "AI");
+
+    const where = (prisma.lead.updateMany as any).mock.calls[0][0].where;
+    // O filtro DEVE casar lastMovedBy NULL e AI, e NÃO casar USER. A forma `{ not:
+    // "USER" }` sozinha (sem o arm null) é o bug — exige o OR com a linha null.
+    expect(where.OR).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ lastMovedBy: null }),
+        expect.objectContaining({ lastMovedBy: "AI" }),
+      ]),
+    );
+    // E não pode haver um filtro top-level que exclua NULL (o bug original).
+    expect(where.lastMovedBy).toBeUndefined();
   });
 
   it("updateLeadAiFields persiste intentConfidence (observabilidade Fatia 3)", async () => {
