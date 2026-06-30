@@ -30,11 +30,10 @@ interface UsePermissionResult {
  * cap de tempo (anti-spinner-eterno).
  */
 export function usePermission(): UsePermissionResult {
-  const { permissions, role, isAdmin, status, fetchingCustom, loadingCapped, refetch } =
+  const { permissions, role, isAdmin, status, customLoading, loadingCapped, refetch } =
     useSharedPermissions();
 
-  const rawLoading =
-    status === "loading" || (status === "authenticated" && !isAdmin && fetchingCustom);
+  const rawLoading = status === "loading" || customLoading;
   const isLoading = rawLoading && !loadingCapped;
 
   const hasPermission = useCallback(

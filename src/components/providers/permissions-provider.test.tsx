@@ -66,6 +66,23 @@ describe("PermissionsProvider — fonte única (1 fetch compartilhado)", () => {
     expect(result.current.canSeeCanceled).toBe(true); // GERENTE
   });
 
+  it("não-ADMIN: isLoading começa TRUE (sem flash de 'sem permissão' antes do fetch)", async () => {
+    useSessionMock.mockReturnValue({ data: NON_ADMIN, status: "authenticated" });
+    const { result } = renderHook(() => usePermissions(), { wrapper });
+    // No 1º render, antes do fetch resolver, DEVE estar carregando (não false).
+    expect(result.current.isLoading).toBe(true);
+    await waitFor(() => expect(result.current.isLoading).toBe(false));
+    expect(result.current.hasPermission("sales.create")).toBe(true);
+  });
+
+  it("fallback SEM provider: o hook ainda funciona (faz o próprio fetch)", async () => {
+    useSessionMock.mockReturnValue({ data: NON_ADMIN, status: "authenticated" });
+    // SEM wrapper — exercita o caminho de fallback do useSharedPermissions.
+    const { result } = renderHook(() => useSharedPermissions());
+    await waitFor(() => expect(result.current.permissions).toEqual(["sales.create"]));
+    expect(global.fetch).toHaveBeenCalledTimes(1);
+  });
+
   it("refetch() dispara UM fetch só (sem disparo duplo)", async () => {
     useSessionMock.mockReturnValue({ data: NON_ADMIN, status: "authenticated" });
     const { result } = renderHook(() => useSharedPermissions(), { wrapper });

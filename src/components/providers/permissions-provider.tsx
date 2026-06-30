@@ -35,10 +35,14 @@ export interface PermissionsState {
   permissions: string[];
   role: string | null;
   isAdmin: boolean;
-  /** status do next-auth: "loading" | "authenticated" | "unauthenticated". */
-  status: string;
-  /** true enquanto o fetch de permissões custom (não-admin) está em voo. */
-  fetchingCustom: boolean;
+  /** status do next-auth. */
+  status: "loading" | "authenticated" | "unauthenticated" | (string & {});
+  /**
+   * true até a 1ª resolução das permissões de um não-ADMIN (fetch concluído ou
+   * falho). Começa true p/ não-ADMIN autenticado — evita o flash de "sem
+   * permissão" no 1º render ANTES do fetch começar (regressão apontada na review).
+   */
+  customLoading: boolean;
   /** true quando o cap de tempo estourou (destrava a UI). */
   loadingCapped: boolean;
   refetch: () => void;
@@ -49,20 +53,27 @@ export interface PermissionsState {
  * (caminho normal) e, como fallback, pelos hooks públicos quando renderizam FORA
  * de um provider (ex.: testes, telas isoladas) — assim nada quebra sem o wrapper.
  */
-export function usePermissionsCore(opts?: { enabled?: boolean }): PermissionsState {
+// NÃO exportado de propósito: consumidores devem usar `useSharedPermissions`
+// (ou os hooks shim), senão fariam fetch próprio e furariam o "1 fetch só".
+function usePermissionsCore(opts?: { enabled?: boolean }): PermissionsState {
   // `enabled=false`: o núcleo NÃO faz fetch (usado como fallback quando um
   // provider já é a fonte — evita fetch duplicado violar o "1 fetch só").
   const enabled = opts?.enabled ?? true;
   const { data: session, status } = useSession();
   const [permissions, setPermissions] = useState<string[]>([]);
-  const [fetchingCustom, setFetchingCustom] = useState(false);
+  // `customResolved=false` = ainda não temos as permissões custom de um não-ADMIN.
+  // Começa false → o não-ADMIN nasce "carregando" (sem flash de "sem permissão"),
+  // vira true assim que o fetch conclui (ok, erro, ou caminho ADMIN/unauth).
+  const [customResolved, setCustomResolved] = useState(false);
   const [loadingCapped, setLoadingCapped] = useState(false);
   // Evita disparo duplo do fetch (React strict-mode / reexecução de efeito).
   const fetchKeyRef = useRef<string | null>(null);
 
   const isAdmin = session?.user?.role === "ADMIN";
-  const rawLoading =
-    status === "loading" || (status === "authenticated" && !isAdmin && fetchingCustom);
+  // Não-ADMIN autenticado bloqueia ATÉ a 1ª resolução das permissões (não só
+  // "enquanto o fetch está em voo") — cobre o render inicial antes do fetch.
+  const customLoading = status === "authenticated" && !isAdmin && !customResolved;
+  const rawLoading = status === "loading" || customLoading;
 
   // Cap: arma enquanto realmente carrega; reseta quando resolve.
   useEffect(() => {
@@ -76,18 +87,22 @@ export function usePermissionsCore(opts?: { enabled?: boolean }): PermissionsSta
   }, [rawLoading, enabled]);
 
   const fetchPermissions = useCallback(async () => {
+    // Guard `enabled`: o núcleo inerte (fallback quando há provider) nunca busca,
+    // nem via refetch direto (defense-in-depth apontado na review).
+    if (!enabled) return;
     if (status === "loading") return;
     if (!session?.user?.id) {
       setPermissions([]);
+      setCustomResolved(true);
       return;
     }
-    // ADMIN tem tudo — sem rede.
+    // ADMIN tem tudo — sem rede. Resolvido na hora.
     if (session.user.role === "ADMIN") {
       setPermissions(["*"]);
+      setCustomResolved(true);
       return;
     }
 
-    setFetchingCustom(true);
     try {
       const response = await fetch(`/api/users/${session.user.id}/permissions`, {
         cache: "no-store", // permissões custom sempre frescas (revogação dinâmica)
@@ -101,9 +116,9 @@ export function usePermissionsCore(opts?: { enabled?: boolean }): PermissionsSta
     } catch {
       setPermissions([]);
     } finally {
-      setFetchingCustom(false);
+      setCustomResolved(true);
     }
-  }, [session?.user?.id, session?.user?.role, status]);
+  }, [enabled, session?.user?.id, session?.user?.role, status]);
 
   // Dispara o fetch 1× por (userId, role, status) — a ref impede o disparo duplo
   // do strict-mode e re-fetches por re-render sem mudança real de identidade.
@@ -112,6 +127,7 @@ export function usePermissionsCore(opts?: { enabled?: boolean }): PermissionsSta
     const key = `${status}:${session?.user?.id ?? ""}:${session?.user?.role ?? ""}`;
     if (fetchKeyRef.current === key) return;
     fetchKeyRef.current = key;
+    setCustomResolved(false); // nova identidade → recarrega (volta a "carregando")
     fetchPermissions();
   }, [enabled, fetchPermissions, status, session?.user?.id, session?.user?.role]);
 
@@ -127,8 +143,10 @@ export function usePermissionsCore(opts?: { enabled?: boolean }): PermissionsSta
     role: session?.user?.role || null,
     isAdmin,
     status,
-    fetchingCustom,
-    loadingCapped,
+    customLoading,
+    // Núcleo inerte (enabled=false) nunca arma o cap — força false p/ não vazar
+    // estado preso caso este retorno seja lido (não é, mas é contrato honesto).
+    loadingCapped: enabled ? loadingCapped : false,
     refetch,
   };
 }
