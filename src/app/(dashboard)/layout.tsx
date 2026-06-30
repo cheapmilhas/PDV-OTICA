@@ -9,6 +9,7 @@ import { checkSubscription } from "@/lib/subscription";
 import { SubscriptionBanner } from "@/components/subscription/subscription-banner";
 import { SubscriptionBlocked } from "@/components/subscription/subscription-blocked";
 import { BranchProviderWrapper } from "@/components/providers/branch-provider-wrapper";
+import { SessionProvider } from "@/components/providers/session-provider";
 import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import { LensAdvisorFab } from "@/components/lens-advisor/lens-advisor-fab";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
@@ -102,6 +103,12 @@ export default async function DashboardLayout({
   }
 
   return (
+    // SessionProvider com a sessão JÁ resolvida no servidor (auth() acima): o
+    // useSession() do cliente nasce `authenticated` no 1º paint, eliminando a
+    // janela de "loading" da cold start que travava o ProtectedRoute em
+    // "Verificando permissões…". Aninhado dentro do SessionProvider do root
+    // layout — o de dentro tem precedência p/ a subárvore do dashboard.
+    <SessionProvider session={session}>
     <ThemeProvider>
       <BranchProviderWrapper>
         {/* Coluna que POSSUI a viewport: banner + shell dividem os 100vh.
@@ -147,5 +154,6 @@ export default async function DashboardLayout({
         <KeyboardShortcuts />
       </BranchProviderWrapper>
     </ThemeProvider>
+    </SessionProvider>
   );
 }

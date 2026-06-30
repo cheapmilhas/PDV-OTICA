@@ -3,6 +3,16 @@
 import { useSession } from "next-auth/react";
 import { useState, useEffect, useCallback } from "react";
 
+/**
+ * Teto de tempo (ms) que a UI bloqueia esperando a sessão/permissões. Se passar
+ * disso (ex.: cold start serverless muito lenta, ou um estado preso em
+ * `loading`), o hook PARA de bloquear e libera a renderização — uma rota
+ * protegida nunca deve ficar em "Verificando permissões…" para sempre. A
+ * verificação real de acesso continua valendo (ADMIN/permissões); o cap só
+ * impede o spinner eterno.
+ */
+export const PERMISSION_LOADING_CAP_MS = 4000;
+
 interface UsePermissionResult {
   hasPermission: (permission: string) => boolean;
   hasAnyPermission: (permissions: string[]) => boolean;
@@ -22,10 +32,24 @@ export function usePermission(): UsePermissionResult {
   // a sessão ainda está resolvendo OU quando um não-ADMIN precisa buscar o
   // array de overrides. Isso elimina o "Verificando permissões" do ADMIN.
   const [fetchingCustom, setFetchingCustom] = useState(false);
+  // Cap de segurança: vira true quando o tempo-limite estoura, destravando a UI
+  // mesmo se a sessão ficar presa em `loading` (cold start lenta etc.).
+  const [loadingCapped, setLoadingCapped] = useState(false);
 
   const isAdmin = session?.user?.role === "ADMIN";
-  const isLoading =
+  const rawLoading =
     status === "loading" || (status === "authenticated" && !isAdmin && fetchingCustom);
+  const isLoading = rawLoading && !loadingCapped;
+
+  // Arma o teto enquanto estiver realmente carregando; reseta quando resolve.
+  useEffect(() => {
+    if (!rawLoading) {
+      setLoadingCapped(false);
+      return;
+    }
+    const t = setTimeout(() => setLoadingCapped(true), PERMISSION_LOADING_CAP_MS);
+    return () => clearTimeout(t);
+  }, [rawLoading]);
 
   const fetchPermissions = useCallback(async () => {
     if (status === "loading") return;
