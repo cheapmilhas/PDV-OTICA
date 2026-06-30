@@ -10,6 +10,7 @@ import { SubscriptionBanner } from "@/components/subscription/subscription-banne
 import { SubscriptionBlocked } from "@/components/subscription/subscription-blocked";
 import { BranchProviderWrapper } from "@/components/providers/branch-provider-wrapper";
 import { SessionProvider } from "@/components/providers/session-provider";
+import { PermissionsProvider } from "@/components/providers/permissions-provider";
 import { KeyboardShortcuts } from "@/components/layout/keyboard-shortcuts";
 import { LensAdvisorFab } from "@/components/lens-advisor/lens-advisor-fab";
 import { getCachedPlanFeatures } from "@/lib/plan-features-cache";
@@ -109,6 +110,9 @@ export default async function DashboardLayout({
     // "Verificando permissões…". Aninhado dentro do SessionProvider do root
     // layout — o de dentro tem precedência p/ a subárvore do dashboard.
     <SessionProvider session={session}>
+    {/* Fonte ÚNICA de permissões: 1 fetch compartilhado p/ todos os hooks
+        (use-permission / usePermissions são shims que leem daqui). */}
+    <PermissionsProvider>
     <ThemeProvider>
       <BranchProviderWrapper>
         {/* Coluna que POSSUI a viewport: banner + shell dividem os 100vh.
@@ -154,6 +158,7 @@ export default async function DashboardLayout({
         <KeyboardShortcuts />
       </BranchProviderWrapper>
     </ThemeProvider>
+    </PermissionsProvider>
     </SessionProvider>
   );
 }

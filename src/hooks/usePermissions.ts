@@ -1,80 +1,44 @@
 "use client";
 
-import { useEffect, useState } from "react";
-import { useSession } from "next-auth/react";
+import { useSharedPermissions } from "@/components/providers/permissions-provider";
 
 /**
- * Hook para verificar permissões do usuário logado
+ * Hook para verificar permissões do usuário logado (plural).
+ *
+ * Agora é um SHIM fino sobre o estado compartilhado (`useSharedPermissions`):
+ * antes cada chamada fazia seu próprio `useSession()` + fetch de
+ * `/api/users/:id/permissions`; com ~30 consumidores isso eram N fetches
+ * idênticos por página. Agora todos leem 1 fetch só do provider.
  *
  * @example
  * ```tsx
  * const { hasPermission, isLoading } = usePermissions();
- *
- * if (hasPermission('sales.create')) {
- *   // Mostrar botão criar venda
- * }
+ * if (hasPermission('sales.create')) { ... }
  * ```
  */
 export function usePermissions() {
-  const { data: session, status } = useSession();
-  const [permissions, setPermissions] = useState<string[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { permissions, role, isAdmin, status, fetchingCustom, loadingCapped } =
+    useSharedPermissions();
 
-  useEffect(() => {
-    async function loadPermissions() {
-      if (status === "authenticated" && session?.user?.id) {
-        try {
-          const res = await fetch(`/api/users/${session.user.id}/permissions`);
-          if (res.ok) {
-            const data = await res.json();
-            setPermissions(data.effectivePermissions || []);
-          }
-        } catch (error) {
-          console.error("Erro ao carregar permissões:", error);
-        } finally {
-          setLoading(false);
-        }
-      } else if (status === "unauthenticated") {
-        setLoading(false);
-      }
-    }
+  // Contrato PRESERVADO: bloqueia enquanto a sessão resolve OU um não-ADMIN busca
+  // os overrides; libera assim que há resposta definitiva (autenticado+resolvido,
+  // ou não-autenticado). ADMIN resolve sem fetch. Cap evita bloqueio eterno.
+  const rawLoading =
+    status === "loading" || (status === "authenticated" && !isAdmin && fetchingCustom);
+  const isLoading = rawLoading && !loadingCapped;
 
-    loadPermissions();
-  }, [session?.user?.id, status]);
-
-  /**
-   * Verifica se usuário tem uma permissão específica
-   */
   const hasPermission = (permission: string): boolean => {
-    // ADMIN tem todas as permissões
-    if (session?.user?.role === "ADMIN") {
-      return true;
-    }
-
+    if (isAdmin) return true;
     return permissions.includes(permission);
   };
 
-  /**
-   * Verifica se usuário tem TODAS as permissões listadas
-   */
   const hasAllPermissions = (permissionList: string[]): boolean => {
-    // ADMIN tem todas as permissões
-    if (session?.user?.role === "ADMIN") {
-      return true;
-    }
-
+    if (isAdmin) return true;
     return permissionList.every((p) => permissions.includes(p));
   };
 
-  /**
-   * Verifica se usuário tem ALGUMA das permissões listadas
-   */
   const hasAnyPermission = (permissionList: string[]): boolean => {
-    // ADMIN tem todas as permissões
-    if (session?.user?.role === "ADMIN") {
-      return true;
-    }
-
+    if (isAdmin) return true;
     return permissionList.some((p) => permissions.includes(p));
   };
 
@@ -83,11 +47,10 @@ export function usePermissions() {
     hasPermission,
     hasAllPermissions,
     hasAnyPermission,
-    isLoading: loading,
-    isAdmin: session?.user?.role === "ADMIN",
+    isLoading,
+    isAdmin,
     // Quem pode VER registros cancelados (vendas/OS/parcelas). Espelha o
     // helper de server canSeeCanceled() — valores Prisma "ADMIN"/"GERENTE".
-    canSeeCanceled:
-      session?.user?.role === "ADMIN" || session?.user?.role === "GERENTE",
+    canSeeCanceled: role === "ADMIN" || role === "GERENTE",
   };
 }
