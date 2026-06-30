@@ -45,8 +45,9 @@ export async function persistInboundMessage(
     select: { id: true },
   });
 
-  // R1: msg nova numa conversa JÁ analisada → marcar p/ re-qualificação.
-  if (conversation.analyzedAt) {
+  // R1: msg nova numa conversa JÁ analisada → marcar p/ re-qualificação. SÓ
+  // inbound: uma resposta NOSSA (outbound) não é motivo de re-analisar o lead.
+  if (conversation.analyzedAt && msg.direction === "inbound") {
     await prisma.whatsappConversation.update({
       where: { id: conversation.id },
       data: { needsAnalysis: true },

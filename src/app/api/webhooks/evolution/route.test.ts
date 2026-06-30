@@ -243,8 +243,11 @@ describe("POST /api/webhooks/evolution", () => {
     expect(waMsgCreate).toHaveBeenCalled();
   });
 
-  it("messages.upsert fromMe (outbound) é ignorado mas responde 200", async () => {
+  it("messages.upsert fromMe (outbound) é PERSISTIDO como direction outbound", async () => {
     const token = await signValid();
+    waMsgFind.mockResolvedValue(null); // não existe ainda (idempotência)
+    waConvUpsert.mockResolvedValue({ id: "conv1", analyzedAt: null });
+    waMsgCreate.mockResolvedValue({ id: "msg1" });
     const req = makeRequest(
       {
         event: "messages.upsert",
@@ -258,7 +261,8 @@ describe("POST /api/webhooks/evolution", () => {
     );
     const res = await POST(req);
     expect(res.status).toBe(200);
-    expect(waMsgCreate).not.toHaveBeenCalled();
+    expect(waMsgCreate).toHaveBeenCalled();
+    expect((waMsgCreate.mock.calls[0][0] as any).data.direction).toBe("outbound");
   });
 
   it("opt-out: mensagem recebida 'SAIR' marca acceptsMarketing=false do cliente", async () => {

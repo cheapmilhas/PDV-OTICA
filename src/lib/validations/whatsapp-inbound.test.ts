@@ -33,10 +33,11 @@ describe("parseInboundMessage", () => {
     expect(r?.mediaUrl).toBe("https://x/a.ogg");
   });
 
-  it("retorna null para mensagem fromMe (outbound — fora do escopo A')", () => {
-    expect(
-      parseInboundMessage({ key: { id: "X", remoteJid: "5585@s.whatsapp.net", fromMe: true }, message: { conversation: "oi" } })
-    ).toBeNull();
+  it("mensagem fromMe (enviada pela ótica) → direction outbound, mesma conversa", () => {
+    const r = parseInboundMessage({ key: { id: "X", remoteJid: "5585999@s.whatsapp.net", fromMe: true }, message: { conversation: "ok, já separo" } });
+    expect(r?.direction).toBe("outbound");
+    expect(r?.contactNumber).toBe("5585999"); // remoteJid = nº do cliente (conversa)
+    expect(r?.text).toBe("ok, já separo");
   });
 
   it("retorna null se faltam campos essenciais (sem id ou sem remoteJid)", () => {

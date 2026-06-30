@@ -2,7 +2,10 @@ export interface InboundMessage {
   evolutionId: string;
   contactNumber: string;
   contactName: string | null;
-  direction: "inbound";
+  // inbound = recebida do cliente; outbound = ENVIADA pela ótica (fromMe). A
+  // conversa é a mesma (remoteJid é sempre o nº do cliente). Capturar outbound
+  // deixa o inbox mostrar as respostas que o atendente mandou pelo WhatsApp.
+  direction: "inbound" | "outbound";
   type: "text" | "audio" | "image" | "other";
   text: string | null;
   mediaUrl: string | null;
@@ -10,14 +13,14 @@ export interface InboundMessage {
   isGroup: boolean;
 }
 
-/** Extrai uma mensagem inbound do payload data de um evento messages.upsert.
- *  Retorna null se for outbound (fromMe), se faltar id/remoteJid, ou se o payload for inválido. */
+/** Extrai uma mensagem (inbound OU outbound) do payload data de um messages.upsert.
+ *  Retorna null se faltar id/remoteJid ou o payload for inválido. */
 export function parseInboundMessage(data: unknown): InboundMessage | null {
   if (!data || typeof data !== "object") return null;
   const d = data as Record<string, any>;
   const key = d.key as Record<string, any> | undefined;
   if (!key || typeof key.id !== "string" || typeof key.remoteJid !== "string") return null;
-  if (key.fromMe === true) return null; // outbound — fora do escopo A'
+  const direction: InboundMessage["direction"] = key.fromMe === true ? "outbound" : "inbound";
 
   const isGroup = String(key.remoteJid).endsWith("@g.us");
   const contactNumber = String(key.remoteJid).split("@")[0];
@@ -50,7 +53,7 @@ export function parseInboundMessage(data: unknown): InboundMessage | null {
     evolutionId: key.id,
     contactNumber,
     contactName: typeof d.pushName === "string" ? d.pushName : null,
-    direction: "inbound",
+    direction,
     type,
     text,
     mediaUrl,
