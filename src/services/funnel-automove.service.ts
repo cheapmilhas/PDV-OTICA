@@ -19,6 +19,7 @@ import { moveLead } from "@/services/lead.service";
 import { decideFunnelAdvance, type FunnelAction } from "@/lib/funnel-advance";
 import { clientEngaged, oticaSentValue } from "@/lib/funnel-signals";
 import { isFunnelAutoMoveOn } from "@/lib/funnel-automove-flag";
+import { recordAutoMoveTrace } from "@/services/funnel-automove-trace.service";
 import type { ContactIntent } from "@/lib/ai/lead-qualifier";
 
 const log = logger.child({ service: "funnel-automove" });
@@ -40,37 +41,46 @@ export interface AutoAdvanceResult {
 export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<AutoAdvanceResult> {
   const { conversationId, leadId, companyId, intent, confidence } = input;
   const killSwitchOn = isFunnelAutoMoveOn(companyId);
-  // DIAG TEMP (auto-move): console.log cru. Remover após diagnosticar.
-  console.log("[DIAG automove] motor entrou", JSON.stringify({
-    leadId, companyId, intent, confidence, killSwitchOn,
-    envRaw: process.env.FUNNEL_AUTOMOVE_COMPANIES ?? null,
-  }));
+  // "set"/"unset" da env no runtime que rodou — prova de propagação (sem expor a
+  // lista crua de companyIds). Acompanha cada trilha p/ auditar "a env chegou?".
+  const envSeen = process.env.FUNNEL_AUTOMOVE_COMPANIES ? "set" : "unset";
 
-  // OBSERVABILIDADE (Fatia 3): loga TODA decisão — inclusive os "não-moveu" —
-  // com o motivo, a confiança e o estado do kill-switch. Sem isso era impossível
-  // saber no pós-morte por que um card não avançou (todos os early-returns eram
-  // mudos). `decide()` centraliza: computa o resultado, loga 1×, devolve.
-  const decide = (
+  // OBSERVABILIDADE (Fatia 3): emite a decisão. Loga SEMPRE (1 linha estruturada)
+  // e — quando a decisão é INTERESSANTE (persist=true) — grava também na trilha
+  // append-only `FunnelAutoMoveLog`, que é o canal de leitura CONFIÁVEL (o cron
+  // async da Vercel não entrega logs) e a base da métrica de acurácia. O caminho
+  // kill-switch-off e os holds triviais NÃO persistem (persist=false) p/ evitar
+  // amplificação de escrita no cron (rodaria p/ todo lead a cada ciclo).
+  const decide = async (
     r: AutoAdvanceResult,
+    persist: boolean,
     extra?: Record<string, unknown>,
-  ): AutoAdvanceResult => {
+  ): Promise<AutoAdvanceResult> => {
     log.info("auto_move_decision", {
       leadId, companyId, intent, confidence, killSwitchOn,
       moved: r.moved, action: r.action ?? null, reason: r.reason,
       ...extra,
     });
+    if (persist) {
+      await recordAutoMoveTrace({
+        companyId, leadId, action: r.action ?? "hold", moved: r.moved,
+        reason: r.reason, killSwitchOn, intent, confidence, envSeen,
+      });
+    }
     return r;
   };
 
-  // 1. Kill-switch por ótica (OFF por padrão).
-  if (!killSwitchOn) return decide({ moved: false, reason: "auto-move desligado p/ esta ótica" });
+  // 1. Kill-switch por ótica (OFF por padrão). NÃO persiste (caminho comum/mudo).
+  if (!killSwitchOn) return decide({ moved: false, reason: "auto-move desligado p/ esta ótica" }, false);
 
+  // Guarda o move bem-sucedido p/ gravar a trilha de SUCESSO fora do try (HIGH-1).
+  let moved: { decision: { reason: string; targetStageId?: string }; fromStageId: string } | null = null;
   try {
     const lead = await prisma.lead.findFirst({
       where: { id: leadId, companyId, deletedAt: null },
       select: { id: true, stageId: true, lastMovedBy: true, aiLockUntilMessageAt: true },
     });
-    if (!lead) return decide({ moved: false, reason: "lead não encontrado" });
+    if (!lead) return decide({ moved: false, reason: "lead não encontrado" }, false);
 
     const conv = await prisma.whatsappConversation.findFirst({
       where: { id: conversationId, companyId },
@@ -81,13 +91,16 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
     //    chegou mensagem MAIS NOVA que o ponto travado (conversa evoluiu). Se não
     //    há ponto travado (lead manual sem conversa), a IA fica travada SEMPRE —
     //    sem sinal de "evoluiu", respeitar o humano é o seguro (fecha o gap do
-    //    aiLockUntilMessageAt null não destravar).
+    //    aiLockUntilMessageAt null não destravar). PERSISTE: o humano-vs-IA é
+    //    exatamente o sinal que a métrica de acurácia quer.
     if (lead.lastMovedBy === "USER") {
       const evolved =
         !!lead.aiLockUntilMessageAt &&
         !!conv?.lastMessageAt &&
         conv.lastMessageAt.getTime() > lead.aiLockUntilMessageAt.getTime();
-      if (!evolved) return decide({ moved: false, reason: "trava humana ativa (humano moveu, sem msg nova)" });
+      if (!evolved) {
+        return decide({ moved: false, reason: "trava humana ativa (humano moveu, sem msg nova)" }, true);
+      }
     }
 
     // 3. Sinais da conversa (lib pura) a partir das mensagens.
@@ -110,22 +123,46 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
     });
 
     if (decision.action !== "move" || !decision.targetStageId) {
-      // hold/flag → não move. (flag é sinalizado pela telemetria/inbox existente.)
+      // hold/flag → não move. `flag` (reclamação/cobrança → sinaliza humano)
+      // PERSISTE (decisão relevante p/ o inbox/telemetria); `hold` trivial NÃO
+      // (não há sinal de compra → ruído a cada ciclo).
+      const persist = decision.action === "flag";
       return decide(
         { moved: false, action: decision.action, reason: decision.reason },
+        persist,
         { currentStageId: lead.stageId, clientEngaged: engaged, oticaSentValue: sentValue },
       );
     }
 
-    // 5. Move via moveLead(AI) — passa pelas validações do writer único.
+    // 5. Move via moveLead(AI) — passa pelas validações do writer único. Só ISTO
+    //    fica no try: se moveLead falha, é erro de verdade (linha "error"). A
+    //    trilha de SUCESSO é gravada FORA do try (abaixo) p/ que uma falha do
+    //    logger/trace NÃO rotule um move já aplicado como "error" (HIGH-1).
     await moveLead(lead.id, { stageId: decision.targetStageId }, companyId, "AI");
-    return decide(
-      { moved: true, action: "move", reason: decision.reason },
-      { from: lead.stageId, to: decision.targetStageId },
-    );
+    moved = { decision, fromStageId: lead.stageId };
   } catch (e) {
     // NÃO propaga — o cron de qualificação não pode quebrar por causa do auto-move.
-    log.error("auto_move_failed", { leadId, companyId, error: e instanceof Error ? e.message : String(e) });
+    // PERSISTE incondicionalmente: a linha de erro é justamente o que estávamos
+    // caçando às cegas (exceção engolida e invisível nos logs do cron).
+    const msg = e instanceof Error ? e.message : String(e);
+    log.error("auto_move_failed", { leadId, companyId, error: msg });
+    await recordAutoMoveTrace({
+      companyId, leadId, action: "error", moved: false,
+      reason: "erro no auto-move (fail-safe)", killSwitchOn, intent, confidence, envSeen, error: msg,
+    });
     return { moved: false, reason: "erro no auto-move (fail-safe)" };
   }
+
+  // Defesa de tipo: todos os caminhos não-move dentro do try fazem `return`, então
+  // só se chega aqui com `moved` preenchido. O guard satisfaz o compilador e é um
+  // no-op em runtime.
+  if (!moved) return { moved: false, reason: "sem movimento" };
+
+  // Move JÁ aplicado com sucesso. Grava a trilha de sucesso FORA do try: a partir
+  // daqui nenhuma falha de telemetria pode reescrever o resultado como "error".
+  return decide(
+    { moved: true, action: "move", reason: moved.decision.reason },
+    true,
+    { from: moved.fromStageId, to: moved.decision.targetStageId },
+  );
 }

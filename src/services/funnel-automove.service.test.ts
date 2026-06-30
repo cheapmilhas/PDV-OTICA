@@ -11,6 +11,10 @@ vi.mock("@/lib/prisma", () => ({
 vi.mock("@/lib/logger", () => ({ logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) } }));
 const moveLeadMock = vi.fn();
 vi.mock("@/services/lead.service", () => ({ moveLead: (...a: unknown[]) => moveLeadMock(...a) }));
+const traceMock = vi.fn();
+vi.mock("@/services/funnel-automove-trace.service", () => ({
+  recordAutoMoveTrace: (...a: unknown[]) => traceMock(...a),
+}));
 
 import { prisma } from "@/lib/prisma";
 import { maybeAutoAdvanceLead } from "./funnel-automove.service";
@@ -41,6 +45,10 @@ function setup(over: {
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // clearAllMocks zera as CHAMADAS mas não as IMPLEMENTAÇÕES — reseta os mocks
+  // que recebem mockRejectedValue/mockResolvedValue noutros testes p/ não vazar.
+  moveLeadMock.mockReset().mockResolvedValue(undefined);
+  traceMock.mockReset().mockResolvedValue(undefined);
   process.env.FUNNEL_AUTOMOVE_COMPANIES = "co_1"; // ligado p/ a ótica de teste
 });
 afterEach(() => { process.env.FUNNEL_AUTOMOVE_COMPANIES = ORIG; });
@@ -129,5 +137,55 @@ describe("maybeAutoAdvanceLead — motor de auto-move (travas + régua)", () => 
     await call();
     const where = (prisma.lead.findFirst as any).mock.calls[0][0].where;
     expect(where).toMatchObject({ id: "lead_1", companyId: "co_1" });
+  });
+
+  describe("trilha de telemetria (gated)", () => {
+    it("MOVE → grava trilha com action=move e envSeen=set", async () => {
+      setup();
+      await call();
+      expect(traceMock).toHaveBeenCalledTimes(1);
+      expect(traceMock.mock.calls[0][0]).toMatchObject({
+        companyId: "co_1", leadId: "lead_1", action: "move", moved: true, killSwitchOn: true, envSeen: "set",
+      });
+    });
+
+    it("kill-switch OFF → NÃO grava trilha (evita amplificação)", async () => {
+      process.env.FUNNEL_AUTOMOVE_COMPANIES = "outra_co";
+      setup();
+      await call();
+      expect(traceMock).not.toHaveBeenCalled();
+    });
+
+    it("hold trivial (cliente não engajou) → NÃO grava trilha", async () => {
+      setup({ messages: [{ direction: "inbound", type: "text", text: "oi" }] });
+      await call();
+      expect(traceMock).not.toHaveBeenCalled();
+    });
+
+    it("flag (RECLAMACAO) → grava trilha (relevante p/ inbox/acurácia)", async () => {
+      setup();
+      await call({ intent: "RECLAMACAO" });
+      expect(traceMock).toHaveBeenCalledTimes(1);
+      expect(traceMock.mock.calls[0][0]).toMatchObject({ action: "flag", moved: false });
+    });
+
+    it("trava humana ativa → grava trilha (humano-vs-IA = sinal de acurácia)", async () => {
+      setup({
+        lead: { id: "lead_1", stageId: "s_novo", lastMovedBy: "USER", aiLockUntilMessageAt: new Date("2026-06-30T10:00:00Z") },
+        conv: { id: "conv_1", lastMessageAt: new Date("2026-06-30T10:00:00Z") },
+      });
+      await call();
+      expect(traceMock).toHaveBeenCalledTimes(1);
+      expect(traceMock.mock.calls[0][0]).toMatchObject({ moved: false });
+    });
+
+    it("erro no move → grava trilha action=error com a mensagem", async () => {
+      setup();
+      moveLeadMock.mockRejectedValue(new Error("db down"));
+      await call();
+      const errCall = traceMock.mock.calls.find((c) => c[0].action === "error");
+      expect(errCall).toBeTruthy();
+      expect(errCall![0]).toMatchObject({ action: "error", error: "db down", envSeen: "set" });
+    });
   });
 });

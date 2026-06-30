@@ -1278,6 +1278,37 @@ model Lead {
   @@index([companyId, intentPredicted])
 }
 
+// Funil Inteligente — Fatia 3: trilha de auditoria APPEND-ONLY do auto-move da IA.
+// Uma linha por decisão INTERESSANTE do motor (moveu, hold com sinal positivo, ou
+// erro) — o caminho kill-switch-off / sem-sinal NÃO grava (evita amplificação de
+// escrita no cron). Serve a dois propósitos:
+//  1. observabilidade: o cron async não entrega logs de forma confiável; esta
+//     tabela é o canal de leitura confiável ("por que o card moveu/não moveu");
+//  2. base da métrica futura "IA moveu vs humano corrigiu = acurácia" (histórico).
+// Sem FK p/ Lead (append-only, não deve impedir exclusão de lead; leadId é só
+// referência). Multi-tenant: companyId em todo filtro/índice.
+model FunnelAutoMoveLog {
+  id           String   @id @default(cuid())
+  companyId    String
+  leadId       String
+  // "move" | "hold" | "flag" | "error" (FunnelAction + "error" do catch).
+  action       String
+  moved        Boolean  @default(false)
+  reason       String
+  killSwitchOn Boolean  @default(false)
+  intent       String?
+  confidence   Float?
+  // Estado da env FUNNEL_AUTOMOVE_COMPANIES no runtime que rodou (prova de
+  // propagação): "set" | "unset". Sem valor cru (não vaza lista de companyIds).
+  envSeen      String?
+  // Mensagem de erro (só quando action="error") — fica SÓ no banco, nunca no HTTP.
+  error        String?
+  at           DateTime @default(now())
+
+  @@index([companyId, leadId, at])
+  @@index([companyId, action, at])
+}
+
 model Sale {
   id                   String               @id @default(cuid())
   companyId            String

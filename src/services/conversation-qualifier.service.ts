@@ -13,6 +13,7 @@ import { customerKind } from "@/lib/customer-kind-label";
 import { intentLabel } from "@/lib/contact-intent-label";
 import { sanitizeAiReason } from "@/lib/sanitize-ai-reason";
 import { maybeAutoAdvanceLead } from "@/services/funnel-automove.service";
+import { recordAutoMoveTrace } from "@/services/funnel-automove-trace.service";
 import { getRecentIntentCorrections, buildFewShotBlock } from "@/services/funnel-fewshot.service";
 
 const log = logger.child({ service: "conversation-qualifier" });
@@ -46,6 +47,10 @@ export interface QualifyResult {
   skipped?: "group" | "already_analyzed" | "no_text" | "not_found" | "claimed_by_other";
   isLead?: boolean;
   leadId: string | null;
+  // Heartbeat do auto-move (Fatia 3): preenchido quando o motor foi AVALIADO nesta
+  // qualificação (re-qualificação com leadId). Bubbla até o JSON do cron — canal
+  // de leitura zero-DB que prova "o loop rodou" sem depender de logs do cron.
+  autoMove?: { evaluated: boolean; moved: boolean; errored: boolean };
 }
 
 interface ConvMessage { direction: string; type: string; text: string | null; evolutionId: string | null; receivedAt: Date }
@@ -275,22 +280,35 @@ export async function qualifyConversation(conversationId: string, opts?: { force
 
   // Funil Inteligente — Fatia 3: auto-move. Só roda em RE-QUALIFICAÇÃO (a conversa
   // JÁ era lead) — não no nascimento (card nasce em "Novo" e avança no próximo
-  // ciclo, quando a conversa evoluir). O motor é fail-safe e gateado por
-  // kill-switch por ótica (OFF por padrão), então é inerte até o dono ligar.
-  // DIAG TEMP (auto-move): console.log cru — sai no Vercel mesmo no cron, ao
-  // contrário do logger estruturado. Remover após diagnosticar.
-  console.log("[DIAG automove] qualifier pré-chamada", JSON.stringify({
-    conversationId, leadId, convLeadId: conv.leadId, willCall: !!conv.leadId,
-    intent: result.intent, confidence: result.confidence, companyId: conv.companyId,
-  }));
+  // ciclo, quando a conversa evoluir). O motor é fail-safe (não propaga) e gateado
+  // por kill-switch por ótica (OFF por padrão), então é inerte até o dono ligar.
+  // A observabilidade vive na trilha `FunnelAutoMoveLog` (gravada dentro do motor).
+  // Try/catch DEDICADO cobre ESTRITAMENTE a chamada do motor: o motor já é
+  // fail-safe (catch interno), então este catch só pega o caso raro de ele lançar
+  // PASSANDO do próprio catch (ex.: o writer de trilha falhar). Sem isto, tal
+  // exceção subiria ao catch MUDO do loop do cron e a causa ficaria invisível.
+  // (`finalize`, acima, NÃO está coberto aqui de propósito: a falha dele é uma
+  // falha genérica de qualificação, tratada pelo catch do loop — não é auto-move.)
+  let autoMove: QualifyResult["autoMove"];
   if (conv.leadId) {
-    const amr = await maybeAutoAdvanceLead({
-      conversationId, leadId, companyId: conv.companyId,
-      intent: result.intent, confidence: result.confidence,
-    });
-    console.log("[DIAG automove] resultado", JSON.stringify(amr));
+    try {
+      const r = await maybeAutoAdvanceLead({
+        conversationId, leadId, companyId: conv.companyId,
+        intent: result.intent, confidence: result.confidence,
+      });
+      autoMove = { evaluated: true, moved: r.moved, errored: false };
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      log.error("auto-move lançou (segue, não quebra a qualificação)", { conversationId, leadId, error: msg });
+      await recordAutoMoveTrace({
+        companyId: conv.companyId, leadId, action: "error", moved: false,
+        reason: "exceção fora do motor (qualifier)", error: msg,
+        envSeen: process.env.FUNNEL_AUTOMOVE_COMPANIES ? "set" : "unset",
+      });
+      autoMove = { evaluated: true, moved: false, errored: true };
+    }
   }
-  return { conversationId, isLead: true, leadId };
+  return { conversationId, isLead: true, leadId, autoMove };
 }
 
 /**
@@ -301,7 +319,15 @@ export async function qualifyConversation(conversationId: string, opts?: { force
 export async function qualifyPendingConversations(
   companyId?: string,
   opts?: { cooldownMin?: number },
-): Promise<{ processed: number; leads: number; errors: number; skippedCompanies: number }> {
+): Promise<{
+  processed: number; leads: number; errors: number; skippedCompanies: number;
+  // Heartbeat do auto-move (Fatia 3) p/ o JSON do cron — SEM escrita extra no
+  // banco. `leadsEvaluated`>0 prova que o loop rodou e CHAMOU o motor; `moves` =
+  // cards movidos no ciclo. `errors` conta só exceções que ESCAPARAM do motor
+  // (raro: o motor é fail-safe) — o canal de erro REAL é a linha action="error"
+  // na trilha `FunnelAutoMoveLog`, não este contador.
+  autoMove: { leadsEvaluated: number; moves: number; errors: number };
+}> {
   // Cooldown: ignora conversas com mensagem nos últimos N min (ainda "quentes").
   const cooldownMin = opts?.cooldownMin ?? COOLDOWN_MIN;
   const coldBefore = new Date(Date.now() - cooldownMin * 60_000);
@@ -327,6 +353,7 @@ export async function qualifyPendingConversations(
   }
 
   let leads = 0, errors = 0, skippedCompanies = 0, processed = 0;
+  let amEvaluated = 0, amMoves = 0, amErrors = 0; // heartbeat do auto-move
   for (const [cid, ids] of byCompany) {
     // R4: fail-CLOSED. Erro de leitura OU IA indisponível/desligada → pula a empresa.
     let settings;
@@ -366,11 +393,19 @@ export async function qualifyPendingConversations(
       try {
         const r = await qualifyConversation(id);
         if (r.leadId) leads++;
+        if (r.autoMove?.evaluated) {
+          amEvaluated++;
+          if (r.autoMove.moved) amMoves++;
+          if (r.autoMove.errored) amErrors++;
+        }
       } catch (e) {
         errors++;
         log.error("falha ao qualificar conversa (segue)", { conversationId: id, error: e });
       }
     }
   }
-  return { processed, leads, errors, skippedCompanies };
+  return {
+    processed, leads, errors, skippedCompanies,
+    autoMove: { leadsEvaluated: amEvaluated, moves: amMoves, errors: amErrors },
+  };
 }
