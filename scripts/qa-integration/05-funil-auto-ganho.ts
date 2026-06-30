@@ -27,6 +27,19 @@ const state = loadState();
 const { companyId, branchId, adminUserId, customerId, frameProductId, prefix } =
   state as Required<typeof state>;
 
+/**
+ * Garante BranchStock com saldo p/ o produto na filial. O 01-setup só seta
+ * Product.stockQty (cache legado); o débito atômico real usa BranchStock por
+ * filial. Sem isso a venda falha com "Estoque insuficiente. Disponível: 0".
+ */
+async function ensureBranchStock(productId: string, qty: number) {
+  await prisma.branchStock.upsert({
+    where: { branchId_productId: { branchId, productId } },
+    update: { quantity: qty },
+    create: { branchId, productId, quantity: qty },
+  });
+}
+
 /** Garante 1 estágio aberto e 1 estágio Ganho (isWon) na ótica de teste. */
 async function ensureStages() {
   const open = await prisma.leadStage.upsert({
@@ -73,6 +86,12 @@ async function createSale(withCustomer: boolean, label: string) {
 
 async function main() {
   const { openStageId, wonStageId } = await ensureStages();
+  // Saldo suficiente p/ as 3 vendas do cenário (5.1, 5.3, 5.4).
+  await ensureBranchStock(frameProductId, 10);
+  // Idempotência: limpa leads do cliente de execuções anteriores p/ o cenário
+  // partir de estado conhecido (1 único lead aberto criado abaixo).
+  await prisma.sale.updateMany({ where: { companyId, customerId, leadId: { not: null } }, data: { leadId: null } });
+  await prisma.lead.deleteMany({ where: { companyId, customerId } });
 
   // ---- 5.1 lead aberto + venda → vínculo + auto-Ganho ----
   console.log("\n=== Cenário 5.1 — lead aberto + venda → auto-Ganho ===");
