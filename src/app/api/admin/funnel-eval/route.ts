@@ -3,6 +3,7 @@ import { getAdminSession } from "@/lib/admin-session";
 import { qualifyConversationText, LEAD_QUALIFIER_MODEL, type ContactIntent } from "@/lib/ai/lead-qualifier";
 import { decideFunnelAdvance } from "@/lib/funnel-advance";
 import { clientEngaged, oticaSentValue, shopReplied, type SignalMessage } from "@/lib/funnel-signals";
+import { EVAL_CASES } from "./cases.data";
 
 // Eval do funil IA (SUPER_ADMIN). Recebe casos sintéticos no body, roda a IA real
 // + a régua ponta-a-ponta NA PROD (onde a chave Anthropic existe), e devolve o
@@ -62,17 +63,14 @@ async function pool<T, R>(items: T[], n: number, fn: (it: T) => Promise<R>): Pro
   return out;
 }
 
-export async function POST(request: Request) {
+export async function GET(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   if (admin.role !== "SUPER_ADMIN") return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
 
-  let body: { cases?: EvalCase[]; model?: string };
-  try { body = await request.json(); } catch { return NextResponse.json({ error: "JSON inválido" }, { status: 400 }); }
-  const cases = body.cases ?? [];
-  if (!Array.isArray(cases) || cases.length === 0) return NextResponse.json({ error: "cases vazio" }, { status: 400 });
-  if (cases.length > 200) return NextResponse.json({ error: "máx 200 casos" }, { status: 400 });
-  const model = body.model || LEAD_QUALIFIER_MODEL;
+  // Casos embutidos (cases.data.ts). model opcional via ?model=...
+  const cases = EVAL_CASES as unknown as EvalCase[];
+  const model = new URL(request.url).searchParams.get("model") || LEAD_QUALIFIER_MODEL;
 
   const results = await pool(cases, 5, async (c) => {
     try { return await runOne(c, model); }
