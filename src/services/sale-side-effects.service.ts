@@ -711,6 +711,99 @@ export async function applyFinanceEntriesInTx(
   }
 }
 
+/**
+ * Funil Inteligente — Fatia 1: elo determinístico Lead↔Sale + auto-Ganho.
+ *
+ * Quando a venda tem `customerId`, casa o lead mais recente daquele cliente e:
+ *  - grava `Sale.leadId` (rastreio do elo);
+ *  - se o lead casado está ABERTO (não-terminal) E a ótica tem um estágio
+ *    `isWon=true`, move o lead p/ esse estágio (auto-Ganho).
+ *
+ * Decisões de produto (ver memória funil-auto-move):
+ *  - Match SÓ por customerId (walk-in com cliente cadastrado). Sem fallback tel.
+ *  - Pega o lead mais recente por `lastActivityAt` (provável origem da venda).
+ *  - Lead TERMINAL (isWon/isLost) → só grava o vínculo, NUNCA re-move o card.
+ *  - Ótica sem estágio isWon → só grava o vínculo + loga (não inventa estágio).
+ *  - Auto-Ganho é FATO (a venda existe) → vence um move humano anterior. O lock
+ *    "humano-tocou-não-mexe" (Fatia 3) protege contra a IA LENDO texto, não
+ *    contra uma venda confirmada.
+ *
+ * Comportamento de erro: NÃO bloqueia a transação (fail-safe, igual ao ledger).
+ * Loga estruturado em vez de silently swallow. Multi-tenant: companyId em todos
+ * os filtros.
+ */
+export async function linkLeadAndMaybeWinInTx(
+  tx: Tx,
+  params: {
+    saleId: string;
+    customerId: string | null | undefined;
+    companyId: string;
+  }
+): Promise<void> {
+  const { saleId, customerId, companyId } = params;
+  // Sem cliente cadastrado não há como casar deterministicamente (decisão de
+  // produto: não usar telefone). Walk-in anônimo simplesmente não vincula.
+  if (!customerId) return;
+
+  try {
+    // PREFERE o lead ABERTO (não-terminal) mais recente daquele cliente — é o
+    // provável originador da venda. Só se NÃO houver lead aberto é que caímos no
+    // mais recente geral (que então será terminal → apenas vincula, não re-move).
+    // Sem isso, um lead Ganho antigo "bumpado" por follow-up poderia capturar o
+    // vínculo e deixar o lead aberto real parado fora do funil.
+    const baseWhere = { customerId, companyId, deletedAt: null };
+    const lead =
+      (await tx.lead.findFirst({
+        where: { ...baseWhere, stage: { isWon: false, isLost: false } },
+        orderBy: { lastActivityAt: "desc" },
+        select: { id: true, stage: { select: { id: true, isWon: true, isLost: true } } },
+      })) ??
+      (await tx.lead.findFirst({
+        where: baseWhere,
+        orderBy: { lastActivityAt: "desc" },
+        select: { id: true, stage: { select: { id: true, isWon: true, isLost: true } } },
+      }));
+    if (!lead) return; // cliente sem lead → nada a vincular
+
+    // Grava o elo na venda (sempre que achou um lead — serve de rastreio mesmo
+    // que o card não se mova). updateMany + companyId: guard multi-tenant
+    // defense-in-depth (mesmo o id já vindo da própria tx).
+    await tx.sale.updateMany({
+      where: { id: saleId, companyId },
+      data: { leadId: lead.id },
+    });
+
+    // Card terminal: não mexe (decisão #5 — idempotente, não reabre Ganho/Perdido).
+    if (lead.stage.isWon || lead.stage.isLost) return;
+
+    // Resolve o estágio "Ganho" da ótica (maior order se houver mais de um).
+    const wonStage = await tx.leadStage.findFirst({
+      where: { companyId, isWon: true },
+      orderBy: { order: "desc" },
+      select: { id: true },
+    });
+    if (!wonStage) {
+      // Ótica não configurou estágio Ganho — não inventa. Só o vínculo fica.
+      log.warn("lead_link_no_won_stage", { saleId, companyId, leadId: lead.id });
+      return;
+    }
+
+    // Auto-Ganho determinístico. updateMany + companyId: guard multi-tenant.
+    await tx.lead.updateMany({
+      where: { id: lead.id, companyId },
+      data: { stageId: wonStage.id, lastActivityAt: new Date() },
+    });
+    log.info("lead_auto_won_by_sale", { saleId, companyId, leadId: lead.id, stageId: wonStage.id });
+  } catch (linkError) {
+    // NÃO propaga — venda não pode quebrar por causa do elo do funil.
+    log.error("lead_link_failed", {
+      saleId,
+      companyId,
+      error: linkError instanceof Error ? linkError.message : String(linkError),
+    });
+  }
+}
+
 // ============================================================================
 // Side-effects pós-transação
 // ============================================================================

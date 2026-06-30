@@ -8,7 +8,11 @@ vi.mock("@/lib/prisma", () => ({
 }));
 vi.mock("@/lib/logger", () => ({ logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) } }));
 const logAiUsageMock = vi.fn();
-vi.mock("@/services/ai-usage.service", () => ({ logAiUsage: (...a: unknown[]) => logAiUsageMock(...a) }));
+const getMonthlyUsageMock = vi.fn();
+vi.mock("@/services/ai-usage.service", () => ({
+  logAiUsage: (...a: unknown[]) => logAiUsageMock(...a),
+  getMonthlyUsage: (...a: unknown[]) => getMonthlyUsageMock(...a),
+}));
 const qualifyTextMock = vi.fn();
 vi.mock("@/lib/ai/lead-qualifier", () => ({ qualifyConversationText: (...a: unknown[]) => qualifyTextMock(...a), LEAD_QUALIFIER_MODEL: "claude-sonnet-4-6" }));
 const listStagesMock = vi.fn();
@@ -312,6 +316,47 @@ describe("qualifyPendingConversations (R4 fail-closed por empresa)", () => {
     const r = await qualifyPendingConversations();
     expect(qualifyTextMock).not.toHaveBeenCalled();
     expect(r.skippedCompanies).toBe(1);
+  });
+
+  it("empresa com cota mensal ESTOURADA → pula sem chamar IA (gate de cota no cron)", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([{ id: "c1", companyId: "co1" }]);
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ iaAvailable: true, iaEnabled: true, iaMonthlyTokenLimit: 500_000 });
+    getMonthlyUsageMock.mockResolvedValue({ totalTokens: 500_000 }); // uso == limite → estourou
+    const r = await qualifyPendingConversations();
+    expect(qualifyTextMock).not.toHaveBeenCalled();
+    expect(r.skippedCompanies).toBe(1);
+  });
+
+  it("empresa com cota mensal AINDA disponível → processa normalmente", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([{ id: "c1", companyId: "co1" }]);
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ iaAvailable: true, iaEnabled: true, iaMonthlyTokenLimit: 500_000 });
+    getMonthlyUsageMock.mockResolvedValue({ totalTokens: 100_000 }); // bem abaixo do limite
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, id: "c1", companyId: "co1" });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    const r = await qualifyPendingConversations();
+    expect(getMonthlyUsageMock).toHaveBeenCalledWith("co1");
+    expect(qualifyTextMock).toHaveBeenCalledOnce(); // processou de fato (não pulou)
+    expect(r.skippedCompanies).toBe(0);
+  });
+
+  it("limite NULL (sem cota) → não chama getMonthlyUsage e processa", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([{ id: "c1", companyId: "co1" }]);
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ iaAvailable: true, iaEnabled: true, iaMonthlyTokenLimit: null });
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, id: "c1", companyId: "co1" });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    const r = await qualifyPendingConversations();
+    expect(getMonthlyUsageMock).not.toHaveBeenCalled();
+    expect(r.skippedCompanies).toBe(0);
+  });
+
+  it("cota: erro ao somar uso mensal → fail-safe deixa processar (não trava por flake)", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([{ id: "c1", companyId: "co1" }]);
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ iaAvailable: true, iaEnabled: true, iaMonthlyTokenLimit: 500_000 });
+    getMonthlyUsageMock.mockRejectedValue(new Error("usage db flake"));
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, id: "c1", companyId: "co1" });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    const r = await qualifyPendingConversations();
+    expect(r.skippedCompanies).toBe(0); // fail-safe: não pula por erro de leitura de uso
   });
 
   it("findMany filtra grupo, attempts<3 e (analyzedAt null OU needsAnalysis), FIFO", async () => {

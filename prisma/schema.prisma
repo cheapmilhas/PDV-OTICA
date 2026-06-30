@@ -1255,6 +1255,10 @@ model Lead {
   customer Customer? @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
   suggestedCustomer Customer? @relation("LeadSuggestedCustomer", fields: [suggestedCustomerId], references: [id], onDelete: SetNull)
   quote    Quote?    @relation("LeadQuote", fields: [quoteId], references: [id], onDelete: SetNull)
+  // Funil Inteligente — Fatia 1: vendas vinculadas a este lead (elo Lead↔Sale).
+  // Gravado fail-safe na tx da venda quando há customerId. Sem @unique: um lead
+  // pode, em tese, gerar mais de uma venda (re-compra do mesmo cliente).
+  sales    Sale[]    @relation("LeadSale")
 
   @@index([companyId, stageId])
   @@index([companyId, sellerUserId])
@@ -1297,6 +1301,10 @@ model Sale {
   createdAt            DateTime             @default(now())
   updatedAt            DateTime             @updatedAt
   convertedFromQuoteId String?              @unique
+  // Funil Inteligente — Fatia 1: lead que originou esta venda (elo determinístico
+  // p/ auto-Ganho). Opcional, SEM @unique. Gravado fail-safe na tx da venda
+  // quando casa por customerId. SetNull: não prende exclusão de lead.
+  leadId               String?
   cashbackUsed         Decimal              @default(0) @db.Decimal(10, 2)
   legacyId             String?              @unique
   legacySource         String?
@@ -1309,6 +1317,7 @@ model Sale {
   branch               Branch               @relation(fields: [branchId], references: [id])
   company              Company              @relation(fields: [companyId], references: [id])
   convertedFromQuote   Quote?               @relation("QuoteToSale", fields: [convertedFromQuoteId], references: [id])
+  lead                 Lead?                @relation("LeadSale", fields: [leadId], references: [id], onDelete: SetNull)
   customer             Customer?            @relation(fields: [customerId], references: [id])
   sellerUser           User                 @relation("SaleSeller", fields: [sellerUserId], references: [id])
   serviceOrder         ServiceOrder?        @relation(fields: [serviceOrderId], references: [id])
@@ -1328,6 +1337,7 @@ model Sale {
   @@index([agreementId])
   @@index([status, completedAt])
   @@index([companyId, completedAt])
+  @@index([leadId])
 }
 
 /// Q8.2.3: idempotência server-side de POST /api/sales. Um Idempotency-Key

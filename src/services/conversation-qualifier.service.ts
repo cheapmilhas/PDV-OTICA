@@ -1,6 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
-import { logAiUsage } from "@/services/ai-usage.service";
+import { logAiUsage, getMonthlyUsage } from "@/services/ai-usage.service";
 import { qualifyConversationText } from "@/lib/ai/lead-qualifier";
 import { listStages } from "@/services/lead-stage.service";
 import { createLead } from "@/services/lead.service";
@@ -296,8 +296,25 @@ export async function qualifyPendingConversations(
       continue;
     }
     if (!settings || !settings.iaAvailable || !settings.iaEnabled) { skippedCompanies++; continue; }
-    // (cota mensal: o logAiUsage acumula; uma checagem de cota fina pode somar
-    //  getMonthlyUsage aqui no futuro. v1 confia na flag + teto de attempts/scan.)
+
+    // Gate de cota mensal (mesma regra do assertAiAllowed, 1× por empresa aqui
+    // p/ não somar por conversa). Fecha o furo de o cron estourar a cota — o
+    // Atacadão já estourou uma vez. Fail-SAFE no erro de leitura do uso: deixa
+    // processar (não trava a feature por flake de banco), igual ao guard manual.
+    if (settings.iaMonthlyTokenLimit != null) {
+      let overQuota = false;
+      try {
+        const usage = await getMonthlyUsage(cid);
+        overQuota = usage.totalTokens >= settings.iaMonthlyTokenLimit;
+      } catch (e) {
+        log.error("falha ao somar uso mensal no cron — deixando processar (fail-safe)", { companyId: cid, error: e });
+      }
+      if (overQuota) {
+        skippedCompanies++;
+        log.warn("cota mensal de IA atingida — pulando empresa no cron", { companyId: cid });
+        continue;
+      }
+    }
 
     for (const id of ids) {
       processed++;

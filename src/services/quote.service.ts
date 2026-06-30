@@ -29,6 +29,7 @@ import {
   applyPaymentsInTx,
   applyCommissionInTx,
   applyFinanceEntriesInTx,
+  linkLeadAndMaybeWinInTx,
   applyPostCommitSideEffects,
 } from "@/services/sale-side-effects.service";
 import { isLegacyCommissionEngine } from "@/lib/commission-flag";
@@ -977,6 +978,14 @@ export class QuoteService {
       // 9.6. FinanceEntry / DRE (helper — log estruturado, não bloqueia)
       await applyFinanceEntriesInTx(tx, {
         saleId: sale.id,
+        companyId,
+      });
+
+      // 9.6b. Funil Inteligente — elo Lead↔Sale + auto-Ganho (fail-safe).
+      // Cobre o caminho Quote→Sale: se o cliente tem lead aberto, casa e ganha.
+      await linkLeadAndMaybeWinInTx(tx, {
+        saleId: sale.id,
+        customerId: quote.customerId,
         companyId,
       });
 

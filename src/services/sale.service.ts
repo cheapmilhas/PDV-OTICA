@@ -21,6 +21,7 @@ import {
   applyCashbackUsageInTx,
   applyCommissionInTx,
   applyFinanceEntriesInTx,
+  linkLeadAndMaybeWinInTx,
   applyPostCommitSideEffects,
   reverseCommissionForSaleInTx,
   reverseCashbackForSaleInTx,
@@ -835,6 +836,15 @@ export class SaleService {
       // 8. FinanceEntry / DRE (helper — log estruturado, não bloqueia)
       await applyFinanceEntriesInTx(tx, {
         saleId: newSale.id,
+        companyId,
+      });
+
+      // 9. Funil Inteligente — elo Lead↔Sale + auto-Ganho determinístico
+      // (helper fail-safe: casa o lead do cliente e move p/ Ganho; falha NÃO
+      // quebra a venda). Só roda quando há customerId.
+      await linkLeadAndMaybeWinInTx(tx, {
+        saleId: newSale.id,
+        customerId,
         companyId,
       });
 
