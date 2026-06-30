@@ -84,6 +84,7 @@ export async function qualifyConversationText(
   stages: QualifierStage[],
   model: string = LEAD_QUALIFIER_MODEL,
   customerHint?: SafeCustomerHint | null,
+  fewShotBlock?: string | null,
 ): Promise<QualificationResult> {
   const apiKey = await getAnthropicKey();
   if (!apiKey) throw new Error("Anthropic API key não configurada (super admin → config IA, ou env ANTHROPIC_API_KEY)");
@@ -91,8 +92,9 @@ export async function qualifyConversationText(
   const nonce = randomBytes(8).toString("hex");
   const stageNames = stages.map((s) => s.name).join(", ");
   const system = SYSTEM_PROMPT.replaceAll("{nonce}", nonce);
-  // Bloco de dica fica FORA dos marcadores «INICIO/FIM» (não é texto do cliente).
-  const userPrompt = `Etapas do funil desta ótica: ${stageNames}\n${hintBlock(customerHint)}\n«INICIO-${nonce}»\n${conversationText}\n«FIM-${nonce}»`;
+  // Dica do cliente + colinha de correções (few-shot) ficam FORA dos marcadores
+  // «INICIO/FIM» (não são texto do cliente; few-shot é só pares de enum, sem PII).
+  const userPrompt = `Etapas do funil desta ótica: ${stageNames}\n${hintBlock(customerHint)}${fewShotBlock ?? ""}\n«INICIO-${nonce}»\n${conversationText}\n«FIM-${nonce}»`;
 
   const response = await anthropic.messages.create({
     model, max_tokens: 512, system,

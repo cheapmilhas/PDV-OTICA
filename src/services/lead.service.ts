@@ -174,7 +174,21 @@ function serializeLead(l: any) {
   };
 }
 
-export async function moveLead(id: string, data: MoveLeadDTO, companyId: string) {
+/**
+ * Move um lead de estágio. `movedBy` (Fatia 3) registra a autoria:
+ *  - "USER" (default, vindo da rota humana): carimba lastMovedBy=USER +
+ *    lastHumanMoveAt e ARMA a trava humana — aiLockUntilMessageAt recebe o
+ *    lastMessageAt da conversa vinculada (a IA só re-mexe se chegar msg MAIS
+ *    nova que isso). Sem conversa vinculada (lead manual), a trava fica null.
+ *  - "AI" (vindo do motor de auto-move): carimba lastMovedBy=AI e NÃO mexe na
+ *    trava humana (não consulta conversa).
+ */
+export async function moveLead(
+  id: string,
+  data: MoveLeadDTO,
+  companyId: string,
+  movedBy: "USER" | "AI" = "USER",
+) {
   const lead = await prisma.lead.findFirst({
     where: { id, companyId, deletedAt: null },
     select: { id: true, updatedAt: true },
@@ -187,11 +201,57 @@ export async function moveLead(id: string, data: MoveLeadDTO, companyId: string)
 
   const stage = await prisma.leadStage.findFirst({
     where: { id: data.stageId, companyId },
-    select: { id: true, isLost: true },
+    select: { id: true, isLost: true, isWon: true },
   });
   if (!stage) throw notFoundError("Etapa inválida");
   if (stage.isLost && !data.lostReason) {
     throw businessRuleError("Informe o motivo da perda");
+  }
+  // Defense-in-depth (Fatia 3): a IA NUNCA leva um card p/ "Ganho" via moveLead.
+  // O auto-Ganho é determinístico (linkLeadAndMaybeWinInTx, na venda real). Se um
+  // estágio virar isWon entre a leitura do motor e aqui, o guard impede a IA de
+  // "ganhar" um lead sem venda. Humano (USER) pode mover p/ Ganho manualmente.
+  if (movedBy === "AI" && stage.isWon) {
+    throw businessRuleError("A IA não move card para Ganho (só venda real ou humano).");
+  }
+
+  // Trava humana inteligente: ao mover por humano, congela a IA até chegar uma
+  // mensagem mais nova que a última conhecida da conversa. Só p/ o caminho USER.
+  let humanStamp: {
+    lastMovedBy: "USER";
+    lastHumanMoveAt: Date;
+    aiLockUntilMessageAt: Date | null;
+  } | undefined;
+  if (movedBy === "USER") {
+    const conv = await prisma.whatsappConversation.findFirst({
+      where: { leadId: id, companyId },
+      select: { lastMessageAt: true },
+    });
+    humanStamp = {
+      lastMovedBy: "USER",
+      lastHumanMoveAt: new Date(),
+      aiLockUntilMessageAt: conv?.lastMessageAt ?? null,
+    };
+  }
+
+  // Auto-move da IA: NUNCA sobrescreve uma correção humana. updateMany com guard
+  // `lastMovedBy != USER` fecha a janela de corrida (humano move entre a leitura
+  // do motor e este update) — se um USER carimbou no meio, count=0 e a IA aborta.
+  if (movedBy === "AI") {
+    const res = await prisma.lead.updateMany({
+      where: { id, companyId, lastMovedBy: { not: "USER" } },
+      data: {
+        stageId: data.stageId,
+        lostReason: stage.isLost ? data.lostReason : null,
+        lastActivityAt: new Date(),
+        lastMovedBy: "AI",
+      },
+    });
+    if (res.count === 0) {
+      // Humano carimbou na corrida — respeita e não move.
+      throw duplicateError("Lead foi movido por um humano. A IA não sobrescreve.");
+    }
+    return prisma.lead.findUniqueOrThrow({ where: { id } });
   }
 
   return prisma.lead.update({
@@ -200,6 +260,7 @@ export async function moveLead(id: string, data: MoveLeadDTO, companyId: string)
       stageId: data.stageId,
       lostReason: stage.isLost ? data.lostReason : null,
       lastActivityAt: new Date(),
+      ...humanStamp,
     },
   });
 }
@@ -321,6 +382,41 @@ export async function correctLeadIntent(
     // select mínimo: o PATCH de intenção não precisa devolver phone/email/userId
     // (minimização LGPD); só o que o card usa p/ refletir a correção.
     select: { id: true, intent: true, intentPredicted: true, lastActivityAt: true },
+  });
+}
+
+/**
+ * Atualiza os campos derivados da IA num lead EXISTENTE durante a
+ * RE-QUALIFICAÇÃO (conversa que já é lead recebeu msg nova). Evita o bug de
+ * criar lead duplicado a cada ciclo do cron. NÃO toca `intentPredicted` (o
+ * palpite ORIGINAL — preserva a telemetria de acurácia) nem `stageId` (quem move
+ * é o auto-move/humano, não a re-análise). Multi-tenant: companyId no filtro.
+ */
+export async function updateLeadAiFields(
+  id: string,
+  companyId: string,
+  aiFields: {
+    intent?: ContactIntent;
+    contactNotPatient?: boolean;
+    urgent?: boolean;
+  },
+) {
+  const lead = await prisma.lead.findFirst({
+    where: { id, companyId, deletedAt: null },
+    select: { id: true },
+  });
+  if (!lead) throw notFoundError("Lead não encontrado");
+
+  return prisma.lead.update({
+    where: { id },
+    data: {
+      // intent reflete a "verdade atual" da IA; intentPredicted NÃO muda.
+      ...(aiFields.intent ? { intent: aiFields.intent } : {}),
+      ...(aiFields.contactNotPatient !== undefined ? { contactNotPatient: aiFields.contactNotPatient } : {}),
+      ...(aiFields.urgent !== undefined ? { urgent: aiFields.urgent } : {}),
+      lastActivityAt: new Date(),
+    },
+    select: { id: true },
   });
 }
 

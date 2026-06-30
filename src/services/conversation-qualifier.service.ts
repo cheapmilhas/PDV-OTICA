@@ -3,7 +3,7 @@ import { logger } from "@/lib/logger";
 import { logAiUsage, getMonthlyUsage } from "@/services/ai-usage.service";
 import { qualifyConversationText } from "@/lib/ai/lead-qualifier";
 import { listStages } from "@/services/lead-stage.service";
-import { createLead } from "@/services/lead.service";
+import { createLead, updateLeadAiFields } from "@/services/lead.service";
 import { getOrCreateAiSellerUser } from "@/services/ai-seller-user.service";
 import { transcribeAudio } from "@/services/audio-transcription.service";
 import { instanceNameForCompany } from "@/lib/whatsapp-instance";
@@ -12,10 +12,15 @@ import { matchCustomerByPhone } from "@/services/lead-customer-match.service";
 import { customerKind } from "@/lib/customer-kind-label";
 import { intentLabel } from "@/lib/contact-intent-label";
 import { sanitizeAiReason } from "@/lib/sanitize-ai-reason";
+import { maybeAutoAdvanceLead } from "@/services/funnel-automove.service";
+import { getRecentIntentCorrections, buildFewShotBlock } from "@/services/funnel-fewshot.service";
 
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
 const SCAN_LIMIT = 200;
+// Few-shot (Fatia 3): qtde de correções recentes da ótica injetadas no prompt.
+// Teto baixo p/ controlar custo de tokens (a crítica alertou: +input por chamada).
+const FEWSHOT_LIMIT = 8;
 // "Esfriar a conversa" (debounce): quando o cron roda em alta frequência (ex.
 // cron-job.org a cada 1-2 min), não queremos qualificar no MEIO de uma rajada de
 // mensagens — o cliente ainda está digitando. Só consideramos uma conversa pronta
@@ -191,11 +196,16 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   // revisável; o vínculo customerId só grava após confirmação humana (writer
   // dedicado), NÃO aqui — aqui o resumo é só dica de classificação.
   const match = await matchCustomerByPhone(conv.companyId, conv.contactNumber);
+  // Few-shot por ótica (Fatia 3): injeta as últimas correções de intenção desta
+  // ótica (só pares de enum, sem PII) p/ a IA não repetir erros recentes.
+  const corrections = await getRecentIntentCorrections(conv.companyId, FEWSHOT_LIMIT);
+  const fewShotBlock = buildFewShotBlock(corrections);
   const result = await qualifyConversationText(
     text,
     stages.map((s) => ({ id: s.id, name: s.name })),
     cfg.qualifierModel,
     match.kind === "single" ? match.summary : null,
+    fewShotBlock,
   );
 
   await logAiUsage({
@@ -221,31 +231,57 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     return { conversationId, isLead: false, leadId: null };
   }
 
-  const sellerUserId = await getOrCreateAiSellerUser(conv.companyId);
-  // Mapeia o kind do match (minúsculo no serviço) → enum do banco (maiúsculo).
-  const matchKind = match.kind === "single" ? "SINGLE" : match.kind === "ambiguous" ? "AMBIGUOUS" : "NONE";
-  const { lead } = await createLead(
-    {
-      name: conv.contactName ?? conv.contactNumber,
-      phone: conv.contactNumber,
-      source: "WHATSAPP",
-      interest: result.interest ?? undefined,
-      stageId: result.stageId ?? undefined,
-      notes: `Lead criado pela IA do funil. Motivo: ${safeReason}`.slice(0, 500),
-    },
-    conv.companyId, sellerUserId, null,
-    {
+  // RE-QUALIFICAÇÃO vs criação. Se a conversa JÁ é lead (conv.leadId), atualiza
+  // o existente — NÃO cria de novo (corrige bug pré-existente de lead duplicado
+  // a cada ciclo do cron). Senão, cria o lead.
+  let leadId: string;
+  if (conv.leadId) {
+    await updateLeadAiFields(conv.leadId, conv.companyId, {
       intent: result.intent,
       contactNotPatient: result.contactNotPatient,
       urgent: result.urgent,
-      customerMatchKind: matchKind,
-      // Guarda o candidato (match único) p/ o vendedor confirmar com 1 clique.
-      suggestedCustomerId: match.kind === "single" ? match.customerId : null,
-    },
-  );
-  await finalize(lead.id, { isLead: true, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
-  log.info("lead criado pela IA", { conversationId, leadId: lead.id, companyId: conv.companyId });
-  return { conversationId, isLead: true, leadId: lead.id };
+    });
+    leadId = conv.leadId;
+    log.info("lead re-qualificado pela IA", { conversationId, leadId, companyId: conv.companyId });
+  } else {
+    const sellerUserId = await getOrCreateAiSellerUser(conv.companyId);
+    // Mapeia o kind do match (minúsculo no serviço) → enum do banco (maiúsculo).
+    const matchKind = match.kind === "single" ? "SINGLE" : match.kind === "ambiguous" ? "AMBIGUOUS" : "NONE";
+    const { lead } = await createLead(
+      {
+        name: conv.contactName ?? conv.contactNumber,
+        phone: conv.contactNumber,
+        source: "WHATSAPP",
+        interest: result.interest ?? undefined,
+        stageId: result.stageId ?? undefined,
+        notes: `Lead criado pela IA do funil. Motivo: ${safeReason}`.slice(0, 500),
+      },
+      conv.companyId, sellerUserId, null,
+      {
+        intent: result.intent,
+        contactNotPatient: result.contactNotPatient,
+        urgent: result.urgent,
+        customerMatchKind: matchKind,
+        // Guarda o candidato (match único) p/ o vendedor confirmar com 1 clique.
+        suggestedCustomerId: match.kind === "single" ? match.customerId : null,
+      },
+    );
+    leadId = lead.id;
+    log.info("lead criado pela IA", { conversationId, leadId, companyId: conv.companyId });
+  }
+  await finalize(leadId, { isLead: true, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
+
+  // Funil Inteligente — Fatia 3: auto-move. Só roda em RE-QUALIFICAÇÃO (a conversa
+  // JÁ era lead) — não no nascimento (card nasce em "Novo" e avança no próximo
+  // ciclo, quando a conversa evoluir). O motor é fail-safe e gateado por
+  // kill-switch por ótica (OFF por padrão), então é inerte até o dono ligar.
+  if (conv.leadId) {
+    await maybeAutoAdvanceLead({
+      conversationId, leadId, companyId: conv.companyId,
+      intent: result.intent, confidence: result.confidence,
+    });
+  }
+  return { conversationId, isLead: true, leadId };
 }
 
 /**

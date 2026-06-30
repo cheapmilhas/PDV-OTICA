@@ -3,11 +3,12 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     leadStage: { findFirst: vi.fn() },
-    lead: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn(), findMany: vi.fn(), update: vi.fn() },
+    lead: { create: vi.fn(), findFirst: vi.fn(), count: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn(), findUniqueOrThrow: vi.fn() },
     customer: { findFirst: vi.fn() },
     quote: { findFirst: vi.fn() },
     user: { findFirst: vi.fn() },
     prescription: { findFirst: vi.fn() },
+    whatsappConversation: { findFirst: vi.fn() },
   },
 }));
 import { prisma } from "@/lib/prisma";
@@ -222,6 +223,59 @@ describe("moveLead", () => {
     const data = (prisma.lead.update as any).mock.calls[0][0].data;
     expect(data.stageId).toBe("stg2");
     expect(data.lastActivityAt).toBeInstanceOf(Date);
+  });
+
+  // Fatia 3: autoria do movimento + trava humana inteligente.
+  it("movimento por HUMANO (default) carimba lastMovedBy=USER + lastHumanMoveAt + trava na msg atual", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    // conversa vinculada com última mensagem conhecida → vira o ponto da trava
+    (prisma.whatsappConversation.findFirst as any).mockResolvedValue({ lastMessageAt: new Date("2026-06-20T08:00:00Z") });
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+
+    await moveLead("l1", { stageId: "stg2" } as any, "co_1"); // sem movedBy = USER
+
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.lastMovedBy).toBe("USER");
+    expect(data.lastHumanMoveAt).toBeInstanceOf(Date);
+    // trava = lastMessageAt da conversa no momento da correção
+    expect(data.aiLockUntilMessageAt).toEqual(new Date("2026-06-20T08:00:00Z"));
+  });
+
+  it("movimento por IA usa updateMany com guard lastMovedBy!=USER + carimba AI", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    (prisma.lead.updateMany as any).mockResolvedValue({ count: 1 });
+    (prisma.lead.findUniqueOrThrow as any).mockResolvedValue({ id: "l1", stageId: "stg2" });
+
+    await moveLead("l1", { stageId: "stg2" } as any, "co_1", "AI");
+
+    const arg = (prisma.lead.updateMany as any).mock.calls[0][0];
+    expect(arg.where).toMatchObject({ id: "l1", companyId: "co_1", lastMovedBy: { not: "USER" } });
+    expect(arg.data.lastMovedBy).toBe("AI");
+    // IA não consulta conversa p/ trava humana
+    expect(prisma.whatsappConversation.findFirst).not.toHaveBeenCalled();
+  });
+
+  it("RACE: humano carimbou no meio (count=0) → IA aborta com erro (não sobrescreve)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    (prisma.lead.updateMany as any).mockResolvedValue({ count: 0 }); // guard barrou
+
+    await expect(moveLead("l1", { stageId: "stg2" } as any, "co_1", "AI")).rejects.toThrow(/humano/i);
+  });
+
+  it("HUMANO sem conversa vinculada → trava fica null (não quebra)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    (prisma.whatsappConversation.findFirst as any).mockResolvedValue(null); // lead manual, sem WhatsApp
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+
+    await moveLead("l1", { stageId: "stg2" } as any, "co_1", "USER");
+
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.lastMovedBy).toBe("USER");
+    expect(data.aiLockUntilMessageAt).toBeNull();
   });
 });
 

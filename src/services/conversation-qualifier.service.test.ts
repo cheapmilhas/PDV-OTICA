@@ -18,7 +18,11 @@ vi.mock("@/lib/ai/lead-qualifier", () => ({ qualifyConversationText: (...a: unkn
 const listStagesMock = vi.fn();
 vi.mock("@/services/lead-stage.service", () => ({ listStages: (...a: unknown[]) => listStagesMock(...a) }));
 const createLeadMock = vi.fn();
-vi.mock("@/services/lead.service", () => ({ createLead: (...a: unknown[]) => createLeadMock(...a) }));
+const updateLeadAiFieldsMock = vi.fn();
+vi.mock("@/services/lead.service", () => ({
+  createLead: (...a: unknown[]) => createLeadMock(...a),
+  updateLeadAiFields: (...a: unknown[]) => updateLeadAiFieldsMock(...a),
+}));
 const getBotMock = vi.fn();
 vi.mock("@/services/ai-seller-user.service", () => ({ getOrCreateAiSellerUser: (...a: unknown[]) => getBotMock(...a) }));
 const transcribeAudioMock = vi.fn();
@@ -28,6 +32,12 @@ const getAiConfigMock = vi.fn();
 vi.mock("@/services/ai-config.service", () => ({ getAiConfig: (...a: unknown[]) => getAiConfigMock(...a) }));
 const matchCustomerMock = vi.fn();
 vi.mock("@/services/lead-customer-match.service", () => ({ matchCustomerByPhone: (...a: unknown[]) => matchCustomerMock(...a) }));
+const autoAdvanceMock = vi.fn();
+vi.mock("@/services/funnel-automove.service", () => ({ maybeAutoAdvanceLead: (...a: unknown[]) => autoAdvanceMock(...a) }));
+vi.mock("@/services/funnel-fewshot.service", () => ({
+  getRecentIntentCorrections: vi.fn().mockResolvedValue([]),
+  buildFewShotBlock: vi.fn().mockReturnValue(""),
+}));
 
 import { prisma } from "@/lib/prisma";
 import { qualifyConversation, qualifyPendingConversations } from "./conversation-qualifier.service";
@@ -232,7 +242,7 @@ describe("qualifyConversation", () => {
 
     await qualifyConversation("c1");
 
-    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), "claude-opus-4-8", null);
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), "claude-opus-4-8", null, "");
     expect(logAiUsageMock).toHaveBeenCalledWith(expect.objectContaining({ model: "claude-opus-4-8" }));
   });
 
@@ -245,7 +255,7 @@ describe("qualifyConversation", () => {
     await qualifyConversation("c1");
 
     // 4º arg = o resumo seguro do cliente (hint)
-    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), summary);
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), summary, "");
   });
 
   it("match ambíguo (2+ fichas) → NÃO passa hint (null), não vaza resumo de ninguém", async () => {
@@ -255,7 +265,7 @@ describe("qualifyConversation", () => {
 
     await qualifyConversation("c1");
 
-    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), null);
+    expect(qualifyTextMock).toHaveBeenCalledWith(expect.any(String), expect.any(Array), expect.any(String), null, "");
   });
 
   it("ao criar lead, persiste intent/contactNotPatient/urgent/customerMatchKind", async () => {
@@ -271,6 +281,22 @@ describe("qualifyConversation", () => {
     expect(aiFields.customerMatchKind).toBe("SINGLE");
     expect(aiFields.contactNotPatient).toBe(false);
     expect(aiFields.urgent).toBe(false);
+  });
+
+  it("RE-QUALIFICAÇÃO: conversa que JÁ é lead NÃO cria lead novo (evita duplicado)", async () => {
+    // conv com leadId já setado + needsAnalysis (msg nova) → re-qualifica, não recria.
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv, leadId: "lead_existente", analyzedAt: new Date("2026-06-29"), needsAnalysis: true,
+    });
+    qualifyTextMock.mockResolvedValue({ isLead: true, intent: "NOVA_COMPRA", reason: "quer comprar", interest: "grau", stageId: "s_novo", confidence: 0.9, contactNotPatient: false, urgent: false, parseError: false, usage: { inputTokens: 10, outputTokens: 5, cacheTokens: 0 } });
+
+    const r = await qualifyConversation("c1");
+
+    expect(createLeadMock).not.toHaveBeenCalled(); // NÃO duplica
+    expect(updateLeadAiFieldsMock).toHaveBeenCalled(); // atualiza o existente
+    expect(r.leadId).toBe("lead_existente");
+    // auto-move roda sobre o lead existente
+    expect(autoAdvanceMock).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead_existente" }));
   });
 
   it("grupo → transcribeAudio NÃO é chamado (pulado como group)", async () => {

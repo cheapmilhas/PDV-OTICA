@@ -1243,6 +1243,15 @@ model Lead {
   intentPredicted            ContactIntent?
   intentCorrectedById        String?
   intentCorrectedAt          DateTime?
+  // Funil Inteligente — Fatia 3 (auto-move): autoria do último movimento + trava
+  // humana inteligente. lastMovedBy=USER + lastHumanMoveAt registram que um
+  // humano mexeu; aiLockUntilMessageAt guarda o lastMessageAt da conversa no
+  // momento da correção — a IA só volta a mover esse card se chegar mensagem MAIS
+  // NOVA que isso (conversa evoluiu), evitando desfazer a correção relendo o mesmo
+  // texto. NULL = nunca tocado por humano (IA livre).
+  lastMovedBy          LeadMover?
+  lastHumanMoveAt      DateTime?
+  aiLockUntilMessageAt DateTime?
   lastActivityAt DateTime    @default(now())
   deletedAt      DateTime?
   createdAt      DateTime    @default(now())
@@ -4226,6 +4235,14 @@ enum CustomerMatchKind {
   NONE
   SINGLE
   AMBIGUOUS
+}
+
+// Funil Inteligente — Fatia 3: quem moveu o card por último (auto-move da IA vs
+// humano). Usado pela trava "humano-tocou": se USER moveu, a IA só re-mexe se a
+// conversa evoluiu (msg nova após aiLockUntilMessageAt).
+enum LeadMover {
+  USER
+  AI
 }
 
 enum TagCategory {
