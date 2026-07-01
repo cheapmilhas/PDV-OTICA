@@ -23,6 +23,26 @@ const LEAD_INCLUDE = {
 } as const;
 
 /**
+ * Escopo de filial para LEITURA de leads. Um lead SEM filial (branchId=null) NÃO
+ * pertence a nenhuma filial específica — é "não-atribuído". Casos que nascem assim:
+ * leads da IA do WhatsApp (a conversa não tem filial) e leads criados por um
+ * usuário sem filial (ex.: admin). Se filtrássemos com `where.branchId = X`, o SQL
+ * `branch_id = 'X'` NUNCA casa com NULL, então esses leads SOMEM ao selecionar uma
+ * filial — o dono vê o funil vazio. Correção: um lead não-atribuído aparece em
+ * QUALQUER filial selecionada (`branchId = X OR branchId IS NULL`).
+ *
+ * Retorna uma cláusula pronta p/ um `where.AND` (nunca `where.OR` direto: o topo do
+ * where já usa OR p/ a busca por texto, e dois `OR` no mesmo objeto se sobrescrevem).
+ * `null`/`"ALL"` ⇒ sem escopo (todas as filiais) ⇒ retorna null (o chamador ignora).
+ */
+export function buildLeadBranchScope(
+  branchId: string | null,
+): { OR: [{ branchId: string }, { branchId: null }] } | null {
+  if (!branchId) return null;
+  return { OR: [{ branchId }, { branchId: null }] };
+}
+
+/**
  * Valida que cada FK referenciada por um lead pertence à MESMA empresa, fechando
  * IDOR cross-tenant: sem isto, a empresa A poderia gravar customerId/quoteId/
  * sellerUserId/stageId de outra empresa (vínculo/vazamento cross-tenant). Lança
@@ -137,17 +157,24 @@ export async function listLeads(
   access: { viewAll: boolean; userId: string }
 ) {
   const where: any = { companyId, deletedAt: null };
-  if (branchId) where.branchId = branchId;
   if (query.stageId) where.stageId = query.stageId;
   if (query.source) where.source = query.source;
   if (query.sellerUserId) where.sellerUserId = query.sellerUserId;
   if (!access.viewAll) where.sellerUserId = access.userId;
+  // Filial e busca são cláusulas OR INDEPENDENTES; vão em `AND` p/ não se
+  // sobrescreverem (dois `where.OR` no mesmo objeto colidem — o 2º apaga o 1º).
+  const and: any[] = [];
+  const branchScope = buildLeadBranchScope(branchId);
+  if (branchScope) and.push(branchScope);
   if (query.search) {
-    where.OR = [
-      { name: { contains: query.search, mode: "insensitive" } },
-      { interest: { contains: query.search, mode: "insensitive" } },
-    ];
+    and.push({
+      OR: [
+        { name: { contains: query.search, mode: "insensitive" } },
+        { interest: { contains: query.search, mode: "insensitive" } },
+      ],
+    });
   }
+  if (and.length) where.AND = and;
 
   const { skip, take } = getPaginationParams(query.page, query.pageSize);
   const [rows, total] = await Promise.all([
@@ -481,7 +508,10 @@ export async function deleteLead(id: string, companyId: string) {
  */
 export async function getLeadStats(companyId: string, branchId: string | null) {
   const where: any = { companyId, deletedAt: null };
-  if (branchId) where.branchId = branchId;
+  // Mesmo escopo da listagem: leads não-atribuídos (branchId=null) contam em
+  // qualquer filial selecionada, senão as métricas do funil ficam zeradas.
+  const branchScope = buildLeadBranchScope(branchId);
+  if (branchScope) where.AND = [branchScope];
   const leads = await prisma.lead.findMany({
     where,
     select: {
