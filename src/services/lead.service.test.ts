@@ -200,6 +200,56 @@ describe("listLeads", () => {
     const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
     expect(where.sellerUserId).toBe("u_5");
   });
+
+  // BUG "funil branchId null": lead sem filial (IA/WhatsApp ou admin sem filial)
+  // sumia ao selecionar uma filial. Agora deve aparecer em QUALQUER filial.
+  it("filial selecionada inclui leads dela E os sem filial (branchId=null)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    (prisma.lead.count as any).mockResolvedValue(0);
+    await listLeads({ page: 1, pageSize: 50, search: "" } as any, "co_1", "branch_pacajus", { viewAll: true, userId: "u" });
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    // NUNCA usa where.branchId direto (excluiria os null); usa AND com OR.
+    expect(where.branchId).toBeUndefined();
+    expect(where.AND).toEqual([{ OR: [{ branchId: "branch_pacajus" }, { branchId: null }] }]);
+  });
+
+  it("sem filial (null) NÃO adiciona escopo de filial (mostra todas)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    (prisma.lead.count as any).mockResolvedValue(0);
+    await listLeads({ page: 1, pageSize: 50, search: "" } as any, "co_1", null, { viewAll: true, userId: "u" });
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    expect(where.branchId).toBeUndefined();
+    expect(where.AND).toBeUndefined();
+  });
+
+  // Regressão do ataque adversarial #1: filial + busca são DOIS OR e não podem
+  // se sobrescrever. Ambos precisam sobreviver dentro do where.AND.
+  it("filial + busca por texto COEXISTEM (dois OR não se sobrescrevem)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    (prisma.lead.count as any).mockResolvedValue(0);
+    await listLeads({ page: 1, pageSize: 50, search: "João" } as any, "co_1", "branch_pacajus", { viewAll: true, userId: "u" });
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    expect(where.OR).toBeUndefined(); // nada no topo (senão colidiria)
+    expect(where.AND).toHaveLength(2);
+    // 1ª cláusula: escopo de filial (com null)
+    expect(where.AND).toContainEqual({ OR: [{ branchId: "branch_pacajus" }, { branchId: null }] });
+    // 2ª cláusula: busca por nome/interesse ainda presente
+    expect(where.AND).toContainEqual({
+      OR: [
+        { name: { contains: "João", mode: "insensitive" } },
+        { interest: { contains: "João", mode: "insensitive" } },
+      ],
+    });
+  });
+
+  it("count usa o MESMO where do findMany (paginação consistente)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    (prisma.lead.count as any).mockResolvedValue(0);
+    await listLeads({ page: 1, pageSize: 50, search: "João" } as any, "co_1", "branch_pacajus", { viewAll: true, userId: "u" });
+    const whereFind = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    const whereCount = (prisma.lead.count as any).mock.calls[0][0].where;
+    expect(whereCount).toEqual(whereFind);
+  });
 });
 
 describe("moveLead", () => {
@@ -321,6 +371,23 @@ describe("moveLead", () => {
 
 describe("getLeadStats", () => {
   const NOW = new Date();
+
+  it("filial selecionada inclui leads sem filial (branchId=null) via AND", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    await getLeadStats("co_1", "branch_pacajus");
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    expect(where.branchId).toBeUndefined();
+    expect(where.AND).toEqual([{ OR: [{ branchId: "branch_pacajus" }, { branchId: null }] }]);
+  });
+
+  it("sem filial (null) não adiciona escopo (conta todas)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    await getLeadStats("co_1", null);
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    expect(where.AND).toBeUndefined();
+    expect(where.branchId).toBeUndefined();
+  });
+
   it("calcula conversão = ganhos / total e agrega lostReason e source", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
       { id: "a", lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
