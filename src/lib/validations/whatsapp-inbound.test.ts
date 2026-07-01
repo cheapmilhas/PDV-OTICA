@@ -40,6 +40,27 @@ describe("parseInboundMessage", () => {
     expect(r?.text).toBe("ok, já separo");
   });
 
+  it("outbound NÃO usa pushName como contactName (bug: pushName é o nome do DONO)", () => {
+    // Repro: em fromMe=true o pushName do payload é o nome do dono da instância.
+    // Antes, isso virava contactName e sobrescrevia o nome do cliente. Agora null.
+    const r = parseInboundMessage({
+      key: { id: "OUT1", remoteJid: "5585123456789@s.whatsapp.net", fromMe: true },
+      pushName: "Matheus Rebouças", // nome do DONO no payload de outbound
+      message: { conversation: "já separei seu óculos" },
+    });
+    expect(r?.direction).toBe("outbound");
+    expect(r?.contactName).toBeNull(); // NÃO pega o pushName do dono
+  });
+
+  it("inbound continua pegando o pushName (é o nome do cliente)", () => {
+    const r = parseInboundMessage({
+      key: { id: "IN1", remoteJid: "5585123456789@s.whatsapp.net", fromMe: false },
+      pushName: "João Cliente",
+      message: { conversation: "oi, quero um óculos" },
+    });
+    expect(r?.contactName).toBe("João Cliente");
+  });
+
   it("retorna null se faltam campos essenciais (sem id ou sem remoteJid)", () => {
     expect(parseInboundMessage({ message: { conversation: "oi" } })).toBeNull();
     expect(parseInboundMessage(null)).toBeNull();

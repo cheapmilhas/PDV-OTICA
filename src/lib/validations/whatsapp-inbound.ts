@@ -52,7 +52,12 @@ export function parseInboundMessage(data: unknown): InboundMessage | null {
   return {
     evolutionId: key.id,
     contactNumber,
-    contactName: typeof d.pushName === "string" ? d.pushName : null,
+    // pushName SÓ é do cliente quando a mensagem é INBOUND. Em outbound (fromMe),
+    // o pushName do payload é o nome do DONO da instância (a ótica) — usá-lo aqui
+    // sobrescrevia o nome real do cliente pelo nome do dono a cada resposta (bug:
+    // 14 clientes distintos apareciam como "Matheus Rebouças"). Em outbound → null
+    // (o persist não sobrescreve o nome já salvo; ver `?? undefined` no service).
+    contactName: direction === "inbound" && typeof d.pushName === "string" ? d.pushName : null,
     direction,
     type,
     text,
