@@ -26,6 +26,15 @@ describe("qualifyConversationText", () => {
     expect(arg.model).toBe("claude-sonnet-4-6");
     expect(typeof arg.system).toBe("string");
     expect(arg.messages[0].role).toBe("user");
+    // temperature=0: classificação determinística e reproduzível (Item 3).
+    expect(arg.temperature).toBe(0);
+  });
+
+  it("SYSTEM_PROMPT traz as regras de desempate D0-D4 (Item 3)", () => {
+    expect(SYSTEM_PROMPT).toContain("REGRAS DE DESEMPATE");
+    expect(SYSTEM_PROMPT).toContain("SAUDAÇÃO/VAZIO");
+    expect(SYSTEM_PROMPT).toContain("RENOVACAO"); // D2 refazer
+    expect(SYSTEM_PROMPT).toContain("CONSULTA/EXAME EXTERNO"); // D4
   });
   it("sem arg de model → usa o default claude-sonnet-4-6", async () => {
     mockJson({ intent: "OUTRO", isLead: false, reason: "x", confidence: 0.5 });

@@ -3,6 +3,8 @@ import { getAdminSession } from "@/lib/admin-session";
 import { qualifyConversationText, LEAD_QUALIFIER_MODEL, type ContactIntent } from "@/lib/ai/lead-qualifier";
 import { decideFunnelAdvance } from "@/lib/funnel-advance";
 import { clientEngaged, oticaSentValue, shopReplied, type SignalMessage } from "@/lib/funnel-signals";
+import { conversationNeedsHumanAttention } from "@/lib/conversation-attention";
+import { scoreFunnelEval } from "@/lib/funnel-eval-score";
 import { EVAL_CASES } from "./cases.data";
 
 // Eval do funil IA (SUPER_ADMIN). Recebe casos sintéticos no body, roda a IA real
@@ -38,9 +40,16 @@ async function runOne(c: EvalCase, model: string) {
   const text = buildText(c.messages);
   const sig = toSignals(c.messages);
   const q = await qualifyConversationText(text || "(sem texto)", STAGES, model);
+  // A cadeia REAL de prod: o guardrail de atenção (finalize) decide "Sinaliza
+  // humano" PRIMEIRO — pela intenção CRUA + urgent — para lead OU não-lead. Isso
+  // (não o `action:"flag"` da régua, que é código morto p/ reclamação em prod)
+  // é o sinal que a prod produz. Só depois a régua move o card dos leads reais.
   let gotStage: string;
-  if (!q.isLead) gotStage = "Nao-lead";
-  else {
+  if (conversationNeedsHumanAttention({ intent: q.intent as ContactIntent, urgent: q.urgent })) {
+    gotStage = "Sinaliza humano";
+  } else if (!q.isLead) {
+    gotStage = "Nao-lead";
+  } else {
     const d = decideFunnelAdvance({
       intent: q.intent as ContactIntent, confidence: q.confidence, currentStageId: "novo", stages: STAGES,
       clientEngaged: clientEngaged(sig), shopReplied: shopReplied(sig), oticaSentValue: oticaSentValue(sig),
@@ -81,8 +90,19 @@ export async function GET(request: Request) {
   const byCat: Record<string, { total: number; pass: number }> = {};
   for (const r of results) { const e = byCat[r.categoria] ??= { total: 0, pass: 0 }; e.total++; if (r.ok) e.pass++; }
 
+  // Item 2: placar PONDERADO POR IMPACTO — o número que interessa. A acurácia
+  // geral (abaixo) fica só como continuidade histórica; a decisão sai daqui.
+  const score = scoreFunnelEval(results.map((r) => ({
+    gotIsLead: r.gotIsLead, gotStage: r.gotStage, expIsLead: r.expIsLead, expStage: r.expStage,
+  })));
+
   return NextResponse.json({
-    model, total: results.length, pass, accuracy: +((pass / results.length) * 100).toFixed(1),
+    model, total: results.length,
+    // ⭐ Placar por impacto (Item 2): a régua de decisão.
+    //   naoPerdeReclamacao = SAGRADO (~100%), capturaLead = recall, estagioCerto | é-lead.
+    impacto: score,
+    // Continuidade histórica (métrica de vaidade — NÃO decidir por ela):
+    pass, accuracy: +((pass / results.length) * 100).toFixed(1),
     dims: {
       intent: results.filter((r) => !r.failed.some((f) => f.startsWith("intent"))).length,
       isLead: results.filter((r) => !r.failed.some((f) => f.startsWith("isLead"))).length,

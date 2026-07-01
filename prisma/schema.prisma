@@ -4537,8 +4537,20 @@ model WhatsappConversation {
   // strings (rótulos) p/ exibição — não acoplam ao enum.
   analysisIsLead       Boolean?
   analysisIntent       String?
+  // Intenção CRUA (enum) da última análise — o sinal MÁQUINA-legível. analysisIntent
+  // guarda só o RÓTULO ("Reclamação"), que é artefato de exibição e deriva ao renomear;
+  // um guardrail (~100% recall) precisa do valor recuperável no disco. Sempre sobrescrito.
+  analysisIntentCode   ContactIntent?
   analysisCustomerKind String?
   analysisReason       String?
+  // Guardrail SAGRADO da reclamação (Item 1). true = a conversa precisa de um
+  // humano AGORA (reclamação/cobrança OU tom irritado). É MONOTÔNICO-PRA-CIMA:
+  // a re-qualificação NUNCA volta p/ false (senão o cliente desarma o alarme só
+  // mandando "ok obrigado"). Baixa = ação HUMANA explícita e auditada (abaixo).
+  // Ver src/lib/conversation-attention.ts (fonte única, pura, usada por prod+eval).
+  needsHumanAttention  Boolean   @default(false)
+  attentionResolvedAt   DateTime? // quando um humano deu baixa no alarme
+  attentionResolvedById String?   // quem deu baixa (trilha de auditoria do R$50k)
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -4549,6 +4561,8 @@ model WhatsappConversation {
   @@index([companyId, lastMessageAt])
   @@index([companyId, analyzedAt])
   @@index([companyId, isGroup, analyzedAt])
+  // Índice p/ o inbox listar/ordenar os que precisam de atenção sem table-scan.
+  @@index([companyId, needsHumanAttention])
 }
 
 model WhatsappMessage {

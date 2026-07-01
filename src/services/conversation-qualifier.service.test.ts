@@ -174,6 +174,79 @@ describe("qualifyConversation", () => {
     expect(upd.data.analysisCustomerKind).toBe("Cliente novo"); // sem match → novo
   });
 
+  // ── Guardrail SAGRADO da reclamação (Item 1) ─────────────────────────────
+  // Reclamação/cobrança é isLead=false → NÃO vira card. Sem este sinal na CONVERSA
+  // o cliente furioso some no "Não-lead". finalize acende needsHumanAttention.
+  it("RECLAMACAO (isLead=false) ACENDE needsHumanAttention + grava intent CRUA", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: false, intent: "RECLAMACAO", urgent: false, reason: "insatisfeito", interest: null, stageId: null, confidence: 0.8, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data.needsHumanAttention).toBe(true);
+    expect(upd.data.analysisIntentCode).toBe("RECLAMACAO");
+  });
+
+  it("COBRANCA_FINANCEIRO (isLead=false) ACENDE needsHumanAttention", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: false, intent: "COBRANCA_FINANCEIRO", urgent: false, reason: "boleto", interest: null, stageId: null, confidence: 0.8, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data.needsHumanAttention).toBe(true);
+  });
+
+  it("urgent=true com intenção NÃO-flag (OUTRO) ainda ACENDE (rede de segurança)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: false, intent: "OUTRO", urgent: true, reason: "irritado", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data.needsHumanAttention).toBe(true);
+  });
+
+  it("cliente furioso classificado como VENDA (isLead=true) + urgent → ACENDE mesmo assim", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: true, intent: "NOVA_COMPRA", urgent: true, reason: "quer comprar mas irritado", interest: "grau", stageId: "s_novo", confidence: 0.9, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "leadF" }, duplicateWarning: false });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data.needsHumanAttention).toBe(true);
+  });
+
+  it("conversa tranquila (venda, sem urgent) NÃO escreve needsHumanAttention (preserva monotônico)", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: true, intent: "NOVA_COMPRA", urgent: false, reason: "grau", interest: "grau", stageId: "s_novo", confidence: 0.9, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "leadQ" }, duplicateWarning: false });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    // MONOTÔNICO: a chave NÃO deve aparecer (não sobrescreve um alarme já aceso).
+    expect(upd.data).not.toHaveProperty("needsHumanAttention");
+  });
+
+  it("RE-acende (reclama de novo após baixa humana) → LIMPA attentionResolvedAt/ById", async () => {
+    // Estado ANTERIOR: já foi resolvido por um humano (needsHumanAttention=false,
+    // resolvedAt setado). O cliente reclama DE NOVO → o alarme tem que voltar a
+    // aparecer como "live" no inbox (senão a resolução antiga esconde a nova).
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv, needsHumanAttention: false, attentionResolvedAt: new Date("2026-01-01"),
+    });
+    qualifyTextMock.mockResolvedValue({ isLead: false, intent: "RECLAMACAO", urgent: false, reason: "de novo", interest: null, stageId: null, confidence: 0.8, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data.needsHumanAttention).toBe(true);
+    // sem isso, o inbox veria a resolução antiga e esconderia a nova reclamação
+    expect(upd.data.attentionResolvedAt).toBeNull();
+    expect(upd.data.attentionResolvedById).toBeNull();
+  });
+
+  it("GARANTIA_CONSERTO sozinha (sem urgent) NÃO acende o alarme vermelho", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    qualifyTextMock.mockResolvedValue({ isLead: false, intent: "GARANTIA_CONSERTO", urgent: false, reason: "haste quebrou", interest: null, stageId: null, confidence: 0.8, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+    await qualifyConversation("c1");
+    const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
+    expect(upd.data).not.toHaveProperty("needsHumanAttention");
+    // mas a intent crua fica registrada p/ o tier suave derivar no inbox
+    expect(upd.data.analysisIntentCode).toBe("GARANTIA_CONSERTO");
+  });
+
   it("áudio transcrito (text null) → texto entra no contexto + transcribeAudio(companyId, instance, evolutionId)", async () => {
     (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
       ...conv,

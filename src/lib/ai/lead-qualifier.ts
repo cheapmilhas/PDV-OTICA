@@ -79,6 +79,13 @@ Classifique a INTENÇÃO em UMA destas (use o histórico p/ desempatar):
 - COBRANCA_FINANCEIRO: boleto/parcela/conta. (Reclamação SOBRE dinheiro → COBRANCA_FINANCEIRO.)
 - OUTRO: fornecedor, grupo, engano, pessoal, spam.
 
+REGRAS DE DESEMPATE (aplique nesta ordem antes de decidir):
+D0. SAUDAÇÃO/VAZIO ("oi", "bom dia", figurinha, só emoji, "?") sem pedido = OUTRO, isLead=false. NÃO chute NOVA_COMPRA por otimismo.
+D1. O NÚCLEO ATUAL vence o HISTÓRICO: "comprei aí e quero outro pro meu filho" = NOVA_COMPRA (o pedido é comprar agora), não COMPROU_RECENTE.
+D2. REFAZER O QUE JÁ TINHA = RENOVACAO (perda/quebra/desgaste/grau vencido do MESMO uso; pistas: "igualzinho", "mesmo grau", "meu de sempre", "renovar").
+D3. EIXO NA DÚVIDA = PREÇO → ORCAMENTO_PRECO, mesmo com "quero"/"vou levar" (o cliente ainda está no preço). Não trave em NOVA_COMPRA se o foco é valor.
+D4. CONSULTA/EXAME EXTERNO (marcado em clínica/outro lugar, andamento de processo, etc.) = OUTRO. AGENDAMENTO_INFO é SÓ horário/endereço/atendimento DA PRÓPRIA ÓTICA.
+
 isLead = true só para intenções de VENDA (não para GARANTIA_CONSERTO, RECLAMACAO, COBRANCA_FINANCEIRO, OUTRO).
 contactNotPatient = true se quem escreve fala EM NOME de outra pessoa ("é pro meu filho", "minha esposa", "pro meu pai").
 urgent = true se o tom é irritado/urgente.
@@ -117,7 +124,10 @@ export async function qualifyConversationText(
   const userPrompt = `Etapas do funil desta ótica: ${stageNames}\n${hintBlock(customerHint)}${fewShotBlock ?? ""}\n«INICIO-${nonce}»\n${conversationText}\n«FIM-${nonce}»`;
 
   const response = await anthropic.messages.create({
-    model, max_tokens: 512, system,
+    // temperature=0: classificação é tarefa determinística. Sem isso, a mesma
+    // conversa oscilava entre rodadas (ruído no eval e no funil real). Torna o
+    // placar do eval reproduzível e a classificação estável p/ o dono.
+    model, max_tokens: 512, temperature: 0, system,
     messages: [{ role: "user", content: [{ type: "text", text: userPrompt }] }],
   });
 

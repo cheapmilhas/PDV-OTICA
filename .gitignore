@@ -12,6 +12,10 @@
 /playwright-report
 /playwright/.cache
 
+# eval harness do funil IA — LOCAL only. A fonte da verdade em prod é o embutido
+# src/app/api/admin/funnel-eval/cases.data.ts (gerado por _eval/gen-cases-data.ts).
+/_eval
+
 # next.js
 /.next/
 /out/

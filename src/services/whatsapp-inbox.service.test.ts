@@ -26,7 +26,8 @@ describe("listInboxConversations", () => {
     const arg = findMany.mock.calls[0][0];
     expect(arg.where.companyId).toBe("co1");
     expect(arg.where.isGroup).toBe(false);
-    expect(arg.orderBy).toEqual({ lastMessageAt: "desc" });
+    // Atenção primeiro (guardrail não pode ficar enterrado), depois recência.
+    expect(arg.orderBy).toEqual([{ needsHumanAttention: "desc" }, { lastMessageAt: "desc" }]);
   });
 
   it("status=pending filtra analyzedAt null OU needsAnalysis", async () => {
@@ -80,6 +81,38 @@ describe("listInboxConversations", () => {
     ]);
     const out = await listInboxConversations("co1");
     expect(out[0].lastMessageText).toBeNull();
+  });
+
+  it("alarme ATIVO (needsHumanAttention, não resolvido) → tier 'red' + needsHumanAttention true", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "c1", contactNumber: "x", contactName: null,
+        lastMessageAt: new Date(), analyzedAt: new Date(), needsAnalysis: false, leadId: null,
+        analysisIsLead: false, analysisIntent: "Reclamação", analysisIntentCode: "RECLAMACAO",
+        analysisCustomerKind: null, analysisReason: null,
+        needsHumanAttention: true, attentionResolvedAt: null,
+        _count: { messages: 1 }, messages: [{ text: "absurdo" }],
+      },
+    ]);
+    const out = await listInboxConversations("co1");
+    expect(out[0].attentionTier).toBe("red");
+    expect(out[0].needsHumanAttention).toBe(true);
+  });
+
+  it("alarme RESOLVIDO por humano → não é mais 'red'; garantia vira tier 'soft'", async () => {
+    findMany.mockResolvedValue([
+      {
+        id: "c1", contactNumber: "x", contactName: null,
+        lastMessageAt: new Date(), analyzedAt: new Date(), needsAnalysis: false, leadId: null,
+        analysisIsLead: false, analysisIntent: "Garantia/conserto", analysisIntentCode: "GARANTIA_CONSERTO",
+        analysisCustomerKind: null, analysisReason: null,
+        needsHumanAttention: true, attentionResolvedAt: new Date(),
+        _count: { messages: 1 }, messages: [{ text: "haste quebrou" }],
+      },
+    ]);
+    const out = await listInboxConversations("co1");
+    expect(out[0].needsHumanAttention).toBe(false); // resolvido → não conta como ativo
+    expect(out[0].attentionTier).toBe("soft");
   });
 
   it("clampa o take entre 1 e 200", async () => {

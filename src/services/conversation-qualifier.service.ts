@@ -15,6 +15,8 @@ import { sanitizeAiReason } from "@/lib/sanitize-ai-reason";
 import { maybeAutoAdvanceLead } from "@/services/funnel-automove.service";
 import { recordAutoMoveTrace } from "@/services/funnel-automove-trace.service";
 import { getRecentIntentCorrections, buildFewShotBlock } from "@/services/funnel-fewshot.service";
+import { conversationNeedsHumanAttention } from "@/lib/conversation-attention";
+import type { ContactIntent } from "@/lib/ai/lead-qualifier";
 
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
@@ -96,9 +98,25 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   // preenchido SEMPRE — inclusive quando NÃO vira lead (era descartado antes).
   const finalize = (
     leadId: string | null,
-    analysis?: { isLead: boolean; intent?: string | null; customerKind?: string | null; reason?: string | null },
-  ) =>
-    prisma.whatsappConversation.update({
+    analysis?: {
+      isLead: boolean;
+      intent?: string | null;
+      // Intenção CRUA (enum) — o sinal máquina-legível que deriva o guardrail.
+      // Separado do `intent` (rótulo de exibição) de propósito (ver schema).
+      intentCode?: ContactIntent | null;
+      urgent?: boolean | null;
+      customerKind?: string | null;
+      reason?: string | null;
+    },
+  ) => {
+    // Guardrail SAGRADO (Item 1): a conversa "acende" quando é reclamação/cobrança
+    // OU tom irritado (fonte única, pura, = a que o eval usa). MONOTÔNICO-PRA-CIMA:
+    // só escrevemos `true` — NUNCA voltamos p/ false numa re-qualificação (senão o
+    // cliente desarma o alarme mandando "ok obrigado"). A baixa é ação humana à parte.
+    const shouldFlag = analysis
+      ? conversationNeedsHumanAttention({ intent: analysis.intentCode ?? null, urgent: analysis.urgent })
+      : false;
+    return prisma.whatsappConversation.update({
       where: { id: conv.id },
       data: {
         analyzedAt: new Date(),
@@ -109,12 +127,23 @@ export async function qualifyConversation(conversationId: string, opts?: { force
           ? {
               analysisIsLead: analysis.isLead,
               analysisIntent: analysis.intent ?? null,
+              analysisIntentCode: analysis.intentCode ?? null,
               analysisCustomerKind: analysis.customerKind ?? null,
               analysisReason: analysis.reason ? analysis.reason.slice(0, 500) : null,
+              // Só marca true; a ausência da chave quando shouldFlag=false PRESERVA
+              // um alarme já aceso (monotônico). Baixa só via resolver humano.
+              // Ao RE-acender (cliente reclama DE NOVO após um humano ter dado baixa),
+              // LIMPA a baixa anterior — senão o inbox ("live" = aceso E resolvedAt
+              // null) veria a resolução antiga e esconderia a nova reclamação (buraco
+              // de recall). Reabrir o alarme reabre a pendência de tratativa.
+              ...(shouldFlag
+                ? { needsHumanAttention: true, attentionResolvedAt: null, attentionResolvedById: null }
+                : {}),
             }
           : {}),
       },
     });
+  };
 
   if (conv.isGroup) {
     await finalize(null, { isLead: false, reason: "Conversa em grupo — não vira lead." });
@@ -232,7 +261,14 @@ export async function qualifyConversation(conversationId: string, opts?: { force
   const safeReason = sanitizeAiReason(result.reason);
 
   if (!result.isLead) {
-    await finalize(null, { isLead: false, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
+    // Caminho NÃO-lead: aqui vivem RECLAMACAO/COBRANCA (isLead=false). finalize
+    // recebe a intenção CRUA + urgent e ACENDE o guardrail sagrado se preciso —
+    // FORA do kill-switch, p/ TODAS as óticas. Era exatamente o que o retorno
+    // precoce daqui matava antes (o flag da régua era código morto p/ reclamação).
+    await finalize(null, {
+      isLead: false, intent: intentLbl, intentCode: result.intent, urgent: result.urgent,
+      customerKind: customerKindLabel, reason: safeReason,
+    });
     return { conversationId, isLead: false, leadId: null };
   }
 
@@ -276,7 +312,13 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     leadId = lead.id;
     log.info("lead criado pela IA", { conversationId, leadId, companyId: conv.companyId });
   }
-  await finalize(leadId, { isLead: true, intent: intentLbl, customerKind: customerKindLabel, reason: safeReason });
+  // Caminho LEAD: também passa intent CRUA + urgent. Cobre o buraco do architect —
+  // um cliente furioso que a IA classificou como intenção de VENDA (isLead=true)
+  // ainda acende o guardrail via `urgent` (finalize decide, ortogonal ao isLead).
+  await finalize(leadId, {
+    isLead: true, intent: intentLbl, intentCode: result.intent, urgent: result.urgent,
+    customerKind: customerKindLabel, reason: safeReason,
+  });
 
   // Funil Inteligente — Fatia 3: auto-move. Roda em TODA qualificação — inclusive
   // no NASCIMENTO do lead (não só re-qualificação). É SEGURO avaliar no nascimento

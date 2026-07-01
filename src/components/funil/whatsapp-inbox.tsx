@@ -32,6 +32,8 @@ interface InboxConversation {
   analysisIntent: string | null;
   analysisCustomerKind: string | null;
   analysisReason: string | null;
+  needsHumanAttention: boolean;
+  attentionTier: "red" | "soft" | null;
 }
 
 interface InboxMessage {
@@ -58,6 +60,20 @@ function formatTime(iso: string): string {
 }
 
 function ConversationBadge({ conv }: { conv: InboxConversation }) {
+  // Guardrail SAGRADO (Item 1): o alarme de atenção PREVALECE sobre os demais
+  // rótulos — é o que o dono não pode perder de vista (reclamação/cobrança/irritado).
+  if (conv.attentionTier === "red") {
+    return (
+      <Badge className="bg-red-600 hover:bg-red-600">⚠️ Precisa de atenção</Badge>
+    );
+  }
+  if (conv.attentionTier === "soft") {
+    return (
+      <Badge className="border-amber-300 bg-amber-50 text-amber-700" variant="outline">
+        Garantia/conserto
+      </Badge>
+    );
+  }
   if (conv.leadId) {
     return <Badge className="bg-green-600 hover:bg-green-600">Lead criado</Badge>;
   }
@@ -182,6 +198,30 @@ export function WhatsappInbox({ active }: { active: boolean }) {
     [fetchConversations],
   );
 
+  const [resolvingId, setResolvingId] = useState<string | null>(null);
+  const handleResolveAttention = useCallback(
+    async (id: string) => {
+      setResolvingId(id);
+      try {
+        const res = await fetch(`/api/whatsapp/conversations/${id}/resolve-attention`, {
+          method: "POST",
+        });
+        const json = await res.json();
+        if (!res.ok) {
+          toast.error(json?.error?.message ?? "Não foi possível dar baixa agora.");
+          return;
+        }
+        toast.success("Atenção resolvida.");
+        await fetchConversations(false);
+      } catch {
+        toast.error("Erro ao dar baixa na atenção.");
+      } finally {
+        setResolvingId(null);
+      }
+    },
+    [fetchConversations],
+  );
+
   return (
     <div className="grid gap-4 lg:grid-cols-[minmax(0,1fr)_minmax(0,1.2fr)]">
       {/* Lista de conversas */}
@@ -276,6 +316,30 @@ export function WhatsappInbox({ active }: { active: boolean }) {
                   </Button>
                 </Can>
               </div>
+
+              {/* Guardrail SAGRADO (Item 1): banner de atenção + baixa humana. Só
+                  a ação humana apaga o alarme (a IA nunca o apaga). */}
+              {selectedConv?.needsHumanAttention && (
+                <div className="flex items-center justify-between gap-2 rounded-md border border-red-200 bg-red-50 p-2.5 text-xs">
+                  <span className="font-semibold text-red-700">
+                    ⚠️ Esta conversa precisa de atenção humana.
+                  </span>
+                  <Can permission="leads.edit">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="h-7 border-red-300 text-red-700 hover:bg-red-100"
+                      onClick={() => selectedId && handleResolveAttention(selectedId)}
+                      disabled={resolvingId === selectedId}
+                    >
+                      {resolvingId === selectedId ? (
+                        <Loader2 className="mr-1.5 h-3.5 w-3.5 animate-spin" />
+                      ) : null}
+                      Marcar resolvido
+                    </Button>
+                  </Can>
+                </div>
+              )}
 
               {/* Resultado da análise da IA — mostra o PORQUÊ, inclusive quando
                   NÃO virou lead (antes só havia o badge cinza mudo). */}

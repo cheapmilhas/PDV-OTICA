@@ -1,4 +1,5 @@
 import { prisma } from "@/lib/prisma";
+import { conversationAttentionTier, type AttentionTier } from "@/lib/conversation-attention";
 
 /**
  * Leitura do inbox de conversas de WhatsApp para a tela do Funil (aba "Conversas").
@@ -22,6 +23,10 @@ export interface InboxConversation {
   analysisIntent: string | null;
   analysisCustomerKind: string | null;
   analysisReason: string | null;
+  // Guardrail SAGRADO (Item 1): true = precisa de humano AGORA e ainda não resolvido.
+  needsHumanAttention: boolean;
+  // Tier p/ o badge: "red" (reclamação/cobrança/irritado) > "soft" (garantia) > null.
+  attentionTier: AttentionTier;
 }
 
 export interface InboxMessage {
@@ -65,7 +70,9 @@ export async function listInboxConversations(
       ...(opts?.includeGroups ? {} : { isGroup: false }),
       ...statusWhere(status),
     },
-    orderBy: { lastMessageAt: "desc" },
+    // Os que precisam de atenção (e ainda não resolvidos) vêm PRIMEIRO — o guardrail
+    // não pode ficar enterrado embaixo de conversas mais recentes. Depois, recência.
+    orderBy: [{ needsHumanAttention: "desc" }, { lastMessageAt: "desc" }],
     take,
     select: {
       id: true,
@@ -77,8 +84,11 @@ export async function listInboxConversations(
       leadId: true,
       analysisIsLead: true,
       analysisIntent: true,
+      analysisIntentCode: true,
       analysisCustomerKind: true,
       analysisReason: true,
+      needsHumanAttention: true,
+      attentionResolvedAt: true,
       _count: { select: { messages: true } },
       messages: {
         where: { direction: "inbound" },
@@ -89,21 +99,32 @@ export async function listInboxConversations(
     },
   });
 
-  return convs.map((c) => ({
-    id: c.id,
-    contactNumber: c.contactNumber,
-    contactName: c.contactName,
-    lastMessageAt: c.lastMessageAt,
-    analyzedAt: c.analyzedAt,
-    needsAnalysis: c.needsAnalysis,
-    leadId: c.leadId,
-    messageCount: c._count.messages,
-    lastMessageText: c.messages[0]?.text ?? null,
-    analysisIsLead: c.analysisIsLead,
-    analysisIntent: c.analysisIntent,
-    analysisCustomerKind: c.analysisCustomerKind,
-    analysisReason: c.analysisReason,
-  }));
+  return convs.map((c) => {
+    // Alarme ATIVO = acendido e ainda não resolvido por humano. Enquanto ativo, é
+    // sempre "red" (o guardrail persistido já ORou urgent). Resolvido → derivamos
+    // só o tier suave da intenção (garantia) p/ manter o marcador operacional.
+    const live = c.needsHumanAttention && c.attentionResolvedAt == null;
+    const attentionTier: AttentionTier = live
+      ? "red"
+      : conversationAttentionTier({ intent: c.analysisIntentCode });
+    return {
+      id: c.id,
+      contactNumber: c.contactNumber,
+      contactName: c.contactName,
+      lastMessageAt: c.lastMessageAt,
+      analyzedAt: c.analyzedAt,
+      needsAnalysis: c.needsAnalysis,
+      leadId: c.leadId,
+      messageCount: c._count.messages,
+      lastMessageText: c.messages[0]?.text ?? null,
+      analysisIsLead: c.analysisIsLead,
+      analysisIntent: c.analysisIntent,
+      analysisCustomerKind: c.analysisCustomerKind,
+      analysisReason: c.analysisReason,
+      needsHumanAttention: live,
+      attentionTier,
+    };
+  });
 }
 
 /**
