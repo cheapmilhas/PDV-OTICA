@@ -110,7 +110,8 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
     });
     const stages = await prisma.leadStage.findMany({
       where: { companyId },
-      select: { id: true, order: true, isWon: true, isLost: true },
+      // name entra p/ o pulo do R$ (Item 4) mirar o "Orçamento" por semântica.
+      select: { id: true, order: true, isWon: true, isLost: true, name: true },
     });
 
     const engaged = clientEngaged(messages);

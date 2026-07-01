@@ -85,11 +85,59 @@ describe("decideFunnelAdvance — régua de avanço do funil", () => {
     expect(r.action).toBe("hold");
   });
 
-  // ---- só avança 1 / nunca pula ----
-  it("Novo + ótica já mandou R$ → avança só 1 (p/ Em atendimento, não pula p/ Orçamento)", () => {
-    const r = base({ currentStageId: "s_novo", clientEngaged: true, oticaSentValue: true });
+  // ---- Item 4: Novo → PULA p/ Orçamento quando a ótica já mandou R$ ----
+  it("Novo + ótica JÁ mandou R$ + confiança OK → PULA direto p/ Orçamento enviado", () => {
+    // Item 4 (dono aprovou): o R$ no banco é sinal objetivo de "orçamento enviado".
+    // Não faz sentido parar em "Em atendimento" e esperar outro ciclo (que pode
+    // nunca vir) — o card já está objetivamente adiante.
+    const r = base({ currentStageId: "s_novo", clientEngaged: true, oticaSentValue: true, confidence: 0.9 });
     expect(r.action).toBe("move");
-    expect(r.targetStageId).toBe("s_atend"); // 1 passo só
+    expect(r.targetStageId).toBe("s_orc"); // PULA "Em atendimento"
+  });
+
+  it("Novo + R$ presente MAS confiança abaixo do piso → NÃO pula; cai p/ Em atendimento (ótica respondeu)", () => {
+    // O piso de confiança guarda o pulo (não promover orçamento numa leitura ruim).
+    // Sem confiança, ainda avança 1 pelo gatilho objetivo (ótica respondeu).
+    const r = base({ currentStageId: "s_novo", clientEngaged: true, oticaSentValue: true, shopReplied: true, confidence: 0.2 });
+    expect(r.action).toBe("move");
+    expect(r.targetStageId).toBe("s_atend");
+  });
+
+  it("Novo + R$ presente + confiança baixa + ótica NÃO respondeu → hold (nada objetivo p/ mover)", () => {
+    const r = base({ currentStageId: "s_novo", clientEngaged: true, oticaSentValue: true, shopReplied: false, confidence: 0.2 });
+    expect(r.action).toBe("hold");
+  });
+
+  it("Item 4 SEMÂNTICO: funil reordenado (estágio extra) → pula p/ o 'Orçamento' por NOME, não índice 2", () => {
+    // Funil: Novo(0) → Triagem(1) → Em atendimento(2) → Orçamento enviado(3).
+    // Índice 2 dos abertos = "Em atendimento" (errado). O nome garante o alvo certo.
+    const reshaped: FunnelStage[] = [
+      { id: "s_novo", order: 0, isWon: false, isLost: false, name: "Novo" },
+      { id: "s_triagem", order: 1, isWon: false, isLost: false, name: "Triagem" },
+      { id: "s_atend", order: 2, isWon: false, isLost: false, name: "Em atendimento" },
+      { id: "s_orc", order: 3, isWon: false, isLost: false, name: "Orçamento enviado" },
+      { id: "s_fechado", order: 4, isWon: true, isLost: false, name: "Fechado" },
+    ];
+    const r = decideFunnelAdvance({
+      intent: "NOVA_COMPRA", confidence: 0.9, currentStageId: "s_novo", stages: reshaped,
+      clientEngaged: true, shopReplied: true, oticaSentValue: true,
+    });
+    expect(r.action).toBe("move");
+    expect(r.targetStageId).toBe("s_orc"); // pelo NOME, não índice 2 (que seria s_atend)
+  });
+
+  it("Novo + R$ + confiança OK mas funil SEM 3º estágio aberto → avança 1 (não há p/ onde pular)", () => {
+    const twoStages: FunnelStage[] = [
+      { id: "s_novo", order: 0, isWon: false, isLost: false },
+      { id: "s_atend", order: 1, isWon: false, isLost: false },
+      { id: "s_fechado", order: 2, isWon: true, isLost: false },
+    ];
+    const r = decideFunnelAdvance({
+      intent: "NOVA_COMPRA", confidence: 0.9, currentStageId: "s_novo", stages: twoStages,
+      clientEngaged: true, shopReplied: true, oticaSentValue: true,
+    });
+    expect(r.action).toBe("move");
+    expect(r.targetStageId).toBe("s_atend");
   });
 
   // ---- terminais: nunca toca ----

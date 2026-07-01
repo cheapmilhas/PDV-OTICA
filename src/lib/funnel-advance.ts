@@ -3,11 +3,15 @@
  * ação a partir dos sinais da conversa, SEM tocar banco. O motor no cron aplica
  * o resultado através das travas (só-avança-1, trava humana, kill-switch).
  *
- * Régua aprovada pelo dono (2026-06-30, revisada):
- *  - só AVANÇA 1 passo; nunca volta, nunca pula, NUNCA toca terminal (isWon/isLost);
+ * Régua aprovada pelo dono (2026-06-30, revisada; Item 4 2026-07-01):
+ *  - avança SÓ p/ frente; nunca volta, NUNCA toca terminal (isWon/isLost);
  *  - Novo→Em atendimento: intenção de COMPRA (5 intenções) + cliente engajou +
  *    A ÓTICA RESPONDEU (sinal OBJETIVO de "está sendo atendido"). SEM gate de
  *    confiança aqui — "Em atendimento" = a ótica agiu, fato no banco, não palpite;
+ *  - Novo→Orçamento (PULA — Item 4): se a ÓTICA JÁ MANDOU R$ (oticaSentValue), o
+ *    card está objetivamente em "Orçamento enviado"; pula direto (com piso de
+ *    confiança), em vez de ficar preso 1 ciclo em "Em atendimento". Relaxa o
+ *    "avança-1" SÓ aqui e SÓ por sinal objetivo (o R$ no banco);
  *  - Em atendimento→Orçamento: sinal OBJETIVO = a ÓTICA mandou R$ (msg outbound),
  *    com um piso de confiança como sanidade (só neste trecho);
  *  - RECLAMACAO/COBRANCA → flag (sinaliza humano), prevalece mesmo com R$;
@@ -33,6 +37,28 @@ export interface FunnelStage {
   order: number;
   isWon: boolean;
   isLost: boolean;
+  /** Nome do estágio (opcional). Quando presente, o pulo do R$ (Item 4) mira o
+   *  estágio de ORÇAMENTO por SEMÂNTICA (nome), não por índice — robusto a funis
+   *  reordenados/com estágios extras. Sem nome, cai no índice 2 (funil padrão). */
+  name?: string;
+}
+
+/**
+ * Acha o estágio ABERTO de "orçamento" pelo NOME (semântica), p/ o pulo do R$
+ * não depender da posição. Fallback: índice 2 dos abertos (funil padrão de 3),
+ * e o chamador cai no avanço-de-1 se nem isso existir. Só considera estágios
+ * ADIANTE do atual (order > current) — nunca mira p/ trás.
+ */
+function quoteStage(openStages: FunnelStage[], currentOrder: number): FunnelStage | null {
+  const ahead = openStages.filter((s) => s.order > currentOrder);
+  const byName = ahead.find((s) => {
+    const n = s.name?.toLowerCase() ?? "";
+    return n.includes("orçamento") || n.includes("orcamento");
+  });
+  if (byName) return byName;
+  // Fallback posicional: 3º aberto (índice 2) — só se estiver adiante do atual.
+  const third = openStages[2];
+  return third && third.order > currentOrder ? third : null;
 }
 
 export interface FunnelAdvanceInput {
@@ -101,10 +127,32 @@ export function decideFunnelAdvance(input: FunnelAdvanceInput): FunnelAdvanceRes
   const openIndex = openStages.findIndex((s) => s.id === current.id);
 
   if (openIndex === 0) {
-    // 1º estágio aberto (ex.: Novo) → 2º (ex.: Em atendimento). Gatilho OBJETIVO
-    // (sem confiança da IA): há intenção de compra, o cliente engajou E A ÓTICA
-    // RESPONDEU — ou seja, o lead JÁ está sendo atendido. "Em atendimento"
-    // significa que alguém da ótica agiu; por isso exigimos o outbound real.
+    // 1º estágio aberto (ex.: Novo). O DESTINO é escolhido pelo sinal MAIS FORTE
+    // presente (não passo-a-passo) — Item 4, aprovado pelo dono, que RELAXA o
+    // "avança-1" SÓ neste ponto e SÓ por sinal objetivo:
+    //
+    //  - se a ÓTICA JÁ MANDOU R$ (oticaSentValue), o card está objetivamente em
+    //    "Orçamento enviado" — PULA direto p/ o 3º aberto (index 2), sem ficar
+    //    preso 1 ciclo em "Em atendimento" (o bug: o cron podia nunca re-visitar
+    //    sem msg nova, deixando um orçamento enviado parado em "Em atendimento").
+    //    Aplica o MESMO piso de confiança que guarda o trecho do R$ (sanidade:
+    //    não promover orçamento numa conversa que a IA leu mal mas tem um número).
+    //  - senão, se a ótica RESPONDEU (shopReplied), vai p/ "Em atendimento" (1 passo,
+    //    gatilho objetivo, sem confiança — inalterado).
+    if (ADVANCE_INTENTS.has(intent) && clientEngaged && oticaSentValue) {
+      if (confidence < FUNNEL_CONFIDENCE_MIN) {
+        // Tem R$ mas confiança baixa: não pula p/ Orçamento; se a ótica respondeu,
+        // ainda avança 1 (Em atendimento) — o trecho 0 é confidence-free.
+        if (shopReplied) return { action: "move", targetStageId: next.id, reason: `em atendimento (${intent})` };
+        return hold("R$ presente mas confiança baixa e ótica não respondeu");
+      }
+      const orcamento = quoteStage(openStages, current.order);
+      if (orcamento && orcamento.id !== next.id) {
+        return { action: "move", targetStageId: orcamento.id, reason: `orçamento enviado (R$) — pula de ${current.id}` };
+      }
+      // Sem estágio de orçamento distinto adiante: cai no avanço de 1 passo.
+      return { action: "move", targetStageId: next.id, reason: `em atendimento (${intent})` };
+    }
     if (ADVANCE_INTENTS.has(intent) && clientEngaged && shopReplied) {
       return { action: "move", targetStageId: next.id, reason: `em atendimento (${intent})` };
     }
