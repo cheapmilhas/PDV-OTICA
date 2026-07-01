@@ -168,3 +168,84 @@ export async function maybeAutoAdvanceLead(input: AutoAdvanceInput): Promise<Aut
     { from: moved.fromStageId, to: moved.decision.targetStageId },
   );
 }
+
+/** Teto de conversas re-avaliadas por ciclo (espelha o SCAN_LIMIT do qualifier). */
+const REEVAL_SCAN_LIMIT = 200;
+
+export interface FunnelReevalSummary {
+  scanned: number;
+  moves: number;
+  errors: number;
+}
+
+/**
+ * Re-avaliação de ESTÁGIO do funil disparada pela resposta da ÓTICA (outbound),
+ * SEM IA. Complementa o cron de qualificação: quando a ótica responde, o sinal
+ * objetivo shopReplied vira true, mas nada re-rodava a régua (o outbound não
+ * re-arma needsAnalysis). persistInboundMessage marca `needsFunnelEval=true`; esta
+ * varredura pega essas conversas, roda SÓ a régua (maybeAutoAdvanceLead, que já
+ * carrega kill-switch + trava humana + fail-safe) lendo a intenção JÁ salva no
+ * lead (nenhuma chamada ao Claude), e limpa o flag.
+ *
+ * Multi-tenant: companyId em todo filtro. Fail-safe por conversa (erro numa NÃO
+ * interrompe as outras). Idempotente: limpa o flag ao processar; re-marcar é barato.
+ */
+export async function processFunnelReevals(companyId?: string): Promise<FunnelReevalSummary> {
+  const pending = await prisma.whatsappConversation.findMany({
+    where: {
+      needsFunnelEval: true,
+      leadId: { not: null },
+      ...(companyId ? { companyId } : {}),
+    },
+    select: { id: true, companyId: true, leadId: true, analyzedAt: true },
+    orderBy: { lastMessageAt: "asc" }, // FIFO, evita starvation
+    take: REEVAL_SCAN_LIMIT,
+  });
+
+  let moves = 0, errors = 0;
+  for (const conv of pending) {
+    // Por padrão limpamos o flag ao final (já avaliamos, ou não há o que fazer). A
+    // ÚNICA exceção: intenção ainda não classificada MAS a conversa ainda não foi
+    // analisada → a qualificação vai preencher o intent num próximo ciclo; manter o
+    // flag p/ re-avaliar então (senão perderíamos o shopReplied deste outbound). Se
+    // já foi analisada e o intent segue null, não há esperança → limpa (não gira à toa).
+    let clearFlag = true;
+    try {
+      // Lê a intenção JÁ classificada do lead (o outbound não muda intenção).
+      const lead = await prisma.lead.findFirst({
+        where: { id: conv.leadId!, companyId: conv.companyId, deletedAt: null },
+        select: { intent: true, intentConfidence: true },
+      });
+      if (lead?.intent) {
+        const r = await maybeAutoAdvanceLead({
+          conversationId: conv.id,
+          leadId: conv.leadId!,
+          companyId: conv.companyId,
+          intent: lead.intent as ContactIntent,
+          confidence: lead.intentConfidence ?? 0,
+        });
+        if (r.moved) moves++;
+      } else if (lead && !conv.analyzedAt) {
+        // Lead existe mas sem intenção e a conversa ainda não foi qualificada:
+        // espera a qualificação preencher o intent — NÃO consome o flag "a seco".
+        clearFlag = false;
+      }
+    } catch (e) {
+      // Fail-safe: uma conversa problemática não pode travar o ciclo nem o cron.
+      // Limpa o flag mesmo em erro (não re-processa em loop uma linha defeituosa).
+      errors++;
+      log.error("funnel_reeval_failed", {
+        conversationId: conv.id, companyId: conv.companyId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    } finally {
+      if (clearFlag) {
+        await prisma.whatsappConversation
+          .update({ where: { id: conv.id }, data: { needsFunnelEval: false } })
+          .catch(() => {});
+      }
+    }
+  }
+
+  return { scanned: pending.length, moves, errors };
+}

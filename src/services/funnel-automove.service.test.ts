@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     lead: { findFirst: vi.fn() },
-    whatsappConversation: { findFirst: vi.fn() },
+    whatsappConversation: { findFirst: vi.fn(), findMany: vi.fn(), update: vi.fn() },
     whatsappMessage: { findMany: vi.fn() },
     leadStage: { findMany: vi.fn() },
   },
@@ -17,7 +17,7 @@ vi.mock("@/services/funnel-automove-trace.service", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
-import { maybeAutoAdvanceLead } from "./funnel-automove.service";
+import { maybeAutoAdvanceLead, processFunnelReevals } from "./funnel-automove.service";
 
 const STAGES = [
   { id: "s_novo", order: 0, isWon: false, isLost: false },
@@ -211,5 +211,87 @@ describe("maybeAutoAdvanceLead — motor de auto-move (travas + régua)", () => 
       expect(errCall).toBeTruthy();
       expect(errCall![0]).toMatchObject({ action: "error", error: "db down", envSeen: "set" });
     });
+  });
+});
+
+describe("processFunnelReevals — re-avaliação por resposta da ótica (sem IA)", () => {
+  function pending(convs: any[]) {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue(convs);
+    (prisma.whatsappConversation.update as any).mockResolvedValue(undefined);
+  }
+
+  it("busca só conversas needsFunnelEval=true com lead, e limpa o flag após processar", async () => {
+    pending([{ id: "conv_1", companyId: "co_1", leadId: "lead_1" }]);
+    // lead com intenção JÁ salva (nenhuma chamada ao Claude)
+    (prisma.lead.findFirst as any).mockImplementation((arg: any) =>
+      arg.select?.intent
+        ? Promise.resolve({ intent: "AGENDAMENTO_INFO", intentConfidence: 0.9 })
+        : Promise.resolve({ id: "lead_1", stageId: "s_novo", lastMovedBy: null, aiLockUntilMessageAt: null }),
+    );
+    const r = await processFunnelReevals();
+    // filtro correto
+    const where = (prisma.whatsappConversation.findMany as any).mock.calls[0][0].where;
+    expect(where.needsFunnelEval).toBe(true);
+    expect(where.leadId).toEqual({ not: null });
+    // moveu (Novo→Em atendimento, ótica respondeu no mock padrão) e limpou o flag
+    expect(moveLeadMock).toHaveBeenCalledWith("lead_1", { stageId: "s_atend" }, "co_1", "AI");
+    expect(r.moves).toBe(1);
+    const clear = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === false);
+    expect(clear).toBeTruthy();
+    expect(clear[0].where).toEqual({ id: "conv_1" });
+  });
+
+  it("respeita o kill-switch: ótica desligada → não move, mas limpa o flag", async () => {
+    process.env.FUNNEL_AUTOMOVE_COMPANIES = "outra_co";
+    pending([{ id: "conv_1", companyId: "co_1", leadId: "lead_1" }]);
+    (prisma.lead.findFirst as any).mockResolvedValue({ intent: "AGENDAMENTO_INFO", intentConfidence: 0.9 });
+    const r = await processFunnelReevals();
+    expect(moveLeadMock).not.toHaveBeenCalled();
+    expect(r.moves).toBe(0);
+    const clear = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === false);
+    expect(clear).toBeTruthy();
+  });
+
+  it("lead sem intenção MAS conversa já analisada → não avalia e LIMPA (sem esperança)", async () => {
+    pending([{ id: "conv_1", companyId: "co_1", leadId: "lead_1", analyzedAt: new Date("2026-06-10") }]);
+    (prisma.lead.findFirst as any).mockResolvedValue({ intent: null, intentConfidence: null });
+    const r = await processFunnelReevals();
+    expect(moveLeadMock).not.toHaveBeenCalled();
+    expect(r.moves).toBe(0);
+    const clear = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === false);
+    expect(clear).toBeTruthy();
+  });
+
+  // HIGH #1 do review: intent ainda não classificada + conversa AINDA NÃO analisada
+  // → NÃO consome o flag "a seco"; espera a qualificação preencher o intent.
+  it("lead sem intenção E conversa não analisada → NÃO limpa o flag (aguarda qualificação)", async () => {
+    pending([{ id: "conv_1", companyId: "co_1", leadId: "lead_1", analyzedAt: null }]);
+    (prisma.lead.findFirst as any).mockResolvedValue({ intent: null, intentConfidence: null });
+    const r = await processFunnelReevals();
+    expect(moveLeadMock).not.toHaveBeenCalled();
+    expect(r.moves).toBe(0);
+    const clear = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === false);
+    expect(clear).toBeUndefined(); // flag preservado p/ o próximo ciclo
+  });
+
+  it("fail-safe: erro numa conversa NÃO trava as outras e ainda limpa o flag", async () => {
+    pending([
+      { id: "conv_err", companyId: "co_1", leadId: "lead_err" },
+      { id: "conv_ok", companyId: "co_1", leadId: "lead_ok" },
+    ]);
+    (prisma.lead.findFirst as any)
+      .mockRejectedValueOnce(new Error("db hiccup")) // 1ª conversa falha ao ler lead
+      .mockImplementation((arg: any) =>
+        arg.select?.intent
+          ? Promise.resolve({ intent: "AGENDAMENTO_INFO", intentConfidence: 0.9 })
+          : Promise.resolve({ id: "lead_ok", stageId: "s_novo", lastMovedBy: null, aiLockUntilMessageAt: null }),
+      );
+    const r = await processFunnelReevals();
+    expect(r.errors).toBe(1);
+    // a 2ª ainda processa e move
+    expect(moveLeadMock).toHaveBeenCalledWith("lead_ok", { stageId: "s_atend" }, "co_1", "AI");
+    // ambas limpam o flag (erro inclusive, no finally)
+    const clears = (prisma.whatsappConversation.update as any).mock.calls.filter((c: any[]) => c[0].data?.needsFunnelEval === false);
+    expect(clears).toHaveLength(2);
   });
 });
