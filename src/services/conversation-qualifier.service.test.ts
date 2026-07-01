@@ -138,6 +138,9 @@ describe("qualifyConversation", () => {
     expect(upd.data.leadId).toBe("lead1");
     expect(upd.data.analyzedAt).toBeInstanceOf(Date);
     expect(upd.data.analysisAttempts).toBe(0); // R2-fix: sucesso zera o contador (não congela recorrente)
+    // A qualificação já roda a régua; limpa needsFunnelEval p/ processFunnelReevals
+    // não re-avaliar a mesma conversa no mesmo ciclo (evita duplo-avanço de estágio).
+    expect(upd.data.needsFunnelEval).toBe(false);
     expect(r.leadId).toBe("lead1");
     // FIX (cards presos em Novo): o motor de auto-move roda TAMBÉM no NASCIMENTO
     // do lead, não só em re-qualificação. Com o leadId recém-criado.

@@ -121,6 +121,11 @@ export async function qualifyConversation(conversationId: string, opts?: { force
       data: {
         analyzedAt: new Date(),
         needsAnalysis: false,
+        // A qualificação JÁ roda a régua (maybeAutoAdvanceLead, abaixo) com o intent
+        // fresco. Limpar needsFunnelEval aqui evita que processFunnelReevals re-rode
+        // a régua na MESMA conversa no mesmo ciclo do cron (duplo-avanço de estágio a
+        // partir de um único evento). Se um novo outbound chegar depois, re-arma.
+        needsFunnelEval: false,
         analysisAttempts: 0,
         ...(leadId ? { leadId } : {}),
         ...(analysis

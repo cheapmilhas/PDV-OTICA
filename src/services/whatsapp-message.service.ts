@@ -28,7 +28,7 @@ export async function persistInboundMessage(
       lastMessageAt: msg.receivedAt,
       isGroup: msg.isGroup,
     },
-    select: { id: true, analyzedAt: true },
+    select: { id: true, analyzedAt: true, leadId: true },
   });
 
   const newMessage = await prisma.whatsappMessage.create({
@@ -46,11 +46,24 @@ export async function persistInboundMessage(
   });
 
   // R1: msg nova numa conversa JÁ analisada → marcar p/ re-qualificação. SÓ
-  // inbound: uma resposta NOSSA (outbound) não é motivo de re-analisar o lead.
+  // inbound: uma resposta NOSSA (outbound) não é motivo de re-analisar o lead
+  // (a intenção não muda porque respondemos — re-classificar gastaria IA à toa).
   if (conversation.analyzedAt && msg.direction === "inbound") {
     await prisma.whatsappConversation.update({
       where: { id: conversation.id },
       data: { needsAnalysis: true },
+    });
+  }
+
+  // A resposta da ÓTICA (outbound) NÃO re-classifica, mas MUDA o sinal objetivo
+  // shopReplied (false→true) que move Novo→"Em atendimento". Sem re-armar aqui, o
+  // card fica preso em "Novo" apesar de atendido (o cron pula conversas já
+  // analisadas). Marca needsFunnelEval p/ o cron re-rodar SÓ a régua (sem IA).
+  // Só quando a conversa já é lead e já foi analisada (senão o fluxo normal cobre).
+  if (conversation.analyzedAt && conversation.leadId && msg.direction === "outbound") {
+    await prisma.whatsappConversation.update({
+      where: { id: conversation.id },
+      data: { needsFunnelEval: true },
     });
   }
 

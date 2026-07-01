@@ -89,4 +89,48 @@ describe("persistInboundMessage", () => {
     const updCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsAnalysis === true);
     expect(updCall).toBeUndefined();
   });
+
+  // Bug "card preso em Novo": a resposta da ótica (outbound) muda shopReplied mas
+  // não re-armava a régua. Agora arma needsFunnelEval p/ o cron re-avaliar SEM IA.
+  const outbound: InboundMessage = { ...base, direction: "outbound", text: "Olá, vamos agendar!" };
+
+  it("OUTBOUND em conversa analisada E lead arma needsFunnelEval (não needsAnalysis)", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: new Date("2026-06-10"), leadId: "lead_1" });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", outbound);
+    const funnelCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === true);
+    expect(funnelCall).toBeTruthy();
+    expect(funnelCall[0].where).toEqual({ id: "conv_1" });
+    // outbound NÃO re-classifica (não gasta IA)
+    const analysisCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsAnalysis === true);
+    expect(analysisCall).toBeUndefined();
+  });
+
+  it("OUTBOUND numa conversa SEM lead NÃO arma needsFunnelEval", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: new Date("2026-06-10"), leadId: null });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", outbound);
+    const funnelCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === true);
+    expect(funnelCall).toBeUndefined();
+  });
+
+  it("OUTBOUND numa conversa AINDA NÃO analisada NÃO arma needsFunnelEval", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: null, leadId: "lead_1" });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", outbound);
+    const funnelCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === true);
+    expect(funnelCall).toBeUndefined();
+  });
+
+  it("INBOUND NÃO arma needsFunnelEval (só o outbound da ótica move)", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: new Date("2026-06-10"), leadId: "lead_1" });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", base);
+    const funnelCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.needsFunnelEval === true);
+    expect(funnelCall).toBeUndefined();
+  });
 });

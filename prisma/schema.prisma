@@ -4527,6 +4527,13 @@ model WhatsappConversation {
   contactName      String?
   isGroup          Boolean   @default(false)  // remoteJid terminava em @g.us; grupos NÃO viram lead
   needsAnalysis    Boolean   @default(false)  // msg nova chegou após analyzedAt → re-qualificar (R1)
+  // Re-avaliação do ESTÁGIO do funil (barata, sem IA), separada de needsAnalysis
+  // (que re-classifica a intenção via Claude — caro). Armado quando a ÓTICA RESPONDE
+  // (outbound) numa conversa que já é lead: o sinal shopReplied só vira true no
+  // outbound, mas o outbound NÃO re-arma needsAnalysis (a intenção não muda porque
+  // respondemos). Sem este flag, o card fica preso em "Novo" apesar de atendido —
+  // a régua nunca era re-avaliada. O cron roda SÓ a régua objetiva e limpa o flag.
+  needsFunnelEval  Boolean   @default(false)
   analysisAttempts Int       @default(0)      // anti-loop: cron só pega < 3 (R2)
   lastMessageAt DateTime  @default(now())
   analyzedAt    DateTime?
@@ -4566,6 +4573,8 @@ model WhatsappConversation {
   // Item 5: o SLA afiado ("precisa responder") busca conversas por leadId (in).
   // Sem este índice, a busca vira scan filtrado por companyId conforme a ótica cresce.
   @@index([companyId, leadId])
+  // O cron varre conversas com re-avaliação de funil pendente sem table-scan.
+  @@index([companyId, needsFunnelEval])
 }
 
 model WhatsappMessage {
