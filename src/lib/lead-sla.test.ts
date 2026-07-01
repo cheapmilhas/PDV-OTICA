@@ -75,5 +75,53 @@ describe("computeLeadSla — SLA de lead não respondido (Fase 3, Item 4a)", () 
     expect(r.warning).toBe(0);
     expect(r.late).toBe(0);
     expect(r.lateLeads).toEqual([]);
+    expect(r.needsReply).toBe(0);
+    expect(r.needsReplyLeads).toEqual([]);
+  });
+
+  // ── SLA AFIADO "precisa responder" (Item 5) ──────────────────────────────
+  it("needsReply conta só quem a bola está com a ótica (needsReply=true)", () => {
+    const now = new Date();
+    const r = computeLeadSla(
+      [
+        { ...openLead("bola-otica", 2, now), needsReply: true },   // conta
+        { ...openLead("respondido", 2, now), needsReply: false },  // ótica já respondeu
+        { ...openLead("sem-sinal", 2, now) },                      // undefined → fora
+      ],
+      now,
+    );
+    expect(r.needsReply).toBe(1);
+    expect(r.needsReplyLeads.map((l) => l.id)).toEqual(["bola-otica"]);
+  });
+
+  it("needsReply é ORTOGONAL ao tempo: pode precisar responder E estar no prazo", () => {
+    const now = new Date();
+    const r = computeLeadSla(
+      [{ ...openLead("novinho", 1, now), needsReply: true }], // 1h = no prazo
+      now,
+    );
+    expect(r.onTime).toBe(1);   // ainda no prazo pela faixa de tempo
+    expect(r.needsReply).toBe(1); // mas a bola está com a ótica
+  });
+
+  it("needsReplyLeads ordenado do que mais espera resposta p/ o menos", () => {
+    const now = new Date();
+    const r = computeLeadSla(
+      [
+        { ...openLead("recente", 1, now), needsReply: true },
+        { ...openLead("antigo", 10, now), needsReply: true },
+      ],
+      now,
+    );
+    expect(r.needsReplyLeads.map((l) => l.id)).toEqual(["antigo", "recente"]);
+  });
+
+  it("lead FECHADO nunca conta como precisa-responder mesmo com needsReply=true", () => {
+    const now = new Date();
+    const r = computeLeadSla(
+      [{ id: "ganho", lastActivityAt: now, stage: { isWon: true, isLost: false }, needsReply: true }],
+      now,
+    );
+    expect(r.needsReply).toBe(0);
   });
 });

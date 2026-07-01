@@ -8,7 +8,8 @@ vi.mock("@/lib/prisma", () => ({
     quote: { findFirst: vi.fn() },
     user: { findFirst: vi.fn() },
     prescription: { findFirst: vi.fn() },
-    whatsappConversation: { findFirst: vi.fn() },
+    whatsappConversation: { findFirst: vi.fn(), findMany: vi.fn() },
+    whatsappMessage: { groupBy: vi.fn() },
   },
 }));
 import { prisma } from "@/lib/prisma";
@@ -20,6 +21,9 @@ beforeEach(() => {
   (prisma.customer.findFirst as any).mockResolvedValue({ id: "cust_ok" });
   (prisma.quote.findFirst as any).mockResolvedValue({ id: "quote_ok" });
   (prisma.user.findFirst as any).mockResolvedValue({ id: "user_ok" });
+  // SLA afiado (Item 5): por padrão nenhuma conversa/outbound (leads sem WhatsApp).
+  (prisma.whatsappConversation.findMany as any).mockResolvedValue([]);
+  (prisma.whatsappMessage.groupBy as any).mockResolvedValue([]);
 });
 
 describe("setLeadCustomer — writer dedicado de vínculo", () => {
@@ -356,6 +360,36 @@ describe("getLeadStats", () => {
     expect(s.sla.totalOpen).toBe(2);   // 'c' está ganho → fora
     expect(s.sla.late).toBe(1);        // 'b' parado 48h
     expect(s.sla.lateLeads[0].id).toBe("b");
+  });
+
+  it("SLA afiado 'precisa responder' (Item 5): lead aberto com conversa SEM outbound", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { id: "L1", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+      { id: "L2", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+    ]);
+    // L1 tem conversa sem outbound (bola com a ótica); L2 tem outbound (respondido).
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([
+      { id: "c1", leadId: "L1" }, { id: "c2", leadId: "L2" },
+    ]);
+    (prisma.whatsappMessage.groupBy as any).mockResolvedValue([{ conversationId: "c2", _count: { _all: 1 } }]);
+    const s = await getLeadStats("co_1", null);
+    expect(s.sla.needsReply).toBe(1);
+    expect(s.sla.needsReplyLeads[0].id).toBe("L1");
+    // só consulta os ABERTOS
+    expect((prisma.whatsappConversation.findMany as any).mock.calls[0][0].where.leadId.in).toEqual(["L1", "L2"]);
+  });
+
+  it("inclui acurácia POR intenção (gold set — Item 5)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { id: "a", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "RENOVACAO", intent: "NOVA_COMPRA" }, // erro
+      { id: "b", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intentPredicted: "RENOVACAO", intent: "RENOVACAO" },   // acerto
+    ]);
+    const s = await getLeadStats("co_1", null);
+    const renov = s.aiAccuracyByIntent.find((o: { intent: string }) => o.intent === "RENOVACAO");
+    expect(renov).toBeDefined();
+    expect(renov!.total).toBe(2);
+    expect(renov!.correct).toBe(1);
+    expect(renov!.topConfusion).toEqual({ intent: "NOVA_COMPRA", count: 1 });
   });
 });
 

@@ -51,6 +51,15 @@ interface LeadStats {
     rate: number;
     hasEnoughSample: boolean;
   };
+  // Gold set (Item 5): acurácia por intenção (das correções humanas reais).
+  aiAccuracyByIntent?: {
+    intent: string;
+    total: number;
+    correct: number;
+    rate: number;
+    hasEnoughSample: boolean;
+    topConfusion: { intent: string; count: number } | null;
+  }[];
   byIntent?: Record<string, number>;
   sla?: {
     totalOpen: number;
@@ -58,6 +67,9 @@ interface LeadStats {
     warning: number;
     late: number;
     lateLeads: { id: string; hoursWaiting: number }[];
+    // SLA afiado (Item 5): a bola está com a ótica (cliente engajou, sem resposta).
+    needsReply: number;
+    needsReplyLeads: { id: string; hoursWaiting: number }[];
   };
 }
 
@@ -190,6 +202,23 @@ function FunilPage() {
 
   const funilContent = (
     <>
+      {/* PRECISA RESPONDER (Item 5) — sinal AFIADO: a bola está com a ótica (cliente
+          engajou, ninguém respondeu). É a maior alavancagem: diferente do SLA por
+          tempo, aqui é "responder agora ou perder o lead". Só aparece se há algum. */}
+      {stats?.sla && stats.sla.needsReply > 0 && (
+        <div className="flex items-center gap-3 rounded-lg border border-orange-300 bg-orange-50 p-3 text-sm text-orange-900">
+          <Clock className="h-5 w-5 shrink-0" />
+          <div>
+            <p className="font-semibold">
+              {stats.sla.needsReply} lead{stats.sla.needsReply > 1 ? "s" : ""} esperando SUA resposta
+            </p>
+            <p className="text-xs opacity-80">
+              O cliente escreveu e a ótica ainda não respondeu — responda p/ não perder a venda.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* SLA — a dor nº1: leads aguardando resposta. Só aparece se há atraso/atenção. */}
       {stats?.sla && (stats.sla.late > 0 || stats.sla.warning > 0) && (
         <div
@@ -303,6 +332,29 @@ function FunilPage() {
                 <p className="mt-1 text-xs text-muted-foreground">
                   acertou {stats.aiAccuracy.correct} de {stats.aiAccuracy.total} intenções
                 </p>
+                {/* Gold set (Item 5): onde a IA é mais fraca — só as com amostra e
+                    abaixo de 100% (o problema), no máximo 3, das correções reais. */}
+                {(() => {
+                  const weak = (stats.aiAccuracyByIntent ?? [])
+                    .filter((d) => d.hasEnoughSample && d.rate < 1)
+                    .slice(0, 3);
+                  if (weak.length === 0) return null;
+                  return (
+                    <div className="mt-2 space-y-1 border-t pt-2">
+                      <p className="text-[11px] font-medium text-muted-foreground">Onde mais erra:</p>
+                      {weak.map((d) => {
+                        const lbl = intentLabel(d.intent)?.label ?? d.intent;
+                        const conf = d.topConfusion ? intentLabel(d.topConfusion.intent)?.label ?? d.topConfusion.intent : null;
+                        return (
+                          <p key={d.intent} className="text-[11px] text-muted-foreground">
+                            <span className="font-medium">{lbl}</span> {(d.rate * 100).toFixed(0)}%
+                            {conf ? <span className="opacity-70"> · confunde c/ {conf}</span> : null}
+                          </p>
+                        );
+                      })}
+                    </div>
+                  );
+                })()}
               </>
             ) : (
               <>

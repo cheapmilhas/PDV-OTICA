@@ -4,8 +4,9 @@ import { notFoundError, businessRuleError, duplicateError } from "@/lib/error-ha
 import { getPaginationParams, createPaginationMeta } from "@/lib/api-response";
 import type { ContactIntent, CustomerMatchKind } from "@prisma/client";
 import { INTENT_VALUES } from "@/lib/contact-intent-label";
-import { computeIntentAccuracy } from "@/lib/intent-accuracy";
+import { computeIntentAccuracy, computeIntentAccuracyByIntent } from "@/lib/intent-accuracy";
 import { computeLeadSla } from "@/lib/lead-sla";
+import { computeNeedsReplyLeadIds } from "@/services/lead-needs-reply.service";
 import type {
   CreateLeadDTO,
   LeadQuery,
@@ -511,7 +512,22 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
     }
   }
   const aiAccuracy = computeIntentAccuracy(leads);
-  const sla = computeLeadSla(leads, new Date());
+  // Gold set (Item 5): acurácia POR intenção das correções humanas reais — mostra
+  // ONDE a IA erra e destrava a Fase 4 (automação por intenção com acurácia >= piso).
+  const aiAccuracyByIntent = computeIntentAccuracyByIntent(leads);
+  // SLA AFIADO (Item 5): "precisa responder" = a bola está com a ótica (cliente
+  // engajou, sem outbound). Só p/ leads ABERTOS (os únicos que aguardam resposta).
+  const openLeadIds = leads.filter((l) => !l.stage.isWon && !l.stage.isLost).map((l) => l.id);
+  const needsReplyIds = await computeNeedsReplyLeadIds(companyId, openLeadIds);
+  const slaRows = leads.map((l) => ({
+    id: l.id,
+    lastActivityAt: l.lastActivityAt,
+    stage: l.stage,
+    // undefined p/ leads sem conversa (o Set só tem os que precisam responder;
+    // ausência = ou já respondida, ou sem conversa → o SLA não conta como precisa).
+    needsReply: needsReplyIds.has(l.id) ? true : undefined,
+  }));
+  const sla = computeLeadSla(slaRows, new Date());
   return {
     total,
     won,
@@ -520,6 +536,7 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
     bySource,
     byIntent,
     aiAccuracy,
+    aiAccuracyByIntent,
     sla,
   };
 }

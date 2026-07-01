@@ -17,6 +17,15 @@ export interface SlaLeadRow {
   id: string;
   lastActivityAt: Date;
   stage: { isWon: boolean; isLost: boolean };
+  /**
+   * "Precisa responder" (Item 5, sinal AFIADO): o cliente engajou mas a ÓTICA
+   * ainda NÃO respondeu com conteúdo humano. undefined = sinal indisponível p/
+   * este lead (ex.: lead sem conversa de WhatsApp) — não entra na conta afiada.
+   * O tempo parado (lastActivityAt) mede STALENESS; isto mede "a bola está com a
+   * ótica": é a diferença entre "ninguém respondeu ainda" e "respondemos, o
+   * cliente é que sumiu". A dor nº1 do dono é a primeira.
+   */
+  needsReply?: boolean;
 }
 
 export interface LateLead {
@@ -31,6 +40,13 @@ export interface LeadSla {
   late: number;
   /** Atrasados, do mais parado p/ o menos (p/ o gerente priorizar). */
   lateLeads: LateLead[];
+  /**
+   * AFIADO (Item 5): leads abertos onde a bola está com a ótica (cliente engajou,
+   * ótica não respondeu). Subconjunto dos abertos com sinal disponível. `topWaiting`
+   * = os que mais esperam por resposta, p/ o gerente atacar primeiro.
+   */
+  needsReply: number;
+  needsReplyLeads: LateLead[];
 }
 
 export function computeLeadSla(rows: ReadonlyArray<SlaLeadRow>, now: Date): LeadSla {
@@ -38,6 +54,7 @@ export function computeLeadSla(rows: ReadonlyArray<SlaLeadRow>, now: Date): Lead
   let warning = 0;
   let late = 0;
   const lateLeads: LateLead[] = [];
+  const needsReplyLeads: LateLead[] = [];
 
   for (const r of rows) {
     if (r.stage.isWon || r.stage.isLost) continue; // não está aguardando resposta
@@ -50,8 +67,20 @@ export function computeLeadSla(rows: ReadonlyArray<SlaLeadRow>, now: Date): Lead
     } else {
       onTime++;
     }
+    // Sinal afiado: a bola está com a ótica (cliente engajou, ótica não respondeu).
+    // Ortogonal às faixas de tempo — um lead pode "precisar responder" e ainda
+    // estar no prazo (chegou há 1h e ninguém respondeu). undefined não entra.
+    if (r.needsReply === true) {
+      needsReplyLeads.push({ id: r.id, hoursWaiting });
+    }
   }
 
   lateLeads.sort((a, b) => b.hoursWaiting - a.hoursWaiting);
-  return { totalOpen: onTime + warning + late, onTime, warning, late, lateLeads };
+  needsReplyLeads.sort((a, b) => b.hoursWaiting - a.hoursWaiting);
+  return {
+    totalOpen: onTime + warning + late,
+    onTime, warning, late, lateLeads,
+    needsReply: needsReplyLeads.length,
+    needsReplyLeads,
+  };
 }

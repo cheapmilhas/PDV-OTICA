@@ -4563,6 +4563,9 @@ model WhatsappConversation {
   @@index([companyId, isGroup, analyzedAt])
   // Índice p/ o inbox listar/ordenar os que precisam de atenção sem table-scan.
   @@index([companyId, needsHumanAttention])
+  // Item 5: o SLA afiado ("precisa responder") busca conversas por leadId (in).
+  // Sem este índice, a busca vira scan filtrado por companyId conforme a ótica cresce.
+  @@index([companyId, leadId])
 }
 
 model WhatsappMessage {

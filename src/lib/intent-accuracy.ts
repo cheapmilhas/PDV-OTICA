@@ -50,3 +50,63 @@ export function computeIntentAccuracy(
     hasEnoughSample: total >= minSample,
   };
 }
+
+/** Acurácia de UMA intenção (quando a IA disse X, quantas vezes acertou). */
+export interface IntentAccuracyDetail {
+  /** A intenção PREDITA (o que a IA chutou). */
+  intent: string;
+  total: number;
+  correct: number;
+  rate: number;
+  hasEnoughSample: boolean;
+  /** Confusão nº1: p/ qual intenção X mais foi CORRIGIDA (o erro típico). null se sempre acerta. */
+  topConfusion: { intent: string; count: number } | null;
+}
+
+/**
+ * Acurácia POR intenção predita (gold set das correções humanas reais). Responde
+ * "quando a IA diz RENOVACAO, ela acerta X%?" e "quando erra, vira o quê?" — é o
+ * que destrava a Fase 4 (automação só liga onde a acurácia por intenção passa o
+ * piso), e mostra ao dono ONDE a IA é fraca. Ordenado da pior acurácia p/ a melhor
+ * (com amostra suficiente primeiro), p/ o problema aparecer no topo.
+ *
+ * Puro, sem I/O. Agrupa por `intentPredicted` (o chute); `intent` é a verdade.
+ */
+export function computeIntentAccuracyByIntent(
+  rows: ReadonlyArray<IntentAccuracyRow>,
+  minSample: number = ACCURACY_MIN_SAMPLE,
+): IntentAccuracyDetail[] {
+  // Por intenção predita: total, acertos e histograma das correções (predito != atual).
+  const acc = new Map<string, { total: number; correct: number; confusions: Map<string, number> }>();
+  for (const r of rows) {
+    if (!r.intentPredicted || !r.intent) continue;
+    const e = acc.get(r.intentPredicted) ?? { total: 0, correct: 0, confusions: new Map() };
+    e.total++;
+    if (r.intentPredicted === r.intent) e.correct++;
+    else e.confusions.set(r.intent, (e.confusions.get(r.intent) ?? 0) + 1);
+    acc.set(r.intentPredicted, e);
+  }
+
+  const out: IntentAccuracyDetail[] = [];
+  for (const [intent, e] of acc) {
+    let topConfusion: { intent: string; count: number } | null = null;
+    for (const [to, count] of e.confusions) {
+      if (!topConfusion || count > topConfusion.count) topConfusion = { intent: to, count };
+    }
+    out.push({
+      intent,
+      total: e.total,
+      correct: e.correct,
+      rate: e.total === 0 ? 0 : e.correct / e.total,
+      hasEnoughSample: e.total >= minSample,
+      topConfusion,
+    });
+  }
+
+  // Amostra suficiente primeiro; dentro disso, pior acurácia no topo (o problema).
+  out.sort((a, b) => {
+    if (a.hasEnoughSample !== b.hasEnoughSample) return a.hasEnoughSample ? -1 : 1;
+    return a.rate - b.rate;
+  });
+  return out;
+}
