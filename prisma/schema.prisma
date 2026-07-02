@@ -938,6 +938,11 @@ model ServiceOrder {
   readyAt           DateTime?
   deliveredAt       DateTime?
   canceledAt        DateTime?
+  // "Ocultar por hoje" da fila "Prontos pra avisar": a OS some da fila até esta
+  // data (amanhã 06h BRT) e reaparece se ainda estiver READY. NÃO é status —
+  // é um adiamento leve, não confunde com "avisado" (que deriva do
+  // WhatsappMessageLog type=OS_READY, fonte canônica) nem com DELIVERED.
+  notifySnoozedUntil DateTime?
   laboratoryId      String?
   labOrderNumber    String?
   labNotes          String?
