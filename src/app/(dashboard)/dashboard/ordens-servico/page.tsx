@@ -28,7 +28,7 @@ import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatDateBR } from "@/lib/date-utils";
 import { useBranchContext } from "@/hooks/use-branch-context";
-import { normalizePhoneBR } from "@/lib/whatsapp-phone";
+import { WhatsAppButton } from "@/components/whatsapp/whatsapp-button";
 
 // ===== TIPOS =====
 interface ServiceOrder {
@@ -104,14 +104,6 @@ function readyTrafficLight(days: number): { color: string; label: string } {
   if (days >= 5) return { color: "bg-red-500", label: `pronto há ${days} dias` };
   if (days >= 2) return { color: "bg-amber-500", label: `pronto há ${days} dias` };
   return { color: "bg-emerald-500", label: days <= 0 ? "pronto hoje" : "pronto ontem" };
-}
-
-// Monta wa.me/55DDDNUM reusando a normalização oficial (valida comprimento
-// pós-DDI e rejeita lixo — evita abrir conversa com número errado).
-function waMeUrl(phone?: string): string | null {
-  if (!phone) return null;
-  const normalized = normalizePhoneBR(phone);
-  return normalized ? `https://wa.me/${normalized}` : null;
 }
 
 // Texto pronto pra atendente copiar (aviso de OS pronta).
@@ -550,20 +542,6 @@ function OrdensServicoPage() {
     setCounts(statusCounts);
   }, [orders]);
 
-  // Fila "Prontos pra avisar": abrir WhatsApp com texto pronto (copia + abre).
-  const avisarWhatsApp = async (order: ServiceOrder) => {
-    const url = waMeUrl(order.customer.phone);
-    if (!url) { toast.error("Cliente sem telefone válido"); return; }
-    const draft = osReadyDraft(order.customer.name);
-    try {
-      await navigator.clipboard.writeText(draft);
-      toast.success("Texto copiado ✅ Cola lá no WhatsApp");
-    } catch {
-      toast("Abri o WhatsApp — copie o texto: " + draft, { duration: 6000 });
-    }
-    window.open(url, "_blank");
-  };
-
   // Fila "Prontos pra avisar": ocultar por hoje (some da fila até amanhã).
   const ocultarPorHoje = async (order: ServiceOrder) => {
     setActionLoading(order.id + "snooze");
@@ -887,14 +865,10 @@ function OrdensServicoPage() {
                           {/* Fila "Prontos pra avisar": avisar cliente + ocultar por hoje */}
                           {statusFilter === "prontos_avisar" && !filterParam && (
                             <>
-                              <Button
-                                size="sm"
-                                className="bg-[#25D366] hover:bg-[#1da851] text-white"
-                                onClick={() => avisarWhatsApp(order)}
-                              >
-                                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 00-8.6 15l-1.4 5 5.1-1.3A10 10 0 1012 2z"/></svg>
-                                Avisar no WhatsApp
-                              </Button>
+                              <WhatsAppButton
+                                phone={order.customer.phone}
+                                draftText={osReadyDraft(order.customer.name)}
+                              />
                               <Button
                                 size="sm"
                                 variant="outline"
