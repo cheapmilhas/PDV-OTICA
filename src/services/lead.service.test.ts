@@ -253,12 +253,34 @@ describe("listLeads", () => {
 });
 
 describe("moveLead", () => {
-  it("exige lostReason ao mover para etapa isLost", async () => {
+  it("exige CATEGORIA de motivo ao mover HUMANO para etapa isLost (#8)", async () => {
     (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14") });
     (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_lost", isLost: true, isWon: false });
     await expect(
       moveLead("l1", { stageId: "stg_lost" } as any, "co_1")
     ).rejects.toThrow(/motivo/i);
+  });
+
+  it("grava lostReasonCategory + detalhe ao perder com categoria (#8)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_lost", isLost: true, isWon: false });
+    (prisma.whatsappConversation.findFirst as any).mockResolvedValue(null);
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    await moveLead("l1", { stageId: "stg_lost", lostReasonCategory: "PRICE", lostReason: "achou 20% caro" } as any, "co_1");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.lostReasonCategory).toBe("PRICE");
+    expect(data.lostReason).toBe("achou 20% caro");
+  });
+
+  it("mover p/ etapa NÃO-perdida limpa categoria e detalhe (#8)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg2", isLost: false, isWon: false });
+    (prisma.whatsappConversation.findFirst as any).mockResolvedValue(null);
+    (prisma.lead.update as any).mockResolvedValue({ id: "l1" });
+    await moveLead("l1", { stageId: "stg2", lostReasonCategory: "PRICE" } as any, "co_1");
+    const data = (prisma.lead.update as any).mock.calls[0][0].data;
+    expect(data.lostReasonCategory).toBeNull();
+    expect(data.lostReason).toBeNull();
   });
 
   it("detecta conflito de optimistic-lock (expectedUpdatedAt diferente)", async () => {
@@ -294,6 +316,15 @@ describe("moveLead", () => {
     expect(data.lastHumanMoveAt).toBeInstanceOf(Date);
     // trava = lastMessageAt da conversa no momento da correção
     expect(data.aiLockUntilMessageAt).toEqual(new Date("2026-06-20T08:00:00Z"));
+  });
+
+  it("IA NÃO marca card como Perdido (guard simétrico ao de Ganho, #8)", async () => {
+    (prisma.lead.findFirst as any).mockResolvedValue({ id: "l1", updatedAt: new Date("2026-06-14T10:00:00Z") });
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_lost", isLost: true, isWon: false });
+    await expect(
+      moveLead("l1", { stageId: "stg_lost" } as any, "co_1", "AI"),
+    ).rejects.toThrow(/Perdido/i);
+    expect(prisma.lead.updateMany).not.toHaveBeenCalled();
   });
 
   it("movimento por IA usa updateMany com guard (null OU AI) + carimba AI", async () => {
@@ -390,9 +421,10 @@ describe("getLeadStats", () => {
 
   it("calcula conversão = ganhos / total e agrega lostReason e source", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
-      { id: "a", lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
-      { id: "b", lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço", intent: null, intentPredicted: null },
-      { id: "c", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "a", lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, lostReasonCategory: null, intent: null, intentPredicted: null },
+      // Legado (pré-migração): sem categoria → cai no texto livre "Preço".
+      { id: "b", lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço", lostReasonCategory: null, intent: null, intentPredicted: null },
+      { id: "c", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, lostReasonCategory: null, intent: null, intentPredicted: null },
     ]);
     const s = await getLeadStats("co_1", null);
     expect(s.total).toBe(3);
@@ -400,6 +432,21 @@ describe("getLeadStats", () => {
     expect(s.conversionRate).toBeCloseTo(1 / 3);
     expect(s.byLostReason["Preço"]).toBe(1);
     expect(s.bySource["WHATSAPP"]).toBe(2);
+  });
+
+  it("byLostReason agrupa pela CATEGORIA estruturada (rótulo PT), com fallback ao texto legado (#8)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { id: "a", lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: null, lostReason: "achou 20% caro", lostReasonCategory: "PRICE", intent: null, intentPredicted: null },
+      { id: "b", lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: null, lostReason: null, lostReasonCategory: "PRICE", intent: null, intentPredicted: null },
+      { id: "c", lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: null, lostReason: "sumiu", lostReasonCategory: null, intent: null, intentPredicted: null },
+    ]);
+    const s = await getLeadStats("co_1", null);
+    // categoria PRICE (2 leads) agrupa pelo rótulo, não pelo texto livre.
+    expect(s.byLostReason["Achou caro"]).toBe(2);
+    // legado sem categoria cai no texto livre.
+    expect(s.byLostReason["sumiu"]).toBe(1);
+    // o texto livre "achou 20% caro" NÃO vira chave (categoria tem prioridade).
+    expect(s.byLostReason["achou 20% caro"]).toBeUndefined();
   });
 
   it("inclui acurácia da IA (pares predito×atual; ignora leads sem palpite)", async () => {

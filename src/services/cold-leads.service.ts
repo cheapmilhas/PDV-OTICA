@@ -30,8 +30,8 @@ export const COLD_DAYS = 7;
 export interface ColdLeadsFilters {
   /** Origem exata (LeadFunnelSource) ou undefined p/ todas. */
   source?: string;
-  /** Motivo de perda exato (texto livre atual) ou undefined p/ todos. */
-  lostReason?: string;
+  /** Motivo de perda ESTRUTURADO (LostReasonCategory, #8) ou undefined p/ todos. */
+  lostReasonCategory?: string;
   /** Janela por createdAt (reusa o range do placar, #6). */
   from?: Date;
   to?: Date;
@@ -44,6 +44,9 @@ export interface ColdLeadRow {
   source: string | null;
   /** Perdido explicitamente (isLost) vs. aberto-e-frio (sumiu). */
   status: "lost" | "cold";
+  /** Motivo ESTRUTURADO (#8), quando perdido com categoria. */
+  lostReasonCategory: string | null;
+  /** Detalhe em texto livre (opcional). */
   lostReason: string | null;
   /** "há X dias" desde a última atividade — pra priorizar o resgate. */
   coldFor: string;
@@ -81,7 +84,9 @@ export async function listColdLeads(
   };
 
   if (filters.source) where.source = filters.source as Prisma.LeadWhereInput["source"];
-  if (filters.lostReason) where.lostReason = filters.lostReason;
+  if (filters.lostReasonCategory) {
+    where.lostReasonCategory = filters.lostReasonCategory as Prisma.LeadWhereInput["lostReasonCategory"];
+  }
   if (filters.from || filters.to) {
     where.createdAt = {
       ...(filters.from ? { gte: filters.from } : {}),
@@ -110,6 +115,7 @@ export async function listColdLeads(
       phone: true,
       source: true,
       lostReason: true,
+      lostReasonCategory: true,
       lastActivityAt: true,
       stage: { select: { isLost: true } },
       customer: { select: { name: true, phone: true } },
@@ -127,6 +133,7 @@ export async function listColdLeads(
       phone,
       source: l.source,
       status: l.stage.isLost ? "lost" : "cold",
+      lostReasonCategory: l.lostReasonCategory,
       lostReason: l.lostReason,
       coldFor: humanWait(hoursCold),
       hoursCold,

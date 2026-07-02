@@ -1228,6 +1228,10 @@ model Lead {
   customerId     String?
   quoteId        String?
   lostReason     String?
+  // Motivo ESTRUTURADO da perda (Sprint 3, #8). Nullable: leads perdidos ANTES
+  // da migração ficam null (não adivinhamos categoria do texto livre antigo).
+  // A partir de agora é obrigatório ao marcar como perdido (validado no service).
+  lostReasonCategory LostReasonCategory?
   notes          String?
   // IA contexto cliente (Fase 1/2): intenção classificada + estado do match de
   // cliente. intent/contactNotPatient/urgent são SUGESTÃO da IA; o vínculo só
@@ -4251,6 +4255,18 @@ enum LeadFunnelSource {
   REFERRAL
   WALK_IN
   OTHER
+}
+
+/// Motivo ESTRUTURADO da perda de um lead (Sprint 3, #8). Substitui o texto livre
+/// como fonte principal p/ análise e reoferta segmentada ("todos que perderam por
+/// preço"). O texto livre continua em Lead.lostReason como DETALHE opcional.
+enum LostReasonCategory {
+  PRICE          // achou caro / fora do orçamento
+  COMPETITOR     // comprou no concorrente
+  GAVE_UP        // desistiu / só estava pesquisando
+  NO_RESPONSE    // sumiu / parou de responder
+  WRONG_PRODUCT  // não era o que queria / produto errado
+  OTHER          // outro (detalhe no texto livre)
 }
 
 /// Intenção do contato classificada pela IA (Fase 1/2 — IA contexto cliente).

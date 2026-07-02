@@ -15,6 +15,7 @@ import toast from "react-hot-toast";
 import { WhatsAppButton } from "@/components/whatsapp/whatsapp-button";
 import { buildWaMeUrl } from "@/lib/whatsapp-deeplink";
 import { LEAD_STATS_PERIODS, type LeadStatsPeriod } from "@/lib/lead-stats-period";
+import { LOST_REASON_OPTIONS, lostReasonLabel } from "@/lib/lost-reason-label";
 
 interface FunilRecuperarProps {
   active: boolean;
@@ -27,6 +28,7 @@ interface ColdLeadRow {
   phone: string | null;
   source: string | null;
   status: "lost" | "cold";
+  lostReasonCategory: string | null;
   lostReason: string | null;
   coldFor: string;
   draftText: string;
@@ -53,6 +55,9 @@ export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
   const [rows, setRows] = useState<ColdLeadRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<string>(ALL);
+  // Motivo ESTRUTURADO (#8): filtra a recuperação por categoria da perda —
+  // "todos que perderam por preço" viram uma campanha de reoferta.
+  const [motive, setMotive] = useState<string>(ALL);
   // Padrão "Tudo": recuperação olha o backlog inteiro (perdido meses atrás ainda vale).
   const [period, setPeriod] = useState<LeadStatsPeriod>("all");
 
@@ -61,13 +66,14 @@ export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
     const params = new URLSearchParams();
     if (branchId) params.set("branchId", branchId);
     if (source !== ALL) params.set("source", source);
+    if (motive !== ALL) params.set("lostReasonCategory", motive);
     params.set("period", period);
     fetch(`/api/leads/cold?${params}`)
       .then((res) => res.json())
       .then((json) => setRows(json.data?.rows ?? []))
       .catch(() => toast.error("Erro ao carregar a lista de recuperação"))
       .finally(() => setLoading(false));
-  }, [branchId, source, period]);
+  }, [branchId, source, motive, period]);
 
   useEffect(() => {
     if (active) fetchRows();
@@ -103,10 +109,10 @@ export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
         </Button>
       </div>
 
-      {/* Filtros: origem + período */}
+      {/* Filtros: origem + motivo + período */}
       <div className="flex flex-wrap items-center gap-2">
         <Select value={source} onValueChange={setSource}>
-          <SelectTrigger className="w-[180px]">
+          <SelectTrigger className="w-[170px]">
             <SelectValue placeholder="Todas as origens" />
           </SelectTrigger>
           <SelectContent>
@@ -114,6 +120,19 @@ export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
             {sourceOptions.map(([value, label]) => (
               <SelectItem key={value} value={value}>
                 {label}
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        <Select value={motive} onValueChange={setMotive}>
+          <SelectTrigger className="w-[190px]">
+            <SelectValue placeholder="Todos os motivos" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value={ALL}>Todos os motivos</SelectItem>
+            {LOST_REASON_OPTIONS.map((o) => (
+              <SelectItem key={o.value} value={o.value}>
+                {o.label}
               </SelectItem>
             ))}
           </SelectContent>
@@ -154,11 +173,11 @@ export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
                     <p className="truncate text-sm text-muted-foreground">
                       {[
                         r.source ? (SOURCE_LABEL[r.source] ?? r.source) : null,
-                        r.status === "lost" && r.lostReason
-                          ? `perdido: ${r.lostReason}`
-                          : r.status === "lost"
-                            ? "perdido"
-                            : `esfriou ${r.coldFor}`,
+                        r.status === "lost"
+                          ? // Mostra a CATEGORIA estruturada (#8); cai no detalhe
+                            // livre, e por fim só "perdido" se não houver nenhum.
+                            `perdido: ${lostReasonLabel(r.lostReasonCategory) || r.lostReason || "motivo não informado"}`
+                          : `esfriou ${r.coldFor}`,
                       ]
                         .filter(Boolean)
                         .join(" · ")}

@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { LeadFunnelSource } from "@prisma/client";
+import { LeadFunnelSource, LostReasonCategory } from "@prisma/client";
 
 export const createLeadSchema = z.object({
   name: z.string().min(1, "Nome é obrigatório"),
@@ -16,6 +16,10 @@ export const createLeadSchema = z.object({
 });
 export type CreateLeadDTO = z.infer<typeof createLeadSchema>;
 
+// Motivo de perda NÃO é editável por este endpoint genérico: quem grava categoria
+// + detalhe é o fluxo de mover p/ etapa perdida (moveLead), que valida a categoria
+// obrigatória. Expor lostReasonCategory aqui seria afordância falsa (updateLead não
+// escreve o campo). lostReason segue aceito só por compat, mas idem — sem writer aqui.
 export const updateLeadSchema = createLeadSchema.partial().extend({
   lostReason: z.string().optional(),
 });
@@ -23,7 +27,10 @@ export type UpdateLeadDTO = z.infer<typeof updateLeadSchema>;
 
 export const moveLeadSchema = z.object({
   stageId: z.string().min(1),
-  lostReason: z.string().optional(), // obrigatório quando a etapa destino é isLost (validado no service)
+  // Motivo ESTRUTURADO (Sprint 3, #8): obrigatório quando a etapa destino é isLost
+  // (validado no service). lostReason vira DETALHE opcional em texto livre.
+  lostReasonCategory: z.nativeEnum(LostReasonCategory).optional(),
+  lostReason: z.string().optional(),
   expectedUpdatedAt: z.string().optional(), // optimistic-lock
 });
 export type MoveLeadDTO = z.infer<typeof moveLeadSchema>;

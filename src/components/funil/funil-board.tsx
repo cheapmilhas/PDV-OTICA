@@ -16,6 +16,7 @@ import toast from "react-hot-toast";
 import { formatCurrency } from "@/lib/utils";
 import { LeadCard, type Lead } from "./lead-card";
 import { LostReasonModal } from "./lost-reason-modal";
+import type { LostReasonCategory } from "@prisma/client";
 
 export interface LeadStage {
   id: string;
@@ -104,7 +105,7 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
     lead: Lead,
     stageId: string,
     stage: LeadStage,
-    lostReason?: string
+    lost?: { category: LostReasonCategory; detail?: string }
   ) {
     // Otimista: move o card já.
     setOptimistic((prev) => ({ ...prev, [lead.id]: stageId }));
@@ -116,7 +117,8 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
         body: JSON.stringify({
           stageId,
           expectedUpdatedAt: lead.updatedAt,
-          ...(lostReason ? { lostReason } : {}),
+          ...(lost ? { lostReasonCategory: lost.category } : {}),
+          ...(lost?.detail ? { lostReason: lost.detail } : {}),
         }),
       });
 
@@ -252,12 +254,12 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
     }
   }
 
-  function confirmLostMove(reason: string) {
+  function confirmLostMove(category: LostReasonCategory, detail?: string) {
     if (!pendingLostMove) return;
     const { lead, stageId } = pendingLostMove;
     const stage = sortedStages.find((s) => s.id === stageId);
     setPendingLostMove(null);
-    if (stage) void persistMove(lead, stageId, stage, reason);
+    if (stage) void persistMove(lead, stageId, stage, { category, detail });
   }
 
   return (

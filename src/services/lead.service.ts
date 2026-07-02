@@ -7,6 +7,7 @@ import { INTENT_VALUES } from "@/lib/contact-intent-label";
 import { computeIntentAccuracy, computeIntentAccuracyByIntent } from "@/lib/intent-accuracy";
 import { computeLeadSla } from "@/lib/lead-sla";
 import { computeNeedsReplyLeadIds } from "@/services/lead-needs-reply.service";
+import { lostReasonLabel } from "@/lib/lost-reason-label";
 import type {
   CreateLeadDTO,
   LeadQuery,
@@ -235,8 +236,12 @@ export async function moveLead(
     select: { id: true, isLost: true, isWon: true },
   });
   if (!stage) throw notFoundError("Etapa inválida");
-  if (stage.isLost && !data.lostReason) {
-    throw businessRuleError("Informe o motivo da perda");
+  // Motivo ESTRUTURADO (Sprint 3, #8): ao marcar como perdido, a CATEGORIA é
+  // obrigatória (o texto livre lostReason virou detalhe opcional). Só exige do
+  // caminho humano — a IA nunca leva card p/ isLost por conta própria (auto-move
+  // só avança; perda é decisão humana), então não teria categoria pra informar.
+  if (stage.isLost && movedBy === "USER" && !data.lostReasonCategory) {
+    throw businessRuleError("Escolha o motivo da perda");
   }
   // Defense-in-depth (Fatia 3): a IA NUNCA leva um card p/ "Ganho" via moveLead.
   // O auto-Ganho é determinístico (linkLeadAndMaybeWinInTx, na venda real). Se um
@@ -244,6 +249,13 @@ export async function moveLead(
   // "ganhar" um lead sem venda. Humano (USER) pode mover p/ Ganho manualmente.
   if (movedBy === "AI" && stage.isWon) {
     throw businessRuleError("A IA não move card para Ganho (só venda real ou humano).");
+  }
+  // Defense-in-depth simétrico (Sprint 3, #8): a IA também NUNCA marca um card como
+  // PERDIDO. "Perdido" é decisão humana (exige o motivo estruturado, que a IA não
+  // tem). Se um estágio virar isLost entre a leitura do motor e aqui (TOCTOU), este
+  // guard impede a IA de perder um lead SEM categoria, burlando a regra sagrada.
+  if (movedBy === "AI" && stage.isLost) {
+    throw businessRuleError("A IA não marca card como Perdido (decisão humana com motivo).");
   }
 
   // Trava humana inteligente: ao mover por humano, congela a IA até chegar uma
@@ -279,6 +291,7 @@ export async function moveLead(
       data: {
         stageId: data.stageId,
         lostReason: stage.isLost ? data.lostReason : null,
+        lostReasonCategory: stage.isLost ? data.lostReasonCategory ?? null : null,
         lastActivityAt: new Date(),
         lastMovedBy: "AI",
       },
@@ -295,6 +308,7 @@ export async function moveLead(
     data: {
       stageId: data.stageId,
       lostReason: stage.isLost ? data.lostReason : null,
+      lostReasonCategory: stage.isLost ? data.lostReasonCategory ?? null : null,
       lastActivityAt: new Date(),
       ...humanStamp,
     },
@@ -543,6 +557,7 @@ export async function getLeadStats(
       id: true,
       source: true,
       lostReason: true,
+      lostReasonCategory: true,
       lastActivityAt: true,
       createdAt: true,
       // Telemetria de acurácia (par palpite×atual) + volume por intenção (Fase 3).
@@ -569,8 +584,12 @@ export async function getLeadStats(
   const bySourceConversion: Record<string, { total: number; won: number }> = {};
   // Placar (escopado ao período): perdas por motivo + volume/conversão por origem.
   for (const l of scoredLeads) {
-    if (l.stage.isLost && l.lostReason) {
-      byLostReason[l.lostReason] = (byLostReason[l.lostReason] ?? 0) + 1;
+    if (l.stage.isLost) {
+      // "Por que perdemos" agora agrupa pelo motivo ESTRUTURADO (#8), com rótulo
+      // legível. Fallback p/ o texto livre (leads perdidos ANTES da migração, sem
+      // categoria). Sem nenhum dos dois → não conta (perda antiga sem motivo).
+      const key = l.lostReasonCategory ? lostReasonLabel(l.lostReasonCategory) : l.lostReason;
+      if (key) byLostReason[key] = (byLostReason[key] ?? 0) + 1;
     }
     if (l.source) {
       bySource[l.source] = (bySource[l.source] ?? 0) + 1;
