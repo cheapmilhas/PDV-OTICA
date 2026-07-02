@@ -23,6 +23,14 @@ interface QueueResponse {
   overflow: number;
 }
 
+/** Resumo do dono (#12): o dia num relance. Shape espelha o service. */
+interface OwnerDailySummary {
+  conversations: number;
+  replied: number;
+  awaiting: number;
+  complaints: number;
+}
+
 /** Cor do pontinho do semáforo. */
 const DOT: Record<QueueSeverity, string> = {
   red: "bg-red-500",
@@ -38,6 +46,7 @@ const DOT: Record<QueueSeverity, string> = {
  */
 export function FunilTodayQueue({ active, branchId }: FunilTodayQueueProps) {
   const [data, setData] = useState<QueueResponse | null>(null);
+  const [summary, setSummary] = useState<OwnerDailySummary | null>(null);
   const [loading, setLoading] = useState(true);
 
   const fetchQueue = useCallback(() => {
@@ -49,6 +58,11 @@ export function FunilTodayQueue({ active, branchId }: FunilTodayQueueProps) {
       .then((json) => setData(json.data ?? null))
       .catch(() => toast.error("Erro ao carregar a fila de hoje"))
       .finally(() => setLoading(false));
+    // Resumo do dono (#12): busca em paralelo, falha silenciosa (não trava a fila).
+    fetch(`/api/funil/resumo-hoje?${params}`)
+      .then((res) => res.json())
+      .then((json) => setSummary(json.data ?? null))
+      .catch(() => {});
   }, [branchId]);
 
   useEffect(() => {
@@ -68,6 +82,28 @@ export function FunilTodayQueue({ active, branchId }: FunilTodayQueueProps) {
 
   return (
     <div className="space-y-4">
+      {/* Resumo do dono (#12): o dia num relance. Só aparece se houve conversa hoje.
+          Rótulo "todas as filiais" porque o WhatsApp é compartilhado — o resumo é
+          company-wide, ao contrário da fila de leads abaixo (que é por filial). */}
+      {summary && summary.conversations > 0 && (
+        <div className="flex flex-wrap items-center gap-x-4 gap-y-1 rounded-lg border bg-muted/40 p-3 text-sm">
+          <span className="font-semibold">Hoje (todas as filiais):</span>
+          <span>
+            {summary.conversations}{" "}
+            {summary.conversations === 1 ? "conversa" : "conversas"}
+          </span>
+          <span className="text-green-700">{summary.replied} respondida{summary.replied === 1 ? "" : "s"}</span>
+          {summary.awaiting > 0 && (
+            <span className="text-orange-700">{summary.awaiting} sem resposta</span>
+          )}
+          {summary.complaints > 0 && (
+            <span className="font-medium text-red-700">
+              {summary.complaints} reclamação{summary.complaints === 1 ? "" : "ões"}
+            </span>
+          )}
+        </div>
+      )}
+
       {/* 1 número no topo: quantas pessoas pra cuidar hoje. */}
       <div className="flex items-center justify-between gap-3">
         <div>
