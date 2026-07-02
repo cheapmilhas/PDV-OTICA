@@ -431,14 +431,19 @@ describe("getLeadStats", () => {
 
   it("SLA afiado 'precisa responder' (Item 5): lead aberto com conversa SEM outbound", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
-      { id: "L1", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
-      { id: "L2", lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+      { id: "L1", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+      { id: "L2", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
     ]);
     // L1 tem conversa sem outbound (bola com a ótica); L2 tem outbound (respondido).
     (prisma.whatsappConversation.findMany as any).mockResolvedValue([
       { id: "c1", leadId: "L1" }, { id: "c2", leadId: "L2" },
     ]);
-    (prisma.whatsappMessage.groupBy as any).mockResolvedValue([{ conversationId: "c2", _count: { _all: 1 } }]);
+    // Os dois groupBy: 1º outbound (só c2 respondeu), 2º inbound (relógio de c1, pendente).
+    (prisma.whatsappMessage.groupBy as any).mockImplementation((args: any) =>
+      args.where.direction === "outbound"
+        ? Promise.resolve([{ conversationId: "c2", _count: { _all: 1 } }])
+        : Promise.resolve([{ conversationId: "c1", _max: { receivedAt: NOW } }]),
+    );
     const s = await getLeadStats("co_1", null);
     expect(s.sla.needsReply).toBe(1);
     expect(s.sla.needsReplyLeads[0].id).toBe("L1");

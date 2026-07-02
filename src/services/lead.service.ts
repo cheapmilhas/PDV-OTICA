@@ -594,15 +594,22 @@ export async function getLeadStats(
   // SLA AFIADO (Item 5): "precisa responder" = a bola está com a ótica (cliente
   // engajou, sem outbound). Só p/ leads ABERTOS (os únicos que aguardam resposta).
   const openLeadIds = leads.filter((l) => !l.stage.isWon && !l.stage.isLost).map((l) => l.id);
-  const needsReplyIds = await computeNeedsReplyLeadIds(companyId, openLeadIds);
-  const slaRows = leads.map((l) => ({
-    id: l.id,
-    lastActivityAt: l.lastActivityAt,
-    stage: l.stage,
-    // undefined p/ leads sem conversa (o Set só tem os que precisam responder;
-    // ausência = ou já respondida, ou sem conversa → o SLA não conta como precisa).
-    needsReply: needsReplyIds.has(l.id) ? true : undefined,
-  }));
+  const needsReplyByLead = await computeNeedsReplyLeadIds(companyId, openLeadIds);
+  const slaRows = leads.map((l) => {
+    // waitingSince (#5): o relógio do "precisa responder" conta desde a mensagem
+    // do CLIENTE sem resposta, não desde lastActivityAt (que nem muda com WhatsApp).
+    const waitingSince = needsReplyByLead.get(l.id);
+    return {
+      id: l.id,
+      lastActivityAt: l.lastActivityAt,
+      stage: l.stage,
+      // undefined p/ leads sem conversa (o Map só tem os que precisam responder;
+      // ausência = ou já respondida, ou sem conversa → o SLA não conta como precisa).
+      needsReply: waitingSince ? true : undefined,
+      // Só presente quando precisa responder — o SLA usa isto como relógio afiado.
+      waitingSince,
+    };
+  });
   const sla = computeLeadSla(slaRows, new Date());
   return {
     total,
