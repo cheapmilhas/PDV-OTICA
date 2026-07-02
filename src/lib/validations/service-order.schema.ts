@@ -86,7 +86,7 @@ export const serviceOrderQuerySchema = z.object({
   search: z.string().optional(),
   page: z.coerce.number().int().min(1).default(1),
   pageSize: z.coerce.number().int().min(1).max(100).default(20),
-  status: z.enum(["ativos", "inativos", "todos"]).default("ativos"),
+  status: z.enum(["ativos", "inativos", "todos", "prontos_avisar"]).default("ativos"),
   customerId: z.string().optional(),
   orderStatus: z.nativeEnum(ServiceOrderStatus).optional(),
   startDate: z.string().datetime().optional(),

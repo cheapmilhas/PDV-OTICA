@@ -75,11 +75,35 @@ export class ServiceOrderService {
 
     const now = new Date();
 
+    // Fila "Prontos pra avisar" (OS pronta parada): OS prontas, NÃO entregues,
+    // que a ótica ainda NÃO avisou o cliente e não foram adiadas ("ocultar por
+    // hoje"). "Avisado" = fonte canônica no WhatsappMessageLog type=OS_READY
+    // (PENDING=na fila ou SENT=enviado) — não re-avisar manualmente o que a
+    // automação já cobriu (evita mensagem duplicada no número compartilhado).
+    // FAILED/SKIPPED NÃO contam como avisado → o manual cobre esses casos.
+    // Subquery porque não há relação ServiceOrder↔WhatsappMessageLog modelada.
+    let notifiedOsIds: string[] = [];
+    if (status === "prontos_avisar") {
+      const notifiedLogs = await prisma.whatsappMessageLog.findMany({
+        where: { companyId, type: "OS_READY", status: { in: ["PENDING", "SENT"] }, referenceId: { not: null } },
+        select: { referenceId: true },
+      });
+      notifiedOsIds = notifiedLogs.map((l) => l.referenceId!).filter(Boolean);
+    }
+
     const where: Prisma.ServiceOrderWhereInput = {
       companyId,
       ...(branchId && { branchId }),
       ...(status === "ativos" && !filter && { status: { not: "CANCELED" } }),
       ...(status === "inativos" && !filter && { status: "CANCELED" }),
+      // Prontos pra avisar: READY, não entregue, snooze expirado/ausente, não avisado.
+      ...(status === "prontos_avisar" && {
+        status: "READY",
+        deliveredAt: null,
+        readyAt: { not: null }, // sem data de "pronto" não dá pra priorizar por tempo
+        OR: [{ notifySnoozedUntil: null }, { notifySnoozedUntil: { lt: now } }],
+        ...(notifiedOsIds.length > 0 && { id: { notIn: notifiedOsIds } }),
+      }),
       ...(customerId && { customerId }),
       ...(orderStatus && { status: orderStatus }),
       ...(startDate && { createdAt: { gte: new Date(startDate) } }),
@@ -116,7 +140,10 @@ export class ServiceOrderService {
     const { skip, take } = getPaginationParams(page, pageSize);
 
     let orderBy: Prisma.ServiceOrderOrderByWithRelationInput = {};
-    if (sortBy === "customer") {
+    if (status === "prontos_avisar") {
+      // Mais esquecido primeiro (pronto há mais tempo no topo da fila).
+      orderBy = { readyAt: "asc" };
+    } else if (sortBy === "customer") {
       orderBy = { customer: { name: sortOrder } };
     } else {
       orderBy = { [sortBy]: sortOrder };
@@ -139,7 +166,9 @@ export class ServiceOrderService {
             select: { id: true, name: true },
           },
           sale: {
-            select: { id: true },
+            // status p/ a fila "prontos pra avisar" sinalizar "pagamento pendente"
+            // (não trafegamos total: seria o valor cheio, não o saldo em aberto).
+            select: { id: true, status: true },
           },
           originalOrder: {
             select: { number: true },
@@ -1081,6 +1110,56 @@ export class ServiceOrderService {
     }, {} as Record<string, number>);
 
     return { ...counts, DELAYED: delayed };
+  }
+
+  /**
+   * Contagem da fila "Prontos pra avisar" — mesma regra do filtro em list()
+   * (READY, não entregue, snooze expirado, cliente ainda não avisado via
+   * WhatsappMessageLog OS_READY). Isolado p/ o badge do botão poder buscar só
+   * o número sem carregar a lista. Multi-tenant: companyId em todo filtro.
+   */
+  async countProntosAvisar(companyId: string, branchId?: string | null): Promise<number> {
+    const notifiedLogs = await prisma.whatsappMessageLog.findMany({
+      where: { companyId, type: "OS_READY", status: { in: ["PENDING", "SENT"] }, referenceId: { not: null } },
+      select: { referenceId: true },
+    });
+    const notifiedOsIds = notifiedLogs.map((l) => l.referenceId!).filter(Boolean);
+    return prisma.serviceOrder.count({
+      where: {
+        companyId,
+        ...(branchId && { branchId }),
+        status: "READY",
+        deliveredAt: null,
+        readyAt: { not: null },
+        OR: [{ notifySnoozedUntil: null }, { notifySnoozedUntil: { lt: new Date() } }],
+        ...(notifiedOsIds.length > 0 && { id: { notIn: notifiedOsIds } }),
+      },
+    });
+  }
+
+  /**
+   * "Ocultar por hoje" na fila "Prontos pra avisar": adia a OS até amanhã 06h
+   * (horário de Brasília). NÃO é status — a OS continua READY; só some da fila
+   * até a data e reaparece se ainda não tiver sido avisada/entregue. Multi-tenant:
+   * só adia OS da própria empresa (findFirst por companyId antes de escrever).
+   */
+  async snoozeNotify(id: string, companyId: string) {
+    const os = await prisma.serviceOrder.findFirst({
+      where: { id, companyId },
+      select: { id: true },
+    });
+    if (!os) throw notFoundError("Ordem de serviço não encontrada");
+
+    // Amanhã 06:00 BRT (UTC-3) = 09:00 UTC. Base "agora" em UTC + avança pro
+    // próximo dia às 09:00Z, garantindo que reapareça na manhã seguinte.
+    const now = new Date();
+    const tomorrow = new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), now.getUTCDate() + 1, 9, 0, 0));
+
+    return prisma.serviceOrder.update({
+      where: { id },
+      data: { notifySnoozedUntil: tomorrow },
+      select: { id: true, notifySnoozedUntil: true },
+    });
   }
 
   async countActive(companyId: string): Promise<number> {

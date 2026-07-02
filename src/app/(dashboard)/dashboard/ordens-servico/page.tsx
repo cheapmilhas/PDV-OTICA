@@ -28,6 +28,7 @@ import { format, differenceInCalendarDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatDateBR } from "@/lib/date-utils";
 import { useBranchContext } from "@/hooks/use-branch-context";
+import { normalizePhoneBR } from "@/lib/whatsapp-phone";
 
 // ===== TIPOS =====
 interface ServiceOrder {
@@ -44,10 +45,11 @@ interface ServiceOrder {
   warrantySeq?: number | null;
   originalOrder?: { number?: number | null } | null;
   createdAt: string;
+  readyAt?: string | null;
   hasPrescription?: boolean;
   customer: { id: string; name: string; cpf?: string; phone?: string };
   laboratory?: { id: string; name: string };
-  sale?: { id: string } | null;
+  sale?: { id: string; total?: number | string; status?: string } | null;
   _count: { items: number };
 }
 
@@ -89,6 +91,33 @@ function isOrderDelayed(order: ServiceOrder): boolean {
 
 function getDelayDays(promisedDate: string): number {
   return differenceInCalendarDays(new Date(), new Date(promisedDate));
+}
+
+// Fila "Prontos pra avisar": dias parado desde readyAt.
+function daysReady(readyAt?: string | null): number {
+  if (!readyAt) return 0;
+  return differenceInCalendarDays(new Date(), new Date(readyAt));
+}
+
+// Semáforo por tempo parado: 🟢 0-1d / 🟡 2-4d / 🔴 5d+.
+function readyTrafficLight(days: number): { color: string; label: string } {
+  if (days >= 5) return { color: "bg-red-500", label: `pronto há ${days} dias` };
+  if (days >= 2) return { color: "bg-amber-500", label: `pronto há ${days} dias` };
+  return { color: "bg-emerald-500", label: days <= 0 ? "pronto hoje" : "pronto ontem" };
+}
+
+// Monta wa.me/55DDDNUM reusando a normalização oficial (valida comprimento
+// pós-DDI e rejeita lixo — evita abrir conversa com número errado).
+function waMeUrl(phone?: string): string | null {
+  if (!phone) return null;
+  const normalized = normalizePhoneBR(phone);
+  return normalized ? `https://wa.me/${normalized}` : null;
+}
+
+// Texto pronto pra atendente copiar (aviso de OS pronta).
+function osReadyDraft(name: string): string {
+  const first = name.trim().split(/\s+/)[0] || name;
+  return `Oi ${first}! 😊 Seu óculos já está pronto pra retirar aqui na ótica. Qualquer coisa, estou à disposição!`;
 }
 
 // Número de exibição da OS (#1234-G1 etc.) — helper compartilhado com o kanban.
@@ -438,6 +467,7 @@ function OrdensServicoPage() {
   const [pagination, setPagination] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [counts, setCounts] = useState<Record<string, number>>({});
+  const [prontosAvisarCount, setProntosAvisarCount] = useState(0);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
 
   // Modais
@@ -484,6 +514,9 @@ function OrdensServicoPage() {
     }
     if (activeBranchId !== "ALL") params.set("branchId", activeBranchId);
 
+    const countsParams = new URLSearchParams();
+    if (activeBranchId !== "ALL") countsParams.set("branchId", activeBranchId);
+
     Promise.all([
       fetch(`/api/service-orders?${params}`).then((r) => r.json()),
     ])
@@ -493,6 +526,12 @@ function OrdensServicoPage() {
       })
       .catch(() => toast.error("Erro ao carregar ordens de serviço"))
       .finally(() => setLoading(false));
+
+    // Badge "Prontos pra avisar" — contagem real (independente da página/filtro atual).
+    fetch(`/api/service-orders/counts?${countsParams}`)
+      .then((r) => r.json())
+      .then((res) => setProntosAvisarCount(res?.data?.prontosAvisar ?? 0))
+      .catch(() => {});
   }, [search, page, statusFilter, filterParam, activeBranchId]);
 
   useEffect(() => {
@@ -510,6 +549,35 @@ function OrdensServicoPage() {
     });
     setCounts(statusCounts);
   }, [orders]);
+
+  // Fila "Prontos pra avisar": abrir WhatsApp com texto pronto (copia + abre).
+  const avisarWhatsApp = async (order: ServiceOrder) => {
+    const url = waMeUrl(order.customer.phone);
+    if (!url) { toast.error("Cliente sem telefone válido"); return; }
+    const draft = osReadyDraft(order.customer.name);
+    try {
+      await navigator.clipboard.writeText(draft);
+      toast.success("Texto copiado ✅ Cola lá no WhatsApp");
+    } catch {
+      toast("Abri o WhatsApp — copie o texto: " + draft, { duration: 6000 });
+    }
+    window.open(url, "_blank");
+  };
+
+  // Fila "Prontos pra avisar": ocultar por hoje (some da fila até amanhã).
+  const ocultarPorHoje = async (order: ServiceOrder) => {
+    setActionLoading(order.id + "snooze");
+    try {
+      const res = await fetch(`/api/service-orders/${order.id}/snooze-notify`, { method: "POST" });
+      if (!res.ok) throw new Error("Erro ao ocultar");
+      toast.success("Ocultado por hoje — volta amanhã se ainda estiver pronto");
+      fetchOrders();
+    } catch (e: any) {
+      toast.error(e.message);
+    } finally {
+      setActionLoading(null);
+    }
+  };
 
   const quickStatusChange = async (order: ServiceOrder, newStatus: string) => {
     setActionLoading(order.id + newStatus);
@@ -672,6 +740,14 @@ function OrdensServicoPage() {
               <Clock className="h-3.5 w-3.5 mr-1" />
               Vencendo (3 dias)
             </Button>
+            <Button
+              size="sm"
+              variant={statusFilter === "prontos_avisar" && !filterParam ? "default" : "outline"}
+              className={statusFilter === "prontos_avisar" && !filterParam ? "bg-[#25D366] hover:bg-[#1da851]" : "border-emerald-400 text-emerald-700 hover:bg-emerald-50"}
+              onClick={() => { setStatusFilter("prontos_avisar"); setPage(1); router.push("/dashboard/ordens-servico"); }}
+            >
+              🕶️ Prontos pra avisar{prontosAvisarCount ? ` (${prontosAvisarCount})` : ""}
+            </Button>
           </div>
         )}
       </div>
@@ -696,7 +772,14 @@ function OrdensServicoPage() {
           )}
 
           {/* Empty */}
-          {!loading && orders.length === 0 && (
+          {!loading && orders.length === 0 && statusFilter === "prontos_avisar" && !filterParam && !search && (
+            <EmptyState
+              icon={<CheckCircle2 className="h-12 w-12 text-emerald-500" />}
+              title="Nenhum óculos parado! 🎉"
+              description="Todo mundo já foi avisado. Bom trabalho."
+            />
+          )}
+          {!loading && orders.length === 0 && !(statusFilter === "prontos_avisar" && !filterParam && !search) && (
             <EmptyState
               icon={<Clock className="h-12 w-12" />}
               title="Nenhuma ordem de serviço encontrada"
@@ -735,6 +818,12 @@ function OrdensServicoPage() {
                         {/* Info principal */}
                         <div className="flex-1 min-w-0">
                           <div className="flex items-center gap-2 flex-wrap mb-1">
+                            {statusFilter === "prontos_avisar" && !filterParam && (
+                              <span
+                                className={`inline-block h-3 w-3 rounded-full ${readyTrafficLight(daysReady(order.readyAt)).color}`}
+                                title={readyTrafficLight(daysReady(order.readyAt)).label}
+                              />
+                            )}
                             <span className="text-lg font-black text-blue-700">{osNum(order)}</span>
                             <span className="font-semibold text-gray-900 truncate">{order.customer.name}</span>
                             <StatusBadge status={order.status} delayed={isOrderDelayed(order)} />
@@ -760,6 +849,20 @@ function OrdensServicoPage() {
                             )}
                           </div>
 
+                          {statusFilter === "prontos_avisar" && !filterParam && (
+                            <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm mb-1">
+                              <span className="font-semibold text-gray-800">{readyTrafficLight(daysReady(order.readyAt)).label}</span>
+                              {/* Selo qualitativo: a venda ainda está aberta (pagamento pendente).
+                                  NÃO mostramos valor porque `sale.total` é o total, não o saldo em
+                                  aberto (o saldo real viria de SalePayment/AccountReceivable). Evita
+                                  enganar a atendente com um número que pode já estar pago. */}
+                              {order.sale && order.sale.status === "OPEN" && (
+                                <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-xs font-semibold bg-amber-50 text-amber-700 border border-amber-200">
+                                  pagamento pendente
+                                </span>
+                              )}
+                            </div>
+                          )}
                           <div className="flex flex-wrap items-center gap-x-4 gap-y-1 text-sm text-muted-foreground">
                             <span>{format(new Date(order.createdAt), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}</span>
                             <span>{order._count.items} {order._count.items === 1 ? "item" : "itens"}</span>
@@ -781,6 +884,30 @@ function OrdensServicoPage() {
 
                         {/* Ações */}
                         <div className="flex flex-wrap gap-2 items-center">
+                          {/* Fila "Prontos pra avisar": avisar cliente + ocultar por hoje */}
+                          {statusFilter === "prontos_avisar" && !filterParam && (
+                            <>
+                              <Button
+                                size="sm"
+                                className="bg-[#25D366] hover:bg-[#1da851] text-white"
+                                onClick={() => avisarWhatsApp(order)}
+                              >
+                                <svg className="h-3.5 w-3.5 mr-1" viewBox="0 0 24 24" fill="currentColor"><path d="M12 2a10 10 0 00-8.6 15l-1.4 5 5.1-1.3A10 10 0 1012 2z"/></svg>
+                                Avisar no WhatsApp
+                              </Button>
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                disabled={actionLoading === order.id + "snooze"}
+                                onClick={() => ocultarPorHoje(order)}
+                              >
+                                {actionLoading === order.id + "snooze"
+                                  ? <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
+                                  : null}
+                                Ocultar por hoje
+                              </Button>
+                            </>
+                          )}
                           {/* Ações rápidas de status */}
                           {hasPermission("service_orders.edit") && nextActions.map((action) => (
                             <Button
