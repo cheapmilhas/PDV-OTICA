@@ -26,6 +26,15 @@ export interface SlaLeadRow {
    * cliente é que sumiu". A dor nº1 do dono é a primeira.
    */
   needsReply?: boolean;
+  /**
+   * Relógio REAL da espera (Sprint 2, #5 — laço fechado pelo fluxo real): o
+   * instante da mensagem do CLIENTE a partir do qual ele aguarda sem resposta.
+   * Só faz sentido junto de needsReply=true. Quando presente, o "precisa
+   * responder" mede a espera a partir DAQUI (não de lastActivityAt, que reflete o
+   * último movimento do card e nem muda quando o cliente escreve). Ausente =
+   * fallback p/ lastActivityAt (nunca pior que o comportamento antigo).
+   */
+  waitingSince?: Date;
 }
 
 export interface LateLead {
@@ -70,8 +79,14 @@ export function computeLeadSla(rows: ReadonlyArray<SlaLeadRow>, now: Date): Lead
     // Sinal afiado: a bola está com a ótica (cliente engajou, ótica não respondeu).
     // Ortogonal às faixas de tempo — um lead pode "precisar responder" e ainda
     // estar no prazo (chegou há 1h e ninguém respondeu). undefined não entra.
+    // O relógio aqui é waitingSince (desde a msg do cliente), NÃO lastActivityAt:
+    // é isso que torna "esperando há 2 dias" fiel à dor real. Fallback seguro p/
+    // lastActivityAt quando o sinal por mensagem não está disponível.
     if (r.needsReply === true) {
-      needsReplyLeads.push({ id: r.id, hoursWaiting });
+      const waitingHours = r.waitingSince
+        ? (now.getTime() - r.waitingSince.getTime()) / 3600_000
+        : hoursWaiting;
+      needsReplyLeads.push({ id: r.id, hoursWaiting: waitingHours });
     }
   }
 

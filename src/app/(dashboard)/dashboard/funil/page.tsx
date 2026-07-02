@@ -34,10 +34,15 @@ import {
 import { Can } from "@/components/permissions/can";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
+import { FunilTodayQueue } from "@/components/funil/funil-today-queue";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { ACCURACY_MIN_SAMPLE } from "@/lib/intent-accuracy";
 import { intentLabel } from "@/lib/contact-intent-label";
 import { countNeedsAttention, leadNeedsAttention } from "@/lib/lead-needs-attention";
+import {
+  LEAD_STATS_PERIODS,
+  type LeadStatsPeriod,
+} from "@/lib/lead-stats-period";
 
 interface LeadStats {
   total: number;
@@ -45,6 +50,8 @@ interface LeadStats {
   conversionRate: number;
   byLostReason: Record<string, number>;
   bySource: Record<string, number>;
+  // Conversão por origem (Sprint 2, #6): total e ganhos de cada origem.
+  bySourceConversion: Record<string, { total: number; won: number }>;
   aiAccuracy?: {
     total: number;
     correct: number;
@@ -91,7 +98,7 @@ const ALL = "__all__";
 function FunilPage() {
   const { activeBranchId } = useBranchContext();
   const { enabled: whatsappEnabled } = useWhatsappEnabled();
-  const [activeTab, setActiveTab] = useState("funil");
+  const [activeTab, setActiveTab] = useState("hoje");
 
   const [stages, setStages] = useState<LeadStage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -105,6 +112,8 @@ function FunilPage() {
   const [sourceFilter, setSourceFilter] = useState<string>(ALL);
   const [sellerFilter, setSellerFilter] = useState<string>(ALL);
   const [attentionOnly, setAttentionOnly] = useState(false);
+  // Período do placar (Sprint 2, #6). Padrão 30 dias = mesmo default do servidor.
+  const [period, setPeriod] = useState<LeadStatsPeriod>("30d");
 
   const branchParam = useMemo(
     () => (activeBranchId !== "ALL" ? activeBranchId : null),
@@ -133,11 +142,12 @@ function FunilPage() {
   const fetchStats = useCallback(() => {
     const params = new URLSearchParams();
     if (branchParam) params.set("branchId", branchParam);
+    params.set("period", period);
     fetch(`/api/leads/stats?${params}`)
       .then((res) => res.json())
       .then((json) => setStats(json.data || null))
       .catch(() => {});
-  }, [branchParam]);
+  }, [branchParam, period]);
 
   // Leads (board). pageSize alto pois o board agrupa por etapa.
   const fetchLeads = useCallback(() => {
@@ -175,9 +185,19 @@ function FunilPage() {
       .slice(0, 3);
   }, [stats]);
 
+  // Conversão por origem (Sprint 2, #6): total, ganhos e taxa de cada origem,
+  // ordenado por volume (a origem que mais traz leads aparece primeiro). Deriva
+  // de bySourceConversion (só origens explícitas — sem origem não entra aqui).
   const topSources = useMemo(() => {
-    if (!stats) return [];
-    return Object.entries(stats.bySource).sort((a, b) => b[1] - a[1]);
+    if (!stats?.bySourceConversion) return [];
+    return Object.entries(stats.bySourceConversion)
+      .map(([source, { total, won }]) => ({
+        source,
+        total,
+        won,
+        rate: total ? won / total : 0,
+      }))
+      .sort((a, b) => b.total - a.total);
   }, [stats]);
 
   const intentVolume = useMemo(() => {
@@ -249,6 +269,25 @@ function FunilPage() {
         </div>
       )}
 
+      {/* Período do placar (Sprint 2, #6): o dono escolhe a janela e o placar
+          (conversão, origem, perdas) recalcula. Presets simples, sem digitar data. */}
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-sm text-muted-foreground">Período:</span>
+        <div className="flex flex-wrap gap-1">
+          {LEAD_STATS_PERIODS.map((p) => (
+            <Button
+              key={p.value}
+              type="button"
+              size="sm"
+              variant={period === p.value ? "default" : "outline"}
+              onClick={() => setPeriod(p.value)}
+            >
+              {p.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+
       {/* Métricas */}
       <div className="grid gap-3 grid-cols-1 md:grid-cols-2 lg:grid-cols-4">
         <Card>
@@ -295,20 +334,25 @@ function FunilPage() {
           <CardHeader className="pb-2">
             <CardTitle className="flex items-center gap-2 text-sm font-medium text-muted-foreground">
               <Trophy className="h-4 w-4" />
-              Origem dos leads
+              Conversão por origem
             </CardTitle>
           </CardHeader>
           <CardContent>
             {topSources.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem origem informada</p>
             ) : (
-              <ul className="space-y-1 text-sm">
-                {topSources.slice(0, 3).map(([source, count]) => (
-                  <li key={source} className="flex justify-between gap-2">
+              <ul className="space-y-1.5 text-sm">
+                {topSources.slice(0, 3).map(({ source, total, won, rate }) => (
+                  <li key={source} className="flex items-center justify-between gap-2">
                     <span className="truncate">
                       {SOURCE_LABEL[source] ?? source}
                     </span>
-                    <span className="font-medium text-muted-foreground">{count}</span>
+                    <span className="whitespace-nowrap font-medium">
+                      <span className="text-primary">{(rate * 100).toFixed(0)}%</span>{" "}
+                      <span className="text-xs text-muted-foreground">
+                        ({won}/{total})
+                      </span>
+                    </span>
                   </li>
                 ))}
               </ul>
@@ -479,22 +523,24 @@ function FunilPage() {
         </Can>
       </div>
 
-      {whatsappEnabled ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="funil">Funil</TabsTrigger>
-            <TabsTrigger value="conversas">Conversas</TabsTrigger>
-          </TabsList>
-          <TabsContent value="funil" className="mt-4 space-y-6">
-            {funilContent}
-          </TabsContent>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="hoje">Fila de Hoje</TabsTrigger>
+          <TabsTrigger value="funil">Funil</TabsTrigger>
+          {whatsappEnabled && <TabsTrigger value="conversas">Conversas</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="hoje" className="mt-4">
+          <FunilTodayQueue active={activeTab === "hoje"} branchId={branchParam} />
+        </TabsContent>
+        <TabsContent value="funil" className="mt-4 space-y-6">
+          {funilContent}
+        </TabsContent>
+        {whatsappEnabled && (
           <TabsContent value="conversas" className="mt-4">
             <WhatsappInbox active={activeTab === "conversas"} />
           </TabsContent>
-        </Tabs>
-      ) : (
-        funilContent
-      )}
+        )}
+      </Tabs>
 
       <NovoLeadModal
         open={showNewLead}

@@ -124,4 +124,33 @@ describe("computeLeadSla — SLA de lead não respondido (Fase 3, Item 4a)", () 
     );
     expect(r.needsReply).toBe(0);
   });
+
+  // ── RELÓGIO REAL do "precisa responder" (#5): conta desde a msg do cliente ──
+  it("hoursWaiting do needsReply usa waitingSince (msg do cliente), não lastActivityAt", () => {
+    const now = new Date();
+    // Card movido há 1h (lastActivityAt recente), MAS o cliente escreveu há 30h.
+    const r = computeLeadSla(
+      [{
+        id: "L1",
+        lastActivityAt: new Date(now.getTime() - 1 * 3600_000),
+        waitingSince: new Date(now.getTime() - 30 * 3600_000),
+        needsReply: true,
+        stage: { isWon: false, isLost: false },
+      }],
+      now,
+    );
+    // O relógio afiado enxerga 30h de espera do cliente (não 1h do card).
+    expect(r.needsReplyLeads[0].hoursWaiting).toBeCloseTo(30, 5);
+    // A faixa de tempo (late/warning) continua sobre lastActivityAt (staleness do card).
+    expect(r.onTime).toBe(1);
+  });
+
+  it("needsReply sem waitingSince cai no lastActivityAt (fallback seguro)", () => {
+    const now = new Date();
+    const r = computeLeadSla(
+      [{ ...openLead("L1", 10, now), needsReply: true }], // sem waitingSince
+      now,
+    );
+    expect(r.needsReplyLeads[0].hoursWaiting).toBeCloseTo(10, 5);
+  });
 });
