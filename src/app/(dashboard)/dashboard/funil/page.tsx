@@ -34,6 +34,7 @@ import {
 import { Can } from "@/components/permissions/can";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
+import { FunilTodayQueue } from "@/components/funil/funil-today-queue";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { ACCURACY_MIN_SAMPLE } from "@/lib/intent-accuracy";
 import { intentLabel } from "@/lib/contact-intent-label";
@@ -97,7 +98,7 @@ const ALL = "__all__";
 function FunilPage() {
   const { activeBranchId } = useBranchContext();
   const { enabled: whatsappEnabled } = useWhatsappEnabled();
-  const [activeTab, setActiveTab] = useState("funil");
+  const [activeTab, setActiveTab] = useState("hoje");
 
   const [stages, setStages] = useState<LeadStage[]>([]);
   const [leads, setLeads] = useState<Lead[]>([]);
@@ -522,22 +523,24 @@ function FunilPage() {
         </Can>
       </div>
 
-      {whatsappEnabled ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="funil">Funil</TabsTrigger>
-            <TabsTrigger value="conversas">Conversas</TabsTrigger>
-          </TabsList>
-          <TabsContent value="funil" className="mt-4 space-y-6">
-            {funilContent}
-          </TabsContent>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="hoje">Fila de Hoje</TabsTrigger>
+          <TabsTrigger value="funil">Funil</TabsTrigger>
+          {whatsappEnabled && <TabsTrigger value="conversas">Conversas</TabsTrigger>}
+        </TabsList>
+        <TabsContent value="hoje" className="mt-4">
+          <FunilTodayQueue active={activeTab === "hoje"} branchId={branchParam} />
+        </TabsContent>
+        <TabsContent value="funil" className="mt-4 space-y-6">
+          {funilContent}
+        </TabsContent>
+        {whatsappEnabled && (
           <TabsContent value="conversas" className="mt-4">
             <WhatsappInbox active={activeTab === "conversas"} />
           </TabsContent>
-        </Tabs>
-      ) : (
-        funilContent
-      )}
+        )}
+      </Tabs>
 
       <NovoLeadModal
         open={showNewLead}
