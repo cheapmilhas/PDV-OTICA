@@ -99,6 +99,10 @@ export function WhatsappInbox({ active }: { active: boolean }) {
   const [messages, setMessages] = useState<InboxMessage[]>([]);
   const [messagesLoading, setMessagesLoading] = useState(false);
   const [qualifyingId, setQualifyingId] = useState<string | null>(null);
+  // Copiloto interno: resumo + rascunho (a atendente copia; a IA não envia nada).
+  const [copilotLoadingId, setCopilotLoadingId] = useState<string | null>(null);
+  const [copilot, setCopilot] = useState<{ convId: string; summary: string; draft: string } | null>(null);
+  const [draftEdit, setDraftEdit] = useState<string | null>(null);
   const selectedConv = useMemo(
     () => conversations.find((c) => c.id === selectedId) ?? null,
     [conversations, selectedId],
@@ -197,6 +201,35 @@ export function WhatsappInbox({ active }: { active: boolean }) {
     },
     [fetchConversations],
   );
+
+  // Copiloto: pede resumo + rascunho à IA (interno). NÃO envia nada ao cliente.
+  const handleCopilot = useCallback(async (id: string) => {
+    setCopilotLoadingId(id);
+    try {
+      const res = await fetch(`/api/whatsapp/conversations/${id}/copilot`, { method: "POST" });
+      const json = await res.json();
+      if (!res.ok) {
+        toast.error(json?.error?.message ?? "Não foi possível gerar o rascunho agora.");
+        return;
+      }
+      setCopilot({ convId: id, summary: json.summary ?? "", draft: json.draft ?? "" });
+      setDraftEdit(null);
+      if (json.parseError) toast("A IA não conseguiu montar o rascunho — leia a conversa e escreva você.", { duration: 5000 });
+    } catch {
+      toast.error("Erro ao gerar o rascunho.");
+    } finally {
+      setCopilotLoadingId(null);
+    }
+  }, []);
+
+  const copyDraft = useCallback(async (text: string) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      toast.success("Copiei ✅ Cola no WhatsApp e ajuste se quiser");
+    } catch {
+      toast(`Copie o rascunho: ${text}`, { duration: 6000 });
+    }
+  }, []);
 
   const [resolvingId, setResolvingId] = useState<string | null>(null);
   const handleResolveAttention = useCallback(
@@ -301,21 +334,69 @@ export function WhatsappInbox({ active }: { active: boolean }) {
             <CardContent className="space-y-3 p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">Mensagens</p>
-                <Can permission="leads.create">
-                  <Button
-                    size="sm"
-                    onClick={() => handleQualify(selectedId)}
-                    disabled={qualifyingId === selectedId}
-                  >
-                    {qualifyingId === selectedId ? (
-                      <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                    ) : (
-                      <Sparkles className="mr-2 h-4 w-4" />
-                    )}
-                    Analisar com IA
-                  </Button>
-                </Can>
+                <div className="flex items-center gap-2">
+                  {/* Copiloto: mesma permissão que já gate a tela (leads.access). */}
+                  <Can permission="leads.access">
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => selectedId && handleCopilot(selectedId)}
+                      disabled={copilotLoadingId === selectedId}
+                    >
+                      {copilotLoadingId === selectedId ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4" />
+                      )}
+                      Rascunho da IA
+                    </Button>
+                  </Can>
+                  <Can permission="leads.create">
+                    <Button
+                      size="sm"
+                      onClick={() => handleQualify(selectedId)}
+                      disabled={qualifyingId === selectedId}
+                    >
+                      {qualifyingId === selectedId ? (
+                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                      ) : (
+                        <Sparkles className="mr-2 h-4 w-4" />
+                      )}
+                      Analisar com IA
+                    </Button>
+                  </Can>
+                </div>
               </div>
+
+              {/* Copiloto INTERNO: resumo + rascunho copiável. A IA NUNCA envia —
+                  a atendente copia e manda do próprio celular. */}
+              {copilot && copilot.convId === selectedId && (
+                <div className="rounded-md border border-violet-200 bg-violet-50/60 p-3 space-y-2">
+                  {copilot.summary && (
+                    <div>
+                      <p className="text-xs font-semibold text-violet-800">🤖 Resumo da IA</p>
+                      <p className="text-sm text-gray-700">{copilot.summary}</p>
+                    </div>
+                  )}
+                  <div>
+                    <p className="text-xs font-semibold text-violet-800">✍️ Sugestão de resposta (rascunho seu)</p>
+                    <textarea
+                      className="mt-1 w-full rounded border border-violet-200 bg-white p-2 text-sm"
+                      rows={3}
+                      value={draftEdit ?? copilot.draft}
+                      onChange={(e) => setDraftEdit(e.target.value)}
+                    />
+                    <div className="mt-1 flex items-center gap-2">
+                      <Button size="sm" onClick={() => copyDraft(draftEdit ?? copilot.draft)}>
+                        Copiar rascunho
+                      </Button>
+                    </div>
+                  </div>
+                  <p className="text-[11px] text-amber-700">
+                    ⚠️ Isto é só um rascunho pra você. A IA não manda nada — quem responde é você, no seu WhatsApp.
+                  </p>
+                </div>
+              )}
 
               {/* Guardrail SAGRADO (Item 1): banner de atenção + baixa humana. Só
                   a ação humana apaga o alarme (a IA nunca o apaga). */}
