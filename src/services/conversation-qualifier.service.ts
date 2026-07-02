@@ -16,6 +16,7 @@ import { maybeAutoAdvanceLead } from "@/services/funnel-automove.service";
 import { recordAutoMoveTrace } from "@/services/funnel-automove-trace.service";
 import { getRecentIntentCorrections, buildFewShotBlock } from "@/services/funnel-fewshot.service";
 import { conversationNeedsHumanAttention } from "@/lib/conversation-attention";
+import { isPaidTrafficMessage } from "@/lib/paid-traffic-detect";
 import type { ContactIntent } from "@/lib/ai/lead-qualifier";
 
 const log = logger.child({ service: "conversation-qualifier" });
@@ -63,6 +64,38 @@ function buildConversationText(messages: { direction: string; type: string; text
     .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime())
     .map((m) => m.text!.trim())
     .join("\n");
+}
+
+/** Texto da PRIMEIRA (mais antiga) mensagem do cliente com conteúdo, ou null. */
+function firstInboundText(messages: ReadonlyArray<ConvMessage>): string | null {
+  const inbound = messages
+    .filter((m) => m.direction === "inbound" && typeof m.text === "string" && m.text.trim().length > 0)
+    .sort((a, b) => a.receivedAt.getTime() - b.receivedAt.getTime());
+  return inbound.length > 0 ? inbound[0].text!.trim() : null;
+}
+
+/**
+ * Origem do lead no NASCIMENTO (#9). Lê as frases-isca da ótica e, se a 1ª
+ * mensagem do cliente casa alguma, devolve "PAID_TRAFFIC" (sinal APROXIMADO de
+ * anúncio, nunca ROI). Senão devolve null (o chamador cai no default WHATSAPP).
+ * Fail-safe: erro de leitura das settings → null (não trava a criação do lead).
+ */
+async function detectLeadSource(
+  companyId: string,
+  messages: ReadonlyArray<ConvMessage>,
+): Promise<"PAID_TRAFFIC" | null> {
+  try {
+    const settings = await prisma.companySettings.findUnique({
+      where: { companyId },
+      select: { waAdBaitPhrases: true },
+    });
+    const baits = settings?.waAdBaitPhrases ?? [];
+    if (baits.length === 0) return null; // detecção desligada p/ esta ótica
+    return isPaidTrafficMessage(firstInboundText(messages), baits) ? "PAID_TRAFFIC" : null;
+  } catch (e) {
+    log.warn("falha ao detectar tráfego pago (fail-safe → WHATSAPP)", { companyId, error: e });
+    return null;
+  }
 }
 
 /**
@@ -294,11 +327,18 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     const sellerUserId = await getOrCreateAiSellerUser(conv.companyId);
     // Mapeia o kind do match (minúsculo no serviço) → enum do banco (maiúsculo).
     const matchKind = match.kind === "single" ? "SINGLE" : match.kind === "ambiguous" ? "AMBIGUOUS" : "NONE";
+    // Tráfego pago APROXIMADO (#9): só no NASCIMENTO do lead. Se a PRIMEIRA
+    // mensagem do cliente casa uma frase-isca do anúncio, o lead nasce
+    // PAID_TRAFFIC. Usa `enriched` (não `messages`) p/ enxergar a isca também em
+    // ÁUDIO já transcrito — a 1ª msg do cliente pode ser um áudio "quero a oferta".
+    // firstInboundText() reordena asc internamente, então funciona qualquer que
+    // seja a ordem em que as mensagens chegaram. Não é ROI — sinal aproximado.
+    const source = (await detectLeadSource(conv.companyId, enriched)) ?? "WHATSAPP";
     const { lead } = await createLead(
       {
         name: conv.contactName ?? conv.contactNumber,
         phone: conv.contactNumber,
-        source: "WHATSAPP",
+        source,
         interest: result.interest ?? undefined,
         stageId: result.stageId ?? undefined,
         notes: `Lead criado pela IA do funil. Motivo: ${safeReason}`.slice(0, 500),

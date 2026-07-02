@@ -24,6 +24,7 @@ const AUTOMATION_SELECT = {
   waBirthdayTemplate: true,
   waInstallmentDueTemplate: true,
   waPostSaleDays: true,
+  waAdBaitPhrases: true,
 } as const;
 
 export async function GET() {
@@ -46,6 +47,8 @@ export async function GET() {
         postSale: { enabled: s?.waPostSaleEnabled ?? false, template: s?.waPostSaleTemplate ?? null, days: s?.waPostSaleDays ?? 7 },
         birthday: { enabled: s?.waBirthdayEnabled ?? false, template: s?.waBirthdayTemplate ?? null },
         installmentDue: { enabled: s?.waInstallmentDueEnabled ?? false, template: s?.waInstallmentDueTemplate ?? null },
+        // Tráfego pago APROXIMADO (#9): frases-isca do anúncio. Vazio = detecção off.
+        adBaitPhrases: s?.waAdBaitPhrases ?? [],
         defaults: DEFAULT_AUTOMATION_TEMPLATES,
       },
     });
@@ -59,6 +62,8 @@ const updateSchema = z.object({
   postSale: z.object({ enabled: z.boolean(), template: z.string().max(2000).nullable().optional(), days: z.number().int().min(1).max(90).optional() }).optional(),
   birthday: z.object({ enabled: z.boolean(), template: z.string().max(2000).nullable().optional() }).optional(),
   installmentDue: z.object({ enabled: z.boolean(), template: z.string().max(2000).nullable().optional() }).optional(),
+  // Frases-isca do anúncio (#9). Cada uma até 120 chars; no máx 20 frases.
+  adBaitPhrases: z.array(z.string().max(120)).max(20).optional(),
 });
 
 export async function PUT(request: Request) {
@@ -91,6 +96,14 @@ export async function PUT(request: Request) {
     if (body.installmentDue) {
       data.waInstallmentDueEnabled = body.installmentDue.enabled;
       data.waInstallmentDueTemplate = norm(body.installmentDue.template);
+    }
+    if (body.adBaitPhrases !== undefined) {
+      // Limpa: trim, descarta vazias e muito curtas (<3 após trim, que casariam
+      // quase tudo), remove duplicadas. Vazio = desliga a detecção p/ a ótica.
+      const seen = new Set<string>();
+      data.waAdBaitPhrases = body.adBaitPhrases
+        .map((p) => p.trim())
+        .filter((p) => p.length >= 3 && !seen.has(p.toLowerCase()) && seen.add(p.toLowerCase()));
     }
 
     // upsert: cria CompanySettings se ainda não existir.
