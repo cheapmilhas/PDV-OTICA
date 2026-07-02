@@ -18,7 +18,7 @@ import {
   AlertDialogAction,
 } from "@/components/ui/alert-dialog";
 import { toast } from "sonner";
-import { Loader2, Save, Glasses, HeartHandshake, Cake, CalendarClock, Info, Send, Eye } from "lucide-react";
+import { Loader2, Save, Glasses, HeartHandshake, Cake, CalendarClock, Info, Send, Eye, Megaphone } from "lucide-react";
 
 /** Rótulos por tipo para o resumo do disparo manual. */
 const RUN_TYPE_LABEL: Record<string, string> = {
@@ -63,6 +63,8 @@ interface AutomationsData {
   postSale: AutomationState & { days: number };
   birthday: AutomationState;
   installmentDue: AutomationState;
+  /** Frases-isca do anúncio (#9), uma por linha no textarea. Vazio = detecção off. */
+  adBaitText: string;
 }
 
 const TYPE_META = {
@@ -106,6 +108,7 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
           postSale: { enabled: d.postSale.enabled, template: d.postSale.template ?? "", days: d.postSale.days ?? 7 },
           birthday: { enabled: d.birthday.enabled, template: d.birthday.template ?? "" },
           installmentDue: { enabled: d.installmentDue.enabled, template: d.installmentDue.template ?? "" },
+          adBaitText: (d.adBaitPhrases ?? []).join("\n"),
         });
       }
     } catch {
@@ -129,6 +132,8 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
           postSale: { enabled: data.postSale.enabled, template: data.postSale.template, days: data.postSale.days },
           birthday: { enabled: data.birthday.enabled, template: data.birthday.template },
           installmentDue: { enabled: data.installmentDue.enabled, template: data.installmentDue.template },
+          // Uma frase-isca por linha → array (o servidor limpa/dedupe/valida).
+          adBaitPhrases: data.adBaitText.split("\n").map((l) => l.trim()).filter(Boolean),
         }),
       });
       const result = await res.json();
@@ -359,6 +364,35 @@ export function WhatsappAutomationsClient({ onProcessed }: WhatsappAutomationsCl
           </Card>
         );
       })}
+
+      {/* Tráfego pago APROXIMADO (#9): frases-isca do anúncio. */}
+      <Card>
+        <CardHeader>
+          <div className="flex items-start gap-3">
+            <Megaphone className="h-5 w-5 mt-0.5 text-muted-foreground" />
+            <div>
+              <CardTitle className="text-base">Veio de anúncio? (aproximado)</CardTitle>
+              <CardDescription>
+                Cadastre as frases que seu anúncio pede o cliente a mandar (uma por
+                linha). Quando a 1ª mensagem casar, o lead é marcado como
+                &quot;Anúncio (aprox.)&quot;. É só uma pista — não é medição exata de anúncio.
+              </CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <Textarea
+            value={data.adBaitText}
+            onChange={(e) => setData({ ...data, adBaitText: e.target.value })}
+            placeholder={"quero a oferta\nvi o anúncio\npromoção do face"}
+            rows={4}
+            className="text-sm"
+          />
+          <p className="text-xs text-muted-foreground mt-1">
+            Em branco = detecção desligada. Frases curtas demais são ignoradas.
+          </p>
+        </CardContent>
+      </Card>
 
       <div className="flex justify-end">
         <Button onClick={handleSave} disabled={saving} size="lg">

@@ -87,6 +87,8 @@ const SOURCE_OPTIONS: { value: string; label: string }[] = [
   { value: "GOOGLE", label: "Google" },
   { value: "REFERRAL", label: "Indicação" },
   { value: "WALK_IN", label: "Espontâneo" },
+  // Tráfego pago (#9): rótulo deixa CLARO que é aproximado — nunca ROI.
+  { value: "PAID_TRAFFIC", label: "Anúncio (aprox.)" },
   { value: "OTHER", label: "Outro" },
 ];
 
@@ -341,23 +343,37 @@ function FunilPage() {
           <CardContent>
             {topSources.length === 0 ? (
               <p className="text-sm text-muted-foreground">Sem origem informada</p>
-            ) : (
-              <ul className="space-y-1.5 text-sm">
-                {topSources.slice(0, 3).map(({ source, total, won, rate }) => (
-                  <li key={source} className="flex items-center justify-between gap-2">
-                    <span className="truncate">
-                      {SOURCE_LABEL[source] ?? source}
-                    </span>
-                    <span className="whitespace-nowrap font-medium">
-                      <span className="text-primary">{(rate * 100).toFixed(0)}%</span>{" "}
-                      <span className="text-xs text-muted-foreground">
-                        ({won}/{total})
-                      </span>
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            )}
+            ) : (() => {
+                const visible = topSources.slice(0, 3);
+                return (
+                  <>
+                    <ul className="space-y-1.5 text-sm">
+                      {visible.map(({ source, total, won, rate }) => (
+                        <li key={source} className="flex items-center justify-between gap-2">
+                          <span className="truncate">
+                            {SOURCE_LABEL[source] ?? source}
+                          </span>
+                          <span className="whitespace-nowrap font-medium">
+                            <span className="text-primary">{(rate * 100).toFixed(0)}%</span>{" "}
+                            <span className="text-xs text-muted-foreground">
+                              ({won}/{total})
+                            </span>
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                    {/* Honestidade do #9: "Anúncio" é sinal APROXIMADO (a Evolution
+                        não dá o dado do Meta). O aviso só aparece quando "Anúncio"
+                        está VISÍVEL na lista (top 3) — inseparável do número, nunca ROI. */}
+                    {visible.some((s) => s.source === "PAID_TRAFFIC") && (
+                      <p className="mt-2 text-xs text-muted-foreground">
+                        &quot;Anúncio&quot; é origem aproximada (detectada pela mensagem) —
+                        serve de pista, não de ROI por anúncio.
+                      </p>
+                    )}
+                  </>
+                );
+              })()}
           </CardContent>
         </Card>
 

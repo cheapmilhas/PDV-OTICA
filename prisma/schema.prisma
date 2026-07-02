@@ -2130,6 +2130,10 @@ model CompanySettings {
   waCloseHourOverride      Int?
   waDailyCapOverride       Int?
   waSkipSaturdayOverride   Boolean?
+  // Frases-isca do anúncio (Sprint 3, #9 — detecção APROXIMADA de tráfego pago).
+  // Se a 1ª mensagem do cliente casa alguma destas, o lead nasce PAID_TRAFFIC em
+  // vez de WHATSAPP. Vazio = detecção desligada (a ótica opta por usar). Não é ROI.
+  waAdBaitPhrases          String[] @default([])
   company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
@@ -4255,6 +4259,11 @@ enum LeadFunnelSource {
   REFERRAL
   WALK_IN
   OTHER
+  // Tráfego pago (Sprint 3, #9). ⚠️ SINAL APROXIMADO, NÃO ROI: a Evolution não
+  // entrega o referral/CTWA do Meta, então a atribuição é por MENSAGEM-ISCA (texto
+  // padrão do anúncio). O placar SEMPRE exibe a taxa de captura ao lado — nunca
+  // vender como decisão de verba. ROI confiável só migrando p/ WhatsApp Cloud API.
+  PAID_TRAFFIC
 }
 
 /// Motivo ESTRUTURADO da perda de um lead (Sprint 3, #8). Substitui o texto livre

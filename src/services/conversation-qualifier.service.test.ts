@@ -147,6 +147,46 @@ describe("qualifyConversation", () => {
     expect(autoAdvanceMock).toHaveBeenCalledWith(expect.objectContaining({ leadId: "lead1" }));
   });
 
+  it("tráfego pago (#9): 1ª msg casa isca → lead nasce PAID_TRAFFIC", async () => {
+    // conv.messages[0] (mais antiga) = "quanto custa óculos de grau?". Uso uma isca
+    // que casa essa 1ª mensagem p/ provar a atribuição no nascimento.
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ waAdBaitPhrases: ["quanto custa"] });
+    qualifyTextMock.mockResolvedValue({ isLead: true, reason: "grau", interest: "grau", stageId: "s_novo", confidence: 0.9, parseError: false, usage: { inputTokens: 100, outputTokens: 20, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "leadP" }, duplicateWarning: false });
+
+    await qualifyConversation("c1");
+
+    expect(createLeadMock.mock.calls[0][0].source).toBe("PAID_TRAFFIC");
+  });
+
+  it("tráfego pago (#9): sem isca configurada → lead segue WHATSAPP", async () => {
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv });
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ waAdBaitPhrases: [] });
+    qualifyTextMock.mockResolvedValue({ isLead: true, reason: "grau", interest: "grau", stageId: "s_novo", confidence: 0.9, parseError: false, usage: { inputTokens: 100, outputTokens: 20, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "leadW" }, duplicateWarning: false });
+
+    await qualifyConversation("c1");
+
+    expect(createLeadMock.mock.calls[0][0].source).toBe("WHATSAPP");
+  });
+
+  it("tráfego pago (#9): isca no ÁUDIO transcrito também casa (usa enriched, não raw)", async () => {
+    // 1ª msg do cliente é um ÁUDIO (text null); a transcrição contém a isca.
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({
+      ...conv,
+      messages: [{ direction: "inbound", type: "audio", text: null, evolutionId: "eAudio", receivedAt: new Date("2026-06-15T10:00:00Z") }],
+    });
+    transcribeAudioMock.mockResolvedValue("oi, quero a oferta do anúncio");
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ waAdBaitPhrases: ["quero a oferta"] });
+    qualifyTextMock.mockResolvedValue({ isLead: true, reason: "grau", interest: "grau", stageId: "s_novo", confidence: 0.9, parseError: false, usage: { inputTokens: 100, outputTokens: 20, cacheTokens: 0 } });
+    createLeadMock.mockResolvedValue({ lead: { id: "leadA" }, duplicateWarning: false });
+
+    await qualifyConversation("c1");
+
+    expect(createLeadMock.mock.calls[0][0].source).toBe("PAID_TRAFFIC");
+  });
+
   it("análise concluída (mesmo não-lead) zera analysisAttempts — cliente recorrente não congela", async () => {
     (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, analysisAttempts: 2 });
     qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
