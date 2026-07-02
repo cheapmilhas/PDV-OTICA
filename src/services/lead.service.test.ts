@@ -458,6 +458,61 @@ describe("getLeadStats", () => {
     expect(renov!.correct).toBe(1);
     expect(renov!.topConfusion).toEqual({ intent: "NOVA_COMPRA", count: 1 });
   });
+
+  it("NÃO filtra createdAt na query (período é in-memory; SLA precisa de todos os leads)", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([]);
+    await getLeadStats("co_1", null, { from: new Date("2026-06-01T00:00:00Z") });
+    const where = (prisma.lead.findMany as any).mock.calls[0][0].where;
+    // A query traz TODOS os leads da empresa/filial; o corte por período é em memória.
+    expect(where.createdAt).toBeUndefined();
+    // createdAt é selecionado (para o filtro em memória).
+    expect((prisma.lead.findMany as any).mock.calls[0][0].select.createdAt).toBe(true);
+  });
+
+  it("período escopa o PLACAR (total/won/origem/perdas) por createdAt", async () => {
+    const dentro = new Date("2026-06-15T12:00:00Z");
+    const fora = new Date("2026-05-01T12:00:00Z");
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { id: "a", createdAt: dentro, lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "b", createdAt: dentro, lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "old", createdAt: fora, lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+    ]);
+    const s = await getLeadStats("co_1", null, { from: new Date("2026-06-01T00:00:00Z"), to: new Date("2026-06-30T23:59:59Z") });
+    expect(s.total).toBe(2);              // 'old' fora da janela
+    expect(s.won).toBe(1);                // só 'a'
+    expect(s.bySource["WHATSAPP"]).toBe(2);
+    expect(s.bySourceConversion["WHATSAPP"]).toEqual({ total: 2, won: 1 });
+  });
+
+  it("SLA e byIntent NÃO são cortados pelo período (refletem TODOS os leads abertos)", async () => {
+    const old = new Date(Date.now() - 48 * 3600_000);
+    (prisma.lead.findMany as any).mockResolvedValue([
+      // criado há muito tempo, aberto e ATRASADO — deve continuar no SLA mesmo com janela curta.
+      { id: "velho", createdAt: new Date("2026-01-01T00:00:00Z"), lastActivityAt: old, stage: { isWon: false, isLost: false }, source: null, lostReason: null, intent: "NOVA_COMPRA", intentPredicted: null },
+    ]);
+    const s = await getLeadStats("co_1", null, { from: new Date("2026-07-01T00:00:00Z") });
+    expect(s.total).toBe(0);              // fora da janela → placar zerado
+    expect(s.sla.totalOpen).toBe(1);      // mas o SLA vê o lead aberto
+    expect(s.sla.late).toBe(1);
+    expect(s.byIntent["NOVA_COMPRA"]).toBe(1); // demanda viva não some
+  });
+
+  it("bySourceConversion agrega total e ganhos POR origem", async () => {
+    (prisma.lead.findMany as any).mockResolvedValue([
+      { id: "a", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "b", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: false, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "c", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: "WHATSAPP", lostReason: null, intent: null, intentPredicted: null },
+      { id: "d", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: false, isLost: true }, source: "INSTAGRAM", lostReason: "Preço", intent: null, intentPredicted: null },
+      // sem origem: não entra em bySourceConversion (não há origem a atribuir).
+      { id: "e", createdAt: NOW, lastActivityAt: NOW, stage: { isWon: true, isLost: false }, source: null, lostReason: null, intent: null, intentPredicted: null },
+    ]);
+    const s = await getLeadStats("co_1", null);
+    expect(s.bySourceConversion["WHATSAPP"]).toEqual({ total: 3, won: 2 });
+    expect(s.bySourceConversion["INSTAGRAM"]).toEqual({ total: 1, won: 0 });
+    expect(s.bySourceConversion["null"]).toBeUndefined();
+    // bySource (volume) continua contando todas as origens presentes.
+    expect(s.bySource["WHATSAPP"]).toBe(3);
+  });
 });
 
 describe("correctLeadIntent — correção humana da intenção (telemetria Fase 3)", () => {

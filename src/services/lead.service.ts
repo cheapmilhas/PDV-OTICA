@@ -502,16 +502,41 @@ export async function deleteLead(id: string, companyId: string) {
 }
 
 /**
+ * Janela de tempo (opcional) para o placar de conversão: filtra os leads por
+ * `createdAt`. `from`/`to` são calculados no servidor (a rota deriva do preset)
+ * para não confiar no relógio do cliente. Ambos opcionais e independentes.
+ */
+export interface LeadStatsRange {
+  from?: Date;
+  to?: Date;
+}
+
+/**
  * Métricas do funil: total, ganhos, taxa de conversão (ganhos/total) e
  * agregações por motivo de perda e por origem. Multi-tenant (companyId) +
- * filtro opcional por filial. Ignora leads soft-deletados.
+ * filtro opcional por filial + filtro opcional por período (createdAt).
+ * Ignora leads soft-deletados.
+ *
+ * `bySourceConversion` responde à pergunta central do dono ("quanto cada origem
+ * converte?"): total e ganhos POR origem — o placar mostra a taxa = won/total.
+ * Leads sem origem ficam de fora dessa agregação (não há origem a atribuir),
+ * mas continuam no `total` global e em `bySource` (volume).
  */
-export async function getLeadStats(companyId: string, branchId: string | null) {
+export async function getLeadStats(
+  companyId: string,
+  branchId: string | null,
+  range?: LeadStatsRange
+) {
   const where: any = { companyId, deletedAt: null };
   // Mesmo escopo da listagem: leads não-atribuídos (branchId=null) contam em
   // qualquer filial selecionada, senão as métricas do funil ficam zeradas.
   const branchScope = buildLeadBranchScope(branchId);
   if (branchScope) where.AND = [branchScope];
+  // NÃO filtramos createdAt na query: o período (Sprint 2, #6) só escopa o PLACAR
+  // (conversão/origem/perdas). Os sinais de urgência (SLA, "precisa responder",
+  // volume por intenção) precisam refletir TODOS os leads abertos AGORA — um lead
+  // aberto há 40 dias esperando resposta não pode sumir do alerta porque o dono
+  // olhou "últimos 30 dias" (regra do dono: nunca perder lead aguardando resposta).
   const leads = await prisma.lead.findMany({
     where,
     select: {
@@ -519,24 +544,45 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
       source: true,
       lostReason: true,
       lastActivityAt: true,
+      createdAt: true,
       // Telemetria de acurácia (par palpite×atual) + volume por intenção (Fase 3).
       intent: true,
       intentPredicted: true,
       stage: { select: { isWon: true, isLost: true } },
     },
   });
-  const total = leads.length;
-  const won = leads.filter((l) => l.stage.isWon).length;
+  // Placar = só os leads criados dentro da janela escolhida (in-memory: negócio
+  // pequeno, 1-4 filiais; evita 2ª query e mantém SLA/atenção sobre o conjunto todo).
+  const inRange = (l: { createdAt: Date }): boolean => {
+    if (range?.from && l.createdAt < range.from) return false;
+    if (range?.to && l.createdAt > range.to) return false;
+    return true;
+  };
+  const scoredLeads = leads.filter(inRange);
+  const total = scoredLeads.length;
+  const won = scoredLeads.filter((l) => l.stage.isWon).length;
   const byLostReason: Record<string, number> = {};
   const bySource: Record<string, number> = {};
-  const byIntent: Record<string, number> = {};
-  for (const l of leads) {
+  // Conversão por origem (Sprint 2, #6): total e ganhos de cada origem — o placar
+  // deriva a taxa. Só origens explícitas (l.source truthy): sem origem = sem
+  // atribuição confiável, não infla nem dilui a taxa de nenhuma origem real.
+  const bySourceConversion: Record<string, { total: number; won: number }> = {};
+  // Placar (escopado ao período): perdas por motivo + volume/conversão por origem.
+  for (const l of scoredLeads) {
     if (l.stage.isLost && l.lostReason) {
       byLostReason[l.lostReason] = (byLostReason[l.lostReason] ?? 0) + 1;
     }
-    if (l.source) bySource[l.source] = (bySource[l.source] ?? 0) + 1;
-    // Volume por intenção = demanda VIVA (só leads abertos): um lead ganho/perdido
-    // de meses atrás não representa o que os contatos pedem AGORA.
+    if (l.source) {
+      bySource[l.source] = (bySource[l.source] ?? 0) + 1;
+      const agg = (bySourceConversion[l.source] ??= { total: 0, won: 0 });
+      agg.total += 1;
+      if (l.stage.isWon) agg.won += 1;
+    }
+  }
+  // Volume por intenção = demanda VIVA (só leads abertos), sobre TODOS os leads —
+  // é sinal de "o que pedem agora", não deve ser cortado pela janela do placar.
+  const byIntent: Record<string, number> = {};
+  for (const l of leads) {
     if (l.intent && !l.stage.isWon && !l.stage.isLost) {
       byIntent[l.intent] = (byIntent[l.intent] ?? 0) + 1;
     }
@@ -564,6 +610,7 @@ export async function getLeadStats(companyId: string, branchId: string | null) {
     conversionRate: total ? won / total : 0,
     byLostReason,
     bySource,
+    bySourceConversion,
     byIntent,
     aiAccuracy,
     aiAccuracyByIntent,
