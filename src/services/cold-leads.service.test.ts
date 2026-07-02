@@ -49,20 +49,20 @@ describe("listColdLeads — where (não-convertidos p/ recuperar)", () => {
     );
   });
 
-  it("filtros origem/motivo/período entram no where", async () => {
+  it("filtros origem/motivo(categoria)/período entram no where", async () => {
     const from = daysAgo(30);
-    await listColdLeads("co_1", null, { source: "INSTAGRAM", lostReason: "Preço", from }, NOW);
+    await listColdLeads("co_1", null, { source: "INSTAGRAM", lostReasonCategory: "PRICE", from }, NOW);
     const w = whereOf();
     expect(w.source).toBe("INSTAGRAM");
-    expect(w.lostReason).toBe("Preço");
+    expect(w.lostReasonCategory).toBe("PRICE");
     expect(w.createdAt).toEqual({ gte: from });
   });
 
-  it("sem filtros → sem source/lostReason/createdAt", async () => {
+  it("sem filtros → sem source/lostReasonCategory/createdAt", async () => {
     await listColdLeads("co_1", null, {}, NOW);
     const w = whereOf();
     expect(w.source).toBeUndefined();
-    expect(w.lostReason).toBeUndefined();
+    expect(w.lostReasonCategory).toBeUndefined();
     expect(w.createdAt).toBeUndefined();
   });
 });
@@ -70,11 +70,11 @@ describe("listColdLeads — where (não-convertidos p/ recuperar)", () => {
 describe("listColdLeads — mapeamento das linhas", () => {
   it("perdido vira status='lost'; aberto-frio vira 'cold'; ordena pelo mais frio", async () => {
     (prisma.lead.findMany as any).mockResolvedValue([
-      { id: "a", name: "João", phone: "1", source: "WHATSAPP", lostReason: "Preço", lastActivityAt: daysAgo(20), stage: { isLost: true }, customer: null },
-      { id: "b", name: "Maria", phone: "2", source: "INSTAGRAM", lostReason: null, lastActivityAt: daysAgo(10), stage: { isLost: false }, customer: null },
+      { id: "a", name: "João", phone: "1", source: "WHATSAPP", lostReason: "achou caro", lostReasonCategory: "PRICE", lastActivityAt: daysAgo(20), stage: { isLost: true }, customer: null },
+      { id: "b", name: "Maria", phone: "2", source: "INSTAGRAM", lostReason: null, lostReasonCategory: null, lastActivityAt: daysAgo(10), stage: { isLost: false }, customer: null },
     ]);
     const rows = await listColdLeads("co_1", null, {}, NOW);
-    expect(rows[0]).toMatchObject({ id: "a", status: "lost", lostReason: "Preço", coldFor: "há 20 dias" });
+    expect(rows[0]).toMatchObject({ id: "a", status: "lost", lostReasonCategory: "PRICE", lostReason: "achou caro", coldFor: "há 20 dias" });
     expect(rows[1]).toMatchObject({ id: "b", status: "cold", coldFor: "há 10 dias" });
     // orderBy no banco é asc (mais frio primeiro) — o service não reordena.
     expect((prisma.lead.findMany as any).mock.calls[0][0].orderBy).toEqual({ lastActivityAt: "asc" });

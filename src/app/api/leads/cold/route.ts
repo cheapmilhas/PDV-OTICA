@@ -20,7 +20,7 @@ export async function GET(request: NextRequest) {
     const params = new URL(request.url).searchParams;
     const branchId = params.get("branchId");
     const source = params.get("source");
-    const lostReason = params.get("lostReason");
+    const lostReasonCategory = params.get("lostReasonCategory");
     // Recuperação olha o BACKLOG inteiro por padrão: um lead perdido meses atrás
     // ainda vale resgate. Só recorta por período quando vem um preset VÁLIDO e
     // explícito; ausente OU malformado (?period=xyz) = sem borda (backlog inteiro).
@@ -37,7 +37,7 @@ export async function GET(request: NextRequest) {
       branchId && branchId !== "ALL" ? branchId : null,
       {
         source: source || undefined,
-        lostReason: lostReason || undefined,
+        lostReasonCategory: lostReasonCategory || undefined,
         from: range.from,
       },
     );
