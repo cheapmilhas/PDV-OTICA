@@ -16,6 +16,7 @@ import { WhatsAppButton } from "@/components/whatsapp/whatsapp-button";
 import { buildWaMeUrl } from "@/lib/whatsapp-deeplink";
 import { LEAD_STATS_PERIODS, type LeadStatsPeriod } from "@/lib/lead-stats-period";
 import { LOST_REASON_OPTIONS, lostReasonLabel } from "@/lib/lost-reason-label";
+import { FunilRecuperarExame } from "./funil-recuperar-exame";
 
 interface FunilRecuperarProps {
   active: boolean;
@@ -51,7 +52,11 @@ const SOURCE_LABEL: Record<string, string> = {
  * de origem e período; botão que abre o WhatsApp com o texto de reoferta pronto.
  * Read-only — o envio é sempre manual (a atendente cola e manda do celular).
  */
+/** Modos da aba: não-convertidos (padrão) vs. fez-exame-não-comprou (#10). */
+type RecoverMode = "cold" | "exam";
+
 export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
+  const [mode, setMode] = useState<RecoverMode>("cold");
   const [rows, setRows] = useState<ColdLeadRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [source, setSource] = useState<string>(ALL);
@@ -75,23 +80,58 @@ export function FunilRecuperar({ active, branchId }: FunilRecuperarProps) {
       .finally(() => setLoading(false));
   }, [branchId, source, motive, period]);
 
+  // Só busca os "não-convertidos" no modo cold (o modo exame tem seu próprio fetch).
   useEffect(() => {
-    if (active) fetchRows();
-  }, [active, fetchRows]);
+    if (active && mode === "cold") fetchRows();
+  }, [active, mode, fetchRows]);
 
   const total = rows.length;
   const sourceOptions = useMemo(() => Object.entries(SOURCE_LABEL), []);
 
+  const modeToggle = (
+    <div className="flex flex-wrap gap-1">
+      <Button
+        type="button"
+        size="sm"
+        variant={mode === "cold" ? "default" : "outline"}
+        onClick={() => setMode("cold")}
+      >
+        Não converteram
+      </Button>
+      <Button
+        type="button"
+        size="sm"
+        variant={mode === "exam" ? "default" : "outline"}
+        onClick={() => setMode("exam")}
+      >
+        Fez exame, não comprou
+      </Button>
+    </div>
+  );
+
+  if (mode === "exam") {
+    return (
+      <div className="space-y-4">
+        {modeToggle}
+        <FunilRecuperarExame active={active} branchId={branchId} />
+      </div>
+    );
+  }
+
   if (loading && rows.length === 0) {
     return (
-      <div className="flex items-center justify-center py-12">
-        <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+      <div className="space-y-4">
+        {modeToggle}
+        <div className="flex items-center justify-center py-12">
+          <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
+        </div>
       </div>
     );
   }
 
   return (
     <div className="space-y-4">
+      {modeToggle}
       <div className="flex flex-wrap items-center justify-between gap-3">
         <div>
           <p className="text-2xl font-bold">
