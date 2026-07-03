@@ -137,6 +137,39 @@ export async function consumeInventoryFIFO(
   saleItemId: string,
   branchId?: string
 ): Promise<FIFOResult> {
+  // Idempotência: se este item de venda já teve consumo FIFO registrado, NÃO
+  // reconsumir. generateSaleEntries roda dentro da tx da venda e, se um passo
+  // posterior falhar (ex.: conta contábil ausente), o erro é engolido em
+  // applyFinanceEntriesInTx e o cron retry-finance-entries reprocessa numa tx
+  // nova — sem este guard, o retry decrementaria InventoryLot.qtyRemaining de
+  // novo a cada tentativa, gerando estoque fantasma e CMV inflado.
+  //
+  // Robustez (revisão adversarial): NÃO fazemos early-return cego por
+  // existing.length>0. Se o consumo já registrado cobre a quantidade pedida,
+  // devolvemos o que existe (idempotente). Se cobre PARCIALMENTE (registro
+  // incompleto de uma tentativa anterior, ou estoque que só tinha parte),
+  // consumimos APENAS o saldo faltante — sem duplicar o que já foi debitado nem
+  // travar num consumo incompleto. O `SaleItemLot` tem @@unique(saleItemId,
+  // inventoryLotId), então re-consumir de um lote já usado faz upsert (não
+  // duplica linha).
+  const existing = await tx.saleItemLot.findMany({
+    where: { saleItemId },
+  });
+  const alreadyConsumedQty = existing.reduce((sum, l) => sum + l.qtyConsumed, 0);
+  const alreadyCost = existing.reduce((sum, l) => sum + Number(l.totalCost), 0);
+  const existingConsumptions: FIFOConsumption[] = existing.map((l) => ({
+    inventoryLotId: l.inventoryLotId,
+    qtyConsumed: l.qtyConsumed,
+    unitCost: Number(l.unitCost),
+    totalCost: Number(l.totalCost),
+  }));
+
+  // Já cobre (ou excede) o pedido → idempotente, devolve o registrado.
+  if (alreadyConsumedQty >= qty) {
+    return { totalCost: alreadyCost, consumptions: existingConsumptions };
+  }
+
+  const lotsUsed = new Set(existing.map((l) => l.inventoryLotId));
   const lots = await tx.inventoryLot.findMany({
     where: {
       companyId,
@@ -147,12 +180,17 @@ export async function consumeInventoryFIFO(
     orderBy: { acquiredAt: "asc" },
   });
 
-  const consumptions: FIFOConsumption[] = [];
-  let remaining = qty;
-  let totalCost = 0;
+  const consumptions: FIFOConsumption[] = [...existingConsumptions];
+  // Só falta o saldo não coberto pelo consumo já registrado.
+  let remaining = qty - alreadyConsumedQty;
+  let totalCost = alreadyCost;
 
   for (const lot of lots) {
     if (remaining <= 0) break;
+    // Lote já registrado neste item numa tentativa anterior: pular (o consumo
+    // dele já está contabilizado em alreadyConsumedQty/alreadyCost). Sem isto,
+    // um lote parcialmente consumido antes seria consumido de novo.
+    if (lotsUsed.has(lot.id)) continue;
 
     const consume = Math.min(remaining, lot.qtyRemaining);
     const unitCost = Number(lot.unitCost);
@@ -164,9 +202,12 @@ export async function consumeInventoryFIFO(
       data: { qtyRemaining: lot.qtyRemaining - consume },
     });
 
-    // Criar registro de consumo
-    await tx.saleItemLot.create({
-      data: {
+    // Registrar consumo. upsert (não create) por segurança contra corrida com
+    // um registro parcial anterior do mesmo (saleItemId, inventoryLotId).
+    await tx.saleItemLot.upsert({
+      where: { saleItemId_inventoryLotId: { saleItemId, inventoryLotId: lot.id } },
+      update: { qtyConsumed: consume, unitCost, totalCost: lineCost },
+      create: {
         saleItemId,
         inventoryLotId: lot.id,
         qtyConsumed: consume,
@@ -558,8 +599,18 @@ export async function generateRefundEntries(
     }
   }
 
-  // 3. Reverter pagamento — depende do método de devolução
-  if (refund.refundMethod) {
+  // 3. Reverter pagamento — depende do método de devolução.
+  //
+  // CR-2 (revisão adversarial): o REEMBOLSO em caixa é o dinheiro que
+  // efetivamente ENTROU do bolso do cliente = totalRefund − cashbackUsed. O
+  // cashback usado nunca foi caixa (é saldo de fidelidade, já devolvido ao
+  // cliente por reverseCashbackForSaleInTx no cancel). Reembolsar/decrementar o
+  // saldo pelo totalRefund BRUTO drenava a conta financeira em cashbackUsed a
+  // mais a cada devolução de venda que usou cashback.
+  const cashbackUsed = Math.max(0, Number(refund.sale?.cashbackUsed ?? 0));
+  const cashRefund = Math.round((totalRefund - cashbackUsed) * 100) / 100;
+
+  if (refund.refundMethod && cashRefund > 0) {
     const rm = refund.refundMethod;
     const mappedMethod: PaymentMethod =
       rm === "CASH" ? "CASH" : rm === "CREDIT" ? "CREDIT_CARD" : rm === "PIX" ? "PIX" : "OTHER";
@@ -578,13 +629,13 @@ export async function generateRefundEntries(
           side: "CREDIT",
         },
       },
-      update: { amount: totalRefund },
+      update: { amount: cashRefund },
       create: {
         companyId,
         branchId,
         type: "PAYMENT_RECEIVED",
         side: "CREDIT",
-        amount: totalRefund,
+        amount: cashRefund,
         debitAccountId: contasAReceber.id,
         creditAccountId: contaDebito.id,
         financeAccountId: financeAccount?.id,
@@ -596,11 +647,11 @@ export async function generateRefundEntries(
       },
     });
 
-    // Decrementar saldo da conta financeira
+    // Decrementar saldo da conta financeira pelo valor REALMENTE reembolsado.
     if (financeAccount) {
       await tx.financeAccount.update({
         where: { id: financeAccount.id },
-        data: { balance: { decrement: totalRefund } },
+        data: { balance: { decrement: cashRefund } },
       });
     }
   }
@@ -833,6 +884,68 @@ export async function generateRenegotiationInterestEntry(
       description: `Juros de renegociação AR #${data.accountReceivableId.substring(0, 8)}`,
       entryDate: data.entryDate ?? new Date(),
       cashDate: null, // competência — caixa entra quando a parcela for paga
+    },
+  });
+
+  return entry.id;
+}
+
+/**
+ * S5 (auditoria 2026-07-02): lança como RECEITA FINANCEIRA a multa/juros
+ * recebidos DIRETAMENTE ao quitar um AR (fora de renegociação), via
+ * receive-multiple. Antes só a renegociação lançava juros no ledger; o
+ * pagamento direto com multa/juros criava o CashMovement pelo valor cheio, mas
+ * o ledger só conhecia o principal (SALE_REVENUE) — o DRE subestimava a receita
+ * financeira frente ao caixa real.
+ *
+ * Débito: Contas a Receber (1.1.03) / Crédito: Receita Financeira (3.1.03).
+ * Regime de CAIXA: cashDate = data do recebimento (o dinheiro entrou agora).
+ * Idempotente via @@unique — sourceType "ARInterestReceived" distinto do de
+ * renegociação, para não colidir num AR que também foi renegociado.
+ *
+ * Retorna o id do lançamento, ou null se não houve multa/juros.
+ */
+export async function generateReceivableInterestEntry(
+  tx: TransactionClient,
+  data: {
+    accountReceivableId: string;
+    interestAndFine: number;
+    branchId?: string | null;
+    entryDate?: Date;
+  },
+  companyId: string
+): Promise<string | null> {
+  const amount = Math.round(data.interestAndFine * 100) / 100;
+  if (amount <= 0) return null;
+
+  const contasAReceber = await getChartAccountByCode(tx, companyId, "1.1.03");
+  const receitaFinanceira = await ensureFinancialRevenueAccount(tx, companyId);
+  const entryDate = data.entryDate ?? new Date();
+
+  const entry = await tx.financeEntry.upsert({
+    where: {
+      companyId_sourceType_sourceId_type_side: {
+        companyId,
+        sourceType: "ARInterestReceived",
+        sourceId: data.accountReceivableId,
+        type: "OTHER",
+        side: "CREDIT",
+      },
+    },
+    update: { amount },
+    create: {
+      companyId,
+      branchId: data.branchId ?? undefined,
+      type: "OTHER",
+      side: "CREDIT",
+      amount,
+      debitAccountId: contasAReceber.id,
+      creditAccountId: receitaFinanceira.id,
+      sourceType: "ARInterestReceived",
+      sourceId: data.accountReceivableId,
+      description: `Multa/juros recebidos AR #${data.accountReceivableId.substring(0, 8)}`,
+      entryDate,
+      cashDate: entryDate, // regime de caixa — o dinheiro entrou no recebimento
     },
   });
 

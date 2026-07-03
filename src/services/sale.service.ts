@@ -15,6 +15,7 @@ import { autoOpenShiftWithInheritedFloat } from "@/services/cash.service";
 import { getNextSequence } from "@/lib/counter";
 import { shouldRestockOnCancel } from "@/lib/stock-operation";
 import { reverseBonusForSale, reactivateBonusForSale } from "@/services/product-campaign.service";
+import { generateRefundEntries } from "@/services/finance-entry.service";
 import {
   applyStockDebitInTx,
   applyPaymentsInTx,
@@ -862,6 +863,9 @@ export class SaleService {
       branchId,
       companyId,
       total,
+      // H2 (auditoria 2026-07-02): cashback é ganho sobre o valor PAGO do bolso
+      // (total menos o cashback que o cliente usou), não sobre o total bruto.
+      cashbackEarnBase: totalAfterCashback,
       // Em vendas novas (PDV direto), gera cashback normalmente.
       skipCashbackEarn: false,
     });
@@ -933,8 +937,20 @@ export class SaleService {
    * Validações:
    * - Não permitir cancelar venda já cancelada
    * - Estornar estoque de todos os itens
+   *
+   * @param preserveLedgerHistory Quando true, NÃO deleta os FinanceEntry da
+   *   venda nem reverte o saldo das FinanceAccount — a devolução (refundFull)
+   *   gera lançamentos de estorno DATADOS da devolução (generateRefundEntries),
+   *   preservando a imutabilidade contábil do mês da venda original. O default
+   *   (false) mantém o comportamento de cancelamento direto/reativação: apaga o
+   *   ledger porque a venda passa a ser tratada como se nunca tivesse existido.
    */
-  async cancel(id: string, companyId: string, reason?: string) {
+  async cancel(
+    id: string,
+    companyId: string,
+    reason?: string,
+    preserveLedgerHistory = false
+  ) {
     // Busca venda
     const sale = await this.getById(id, companyId);
 
@@ -1086,32 +1102,42 @@ export class SaleService {
       }
 
       // 6. Reverter lançamentos financeiros (FinanceEntry)
-      // Deleta todos os lançamentos vinculados a esta venda e seus pagamentos
-      await tx.financeEntry.deleteMany({
-        where: {
-          companyId: sale.companyId,
-          OR: [
-            { sourceType: "Sale", sourceId: id },
-            { sourceType: "SalePayment", sourceId: { in: sale.payments.map((p: any) => p.id) } },
-            { sourceType: "SaleItem", sourceId: { in: sale.items.map((i: any) => i.id) } },
-          ],
-        },
-      });
+      // Deleta todos os lançamentos vinculados a esta venda e seus pagamentos.
+      // Numa DEVOLUÇÃO (preserveLedgerHistory), NÃO apaga: o refundFull emite
+      // lançamentos REFUND datados da devolução (generateRefundEntries), então
+      // deletar aqui zeraria retroativamente a receita/CMV do mês da venda e
+      // faria a linha "Devoluções" do DRE nunca aparecer.
+      if (!preserveLedgerHistory) {
+        await tx.financeEntry.deleteMany({
+          where: {
+            companyId: sale.companyId,
+            OR: [
+              { sourceType: "Sale", sourceId: id },
+              { sourceType: "SalePayment", sourceId: { in: sale.payments.map((p: any) => p.id) } },
+              { sourceType: "SaleItem", sourceId: { in: sale.items.map((i: any) => i.id) } },
+            ],
+          },
+        });
+      }
 
       // 7. Reverter saldo das contas financeiras (FinanceAccount)
-      for (const payment of sale.payments) {
-        if (methodsComCaixa.includes(payment.method) || payment.method === "CREDIT_CARD") {
-          // Buscar a FinanceEntry que incrementou o saldo
-          // Para pagamentos à vista: decrementar o saldo que foi incrementado
-          const faType = payment.method === "CASH" ? "CASH" : payment.method === "PIX" ? "PIX" : "CARD_ACQUIRER";
-          const fa = await tx.financeAccount.findFirst({
-            where: { companyId: sale.companyId, type: faType as any, active: true },
-          });
-          if (fa) {
-            await tx.financeAccount.update({
-              where: { id: fa.id },
-              data: { balance: { decrement: Number(payment.amount) } },
+      // Também pulado na devolução: generateRefundEntries decrementa o saldo
+      // pelo valor efetivamente reembolsado (evita dupla reversão do balance).
+      if (!preserveLedgerHistory) {
+        for (const payment of sale.payments) {
+          if (methodsComCaixa.includes(payment.method) || payment.method === "CREDIT_CARD") {
+            // Buscar a FinanceEntry que incrementou o saldo
+            // Para pagamentos à vista: decrementar o saldo que foi incrementado
+            const faType = payment.method === "CASH" ? "CASH" : payment.method === "PIX" ? "PIX" : "CARD_ACQUIRER";
+            const fa = await tx.financeAccount.findFirst({
+              where: { companyId: sale.companyId, type: faType as any, active: true },
             });
+            if (fa) {
+              await tx.financeAccount.update({
+                where: { id: fa.id },
+                data: { balance: { decrement: Number(payment.amount) } },
+              });
+            }
           }
         }
       }
@@ -1246,9 +1272,16 @@ export class SaleService {
     });
 
     // 2. Reversão pesada: reusa o cancel (robustez já testada em produção).
-    await this.cancel(id, companyId, opts.reason || "Devolução");
+    // preserveLedgerHistory=true: o cancel NÃO apaga os FinanceEntry da venda
+    // nem reverte o saldo das contas — quem reverte o ledger é o passo 3 abaixo,
+    // com lançamentos de estorno DATADOS da devolução (não retroativos).
+    await this.cancel(id, companyId, opts.reason || "Devolução", true);
 
-    // 3. Marca venda REFUNDED + Refund COMPLETED atomicamente.
+    // 3. Marca venda REFUNDED + Refund COMPLETED + gera o estorno no ledger,
+    // tudo atomicamente. O completedAt é gravado ANTES de generateRefundEntries
+    // porque esta função data os lançamentos por refund.completedAt (o mês da
+    // devolução), preservando a receita/CMV originais no mês da venda e
+    // alimentando a linha "Devoluções e Estornos" do DRE dinâmico.
     // Obs: a devolução do cashback USADO e o cancelamento da OS vinculada
     // já são feitos DENTRO do cancel() (B2/B5, idempotentes) — não repetir aqui.
     await prisma.$transaction(async (tx) => {
@@ -1257,6 +1290,7 @@ export class SaleService {
         where: { id: refund.id },
         data: { status: "COMPLETED", completedAt: new Date() },
       });
+      await generateRefundEntries(tx, refund.id, companyId);
     }, { timeout: 30_000 });
 
     return this.getById(id, companyId, true);
@@ -1415,6 +1449,60 @@ export class SaleService {
           status: "PENDING",
         },
       });
+
+      // 4.5. CR-3 (revisão adversarial): se a venda estava REFUNDED, o refund
+      // PRESERVOU os FinanceEntry originais e ADICIONOU lançamentos de estorno
+      // (REFUND/DEBIT + COGS/CREDIT + reembolso) datados da devolução — ver
+      // generateRefundEntries. Reativar a venda torna esses estornos órfãos: o
+      // DRE do mês da devolução mostraria "Devoluções" de uma venda que voltou a
+      // estar ativa. Como os lançamentos ORIGINAIS foram preservados, basta
+      // remover os do estorno e marcar o Refund como revertido — o ledger volta
+      // a refletir a venda ativa sem resíduo.
+      if (sale.status === "REFUNDED") {
+        const refunds = await tx.refund.findMany({
+          where: { saleId: id, companyId, status: "COMPLETED" },
+          include: { items: { select: { id: true } } },
+        });
+        for (const r of refunds) {
+          const refundItemIds = r.items.map((it) => it.id);
+          await tx.financeEntry.deleteMany({
+            where: {
+              companyId,
+              OR: [
+                { sourceType: "Refund", sourceId: r.id },
+                { sourceType: "RefundItem", sourceId: { in: refundItemIds } },
+              ],
+            },
+          });
+          // Reverter o saldo da conta que foi decrementado no reembolso: o
+          // dinheiro "volta" ao caixa porque a venda foi reativada. Recompõe o
+          // cashRefund (bruto − cashback) coerente com generateRefundEntries.
+          const cashbackUsed = Math.max(0, Number(sale.cashbackUsed ?? 0));
+          const cashRefund = Math.round((Number(r.totalRefund) - cashbackUsed) * 100) / 100;
+          if (r.refundMethod && cashRefund > 0) {
+            const faType =
+              r.refundMethod === "CASH" ? "CASH" : r.refundMethod === "PIX" ? "PIX" : r.refundMethod === "CREDIT" ? "CARD_ACQUIRER" : null;
+            if (faType) {
+              const fa = await tx.financeAccount.findFirst({
+                where: { companyId, type: faType as any, active: true },
+              });
+              if (fa) {
+                await tx.financeAccount.update({
+                  where: { id: fa.id },
+                  data: { balance: { increment: cashRefund } },
+                });
+              }
+            }
+          }
+          // CANCELED = devolução desfeita (RefundStatus não tem "REVERSED"; usar
+          // CANCELED evita migração de enum e é semanticamente correto — o
+          // estorno foi anulado pela reativação).
+          await tx.refund.update({
+            where: { id: r.id },
+            data: { status: "CANCELED" },
+          });
+        }
+      }
     }, { timeout: 30_000 });
 
     // 5. B4: Reativar bônus de campanha — reverte o REVERSED→PENDING e
