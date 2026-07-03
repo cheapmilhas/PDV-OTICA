@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
 vi.mock("@/lib/prisma", () => ({
-  prisma: { lead: { findMany: vi.fn() } },
+  prisma: {
+    lead: { findMany: vi.fn() },
+    // getArchivedLeadIds consulta as conversas arquivadas (troca de número).
+    whatsappConversation: { findMany: vi.fn() },
+  },
 }));
 
 import { prisma } from "@/lib/prisma";
@@ -13,6 +17,8 @@ const daysAgo = (d: number) => new Date(NOW.getTime() - d * 24 * 3600_000);
 beforeEach(() => {
   vi.clearAllMocks();
   (prisma.lead.findMany as any).mockResolvedValue([]);
+  // Default: nada arquivado.
+  (prisma.whatsappConversation.findMany as any).mockResolvedValue([]);
 });
 
 function whereOf() {
@@ -64,6 +70,22 @@ describe("listColdLeads — where (não-convertidos p/ recuperar)", () => {
     expect(w.source).toBeUndefined();
     expect(w.lostReasonCategory).toBeUndefined();
     expect(w.createdAt).toBeUndefined();
+  });
+
+  it("troca de número: exclui leads de conversas arquivadas (id notIn)", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([
+      { leadId: "lead_antigo_1" },
+      { leadId: "lead_antigo_2" },
+    ]);
+    await listColdLeads("co_1", null, {}, NOW);
+    const w = whereOf();
+    expect(w.id).toEqual({ notIn: ["lead_antigo_1", "lead_antigo_2"] });
+  });
+
+  it("sem conversas arquivadas: não adiciona filtro id notIn", async () => {
+    await listColdLeads("co_1", null, {}, NOW);
+    const w = whereOf();
+    expect(w.id).toBeUndefined();
   });
 });
 

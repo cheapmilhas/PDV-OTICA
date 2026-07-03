@@ -72,6 +72,7 @@ export function WhatsappConnectClient() {
   const [loadingStatus, setLoadingStatus] = useState(true);
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
+  const [archiving, setArchiving] = useState(false);
   const [refreshing, setRefreshing] = useState(false);
   const [practicesAccepted, setPracticesAccepted] = useState(false);
 
@@ -171,6 +172,60 @@ export function WhatsappConnectClient() {
       toast.error("Erro ao gerar novo QR Code.");
     } finally {
       setRefreshing(false);
+    }
+  }
+
+  async function handleArchiveOldNumber() {
+    setArchiving(true);
+    try {
+      // Preview: conversas anteriores à troca DETECTADA automaticamente.
+      const previewRes = await fetch("/api/whatsapp/archive-old-number");
+      const preview = await previewRes.json();
+      const count = preview?.data?.archived ?? 0;
+
+      let mode: "detected" | "all-current" = "detected";
+      if (count > 0) {
+        if (
+          !confirm(
+            `Detectamos ${count} conversa(s) do número anterior. Arquivar? Elas ` +
+              `saem do funil ativo (Conversas e Recuperar), mas ficam no histórico. ` +
+              `Você pode desfazer.`,
+          )
+        ) {
+          return;
+        }
+      } else {
+        // Sem troca detectada (ex.: você trocou antes desta opção existir).
+        // Oferece arquivar TUDO que está no funil hoje — o que fica ativo é só
+        // o que chegar do número novo daqui pra frente.
+        if (
+          !confirm(
+            "Não detectamos uma troca de número automática. Se você JÁ trocou o " +
+              "número, deseja arquivar TODAS as conversas atuais? Elas saem do " +
+              "funil ativo mas ficam no histórico (reversível). O que chegar do " +
+              "número novo a partir de agora aparece normalmente.",
+          )
+        ) {
+          return;
+        }
+        mode = "all-current";
+      }
+
+      const res = await fetch("/api/whatsapp/archive-old-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "archive", mode }),
+      });
+      const result = await res.json();
+      if (result.success) {
+        toast.success(`${result.data.archived} conversa(s) arquivada(s).`);
+      } else {
+        toast.error(result.error || "Não foi possível arquivar.");
+      }
+    } catch {
+      toast.error("Erro ao arquivar conversas.");
+    } finally {
+      setArchiving(false);
     }
   }
 
@@ -277,6 +332,29 @@ export function WhatsappConnectClient() {
           )}
         </CardContent>
       </Card>
+
+      {status === "CONNECTED" && (
+        <Card className="mt-4">
+          <CardContent className="p-4">
+            <p className="text-sm font-medium">Trocou de número?</p>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Se você conectou um número diferente do anterior, arquive as
+              conversas do número antigo. Elas saem da aba Conversas e do
+              Recuperar (não dá mais para responder por ali), mas continuam no
+              histórico. Você pode desfazer depois.
+            </p>
+            <Button
+              variant="outline"
+              size="sm"
+              className="mt-3"
+              onClick={handleArchiveOldNumber}
+              disabled={archiving}
+            >
+              {archiving ? "Arquivando…" : "Arquivar conversas do número anterior"}
+            </Button>
+          </CardContent>
+        </Card>
+      )}
 
       <p className="mt-4 text-center text-xs text-muted-foreground">
         A conexão usa o app WhatsApp do seu celular (igual ao WhatsApp Web).

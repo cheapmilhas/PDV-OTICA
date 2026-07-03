@@ -59,7 +59,7 @@ function statusWhere(status: InboxStatusFilter) {
  */
 export async function listInboxConversations(
   companyId: string,
-  opts?: { status?: InboxStatusFilter; includeGroups?: boolean; take?: number },
+  opts?: { status?: InboxStatusFilter; includeGroups?: boolean; take?: number; includeArchived?: boolean },
 ): Promise<InboxConversation[]> {
   const status = opts?.status ?? "all";
   const take = Math.min(Math.max(opts?.take ?? DEFAULT_TAKE, 1), 200);
@@ -68,6 +68,9 @@ export async function listInboxConversations(
     where: {
       companyId,
       ...(opts?.includeGroups ? {} : { isGroup: false }),
+      // Troca de número: conversas arquivadas (do número antigo) saem do funil
+      // ativo por padrão. includeArchived=true traz o histórico (aba "Arquivadas").
+      ...(opts?.includeArchived ? {} : { archivedAt: null }),
       ...statusWhere(status),
     },
     // Os que precisam de atenção (e ainda não resolvidos) vêm PRIMEIRO — o guardrail

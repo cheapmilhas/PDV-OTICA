@@ -4546,6 +4546,11 @@ model WhatsappConnection {
   status          WhatsappConnStatus     @default(DISCONNECTED)
   /// Número conectado (somente dígitos, ex: 5511999999999).
   connectedNumber String?
+  /// Momento em que o número MUDOU de fato (troca de chip), distinto de
+  /// connectedAt (que é regravado em toda reconexão, inclusive queda de sinal).
+  /// É o CORTE do arquivamento de conversas do número antigo — usar connectedAt
+  /// aqui arquivaria o funil inteiro numa simples reconexão.
+  numberChangedAt DateTime?
   lastQrAt        DateTime?
   connectedAt     DateTime?
   disconnectedAt  DateTime?
@@ -4598,6 +4603,12 @@ model WhatsappConversation {
   needsHumanAttention  Boolean   @default(false)
   attentionResolvedAt   DateTime? // quando um humano deu baixa no alarme
   attentionResolvedById String?   // quem deu baixa (trilha de auditoria do R$50k)
+  // Arquivamento (troca de número da loja): conversa arquivada = fora do funil
+  // ativo (inbox/Recuperar/filas de automação), mas PRESERVADA no banco p/
+  // histórico/LGPD. Setado em lote quando a loja troca o número de WhatsApp — as
+  // conversas do número antigo não podem mais ser respondidas por ali, então
+  // saem do dia a dia. null = ativa. Reversível (desarquivar = voltar a null).
+  archivedAt    DateTime?
   createdAt     DateTime  @default(now())
   updatedAt     DateTime  @updatedAt
 
@@ -4615,6 +4626,9 @@ model WhatsappConversation {
   @@index([companyId, leadId])
   // O cron varre conversas com re-avaliação de funil pendente sem table-scan.
   @@index([companyId, needsFunnelEval])
+  // Inbox/filas filtram archivedAt=null e ordenam por lastMessageAt — índice
+  // parcial-friendly p/ não varrer arquivadas conforme o histórico cresce.
+  @@index([companyId, archivedAt, lastMessageAt])
 }
 
 model WhatsappMessage {

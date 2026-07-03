@@ -5,6 +5,8 @@ vi.mock("@/lib/prisma", () => ({
     lead: { findMany: vi.fn() },
     whatsappMessageLog: { findMany: vi.fn() },
     serviceOrder: { findMany: vi.fn() },
+    // getArchivedLeadIds (troca de número) consulta conversas arquivadas.
+    whatsappConversation: { findMany: vi.fn() },
   },
 }));
 
@@ -25,6 +27,7 @@ beforeEach(() => {
   (prisma.lead.findMany as any).mockResolvedValue([]);
   (prisma.whatsappMessageLog.findMany as any).mockResolvedValue([]);
   (prisma.serviceOrder.findMany as any).mockResolvedValue([]);
+  (prisma.whatsappConversation.findMany as any).mockResolvedValue([]);
   (computeNeedsReplyLeadIds as any).mockResolvedValue(new Map());
 });
 
