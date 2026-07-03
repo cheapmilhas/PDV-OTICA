@@ -1,3 +1,23 @@
+/**
+ * Fonte única dos valores de `WhatsappMessage.direction`/`.type`.
+ *
+ * A coluna no banco é String livre (dívida de schema mapeada na auditoria
+ * 2026-07-02 — migrar para enum Postgres é follow-up que exige ALTER COLUMN com
+ * validação dos dados existentes). Enquanto isso, TODA leitura/escrita deve usar
+ * estas constantes em vez de string crua, para um typo ("outbond") não quebrar
+ * silenciosamente a régua do funil (que depende de direction === OUTBOUND).
+ */
+export const WA_DIRECTION = { INBOUND: "inbound", OUTBOUND: "outbound" } as const;
+export type WaDirection = (typeof WA_DIRECTION)[keyof typeof WA_DIRECTION];
+
+export const WA_MESSAGE_TYPE = {
+  TEXT: "text",
+  AUDIO: "audio",
+  IMAGE: "image",
+  OTHER: "other",
+} as const;
+export type WaMessageType = (typeof WA_MESSAGE_TYPE)[keyof typeof WA_MESSAGE_TYPE];
+
 export interface InboundMessage {
   evolutionId: string;
   contactNumber: string;
@@ -5,8 +25,8 @@ export interface InboundMessage {
   // inbound = recebida do cliente; outbound = ENVIADA pela ótica (fromMe). A
   // conversa é a mesma (remoteJid é sempre o nº do cliente). Capturar outbound
   // deixa o inbox mostrar as respostas que o atendente mandou pelo WhatsApp.
-  direction: "inbound" | "outbound";
-  type: "text" | "audio" | "image" | "other";
+  direction: WaDirection;
+  type: WaMessageType;
   text: string | null;
   mediaUrl: string | null;
   receivedAt: Date;
@@ -20,7 +40,7 @@ export function parseInboundMessage(data: unknown): InboundMessage | null {
   const d = data as Record<string, any>;
   const key = d.key as Record<string, any> | undefined;
   if (!key || typeof key.id !== "string" || typeof key.remoteJid !== "string") return null;
-  const direction: InboundMessage["direction"] = key.fromMe === true ? "outbound" : "inbound";
+  const direction: InboundMessage["direction"] = key.fromMe === true ? WA_DIRECTION.OUTBOUND : WA_DIRECTION.INBOUND;
 
   const isGroup = String(key.remoteJid).endsWith("@g.us");
   const contactNumber = String(key.remoteJid).split("@")[0];

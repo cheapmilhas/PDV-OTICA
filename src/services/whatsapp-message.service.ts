@@ -1,5 +1,5 @@
 import { prisma } from "@/lib/prisma";
-import type { InboundMessage } from "@/lib/validations/whatsapp-inbound";
+import { type InboundMessage, WA_DIRECTION } from "@/lib/validations/whatsapp-inbound";
 
 export async function persistInboundMessage(
   companyId: string,
@@ -48,7 +48,7 @@ export async function persistInboundMessage(
   // R1: msg nova numa conversa JÁ analisada → marcar p/ re-qualificação. SÓ
   // inbound: uma resposta NOSSA (outbound) não é motivo de re-analisar o lead
   // (a intenção não muda porque respondemos — re-classificar gastaria IA à toa).
-  if (conversation.analyzedAt && msg.direction === "inbound") {
+  if (conversation.analyzedAt && msg.direction === WA_DIRECTION.INBOUND) {
     await prisma.whatsappConversation.update({
       where: { id: conversation.id },
       data: { needsAnalysis: true },
@@ -60,7 +60,7 @@ export async function persistInboundMessage(
   // card fica preso em "Novo" apesar de atendido (o cron pula conversas já
   // analisadas). Marca needsFunnelEval p/ o cron re-rodar SÓ a régua (sem IA).
   // Só quando a conversa já é lead e já foi analisada (senão o fluxo normal cobre).
-  if (conversation.analyzedAt && conversation.leadId && msg.direction === "outbound") {
+  if (conversation.analyzedAt && conversation.leadId && msg.direction === WA_DIRECTION.OUTBOUND) {
     await prisma.whatsappConversation.update({
       where: { id: conversation.id },
       data: { needsFunnelEval: true },
