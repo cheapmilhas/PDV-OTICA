@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { adminRateLimit } from "@/lib/rate-limit";
 
 /**
@@ -26,6 +26,29 @@ export async function DELETE(
 
   if (!session) {
     return NextResponse.json({ error: "Sessão não encontrada" }, { status: 404 });
+  }
+
+  // SEC (auditoria 2026-07-02): antes qualquer admin autenticado (inclusive
+  // SUPPORT/BILLING) podia encerrar a sessão de impersonação de OUTRO admin.
+  // Agora só o dono da sessão OU um admin com escopo sobre a empresa da sessão
+  // (mesma regra do POST /impersonate) pode encerrá-la.
+  const isOwner = session.adminUserId === admin.id;
+  const hasScope = isOwner || (await requireCompanyScope(admin.id, session.companyId));
+  if (!hasScope) {
+    await prisma.globalAudit.create({
+      data: {
+        actorType: "ADMIN_USER",
+        actorId: admin.id,
+        companyId: session.companyId,
+        action: "IMPERSONATION_END_DENIED",
+        metadata: {
+          sessionId: id,
+          reason: "fora de escopo e não é dono da sessão",
+          adminEmail: admin.email,
+        },
+      },
+    });
+    return NextResponse.json({ error: "Sem permissão para encerrar esta sessão" }, { status: 403 });
   }
 
   if (session.endedAt) {

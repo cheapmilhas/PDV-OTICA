@@ -5,6 +5,7 @@ import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { parseInboundMessage } from "@/lib/validations/whatsapp-inbound";
 import { persistInboundMessage } from "@/services/whatsapp-message.service";
+import { phoneMatchKey } from "@/lib/lead-phone-match";
 
 const log = logger.child({ webhook: "evolution" });
 
@@ -213,17 +214,26 @@ export async function POST(request: Request) {
           const word = text.trim().toLowerCase().replace(/[.!?]+$/, "");
           if (OPT_OUT_KEYWORDS.has(word)) {
             const senderDigits = extractNumber(payload.data?.key?.remoteJid ?? payload.sender);
-            if (senderDigits) {
-              const tail = senderDigits.slice(-8); // casa com variações de DDI/9º dígito
-              await prisma.customer.updateMany({
+            // LGPD (auditoria 2026-07-02): casa pela CHAVE CANÔNICA (DDD+8díg),
+            // igual ao reconhecimento de cliente da IA (lead-customer-match), em
+            // vez do antigo `phone contains últimos-8`. O `contains` sobre texto
+            // livre podia (a) NÃO bater se o telefone estivesse mascarado — opt-out
+            // silenciosamente ignorado — e (b) casar cliente de OUTRO DDD (sem DDD,
+            // 8 dígitos colidem entre cidades), silenciando quem nunca pediu.
+            const key = phoneMatchKey(senderDigits);
+            if (key) {
+              const result = await prisma.customer.updateMany({
                 where: {
                   companyId: conn.companyId,
                   acceptsMarketing: true,
-                  phone: { contains: tail },
+                  OR: [{ phoneNormalized: key }, { phone2Normalized: key }],
                 },
                 data: { acceptsMarketing: false },
               });
-              log.info("Opt-out de marketing por WhatsApp", { companyId: conn.companyId });
+              log.info("Opt-out de marketing por WhatsApp", {
+                companyId: conn.companyId,
+                affected: result.count,
+              });
             }
           }
         }

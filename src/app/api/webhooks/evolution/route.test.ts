@@ -283,6 +283,29 @@ describe("POST /api/webhooks/evolution", () => {
     }));
   });
 
+  it("opt-out (LGPD): casa pela CHAVE CANÔNICA (DDD+8díg), não por substring de phone", async () => {
+    const token = await signValid();
+    // 5511988887777 → phoneMatchKey descarta DDI 55 + 9º dígito → "1188887777".
+    const req = makeRequest({
+      event: "messages.upsert",
+      instance: "vis_co1",
+      data: {
+        key: { remoteJid: "5511988887777@s.whatsapp.net", fromMe: false },
+        message: { conversation: "SAIR" },
+      },
+    }, `Bearer ${token}`);
+    await POST(req);
+
+    const call = (customerUpdateMany.mock.calls[0][0] as any);
+    // Não usa mais `phone: { contains }` (que dava falso-positivo cross-DDD e
+    // falso-negativo com máscara). Usa phoneNormalized/phone2Normalized = key.
+    expect(call.where.phone).toBeUndefined();
+    expect(call.where.OR).toEqual([
+      { phoneNormalized: "1188887777" },
+      { phone2Normalized: "1188887777" },
+    ]);
+  });
+
   it("opt-out: variações (PARAR, com pontuação) também descadastram", async () => {
     const token = await signValid();
     const req = makeRequest({
