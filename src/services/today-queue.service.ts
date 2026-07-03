@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { buildLeadBranchScope } from "@/services/lead.service";
+import { getArchivedLeadIds } from "@/lib/archived-lead-ids";
 import { computeNeedsReplyLeadIds } from "@/services/lead-needs-reply.service";
 import { leadNeedsAttention } from "@/lib/lead-needs-attention";
 import { SLA_LATE_HOURS } from "@/lib/lead-sla";
@@ -45,6 +46,9 @@ export async function getTodayQueue(
     deletedAt: null,
     stage: { isWon: false, isLost: false },
   };
+  // Troca de número: leads do número antigo (conversa arquivada) saem da fila.
+  const archivedLeadIds = await getArchivedLeadIds(companyId);
+  if (archivedLeadIds.length > 0) leadWhere.id = { notIn: archivedLeadIds };
   const branchScope = buildLeadBranchScope(branchId);
   if (branchScope) leadWhere.AND = [branchScope];
 

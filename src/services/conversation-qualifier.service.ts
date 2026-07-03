@@ -420,6 +420,9 @@ export async function qualifyPendingConversations(
   const pending = await prisma.whatsappConversation.findMany({
     where: {
       isGroup: false,
+      // Troca de número: conversa arquivada (número antigo) NÃO é re-qualificada
+      // pela IA — não gastar cota com quem saiu do funil ativo.
+      archivedAt: null,
       analysisAttempts: { lt: MAX_ATTEMPTS },
       OR: [{ analyzedAt: null }, { needsAnalysis: true }],
       ...(cooldownMin > 0 ? { lastMessageAt: { lt: coldBefore } } : {}),

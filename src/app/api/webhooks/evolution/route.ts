@@ -138,7 +138,7 @@ export async function POST(request: Request) {
   // Isolamento: resolve a empresa pelo instanceName único. Desconhecido → 404.
   const conn = await prisma.whatsappConnection.findUnique({
     where: { instanceName: instance },
-    select: { id: true, companyId: true, status: true },
+    select: { id: true, companyId: true, status: true, connectedNumber: true },
   });
   if (!conn) {
     log.warn("Instância desconhecida no webhook", { instance, event });
@@ -154,12 +154,20 @@ export async function POST(request: Request) {
         // open → conectado; close → desconectado; connecting → conectando.
         if (state === "open") {
           const number = extractNumber(payload.sender);
+          // TROCA DE NÚMERO: numberChangedAt só é marcado quando o número muda de
+          // fato (conn.connectedNumber anterior != number novo, ambos presentes).
+          // Reconexão do MESMO número (queda de sinal) NÃO reescreve o corte —
+          // senão o arquivamento sumiria com o funil ativo inteiro. Primeira
+          // conexão (connectedNumber null) também não conta como "troca".
+          const numberChanged =
+            !!number && !!conn.connectedNumber && number !== conn.connectedNumber;
           await prisma.whatsappConnection.update({
             where: { id: conn.id },
             data: {
               status: "CONNECTED",
               connectedNumber: number,
               connectedAt: now,
+              ...(numberChanged ? { numberChangedAt: now } : {}),
               lastEventAt: now,
               lastError: null,
             },

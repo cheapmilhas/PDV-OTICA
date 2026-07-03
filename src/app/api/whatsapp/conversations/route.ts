@@ -13,8 +13,9 @@ import {
  * Permissão: leads.access (mesma do funil). Sempre escopado por companyId.
  *
  * Query params:
- *   status = pending | analyzed | all (default all)
- *   take   = 1..200 (default 50)
+ *   status   = pending | analyzed | all (default all)
+ *   take     = 1..200 (default 50)
+ *   archived = "1" para ver as conversas arquivadas (número antigo). Default: ativas.
  */
 export async function GET(request: NextRequest) {
   try {
@@ -28,8 +29,9 @@ export async function GET(request: NextRequest) {
       statusRaw === "pending" || statusRaw === "analyzed" ? statusRaw : "all";
     const takeRaw = Number(searchParams.get("take"));
     const take = Number.isFinite(takeRaw) && takeRaw > 0 ? takeRaw : undefined;
+    const includeArchived = searchParams.get("archived") === "1";
 
-    const conversations = await listInboxConversations(companyId, { status, take });
+    const conversations = await listInboxConversations(companyId, { status, take, includeArchived });
     return successResponse(conversations);
   } catch (error) {
     return handleApiError(error);

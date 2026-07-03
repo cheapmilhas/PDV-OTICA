@@ -195,6 +195,9 @@ export async function processFunnelReevals(companyId?: string): Promise<FunnelRe
     where: {
       needsFunnelEval: true,
       leadId: { not: null },
+      // Troca de número: conversa arquivada não re-avalia a régua do funil — a
+      // IA não pode mover o estágio de um card que saiu do funil ativo.
+      archivedAt: null,
       ...(companyId ? { companyId } : {}),
     },
     select: { id: true, companyId: true, leadId: true, analyzedAt: true },

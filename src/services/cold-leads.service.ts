@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import type { Prisma } from "@prisma/client";
 import { buildLeadBranchScope } from "@/services/lead.service";
 import { firstName, humanWait } from "@/lib/today-queue";
+import { getArchivedLeadIds } from "@/lib/archived-lead-ids";
 
 /**
  * "Recuperar" (Sprint 3, #7) — a lista de clientes que NÃO converteram, para o
@@ -92,6 +93,14 @@ export async function listColdLeads(
       ...(filters.from ? { gte: filters.from } : {}),
       ...(filters.to ? { lte: filters.to } : {}),
     };
+  }
+
+  // Troca de número: exclui leads cuja conversa de WhatsApp foi arquivada
+  // (número antigo) — não faz sentido reofertar por um número que não existe
+  // mais. Leads sem conversa não são afetados.
+  const archivedLeadIds = await getArchivedLeadIds(companyId);
+  if (archivedLeadIds.length > 0) {
+    where.id = { notIn: archivedLeadIds };
   }
 
   // Filial e o OR de "esfriou" são cláusulas independentes → vão em AND p/ não
