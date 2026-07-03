@@ -73,6 +73,8 @@ export function WhatsappConnectClient() {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [archivedBatches, setArchivedBatches] = useState<{ archivedAt: string; count: number }[]>([]);
+  const [unarchivingBatch, setUnarchivingBatch] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
   const [practicesAccepted, setPracticesAccepted] = useState(false);
 
@@ -175,6 +177,43 @@ export function WhatsappConnectClient() {
     }
   }
 
+  const loadArchivedBatches = useCallback(async () => {
+    try {
+      const res = await fetch("/api/whatsapp/archive-old-number");
+      const json = await res.json();
+      setArchivedBatches(json?.data?.batches ?? []);
+    } catch {
+      /* silencioso: a lista de levas é secundária */
+    }
+  }, []);
+
+  useEffect(() => {
+    if (status === "CONNECTED") loadArchivedBatches();
+  }, [status, loadArchivedBatches]);
+
+  async function unarchiveBatch(archivedAt: string, count: number) {
+    if (!confirm(`Desarquivar ${count} conversa(s) desta leva? Elas voltam ao funil ativo.`)) return;
+    setUnarchivingBatch(archivedAt);
+    try {
+      const res = await fetch("/api/whatsapp/archive-old-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "unarchive", batchArchivedAt: archivedAt }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success(`${json.data.unarchived} conversa(s) desarquivada(s).`);
+        await loadArchivedBatches();
+      } else {
+        toast.error(json.error || "Não foi possível desarquivar.");
+      }
+    } catch {
+      toast.error("Erro ao desarquivar.");
+    } finally {
+      setUnarchivingBatch(null);
+    }
+  }
+
   async function handleArchiveOldNumber() {
     setArchiving(true);
     try {
@@ -219,6 +258,7 @@ export function WhatsappConnectClient() {
       const result = await res.json();
       if (result.success) {
         toast.success(`${result.data.archived} conversa(s) arquivada(s).`);
+        await loadArchivedBatches();
       } else {
         toast.error(result.error || "Não foi possível arquivar.");
       }
@@ -352,6 +392,32 @@ export function WhatsappConnectClient() {
             >
               {archiving ? "Arquivando…" : "Arquivar conversas do número anterior"}
             </Button>
+
+            {archivedBatches.length > 0 && (
+              <div className="mt-4 border-t pt-3">
+                <p className="text-xs font-medium text-muted-foreground">
+                  Levas arquivadas (você pode desfazer cada uma)
+                </p>
+                <ul className="mt-2 space-y-1.5">
+                  {archivedBatches.map((b) => (
+                    <li key={b.archivedAt} className="flex items-center justify-between text-xs">
+                      <span>
+                        {b.count} conversa(s) · {new Date(b.archivedAt).toLocaleString("pt-BR")}
+                      </span>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-6 text-xs"
+                        onClick={() => unarchiveBatch(b.archivedAt, b.count)}
+                        disabled={unarchivingBatch === b.archivedAt}
+                      >
+                        {unarchivingBatch === b.archivedAt ? "Desarquivando…" : "Desarquivar"}
+                      </Button>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}

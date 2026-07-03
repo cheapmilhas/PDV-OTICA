@@ -66,16 +66,51 @@ export async function archiveOldNumberConversations(
   return { archived: res.count, cutoff: cutoff.toISOString() };
 }
 
+export interface ArchivedBatch {
+  archivedAt: string; // ISO — o timestamp comum da leva (chave de agrupamento)
+  count: number;
+}
+
 /**
- * Desarquiva (reverte) — devolve conversas ao funil ativo. Opção de escapatória
- * caso o dono arquive por engano (ex.: era só reconexão do mesmo número).
+ * Lista as LEVAS de arquivamento (cada troca de número gera um lote com o mesmo
+ * archivedAt). Permite ao dono desarquivar só uma leva específica em vez de
+ * tudo. Mais recente primeiro.
  */
-export async function unarchiveConversations(companyId: string): Promise<{ unarchived: number }> {
-  const res = await prisma.whatsappConversation.updateMany({
+export async function listArchivedBatches(companyId: string): Promise<ArchivedBatch[]> {
+  const grouped = await prisma.whatsappConversation.groupBy({
+    by: ["archivedAt"],
     where: { companyId, archivedAt: { not: null } },
+    _count: { _all: true },
+  });
+  return grouped
+    .filter((g) => g.archivedAt != null)
+    .map((g) => ({ archivedAt: (g.archivedAt as Date).toISOString(), count: g._count._all }))
+    .sort((a, b) => (a.archivedAt < b.archivedAt ? 1 : -1));
+}
+
+/**
+ * Desarquiva (reverte) — devolve conversas ao funil ativo.
+ *
+ * Sem batchArchivedAt: reabre TODAS as arquivadas da empresa (escapatória
+ * ampla). Com batchArchivedAt: reabre só a LEVA daquele timestamp — evita que
+ * desarquivar uma troca recente reabra arquivamentos antigos e intencionais.
+ */
+export async function unarchiveConversations(
+  companyId: string,
+  batchArchivedAt?: Date,
+): Promise<{ unarchived: number }> {
+  const where = batchArchivedAt
+    ? { companyId, archivedAt: batchArchivedAt }
+    : { companyId, archivedAt: { not: null } };
+  const res = await prisma.whatsappConversation.updateMany({
+    where,
     data: { archivedAt: null },
   });
-  log.info("Conversas desarquivadas", { companyId, unarchived: res.count });
+  log.info("Conversas desarquivadas", {
+    companyId,
+    unarchived: res.count,
+    batch: batchArchivedAt?.toISOString() ?? "TODAS",
+  });
   return { unarchived: res.count };
 }
 
