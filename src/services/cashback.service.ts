@@ -267,7 +267,13 @@ export const cashbackService = {
   },
 
   /**
-   * Usar cashback em uma venda
+   * Usar cashback em uma venda.
+   *
+   * NOTA (auditoria 2026-07-02): hoje NÃO é chamado em produção — o débito de
+   * cashback na venda passa por applyCashbackUsageInTx (sale-side-effects). Foi
+   * mantido e blindado (débito condicional atômico) para o caso de resgate
+   * avulso futuro; sem essa blindagem, dois usos concorrentes levavam o saldo a
+   * NEGATIVO (mesma classe de bug já corrigida em applyCashbackUsageInTx).
    */
   async useCashback(data: UseCashbackDTO, branchId: string, companyId: string) {
     const { customerId, amount, saleId, description } = data;
@@ -282,11 +288,25 @@ export const cashbackService = {
         throw new Error("Cliente sem cashback cadastrado");
       }
 
-      if (Number(customerCashback.balance) < amount) {
+      // Débito condicional atômico: só decrementa se o saldo AINDA cobre o valor.
+      // O WHERE balance >= amount + checagem de count fecha a corrida (dois usos
+      // simultâneos não passam ambos). Substitui o read-then-write anterior.
+      const debited = await tx.customerCashback.updateMany({
+        where: {
+          id: customerCashback.id,
+          balance: { gte: new Decimal(amount) },
+        },
+        data: {
+          balance: { decrement: new Decimal(amount) },
+          totalUsed: { increment: new Decimal(amount) },
+        },
+      });
+
+      if (debited.count === 0) {
         throw new Error("Saldo insuficiente");
       }
 
-      // Criar movimento de débito
+      // Criar movimento de débito (só após o decremento ser confirmado)
       const movement = await tx.cashbackMovement.create({
         data: {
           customerCashbackId: customerCashback.id,
@@ -296,19 +316,6 @@ export const cashbackService = {
           description:
             description ||
             `Cashback usado na venda #${saleId?.slice(-8) || "AVULSA"}`,
-        },
-      });
-
-      // Atualizar saldo e totais
-      await tx.customerCashback.update({
-        where: { id: customerCashback.id },
-        data: {
-          balance: {
-            decrement: new Decimal(amount),
-          },
-          totalUsed: {
-            increment: new Decimal(amount),
-          },
         },
       });
 
@@ -341,11 +348,22 @@ export const cashbackService = {
         });
       }
 
+      // H3 (auditoria 2026-07-02): lock pessimista na linha antes de ler o saldo.
+      // adjustCashback fazia read-then-write com balance ABSOLUTO — dois ajustes
+      // concorrentes do mesmo cliente liam o mesmo saldo e um sobrescrevia o
+      // outro (lost update). O FOR UPDATE serializa: o 2º ajuste espera o 1º
+      // commitar e relê o saldo já atualizado. Relemos o balance SOB o lock.
+      await tx.$queryRaw`SELECT id FROM "CustomerCashback" WHERE id = ${customerCashback.id} FOR UPDATE`;
+      const locked = await tx.customerCashback.findUnique({
+        where: { id: customerCashback.id },
+        select: { balance: true },
+      });
+
       // M9: piso 0. Lógica pura em applyCashbackAdjustment (testada): um ajuste
       // negativo maior que o saldo (ex: -100 sobre 30) deixava o balance
       // NEGATIVO. Limita ao saldo disponível; o movimento registra o valor REAL
       // aplicado (não o solicitado) para o ledger bater com o saldo.
-      const currentBalance = Number(customerCashback.balance);
+      const currentBalance = Number(locked?.balance ?? customerCashback.balance);
       const { newBalance, appliedAmount } = applyCashbackAdjustment(currentBalance, amount);
 
       // M9: ajuste sem efeito (débito sobre saldo já zero) → erro informativo
