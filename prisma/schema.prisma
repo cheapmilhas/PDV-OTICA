@@ -2359,6 +2359,13 @@ model CommissionPayment {
   totalCommission Decimal  @db.Decimal(10, 2)
   paidAt          DateTime @default(now())
   paidByUserId    String?
+  // Glosa REGISTRADA (não descontada automaticamente): quando uma venda do mês
+  // é devolvida DEPOIS do pagamento, o pago excede o devido. O dono REGISTRA
+  // aqui quanto reconhece a glosar — o sistema só sinaliza "a descontar no
+  // próximo fechamento". NÃO abate folha sozinho (decisão trabalhista do dono).
+  clawbackAmount  Decimal  @default(0) @db.Decimal(10, 2)
+  clawbackAt      DateTime?
+  clawbackByUserId String?
   createdAt       DateTime @default(now())
 
   company  Company @relation(fields: [companyId], references: [id])

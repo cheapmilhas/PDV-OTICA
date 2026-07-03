@@ -60,6 +60,7 @@ const mock = vi.hoisted(() => {
         (state.payments ?? []).map((p: any) => ({
           userId: p.userId,
           totalCommission: { toString: () => String(p.totalCommission ?? 0) },
+          clawbackAmount: { toString: () => String(p.clawbackAmount ?? 0) },
         }))
       ),
     },
@@ -136,6 +137,23 @@ describe("generateMonthlyCommission (regra nova, read-only)", () => {
     expect(ana?.total).toBe("100.00"); // devido recalculado (mini 1% de 10.000)
     expect(ana?.paidAmount).toBe("440.00"); // o que saiu do caixa
     expect(ana?.overpaid).toBe("340.00"); // glosa a cobrar/ajustar
+    // FU-1: nada registrado ainda → pendente = overpaid inteiro.
+    expect(ana?.clawbackAmount).toBe("0.00");
+    expect(ana?.clawbackPending).toBe("340.00");
+  });
+
+  it("FU-1: glosa JÁ registrada zera o pendente (não pede mais 'Registrar')", async () => {
+    // Mesmo cenário: overpaid 340. O dono já registrou 340 de glosa.
+    mock.state.sales = [
+      { sellerUserId: "U1", sellerName: "Ana", status: "COMPLETED", total: 10000, createdAt: JUL },
+    ];
+    mock.state.payments = [{ userId: "U1", totalCommission: 440, clawbackAmount: 340 }];
+
+    const r = await generateMonthlyCommission("co1", 2026, 7);
+    const ana = r.rows.find((x) => x.userName === "Ana");
+    expect(ana?.overpaid).toBe("340.00");
+    expect(ana?.clawbackAmount).toBe("340.00"); // reconhecida
+    expect(ana?.clawbackPending).toBe("0.00"); // nada mais a registrar
   });
 
   it("H1: pago a MENOS que o devido não vira glosa (overpaid=0, extra sai no próximo)", async () => {

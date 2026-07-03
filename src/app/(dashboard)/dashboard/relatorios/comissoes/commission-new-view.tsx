@@ -43,6 +43,10 @@ interface Row {
   paidAmount: string;
   /** H1: valor pago a mais do que o devido atual (venda devolvida após pagar). */
   overpaid: string;
+  /** FU-1: glosa já registrada pelo dono. */
+  clawbackAmount: string;
+  /** FU-1: overpaid ainda não registrado como glosa (> 0 → mostrar botão). */
+  clawbackPending: string;
 }
 interface Report {
   year: number;
@@ -108,6 +112,34 @@ export function CommissionNewView() {
       toast({ title: "Erro", description: "Erro ao pagar a comissão", variant: "destructive" });
     } finally {
       setPayingId(null);
+    }
+  }, [year, month, toast, fetchReport]);
+
+  const [clawingId, setClawingId] = useState<string | null>(null);
+  const registerClawback = useCallback(async (userId: string, pending: string) => {
+    if (!confirm(
+      `Registrar glosa de R$ ${pending}? Isso NÃO desconta o vendedor agora — só ` +
+        `marca o valor a abater no próximo fechamento. Você faz o desconto manualmente.`,
+    )) return;
+    setClawingId(userId);
+    try {
+      const res = await fetch(`/api/reports/commissions/clawback`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ userId, year, month }),
+      });
+      const json = await res.json().catch(() => null);
+      if (res.ok && json?.success) {
+        toast({ title: "Glosa registrada", description: json.message });
+        await fetchReport();
+      } else {
+        const msg = json?.error?.message ?? json?.message ?? "Não foi possível registrar a glosa";
+        toast({ title: "Erro", description: msg, variant: "destructive" });
+      }
+    } catch {
+      toast({ title: "Erro", description: "Erro ao registrar a glosa", variant: "destructive" });
+    } finally {
+      setClawingId(null);
     }
   }, [year, month, toast, fetchReport]);
 
@@ -222,6 +254,28 @@ export function CommissionNewView() {
                                 >
                                   ⚠ Revisar {brl(r.overpaid)}
                                 </span>
+                              )}
+                              {Number(r.clawbackAmount) > 0 && (
+                                <span
+                                  className="inline-flex items-center rounded-full bg-slate-100 px-2 py-0.5 text-xs font-medium text-slate-700"
+                                  title="Glosa registrada — abata este valor do próximo fechamento do vendedor."
+                                >
+                                  Glosa registrada {brl(r.clawbackAmount)}
+                                </span>
+                              )}
+                              {Number(r.clawbackPending) > 0 && (
+                                <Can permission="goals.manage">
+                                  <Button
+                                    size="sm"
+                                    variant="outline"
+                                    className="h-6 text-xs"
+                                    disabled={clawingId === r.userId}
+                                    onClick={() => registerClawback(r.userId, r.clawbackPending)}
+                                  >
+                                    {clawingId === r.userId && <Loader2 className="h-3 w-3 mr-1 animate-spin" />}
+                                    Registrar glosa
+                                  </Button>
+                                </Can>
                               )}
                             </div>
                           ) : Number(r.total) > 0 ? (
