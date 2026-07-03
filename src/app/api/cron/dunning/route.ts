@@ -95,7 +95,11 @@ export async function GET(request: Request) {
               companyId: sub.companyId,
               metadata: { subscriptionId: sub.id, stage, daysOverdue },
             },
-          }).catch(() => {});
+          }).catch((e: unknown) =>
+            log.error("Falha ao auditar DUNNING_NOTICE (não-fatal)", {
+              subscriptionId: sub.id, error: e instanceof Error ? e.message : String(e),
+            })
+          );
           await notifyCompany(
             sub.companyId,
             "INVOICE_OVERDUE",
@@ -167,7 +171,11 @@ export async function GET(request: Request) {
               companyId: sub.companyId,
               metadata: { subscriptionId: sub.id, daysOverdue },
             },
-          }).catch(() => {});
+          }).catch((e: unknown) =>
+            log.error("Falha ao auditar DUNNING_CANCELED (não-fatal)", {
+              subscriptionId: sub.id, error: e instanceof Error ? e.message : String(e),
+            })
+          );
           await notifyCompany(
             sub.companyId,
             "SUBSCRIPTION_CANCELED",

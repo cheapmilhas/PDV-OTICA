@@ -8,6 +8,8 @@ import {
 } from "@/lib/validations/sale.schema";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { handleApiError, unauthorizedError } from "@/lib/error-handler";
+import { logger } from "@/lib/logger";
+import { Prisma } from "@prisma/client";
 import { paginatedResponse, createdResponse } from "@/lib/api-response";
 import { auth } from "@/auth";
 import { rateLimitResponse } from "@/lib/rate-limit";
@@ -216,7 +218,19 @@ export async function POST(request: Request) {
             expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000), // 24h
           },
         })
-        .catch(() => {});
+        .catch((e: unknown) => {
+          // P2002 (unique) é o resultado ESPERADO da race de duplo-POST — a venda
+          // já foi criada por este request, então o registro duplicado é ignorado.
+          // Qualquer OUTRO erro (ex.: banco fora) era engolido silenciosamente;
+          // agora é logado para não ficar invisível (F5, auditoria 2026-07-02).
+          const isDuplicate = e instanceof Prisma.PrismaClientKnownRequestError && e.code === "P2002";
+          if (!isDuplicate) {
+            logger.error("Falha ao registrar idempotência da venda (não-fatal)", {
+              saleId: sale.id,
+              error: e instanceof Error ? e.message : String(e),
+            });
+          }
+        });
     }
 
     // Retorna 201 Created

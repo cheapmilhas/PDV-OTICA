@@ -501,7 +501,7 @@ export class QuoteService {
     };
 
     // Query paralela para métricas
-    const [byStatus, totals, lostReasons, conversionMetrics, sentCount, pendingFollowUpCount] = await Promise.all([
+    const [byStatus, totals, lostReasons, conversionMetrics, sentCount, pendingFollowUpCount, convertedTotals] = await Promise.all([
       // Contar por status
       prisma.quote.groupBy({
         by: ["status"],
@@ -554,6 +554,14 @@ export class QuoteService {
           status: { notIn: ["CONVERTED", "CANCELED", "EXPIRED", "LOST"] },
         },
       }),
+
+      // F5 (auditoria 2026-07-02): valor convertido = soma do total dos
+      // orçamentos que viraram venda (status CONVERTED). Antes era 0 fixo (TODO),
+      // deixando o relatório de conversão sem o valor realizado.
+      prisma.quote.aggregate({
+        where: { ...where, status: "CONVERTED" },
+        _sum: { total: true },
+      }),
     ]);
 
     // Montar objeto de resposta
@@ -603,7 +611,7 @@ export class QuoteService {
       byStatus: statusMap,
       conversionRate: parseFloat(conversionRate.toFixed(2)),
       totalQuotedValue: Number(totals._sum.total || 0),
-      totalConvertedValue: 0, // TODO: Calcular somando Sale.total de vendas convertidas
+      totalConvertedValue: Number(convertedTotals._sum.total || 0),
       avgTimeToConversion: parseFloat(avgTimeToConversion.toFixed(1)),
       lostReasons: lostReasonsMap,
       // CRM
@@ -1054,6 +1062,11 @@ export class QuoteService {
         branchId,
         companyId,
         total: Number(result.sale.total),
+        // NÃO passamos cashbackEarnBase porque orçamento NÃO tem cashbackUsed
+        // (Quote não tem esse campo — a venda convertida é sempre paga integral,
+        // sem resgate de cashback). Se um dia orçamento passar a aceitar cashback,
+        // ADICIONE cashbackEarnBase = total − cashbackUsed aqui, senão volta o
+        // "cashback sobre cashback" que a Fase 2 corrigiu no PDV (CR-4).
         // NOVAS conversões geram cashback normalmente.
         // Apenas o script de migração de vendas órfãs antigas (fix-bug1-orphan-quotes.ts)
         // passa skipCashbackEarn=true para não dar cashback retroativo confuso ao cliente.

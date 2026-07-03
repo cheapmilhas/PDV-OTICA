@@ -774,13 +774,24 @@ export const reportsService = {
       _count: { id: true },
     });
 
-    // Clientes novos no período
-    const newCustomers = await prisma.customer.count({
-      where: {
-        companyId,
-        createdAt: { gte: startCurrent, lte: endCurrent },
-      },
-    });
+    // Clientes novos no período (atual e anterior, para variação)
+    const [newCustomers, previousCustomers] = await Promise.all([
+      prisma.customer.count({
+        where: {
+          companyId,
+          createdAt: { gte: startCurrent, lte: endCurrent },
+        },
+      }),
+      prisma.customer.count({
+        where: {
+          companyId,
+          createdAt: { gte: startPrevious, lte: endPrevious },
+        },
+      }),
+    ]);
+    const customersChange = previousCustomers > 0
+      ? ((newCustomers - previousCustomers) / previousCustomers) * 100
+      : 0;
 
     // Top 5 produtos do período
     const topProducts = await this.getProductsReport(branchId, {
@@ -820,8 +831,8 @@ export const reportsService = {
       },
       customers: {
         current: newCustomers,
-        previous: 0, // TODO: calcular clientes do período anterior se necessário
-        growth: 0,
+        previous: previousCustomers,
+        growth: customersChange,
       },
       peakHour: peakHours.data && peakHours.data.length > 0
         ? {
