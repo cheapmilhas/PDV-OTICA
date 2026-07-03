@@ -42,6 +42,17 @@ export interface MonthlyCommissionRow {
    * pagamento normal), então zeramos.
    */
   overpaid: string;
+  /**
+   * Glosa REGISTRADA pelo dono (CommissionPayment.clawbackAmount). "0.00" se
+   * nada foi registrado. É só reconhecimento — não desconta folha sozinho.
+   */
+  clawbackAmount: string;
+  /**
+   * Quanto do overpaid AINDA não foi registrado como glosa = max(0, overpaid −
+   * clawbackAmount). > 0 → mostrar o botão "Registrar glosa". 0 → já registrado
+   * (ou não há divergência).
+   */
+  clawbackPending: string;
 }
 
 export interface MonthlyCommissionReport {
@@ -88,12 +99,14 @@ export async function generateMonthlyCommission(
   }
 
   // Quem já foi pago neste mês (Bloco 4) — 1 query, depois lookup em memória.
-  // H1: trazemos também o totalCommission pago (snapshot) para detectar glosa.
+  // H1: trazemos também o totalCommission pago (snapshot) para detectar glosa,
+  // e o clawbackAmount já registrado (FU-1).
   const paidRows = await prisma.commissionPayment.findMany({
     where: { companyId, year, month },
-    select: { userId: true, totalCommission: true },
+    select: { userId: true, totalCommission: true, clawbackAmount: true },
   });
   const paidById = new Map(paidRows.map((p) => [p.userId, money(p.totalCommission.toString())]));
+  const clawbackById = new Map(paidRows.map((p) => [p.userId, money(p.clawbackAmount.toString())]));
 
   const rows: MonthlyCommissionRow[] = [];
   let total = money(0);
@@ -110,6 +123,10 @@ export async function generateMonthlyCommission(
         ? Decimal.max(0, paidAmount.minus(money(r.total)))
         : money(0);
 
+    // FU-1: quanto do overpaid ainda não foi registrado como glosa.
+    const clawbackAmount = clawbackById.get(userId) ?? money(0);
+    const clawbackPending = Decimal.max(0, overpaid.minus(clawbackAmount));
+
     rows.push({
       userId,
       userName: name,
@@ -121,6 +138,8 @@ export async function generateMonthlyCommission(
       paid: paidAmount !== null,
       paidAmount: (paidAmount ?? money(0)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
       overpaid: overpaid.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+      clawbackAmount: clawbackAmount.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+      clawbackPending: clawbackPending.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
     });
   }
 

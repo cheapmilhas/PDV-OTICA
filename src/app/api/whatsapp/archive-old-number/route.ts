@@ -7,6 +7,7 @@ import {
   previewArchiveOldNumber,
   archiveOldNumberConversations,
   unarchiveConversations,
+  listArchivedBatches,
 } from "@/services/whatsapp-archive.service";
 
 /**
@@ -29,8 +30,12 @@ export async function GET() {
     if (!isWhatsappEnabledForCompany(companyId)) {
       throw forbiddenError("Integração de WhatsApp não está habilitada para esta empresa.");
     }
-    const preview = await previewArchiveOldNumber(companyId);
-    return NextResponse.json({ success: true, data: preview });
+    // preview (troca detectada) + levas já arquivadas (p/ desarquivar granular).
+    const [preview, batches] = await Promise.all([
+      previewArchiveOldNumber(companyId),
+      listArchivedBatches(companyId),
+    ]);
+    return NextResponse.json({ success: true, data: { ...preview, batches } });
   } catch (error) {
     return handleApiError(error);
   }
@@ -48,7 +53,16 @@ export async function POST(request: NextRequest) {
     const action = body?.action === "unarchive" ? "unarchive" : "archive";
 
     if (action === "unarchive") {
-      const result = await unarchiveConversations(companyId);
+      // batchArchivedAt opcional: desarquiva só aquela leva; sem ele, todas.
+      const batchRaw = typeof body?.batchArchivedAt === "string" ? body.batchArchivedAt : null;
+      const batch = batchRaw ? new Date(batchRaw) : undefined;
+      if (batchRaw && Number.isNaN(batch!.getTime())) {
+        return NextResponse.json(
+          { error: { code: "BAD_REQUEST", message: "batchArchivedAt inválido." } },
+          { status: 400 },
+        );
+      }
+      const result = await unarchiveConversations(companyId, batch);
       return NextResponse.json({ success: true, data: result });
     }
 

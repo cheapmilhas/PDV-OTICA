@@ -15,9 +15,15 @@ const mock = vi.hoisted(() => {
     // Corte da TROCA REAL de número (não connectedAt — que muda a cada reconexão).
     numberChangedAt: null as Date | null,
   };
+  const archivedMatches = (c: any, wa: any): boolean => {
+    if (wa === null) return c.archivedAt === null;
+    if (wa?.not !== undefined) return c.archivedAt !== null; // { not: null }
+    if (wa instanceof Date) return c.archivedAt != null && c.archivedAt.getTime() === wa.getTime();
+    return true;
+  };
   const inScope = (c: any, where: any) =>
     c.companyId === where.companyId &&
-    (where.archivedAt === null ? c.archivedAt === null : where.archivedAt?.not !== undefined ? c.archivedAt !== null : true) &&
+    archivedMatches(c, where.archivedAt) &&
     (where.lastMessageAt?.lt ? c.lastMessageAt < where.lastMessageAt.lt : true);
 
   const prisma = {
@@ -36,6 +42,18 @@ const mock = vi.hoisted(() => {
         }
         return { count };
       }),
+      groupBy: vi.fn(async ({ where }: any) => {
+        const map = new Map<number, { archivedAt: Date; n: number }>();
+        for (const c of state.convs) {
+          if (c.companyId !== where.companyId) continue;
+          if (c.archivedAt == null) continue;
+          const k = c.archivedAt.getTime();
+          const cur = map.get(k) ?? { archivedAt: c.archivedAt, n: 0 };
+          cur.n++;
+          map.set(k, cur);
+        }
+        return [...map.values()].map((v) => ({ archivedAt: v.archivedAt, _count: { _all: v.n } }));
+      }),
     },
   };
   return { state, prisma };
@@ -52,6 +70,7 @@ import {
   previewArchiveOldNumber,
   archiveOldNumberConversations,
   unarchiveConversations,
+  listArchivedBatches,
 } from "@/services/whatsapp-archive.service";
 
 const CHANGED_AT = new Date("2026-07-01T12:00:00Z"); // número trocou aqui
@@ -115,5 +134,50 @@ describe("whatsapp-archive.service", () => {
     // as 3 conversas de co1 (2 antigas + 1 "nova", todas antes do corte) arquivam.
     expect(r.archived).toBe(3);
     expect(mock.state.convs[3].archivedAt).toBeNull(); // co2 intacta
+  });
+
+  it("FU-2: listArchivedBatches agrupa por archivedAt (uma leva por troca)", async () => {
+    // Duas levas distintas em co1: 1 conversa arquivada às T1, 2 às T2.
+    const T1 = new Date("2026-05-01T00:00:00Z");
+    const T2 = new Date("2026-06-01T00:00:00Z");
+    mock.state.convs = [
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T1 },
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T2 },
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T2 },
+      { companyId: "co2", lastMessageAt: OLD, archivedAt: T1 }, // outra empresa
+    ];
+    const batches = await listArchivedBatches("co1");
+    expect(batches).toHaveLength(2);
+    // mais recente primeiro (T2 antes de T1)
+    expect(batches[0]).toEqual({ archivedAt: T2.toISOString(), count: 2 });
+    expect(batches[1]).toEqual({ archivedAt: T1.toISOString(), count: 1 });
+  });
+
+  it("FU-2: unarchive de UMA leva não mexe nas outras", async () => {
+    const T1 = new Date("2026-05-01T00:00:00Z");
+    const T2 = new Date("2026-06-01T00:00:00Z");
+    mock.state.convs = [
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T1 },
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T2 },
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T2 },
+    ];
+    const r = await unarchiveConversations("co1", T2); // só a leva T2
+    expect(r.unarchived).toBe(2);
+    // a leva T1 continua arquivada; as T2 voltaram a ativa
+    expect(mock.state.convs[0].archivedAt).toEqual(T1);
+    expect(mock.state.convs[1].archivedAt).toBeNull();
+    expect(mock.state.convs[2].archivedAt).toBeNull();
+  });
+
+  it("FU-2: unarchive sem leva reabre TODAS (retrocompat)", async () => {
+    const T1 = new Date("2026-05-01T00:00:00Z");
+    const T2 = new Date("2026-06-01T00:00:00Z");
+    mock.state.convs = [
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T1 },
+      { companyId: "co1", lastMessageAt: OLD, archivedAt: T2 },
+    ];
+    const r = await unarchiveConversations("co1");
+    expect(r.unarchived).toBe(2);
+    expect(mock.state.convs.every((c) => c.archivedAt === null)).toBe(true);
   });
 });
