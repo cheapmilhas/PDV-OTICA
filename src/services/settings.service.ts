@@ -5,41 +5,44 @@ import type { CompanySettingsDTO } from "@/lib/validations/settings.schema";
 
 export const settingsService = {
   /**
-   * Busca configurações da empresa (cria se não existir)
+   * Busca configurações da empresa.
+   *
+   * SEC/consistência (auditoria 2026-07-02): antes este GET escrevia no banco em
+   * TODA chamada — além do create-se-ausente, fazia um `update` de backfill de
+   * templates a cada leitura (não-idempotente, e o create abria corrida entre
+   * dois GETs simultâneos de uma empresa nova). Agora:
+   *  - Registro EXISTE (caminho de 99,9% dos GETs): LEITURA PURA. Se houver
+   *    templates legados NULL, os defaults são mesclados só na RESPOSTA (em
+   *    memória) — NÃO grava mais no banco a cada GET.
+   *  - Registro AUSENTE (só o 1º acesso de uma empresa): inicialização preguiçosa
+   *    via `upsert` (idempotente/race-safe — dois GETs concorrentes não colidem;
+   *    o 2º cai no update no-op). Mantém a resposta com o shape COMPLETO da
+   *    entidade (id + todas as colunas), do qual a UI de configurações depende.
    */
   async get(companyId: string) {
-    let settings = await prisma.companySettings.findUnique({
+    const settings = await prisma.companySettings.findUnique({
       where: { companyId },
     });
 
-    // Se não existir, criar com valores padrão
-    if (!settings) {
-      settings = await prisma.companySettings.create({
-        data: {
-          companyId,
-          messageThankYou: DEFAULT_MESSAGES.thankYou,
-          messageQuote: DEFAULT_MESSAGES.quote,
-          messageReminder: DEFAULT_MESSAGES.reminder,
-          messageBirthday: DEFAULT_MESSAGES.birthday,
-          defaultQuoteValidDays: 15,
-        },
-      });
-      return settings;
+    if (settings) {
+      // Existe com templates legados NULL: mescla defaults só na RESPOSTA (não grava).
+      const patch = missingMessageTemplates(settings);
+      return Object.keys(patch).length > 0 ? { ...settings, ...patch } : settings;
     }
 
-    // Backfill de templates legados (drift de schema): registros criados antes
-    // das colunas de mensagem existirem ficaram com NULL e travavam os botões
-    // de WhatsApp (Agradecer/Orçamento/Lembrete/Aniversário). Preenche só o que
-    // falta, num único update — idempotente (após o 1º GET o patch fica vazio).
-    const patch = missingMessageTemplates(settings);
-    if (Object.keys(patch).length > 0) {
-      settings = await prisma.companySettings.update({
-        where: { companyId },
-        data: patch,
-      });
-    }
-
-    return settings;
+    // Ausente: inicialização preguiçosa idempotente (upsert fecha a corrida).
+    return prisma.companySettings.upsert({
+      where: { companyId },
+      update: {}, // já existe (corrida) → no-op, só retorna
+      create: {
+        companyId,
+        messageThankYou: DEFAULT_MESSAGES.thankYou,
+        messageQuote: DEFAULT_MESSAGES.quote,
+        messageReminder: DEFAULT_MESSAGES.reminder,
+        messageBirthday: DEFAULT_MESSAGES.birthday,
+        defaultQuoteValidDays: 15,
+      },
+    });
   },
 
   /**

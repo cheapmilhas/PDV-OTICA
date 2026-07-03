@@ -12,7 +12,7 @@ const mock = vi.hoisted(() => {
     sales: [] as any[], // {sellerUserId, sellerName, status, total, createdAt}
     bonus: [] as any[], // {sellerUserId, totalBonus, status, saleStatus, saleCreatedAt}
     tiers: [] as any[],
-    payments: [] as any[], // {userId} — vendedores já pagos (Bloco 4)
+    payments: [] as any[], // {userId, totalCommission} — vendedores já pagos (Bloco 4)
   };
   const inWin = (d: Date, w: any) => {
     if (w?.gte && d < w.gte) return false;
@@ -54,8 +54,14 @@ const mock = vi.hoisted(() => {
       ),
     },
     // Bloco 4: estado de pagamento. Default vazio = ninguém pago.
+    // totalCommission precisa ter .toString() (Decimal no runtime real).
     commissionPayment: {
-      findMany: vi.fn(async () => state.payments ?? []),
+      findMany: vi.fn(async () =>
+        (state.payments ?? []).map((p: any) => ({
+          userId: p.userId,
+          totalCommission: { toString: () => String(p.totalCommission ?? 0) },
+        }))
+      ),
     },
   };
   return { state, prisma };
@@ -102,13 +108,49 @@ describe("generateMonthlyCommission (regra nova, read-only)", () => {
       { sellerUserId: "U1", sellerName: "Ana", status: "COMPLETED", total: 22000, createdAt: JUL },
       { sellerUserId: "U2", sellerName: "Bia", status: "COMPLETED", total: 15000, createdAt: JUL },
     ];
-    mock.state.payments = [{ userId: "U1" }]; // só Ana foi paga
+    // Ana paga exatamente o devido (meta 2% de 22.000 = 440) → sem glosa.
+    mock.state.payments = [{ userId: "U1", totalCommission: 440 }];
 
     const r = await generateMonthlyCommission("co1", 2026, 7);
     const ana = r.rows.find((x) => x.userName === "Ana");
     const bia = r.rows.find((x) => x.userName === "Bia");
     expect(ana?.paid).toBe(true);
+    expect(ana?.paidAmount).toBe("440.00");
+    expect(ana?.overpaid).toBe("0.00"); // pago == devido
     expect(bia?.paid).toBe(false);
+    expect(bia?.paidAmount).toBe("0.00");
+  });
+
+  it("H1: venda devolvida após pagamento gera glosa (overpaid) do excedente pago", async () => {
+    // Ana vendeu 22.000 e foi paga 440 (meta 2%). Depois uma venda de 12.000 foi
+    // DEVOLVIDA — netSales cai para 10.000 (só mini 1% = 100). O pagamento de 440
+    // continua no banco; o devido AGORA é 100 → glosa de 340.
+    mock.state.sales = [
+      { sellerUserId: "U1", sellerName: "Ana", status: "COMPLETED", total: 10000, createdAt: JUL },
+    ];
+    mock.state.payments = [{ userId: "U1", totalCommission: 440 }];
+
+    const r = await generateMonthlyCommission("co1", 2026, 7);
+    const ana = r.rows.find((x) => x.userName === "Ana");
+    expect(ana?.paid).toBe(true);
+    expect(ana?.total).toBe("100.00"); // devido recalculado (mini 1% de 10.000)
+    expect(ana?.paidAmount).toBe("440.00"); // o que saiu do caixa
+    expect(ana?.overpaid).toBe("340.00"); // glosa a cobrar/ajustar
+  });
+
+  it("H1: pago a MENOS que o devido não vira glosa (overpaid=0, extra sai no próximo)", async () => {
+    // Ana devido 440, mas pagamento registrado foi só 100 (cenário incomum).
+    // Não é glosa — o vendedor tem a receber; overpaid deve ser 0.
+    mock.state.sales = [
+      { sellerUserId: "U1", sellerName: "Ana", status: "COMPLETED", total: 22000, createdAt: JUL },
+    ];
+    mock.state.payments = [{ userId: "U1", totalCommission: 100 }];
+
+    const r = await generateMonthlyCommission("co1", 2026, 7);
+    const ana = r.rows.find((x) => x.userName === "Ana");
+    expect(ana?.total).toBe("440.00");
+    expect(ana?.paidAmount).toBe("100.00");
+    expect(ana?.overpaid).toBe("0.00");
   });
 
   it("inclui campanha no total e no detalhe", async () => {

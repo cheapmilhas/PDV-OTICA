@@ -116,7 +116,14 @@ export async function POST(request: Request) {
                 metadata: { remaining: admin.mfaRecoveryCodes.length - 1 },
               },
             })
-            .catch(() => {});
+            // Falha ao gravar a trilha de segurança não deve travar o login, mas
+            // NÃO pode sumir silenciosamente (F5, auditoria 2026-07-02).
+            .catch((e: unknown) =>
+              log.error("Falha ao auditar uso de código de recuperação MFA", {
+                adminId: admin.id,
+                error: e instanceof Error ? e.message : String(e),
+              })
+            );
         } else {
           log.warn("Código MFA inválido no login", { email });
           return NextResponse.json({ error: "Código de verificação inválido", mfaRequired: true }, { status: 401 });

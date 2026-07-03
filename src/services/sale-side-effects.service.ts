@@ -884,6 +884,15 @@ export async function applyPostCommitSideEffects(params: {
   companyId: string;
   total: number;
   /**
+   * Base para o CÁLCULO do cashback ganho (H2 / auditoria 2026-07-02). Deve ser
+   * o valor efetivamente PAGO em dinheiro/cartão/pix — ou seja, total menos o
+   * cashback que o cliente usou nesta compra (totalAfterCashback). Sem isto,
+   * earnCashback usava o `total` bruto e gerava "cashback sobre cashback": uma
+   * compra quitada 100% com saldo de cashback ainda creditava novo cashback
+   * (dinheiro que a ótica nunca recebeu). Omitido → cai no `total` (retrocompat).
+   */
+  cashbackEarnBase?: number;
+  /**
    * Se true, NÃO chama earnCashback. Usado pela conversão de orçamento — decisão
    * de produto: vendas convertidas não geram cashback retroativo (ver
    * /docs/audit/fixes/bug1_diagnostico.md decisão (a) de Matheus).
@@ -893,12 +902,13 @@ export async function applyPostCommitSideEffects(params: {
    */
   skipCashbackEarn?: boolean;
 }): Promise<void> {
-  const { saleId, customerId, branchId, companyId, total, skipCashbackEarn } = params;
+  const { saleId, customerId, branchId, companyId, total, cashbackEarnBase, skipCashbackEarn } = params;
 
-  // Cashback ganho
+  // Cashback ganho — base = valor pago do próprio bolso (não o total bruto).
+  const earnBase = cashbackEarnBase ?? total;
   if (customerId && !skipCashbackEarn) {
     try {
-      await cashbackService.earnCashback(customerId, saleId, total, branchId, companyId);
+      await cashbackService.earnCashback(customerId, saleId, earnBase, branchId, companyId);
     } catch (cashbackError) {
       log.warn("cashback_earn_failed", {
         saleId,

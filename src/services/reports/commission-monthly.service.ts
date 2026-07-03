@@ -27,6 +27,21 @@ export interface MonthlyCommissionRow {
   appliedPercent: string;
   /** Já pago (existe CommissionPayment do vendedor/mês) — Bloco 4. */
   paid: boolean;
+  /**
+   * Valor efetivamente PAGO (snapshot do CommissionPayment), quando paid=true.
+   * "0.00" quando não pago.
+   */
+  paidAmount: string;
+  /**
+   * H1 (auditoria 2026-07-02): divergência entre o pago e o devido AGORA.
+   * > 0 = pagou a MAIS do que o devido atual (tipicamente porque uma venda do
+   * mês foi devolvida DEPOIS do pagamento — netSales caiu, mas o pagamento já
+   * saiu). Valor a glosar/cobrar do vendedor no próximo fechamento. "0.00"
+   * quando não há divergência (ou não pago). NUNCA negativo — se o devido subiu
+   * após o pagamento, não é uma glosa (o vendedor recebe a diferença no próximo
+   * pagamento normal), então zeramos.
+   */
+  overpaid: string;
 }
 
 export interface MonthlyCommissionReport {
@@ -73,11 +88,12 @@ export async function generateMonthlyCommission(
   }
 
   // Quem já foi pago neste mês (Bloco 4) — 1 query, depois lookup em memória.
+  // H1: trazemos também o totalCommission pago (snapshot) para detectar glosa.
   const paidRows = await prisma.commissionPayment.findMany({
     where: { companyId, year, month },
-    select: { userId: true },
+    select: { userId: true, totalCommission: true },
   });
-  const paidSet = new Set(paidRows.map((p) => p.userId));
+  const paidById = new Map(paidRows.map((p) => [p.userId, money(p.totalCommission.toString())]));
 
   const rows: MonthlyCommissionRow[] = [];
   let total = money(0);
@@ -85,6 +101,15 @@ export async function generateMonthlyCommission(
   for (const [userId, name] of sellers) {
     const r = await computeSellerCommission(companyId, userId, year, month);
     total = total.plus(money(r.total));
+
+    const paidAmount = paidById.get(userId) ?? null;
+    // H1: glosa = quanto o pago excede o devido AGORA. Piso 0 (se o devido
+    // subiu depois do pagamento, não é glosa — o extra vem no próximo pagamento).
+    const overpaid =
+      paidAmount !== null
+        ? Decimal.max(0, paidAmount.minus(money(r.total)))
+        : money(0);
+
     rows.push({
       userId,
       userName: name,
@@ -93,7 +118,9 @@ export async function generateMonthlyCommission(
       metaCommission: r.metaCommission,
       campaignBonus: r.campaignBonus,
       appliedPercent: r.meta.appliedPercent,
-      paid: paidSet.has(userId),
+      paid: paidAmount !== null,
+      paidAmount: (paidAmount ?? money(0)).toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
+      overpaid: overpaid.toDecimalPlaces(2, Decimal.ROUND_HALF_UP).toFixed(2),
     });
   }
 

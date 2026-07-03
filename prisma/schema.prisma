@@ -999,6 +999,12 @@ model ServiceOrder {
   @@index([companyId, isDelayed])
   @@index([companyId, promisedDate])
   @@index([laboratoryId])
+  // Auditoria 2026-07-02: FKs sem índice dedicado (usadas em relatórios "quem
+  // criou/entregou" e no auto-relacionamento garantia/retrabalho).
+  @@index([createdByUserId])
+  @@index([deliveredByUserId])
+  @@index([prescriptionId])
+  @@index([originalOrderId])
 }
 
 model ServiceOrderItem {
@@ -1384,6 +1390,10 @@ model Sale {
 
   @@unique([companyId, number])
   @@index([companyId, branchId, createdAt])
+  // Auditoria 2026-07-02: a listagem de vendas do PDV filtra por
+  // companyId+branchId+status+range(createdAt). Índice equality-first
+  // (companyId, branchId, status) + range (createdAt) evita o Filter pós-scan.
+  @@index([companyId, branchId, status, createdAt])
   @@index([customerId, createdAt])
   @@index([sellerUserId, createdAt])
   @@index([agreementId])

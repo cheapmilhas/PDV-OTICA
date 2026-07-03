@@ -51,6 +51,51 @@ export async function POST(req: NextRequest) {
       );
     }
 
+    // SEC/operacional (auditoria 2026-07-02): esta é uma ferramenta de reset de
+    // demo. As categorias "finance" e "all" apagam FISICAMENTE o FinanceEntry
+    // (ledger contábil tratado como imutável no resto do sistema) sem rastro
+    // reconstruível (o AuditLog grava só a contagem). Bloqueamos essas duas
+    // categorias para empresas de PRODUÇÃO — assinatura ACTIVE/PAST_DUE, contrato
+    // iniciado, OU qualquer FinanceEntry já lançado. As demais categorias
+    // (produtos, clientes, etc.) seguem permitidas; demo/trial SEM ledger real
+    // continua podendo zerar tudo.
+    if (category === "finance" || category === "all") {
+      const [company, ledgerCount] = await Promise.all([
+        prisma.company.findUnique({
+          where: { id: companyId },
+          select: {
+            contractStart: true,
+            subscriptions: {
+              where: { status: { in: ["ACTIVE", "PAST_DUE"] } },
+              select: { id: true },
+              take: 1,
+            },
+          },
+        }),
+        // CR-4 (revisão adversarial): fecha o furo de empresa TRIALING/CANCELED
+        // com histórico contábil real. Ter QUALQUER FinanceEntry = há ledger a
+        // proteger, independente do status da assinatura.
+        prisma.financeEntry.count({ where: { companyId } }),
+      ]);
+      const isProduction =
+        !!company?.contractStart ||
+        (company?.subscriptions.length ?? 0) > 0 ||
+        ledgerCount > 0;
+      if (isProduction) {
+        log.warn("Bloqueado reset destrutivo do ledger em empresa de produção", { companyId, category, userId: session.user.id });
+        return NextResponse.json(
+          {
+            error: {
+              code: "FORBIDDEN",
+              message:
+                "Esta empresa tem assinatura/contrato ativo. Apagar o histórico financeiro (ledger) não é permitido em produção. Para correções contábeis, use estorno/devolução — não a limpeza de dados.",
+            },
+          },
+          { status: 403 }
+        );
+      }
+    }
+
     const userId = session.user.id;
     let deletedCount = 0;
 

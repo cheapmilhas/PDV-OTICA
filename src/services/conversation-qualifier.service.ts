@@ -22,6 +22,9 @@ import type { ContactIntent } from "@/lib/ai/lead-qualifier";
 const log = logger.child({ service: "conversation-qualifier" });
 const MAX_ATTEMPTS = 3;
 const SCAN_LIMIT = 200;
+// S3: a cada quantas conversas o cron reverifica a cota mensal DENTRO do lote,
+// para que crons sobrepostos não estourem o limite (ver qualifyPendingConversations).
+const QUOTA_RECHECK_EVERY = 20;
 // Few-shot (Fatia 3): qtde de correções recentes da ótica injetadas no prompt.
 // Teto baixo p/ controlar custo de tokens (a crítica alertou: +input por chamada).
 const FEWSHOT_LIMIT = 8;
@@ -452,27 +455,48 @@ export async function qualifyPendingConversations(
     }
     if (!settings || !settings.iaAvailable || !settings.iaEnabled) { skippedCompanies++; continue; }
 
-    // Gate de cota mensal (mesma regra do assertAiAllowed, 1× por empresa aqui
-    // p/ não somar por conversa). Fecha o furo de o cron estourar a cota — o
-    // Atacadão já estourou uma vez. Fail-SAFE no erro de leitura do uso: deixa
-    // processar (não trava a feature por flake de banco), igual ao guard manual.
-    if (settings.iaMonthlyTokenLimit != null) {
-      let overQuota = false;
+    // Gate de cota mensal (mesma regra do assertAiAllowed). Fecha o furo de o
+    // cron estourar a cota — o Atacadão já estourou uma vez. Fail-SAFE no erro
+    // de leitura do uso: deixa processar (não trava a feature por flake de banco).
+    //
+    // S3 (auditoria 2026-07-02): a checagem NÃO é mais só 1× no início. Antes,
+    // dois crons sobrepostos (cron-job.org roda a cada 1-2min; um lote de até
+    // 200 conversas pode não terminar antes do próximo disparar) liam a cota no
+    // começo e cada um gastava seu lote inteiro sem ver o gasto do outro,
+    // estourando o limite. Agora reverificamos a cota a cada QUOTA_RECHECK_EVERY
+    // conversas: assim que o uso acumulado (incluindo o de uma execução
+    // concorrente) cruza o limite, o lote para. Pooler-safe (sem lock de sessão).
+    const quotaLimit = settings.iaMonthlyTokenLimit;
+    const checkOverQuota = async (): Promise<boolean> => {
+      if (quotaLimit == null) return false;
       try {
         const usage = await getMonthlyUsage(cid);
-        overQuota = usage.totalTokens >= settings.iaMonthlyTokenLimit;
+        return usage.totalTokens >= quotaLimit;
       } catch (e) {
+        // fail-safe: erro de leitura do uso → não trava (deixa processar).
         log.error("falha ao somar uso mensal no cron — deixando processar (fail-safe)", { companyId: cid, error: e });
+        return false;
       }
-      if (overQuota) {
-        skippedCompanies++;
-        log.warn("cota mensal de IA atingida — pulando empresa no cron", { companyId: cid });
-        continue;
-      }
+    };
+
+    if (await checkOverQuota()) {
+      skippedCompanies++;
+      log.warn("cota mensal de IA atingida — pulando empresa no cron", { companyId: cid });
+      continue;
     }
 
+    let sinceQuotaCheck = 0;
     for (const id of ids) {
+      // Reverifica a cota periodicamente dentro do lote (S3).
+      if (quotaLimit != null && sinceQuotaCheck >= QUOTA_RECHECK_EVERY) {
+        sinceQuotaCheck = 0;
+        if (await checkOverQuota()) {
+          log.warn("cota mensal de IA atingida no meio do lote — interrompendo empresa", { companyId: cid });
+          break;
+        }
+      }
       processed++;
+      sinceQuotaCheck++;
       try {
         const r = await qualifyConversation(id);
         if (r.leadId) leads++;

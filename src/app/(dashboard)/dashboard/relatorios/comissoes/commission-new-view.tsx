@@ -40,6 +40,9 @@ interface Row {
   campaignBonus: string;
   appliedPercent: string;
   paid: boolean;
+  paidAmount: string;
+  /** H1: valor pago a mais do que o devido atual (venda devolvida após pagar). */
+  overpaid: string;
 }
 interface Report {
   year: number;
@@ -208,9 +211,19 @@ export function CommissionNewView() {
                         </TableCell>
                         <TableCell className="text-right">
                           {r.paid ? (
-                            <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
-                              ✓ Pago
-                            </span>
+                            <div className="flex flex-col items-end gap-1">
+                              <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
+                                ✓ Pago {brl(r.paidAmount)}
+                              </span>
+                              {Number(r.overpaid) > 0 && (
+                                <span
+                                  className="inline-flex items-center rounded-full bg-amber-100 px-2 py-0.5 text-xs font-medium text-amber-800"
+                                  title="O valor pago excede o devido recalculado agora. Isso ocorre quando uma venda do mês é devolvida depois do pagamento OU quando as metas/campanha foram alteradas após o pagamento. Confira o motivo antes de ajustar no próximo fechamento."
+                                >
+                                  ⚠ Revisar {brl(r.overpaid)}
+                                </span>
+                              )}
+                            </div>
                           ) : Number(r.total) > 0 ? (
                             <Can permission="goals.manage">
                               <Button

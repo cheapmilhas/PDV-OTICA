@@ -111,7 +111,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             // resposta (senão atacante mede latência e enumera emails). Só roda
             // quando NENHUM candidato bateu — inclui o caso de zero candidatos.
             await bcrypt.compare(password, DUMMY_HASH);
-            console.log(`❌ Login inválido para ${login}`);
             return null;
           }
 
@@ -119,7 +118,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
           const firstBranch = user.branches[0]?.branch;
 
           if (!firstBranch) {
-            console.log(`❌ Usuário ${login} não possui filial vinculada`);
             return null;
           }
 
@@ -133,17 +131,15 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             networkId: user.company?.networkId || null,
           };
 
-          console.log(`✅ Login bem-sucedido:`, {
-            name: authData.name,
-            email: authData.email,
-            role: authData.role,
-            companyId: authData.companyId,
-            networkId: authData.networkId,
-          });
-
           return authData;
         } catch (error) {
-          console.error("Auth error:", error);
+          // Loga só o TIPO e a MENSAGEM do erro — nunca o objeto cru nem as
+          // credentials (um ZodError poderia ecoar o payload de login). Sem
+          // isto, um outage de infra (banco fora, bcrypt quebrado no deploy)
+          // ficava invisível, indistinguível de senha errada (CR-4).
+          const name = error instanceof Error ? error.name : "UnknownError";
+          const message = error instanceof z.ZodError ? "validação de credenciais falhou" : error instanceof Error ? error.message : "erro desconhecido";
+          console.error(`Auth error [${name}]: ${message}`);
           return null;
         }
       },
@@ -158,14 +154,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
       // Padrão: dashboard
       return `${baseUrl}/dashboard`;
     },
-    async jwt({ token, user, trigger }) {
+    async jwt({ token, user }) {
       // Se for um novo login, atualizar o token com dados do usuário
       if (user) {
-        console.log("🔐 JWT callback - Novo login:", {
-          email: user.email,
-          role: user.role,
-        });
-
         token.id = user.id;
         token.name = user.name;
         token.email = user.email;
@@ -175,11 +166,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.networkId = user.networkId;
         token.revalidatedAt = Date.now();
         return token;
-      }
-
-      // Se for um update da sessão (ex: após signOut), resetar o token
-      if (trigger === "update") {
-        console.log("🔄 JWT callback - Update trigger");
       }
 
       // Q8.3: revogação REAL de impersonação. O token de impersonação é
@@ -272,11 +258,6 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
     async session({ session, token }) {
       // Sempre pegar dados do token (nunca manter dados antigos)
       if (token && session.user) {
-        console.log("👤 Session callback - Token:", {
-          email: token.email,
-          role: token.role,
-        });
-
         session.user.id = token.id as string;
         session.user.name = token.name as string;
         session.user.email = token.email as string;

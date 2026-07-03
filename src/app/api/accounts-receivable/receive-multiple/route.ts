@@ -7,6 +7,10 @@ import { requireWriteAccess } from "@/lib/subscription";
 import { z } from "zod";
 import { AccountReceivableStatus } from "@prisma/client";
 import { calculatePenalties } from "@/lib/penalty-utils";
+import { generateReceivableInterestEntry } from "@/services/finance-entry.service";
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ route: "accounts-receivable/receive-multiple" });
 
 /**
  * Schema de validação para recebimento com múltiplos pagamentos
@@ -246,6 +250,35 @@ export async function POST(request: Request) {
                 note: `Recebimento ${isFullPayment ? "total" : "parcial"}: ${existing.description}${updated.customer ? ` - ${updated.customer.name}` : ""} (${payment.method})`,
                 createdByUserId: userId,
               },
+            });
+          }
+        }
+      }
+
+      // S5 (auditoria 2026-07-02): quando a quitação inclui multa/juros, lança a
+      // receita financeira no ledger (Débito 1.1.03 / Crédito 3.1.03). Só ao
+      // QUITAR (isFullPayment) — os valores fineAmount/interestAmount da conta
+      // ficam finalizados aqui; a upsert idempotente evita duplicar em parciais
+      // ou re-tentativas. Fail-safe: falha do ledger não derruba o recebimento
+      // (mesmo padrão do generateSaleEntries), mas logamos para reconciliação.
+      if (isFullPayment) {
+        const interestAndFine = Math.round((fineAmount + interestAmount) * 100) / 100;
+        if (interestAndFine > 0) {
+          try {
+            await generateReceivableInterestEntry(
+              tx,
+              {
+                accountReceivableId: data.accountId,
+                interestAndFine,
+                branchId: updated.branchId,
+                entryDate: receivedDate,
+              },
+              companyId
+            );
+          } catch (ledgerError) {
+            log.error("Falha ao lançar multa/juros no ledger (não-fatal)", {
+              accountId: data.accountId,
+              error: ledgerError instanceof Error ? ledgerError.message : String(ledgerError),
             });
           }
         }
