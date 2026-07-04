@@ -107,6 +107,35 @@ describe("persistInboundMessage", () => {
     expect(analysisCall).toBeUndefined();
   });
 
+  // Troca de número: conversa arquivada volta ao funil quando o CLIENTE escreve.
+  it("INBOUND numa conversa ARQUIVADA limpa archivedAt (volta ao funil)", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: null, archivedAt: new Date("2026-07-03T16:45:00Z") });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", base);
+    const unarchiveCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.archivedAt === null);
+    expect(unarchiveCall).toBeTruthy();
+    expect(unarchiveCall[0].where).toEqual({ id: "conv_1" });
+  });
+
+  it("OUTBOUND numa conversa arquivada NÃO desarquiva (loja não revive número morto)", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: null, archivedAt: new Date("2026-07-03T16:45:00Z") });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", outbound);
+    const unarchiveCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => c[0].data?.archivedAt === null);
+    expect(unarchiveCall).toBeUndefined();
+  });
+
+  it("INBOUND numa conversa NÃO arquivada não chama update de archivedAt", async () => {
+    (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
+    (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: null, archivedAt: null });
+    (prisma.whatsappMessage.create as any).mockResolvedValue({ id: "m" });
+    await persistInboundMessage("co_1", base);
+    const unarchiveCall = (prisma.whatsappConversation.update as any).mock.calls.find((c: any[]) => "archivedAt" in (c[0].data ?? {}));
+    expect(unarchiveCall).toBeUndefined();
+  });
+
   it("OUTBOUND numa conversa SEM lead NÃO arma needsFunnelEval", async () => {
     (prisma.whatsappMessage.findUnique as any).mockResolvedValue(null);
     (prisma.whatsappConversation.upsert as any).mockResolvedValue({ id: "conv_1", analyzedAt: new Date("2026-06-10"), leadId: null });

@@ -8,6 +8,8 @@ import {
   archiveOldNumberConversations,
   unarchiveConversations,
   listArchivedBatches,
+  setQualifyCutoffNow,
+  clearQualifyCutoff,
 } from "@/services/whatsapp-archive.service";
 
 /**
@@ -50,7 +52,23 @@ export async function POST(request: NextRequest) {
     }
 
     const body = await request.json().catch(() => ({}));
-    const action = body?.action === "unarchive" ? "unarchive" : "archive";
+    const rawAction = body?.action;
+    const action =
+      rawAction === "unarchive" ? "unarchive"
+      : rawAction === "set-qualify-cutoff" ? "set-qualify-cutoff"
+      : rawAction === "clear-qualify-cutoff" ? "clear-qualify-cutoff"
+      : "archive";
+
+    // "Qualificar só daqui pra frente": corta o backlog da IA (não gasta cota com
+    // conversas antigas). O dono aciona ao trocar de número / limpar o funil.
+    if (action === "set-qualify-cutoff") {
+      const result = await setQualifyCutoffNow(companyId);
+      return NextResponse.json({ success: true, data: result });
+    }
+    if (action === "clear-qualify-cutoff") {
+      await clearQualifyCutoff(companyId);
+      return NextResponse.json({ success: true, data: { qualifyFromAt: null } });
+    }
 
     if (action === "unarchive") {
       // batchArchivedAt opcional: desarquiva só aquela leva; sem ele, todas.

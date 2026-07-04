@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     whatsappConversation: { findUnique: vi.fn(), findMany: vi.fn(), update: vi.fn(), updateMany: vi.fn() },
+    whatsappConnection: { findMany: vi.fn() },
     companySettings: { findUnique: vi.fn() },
   },
 }));
@@ -59,6 +60,9 @@ beforeEach(() => {
   getAiConfigMock.mockResolvedValue({ qualifierModel: "claude-haiku-4-5", hasKey: true, usdBrlRate: 5, markupPercent: 0, creditTokenFactor: 1, hasOpenaiKey: true });
   matchCustomerMock.mockResolvedValue({ kind: "none", customerId: null, customerName: null, summary: null, candidateCount: 0 });
   (prisma.whatsappConversation.updateMany as any).mockResolvedValue({ count: 1 }); // claim vence
+  // Sem corte de qualificação por padrão (qualifyFromAt null) — empresas qualificam
+  // todo o backlog, mantendo o comportamento dos testes existentes.
+  (prisma.whatsappConnection.findMany as any).mockResolvedValue([]);
 });
 
 describe("qualifyConversation", () => {
@@ -529,5 +533,40 @@ describe("qualifyPendingConversations (R4 fail-closed por empresa)", () => {
     await qualifyPendingConversations("co1", { cooldownMin: 0 });
     const arg = (prisma.whatsappConversation.findMany as any).mock.calls[0][0];
     expect(arg.where.lastMessageAt).toBeUndefined();
+  });
+
+  // Corte "só daqui pra frente" (qualifyFromAt): backlog antigo não gasta cota.
+  it("qualifyFromAt: pula conversa com msg ANTERIOR ao corte (backlog), processa a POSTERIOR", async () => {
+    const cutoff = new Date("2026-07-03T16:45:00Z");
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([
+      { id: "old", companyId: "co1", lastMessageAt: new Date("2026-07-01T10:00:00Z") }, // antes do corte → pula
+      { id: "new", companyId: "co1", lastMessageAt: new Date("2026-07-04T09:00:00Z") }, // depois → processa
+    ]);
+    (prisma.whatsappConnection.findMany as any).mockResolvedValue([{ companyId: "co1", qualifyFromAt: cutoff }]);
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ iaAvailable: true, iaEnabled: true, iaMonthlyTokenLimit: null });
+    (prisma.whatsappConversation.findUnique as any).mockImplementation((a: any) =>
+      Promise.resolve({ ...conv, id: a.where.id, companyId: "co1" }));
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+
+    await qualifyPendingConversations("co1", { cooldownMin: 0 });
+
+    // Só a conversa "new" (posterior ao corte) foi qualificada; "old" foi ignorada.
+    const claimedIds = (prisma.whatsappConversation.findUnique as any).mock.calls.map((c: any[]) => c[0].where.id);
+    expect(claimedIds).toContain("new");
+    expect(claimedIds).not.toContain("old");
+  });
+
+  it("sem qualifyFromAt (null) → processa tudo, inclusive backlog antigo", async () => {
+    (prisma.whatsappConversation.findMany as any).mockResolvedValue([
+      { id: "old", companyId: "co1", lastMessageAt: new Date("2026-01-01T10:00:00Z") },
+    ]);
+    (prisma.whatsappConnection.findMany as any).mockResolvedValue([{ companyId: "co1", qualifyFromAt: null }]);
+    (prisma.companySettings.findUnique as any).mockResolvedValue({ iaAvailable: true, iaEnabled: true, iaMonthlyTokenLimit: null });
+    (prisma.whatsappConversation.findUnique as any).mockResolvedValue({ ...conv, id: "old", companyId: "co1" });
+    qualifyTextMock.mockResolvedValue({ isLead: false, reason: "x", interest: null, stageId: null, confidence: 0.5, parseError: false, usage: { inputTokens: 1, outputTokens: 1, cacheTokens: 0 } });
+
+    await qualifyPendingConversations("co1", { cooldownMin: 0 });
+    const claimedIds = (prisma.whatsappConversation.findUnique as any).mock.calls.map((c: any[]) => c[0].where.id);
+    expect(claimedIds).toContain("old"); // sem corte, backlog é processado
   });
 });

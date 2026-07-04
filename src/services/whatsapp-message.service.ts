@@ -28,7 +28,7 @@ export async function persistInboundMessage(
       lastMessageAt: msg.receivedAt,
       isGroup: msg.isGroup,
     },
-    select: { id: true, analyzedAt: true, leadId: true },
+    select: { id: true, analyzedAt: true, leadId: true, archivedAt: true },
   });
 
   const newMessage = await prisma.whatsappMessage.create({
@@ -44,6 +44,17 @@ export async function persistInboundMessage(
     },
     select: { id: true },
   });
+
+  // DESARQUIVAR no inbound: se o CLIENTE volta a escrever numa conversa que estava
+  // arquivada (ex.: arquivada na troca de número mas o contato migrou pro número
+  // novo), ela está viva de novo — devolve ao funil ativo. SÓ inbound: a loja
+  // mandar mensagem NÃO revive um número morto (não desarquiva por outbound).
+  if (conversation.archivedAt && msg.direction === WA_DIRECTION.INBOUND) {
+    await prisma.whatsappConversation.update({
+      where: { id: conversation.id },
+      data: { archivedAt: null },
+    });
+  }
 
   // R1: msg nova numa conversa JÁ analisada → marcar p/ re-qualificação. SÓ
   // inbound: uma resposta NOSSA (outbound) não é motivo de re-analisar o lead

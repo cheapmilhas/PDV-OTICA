@@ -4558,6 +4558,12 @@ model WhatsappConnection {
   /// É o CORTE do arquivamento de conversas do número antigo — usar connectedAt
   /// aqui arquivaria o funil inteiro numa simples reconexão.
   numberChangedAt DateTime?
+  /// CORTE da qualificação por IA: quando setado, o cron só qualifica conversas
+  /// com lastMessageAt >= qualifyFromAt — ou seja, "só daqui pra frente". Serve
+  /// para zerar o backlog acumulado (ex.: após troca de número ou estouro de cota)
+  /// sem gastar cota reprocessando conversas antigas. null = sem corte (qualifica
+  /// tudo que estiver pendente, comportamento original). Setado por botão no admin.
+  qualifyFromAt   DateTime?
   lastQrAt        DateTime?
   connectedAt     DateTime?
   disconnectedAt  DateTime?
