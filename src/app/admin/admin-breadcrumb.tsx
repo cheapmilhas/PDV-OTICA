@@ -21,7 +21,20 @@ const SEGMENT_LABELS: Record<string, string> = {
   suporte:        "Suporte",
   tickets:        "Tickets",
   assinaturas:    "Assinaturas",
+  interessados:   "Interessados",
+  saude:          "Saúde",
+  sincronizacao:  "Sincronização",
+  emails:         "Emails",
+  seguranca:      "Segurança",
+  ia:             "IA",
+  whatsapp:       "WhatsApp",
+  nova:           "Nova",
 };
+
+// Segmentos que NÃO têm página própria (só agrupam rotas filhas). O crumb
+// aparece como texto, nunca como link — senão levaria a um 404 (ex.: /admin/suporte,
+// que só existe como /admin/suporte/tickets).
+const NON_LINKABLE = new Set(["suporte"]);
 
 export function AdminBreadcrumb() {
   const pathname = usePathname();
@@ -34,7 +47,9 @@ export function AdminBreadcrumb() {
     const isId = seg.length > 15 && !SEGMENT_LABELS[seg];
     const label = isId ? "Detalhes" : (SEGMENT_LABELS[seg] ?? seg);
     const isLast = idx === segments.length - 1;
-    return { href, label, isLast };
+    // Não linkar segmentos sem página (evita 404) nem IDs (rota de detalhe já é o pai).
+    const linkable = !NON_LINKABLE.has(seg) && !isId;
+    return { href, label, isLast, linkable };
   });
 
   if (crumbs.length <= 1) return null; // só "admin" → sem breadcrumb
@@ -44,8 +59,8 @@ export function AdminBreadcrumb() {
       {crumbs.map((crumb, idx) => (
         <span key={crumb.href} className="flex items-center gap-1">
           {idx > 0 && <ChevronRight className="h-3 w-3 text-muted-foreground/50" />}
-          {crumb.isLast ? (
-            <span className="text-foreground font-medium">{crumb.label}</span>
+          {crumb.isLast || !crumb.linkable ? (
+            <span className={crumb.isLast ? "text-foreground font-medium" : undefined}>{crumb.label}</span>
           ) : (
             <Link href={crumb.href} className="hover:text-foreground transition-colors">
               {crumb.label}

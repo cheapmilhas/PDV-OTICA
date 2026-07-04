@@ -4,6 +4,16 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface EmailConfig {
   masterEnabled: boolean;
@@ -97,6 +107,7 @@ export function EmailsClient({
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
   const [testEmailValue, setTestEmailValue] = useState(config.testEmail ?? "");
+  const [showDisableTestConfirm, setShowDisableTestConfirm] = useState(false);
 
   async function patch(body: Partial<EmailConfig> & { testEmail?: string | null }) {
     setSaving(true);
@@ -236,12 +247,8 @@ export function EmailsClient({
             onClick={() => {
               if (!config.testMode) {
                 patch({ testMode: true });
-              } else if (
-                confirm(
-                  "Desligar modo teste fará os emails irem para os clientes reais. Confirmar?"
-                )
-              ) {
-                patch({ testMode: false });
+              } else {
+                setShowDisableTestConfirm(true);
               }
             }}
             disabled={saving}
@@ -351,6 +358,28 @@ export function EmailsClient({
           </div>
         )}
       </div>
+
+      <AlertDialog open={showDisableTestConfirm} onOpenChange={setShowDisableTestConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desligar o modo teste?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Os emails passarão a ser enviados para os clientes reais. Confirme apenas quando estiver pronto.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowDisableTestConfirm(false);
+                patch({ testMode: false });
+              }}
+            >
+              Desligar modo teste
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

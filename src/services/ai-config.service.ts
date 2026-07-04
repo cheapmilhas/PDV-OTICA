@@ -10,6 +10,19 @@ const SINGLETON_ID = "global";
 export const QUALIFIER_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"] as const;
 export type QualifierModel = (typeof QUALIFIER_MODELS)[number];
 
+/**
+ * Modelos que NÃO aceitam o parâmetro `temperature` (a família Opus 4.7+ o
+ * removeu — passar temperature devolve 400). Chamadas devem OMITIR temperature
+ * para esses modelos. Sem isso, escolher opus-4-8 na config de IA fazia toda
+ * qualificação/copiloto falhar com 400 (silenciosamente, sem medir custo).
+ */
+const MODELS_WITHOUT_TEMPERATURE = new Set<string>(["claude-opus-4-8"]);
+
+/** true se o modelo aceita o parâmetro `temperature` na Messages API. */
+export function modelSupportsTemperature(model: string): boolean {
+  return !MODELS_WITHOUT_TEMPERATURE.has(model);
+}
+
 export interface AiConfigView {
   hasKey: boolean;
   usdBrlRate: number;

@@ -76,6 +76,7 @@ export async function adviseForCompany(input: AdviseInput): Promise<AdviseResult
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cacheTokens: usage.cacheTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
     });
     return { analysis, advice: text };
   } catch (error) {

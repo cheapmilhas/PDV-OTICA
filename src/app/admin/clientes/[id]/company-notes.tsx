@@ -3,6 +3,17 @@
 import { useState, useEffect } from "react";
 import { Plus, Pin, Trash2, Edit2, Save, X } from "lucide-react";
 import { CompanyNote } from "@prisma/client";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface CompanyNotesProps {
   companyId: string;
@@ -15,6 +26,7 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
   const [newNoteType, setNewNoteType] = useState("general");
   const [editingId, setEditingId] = useState<string | null>(null);
   const [editContent, setEditContent] = useState("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   useEffect(() => {
     fetchNotes();
@@ -50,7 +62,7 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
       setNewNoteType("general");
     } catch (error) {
       console.error(error);
-      alert("Erro ao criar nota");
+      toast.error("Erro ao criar nota");
     }
   }
 
@@ -89,8 +101,6 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
   }
 
   async function handleDelete(noteId: string) {
-    if (!confirm("Deletar esta nota?")) return;
-
     try {
       const res = await fetch(`/api/admin/clientes/${companyId}/notes/${noteId}`, {
         method: "DELETE",
@@ -100,6 +110,9 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
       setNotes(notes.filter((n) => n.id !== noteId));
     } catch (error) {
       console.error(error);
+      toast.error("Erro ao deletar nota");
+    } finally {
+      setDeletingId(null);
     }
   }
 
@@ -213,7 +226,7 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
-                        onClick={() => handleDelete(note.id)}
+                        onClick={() => setDeletingId(note.id)}
                         className="p-1.5 text-rose-600 hover:text-rose-700 rounded transition-colors"
                       >
                         <Trash2 className="w-4 h-4" />
@@ -242,6 +255,28 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
           ))}
         </div>
       )}
+
+      <AlertDialog open={deletingId !== null} onOpenChange={(o) => !o && setDeletingId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Deletar nota?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. A nota será removida permanentemente.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deletingId) handleDelete(deletingId);
+              }}
+            >
+              Deletar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

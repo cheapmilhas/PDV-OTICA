@@ -7,6 +7,10 @@
  * A ótica NUNCA vê USD/BRL — só créditos (tokensToCredits).
  */
 
+import { logger } from "@/lib/logger";
+
+const log = logger.child({ lib: "ai-pricing" });
+
 export const USD_BRL_RATE = 5.5; // taxa fixa v1 (atualizar manualmente)
 export const CREDIT_TOKEN_FACTOR = 1000; // 1 crédito = 1000 tokens
 
@@ -15,8 +19,17 @@ interface TokenPrice {
   inputPerMillion: number;
   /** USD por 1M de output tokens */
   outputPerMillion: number;
-  /** USD por 1M de tokens lidos do cache */
+  /** USD por 1M de tokens lidos do cache (cache_read_input_tokens) */
   cacheReadPerMillion: number;
+  /** USD por 1M de tokens de escrita de cache (cache_creation_input_tokens).
+   *  Anthropic cobra 1,25× o input para cache de 5 min. NÃO vem dentro de
+   *  input_tokens — precisa ser medido à parte, senão some do custo. */
+  cacheWritePerMillion: number;
+}
+
+/** Modelos de texto conhecidos (para o teste de acoplamento allowlist↔preço). */
+export function knownTextModels(): string[] {
+  return Object.keys(TEXT_PRICING);
 }
 
 interface AudioPrice {
@@ -26,11 +39,12 @@ interface AudioPrice {
 
 /** Preço por modelo de texto (Anthropic). Chave = model string exata da API. */
 const TEXT_PRICING: Record<string, TokenPrice> = {
-  // Claude Sonnet 4 — $3/M in, $15/M out, $0.30/M cache read
+  // Claude Sonnet 4 — $3/M in, $15/M out, $0.30/M cache read, $3.75/M cache write
   "claude-sonnet-4-20250514": {
     inputPerMillion: 3,
     outputPerMillion: 15,
     cacheReadPerMillion: 0.3,
+    cacheWritePerMillion: 3.75,
   },
   // Alias que o Bloco B' usará (qualificação de leads). Mantido aqui para que a
   // medição já cubra o B' assim que ele chamar a API com esse model id.
@@ -38,18 +52,21 @@ const TEXT_PRICING: Record<string, TokenPrice> = {
     inputPerMillion: 3,
     outputPerMillion: 15,
     cacheReadPerMillion: 0.3,
+    cacheWritePerMillion: 3.75,
   },
-  // Claude Haiku 4.5 — $1/M in, $5/M out, $0.10/M cache read
+  // Claude Haiku 4.5 — $1/M in, $5/M out, $0.10/M cache read, $1.25/M cache write
   "claude-haiku-4-5": {
     inputPerMillion: 1,
     outputPerMillion: 5,
     cacheReadPerMillion: 0.1,
+    cacheWritePerMillion: 1.25,
   },
-  // Claude Opus 4.8 — $5/M in, $25/M out, $0.50/M cache read
+  // Claude Opus 4.8 — $5/M in, $25/M out, $0.50/M cache read, $6.25/M cache write
   "claude-opus-4-8": {
     inputPerMillion: 5,
     outputPerMillion: 25,
     cacheReadPerMillion: 0.5,
+    cacheWritePerMillion: 6.25,
   },
 };
 
@@ -64,13 +81,20 @@ export interface CostInput {
   model: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** cache_read_input_tokens (leitura de cache — 0,1× do input). */
   cacheTokens?: number;
+  /** cache_creation_input_tokens (escrita de cache — 1,25× do input).
+   *  NÃO está contido em inputTokens; precisa ser passado à parte. */
+  cacheWriteTokens?: number;
   audioSeconds?: number;
 }
 
 /**
  * Calcula o custo REAL em USD de uma chamada de IA.
- * Fail-safe: modelo desconhecido → 0 (nunca lança; a medição não pode quebrar a feature).
+ * Fail-safe: modelo desconhecido → 0 (nunca lança; a medição não pode quebrar a
+ * feature), mas LOGA um warn — modelo sem preço significa custo/markup subreportados,
+ * e não deve passar silenciosamente (ex.: alguém adicionou um modelo à allowlist
+ * sem cadastrar o preço aqui).
  */
 export function computeCostUsd(input: CostInput): number {
   const audio = AUDIO_PRICING[input.model];
@@ -83,10 +107,15 @@ export function computeCostUsd(input: CostInput): number {
   if (text) {
     const inputCost = ((input.inputTokens ?? 0) / 1_000_000) * text.inputPerMillion;
     const outputCost = ((input.outputTokens ?? 0) / 1_000_000) * text.outputPerMillion;
-    const cacheCost = ((input.cacheTokens ?? 0) / 1_000_000) * text.cacheReadPerMillion;
-    return round6(inputCost + outputCost + cacheCost);
+    const cacheReadCost = ((input.cacheTokens ?? 0) / 1_000_000) * text.cacheReadPerMillion;
+    const cacheWriteCost = ((input.cacheWriteTokens ?? 0) / 1_000_000) * text.cacheWritePerMillion;
+    return round6(inputCost + outputCost + cacheReadCost + cacheWriteCost);
   }
 
+  log.warn("computeCostUsd: modelo sem preço cadastrado — custo contabilizado como $0", {
+    provider: input.provider,
+    model: input.model,
+  });
   return 0; // modelo desconhecido — fail-safe
 }
 

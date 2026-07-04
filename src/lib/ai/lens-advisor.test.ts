@@ -32,7 +32,7 @@ describe("explainLensRecommendation", () => {
     const r = await explainLensRecommendation({ motor, docs }, "claude-haiku-4-5");
 
     expect(r.text).toBe("As lentes recomendadas deixam o óculos mais fino e confortável.");
-    expect(r.usage).toEqual({ inputTokens: 100, outputTokens: 20, cacheTokens: 0 });
+    expect(r.usage).toEqual({ inputTokens: 100, outputTokens: 20, cacheTokens: 0, cacheWriteTokens: 0 });
 
     const arg = createMock.mock.calls[0][0];
     expect(arg.model).toBe("claude-haiku-4-5");
@@ -85,6 +85,6 @@ describe("explainLensRecommendation", () => {
   it("usage ausente nos campos → cada um vira 0 (defensivo)", async () => {
     createMock.mockResolvedValue({ content: [{ type: "text", text: "x" }], usage: {} });
     const r = await explainLensRecommendation({ motor, docs });
-    expect(r.usage).toEqual({ inputTokens: 0, outputTokens: 0, cacheTokens: 0 });
+    expect(r.usage).toEqual({ inputTokens: 0, outputTokens: 0, cacheTokens: 0, cacheWriteTokens: 0 });
   });
 });

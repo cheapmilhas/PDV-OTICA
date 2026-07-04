@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Company {
   id: string;
@@ -29,7 +30,7 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!companyId || !subscription) {
-      alert("Selecione uma empresa");
+      toast.error("Selecione uma empresa");
       return;
     }
 
@@ -40,7 +41,12 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           subscriptionId: subscription.id,
-          customValue: customValue ? parseFloat(customValue) * 100 : undefined,
+          // Aceita "149,90" (padrão BR) e "149.90": normaliza vírgula→ponto e
+          // arredonda para centavos inteiros (o campo total é Int). Sem isso,
+          // parseFloat("149,90") cortava na vírgula → cobrança de R$ 149,00.
+          customValue: customValue
+            ? Math.round(parseFloat(customValue.replace(",", ".")) * 100)
+            : undefined,
           dueDate: dueDate || undefined,
           billingType,
           description,
@@ -50,12 +56,13 @@ export function NewInvoiceForm({ companies }: { companies: Company[] }) {
       const data = await res.json();
 
       if (data.success) {
+        toast.success("Cobrança criada");
         router.push(`/admin/financeiro/faturas/${data.invoice.id}`);
       } else {
-        alert(data.error || "Erro ao criar cobrança");
+        toast.error(data.error || "Erro ao criar cobrança");
       }
-    } catch (error) {
-      alert("Erro ao criar cobrança");
+    } catch {
+      toast.error("Erro ao criar cobrança");
     } finally {
       setLoading(false);
     }

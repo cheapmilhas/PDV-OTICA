@@ -155,6 +155,10 @@ export async function POST(request: Request) {
       token: tokenPayload,
       secret,
       salt: "next-auth.session-token",
+      // Alinha o `exp` do JWT ao TTL de impersonação (30 min). Sem isso o
+      // @auth/core usa o DEFAULT_MAX_AGE de 30 dias — um token vazado sobreviveria
+      // muito além da sessão, dependendo apenas da revogação por DB.
+      maxAge: Math.floor(IMPERSONATION_TTL_MS / 1000),
     });
 
     // Registrar auditoria

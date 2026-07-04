@@ -12,7 +12,10 @@ export interface LogAiUsageInput {
   model: string;
   inputTokens?: number;
   outputTokens?: number;
+  /** cache_read_input_tokens (leitura de cache). */
   cacheTokens?: number;
+  /** cache_creation_input_tokens (escrita de cache — cobrada 1,25× o input). */
+  cacheWriteTokens?: number;
   audioSeconds?: number;
 }
 
@@ -32,6 +35,7 @@ export async function logAiUsage(input: LogAiUsageInput): Promise<void> {
         inputTokens: input.inputTokens ?? 0,
         outputTokens: input.outputTokens ?? 0,
         cacheTokens: input.cacheTokens ?? 0,
+        cacheWriteTokens: input.cacheWriteTokens ?? 0,
         audioSeconds: input.audioSeconds ?? null,
         costUsd: new Prisma.Decimal(costUsd),
       },
@@ -63,12 +67,12 @@ function startOfCurrentMonth(): Date {
 export async function getDailyUsage(companyId: string): Promise<{ date: string; tokens: number; costUsd: number }[]> {
   const rows = await prisma.aiTokenUsage.findMany({
     where: { companyId, createdAt: { gte: startOfCurrentMonth() } },
-    select: { createdAt: true, inputTokens: true, outputTokens: true, cacheTokens: true, costUsd: true },
+    select: { createdAt: true, inputTokens: true, outputTokens: true, cacheTokens: true, cacheWriteTokens: true, costUsd: true },
   });
   const byDay = new Map<string, { tokens: number; costUsd: number }>();
   for (const r of rows) {
     const date = r.createdAt.toISOString().slice(0, 10);
-    const tokens = (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheTokens ?? 0);
+    const tokens = (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheTokens ?? 0) + (r.cacheWriteTokens ?? 0);
     const cost = Number(r.costUsd.toString());
     const d = byDay.get(date) ?? { tokens: 0, costUsd: 0 };
     d.tokens += tokens;
@@ -81,18 +85,48 @@ export async function getDailyUsage(companyId: string): Promise<{ date: string; 
 }
 
 /**
+ * Uso INTERNO/GLOBAL do mês corrente (linhas com companyId = null: playground do
+ * super admin e chamadas internas). Esse gasto é real (pago à Anthropic/OpenAI)
+ * mas não pertence a nenhuma ótica — sem isto, não aparecia em painel nenhum.
+ * Só para o super admin.
+ */
+export async function getInternalMonthlyUsage(): Promise<MonthlyUsage> {
+  const rows = await prisma.aiTokenUsage.findMany({
+    where: { companyId: null, createdAt: { gte: startOfCurrentMonth() } },
+    select: { feature: true, inputTokens: true, outputTokens: true, cacheTokens: true, cacheWriteTokens: true, costUsd: true },
+  });
+
+  const result: MonthlyUsage = { totalTokens: 0, totalCostUsd: 0, byFeature: {} };
+  for (const r of rows) {
+    const tokens = (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheTokens ?? 0) + (r.cacheWriteTokens ?? 0);
+    const cost = Number(r.costUsd.toString());
+    result.totalTokens += tokens;
+    result.totalCostUsd += cost;
+    const f = (result.byFeature[r.feature] ??= { tokens: 0, costUsd: 0 });
+    f.tokens += tokens;
+    f.costUsd += cost;
+  }
+  const round6 = (n: number) => Math.round(n * 1_000_000) / 1_000_000;
+  result.totalCostUsd = round6(result.totalCostUsd);
+  for (const f of Object.values(result.byFeature)) {
+    f.costUsd = round6(f.costUsd);
+  }
+  return result;
+}
+
+/**
  * Soma o uso de IA do mês corrente de uma empresa (tokens + custo + breakdown por feature).
  * Usado pelo guard (cota) e pelas telas (C2/C3). Multi-tenant por companyId.
  */
 export async function getMonthlyUsage(companyId: string): Promise<MonthlyUsage> {
   const rows = await prisma.aiTokenUsage.findMany({
     where: { companyId, createdAt: { gte: startOfCurrentMonth() } },
-    select: { feature: true, inputTokens: true, outputTokens: true, cacheTokens: true, costUsd: true },
+    select: { feature: true, inputTokens: true, outputTokens: true, cacheTokens: true, cacheWriteTokens: true, costUsd: true },
   });
 
   const result: MonthlyUsage = { totalTokens: 0, totalCostUsd: 0, byFeature: {} };
   for (const r of rows) {
-    const tokens = (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheTokens ?? 0);
+    const tokens = (r.inputTokens ?? 0) + (r.outputTokens ?? 0) + (r.cacheTokens ?? 0) + (r.cacheWriteTokens ?? 0);
     const cost = Number(r.costUsd.toString());
     result.totalTokens += tokens;
     result.totalCostUsd += cost;

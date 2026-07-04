@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds, requireCompanyScope } from "@/lib/admin-session";
 
 const bodySchema = z.object({
   companyId: z.string().min(1).optional(),
@@ -51,13 +51,27 @@ export async function POST(request: Request) {
     throw err;
   }
 
+  // Escopo: fechar turnos altera differenceCash/closingExpectedCash do tenant.
+  // - Com companyId: valida que o admin acessa aquela empresa.
+  // - Sem companyId (modo "todas"): só admin irrestrito (SUPER_ADMIN/scopeAll)
+  //   varre tudo; admin escopado fica limitado às suas empresas.
+  const accessible = await getAccessibleCompanyIds(admin.id);
+  if (body.companyId) {
+    const scoped = await requireCompanyScope(admin.id, body.companyId);
+    if (!scoped) {
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+    }
+  }
+
   const cutoff = new Date(Date.now() - body.thresholdHours * 60 * 60 * 1000);
 
   const candidatesRaw = await prisma.cashShift.findMany({
     where: {
       status: "OPEN",
       openedAt: { lt: cutoff },
-      ...(body.companyId && { companyId: body.companyId }),
+      ...(body.companyId
+        ? { companyId: body.companyId }
+        : accessible !== null && { companyId: { in: accessible } }),
     },
     include: {
       company: { select: { id: true, name: true } },

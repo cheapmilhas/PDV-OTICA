@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Save } from "lucide-react";
+import { toast } from "sonner";
 
 interface CompanyData {
   id: string;
@@ -42,7 +43,10 @@ export function CompanyDataForm({ company }: { company: CompanyData }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) return alert("Nome é obrigatório");
+    if (!form.name.trim()) {
+      toast.error("Nome é obrigatório");
+      return;
+    }
     setSaving(true);
 
     try {
@@ -53,13 +57,13 @@ export function CompanyDataForm({ company }: { company: CompanyData }) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Erro ao salvar");
+        toast.error(data.error || "Erro ao salvar");
         return;
       }
       router.refresh();
-      alert("Dados atualizados com sucesso!");
+      toast.success("Dados atualizados com sucesso!");
     } catch {
-      alert("Erro ao salvar dados da empresa");
+      toast.error("Erro ao salvar dados da empresa");
     } finally {
       setSaving(false);
     }

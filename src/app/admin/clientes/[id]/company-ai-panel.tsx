@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useCallback, useId } from "react";
 import { Loader2, Sparkles, Zap, DollarSign, Save, Percent, TrendingUp, Tag } from "lucide-react";
+import { toast } from "sonner";
 import { KPICard } from "@/components/admin/KPICard";
 import {
   Area,
@@ -209,7 +210,7 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
       await patchSettings({ iaAvailable: value });
       await fetchData();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao salvar");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
       setSavingAvailable(false);
     }
@@ -222,7 +223,7 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
       await patchSettings({ iaEnabled: value });
       await fetchData();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao salvar");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
       setSavingEnabled(false);
     }
@@ -235,13 +236,13 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
       const trimmed = quotaInput.trim();
       const limit = trimmed === "" || trimmed === "0" ? null : parseInt(trimmed, 10);
       if (trimmed !== "" && trimmed !== "0" && (isNaN(limit!) || limit! < 0)) {
-        alert("Cota inválida. Use um número positivo ou deixe em branco para ilimitado.");
+        toast.error("Cota inválida. Use um número positivo ou deixe em branco para ilimitado.");
         return;
       }
       await patchSettings({ iaMonthlyTokenLimit: limit });
       await fetchData();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao salvar");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
       setSavingQuota(false);
     }
@@ -258,7 +259,7 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
       } else {
         const parsed = parseFloat(trimmed);
         if (isNaN(parsed)) {
-          alert("Margem inválida. Use um número (negativo permitido = subsídio) ou deixe em branco para usar o global.");
+          toast.error("Margem inválida. Use um número (negativo permitido = subsídio) ou deixe em branco para usar o global.");
           return;
         }
         override = parsed;
@@ -267,7 +268,7 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
       setMarkupInput("");
       await fetchData();
     } catch (e) {
-      alert(e instanceof Error ? e.message : "Erro ao salvar");
+      toast.error(e instanceof Error ? e.message : "Erro ao salvar");
     } finally {
       setSavingMarkup(false);
     }

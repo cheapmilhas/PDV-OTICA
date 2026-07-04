@@ -6,6 +6,18 @@ import { Building2, Loader2, Package, Pencil, Plus, Star, Users, X } from "lucid
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { FEATURES, FEATURE_REGISTRY } from "@/lib/plan-feature-catalog";
+import { brl } from "@/lib/format-brl";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface PlanFeature {
   id: string;
@@ -71,6 +83,7 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
   const [form, setForm] = useState(emptyForm);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [deactivatingPlan, setDeactivatingPlan] = useState<Plan | null>(null);
   const router = useRouter();
 
   function openCreate() {
@@ -145,18 +158,18 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
   }
 
   async function handleDeactivate(plan: Plan) {
-    if (!confirm(`Desativar o plano "${plan.name}"? Assinaturas existentes não serão afetadas.`)) return;
-
     try {
       const res = await fetch(`/api/admin/plans/${plan.id}`, { method: "DELETE" });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Erro ao desativar plano");
+        toast.error(data.error || "Erro ao desativar plano");
         return;
       }
       router.refresh();
     } catch {
-      alert("Erro ao desativar plano");
+      toast.error("Erro ao desativar plano");
+    } finally {
+      setDeactivatingPlan(null);
     }
   }
 
@@ -169,12 +182,12 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
       });
       if (!res.ok) {
         const data = await res.json();
-        alert(data.error || "Erro ao reativar plano");
+        toast.error(data.error || "Erro ao reativar plano");
         return;
       }
       router.refresh();
     } catch {
-      alert("Erro ao reativar plano");
+      toast.error("Erro ao reativar plano");
     }
   }
 
@@ -257,13 +270,13 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
                 <div className="mb-4">
                   <div className="flex items-baseline gap-1">
                     <span className="text-2xl font-bold text-foreground">
-                      R$ {(plan.priceMonthly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      {brl(plan.priceMonthly)}
                     </span>
                     <span className="text-sm text-muted-foreground">/mês</span>
                   </div>
                   {plan.priceYearly > 0 && (
                     <p className="text-xs text-muted-foreground mt-0.5">
-                      ou R$ {(plan.priceYearly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ano
+                      ou {brl(plan.priceYearly)}/ano
                     </p>
                   )}
                 </div>
@@ -298,7 +311,7 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
                     )}
                     {plan.isActive ? (
                       <button
-                        onClick={() => handleDeactivate(plan)}
+                        onClick={() => setDeactivatingPlan(plan)}
                         className="text-rose-600 hover:text-rose-700 transition-colors"
                       >
                         Desativar
@@ -508,6 +521,28 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
           </div>
         </div>
       )}
+
+      <AlertDialog open={deactivatingPlan !== null} onOpenChange={(o) => !o && setDeactivatingPlan(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desativar o plano &quot;{deactivatingPlan?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              O plano deixará de ser comercializável. Assinaturas existentes não serão afetadas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (deactivatingPlan) handleDeactivate(deactivatingPlan);
+              }}
+            >
+              Desativar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

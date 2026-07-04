@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv-safe";
 import { adminRateLimit } from "@/lib/rate-limit";
@@ -16,7 +16,11 @@ export async function GET(request: Request) {
   const limited = adminRateLimit("admin-export-clientes", admin.id, request);
   if (limited) return limited;
 
+  // Escopo: admin restrito só exporta empresas do seu escopo (null = irrestrito).
+  const accessible = await getAccessibleCompanyIds(admin.id);
+
   const companies = await prisma.company.findMany({
+    where: accessible === null ? undefined : { id: { in: accessible } },
     include: {
       subscriptions: {
         include: { plan: true },

@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicKey } from "@/services/ai-config.service";
+import { getAnthropicKey, modelSupportsTemperature } from "@/services/ai-config.service";
 
 export const LEAD_QUALIFIER_MODEL = "claude-sonnet-4-6";
 // order/isWon/isLost são opcionais p/ compat, mas quando presentes permitem
@@ -54,7 +54,7 @@ export interface QualificationResult {
   /** Tom negativo/urgente detectado (prioriza atenção). */
   urgent: boolean;
   stageId: string | null; confidence: number; parseError: boolean;
-  usage: { inputTokens: number; outputTokens: number; cacheTokens: number };
+  usage: { inputTokens: number; outputTokens: number; cacheTokens: number; cacheWriteTokens: number };
 }
 
 // Exportado p/ teste de regressão da instrução LGPD (não é segredo — é texto
@@ -127,7 +127,9 @@ export async function qualifyConversationText(
     // temperature=0: classificação é tarefa determinística. Sem isso, a mesma
     // conversa oscilava entre rodadas (ruído no eval e no funil real). Torna o
     // placar do eval reproduzível e a classificação estável p/ o dono.
-    model, max_tokens: 512, temperature: 0, system,
+    // Opus 4.7+ removeu `temperature` (400 se enviado) → omite para esses modelos.
+    model, max_tokens: 512, system,
+    ...(modelSupportsTemperature(model) ? { temperature: 0 } : {}),
     messages: [{ role: "user", content: [{ type: "text", text: userPrompt }] }],
   });
 
@@ -135,6 +137,7 @@ export async function qualifyConversationText(
     inputTokens: response.usage.input_tokens ?? 0,
     outputTokens: response.usage.output_tokens ?? 0,
     cacheTokens: (response.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0,
+    cacheWriteTokens: (response.usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0,
   };
   const block = response.content.find((b) => b.type === "text");
   const raw = block && block.type === "text" ? (block as { type: "text"; text: string }).text : "";

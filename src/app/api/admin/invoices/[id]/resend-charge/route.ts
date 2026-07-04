@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { sendInvoiceCharge } from "@/services/invoice-send.service";
 import { logger } from "@/lib/logger";
@@ -17,9 +17,17 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
   const { id } = await ctx.params;
 
   try {
-    // findUnique apenas para o 404; o service gera a cobrança e envia (porta única).
-    const invoice = await prisma.invoice.findUnique({ where: { id }, select: { id: true } });
+    // findUnique para o 404 + escopo (F5): admin restrito não reenvia cobrança de
+    // fatura de empresa fora do seu escopo (Invoice → subscription.companyId).
+    const invoice = await prisma.invoice.findUnique({
+      where: { id },
+      select: { id: true, subscription: { select: { companyId: true } } },
+    });
     if (!invoice) return NextResponse.json({ error: "Fatura não encontrada" }, { status: 404 });
+
+    if (!(await requireCompanyScope(admin.id, invoice.subscription.companyId))) {
+      return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+    }
 
     const { status, alreadySentToday } = await sendInvoiceCharge(id, admin.id);
 

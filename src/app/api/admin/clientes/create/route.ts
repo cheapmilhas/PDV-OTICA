@@ -25,6 +25,11 @@ export async function POST(request: Request) {
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
+  // Provisionar ótica nova + owner (com senha) é ação de dono — mín. ADMIN.
+  // SUPPORT/BILLING não criam empresas arbitrárias.
+  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+    return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
+  }
 
   const body = await request.json();
 

@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 
@@ -19,6 +19,13 @@ export async function PATCH(
   }
 
   const { id: companyId, noteId } = await params;
+
+  // Escopo: alinha PATCH ao GET/POST irmãos (admin restrito não edita notas de
+  // empresa fora do seu escopo, mesmo passando o companyId correto no path).
+  const scoped = await requireSupportScope(admin.id, companyId);
+  if (!scoped) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   try {
     const body = await request.json();
@@ -60,6 +67,13 @@ export async function DELETE(
   }
 
   const { id: companyId, noteId } = await params;
+
+  // Escopo: alinha DELETE ao GET/POST irmãos (admin restrito não apaga notas de
+  // empresa fora do seu escopo).
+  const scoped = await requireSupportScope(admin.id, companyId);
+  if (!scoped) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   try {
     // Amarra a nota à empresa do path (deleteMany com {id, companyId} não apaga

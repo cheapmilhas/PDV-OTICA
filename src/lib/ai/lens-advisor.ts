@@ -47,7 +47,7 @@ function serializeDocs(docs: LensAdvisorInput["docs"]): string {
 export async function explainLensRecommendation(
   input: LensAdvisorInput,
   model: string = LENS_ADVISOR_MODEL,
-): Promise<{ text: string | null; usage: { inputTokens: number; outputTokens: number; cacheTokens: number } }> {
+): Promise<{ text: string | null; usage: { inputTokens: number; outputTokens: number; cacheTokens: number; cacheWriteTokens: number } }> {
   const apiKey = await getAnthropicKey();
   if (!apiKey) throw new Error("Anthropic API key não configurada (super admin → config IA, ou env ANTHROPIC_API_KEY)");
   const anthropic = new Anthropic({ apiKey });
@@ -66,6 +66,7 @@ export async function explainLensRecommendation(
     inputTokens: response.usage.input_tokens ?? 0,
     outputTokens: response.usage.output_tokens ?? 0,
     cacheTokens: (response.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0,
+    cacheWriteTokens: (response.usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0,
   };
   const block = response.content.find((b) => b.type === "text");
   const text = block && block.type === "text" ? (block as { type: "text"; text: string }).text : null;

@@ -16,6 +16,17 @@ import {
   Users,
   Shield,
 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface UserData {
   id: string;
@@ -106,10 +117,10 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
         fetchUsers();
       } else {
         const data = await res.json();
-        alert(data.error || "Erro ao atualizar usuário");
+        toast.error(data.error || "Erro ao atualizar usuário");
       }
     } catch {
-      alert("Erro ao atualizar usuário");
+      toast.error("Erro ao atualizar usuário");
     }
   };
 
@@ -872,6 +883,7 @@ function PermissionsModal({
   const [role, setRole] = useState(userRole);
   const [changes, setChanges] = useState<Map<string, boolean>>(new Map());
   const [roleChanged, setRoleChanged] = useState(false);
+  const [showResetConfirm, setShowResetConfirm] = useState(false);
 
   const fetchPermissions = useCallback(async () => {
     setLoading(true);
@@ -945,7 +957,7 @@ function PermissionsModal({
   };
 
   const handleReset = async () => {
-    if (!confirm("Resetar todas as permissões customizadas para o padrão do cargo?")) return;
+    setShowResetConfirm(false);
     setSaving(true);
     try {
       const res = await fetch(`/api/admin/companies/${companyId}/users/${userId}/permissions`, {
@@ -1086,7 +1098,7 @@ function PermissionsModal({
             {/* Footer */}
             <div className="flex items-center justify-between px-6 py-4 border-t border-border flex-shrink-0">
               <button
-                onClick={handleReset}
+                onClick={() => setShowResetConfirm(true)}
                 disabled={saving || data.summary.customOverrides === 0}
                 className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
               >
@@ -1114,6 +1126,26 @@ function PermissionsModal({
           <div className="p-8 text-center text-rose-600">{error || "Erro ao carregar"}</div>
         )}
       </div>
+
+      <AlertDialog open={showResetConfirm} onOpenChange={setShowResetConfirm}>
+        <AlertDialogContent onClick={(e) => e.stopPropagation()}>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Resetar permissões?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todas as permissões customizadas voltarão ao padrão do cargo. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleReset}
+            >
+              Resetar
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

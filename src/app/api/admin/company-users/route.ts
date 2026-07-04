@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 
 /**
  * GET /api/admin/company-users
@@ -19,6 +19,10 @@ export async function GET(request: Request) {
   const page       = Math.max(1, Number(searchParams.get("page") ?? "1"));
   const limit      = 50;
 
+  // Escopo: admin restrito só lista usuários de empresas no seu escopo
+  // (null = irrestrito; [] = nenhuma). Fecha vazamento de PII cross-tenant.
+  const accessible = await getAccessibleCompanyIds(admin.id);
+
   const where = {
     AND: [
       search
@@ -29,6 +33,7 @@ export async function GET(request: Request) {
             ],
           }
         : {},
+      accessible === null ? {} : { companyId: { in: accessible } },
       companyId ? { companyId } : {},
       role      ? { role: role as any } : {},
       status === "active"   ? { active: true }  : {},

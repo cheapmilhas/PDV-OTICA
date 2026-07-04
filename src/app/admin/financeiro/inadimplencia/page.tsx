@@ -39,6 +39,10 @@ export default async function InadimplenciaPage({
       },
     },
     orderBy: { dueDate: "asc" },
+    // Cap de segurança: sem take, a lista crescia sem teto. Mais vencidos primeiro
+    // (dueDate asc) já priorizam o que importa. Contadores por faixa (total7/15/30/geral)
+    // continuam mostrando o número real mesmo além do cap.
+    take: 500,
   });
 
   // Contadores

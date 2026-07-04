@@ -28,4 +28,16 @@ describe("admin notes — ownership noteId+companyId", () => {
     expect(src).not.toMatch(/\.update\(\s*\{\s*where:\s*\{\s*id:\s*noteId\s*\}/);
     expect(src).not.toMatch(/\.delete\(\s*\{\s*where:\s*\{\s*id:\s*noteId\s*\}/);
   });
+
+  // S2: PATCH/DELETE agora exigem escopo (admin restrito não edita/apaga notas
+  // de empresa fora do seu escopo, alinhando ao GET/POST irmãos).
+  it("PATCH e DELETE chamam requireSupportScope(admin.id, companyId)", () => {
+    const scopeCalls = src.match(/requireSupportScope\(admin\.id,\s*companyId\)/g) ?? [];
+    expect(scopeCalls.length).toBeGreaterThanOrEqual(2);
+  });
+
+  it("importa requireSupportScope de admin-session", () => {
+    expect(src).toMatch(/requireSupportScope/);
+    expect(src).toMatch(/from\s+"@\/lib\/admin-session"/);
+  });
 });

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
+import { csvRow } from "@/lib/csv-safe";
 
 /**
  * GET /api/admin/plan-interests
@@ -23,15 +24,15 @@ export async function GET(request: Request) {
   });
 
   if (format === "csv") {
-    const header = "nome,email,telefone,empresa,plano,data\n";
+    // csvRow neutraliza injeção de fórmula (=+-@) — os campos vêm de formulário
+    // público, então um interessado poderia enviar name = "=HYPERLINK(...)".
+    const header = csvRow(["nome", "email", "telefone", "empresa", "plano", "data"]);
     const rows = items
       .map((i) =>
-        [i.name, i.email, i.phone ?? "", i.companyName ?? "", i.planSlug, i.createdAt.toISOString()]
-          .map((v) => `"${String(v).replace(/"/g, '""')}"`)
-          .join(",")
+        csvRow([i.name, i.email, i.phone ?? "", i.companyName ?? "", i.planSlug, i.createdAt.toISOString()])
       )
       .join("\n");
-    return new NextResponse(header + rows, {
+    return new NextResponse(header + "\n" + rows, {
       headers: {
         "Content-Type": "text/csv; charset=utf-8",
         "Content-Disposition": `attachment; filename="interessados.csv"`,

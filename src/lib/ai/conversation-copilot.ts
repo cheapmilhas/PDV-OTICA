@@ -1,6 +1,6 @@
 import { randomBytes } from "crypto";
 import Anthropic from "@anthropic-ai/sdk";
-import { getAnthropicKey } from "@/services/ai-config.service";
+import { getAnthropicKey, modelSupportsTemperature } from "@/services/ai-config.service";
 
 export const COPILOT_MODEL = "claude-sonnet-4-6";
 
@@ -16,7 +16,7 @@ export interface CopilotResult {
   /** Rascunho de resposta que a atendente COPIA e manda do celular (nunca enviado). */
   draft: string;
   parseError: boolean;
-  usage: { inputTokens: number; outputTokens: number; cacheTokens: number };
+  usage: { inputTokens: number; outputTokens: number; cacheTokens: number; cacheWriteTokens: number };
 }
 
 // Exportado p/ teste de regressão da instrução (não é segredo). NUNCA logar o
@@ -60,7 +60,9 @@ export async function summarizeAndDraft(
   const userPrompt = `«INICIO-${nonce}»\n${transcript}\n«FIM-${nonce}»`;
 
   const response = await anthropic.messages.create({
-    model, max_tokens: 512, temperature: 0.3, system,
+    // Opus 4.7+ removeu `temperature` (400 se enviado) → omite para esses modelos.
+    model, max_tokens: 512, system,
+    ...(modelSupportsTemperature(model) ? { temperature: 0.3 } : {}),
     messages: [{ role: "user", content: [{ type: "text", text: userPrompt }] }],
   });
 
@@ -68,6 +70,7 @@ export async function summarizeAndDraft(
     inputTokens: response.usage.input_tokens ?? 0,
     outputTokens: response.usage.output_tokens ?? 0,
     cacheTokens: (response.usage as { cache_read_input_tokens?: number }).cache_read_input_tokens ?? 0,
+    cacheWriteTokens: (response.usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0,
   };
   const block = response.content.find((b) => b.type === "text");
   const raw = block && block.type === "text" ? (block as { type: "text"; text: string }).text : "";

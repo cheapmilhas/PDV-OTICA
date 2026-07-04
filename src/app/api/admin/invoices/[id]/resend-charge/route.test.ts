@@ -1,14 +1,19 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-vi.mock("@/lib/admin-session", () => ({ getAdminSession: vi.fn() }));
+vi.mock("@/lib/admin-session", () => ({ getAdminSession: vi.fn(), requireCompanyScope: vi.fn() }));
 vi.mock("@/services/invoice-send.service", () => ({ sendInvoiceCharge: vi.fn() }));
 vi.mock("@/lib/prisma", () => ({ prisma: { invoice: { findUnique: vi.fn() } } }));
 import { POST } from "./route";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { sendInvoiceCharge } from "@/services/invoice-send.service";
 import { prisma } from "@/lib/prisma";
 
 const ctx = { params: Promise.resolve({ id: "inv_1" }) };
-beforeEach(() => vi.clearAllMocks());
+const INVOICE = { id: "inv_1", subscription: { companyId: "co_1" } };
+beforeEach(() => {
+  vi.clearAllMocks();
+  // Por padrão, admin acessa a empresa (testes de escopo negativo sobrescrevem).
+  (requireCompanyScope as any).mockResolvedValue({ id: "a", role: "ADMIN" });
+});
 
 describe("POST resend-charge", () => {
   it("401 sem sessão", async () => {
@@ -29,9 +34,18 @@ describe("POST resend-charge", () => {
     expect(res.status).toBe(404);
     expect(sendInvoiceCharge).not.toHaveBeenCalled();
   });
+  it("403 quando admin escopado não acessa a empresa da fatura (F5)", async () => {
+    (getAdminSession as any).mockResolvedValue({ id: "a", role: "ADMIN" });
+    (prisma.invoice.findUnique as any).mockResolvedValue(INVOICE);
+    (requireCompanyScope as any).mockResolvedValue(null); // fora de escopo
+    const res = await POST(new Request("http://x", { method: "POST" }), ctx);
+    expect(res.status).toBe(403);
+    expect(sendInvoiceCharge).not.toHaveBeenCalled();
+    expect(requireCompanyScope).toHaveBeenCalledWith("a", "co_1");
+  });
   it("ADMIN → envia via sendInvoiceCharge e retorna status/alreadySentToday", async () => {
     (getAdminSession as any).mockResolvedValue({ id: "a", role: "ADMIN" });
-    (prisma.invoice.findUnique as any).mockResolvedValue({ id: "inv_1" });
+    (prisma.invoice.findUnique as any).mockResolvedValue(INVOICE);
     (sendInvoiceCharge as any).mockResolvedValue({ status: "SENT", alreadySentToday: false });
     const res = await POST(new Request("http://x", { method: "POST" }), ctx);
     expect(res.status).toBe(200);
@@ -41,7 +55,7 @@ describe("POST resend-charge", () => {
   });
   it("sem paymentUrl → gera e envia (status SENT)", async () => {
     (getAdminSession as any).mockResolvedValue({ id: "a", role: "ADMIN" });
-    (prisma.invoice.findUnique as any).mockResolvedValue({ id: "inv_1", paymentUrl: null });
+    (prisma.invoice.findUnique as any).mockResolvedValue({ ...INVOICE, paymentUrl: null });
     (sendInvoiceCharge as any).mockResolvedValue({ status: "SENT", alreadySentToday: false });
     const res = await POST(new Request("http://x", { method: "POST" }), ctx);
     expect(res.status).toBe(200);

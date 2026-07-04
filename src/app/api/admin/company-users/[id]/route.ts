@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 import { logActivity } from "@/services/activity-log.service";
 import { ActorType } from "@prisma/client";
 
@@ -29,6 +29,13 @@ export async function PATCH(
   });
 
   if (!user) return NextResponse.json({ error: "Usuário não encontrado" }, { status: 404 });
+
+  // Escopo: admin restrito só ativa/desativa usuários de empresas no seu escopo
+  // (fecha IDOR — sem isso, SUPPORT de [A] desativava usuário de qualquer tenant).
+  const scoped = await requireSupportScope(admin.id, user.companyId);
+  if (!scoped) {
+    return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
+  }
 
   if (user.active === body.active) {
     return NextResponse.json({ error: "Usuário já está neste estado" }, { status: 400 });

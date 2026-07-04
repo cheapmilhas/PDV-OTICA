@@ -2,7 +2,18 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 import { Loader2, UserCheck, UserX } from "lucide-react";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 export function ToggleUserButton({
   userId,
@@ -15,12 +26,10 @@ export function ToggleUserButton({
 }) {
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [error, setError] = useState<string | null>(null);
+  const [confirmOpen, setConfirmOpen] = useState(false);
 
   function handleToggle() {
-    if (!confirm(`${active ? "Desativar" : "Reativar"} o usuário "${userName}"?`)) return;
-
-    setError(null);
+    setConfirmOpen(false);
     startTransition(async () => {
       try {
         const res = await fetch(`/api/admin/company-users/${userId}`, {
@@ -32,23 +41,24 @@ export function ToggleUserButton({
           const data = await res.json();
           throw new Error(data.error ?? "Erro inesperado");
         }
+        toast.success(active ? "Usuário desativado" : "Usuário reativado");
         router.refresh();
       } catch (err: unknown) {
-        setError(err instanceof Error ? err.message : "Erro inesperado");
+        toast.error(err instanceof Error ? err.message : "Erro inesperado");
       }
     });
   }
 
   return (
-    <div>
+    <>
       <button
-        onClick={handleToggle}
+        onClick={() => setConfirmOpen(true)}
         disabled={isPending}
         title={active ? "Desativar usuário" : "Reativar usuário"}
         className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium transition-colors disabled:opacity-50 ${
           active
-            ? "bg-red-900/30 hover:bg-red-900/50 text-red-400 border border-red-900"
-            : "bg-green-900/30 hover:bg-green-900/50 text-green-400 border border-green-900"
+            ? "bg-rose-50 hover:bg-rose-100 text-rose-700 border border-rose-200"
+            : "bg-emerald-50 hover:bg-emerald-100 text-emerald-700 border border-emerald-200"
         }`}
       >
         {isPending ? (
@@ -60,7 +70,23 @@ export function ToggleUserButton({
         )}
         {active ? "Desativar" : "Reativar"}
       </button>
-      {error && <p className="text-xs text-red-400 mt-1">{error}</p>}
-    </div>
+
+      <AlertDialog open={confirmOpen} onOpenChange={(o) => !isPending && setConfirmOpen(o)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>{active ? "Desativar" : "Reativar"} usuário?</AlertDialogTitle>
+            <AlertDialogDescription>
+              {active ? "Desativar" : "Reativar"} o usuário <strong>{userName}</strong>?
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={isPending}>Voltar</AlertDialogCancel>
+            <AlertDialogAction onClick={handleToggle} disabled={isPending}>
+              {active ? "Desativar" : "Reativar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </>
   );
 }

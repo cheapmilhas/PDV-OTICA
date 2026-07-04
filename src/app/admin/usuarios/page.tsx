@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ExternalLink, CheckCircle, XCircle } from "lucide-react";
@@ -32,7 +32,10 @@ export default async function UsuariosPage({
     page?: string;
   }>;
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
+  // Escopo: admin restrito só lista usuários de empresas do seu escopo
+  // (null = irrestrito). Alinha à API /api/admin/company-users.
+  const accessible = await getAccessibleCompanyIds(admin.id);
   const params = await searchParams;
 
   const search    = params.search    ?? "";
@@ -45,6 +48,7 @@ export default async function UsuariosPage({
   // ── Filtros ────────────────────────────────────────────────────────────────
   const where = {
     AND: [
+      accessible === null ? {} : { companyId: { in: accessible } },
       search
         ? {
             OR: [
@@ -81,6 +85,7 @@ export default async function UsuariosPage({
     }),
     prisma.user.count({ where }),
     prisma.company.findMany({
+      where: accessible === null ? undefined : { id: { in: accessible } },
       select: { id: true, tradeName: true, name: true },
       orderBy: { name: "asc" },
     }),

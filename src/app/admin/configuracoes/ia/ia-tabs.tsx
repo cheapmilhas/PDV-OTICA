@@ -1,9 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import { toast } from "sonner";
 import { IaClient } from "./ia-client";
 import { KnowledgeClient } from "./knowledge-client";
 import { PlaygroundClient } from "./playground-client";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AiConfigView {
   hasKey: boolean;
@@ -38,20 +49,10 @@ export function IaTabs({
 }) {
   const [active, setActive] = useState<TabKey>("config");
   const [massLoading, setMassLoading] = useState<boolean>(false);
-  const [massError, setMassError] = useState<string>("");
-  const [massFeedback, setMassFeedback] = useState<string>("");
+  const [pendingToggle, setPendingToggle] = useState<boolean | null>(null);
 
   async function handleToggleAll(iaAvailable: boolean) {
-    const label = iaAvailable ? "LIGAR" : "DESLIGAR";
-    if (
-      !window.confirm(
-        `Tem certeza que deseja ${label} a IA para TODAS as óticas? Esta é uma ação em massa.`,
-      )
-    ) {
-      return;
-    }
-    setMassError("");
-    setMassFeedback("");
+    setPendingToggle(null);
     setMassLoading(true);
     try {
       const res = await fetch("/api/admin/ai-toggle-all", {
@@ -61,13 +62,13 @@ export function IaTabs({
       });
       if (!res.ok) {
         const data = await res.json().catch(() => ({}));
-        setMassError((data as { error?: string }).error || "Erro ao atualizar as óticas");
+        toast.error((data as { error?: string }).error || "Erro ao atualizar as óticas");
         return;
       }
       const data = (await res.json()) as { data: { updated: number } };
-      setMassFeedback(`${data.data.updated} ótica(s) atualizada(s).`);
+      toast.success(`${data.data.updated} ótica(s) atualizada(s).`);
     } catch {
-      setMassError("Erro de rede ao atualizar as óticas");
+      toast.error("Erro de rede ao atualizar as óticas");
     } finally {
       setMassLoading(false);
     }
@@ -84,7 +85,7 @@ export function IaTabs({
           <div className="mt-3 flex flex-wrap items-center gap-2">
             <button
               type="button"
-              onClick={() => handleToggleAll(true)}
+              onClick={() => setPendingToggle(true)}
               disabled={massLoading}
               className="rounded-md bg-emerald-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-emerald-700 disabled:opacity-50"
             >
@@ -92,17 +93,43 @@ export function IaTabs({
             </button>
             <button
               type="button"
-              onClick={() => handleToggleAll(false)}
+              onClick={() => setPendingToggle(false)}
               disabled={massLoading}
               className="rounded-md bg-rose-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-rose-700 disabled:opacity-50"
             >
               {massLoading ? "Aguarde…" : "Desligar IA para todas"}
             </button>
           </div>
-          {massError && <p className="mt-2 text-sm text-rose-700">{massError}</p>}
-          {massFeedback && <p className="mt-2 text-sm text-emerald-700">{massFeedback}</p>}
         </div>
       </div>
+
+      <AlertDialog open={pendingToggle !== null} onOpenChange={(o) => !o && setPendingToggle(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {pendingToggle ? "Ligar IA para todas as óticas?" : "Desligar IA para todas as óticas?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta é uma ação em massa que afeta TODAS as óticas de uma vez.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                pendingToggle === false
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
+              onClick={() => {
+                if (pendingToggle !== null) handleToggleAll(pendingToggle);
+              }}
+            >
+              {pendingToggle ? "Ligar para todas" : "Desligar para todas"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
 
       <div className="border-b border-border px-6 pt-4">
         <nav className="flex gap-1" aria-label="Abas de IA">
