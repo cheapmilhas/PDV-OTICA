@@ -21,7 +21,8 @@ export function AnnouncementBar() {
 
   return (
     <div
-      className="relative z-50 py-2.5 px-4 text-center text-xs font-medium"
+      id="announcement-bar"
+      className="relative z-30 py-2.5 px-4 text-center text-xs font-medium"
       style={{
         background: "var(--brand-tint)",
         borderBottom: "1px solid var(--lp-border)",

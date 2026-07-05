@@ -3,13 +3,19 @@
 import { useState } from "react";
 import { signIn, signOut } from "next-auth/react";
 import { useRouter } from "next/navigation";
+import Link from "next/link";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Card, CardContent, CardDescription, CardHeader } from "@/components/ui/card";
-import { Loader2, Trash2 } from "lucide-react";
+import { Loader2 } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
+import { REGISTER_URL, WHATSAPP_NUMBER } from "@/lib/constants";
+
+const FORGOT_PASSWORD_WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
+  "Olá! Esqueci minha senha de acesso ao Vis e preciso de ajuda."
+)}`;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -142,17 +148,34 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          <Button
-            type="button"
-            variant="outline"
-            className="mt-4 w-full"
-            onClick={handleClearSession}
-            disabled={isClearing}
-          >
-            {isClearing && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
-            {!isClearing && <Trash2 className="mr-2 h-4 w-4" />}
-            Limpar Sessão Anterior
-          </Button>
+          <div className="mt-4 text-center text-sm text-muted-foreground">
+            <a
+              href={FORGOT_PASSWORD_WHATSAPP_URL}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="hover:text-foreground hover:underline"
+            >
+              Esqueci minha senha
+            </a>
+          </div>
+
+          <p className="mt-6 text-center text-sm text-muted-foreground">
+            Ainda não tem conta?{" "}
+            <Link href={REGISTER_URL} className="font-medium text-primary hover:underline">
+              Criar conta grátis
+            </Link>
+          </p>
+
+          <div className="mt-6 border-t pt-4 text-center">
+            <button
+              type="button"
+              onClick={handleClearSession}
+              disabled={isClearing}
+              className="text-xs text-muted-foreground hover:text-foreground disabled:opacity-50"
+            >
+              {isClearing ? "Limpando…" : "Problemas para entrar? Limpar sessão anterior"}
+            </button>
+          </div>
 
         </CardContent>
       </Card>

@@ -1,7 +1,10 @@
 export const SITE_NAME = "Vis";
 export const SITE_URL = "https://vis.app.br";
 export const APP_URL = "https://vis.app.br";
-export const WHATSAPP_NUMBER = "5585999999999"; // Trocar pelo número real
+// ⚠️ TODO(dono): número de WhatsApp PLACEHOLDER — leads que clicam em "Falar com
+// consultor", no botão flutuante e no "Esqueci minha senha" caem num número
+// inexistente. Trocar por 55 + DDD + número real (ex.: "5585988887777").
+export const WHATSAPP_NUMBER = "5585999999999"; // TODO: TROCAR PELO NÚMERO REAL
 export const WHATSAPP_MESSAGE = encodeURIComponent(
   "Olá! Tenho interesse no Vis, o sistema de gestão para óticas. Pode me contar mais?"
 );

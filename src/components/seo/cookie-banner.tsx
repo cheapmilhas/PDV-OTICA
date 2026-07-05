@@ -13,6 +13,13 @@ export function CookieBanner() {
     if (!consent) setVisible(true);
   }, []);
 
+  // Let the floating WhatsApp button (and anything else pinned bottom-right)
+  // know the cookie banner is on-screen, so it can lift out of the way.
+  useEffect(() => {
+    document.documentElement.classList.toggle("cookie-banner-open", visible);
+    return () => document.documentElement.classList.remove("cookie-banner-open");
+  }, [visible]);
+
   const accept = () => {
     localStorage.setItem("cookie-consent", "accepted");
     setVisible(false);
@@ -31,7 +38,7 @@ export function CookieBanner() {
           animate={{ y: 0, opacity: 1 }}
           exit={{ y: 100, opacity: 0 }}
           transition={{ duration: 0.3, ease: "easeOut" }}
-          className="fixed bottom-4 left-4 right-4 md:left-auto md:right-4 md:max-w-sm z-40"
+          className="fixed bottom-4 left-4 right-4 md:right-auto md:left-4 md:max-w-sm z-40"
         >
           <div className="rounded-2xl border border-[var(--border-hover)] bg-[var(--surface)] p-5 shadow-card-hover">
             <div className="flex items-start gap-3 mb-3">

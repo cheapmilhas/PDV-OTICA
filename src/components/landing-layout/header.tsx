@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X, ArrowRight } from "lucide-react";
@@ -10,18 +10,53 @@ import { VisLogo } from "./vis-logo";
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const headerRef = useRef<HTMLElement>(null);
 
   useEffect(() => {
-    const handler = () => setScrolled(window.scrollY > 24);
-    window.addEventListener("scroll", handler, { passive: true });
-    return () => window.removeEventListener("scroll", handler);
+    // Offset the fixed header below the announcement bar while it's on screen, so
+    // the logo + mobile menu button never overlap the bar; let it snap to the top
+    // once the bar scrolls away. The `top` is written straight to the DOM node
+    // (not via React state) so it reflects immediately regardless of render timing,
+    // and reads the bar's live height so one- or two-line bars both work.
+    const measure = () => {
+      const bar = document.getElementById("announcement-bar");
+      const barHeight = bar ? bar.offsetHeight : 0;
+      const scrollY = window.scrollY;
+      setScrolled(scrollY > 24);
+      if (headerRef.current) {
+        headerRef.current.style.top = `${Math.max(0, barHeight - scrollY)}px`;
+      }
+    };
+
+    measure();
+
+    // The announcement bar reveals itself in its own mount effect and can appear
+    // several hundred ms after this header mounts (after hydration), so watch the
+    // DOM for its insertion/removal and re-measure rather than racing on timing.
+    const domObserver =
+      typeof MutationObserver !== "undefined"
+        ? new MutationObserver(measure)
+        : null;
+    domObserver?.observe(document.body, { childList: true, subtree: true });
+
+    window.addEventListener("scroll", measure, { passive: true });
+    window.addEventListener("resize", measure);
+    return () => {
+      window.removeEventListener("scroll", measure);
+      window.removeEventListener("resize", measure);
+      domObserver?.disconnect();
+    };
   }, []);
 
   return (
     <header
-      className="fixed top-0 left-0 right-0 z-40 transition-all duration-300"
-      style={
-        scrolled
+      ref={headerRef}
+      // `top` is owned by the measure() effect via a direct DOM write, so it is
+      // intentionally left out of this style object to avoid React clobbering it
+      // on re-render (e.g. when `scrolled` toggles).
+      className="fixed left-0 right-0 z-40 transition-all duration-300"
+      style={{
+        ...(scrolled
           ? {
               background: "rgba(255, 255, 255, 0.85)",
               backdropFilter: "blur(20px) saturate(180%)",
@@ -33,8 +68,8 @@ export function Header() {
               background: "transparent",
               backdropFilter: "none",
               borderBottom: "1px solid transparent",
-            }
-      }
+            }),
+      }}
     >
       <div className="container-custom">
         <div className="flex h-16 items-center justify-between">

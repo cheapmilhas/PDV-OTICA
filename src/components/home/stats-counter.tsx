@@ -30,9 +30,11 @@ const stats = [
     icon: Headphones,
     color: "text-brand-success",
     bg: "bg-brand-success/10",
+    // Rendered statically: a "menos de 2h" claim animated from zero briefly shows
+    // the meaningless "<0h", so it is not run through the counter.
     value: 2,
-    suffix: "h",
-    prefix: "<",
+    customValue: "<2h",
+    suffix: "",
     label: "Suporte",
     description: "Resposta humanizada ultra-rápida",
   },
@@ -94,7 +96,6 @@ export function StatsCounter() {
                   <AnimatedCounter
                     value={s.value}
                     suffix={s.suffix}
-                    prefix={s.prefix}
                   />
                 )}
               </div>

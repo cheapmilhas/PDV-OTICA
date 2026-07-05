@@ -436,11 +436,11 @@ export default function RegistroPage() {
 
         <p className="mt-4 text-center text-sm text-muted-foreground">
           Ao criar sua conta, você concorda com nossos{" "}
-          <Link href="#" className="underline hover:text-foreground">
+          <Link href="/termos" className="underline hover:text-foreground">
             Termos de Uso
           </Link>{" "}
           e{" "}
-          <Link href="#" className="underline hover:text-foreground">
+          <Link href="/privacidade" className="underline hover:text-foreground">
             Política de Privacidade
           </Link>
           .
