@@ -168,6 +168,7 @@ export async function POST(request: NextRequest) {
       inputTokens: response.usage.input_tokens ?? 0,
       outputTokens: response.usage.output_tokens ?? 0,
       cacheTokens: response.usage.cache_read_input_tokens ?? 0,
+      cacheWriteTokens: (response.usage as { cache_creation_input_tokens?: number }).cache_creation_input_tokens ?? 0,
     });
 
     const textBlock = response.content.find((block) => block.type === "text");

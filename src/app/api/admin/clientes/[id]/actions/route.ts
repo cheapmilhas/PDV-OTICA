@@ -232,6 +232,48 @@ export async function POST(
           }),
         ]);
 
+        // F1: cancela TAMBÉM a assinatura recorrente no Asaas — senão o gateway
+        // segue cobrando o cartão/boleto do cliente mesmo com a conta cancelada
+        // aqui (chargeback/reclamação). Fail-soft igual ao change_plan: se o Asaas
+        // falhar, NÃO revertemos o cancelamento local — marcamos billingSyncPending
+        // para reconciliação posterior.
+        if (subscription.asaasSubscriptionId) {
+          try {
+            await asaas.subscriptions.cancel(subscription.asaasSubscriptionId);
+          } catch (err) {
+            const errMsg = err instanceof Error ? err.message : String(err);
+            try {
+              await prisma.globalAudit.create({
+                data: {
+                  actorType: "ADMIN_USER",
+                  actorId: admin.id,
+                  companyId,
+                  action: "BILLING_SYNC_FAILED",
+                  metadata: {
+                    subscriptionId: subscription.id,
+                    asaasSubscriptionId: subscription.asaasSubscriptionId,
+                    context: "cancel_subscription",
+                    error: errMsg,
+                  },
+                },
+              });
+              await prisma.subscription.update({
+                where: { id: subscription.id },
+                data: { billingSyncPending: true },
+              });
+            } catch (recErr) {
+              log.error("Falha ao registrar billingSyncPending (cancel_subscription)", {
+                subscriptionId: subscription.id,
+                error: recErr instanceof Error ? recErr.message : String(recErr),
+              });
+            }
+            log.error("Falha ao cancelar assinatura no Asaas", {
+              subscriptionId: subscription.id,
+              error: errMsg,
+            });
+          }
+        }
+
         await logActivity({ companyId, type: "SUBSCRIPTION_CANCELED", title: "Assinatura cancelada", detail: { reason }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: "Assinatura cancelada" });
       }

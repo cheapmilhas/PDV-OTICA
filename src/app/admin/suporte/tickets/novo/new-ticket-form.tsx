@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2 } from "lucide-react";
+import { toast } from "sonner";
 
 interface Company { id: string; name: string; tradeName: string | null; }
 interface Admin { id: string; name: string; }
@@ -36,10 +37,10 @@ export function NewTicketForm({ companies, admins }: { companies: Company[]; adm
       if (data.success) {
         router.push(`/admin/suporte/tickets/${data.ticket.id}`);
       } else {
-        alert(data.error || "Erro ao criar ticket");
+        toast.error(data.error || "Erro ao criar ticket");
       }
     } catch {
-      alert("Erro ao criar ticket");
+      toast.error("Erro ao criar ticket");
     } finally {
       setLoading(false);
     }

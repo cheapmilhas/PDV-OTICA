@@ -35,7 +35,7 @@ const mockGetAiConfig = vi.mocked(getAiConfig);
 
 // advice neutro: NÃO pode conter "content"/"corpo cru" (anti-vazamento continua valendo).
 const MOCK_ADVICE = "Essas lentes ficam mais finas e leves.";
-const MOCK_USAGE = { inputTokens: 100, outputTokens: 50, cacheTokens: 10 };
+const MOCK_USAGE = { inputTokens: 100, outputTokens: 50, cacheTokens: 10, cacheWriteTokens: 0 };
 const MOCK_CFG = { lensAdvisorModel: "claude-haiku-4-5" } as Awaited<ReturnType<typeof getAiConfig>>;
 
 const adminPayload = { id: "admin-1", email: "a@a.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true };
@@ -144,6 +144,7 @@ describe("POST /api/admin/ai-playground", () => {
       inputTokens: MOCK_USAGE.inputTokens,
       outputTokens: MOCK_USAGE.outputTokens,
       cacheTokens: MOCK_USAGE.cacheTokens,
+      cacheWriteTokens: MOCK_USAGE.cacheWriteTokens,
     });
 
     // ANTI-VAZAMENTO: resposta não pode conter o conteúdo cru dos docs
@@ -192,7 +193,7 @@ describe("POST /api/admin/ai-playground", () => {
     mockBuildGlobalContext.mockResolvedValue(globalCtx);
     mockExplainLensRecommendation.mockResolvedValue({
       text: null,
-      usage: { inputTokens: 9, outputTokens: 0, cacheTokens: 0 },
+      usage: { inputTokens: 9, outputTokens: 0, cacheTokens: 0, cacheWriteTokens: 0 },
     });
 
     const res = await POST(makePostRequest({ od: { sph: -1, cyl: 0 }, oe: { sph: -1, cyl: 0 } }));

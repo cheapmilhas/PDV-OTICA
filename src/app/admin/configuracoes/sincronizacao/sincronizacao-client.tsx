@@ -3,6 +3,16 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/admin/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Config {
   isEnabled: boolean;
@@ -21,6 +31,7 @@ export function SincronizacaoClient({ config, audits }: { config: Config; audits
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+  const [showApplyConfirm, setShowApplyConfirm] = useState(false);
 
   async function patch(body: { isEnabled?: boolean; dryRun?: boolean }) {
     setSaving(true);
@@ -92,11 +103,7 @@ export function SincronizacaoClient({ config, audits }: { config: Config; audits
             🔍 Simulação (só relatório)
           </button>
           <button
-            onClick={() => {
-              if (confirm("Aplicar DE VERDADE nas empresas a partir da próxima execução?")) {
-                patch({ dryRun: false });
-              }
-            }}
+            onClick={() => setShowApplyConfirm(true)}
             disabled={saving || !config.dryRun}
             className={`px-4 py-2 rounded-md text-sm ${
               !config.dryRun
@@ -170,6 +177,28 @@ export function SincronizacaoClient({ config, audits }: { config: Config; audits
           </ul>
         )}
       </div>
+
+      <AlertDialog open={showApplyConfirm} onOpenChange={setShowApplyConfirm}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Aplicar de verdade nas empresas?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A partir da próxima execução, a sincronização vai gravar mudanças nas empresas (modo não é mais simulação).
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                setShowApplyConfirm(false);
+                patch({ dryRun: false });
+              }}
+            >
+              Aplicar de verdade
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

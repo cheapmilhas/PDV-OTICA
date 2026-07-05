@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
+import { prisma } from "@/lib/prisma";
 import {
   getWhatsappGlobalConfig,
   updateWhatsappGlobalConfig,
@@ -26,6 +27,11 @@ export async function GET() {
 export async function PUT(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Config GLOBAL anti-bloqueio afeta o disparo de TODOS os tenants — decisão de
+  // dono, só SUPER_ADMIN (mesmo padrão de auto-sync/ai-toggle-all).
+  if (admin.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+  }
 
   const body = await request.json();
 
@@ -46,5 +52,18 @@ export async function PUT(request: Request) {
   if (err) return NextResponse.json({ error: err }, { status: 400 });
 
   const data = await updateWhatsappGlobalConfig(patch);
+
+  // Auditoria best-effort (config global mutável precisa de trilha; nunca derruba a ação).
+  await prisma.globalAudit
+    .create({
+      data: {
+        actorType: "ADMIN_USER",
+        actorId: admin.id,
+        action: "WHATSAPP_CONFIG_CHANGED",
+        metadata: { patch },
+      },
+    })
+    .catch(() => {});
+
   return NextResponse.json({ data });
 }

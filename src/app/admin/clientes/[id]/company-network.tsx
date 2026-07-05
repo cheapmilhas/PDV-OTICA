@@ -12,6 +12,17 @@ import {
   Trash2,
   UserPlus,
 } from "lucide-react";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface NetworkData {
   id: string;
@@ -43,6 +54,8 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
   const [loading, setLoading] = useState(!!networkId);
   const [showCreateForm, setShowCreateForm] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [removingCompanyId, setRemovingCompanyId] = useState<string | null>(null);
+  const [showDeleteNetwork, setShowDeleteNetwork] = useState(false);
 
   // Form create
   const [networkName, setNetworkName] = useState("");
@@ -83,8 +96,14 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
   }
 
   async function handleCreateNetwork() {
-    if (!networkName.trim()) return alert("Nome da rede é obrigatório");
-    if (selectedCompanyIds.length < 2) return alert("Selecione pelo menos 2 empresas");
+    if (!networkName.trim()) {
+      toast.error("Nome da rede é obrigatório");
+      return;
+    }
+    if (selectedCompanyIds.length < 2) {
+      toast.error("Selecione pelo menos 2 empresas");
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch("/api/admin/networks", {
@@ -97,13 +116,13 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
       });
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Erro ao criar rede");
+        toast.error(data.error || "Erro ao criar rede");
         return;
       }
       setShowCreateForm(false);
       router.refresh();
     } catch {
-      alert("Erro ao criar rede");
+      toast.error("Erro ao criar rede");
     } finally {
       setSaving(false);
     }
@@ -119,13 +138,12 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
       });
       setNetwork({ ...network, [field]: value });
     } catch {
-      alert("Erro ao atualizar configuração");
+      toast.error("Erro ao atualizar configuração");
     }
   }
 
   async function handleRemoveCompany(removeId: string) {
     if (!network) return;
-    if (!confirm("Remover esta empresa da rede?")) return;
     try {
       const res = await fetch(`/api/admin/networks/${network.id}`, {
         method: "POST",
@@ -133,16 +151,17 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
         body: JSON.stringify({ action: "remove-company", companyId: removeId }),
       });
       const data = await res.json();
-      if (!res.ok) { alert(data.error); return; }
+      if (!res.ok) { toast.error(data.error); return; }
       router.refresh();
     } catch {
-      alert("Erro ao remover empresa");
+      toast.error("Erro ao remover empresa");
+    } finally {
+      setRemovingCompanyId(null);
     }
   }
 
   async function handleDeleteNetwork() {
     if (!network) return;
-    if (!confirm(`Desfazer a rede "${network.name}"? As empresas serão desvinculadas.`)) return;
     try {
       await fetch(`/api/admin/networks/${network.id}`, {
         method: "POST",
@@ -151,7 +170,9 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
       });
       router.refresh();
     } catch {
-      alert("Erro ao remover rede");
+      toast.error("Erro ao remover rede");
+    } finally {
+      setShowDeleteNetwork(false);
     }
   }
 
@@ -290,7 +311,7 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
                   <td className="px-4 py-2 text-right">
                     {network.headquarters?.id !== c.id && (
                       <button
-                        onClick={() => handleRemoveCompany(c.id)}
+                        onClick={() => setRemovingCompanyId(c.id)}
                         className="p-1 rounded hover:bg-muted text-rose-600"
                         title="Remover da rede"
                       >
@@ -338,13 +359,55 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
       <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
         <h3 className="text-xs font-semibold text-rose-600 uppercase mb-3">Zona de Perigo</h3>
         <button
-          onClick={handleDeleteNetwork}
+          onClick={() => setShowDeleteNetwork(true)}
           className="flex items-center gap-2 px-3 py-1.5 text-sm text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100"
         >
           <Trash2 className="h-3.5 w-3.5" />
           Desfazer Rede
         </button>
       </div>
+
+      <AlertDialog open={removingCompanyId !== null} onOpenChange={(o) => !o && setRemovingCompanyId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Remover empresa da rede?</AlertDialogTitle>
+            <AlertDialogDescription>
+              A empresa será desvinculada desta rede e deixará de compartilhar dados com as demais.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (removingCompanyId) handleRemoveCompany(removingCompanyId);
+              }}
+            >
+              Remover
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      <AlertDialog open={showDeleteNetwork} onOpenChange={setShowDeleteNetwork}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Desfazer a rede &quot;{network?.name}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Todas as empresas serão desvinculadas. Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={handleDeleteNetwork}
+            >
+              Desfazer Rede
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

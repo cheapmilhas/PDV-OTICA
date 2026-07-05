@@ -4,8 +4,10 @@ import {
   priceForCompany,
   tokensToCredits,
   usdToBrl,
+  knownTextModels,
   CREDIT_TOKEN_FACTOR,
 } from "./ai-pricing";
+import { QUALIFIER_MODELS } from "@/services/ai-config.service";
 
 describe("computeCostUsd", () => {
   it("calcula custo do claude-sonnet-4 (input+output)", () => {
@@ -80,6 +82,45 @@ describe("computeCostUsd", () => {
       outputTokens: 1_000_000,
     });
     expect(cost).toBeCloseTo(30, 4);
+  });
+
+  it("inclui cacheWriteTokens no custo (escrita de cache = 1,25× o input)", () => {
+    // sonnet-4-6 cache write = $3.75/M → 1M = $3.75
+    const cost = computeCostUsd({
+      provider: "anthropic",
+      model: "claude-sonnet-4-6",
+      cacheWriteTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(3.75, 4);
+  });
+
+  it("cache write do haiku-4-5 = $1.25/M", () => {
+    const cost = computeCostUsd({
+      provider: "anthropic",
+      model: "claude-haiku-4-5",
+      cacheWriteTokens: 1_000_000,
+    });
+    expect(cost).toBeCloseTo(1.25, 4);
+  });
+});
+
+// IA-2: acoplamento allowlist ↔ tabela de preço. Se um modelo entra na allowlist
+// (QUALIFIER_MODELS, usada para qualifier/lensAdvisor/ocr) sem preço cadastrado,
+// todo o consumo dele seria contabilizado a $0 silenciosamente — e o markup
+// cobrado da ótica viraria R$ 0. Este teste falha ANTES de isso chegar em prod.
+describe("acoplamento modelo ↔ preço (IA-2)", () => {
+  it("todo modelo da allowlist tem preço na tabela de texto", () => {
+    const priced = new Set(knownTextModels());
+    for (const model of QUALIFIER_MODELS) {
+      expect(priced.has(model), `modelo "${model}" está na allowlist mas SEM preço em ai-pricing.ts`).toBe(true);
+    }
+  });
+
+  it("cada modelo da allowlist produz custo > 0 para tokens > 0", () => {
+    for (const model of QUALIFIER_MODELS) {
+      const cost = computeCostUsd({ provider: "anthropic", model, inputTokens: 1_000_000 });
+      expect(cost, `modelo "${model}" custou $0 para 1M input`).toBeGreaterThan(0);
+    }
   });
 });
 

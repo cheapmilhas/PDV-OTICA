@@ -16,6 +16,17 @@ import {
   Wrench,
 } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface Branch {
   id: string;
@@ -53,6 +64,7 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
   const [showForm, setShowForm] = useState(false);
   const [editingBranch, setEditingBranch] = useState<Branch | null>(null);
   const [saving, setSaving] = useState(false);
+  const [togglingBranch, setTogglingBranch] = useState<Branch | null>(null);
 
   // Form state
   const [form, setForm] = useState({
@@ -105,7 +117,10 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    if (!form.name.trim()) return alert("Nome é obrigatório");
+    if (!form.name.trim()) {
+      toast.error("Nome é obrigatório");
+      return;
+    }
     setSaving(true);
 
     try {
@@ -121,7 +136,7 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || "Erro ao salvar filial");
+        toast.error(data.error || "Erro ao salvar filial");
         return;
       }
 
@@ -129,7 +144,7 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
       fetchBranches();
       router.refresh();
     } catch {
-      alert("Erro ao salvar filial");
+      toast.error("Erro ao salvar filial");
     } finally {
       setSaving(false);
     }
@@ -137,7 +152,6 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
 
   async function toggleActive(branch: Branch) {
     const action = branch.active ? "desativar" : "reativar";
-    if (!confirm(`${branch.active ? "Desativar" : "Reativar"} a filial "${branch.name}"?`)) return;
 
     try {
       const res = await fetch(`/api/admin/companies/${companyId}/branches/${branch.id}`, {
@@ -148,14 +162,16 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
 
       const data = await res.json();
       if (!res.ok) {
-        alert(data.error || `Erro ao ${action} filial`);
+        toast.error(data.error || `Erro ao ${action} filial`);
         return;
       }
 
       fetchBranches();
       router.refresh();
     } catch {
-      alert(`Erro ao ${action} filial`);
+      toast.error(`Erro ao ${action} filial`);
+    } finally {
+      setTogglingBranch(null);
     }
   }
 
@@ -395,7 +411,7 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
-                        onClick={() => toggleActive(branch)}
+                        onClick={() => setTogglingBranch(branch)}
                         className={`p-1.5 rounded hover:bg-muted transition-colors ${
                           branch.active
                             ? "text-amber-600 hover:text-amber-700"
@@ -413,6 +429,36 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
           </table>
         </div>
       )}
+
+      <AlertDialog open={togglingBranch !== null} onOpenChange={(o) => !o && setTogglingBranch(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {togglingBranch?.active ? "Desativar filial?" : "Reativar filial?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {togglingBranch?.active
+                ? `A filial "${togglingBranch?.name}" ficará inativa e não poderá ser usada até ser reativada.`
+                : `A filial "${togglingBranch?.name}" voltará a ficar ativa.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                togglingBranch?.active
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
+              onClick={() => {
+                if (togglingBranch) toggleActive(togglingBranch);
+              }}
+            >
+              {togglingBranch?.active ? "Desativar" : "Reativar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

@@ -55,6 +55,7 @@ export async function POST(request: Request) {
       inputTokens: usage.inputTokens,
       outputTokens: usage.outputTokens,
       cacheTokens: usage.cacheTokens,
+      cacheWriteTokens: usage.cacheWriteTokens,
     });
   } catch (error) {
     // Sem chave / erro de API → degrada para só motor+contexto, sem custo logado.

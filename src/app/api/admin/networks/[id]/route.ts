@@ -45,6 +45,10 @@ export async function PATCH(
 ) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Alterar flags de compartilhamento da rede é estrutural — só SUPER_ADMIN.
+  if (admin.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+  }
 
   const { id } = await params;
 
@@ -92,6 +96,11 @@ export async function POST(
 ) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Add/remove empresa e apagar rede reconfiguram compartilhamento multi-tenant
+  // — estrutural, só SUPER_ADMIN.
+  if (admin.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+  }
 
   const { id } = await params;
   const body = await request.json();

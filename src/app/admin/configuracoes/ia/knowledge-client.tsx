@@ -2,6 +2,16 @@
 
 import { useCallback, useEffect, useState } from "react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface KnowledgeDoc {
   id: string;
@@ -25,6 +35,7 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
   const [pendingId, setPendingId] = useState<string | null>(null);
+  const [docToDelete, setDocToDelete] = useState<KnowledgeDoc | null>(null);
 
   // novo documento
   const [title, setTitle] = useState("");
@@ -89,9 +100,7 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
   }
 
   async function handleDelete(doc: KnowledgeDoc) {
-    if (!window.confirm(`Excluir o documento "${doc.title}"? Esta ação não pode ser desfeita.`)) {
-      return;
-    }
+    setDocToDelete(null);
     if (pendingId) return;
     setPendingId(doc.id);
     setError("");
@@ -195,7 +204,7 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
                           Ativo
                         </span>
                       ) : (
-                        <span className="inline-flex rounded-full bg-gray-100 px-2 py-0.5 text-xs font-medium text-gray-600">
+                        <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
                           Inativo
                         </span>
                       )}
@@ -212,7 +221,7 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
                         </button>
                         <button
                           type="button"
-                          onClick={() => handleDelete(doc)}
+                          onClick={() => setDocToDelete(doc)}
                           disabled={pendingId === doc.id}
                           className="inline-flex items-center px-2 py-1.5 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
                         >
@@ -305,6 +314,28 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
           </button>
         </div>
       </form>
+
+      <AlertDialog open={docToDelete !== null} onOpenChange={(o) => !o && setDocToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir o documento &quot;{docToDelete?.title}&quot;?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Esta ação não pode ser desfeita. O documento será removido da base de conhecimento.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (docToDelete) handleDelete(docToDelete);
+              }}
+            >
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

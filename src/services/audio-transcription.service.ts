@@ -10,6 +10,8 @@ const WHISPER_MODEL = "whisper-1";
 
 interface WhisperResponse {
   text?: string;
+  /** Só presente com response_format=verbose_json. Duração do áudio em segundos. */
+  duration?: number;
 }
 
 /**
@@ -60,6 +62,9 @@ export async function transcribeAudio(
     const blob = new Blob([buffer], { type: media.mimetype ?? "audio/ogg" });
     form.append("file", blob, "audio.ogg");
     form.append("model", WHISPER_MODEL);
+    // verbose_json traz o campo `duration` (segundos) — necessário para medir o
+    // custo real (Whisper é cobrado por minuto). Sem isso, o custo caía sempre a $0.
+    form.append("response_format", "verbose_json");
 
     const res = await fetch(WHISPER_URL, {
       method: "POST",
@@ -84,16 +89,19 @@ export async function transcribeAudio(
 
     // 6. Registra o uso. logAiUsage é fail-safe internamente, mas o chamamos sempre
     //    que houve uma transcrição real (linha de custo: provider/model/feature).
-    //    audioSeconds: LIMITAÇÃO v1 — pedimos o JSON default do Whisper (sem o campo
-    //    `duration`, que só vem em verbose_json) e estimar a duração pelo tamanho do
-    //    buffer é pouco confiável entre codecs. Por ora logamos 0 (decisão do plano);
-    //    revisitar em v2 com verbose_json se a precisão de custo de áudio importar.
+    //    audioSeconds: vem do `duration` do verbose_json. Whisper cobra por minuto,
+    //    então arredondamos para cima (Math.ceil) o segundo — nunca sub-reporta o
+    //    custo. Fallback defensivo a 0 se, por qualquer razão, `duration` faltar.
+    const audioSeconds =
+      typeof data.duration === "number" && Number.isFinite(data.duration) && data.duration > 0
+        ? Math.ceil(data.duration)
+        : 0;
     await logAiUsage({
       companyId,
       feature: "audio_transcription",
       provider: "openai",
       model: WHISPER_MODEL,
-      audioSeconds: 0,
+      audioSeconds,
     });
 
     // 7. Texto transcrito (já trimado).

@@ -4,6 +4,17 @@ import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Plus, Shield, Users, X, Pencil } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { toast } from "sonner";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 
 interface AdminUser {
   id: string;
@@ -43,6 +54,7 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
   const [form, setForm] = useState({ name: "", email: "", password: "", role: "SUPPORT" as string });
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
+  const [togglingAdmin, setTogglingAdmin] = useState<AdminUser | null>(null);
   const router = useRouter();
 
   const isSuperAdmin = currentAdminRole === "SUPER_ADMIN";
@@ -99,17 +111,12 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
   }
 
   async function toggleActive(admin: AdminUser) {
-    if (admin.id === currentAdminId) { alert("Você não pode desativar sua própria conta"); return; }
-
-    const action = admin.active ? "desativar" : "reativar";
-    if (!confirm(`${action.charAt(0).toUpperCase() + action.slice(1)} "${admin.name}"?`)) return;
-
     try {
       if (admin.active) {
         const res = await fetch(`/api/admin/users/${admin.id}`, { method: "DELETE" });
         if (!res.ok) {
           const data = await res.json();
-          alert(data.error || "Erro");
+          toast.error(data.error || "Erro");
           return;
         }
       } else {
@@ -120,13 +127,15 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
         });
         if (!res.ok) {
           const data = await res.json();
-          alert(data.error || "Erro");
+          toast.error(data.error || "Erro");
           return;
         }
       }
       router.refresh();
     } catch {
-      alert("Erro ao executar ação");
+      toast.error("Erro ao executar ação");
+    } finally {
+      setTogglingAdmin(null);
     }
   }
 
@@ -215,7 +224,7 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
                           </button>
                           {admin.id !== currentAdminId && (
                             <button
-                              onClick={() => toggleActive(admin)}
+                              onClick={() => setTogglingAdmin(admin)}
                               className={`text-xs px-2 py-1 rounded transition-colors ${admin.active ? "text-rose-600 hover:bg-rose-50" : "text-emerald-600 hover:bg-emerald-50"}`}
                             >
                               {admin.active ? "Desativar" : "Reativar"}
@@ -322,6 +331,36 @@ export function EquipeClient({ initialAdmins, currentAdminRole, currentAdminId }
           </div>
         </div>
       )}
+
+      <AlertDialog open={togglingAdmin !== null} onOpenChange={(o) => !o && setTogglingAdmin(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              {togglingAdmin?.active ? "Desativar usuário?" : "Reativar usuário?"}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {togglingAdmin?.active
+                ? `"${togglingAdmin?.name}" perderá o acesso administrativo até ser reativado.`
+                : `"${togglingAdmin?.name}" voltará a ter acesso administrativo.`}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className={
+                togglingAdmin?.active
+                  ? "bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                  : undefined
+              }
+              onClick={() => {
+                if (togglingAdmin) toggleActive(togglingAdmin);
+              }}
+            >
+              {togglingAdmin?.active ? "Desativar" : "Reativar"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }

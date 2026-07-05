@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession } from "@/lib/admin-session";
+import { prisma } from "@/lib/prisma";
 import { getAiConfig, updateAiConfig, QUALIFIER_MODELS } from "@/services/ai-config.service";
 
 /**
@@ -23,6 +24,11 @@ export async function GET(_request: Request) {
 export async function PUT(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Grava chaves de API globais (Anthropic/OpenAI), câmbio e markup que afetam
+  // TODOS os tenants — só SUPER_ADMIN (mesmo padrão de auto-sync/ai-toggle-all).
+  if (admin.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+  }
 
   const body = await request.json();
 
@@ -58,5 +64,29 @@ export async function PUT(request: Request) {
   if (typeof body.openaiKey === "string") patch.openaiKey = body.openaiKey;
 
   const data = await updateAiConfig(patch);
+
+  // Auditoria best-effort. NUNCA registra as chaves em claro: apenas quais campos
+  // mudaram (as chaves viram booleano de "tocou/não tocou").
+  await prisma.globalAudit
+    .create({
+      data: {
+        actorType: "ADMIN_USER",
+        actorId: admin.id,
+        action: "AI_CONFIG_CHANGED",
+        metadata: {
+          changedFields: Object.keys(patch),
+          anthropicKeyChanged: patch.anthropicKey !== undefined,
+          openaiKeyChanged: patch.openaiKey !== undefined,
+          usdBrlRate: patch.usdBrlRate,
+          markupPercent: patch.markupPercent,
+          creditTokenFactor: patch.creditTokenFactor,
+          qualifierModel: patch.qualifierModel,
+          lensAdvisorModel: patch.lensAdvisorModel,
+          ocrModel: patch.ocrModel,
+        },
+      },
+    })
+    .catch(() => {});
+
   return NextResponse.json({ data });
 }

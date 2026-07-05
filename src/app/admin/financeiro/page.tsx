@@ -5,15 +5,19 @@ import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight, Clock } fr
 import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
 import { getReceivableThisWeek } from "@/services/invoice-receivable.service";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 export default async function FinanceiroPage() {
   await requireAdmin();
 
+  // F10: fronteiras do mês no fuso de São Paulo (não no fuso do servidor, que é UTC
+  // na Vercel). Sem isso, `paidAt` das 21h–23h59 BRT caía no mês errado.
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
-  const endOfMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0);
-  const startOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 1, 1);
-  const endOfNextMonth = new Date(now.getFullYear(), now.getMonth() + 2, 0);
+  const startOfMonth = startOfLocalMonth(now);
+  const endOfMonth = endOfLocalMonth(now);
+  const nextMonthRef = new Date(now.getFullYear(), now.getMonth() + 1, 15);
+  const startOfNextMonth = startOfLocalMonth(nextMonthRef);
+  const endOfNextMonth = endOfLocalMonth(nextMonthRef);
 
   // Métricas financeiras
   const [

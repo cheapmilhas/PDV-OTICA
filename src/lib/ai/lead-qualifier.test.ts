@@ -1,7 +1,11 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 const createMock = vi.fn();
 vi.mock("@anthropic-ai/sdk", () => ({ default: class { constructor(_opts?: unknown) {} messages = { create: (...a: unknown[]) => createMock(...a) }; } }));
-vi.mock("@/services/ai-config.service", () => ({ getAnthropicKey: vi.fn() }));
+vi.mock("@/services/ai-config.service", () => ({
+  getAnthropicKey: vi.fn(),
+  // opus-4-8 não aceita temperature; os testes usam sonnet/haiku (aceitam).
+  modelSupportsTemperature: (m: string) => m !== "claude-opus-4-8",
+}));
 import { getAnthropicKey } from "@/services/ai-config.service";
 import { qualifyConversationText, SYSTEM_PROMPT } from "./lead-qualifier";
 

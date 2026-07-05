@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { UserPlus } from "lucide-react";
@@ -33,7 +33,10 @@ export default async function EmpresasPage({
     quick?: string;
   }>;
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
+  // Escopo: admin restrito só enxerga empresas do seu escopo (null = irrestrito).
+  // Alinha a página à API /api/admin/clientes, que já filtra por escopo.
+  const accessible = await getAccessibleCompanyIds(admin.id);
   const params = await searchParams;
   const search = params.search ?? "";
   const statusFilter = params.status ?? "";
@@ -48,6 +51,7 @@ export default async function EmpresasPage({
   const companies = await prisma.company.findMany({
     where: {
       AND: [
+        accessible === null ? {} : { id: { in: accessible } },
         search
           ? { OR: [
               { name: { contains: search, mode: "insensitive" } },
@@ -77,8 +81,34 @@ export default async function EmpresasPage({
     take: 100,
   });
 
-  // Contagens para filtros de status
-  const statusCounts = await prisma.subscription.groupBy({ by: ["status"], _count: true });
+  // Total real (respeitando os MESMOS filtros) — para o subtítulo não mentir
+  // quando a lista é truncada em 100 ("mostrando 100 de N").
+  const totalCount = await prisma.company.count({
+    where: {
+      AND: [
+        accessible === null ? {} : { id: { in: accessible } },
+        search
+          ? { OR: [
+              { name: { contains: search, mode: "insensitive" } },
+              { cnpj: { contains: search } },
+              { email: { contains: search, mode: "insensitive" } },
+            ]}
+          : {},
+        statusFilter ? { subscriptions: { some: { status: statusFilter as any } } } : {},
+        healthFilter ? { healthCategory: healthFilter as any } : {},
+        onboardingFilter ? { onboardingStatus: onboardingFilter as any } : {},
+        segmentFilter ? { segment: segmentFilter as any } : {},
+        tagFilter ? { companyTags: { some: { tagId: tagFilter } } } : {},
+      ],
+    },
+  });
+
+  // Contagens para filtros de status (respeitando o escopo do admin)
+  const statusCounts = await prisma.subscription.groupBy({
+    by: ["status"],
+    _count: true,
+    where: accessible === null ? undefined : { companyId: { in: accessible } },
+  });
   const counts = statusCounts.reduce(
     (acc, item) => ({ ...acc, [item.status]: item._count }),
     {} as Record<string, number>
@@ -88,7 +118,11 @@ export default async function EmpresasPage({
     <div className="p-6">
       <PageHeader
         title="Empresas"
-        subtitle={`${companies.length} empresa${companies.length !== 1 ? "s" : ""} encontrada${companies.length !== 1 ? "s" : ""}`}
+        subtitle={
+          totalCount > companies.length
+            ? `Mostrando ${companies.length} de ${totalCount} empresas — refine os filtros para ver as demais`
+            : `${totalCount} empresa${totalCount !== 1 ? "s" : ""} encontrada${totalCount !== 1 ? "s" : ""}`
+        }
         actions={
           <Link
             href="/admin/clientes/novo"

@@ -35,6 +35,11 @@ export async function GET() {
 export async function POST(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+  // Criar rede define o que empresas compartilham entre si (catálogo/clientes/
+  // preços) — decisão estrutural de dono, só SUPER_ADMIN.
+  if (admin.role !== "SUPER_ADMIN") {
+    return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
+  }
 
   try {
     const body = await request.json();

@@ -4,9 +4,9 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
-  Settings, Package, UserCog, ScrollText, UserPlus, Ticket,
+  Package, UserCog, ScrollText, Ticket,
   FileBarChart, UsersRound, Activity, Mail, RefreshCw,
-  CreditCard, ShieldCheck,
+  CreditCard, ShieldCheck, Sparkles, MessageCircle,
 } from "lucide-react";
 
 const menuItems = [
@@ -16,7 +16,6 @@ const menuItems = [
       { href: "/admin",                   icon: LayoutDashboard, label: "Dashboard",       exact: true },
       { href: "/admin/clientes",          icon: Users,           label: "Clientes",         exact: false },
       { href: "/admin/interessados",      icon: Mail,            label: "Interessados",     exact: false },
-      { href: "/admin/clientes/novo",     icon: UserPlus,        label: "Novo Cliente",     exact: true },
       { href: "/admin/usuarios",          icon: UsersRound,      label: "Usuários",         exact: false },
       { href: "/admin/saude",             icon: Activity,        label: "Saúde",            exact: false },
     ],
@@ -47,11 +46,12 @@ const menuItems = [
     items: [
       { href: "/admin/configuracoes/planos",  icon: Package,  label: "Planos",  exact: false },
       { href: "/admin/configuracoes/equipe",  icon: UserCog,  label: "Equipe",  exact: false },
+      { href: "/admin/configuracoes/ia",      icon: Sparkles, label: "IA",      exact: false },
+      { href: "/admin/configuracoes/whatsapp", icon: MessageCircle, label: "WhatsApp", exact: false },
       { href: "/admin/configuracoes/logs",    icon: ScrollText, label: "Logs",  exact: false },
       { href: "/admin/configuracoes/sincronizacao", icon: RefreshCw, label: "Sincronização", exact: false },
       { href: "/admin/configuracoes/emails",    icon: Mail,        label: "Emails",    exact: false },
       { href: "/admin/configuracoes/seguranca", icon: ShieldCheck, label: "Segurança", exact: false },
-      { href: "/admin/configuracoes",           icon: Settings,    label: "Config",    exact: true  },
     ],
   },
 ];

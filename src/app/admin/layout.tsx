@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { Toaster } from "sonner";
 import { NotificationBell } from "@/components/admin/NotificationBell";
 import { AdminSidebar, AdminMobileMenu } from "@/components/admin/AdminSidebar";
 import { AdminBreadcrumb } from "./admin-breadcrumb";
@@ -27,6 +28,11 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
         </div>
         {children}
       </main>
+
+      {/* Toaster do sonner: ~15 componentes do admin usam `toast` de "sonner"
+          (ações de ticket, etc.) mas ele nunca era montado — sucesso e erro
+          ficavam invisíveis (A1). richColors dá verde/vermelho semântico. */}
+      <Toaster position="top-right" richColors closeButton />
     </div>
   );
 }

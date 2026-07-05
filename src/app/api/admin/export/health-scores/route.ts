@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { csvRow } from "@/lib/csv-safe";
 import { adminRateLimit } from "@/lib/rate-limit";
 
@@ -14,7 +14,11 @@ export async function GET(request: Request) {
   const limited = adminRateLimit("admin-export-health-scores", admin.id, request);
   if (limited) return limited;
 
+  // Escopo: admin restrito só exporta health-scores do seu escopo (null = irrestrito).
+  const accessible = await getAccessibleCompanyIds(admin.id);
+
   const scores = await prisma.healthScore.findMany({
+    where: accessible === null ? undefined : { companyId: { in: accessible } },
     orderBy: { calculatedAt: "desc" },
     include: { company: { select: { name: true, email: true } } },
     distinct: ["companyId"],

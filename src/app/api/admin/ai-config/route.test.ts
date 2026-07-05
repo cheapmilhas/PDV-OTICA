@@ -8,6 +8,9 @@ vi.mock("@/services/ai-config.service", () => ({
   updateAiConfig: vi.fn(),
   QUALIFIER_MODELS: ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"],
 }));
+vi.mock("@/lib/prisma", () => ({
+  prisma: { globalAudit: { create: vi.fn().mockResolvedValue({}) } },
+}));
 
 import { GET, PUT } from "./route";
 import { getAdminSession } from "@/lib/admin-session";
@@ -84,6 +87,16 @@ describe("PUT /api/admin/ai-config", () => {
     expect(res.status).toBe(401);
     expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
+
+  it.each(["ADMIN", "SUPPORT", "BILLING"])(
+    "403 para %s (grava chave de API global → só SUPER_ADMIN)",
+    async (role) => {
+      mockGetAdminSession.mockResolvedValue({ ...adminPayload, role });
+      const res = await PUT(makePutRequest({ anthropicKey: "sk-leak" }));
+      expect(res.status).toBe(403);
+      expect(mockUpdateAiConfig).not.toHaveBeenCalled();
+    }
+  );
 
   it("200 calls updateAiConfig with body fields and returns data", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);

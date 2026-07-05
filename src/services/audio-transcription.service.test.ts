@@ -32,10 +32,11 @@ afterEach(() => {
 });
 
 describe("transcribeAudio", () => {
-  it("happy path: transcreve o áudio e registra o uso", async () => {
+  it("happy path: transcreve o áudio e registra o uso (com duração real)", async () => {
     getOpenaiKeyMock.mockResolvedValue("sk-test");
     getMediaBase64Mock.mockResolvedValue({ base64: SAMPLE_BASE64, mimetype: "audio/ogg" });
-    fetchMock.mockResolvedValue(okJson({ text: "olá quanto custa" }));
+    // verbose_json traz `duration` (segundos). 12.3s → arredonda p/ cima = 13.
+    fetchMock.mockResolvedValue(okJson({ text: "olá quanto custa", duration: 12.3 }));
 
     const result = await transcribeAudio("co1", "inst1", "evo1");
 
@@ -51,8 +52,10 @@ describe("transcribeAudio", () => {
     expect(init.headers.Authorization).toBe("Bearer sk-test");
     // NÃO seta Content-Type manualmente (fetch monta o boundary)
     expect(init.headers["Content-Type"]).toBeUndefined();
+    // IA-1: pede verbose_json para receber a duração (custo do Whisper é por minuto)
+    expect((init.body as FormData).get("response_format")).toBe("verbose_json");
 
-    // registrou uso uma vez com os campos certos
+    // registrou uso uma vez, com a duração real arredondada p/ cima (nunca subreporta)
     expect(logAiUsageMock).toHaveBeenCalledTimes(1);
     expect(logAiUsageMock).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -60,7 +63,20 @@ describe("transcribeAudio", () => {
         feature: "audio_transcription",
         provider: "openai",
         model: "whisper-1",
+        audioSeconds: 13,
       }),
+    );
+  });
+
+  it("IA-1: sem `duration` na resposta, faz fallback defensivo a audioSeconds=0", async () => {
+    getOpenaiKeyMock.mockResolvedValue("sk-test");
+    getMediaBase64Mock.mockResolvedValue({ base64: SAMPLE_BASE64, mimetype: "audio/ogg" });
+    fetchMock.mockResolvedValue(okJson({ text: "sem duração" }));
+
+    await transcribeAudio("co1", "inst1", "evo1");
+
+    expect(logAiUsageMock).toHaveBeenCalledWith(
+      expect.objectContaining({ audioSeconds: 0 }),
     );
   });
 

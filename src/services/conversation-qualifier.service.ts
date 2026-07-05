@@ -285,7 +285,7 @@ export async function qualifyConversation(conversationId: string, opts?: { force
 
   await logAiUsage({
     companyId: conv.companyId, feature: "lead_qualification", provider: "anthropic", model: cfg.qualifierModel,
-    inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens,
+    inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens, cacheWriteTokens: result.usage.cacheWriteTokens,
   });
 
   // Tipo de cliente p/ exibição. single → deriva das compras; ambiguous → há

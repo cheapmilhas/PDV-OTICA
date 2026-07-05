@@ -1,5 +1,5 @@
 import { NextResponse } from "next/server";
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { csvRow } from "@/lib/csv-safe";
@@ -20,8 +20,13 @@ export async function GET(request: Request) {
   const limited = adminRateLimit("admin-export-faturas", admin.id, request);
   if (limited) return limited;
 
+  // Escopo: admin restrito só exporta faturas de empresas do seu escopo
+  // (Invoice não tem companyId direto → filtra via subscription.companyId).
+  const accessible = await getAccessibleCompanyIds(admin.id);
+
   try {
     const invoices = await prisma.invoice.findMany({
+      where: accessible === null ? undefined : { subscription: { companyId: { in: accessible } } },
       include: {
         subscription: {
           select: {

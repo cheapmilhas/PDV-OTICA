@@ -64,7 +64,7 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
     try {
       await logAiUsage({
         companyId, feature: "whatsapp_copilot", provider: "anthropic", model: COPILOT_MODEL,
-        inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens,
+        inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens, cacheWriteTokens: result.usage.cacheWriteTokens,
       });
     } catch { /* telemetria não bloqueia a resposta */ }
 

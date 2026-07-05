@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { HealthCategory } from "@prisma/client";
 import { HealthBadge } from "@/components/health-badge";
@@ -18,7 +18,10 @@ export default async function AdminSaudePage({
 }: {
   searchParams: Promise<{ category?: string }>;
 }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
+  // Escopo: admin restrito só vê saúde das empresas do seu escopo (null = irrestrito).
+  const accessible = await getAccessibleCompanyIds(admin.id);
+  const scopeWhere = accessible === null ? {} : { id: { in: accessible } };
   const params = await searchParams;
   const filterCategory =
     params.category && CATEGORY_ORDER.includes(params.category as HealthCategory)
@@ -28,6 +31,7 @@ export default async function AdminSaudePage({
   // Empresas com health calculado, piores primeiro. Lê o cache na Company.
   const companies = await prisma.company.findMany({
     where: {
+      ...scopeWhere,
       healthScore: { not: null },
       ...(filterCategory ? { healthCategory: filterCategory } : {}),
     },
@@ -53,7 +57,7 @@ export default async function AdminSaudePage({
   // Contagem por categoria (para os filtros).
   const counts = await prisma.company.groupBy({
     by: ["healthCategory"],
-    where: { healthScore: { not: null } },
+    where: { ...scopeWhere, healthScore: { not: null } },
     _count: true,
   });
   const countByCat = (cat: HealthCategory) =>

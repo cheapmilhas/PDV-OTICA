@@ -4720,12 +4720,13 @@ model AiTokenUsage {
   feature      String   // "ocr_prescription" | "lead_qualification" | "audio_transcription"
   provider     String   // "anthropic" | "openai"
   model        String
-  inputTokens  Int      @default(0)
-  outputTokens Int      @default(0)
-  cacheTokens  Int      @default(0)
-  audioSeconds Int?
-  costUsd      Decimal  @default(0) @db.Decimal(12, 6)
-  createdAt    DateTime @default(now())
+  inputTokens      Int      @default(0)
+  outputTokens     Int      @default(0)
+  cacheTokens      Int      @default(0) // cache_read_input_tokens (leitura de cache)
+  cacheWriteTokens Int      @default(0) // cache_creation_input_tokens (escrita de cache)
+  audioSeconds     Int?
+  costUsd          Decimal  @default(0) @db.Decimal(12, 6)
+  createdAt        DateTime @default(now())
 
   company Company? @relation(fields: [companyId], references: [id], onDelete: Cascade)
 

@@ -1,6 +1,7 @@
 "use client";
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { toast } from "sonner";
 
 interface ResendChargeButtonProps {
   invoiceId: string;
@@ -25,33 +26,31 @@ function deriveLabel(invoiceSent?: boolean, invoiceSentAt?: string | null): stri
 export function ResendChargeButton({ invoiceId, invoiceSent, invoiceSentAt, sentToday, label }: ResendChargeButtonProps) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
-  const [msg, setMsg] = useState<string | null>(null);
 
   const text = label !== undefined ? label : deriveLabel(invoiceSent, invoiceSentAt);
 
   async function run() {
     if (sentToday) return;
-    setLoading(true); setMsg(null);
+    setLoading(true);
     try {
       const res = await fetch(`/api/admin/invoices/${invoiceId}/resend-charge`, { method: "POST" });
       const data = await res.json().catch(() => ({}));
       if (res.ok) {
-        if (data.alreadySentToday) setMsg("Já reenviada hoje");
-        else if (data.status === "SENT") setMsg("Enviado.");
-        else setMsg(`Status: ${data.status ?? "—"}`);
+        if (data.alreadySentToday) toast.success("Já reenviada hoje");
+        else if (data.status === "SENT") toast.success("Enviado.");
+        else toast.success(`Status: ${data.status ?? "—"}`);
         router.refresh();
       } else {
-        setMsg(data.error || "Erro");
+        toast.error(data.error || "Erro");
       }
-    } catch { setMsg("Erro"); } finally { setLoading(false); }
+    } catch { toast.error("Erro"); } finally { setLoading(false); }
   }
 
   return (
     <span className="inline-flex items-center gap-2">
-      <button onClick={run} disabled={loading || sentToday} className="text-xs text-indigo-400 hover:text-indigo-300 underline disabled:opacity-50">
+      <button onClick={run} disabled={loading || sentToday} className="text-xs text-primary hover:text-primary/80 underline disabled:opacity-50">
         {sentToday ? "Já enviada hoje" : loading ? "Reenviando…" : text}
       </button>
-      {msg && <span className="text-xs text-gray-400">{msg}</span>}
     </span>
   );
 }

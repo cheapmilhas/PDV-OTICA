@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Loader2, Check, Plus } from "lucide-react";
+import { toast } from "sonner";
 
 interface InvoiceActionsProps {
   invoiceId: string;
@@ -33,10 +34,10 @@ export function InvoiceActions({ invoiceId, type, currentNote }: InvoiceActionsP
       if (data.success) {
         router.refresh();
       } else {
-        alert(data.error || "Erro ao executar ação");
+        toast.error(data.error || "Erro ao executar ação");
       }
     } catch (error) {
-      alert("Erro ao executar ação");
+      toast.error("Erro ao executar ação");
     } finally {
       setLoading(false);
     }

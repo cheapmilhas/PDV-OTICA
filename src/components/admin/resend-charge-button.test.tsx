@@ -1,6 +1,8 @@
 /** @vitest-environment jsdom */
 import { describe, it, expect, vi } from "vitest";
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh: vi.fn() }) }));
+const { toast } = vi.hoisted(() => ({ toast: { success: vi.fn(), error: vi.fn(), warning: vi.fn() } }));
+vi.mock("sonner", () => ({ toast }));
 import { render, screen, fireEvent, waitFor } from "@testing-library/react";
 import { ResendChargeButton } from "./resend-charge-button";
 
@@ -39,7 +41,7 @@ it("(d) reenvia e mostra 'Enviado.' em SENT + chama a rota certa", async () => {
   vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ success: true, status: "SENT" }), { status: 200 }));
   render(<ResendChargeButton invoiceId="inv_1" />);
   fireEvent.click(screen.getByText("Enviar cobrança"));
-  await waitFor(() => expect(screen.getByText("Enviado.")).toBeDefined());
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Enviado."));
   expect((global.fetch as any).mock.calls[0][0]).toBe("/api/admin/invoices/inv_1/resend-charge");
 });
 
@@ -47,12 +49,12 @@ it("(e) resposta alreadySentToday mostra 'Já reenviada hoje'", async () => {
   vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ success: true, status: "SENT", alreadySentToday: true }), { status: 200 }));
   render(<ResendChargeButton invoiceId="inv_1" />);
   fireEvent.click(screen.getByText("Enviar cobrança"));
-  await waitFor(() => expect(screen.getByText("Já reenviada hoje")).toBeDefined());
+  await waitFor(() => expect(toast.success).toHaveBeenCalledWith("Já reenviada hoje"));
 });
 
 it("mostra o erro quando a resposta não é ok", async () => {
   vi.spyOn(global, "fetch").mockResolvedValue(new Response(JSON.stringify({ error: "Fatura sem link de pagamento — sincronize a cobrança primeiro" }), { status: 400 }));
   render(<ResendChargeButton invoiceId="inv_2" />);
   fireEvent.click(screen.getByText("Enviar cobrança"));
-  await waitFor(() => expect(screen.getByText(/sincronize a cobrança/i)).toBeDefined());
+  await waitFor(() => expect(toast.error).toHaveBeenCalledWith(expect.stringMatching(/sincronize a cobrança/i)));
 });
