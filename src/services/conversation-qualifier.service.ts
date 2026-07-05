@@ -417,7 +417,7 @@ export async function qualifyPendingConversations(
   // Cooldown: ignora conversas com mensagem nos últimos N min (ainda "quentes").
   const cooldownMin = opts?.cooldownMin ?? COOLDOWN_MIN;
   const coldBefore = new Date(Date.now() - cooldownMin * 60_000);
-  const pending = await prisma.whatsappConversation.findMany({
+  const pendingRaw = await prisma.whatsappConversation.findMany({
     where: {
       isGroup: false,
       // Troca de número: conversa arquivada (número antigo) NÃO é re-qualificada
@@ -428,9 +428,27 @@ export async function qualifyPendingConversations(
       ...(cooldownMin > 0 ? { lastMessageAt: { lt: coldBefore } } : {}),
       ...(companyId ? { companyId } : {}),
     },
-    select: { id: true, companyId: true },
+    select: { id: true, companyId: true, lastMessageAt: true },
     orderBy: { lastMessageAt: "asc" }, // R5: FIFO, evita starvation
     take: SCAN_LIMIT,
+  });
+
+  // Corte "só daqui pra frente" (qualifyFromAt): por empresa, ignora conversas
+  // cuja última mensagem é ANTERIOR ao corte. Serve para zerar o backlog
+  // acumulado (troca de número / estouro de cota) sem gastar cota reprocessando
+  // conversas antigas. Empresa sem corte (null) qualifica tudo (comportamento
+  // original). 1 query só p/ as empresas presentes no lote.
+  const companyIdsInBatch = [...new Set(pendingRaw.map((c) => c.companyId))];
+  const cutoffRows = companyIdsInBatch.length
+    ? await prisma.whatsappConnection.findMany({
+        where: { companyId: { in: companyIdsInBatch } },
+        select: { companyId: true, qualifyFromAt: true },
+      })
+    : [];
+  const cutoffByCompany = new Map(cutoffRows.map((r) => [r.companyId, r.qualifyFromAt]));
+  const pending = pendingRaw.filter((c) => {
+    const cutoff = cutoffByCompany.get(c.companyId);
+    return !cutoff || c.lastMessageAt >= cutoff;
   });
 
   // Agrupa por empresa para checar a flag 1× (R4).

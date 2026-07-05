@@ -115,6 +115,36 @@ export async function unarchiveConversations(
 }
 
 /**
+ * Define o corte "qualificar só daqui pra frente" = AGORA. A partir daí, o cron
+ * de qualificação por IA ignora conversas cuja última mensagem é anterior a este
+ * instante (backlog), poupando cota. Usado após troca de número / limpeza de
+ * funil. Retorna o corte aplicado.
+ */
+export async function setQualifyCutoffNow(companyId: string): Promise<{ qualifyFromAt: string }> {
+  const now = new Date();
+  await prisma.whatsappConnection.update({
+    where: { companyId },
+    data: { qualifyFromAt: now },
+  });
+  log.info("Corte de qualificação (só daqui pra frente) definido", {
+    companyId,
+    qualifyFromAt: now.toISOString(),
+  });
+  return { qualifyFromAt: now.toISOString() };
+}
+
+/**
+ * Remove o corte de qualificação (volta a qualificar todo o backlog pendente).
+ */
+export async function clearQualifyCutoff(companyId: string): Promise<void> {
+  await prisma.whatsappConnection.update({
+    where: { companyId },
+    data: { qualifyFromAt: null },
+  });
+  log.info("Corte de qualificação removido (volta a qualificar backlog)", { companyId });
+}
+
+/**
  * Resolve o corte: override explícito, senão o numberChangedAt (última troca
  * REAL de número). Retorna null quando nunca houve troca registrada — nesse caso
  * não arquivamos nada (fail-safe: reconexão do mesmo número não vira corte, e

@@ -73,6 +73,7 @@ export function WhatsappConnectClient() {
   const [connecting, setConnecting] = useState(false);
   const [disconnecting, setDisconnecting] = useState(false);
   const [archiving, setArchiving] = useState(false);
+  const [settingCutoff, setSettingCutoff] = useState(false);
   const [archivedBatches, setArchivedBatches] = useState<{ archivedAt: string; count: number }[]>([]);
   const [unarchivingBatch, setUnarchivingBatch] = useState<string | null>(null);
   const [refreshing, setRefreshing] = useState(false);
@@ -211,6 +212,36 @@ export function WhatsappConnectClient() {
       toast.error("Erro ao desarquivar.");
     } finally {
       setUnarchivingBatch(null);
+    }
+  }
+
+  async function handleQualifyFromNow() {
+    if (
+      !confirm(
+        "A IA vai qualificar SÓ as conversas que receberem mensagem a partir de " +
+          "agora. As conversas antigas paradas deixam de consumir cota de IA. " +
+          "As conversas ativas entram no funil na próxima mensagem do cliente. Confirmar?",
+      )
+    ) {
+      return;
+    }
+    setSettingCutoff(true);
+    try {
+      const res = await fetch("/api/whatsapp/archive-old-number", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action: "set-qualify-cutoff" }),
+      });
+      const json = await res.json();
+      if (json.success) {
+        toast.success("Pronto. A IA passa a qualificar só as mensagens novas daqui pra frente.");
+      } else {
+        toast.error(json.error || "Não foi possível aplicar o corte.");
+      }
+    } catch {
+      toast.error("Erro ao aplicar o corte de qualificação.");
+    } finally {
+      setSettingCutoff(false);
     }
   }
 
@@ -392,6 +423,25 @@ export function WhatsappConnectClient() {
             >
               {archiving ? "Arquivando…" : "Arquivar conversas do número anterior"}
             </Button>
+
+            <div className="mt-4 border-t pt-3">
+              <p className="text-xs text-muted-foreground">
+                Se o funil acumulou muitas conversas antigas (ou a cota de IA
+                estourou), use isto para a IA passar a qualificar{" "}
+                <strong>só as mensagens novas daqui pra frente</strong>. As
+                conversas antigas param de consumir cota; as ativas voltam ao
+                funil na próxima mensagem do cliente.
+              </p>
+              <Button
+                variant="outline"
+                size="sm"
+                className="mt-2"
+                onClick={handleQualifyFromNow}
+                disabled={settingCutoff}
+              >
+                {settingCutoff ? "Aplicando…" : "Qualificar só daqui pra frente"}
+              </Button>
+            </div>
 
             {archivedBatches.length > 0 && (
               <div className="mt-4 border-t pt-3">
