@@ -190,7 +190,6 @@ export function PricingSection() {
             {plans.filter((p) => !isComingSoon(p)).map((plan) => {
               const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
               const isHighlighted = plan.isFeatured;
-              const comingSoon = isComingSoon(plan);
               const badge = isHighlighted ? "Mais escolhido" : undefined;
               // priceYearly é o TOTAL anual (centavos). O valor exibido com "/mês" no
               // modo anual é o mensal-equivalente (total anual ÷ 12).
@@ -244,23 +243,6 @@ export function PricingSection() {
                       >
                         <Rocket className="h-3 w-3" />
                         {badge}
-                      </span>
-                    </div>
-                  )}
-
-                  {/* "Em breve" badge */}
-                  {comingSoon && (
-                    <div className="absolute -top-3.5 right-4 z-10">
-                      <span
-                        className="inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-bold tracking-wide"
-                        style={{
-                          background: "var(--lp-surface)",
-                          border: "1px solid var(--lp-border-hover)",
-                          color: "var(--lp-muted)",
-                        }}
-                      >
-                        <Bell className="h-3 w-3" />
-                        Em breve
                       </span>
                     </div>
                   )}
@@ -357,51 +339,36 @@ export function PricingSection() {
                     )}
                   </div>
 
-                  {/* CTA */}
+                  {/* CTA — planos "Em breve" são filtrados para a faixa "No radar"
+                      abaixo, então aqui o plano é sempre disponível. */}
                   <motion.div
-                    whileHover={comingSoon ? undefined : { scale: 1.02 }}
-                    whileTap={comingSoon ? undefined : { scale: 0.98 }}
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                     className="mb-7"
                   >
-                    {comingSoon ? (
-                      <button
-                        type="button"
-                        onClick={() => setInterest(plan)}
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
-                        style={{
-                          background: "var(--lp-surface)",
-                          border: "1px solid var(--lp-border-hover)",
-                          color: "var(--lp-foreground)",
-                        }}
-                      >
-                        <Bell className="h-4 w-4" />
-                        Quero ser avisado
-                      </button>
-                    ) : (
-                      <Link
-                        href={plan.slug === "rede" ? WHATSAPP_URL : REGISTER_URL}
-                        rel={plan.slug === "rede" ? "noopener noreferrer" : undefined}
-                        target={plan.slug === "rede" ? "_blank" : undefined}
-                        className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
-                        style={
-                          isHighlighted
-                            ? {
-                                background: "var(--gradient-brand-vivid)",
-                                color: "white",
-                                boxShadow: "0 4px 20px var(--brand-glow)",
-                              }
-                            : {
-                                background: "var(--lp-surface)",
-                                border: "1px solid var(--lp-border-hover)",
-                                color: "var(--lp-foreground)",
-                              }
-                        }
-                      >
-                        {plan.slug === "rede" ? "Falar com Consultor" : "Testar Grátis"}
-                        <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
-                      </Link>
-                    )}
+                    <Link
+                      href={plan.slug === "rede" ? WHATSAPP_URL : REGISTER_URL}
+                      rel={plan.slug === "rede" ? "noopener noreferrer" : undefined}
+                      target={plan.slug === "rede" ? "_blank" : undefined}
+                      className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
+                      style={
+                        isHighlighted
+                          ? {
+                              background: "var(--gradient-brand-vivid)",
+                              color: "white",
+                              boxShadow: "0 4px 20px var(--brand-glow)",
+                            }
+                          : {
+                              background: "var(--lp-surface)",
+                              border: "1px solid var(--lp-border-hover)",
+                              color: "var(--lp-foreground)",
+                            }
+                      }
+                    >
+                      {plan.slug === "rede" ? "Falar com Consultor" : "Testar Grátis"}
+                      <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
+                    </Link>
                   </motion.div>
 
                   {/* Divider */}
