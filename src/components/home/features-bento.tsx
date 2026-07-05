@@ -94,7 +94,7 @@ export function FeaturesBento() {
     <section
       id="funcionalidades"
       className="section-padding relative overflow-hidden scroll-mt-20"
-      style={{ background: "var(--lp-background)" }}
+      style={{ background: "var(--lp-surface)" }}
     >
       {/* Subtle radial glow */}
       <div

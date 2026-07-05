@@ -1,5 +1,6 @@
 "use client";
 
+import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, MessageCircle, Check, Sparkles } from "lucide-react";
@@ -15,6 +16,17 @@ const HERO_BULLETS = [
 ];
 
 export function Hero() {
+  // "Momento de foco": a headline nasce nítida no HTML do servidor. Só no cliente
+  // (e só se o usuário não pediu menos movimento) aplicamos um leve desfoque que
+  // "foca" uma vez — a metáfora do produto. Nunca escondemos o texto (sem opacity 0).
+  const [runFocus, setRunFocus] = useState(false);
+  useEffect(() => {
+    const reduce =
+      typeof window !== "undefined" &&
+      window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+    if (!reduce) setRunFocus(true);
+  }, []);
+
   return (
     <section className="relative min-h-screen flex items-center overflow-hidden pt-20 pb-16">
       {/* ── Wash claro Vis ── */}
@@ -63,10 +75,11 @@ export function Hero() {
             </span>
           </motion.div>
 
-          {/* ── Headline ── */}
-          <motion.h1
-            variants={fadeInUp}
-            className="font-heading font-extrabold tracking-tight mb-5"
+          {/* ── Headline (com "momento de foco") ── */}
+          <h1
+            className={`font-heading font-extrabold tracking-tight mb-5 ${
+              runFocus ? "hero-focus-in" : ""
+            }`}
             style={{
               fontSize: "var(--text-hero)",
               lineHeight: 1.05,
@@ -86,7 +99,7 @@ export function Hero() {
               clara
             </span>{" "}
             da sua ótica.
-          </motion.h1>
+          </h1>
 
           {/* Subtitle */}
           <motion.p

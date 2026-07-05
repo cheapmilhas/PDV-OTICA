@@ -35,7 +35,7 @@ export function PricingSection() {
   return (
     <section
       className="section-padding relative overflow-hidden"
-      style={{ background: "var(--lp-surface)" }}
+      style={{ background: "var(--lp-background)" }}
     >
       {/* Subtle noise texture */}
       <div
