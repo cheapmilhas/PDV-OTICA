@@ -362,8 +362,10 @@ html {
 @layer utilities {
 
   /* ── Typography ── */
+  /* Display face (Bricolage Grotesque) para títulos da landing; cai no corpo
+     (Plus Jakarta Sans) onde --font-display não estiver carregado. */
   .font-heading {
-    font-family: var(--font-body), 'Plus Jakarta Sans', system-ui, sans-serif;
+    font-family: var(--font-display), var(--font-body), 'Plus Jakarta Sans', system-ui, sans-serif;
     letter-spacing: -0.02em;
   }
 

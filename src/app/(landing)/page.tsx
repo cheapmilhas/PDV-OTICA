@@ -1,6 +1,7 @@
 import dynamic from "next/dynamic";
 import { Hero } from "@/components/home/hero";
 import { ProblemsSolutions } from "@/components/home/problems-solutions";
+import { TESTIMONIALS_ARE_PLACEHOLDER } from "@/components/home/testimonials-flag";
 
 // Placeholder de carregamento para seções abaixo da dobra — reserva altura
 // e evita layout shift (CLS) enquanto o chunk carrega.
@@ -18,6 +19,12 @@ const FeaturesBento = dynamic(
 );
 const StatsCounter = dynamic(
   () => import("@/components/home/stats-counter").then((m) => m.StatsCounter),
+  { loading: sectionFallback }
+);
+// Prova social — só renderiza quando houver depoimentos REAIS (o componente
+// exporta TESTIMONIALS_ARE_PLACEHOLDER; enquanto for true, a seção fica oculta).
+const Testimonials = dynamic(
+  () => import("@/components/home/testimonials").then((m) => m.Testimonials),
   { loading: sectionFallback }
 );
 const LabIntegration = dynamic(
@@ -58,6 +65,7 @@ export default function HomePage() {
     <>
       <Hero />
       <ProblemsSolutions />
+      {!TESTIMONIALS_ARE_PLACEHOLDER && <Testimonials />}
       <TargetAudience />
       <FeaturesBento />
       <StatsCounter />

@@ -1,5 +1,5 @@
 import type { Metadata, Viewport } from "next";
-import { Plus_Jakarta_Sans } from "next/font/google";
+import { Plus_Jakarta_Sans, Bricolage_Grotesque } from "next/font/google";
 import "./globals.css";
 import { Suspense } from "react";
 import { Toaster } from "@/components/ui/toaster";
@@ -19,6 +19,15 @@ const jakartaSans = Plus_Jakarta_Sans({
   subsets: ["latin"],
   variable: "--font-body",
   weight: ["400", "500", "600", "700", "800"],
+  display: "swap",
+});
+
+// Bricolage Grotesque — display face for landing H1/H2. Humanist grotesque with
+// character (avoids the generic "template" feel) while staying legible in pt-BR.
+const bricolage = Bricolage_Grotesque({
+  subsets: ["latin"],
+  variable: "--font-display",
+  weight: ["600", "700", "800"],
   display: "swap",
 });
 
@@ -81,7 +90,7 @@ export default async function RootLayout({
         <JsonLd data={organizationJsonLd} />
         <JsonLd data={buildSoftwareApplicationJsonLd(lowest)} />
       </head>
-      <body className={`${jakartaSans.variable} font-sans`}>
+      <body className={`${jakartaSans.variable} ${bricolage.variable} font-sans`}>
         <Suspense fallback={null}>
           <PostHogProvider>
             <SessionProvider>

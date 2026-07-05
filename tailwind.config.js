@@ -10,8 +10,10 @@ module.exports = {
     extend: {
       fontFamily: {
         sans: ['var(--font-body)', 'system-ui', 'sans-serif'],
-        heading: ['var(--font-body)', 'system-ui', 'sans-serif'],
-        display: ['var(--font-body)', 'system-ui', 'sans-serif'],
+        // Display face (Bricolage Grotesque) for landing headings; falls back to
+        // the body font where --font-display isn't loaded (e.g. the logged-in app).
+        heading: ['var(--font-display)', 'var(--font-body)', 'system-ui', 'sans-serif'],
+        display: ['var(--font-display)', 'var(--font-body)', 'system-ui', 'sans-serif'],
       },
       colors: {
         border: "hsl(var(--border))",

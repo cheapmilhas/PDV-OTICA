@@ -177,15 +177,17 @@ export function PricingSection() {
             ))}
           </div>
         ) : (
-          /* Pricing cards — 4 planos: 2 col no tablet, 4 col no desktop, altura uniforme */
+          <>
+          {/* Planos disponíveis em destaque; "Em breve" ficam num rodapé compacto
+              (roadmap) para não competirem como colunas vazias. */}
           <motion.div
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
             viewport={viewportConfig}
-            className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch"
+            className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch max-w-3xl mx-auto"
           >
-            {plans.map((plan) => {
+            {plans.filter((p) => !isComingSoon(p)).map((plan) => {
               const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
               const isHighlighted = plan.isFeatured;
               const comingSoon = isComingSoon(plan);
@@ -435,6 +437,84 @@ export function PricingSection() {
               );
             })}
           </motion.div>
+
+          {/* Roadmap — planos "Em breve" em cards compactos, sem competir com os ativos */}
+          {plans.some((p) => isComingSoon(p)) && (
+            <motion.div
+              initial={{ opacity: 0, y: 12 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={viewportConfig}
+              transition={{ duration: 0.3 }}
+              className="mt-10"
+            >
+              <p
+                className="text-xs font-bold uppercase tracking-widest mb-4"
+                style={{ color: "var(--lp-subtle)", letterSpacing: "0.15em" }}
+              >
+                No radar
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {plans.filter((p) => isComingSoon(p)).map((plan) => {
+                  const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
+                  return (
+                    <button
+                      key={plan.id}
+                      type="button"
+                      onClick={() => setInterest(plan)}
+                      className="group flex items-center gap-3 rounded-xl p-4 text-left transition-colors"
+                      style={{
+                        background: "var(--lp-background)",
+                        border: "1px solid var(--lp-border)",
+                      }}
+                    >
+                      <div
+                        className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0"
+                        style={{ background: "var(--lp-surface)", border: "1px solid var(--lp-border)" }}
+                      >
+                        <Icon className="h-4 w-4" style={{ color: "var(--lp-muted)" }} />
+                      </div>
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <h3
+                            className="font-heading font-bold truncate"
+                            style={{ color: "var(--lp-foreground)", fontSize: "0.9375rem" }}
+                          >
+                            {plan.name}
+                          </h3>
+                          <span
+                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-bold flex-shrink-0"
+                            style={{
+                              background: "var(--lp-surface)",
+                              border: "1px solid var(--lp-border-hover)",
+                              color: "var(--lp-muted)",
+                            }}
+                          >
+                            <Bell className="h-2.5 w-2.5" />
+                            Em breve
+                          </span>
+                        </div>
+                        {plan.description && (
+                          <p
+                            className="truncate"
+                            style={{ color: "var(--lp-subtle)", fontSize: "0.75rem" }}
+                          >
+                            {plan.description}
+                          </p>
+                        )}
+                      </div>
+                      <span
+                        className="text-xs font-semibold flex-shrink-0 transition-colors group-hover:underline"
+                        style={{ color: "var(--brand-primary)" }}
+                      >
+                        Avise-me
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </motion.div>
+          )}
+          </>
         )}
 
         <p
