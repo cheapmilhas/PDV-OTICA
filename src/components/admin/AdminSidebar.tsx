@@ -2,11 +2,11 @@
 
 import { useEffect, useState } from "react";
 import { usePathname } from "next/navigation";
-import { Menu } from "lucide-react";
+import { Menu, Lock } from "lucide-react";
 
 import { Sheet, SheetContent, SheetTitle, SheetTrigger } from "@/components/ui/sheet";
-import { AdminNav } from "@/app/admin/admin-nav";
-import { AdminLogoutButton } from "@/app/admin/AdminLogoutButton";
+import { AdminNav } from "@/app/admin/(painel)/admin-nav";
+import { AdminLogoutButton } from "@/app/admin/(painel)/AdminLogoutButton";
 
 /**
  * Conteúdo interno da sidebar (logo + navegação + logout).
@@ -19,15 +19,11 @@ function SidebarContent() {
       <div className="px-5 py-5 border-b border-border">
         <div className="flex items-center gap-2.5">
           <div className="w-9 h-9 bg-primary rounded-lg flex items-center justify-center flex-shrink-0">
-            <svg className="w-5 h-5 text-white" fill="none" viewBox="0 0 24 24" stroke="currentColor">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
-            </svg>
+            <Lock className="w-4 h-4 text-primary-foreground" aria-hidden="true" />
           </div>
           <div>
-            <p className="text-sm font-semibold text-foreground leading-tight">PDV Ótica</p>
-            <p className="text-xs text-muted-foreground leading-tight">Admin Portal</p>
+            <p className="font-display text-sm font-semibold text-foreground leading-tight">PDV Ótica</p>
+            <p className="text-xs text-muted-foreground leading-tight">Portal de administração</p>
           </div>
         </div>
       </div>

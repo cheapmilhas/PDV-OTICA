@@ -1,6 +1,7 @@
 "use client";
 
 import { useState } from "react";
+import { Loader2, Lock } from "lucide-react";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
@@ -36,7 +37,7 @@ export default function AdminLoginPage() {
         return;
       }
 
-      // Hard redirect para garantir que o cookie é lido pelo middleware
+      // Hard redirect para garantir que o cookie de sessão seja lido pelo servidor.
       window.location.href = "/admin";
     } catch {
       setError("Erro ao fazer login. Tente novamente.");
@@ -46,33 +47,37 @@ export default function AdminLoginPage() {
   };
 
   return (
-    <div className="min-h-screen flex items-center justify-center bg-gray-950 p-4">
-      <div className="w-full max-w-md">
-        {/* Ícone */}
-        <div className="flex justify-center mb-6">
-          <div className="w-16 h-16 bg-indigo-600 rounded-2xl flex items-center justify-center">
-            <svg className="w-8 h-8 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2}
-                d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"
-              />
-            </svg>
+    <main className="min-h-screen flex items-center justify-center bg-background p-4">
+      <div className="w-full max-w-sm animate-fade-up">
+        {/* Marca */}
+        <div className="flex flex-col items-center text-center mb-8">
+          <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shadow-card mb-4">
+            <Lock className="w-5 h-5 text-primary-foreground" aria-hidden="true" />
           </div>
+          <h1 className="font-display text-2xl font-bold text-foreground">PDV Ótica</h1>
+          <p className="text-sm text-muted-foreground mt-1">Portal de administração</p>
         </div>
 
-        {/* Título */}
-        <h1 className="text-2xl font-bold text-white text-center mb-2">PDV Ótica Admin</h1>
-        <p className="text-gray-400 text-center mb-8">Portal de administração do sistema</p>
-
-        {/* Form */}
-        <form onSubmit={handleSubmit} className="bg-gray-900 rounded-xl p-6 border border-gray-800">
+        {/* Card do formulário */}
+        <form
+          onSubmit={handleSubmit}
+          className="bg-card rounded-xl border border-border shadow-card p-6"
+        >
           <div className="space-y-4">
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Email</label>
+              <label
+                htmlFor="admin-email"
+                className="block text-sm font-medium text-foreground mb-1.5"
+              >
+                Email
+              </label>
               <input
+                id="admin-email"
                 type="email"
+                autoComplete="username"
                 value={email}
                 onChange={(e) => setEmail(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
                 placeholder="admin@pdvotica.com.br"
                 required
                 autoFocus
@@ -81,12 +86,19 @@ export default function AdminLoginPage() {
             </div>
 
             <div>
-              <label className="block text-sm font-medium text-gray-300 mb-1">Senha</label>
+              <label
+                htmlFor="admin-password"
+                className="block text-sm font-medium text-foreground mb-1.5"
+              >
+                Senha
+              </label>
               <input
+                id="admin-password"
                 type="password"
+                autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
                 placeholder="••••••••"
                 required
                 disabled={loading}
@@ -94,29 +106,37 @@ export default function AdminLoginPage() {
             </div>
 
             {mfaRequired && (
-              <div>
-                <label className="block text-sm font-medium text-gray-300 mb-1">
+              <div className="animate-fade-in">
+                <label
+                  htmlFor="admin-mfa"
+                  className="block text-sm font-medium text-foreground mb-1.5"
+                >
                   Código de verificação
                 </label>
                 <input
+                  id="admin-mfa"
                   type="text"
                   inputMode="numeric"
                   autoComplete="one-time-code"
                   value={mfaToken}
                   onChange={(e) => setMfaToken(e.target.value)}
-                  className="w-full px-4 py-3 bg-gray-800 border border-gray-700 rounded-lg text-white tracking-widest text-center placeholder-gray-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:border-transparent"
+                  className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground tracking-[0.4em] text-center placeholder:text-muted-foreground placeholder:tracking-normal focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
                   placeholder="000000"
                   autoFocus
                   disabled={loading}
                 />
-                <p className="text-gray-500 text-xs mt-1">
+                <p className="text-muted-foreground text-xs mt-1.5">
                   Digite o código do seu app autenticador (ou um código de recuperação).
                 </p>
               </div>
             )}
 
             {error && (
-              <div className="p-3 bg-red-900/50 border border-red-800 rounded-lg text-red-400 text-sm">
+              <div
+                role="alert"
+                aria-live="assertive"
+                className="p-3 bg-destructive/10 border border-destructive/30 rounded-lg text-destructive text-sm"
+              >
                 {error}
               </div>
             )}
@@ -124,17 +144,18 @@ export default function AdminLoginPage() {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 bg-indigo-600 hover:bg-indigo-700 disabled:bg-indigo-800 disabled:cursor-not-allowed text-white font-medium rounded-lg transition-colors"
+              className="w-full flex items-center justify-center gap-2 py-2.5 bg-primary hover:bg-primary/90 disabled:opacity-60 disabled:cursor-not-allowed text-primary-foreground font-medium rounded-lg transition-colors"
             >
-              {loading ? "Entrando..." : mfaRequired ? "Verificar" : "Entrar"}
+              {loading && <Loader2 className="w-4 h-4 animate-spin" aria-hidden="true" />}
+              {loading ? "Entrando…" : mfaRequired ? "Verificar" : "Entrar"}
             </button>
           </div>
         </form>
 
-        <p className="text-gray-500 text-center text-sm mt-6">
+        <p className="text-muted-foreground text-center text-xs mt-6">
           Acesso restrito a administradores do sistema
         </p>
       </div>
-    </div>
+    </main>
   );
 }

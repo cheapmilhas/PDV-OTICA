@@ -19,7 +19,7 @@ describe("AdminSidebar", () => {
     expect(container.querySelector("aside")).toBeDefined();
     // Conteúdo da marca presente.
     expect(screen.getByText("PDV Ótica")).toBeDefined();
-    expect(screen.getByText("Admin Portal")).toBeDefined();
+    expect(screen.getByText("Portal de administração")).toBeDefined();
   });
 
   it("renderiza o botão hambúrguer do mobile", () => {
