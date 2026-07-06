@@ -7,10 +7,12 @@ import { RecalcHealthButton } from "./RecalcHealthButton";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
+import { AlertCard } from "@/components/admin/AlertCard";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 import { computeTrend, formatTrend, computeMRR, computeMrrSeries, type SubscriptionForMRR, type SubscriptionForSeries } from "@/lib/admin-metrics";
 import { MrrChart } from "@/components/admin/MrrChart";
 import { Card } from "@/components/ui/card";
+import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
@@ -141,7 +143,7 @@ export default async function AdminDashboardPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-2 lg:grid-cols-5 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-4 mb-6">
         <KPICard
           label="Total de Empresas"
           value={String(totalCompanies)}
@@ -186,22 +188,22 @@ export default async function AdminDashboardPage() {
       {(criticalHealthCount > 0 || atRiskHealthCount > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
           {criticalHealthCount > 0 && (
-            <Link href="/admin/saude?category=CRITICAL" className="flex items-center gap-3 p-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 transition-colors">
-              <Activity className="h-5 w-5 text-red-600 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-red-700">{criticalHealthCount} cliente{criticalHealthCount > 1 ? "s" : ""} em estado crítico</p>
-                <p className="text-xs text-red-600">Requer ação imediata →</p>
-              </div>
-            </Link>
+            <AlertCard
+              tone="danger"
+              icon={Activity}
+              href="/admin/saude?category=CRITICAL"
+              title={`${criticalHealthCount} cliente${criticalHealthCount > 1 ? "s" : ""} em estado crítico`}
+              description="Requer ação imediata →"
+            />
           )}
           {atRiskHealthCount > 0 && (
-            <Link href="/admin/saude?category=AT_RISK" className="flex items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors">
-              <Activity className="h-5 w-5 text-amber-600 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-amber-700">{atRiskHealthCount} cliente{atRiskHealthCount > 1 ? "s" : ""} em risco</p>
-                <p className="text-xs text-amber-600">Precisa atenção →</p>
-              </div>
-            </Link>
+            <AlertCard
+              tone="warning"
+              icon={Activity}
+              href="/admin/saude?category=AT_RISK"
+              title={`${atRiskHealthCount} cliente${atRiskHealthCount > 1 ? "s" : ""} em risco`}
+              description="Precisa atenção →"
+            />
           )}
         </div>
       )}
@@ -216,37 +218,39 @@ export default async function AdminDashboardPage() {
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
           {pastDueCount === 0 && expiringTrials.length === 0 && pendingInvoices.length === 0 && (
-            <div className="md:col-span-3 flex items-center gap-3 p-4 rounded-xl border border-border bg-card text-muted-foreground">
-              <CheckCircle2 className="h-5 w-5 text-emerald-600 flex-shrink-0" />
-              <p className="text-sm">Nenhuma ação pendente no momento</p>
-            </div>
+            <AlertCard
+              tone="success"
+              icon={CheckCircle2}
+              title="Nenhuma ação pendente no momento"
+              className="md:col-span-3"
+            />
           )}
           {pastDueCount > 0 && (
-            <Link href="/admin/financeiro/inadimplencia" className="flex items-center gap-3 p-4 rounded-xl border border-red-200 bg-red-50 hover:bg-red-100 transition-colors">
-              <AlertTriangle className="h-5 w-5 text-red-600 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-red-700">{pastDueCount} fatura{pastDueCount > 1 ? "s" : ""} vencida{pastDueCount > 1 ? "s" : ""}</p>
-                <p className="text-xs text-red-600">Cobrar agora →</p>
-              </div>
-            </Link>
+            <AlertCard
+              tone="danger"
+              icon={AlertTriangle}
+              href="/admin/financeiro/inadimplencia"
+              title={`${pastDueCount} fatura${pastDueCount > 1 ? "s" : ""} vencida${pastDueCount > 1 ? "s" : ""}`}
+              description="Cobrar agora →"
+            />
           )}
           {expiringTrials.length > 0 && (
-            <Link href="/admin/clientes?status=TRIAL" className="flex items-center gap-3 p-4 rounded-xl border border-amber-200 bg-amber-50 hover:bg-amber-100 transition-colors">
-              <Clock className="h-5 w-5 text-amber-600 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-amber-700">{expiringTrials.length} trial{expiringTrials.length > 1 ? "s" : ""} expirando</p>
-                <p className="text-xs text-amber-600">Próximos 3 dias →</p>
-              </div>
-            </Link>
+            <AlertCard
+              tone="warning"
+              icon={Clock}
+              href="/admin/clientes?status=TRIAL"
+              title={`${expiringTrials.length} trial${expiringTrials.length > 1 ? "s" : ""} expirando`}
+              description="Próximos 3 dias →"
+            />
           )}
           {pendingInvoices.length > 0 && (
-            <Link href="/admin/financeiro/faturas?status=PENDING" className="flex items-center gap-3 p-4 rounded-xl border border-blue-200 bg-blue-50 hover:bg-blue-100 transition-colors">
-              <CheckCircle2 className="h-5 w-5 text-blue-600 flex-shrink-0" />
-              <div>
-                <p className="text-sm font-medium text-blue-700">{pendingInvoices.length} fatura{pendingInvoices.length > 1 ? "s" : ""} a vencer</p>
-                <p className="text-xs text-blue-600">Próximos 7 dias →</p>
-              </div>
-            </Link>
+            <AlertCard
+              tone="info"
+              icon={CheckCircle2}
+              href="/admin/financeiro/faturas?status=PENDING"
+              title={`${pendingInvoices.length} fatura${pendingInvoices.length > 1 ? "s" : ""} a vencer`}
+              description="Próximos 7 dias →"
+            />
           )}
         </div>
       </div>
@@ -257,38 +261,46 @@ export default async function AdminDashboardPage() {
           <h2 className="text-sm font-semibold text-foreground">Empresas Recentes</h2>
           <Link href="/admin/clientes" className="text-xs text-primary hover:text-primary/80">Ver todas →</Link>
         </div>
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                {["Empresa", "Plano", "Status", "Usuários", "Cadastro"].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {recentCompanies.length === 0 ? (
-                <tr><td colSpan={5} className="px-5 py-8 text-center text-muted-foreground">Nenhuma empresa</td></tr>
-              ) : recentCompanies.map((c) => {
+        <Table>
+          <TableHeader>
+            <TableRow>
+              <TableHead>Empresa</TableHead>
+              <TableHead>Plano</TableHead>
+              <TableHead>Status</TableHead>
+              <TableHead>Usuários</TableHead>
+              <TableHead>Cadastro</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {recentCompanies.length === 0 ? (
+              <TableRow>
+                <TableCell colSpan={5} className="py-8 text-center text-muted-foreground">
+                  Nenhuma empresa
+                </TableCell>
+              </TableRow>
+            ) : (
+              recentCompanies.map((c) => {
                 const sub = c.subscriptions[0];
                 const status = sub?.status ?? "NO_SUBSCRIPTION";
                 return (
-                  <tr key={c.id} className="border-b border-border hover:bg-muted transition-colors">
-                    <td className="px-5 py-3">
-                      <Link href={`/admin/clientes/${c.id}`} className="font-medium text-foreground hover:text-primary">{c.name}</Link>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{sub?.plan?.name ?? "—"}</td>
-                    <td className="px-5 py-3">
+                  <TableRow key={c.id}>
+                    <TableCell>
+                      <Link href={`/admin/clientes/${c.id}`} className="font-medium text-foreground hover:text-primary">
+                        {c.name}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{sub?.plan?.name ?? "—"}</TableCell>
+                    <TableCell>
                       <AdminStatusBadge kind="subscription" status={status} />
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground">{c._count.users}</td>
-                    <td className="px-5 py-3 text-muted-foreground">{new Date(c.createdAt).toLocaleDateString("pt-BR")}</td>
-                  </tr>
+                    </TableCell>
+                    <TableCell className="text-muted-foreground">{c._count.users}</TableCell>
+                    <TableCell className="text-muted-foreground">{new Date(c.createdAt).toLocaleDateString("pt-BR")}</TableCell>
+                  </TableRow>
                 );
-              })}
-            </tbody>
-          </table>
-        </div>
+              })
+            )}
+          </TableBody>
+        </Table>
       </div>
     </div>
   );

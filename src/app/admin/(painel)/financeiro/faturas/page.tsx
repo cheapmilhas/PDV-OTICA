@@ -8,6 +8,9 @@ import {
 import { PageHeader } from "@/components/admin/PageHeader";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
@@ -112,13 +115,13 @@ export default async function FaturasPage({
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground mb-1">Total Recebido</p>
-          <p className="text-xl font-bold text-emerald-600">
+          <p className="text-xl font-bold text-success">
             R$ {((totalRecebido._sum?.total ?? 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground mb-1">A Receber</p>
-          <p className="text-xl font-bold text-amber-600">
+          <p className="text-xl font-bold text-warning">
             R$ {((totalPendente._sum?.total ?? 0) / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </p>
         </div>
@@ -128,7 +131,7 @@ export default async function FaturasPage({
         </div>
         <div className="rounded-xl border border-border bg-card p-4">
           <p className="text-xs text-muted-foreground mb-1">Vencidas</p>
-          <p className="text-xl font-bold text-red-600">{totalOverdue}</p>
+          <p className="text-xl font-bold text-destructive">{totalOverdue}</p>
         </div>
       </div>
 
@@ -138,7 +141,8 @@ export default async function FaturasPage({
         <div className="flex flex-wrap gap-2">
           <Link
             href="/admin/financeiro/faturas"
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            aria-current={!etapaFilter && !statusFilter ? "true" : undefined}
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               !etapaFilter && !statusFilter ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -146,7 +150,8 @@ export default async function FaturasPage({
           </Link>
           <Link
             href="/admin/financeiro/faturas?etapa=aguardando_envio"
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
+            aria-current={etapaFilter === "aguardando_envio" ? "true" : undefined}
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               etapaFilter === "aguardando_envio" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -155,7 +160,8 @@ export default async function FaturasPage({
           </Link>
           <Link
             href="/admin/financeiro/faturas?etapa=aguardando_pagamento"
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
+            aria-current={etapaFilter === "aguardando_pagamento" ? "true" : undefined}
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               etapaFilter === "aguardando_pagamento" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -164,7 +170,8 @@ export default async function FaturasPage({
           </Link>
           <Link
             href="/admin/financeiro/faturas?etapa=aguardando_nf"
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
+            aria-current={etapaFilter === "aguardando_nf" ? "true" : undefined}
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               etapaFilter === "aguardando_nf" ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -173,8 +180,9 @@ export default async function FaturasPage({
           </Link>
           <Link
             href="/admin/financeiro/faturas?status=OVERDUE"
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 ${
-              statusFilter === "OVERDUE" ? "bg-red-600 text-white" : "bg-red-50 text-red-600 hover:bg-red-100"
+            aria-current={statusFilter === "OVERDUE" ? "true" : undefined}
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors flex items-center gap-1.5 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              statusFilter === "OVERDUE" ? "bg-destructive text-destructive-foreground" : "bg-destructive/10 text-destructive hover:bg-destructive/20"
             }`}
           >
             <AlertTriangle className="w-3 h-3" />
@@ -201,100 +209,94 @@ export default async function FaturasPage({
 
       {/* Tabela */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Empresa</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground">Enviado</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground">Pago</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground">NF</th>
-                <th className="px-4 py-3 text-center text-xs font-medium text-muted-foreground">NF Env.</th>
-                <th className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {invoices.length === 0 ? (
-                <tr>
-                  <td colSpan={9} className="px-4 py-8 text-center text-muted-foreground">
-                    Nenhuma fatura encontrada
-                  </td>
-                </tr>
-              ) : (
-                invoices.map((inv) => (
-                  <tr key={inv.id} className="border-b border-border hover:bg-muted transition-colors">
-                    <td className="px-4 py-3">
+        {invoices.length === 0 ? (
+          <EmptyState icon={Receipt} message="Nenhuma fatura encontrada" />
+        ) : (
+          <ResponsiveTable minWidth={980}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Valor</TableHead>
+                <TableHead>Vencimento</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-center">Enviado</TableHead>
+                <TableHead className="text-center">Pago</TableHead>
+                <TableHead className="text-center">NF</TableHead>
+                <TableHead className="text-center">NF Env.</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {invoices.map((inv) => (
+                <TableRow key={inv.id}>
+                  <TableCell>
+                    <Link
+                      href={`/admin/clientes/${inv.subscription.company.id}`}
+                      className="font-medium text-foreground hover:text-primary"
+                    >
+                      {inv.subscription.company.name}
+                    </Link>
+                    <p className="text-xs text-muted-foreground">{inv.subscription.plan.name}</p>
+                  </TableCell>
+                  <TableCell className="text-foreground font-medium">
+                    R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
+                    {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
+                  </TableCell>
+                  <TableCell>
+                    <AdminStatusBadge kind="invoice" status={inv.status} />
+                  </TableCell>
+                  {/* Checkboxes visuais */}
+                  <TableCell className="text-center">
+                    {inv.invoiceSent ? (
+                      <CheckCircle aria-label="Enviado" className="w-5 h-5 text-success mx-auto" />
+                    ) : (
+                      <Circle aria-label="Não enviado" className="w-5 h-5 text-muted-foreground mx-auto" />
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {inv.paymentConfirmed ? (
+                      <CheckCircle aria-label="Pago" className="w-5 h-5 text-success mx-auto" />
+                    ) : (
+                      <Circle aria-label="Não pago" className="w-5 h-5 text-muted-foreground mx-auto" />
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {inv.nfGenerated ? (
+                      <CheckCircle aria-label="NF gerada" className="w-5 h-5 text-success mx-auto" />
+                    ) : (
+                      <Circle aria-label="NF não gerada" className="w-5 h-5 text-muted-foreground mx-auto" />
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {inv.nfSent ? (
+                      <CheckCircle aria-label="NF enviada" className="w-5 h-5 text-success mx-auto" />
+                    ) : (
+                      <Circle aria-label="NF não enviada" className="w-5 h-5 text-muted-foreground mx-auto" />
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex items-center gap-2">
+                      <ResendChargeButton
+                        invoiceId={inv.id}
+                        invoiceSent={inv.invoiceSent}
+                        invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
+                        sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
+                      />
                       <Link
-                        href={`/admin/clientes/${inv.subscription.company.id}`}
-                        className="font-medium text-foreground hover:text-primary"
+                        href={`/admin/financeiro/faturas/${inv.id}`}
+                        className="px-3 py-1.5 text-sm bg-muted text-foreground rounded hover:bg-muted/70 transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
-                        {inv.subscription.company.name}
+                        Gerenciar
                       </Link>
-                      <p className="text-xs text-muted-foreground">{inv.subscription.plan.name}</p>
-                    </td>
-                    <td className="px-4 py-3 text-foreground font-medium">
-                      R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground">
-                      {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
-                    </td>
-                    <td className="px-4 py-3">
-                      <AdminStatusBadge kind="invoice" status={inv.status} />
-                    </td>
-                    {/* Checkboxes visuais */}
-                    <td className="px-4 py-3 text-center">
-                      {inv.invoiceSent ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-600 mx-auto" />
-                      ) : (
-                        <Circle className="w-5 h-5 text-muted-foreground mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {inv.paymentConfirmed ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-600 mx-auto" />
-                      ) : (
-                        <Circle className="w-5 h-5 text-muted-foreground mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {inv.nfGenerated ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-600 mx-auto" />
-                      ) : (
-                        <Circle className="w-5 h-5 text-muted-foreground mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      {inv.nfSent ? (
-                        <CheckCircle className="w-5 h-5 text-emerald-600 mx-auto" />
-                      ) : (
-                        <Circle className="w-5 h-5 text-muted-foreground mx-auto" />
-                      )}
-                    </td>
-                    <td className="px-4 py-3">
-                      <div className="flex items-center gap-2">
-                        <ResendChargeButton
-                          invoiceId={inv.id}
-                          invoiceSent={inv.invoiceSent}
-                          invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
-                          sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
-                        />
-                        <Link
-                          href={`/admin/financeiro/faturas/${inv.id}`}
-                          className="px-3 py-1.5 text-sm bg-muted text-foreground rounded hover:bg-muted/70 transition-colors"
-                        >
-                          Gerenciar
-                        </Link>
-                      </div>
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
-        </div>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
+        )}
       </div>
     </div>
   );

@@ -1,8 +1,12 @@
 import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { ExternalLink, CheckCircle, XCircle } from "lucide-react";
+import { ExternalLink, CheckCircle, XCircle, Users } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { Button } from "@/components/ui/button";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { ToggleUserButton } from "./toggle-user-button";
 
 const ROLE_LABELS: Record<string, string> = {
@@ -13,13 +17,17 @@ const ROLE_LABELS: Record<string, string> = {
   ATENDENTE: "Atendente",
 };
 
+// Escolha semântica (theme-aware): perfis administrativos usam primary/info,
+// operacionais usam success/warning. Fallback neutro via tokens.
 const ROLE_STYLES: Record<string, string> = {
-  ADMIN:     "bg-indigo-100 text-indigo-700 border-indigo-200",
-  GERENTE:   "bg-purple-100 text-purple-700 border-purple-200",
-  VENDEDOR:  "bg-blue-100 text-blue-700 border-blue-200",
-  CAIXA:     "bg-amber-100 text-amber-700 border-amber-200",
-  ATENDENTE: "bg-zinc-100 text-zinc-600 border-zinc-200",
+  ADMIN:     "bg-primary/10 text-primary border-primary/20",
+  GERENTE:   "bg-info/10 text-info border-info/20",
+  VENDEDOR:  "bg-success/10 text-success border-success/20",
+  CAIXA:     "bg-warning/10 text-warning border-warning/20",
+  ATENDENTE: "bg-muted text-muted-foreground border-border",
 };
+
+const ROLE_FALLBACK = "bg-muted text-muted-foreground border-border";
 
 export default async function UsuariosPage({
   searchParams,
@@ -116,11 +124,11 @@ export default async function UsuariosPage({
         subtitle={`${total} usuário${total !== 1 ? "s" : ""} em ${companies.length} empresa${companies.length !== 1 ? "s" : ""}`}
         actions={
           <div className="flex items-center gap-3">
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-emerald-50 border border-emerald-200 text-emerald-700 text-xs font-medium">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success/10 border border-success/25 text-success text-xs font-medium">
               <CheckCircle className="h-3.5 w-3.5" />
               {activeCount} ativos (página)
             </div>
-            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-rose-50 border border-rose-200 text-rose-700 text-xs font-medium">
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 border border-destructive/25 text-destructive text-xs font-medium">
               <XCircle className="h-3.5 w-3.5" />
               {inactiveCount} inativos (página)
             </div>
@@ -171,117 +179,106 @@ export default async function UsuariosPage({
           <option value="inactive">Inativos</option>
         </select>
 
-        <button
-          type="submit"
-          className="px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition-colors"
-        >
-          Filtrar
-        </button>
+        <Button type="submit">Filtrar</Button>
 
         {(search || companyId || role || status) && (
-          <Link
-            href="/admin/usuarios"
-            className="px-4 py-2 bg-muted hover:bg-muted/80 text-muted-foreground hover:text-foreground text-sm rounded-lg transition-colors"
-          >
-            Limpar
-          </Link>
+          <Button asChild variant="secondary">
+            <Link href="/admin/usuarios">Limpar</Link>
+          </Button>
         )}
       </form>
 
       {/* Tabela */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Usuário</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Empresa</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Perfil</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cadastro</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
-              {users.length === 0 ? (
-                <tr>
-                  <td colSpan={6} className="px-5 py-12 text-center text-muted-foreground">
-                    Nenhum usuário encontrado com os filtros aplicados
-                  </td>
-                </tr>
-              ) : (
-                users.map((user) => (
-                  <tr
-                    key={user.id}
-                    className={`border-b border-border hover:bg-muted transition-colors ${
-                      !user.active ? "opacity-50" : ""
-                    }`}
-                  >
-                    {/* Usuário */}
-                    <td className="px-5 py-3.5">
-                      <p className="font-medium text-foreground">{user.name}</p>
-                      <p className="text-xs text-muted-foreground">{user.email}</p>
-                    </td>
-
-                    {/* Empresa */}
-                    <td className="px-5 py-3.5">
-                      <Link
-                        href={`/admin/clientes/${user.company.id}`}
-                        className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group"
-                      >
-                        <span className="text-sm">
-                          {user.company.tradeName ?? user.company.name}
-                        </span>
-                        <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
-                      </Link>
-                    </td>
-
-                    {/* Perfil */}
-                    <td className="px-5 py-3.5">
-                      <span
-                        className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
-                          ROLE_STYLES[user.role] ?? "bg-zinc-100 text-zinc-600 border-zinc-200"
-                        }`}
-                      >
-                        {ROLE_LABELS[user.role] ?? user.role}
-                      </span>
-                    </td>
-
-                    {/* Status */}
-                    <td className="px-5 py-3.5">
-                      {user.active ? (
-                        <span className="flex items-center gap-1.5 text-xs text-emerald-600">
-                          <CheckCircle className="h-3.5 w-3.5" />
-                          Ativo
-                        </span>
-                      ) : (
-                        <span className="flex items-center gap-1.5 text-xs text-rose-600">
-                          <XCircle className="h-3.5 w-3.5" />
-                          Inativo
-                        </span>
-                      )}
-                    </td>
-
-                    {/* Cadastro */}
-                    <td className="px-5 py-3.5 text-xs text-muted-foreground">
-                      {new Date(user.createdAt).toLocaleDateString("pt-BR")}
-                    </td>
-
-                    {/* Ações */}
-                    <td className="px-5 py-3.5">
-                      <ToggleUserButton
-                        userId={user.id}
-                        active={user.active}
-                        userName={user.name}
-                      />
-                    </td>
-                  </tr>
-                ))
-              )}
-            </tbody>
-          </table>
+      {users.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState
+            icon={Users}
+            message="Nenhum usuário encontrado com os filtros aplicados"
+          />
         </div>
-      </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <ResponsiveTable minWidth={980}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Usuário</TableHead>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Perfil</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Cadastro</TableHead>
+                <TableHead>Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((user) => (
+                <TableRow
+                  key={user.id}
+                  className={!user.active ? "opacity-50" : undefined}
+                >
+                  {/* Usuário */}
+                  <TableCell>
+                    <p className="font-medium text-foreground">{user.name}</p>
+                    <p className="text-xs text-muted-foreground">{user.email}</p>
+                  </TableCell>
+
+                  {/* Empresa */}
+                  <TableCell>
+                    <Link
+                      href={`/admin/clientes/${user.company.id}`}
+                      className="flex items-center gap-1.5 text-muted-foreground hover:text-foreground transition-colors group focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+                    >
+                      <span className="text-sm">
+                        {user.company.tradeName ?? user.company.name}
+                      </span>
+                      <ExternalLink className="h-3 w-3 opacity-0 group-hover:opacity-60 transition-opacity" />
+                    </Link>
+                  </TableCell>
+
+                  {/* Perfil */}
+                  <TableCell>
+                    <span
+                      className={`inline-flex px-2 py-0.5 rounded-full text-xs font-medium border ${
+                        ROLE_STYLES[user.role] ?? ROLE_FALLBACK
+                      }`}
+                    >
+                      {ROLE_LABELS[user.role] ?? user.role}
+                    </span>
+                  </TableCell>
+
+                  {/* Status */}
+                  <TableCell>
+                    {user.active ? (
+                      <span className="flex items-center gap-1.5 text-xs text-success">
+                        <CheckCircle className="h-3.5 w-3.5" />
+                        Ativo
+                      </span>
+                    ) : (
+                      <span className="flex items-center gap-1.5 text-xs text-destructive">
+                        <XCircle className="h-3.5 w-3.5" />
+                        Inativo
+                      </span>
+                    )}
+                  </TableCell>
+
+                  {/* Cadastro */}
+                  <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
+                    {new Date(user.createdAt).toLocaleDateString("pt-BR")}
+                  </TableCell>
+
+                  {/* Ações */}
+                  <TableCell>
+                    <ToggleUserButton
+                      userId={user.id}
+                      active={user.active}
+                      userName={user.name}
+                    />
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
+        </div>
+      )}
 
       {/* Paginação */}
       {totalPages > 1 && (
@@ -293,7 +290,7 @@ export default async function UsuariosPage({
             {page > 1 && (
               <Link
                 href={buildHref({ page: String(page - 1) })}
-                className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 ← Anterior
               </Link>
@@ -304,7 +301,8 @@ export default async function UsuariosPage({
                 <Link
                   key={p}
                   href={buildHref({ page: String(p) })}
-                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors ${
+                  aria-current={p === page ? "page" : undefined}
+                  className={`px-3 py-1.5 text-xs rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                     p === page
                       ? "bg-primary text-primary-foreground"
                       : "bg-muted hover:bg-muted/80 text-foreground"
@@ -317,7 +315,7 @@ export default async function UsuariosPage({
             {page < totalPages && (
               <Link
                 href={buildHref({ page: String(page + 1) })}
-                className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors"
+                className="px-3 py-1.5 text-xs bg-muted hover:bg-muted/80 text-foreground rounded-lg transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
               >
                 Próxima →
               </Link>

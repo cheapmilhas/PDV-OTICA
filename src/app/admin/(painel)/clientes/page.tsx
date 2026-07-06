@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { UserPlus } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { Button } from "@/components/ui/button";
 import { ClientesFilters } from "./ClientesFilters";
 import { ClientesTable } from "./ClientesTable";
 
@@ -124,13 +125,12 @@ export default async function EmpresasPage({
             : `${totalCount} empresa${totalCount !== 1 ? "s" : ""} encontrada${totalCount !== 1 ? "s" : ""}`
         }
         actions={
-          <Link
-            href="/admin/clientes/novo"
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 text-primary-foreground text-sm font-medium rounded-lg transition-colors"
-          >
-            <UserPlus className="h-4 w-4" />
-            Nova Empresa
-          </Link>
+          <Button asChild>
+            <Link href="/admin/clientes/novo">
+              <UserPlus className="h-4 w-4" />
+              Nova Empresa
+            </Link>
+          </Button>
         }
       />
 

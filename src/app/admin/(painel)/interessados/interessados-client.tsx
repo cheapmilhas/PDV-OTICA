@@ -1,10 +1,20 @@
 "use client";
 
 import { useState } from "react";
+import Link from "next/link";
 import { Download, Loader2, Mail } from "lucide-react";
 import type { InteressadoItem } from "./page";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Button } from "@/components/ui/button";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 const PLAN_OPTIONS = [
   { slug: "", label: "Todos os planos" },
@@ -62,10 +72,11 @@ export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) 
         actions={
           <div className="flex items-center gap-3">
             <select
+              aria-label="Filtrar por plano"
               value={planSlug}
               onChange={(e) => handleFilterChange(e.target.value)}
               disabled={loading}
-              className="px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus:outline-none focus:border-ring disabled:opacity-60"
+              className="px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
             >
               {PLAN_OPTIONS.map((opt) => (
                 <option key={opt.slug || "all"} value={opt.slug}>
@@ -74,13 +85,12 @@ export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) 
               ))}
             </select>
 
-            <a
-              href={csvHref}
-              className="flex items-center gap-2 px-3 py-2 rounded-lg bg-primary hover:bg-primary/90 text-sm font-medium text-primary-foreground transition-colors"
-            >
-              <Download className="h-4 w-4" />
-              Exportar CSV
-            </a>
+            <Button asChild>
+              <Link href={csvHref}>
+                <Download className="h-4 w-4" />
+                Exportar CSV
+              </Link>
+            </Button>
           </div>
         }
       />
@@ -94,41 +104,36 @@ export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) 
         ) : items.length === 0 ? (
           <EmptyState icon={Mail} message="Nenhum interessado ainda" />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-xs uppercase tracking-wider text-muted-foreground">
-                  <th className="px-4 py-3 font-medium">Nome</th>
-                  <th className="px-4 py-3 font-medium">E-mail</th>
-                  <th className="px-4 py-3 font-medium">Telefone</th>
-                  <th className="px-4 py-3 font-medium">Empresa</th>
-                  <th className="px-4 py-3 font-medium">Plano</th>
-                  <th className="px-4 py-3 font-medium">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {items.map((item) => (
-                  <tr
-                    key={item.id}
-                    className="border-b border-border last:border-0 hover:bg-muted"
-                  >
-                    <td className="px-4 py-3 text-foreground">{item.name}</td>
-                    <td className="px-4 py-3 text-foreground">{item.email}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.phone || "—"}</td>
-                    <td className="px-4 py-3 text-muted-foreground">{item.companyName || "—"}</td>
-                    <td className="px-4 py-3">
-                      <span className="inline-flex px-2 py-0.5 rounded-md bg-muted text-xs text-foreground">
-                        {item.planSlug}
-                      </span>
-                    </td>
-                    <td className="px-4 py-3 text-muted-foreground whitespace-nowrap">
-                      {formatDate(item.createdAt)}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable minWidth={720}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>E-mail</TableHead>
+                <TableHead>Telefone</TableHead>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Plano</TableHead>
+                <TableHead>Data</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((item) => (
+                <TableRow key={item.id}>
+                  <TableCell className="text-foreground">{item.name}</TableCell>
+                  <TableCell className="text-foreground">{item.email}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.phone || "—"}</TableCell>
+                  <TableCell className="text-muted-foreground">{item.companyName || "—"}</TableCell>
+                  <TableCell>
+                    <span className="inline-flex px-2 py-0.5 rounded-md bg-muted text-xs text-foreground">
+                      {item.planSlug}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground whitespace-nowrap">
+                    {formatDate(item.createdAt)}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
         )}
       </div>
 

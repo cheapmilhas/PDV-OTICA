@@ -5,6 +5,9 @@ import { CreditCard, ExternalLink } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 const STATUS_LABELS: Record<string, string> = {
   ACTIVE: "Ativo", TRIAL: "Trial", PAST_DUE: "Inadimplente",
@@ -53,53 +56,74 @@ export default async function AssinaturasPage({
       </FilterBar>
 
       {/* Tabela */}
-      <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <div className="overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                {["Empresa", "Plano", "Status", "Ciclo", "Valor/mês", "Trial expira", "Criada em", ""].map((h) => (
-                  <th key={h} className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {subscriptions.length === 0 ? (
-                <tr>
-                  <td colSpan={8} className="px-5 py-12 text-center">
-                    <CreditCard className="h-8 w-8 text-muted-foreground/50 mx-auto mb-2" />
-                    <p className="text-muted-foreground">Nenhuma assinatura encontrada</p>
-                  </td>
-                </tr>
-              ) : subscriptions.map((sub) => (
-                <tr key={sub.id} className="border-b border-border hover:bg-muted transition-colors">
-                  <td className="px-5 py-3">
+      {subscriptions.length === 0 ? (
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState icon={CreditCard} message="Nenhuma assinatura encontrada" />
+        </div>
+      ) : (
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <ResponsiveTable minWidth={880}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Plano</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Ciclo</TableHead>
+                <TableHead>Valor/mês</TableHead>
+                <TableHead>Trial expira</TableHead>
+                <TableHead>Criada em</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {subscriptions.map((sub) => (
+                <TableRow key={sub.id}>
+                  {/* Empresa */}
+                  <TableCell>
                     <Link href={`/admin/clientes/${sub.company.id}`} className="font-medium text-foreground hover:text-primary">{sub.company.name}</Link>
                     {sub.company.email && <p className="text-xs text-muted-foreground truncate max-w-[160px]">{sub.company.email}</p>}
-                  </td>
-                  <td className="px-5 py-3 text-foreground">{sub.plan.name}</td>
-                  <td className="px-5 py-3">
+                  </TableCell>
+
+                  {/* Plano */}
+                  <TableCell className="text-foreground">{sub.plan.name}</TableCell>
+
+                  {/* Status */}
+                  <TableCell>
                     <AdminStatusBadge kind="subscription" status={sub.status} />
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">{sub.billingCycle === "YEARLY" ? "Anual" : "Mensal"}</td>
-                  <td className="px-5 py-3 text-foreground">
+                  </TableCell>
+
+                  {/* Ciclo */}
+                  <TableCell className="text-muted-foreground">{sub.billingCycle === "YEARLY" ? "Anual" : "Mensal"}</TableCell>
+
+                  {/* Valor/mês */}
+                  <TableCell className="text-foreground">
                     R$ {(sub.plan.priceMonthly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground text-xs">
+                  </TableCell>
+
+                  {/* Trial expira */}
+                  <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
                     {sub.trialEndsAt ? new Date(sub.trialEndsAt).toLocaleDateString("pt-BR") : "—"}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground text-xs">{new Date(sub.createdAt).toLocaleDateString("pt-BR")}</td>
-                  <td className="px-5 py-3">
-                    <Link href={`/admin/clientes/${sub.company.id}`} className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors inline-flex">
+                  </TableCell>
+
+                  {/* Criada em */}
+                  <TableCell className="text-muted-foreground text-xs whitespace-nowrap">{new Date(sub.createdAt).toLocaleDateString("pt-BR")}</TableCell>
+
+                  {/* Ação */}
+                  <TableCell>
+                    <Link
+                      href={`/admin/clientes/${sub.company.id}`}
+                      aria-label={`Abrir ${sub.company.name}`}
+                      className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors inline-flex focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
                       <ExternalLink className="h-4 w-4" />
                     </Link>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </ResponsiveTable>
         </div>
-      </div>
+      )}
     </div>
   );
 }
