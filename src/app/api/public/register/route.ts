@@ -5,6 +5,7 @@ import { setupCompanyFinance } from "@/services/finance-setup.service";
 import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { DEFAULT_MESSAGES } from "@/lib/default-messages";
+import { containsHtml } from "@/lib/validations/safe-text";
 
 const log = logger.child({ route: "public/register" });
 
@@ -29,6 +30,22 @@ export async function POST(request: Request) {
     if (!name || !email || !password || !companyName) {
       return NextResponse.json(
         { error: "Campos obrigatórios: nome, email, senha e nome da empresa" },
+        { status: 400 }
+      );
+    }
+
+    // SEGURANÇA: endpoint público sem auth — rejeitar nomes com HTML impede
+    // XSS/clickjacking armazenado em Company.name/tradeName (defesa na entrada).
+    if (
+      typeof name !== "string" ||
+      typeof companyName !== "string" ||
+      name.length > 120 ||
+      companyName.length > 120 ||
+      containsHtml(name) ||
+      containsHtml(companyName)
+    ) {
+      return NextResponse.json(
+        { error: "Nome ou nome da empresa inválido (não pode conter HTML)" },
         { status: 400 }
       );
     }

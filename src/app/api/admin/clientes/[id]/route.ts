@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
+import { containsHtml } from "@/lib/validations/safe-text";
 
 const log = logger.child({ route: "admin/clientes/[id]" });
 
@@ -28,6 +29,16 @@ export async function PATCH(
 
     if (!name?.trim()) {
       return NextResponse.json({ error: "Nome da empresa é obrigatório" }, { status: 400 });
+    }
+
+    // SEGURANÇA: rejeitar HTML em campos de texto livre (XSS armazenado).
+    for (const [label, value] of [["Nome", name], ["Nome fantasia", tradeName]] as const) {
+      if (typeof value === "string" && (value.length > 120 || containsHtml(value))) {
+        return NextResponse.json(
+          { error: `${label} inválido (não pode conter HTML)` },
+          { status: 400 }
+        );
+      }
     }
 
     // Verificar se empresa existe

@@ -8,6 +8,7 @@ import { logActivity } from "@/services/activity-log.service";
 import { createOnboardingChecklist, completeOnboardingStep } from "@/services/onboarding-checklist.service";
 import { ActorType } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { containsHtml } from "@/lib/validations/safe-text";
 
 const log = logger.child({ route: "admin/clientes/create" });
 
@@ -72,6 +73,23 @@ export async function POST(request: Request) {
   // Validações
   if (!tradeName || !cnpj || !email || !city || !state || !ownerName || !ownerEmail || !planId) {
     return NextResponse.json({ error: "Campos obrigatórios não preenchidos" }, { status: 400 });
+  }
+
+  // SEGURANÇA: rejeitar HTML em campos de texto livre que vão para o banco
+  // (XSS/clickjacking armazenado em Company/Branch/Network/Note).
+  for (const [label, value] of [
+    ["Nome fantasia", tradeName],
+    ["Razão social", companyName],
+    ["Nome do responsável", ownerName],
+    ["Nome da rede", newNetworkName],
+    ["Observações", notes],
+  ] as const) {
+    if (typeof value === "string" && value && (value.length > 200 || containsHtml(value))) {
+      return NextResponse.json(
+        { error: `${label} inválido (não pode conter HTML)` },
+        { status: 400 }
+      );
+    }
   }
 
   // Se adminEmail fornecido, verificar duplicidade.

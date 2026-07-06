@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getCompanyId } from "@/lib/auth-helpers";
 import { handleApiError } from "@/lib/error-handler";
 import { atomicStockCredit } from "@/services/stock.service";
+import { containsHtml } from "@/lib/validations/safe-text";
 
 /**
  * GET /api/onboarding
@@ -60,6 +61,20 @@ export async function PUT(request: Request) {
 
     // Step 1: Dados da empresa (address, phone, etc.)
     if (step === 1) {
+      // SEGURANÇA: rejeitar HTML em campos de texto livre (XSS armazenado).
+      for (const [label, value] of [
+        ["Nome fantasia", data?.tradeName],
+        ["Endereço", data?.address],
+        ["Cidade", data?.city],
+      ] as const) {
+        if (typeof value === "string" && value && (value.length > 200 || containsHtml(value))) {
+          return NextResponse.json(
+            { error: `${label} inválido (não pode conter HTML)` },
+            { status: 400 }
+          );
+        }
+      }
+
       await prisma.company.update({
         where: { id: companyId },
         data: {
