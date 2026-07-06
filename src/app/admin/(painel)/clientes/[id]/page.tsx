@@ -20,6 +20,9 @@ import { adminStatusLabel } from "@/lib/admin-status";
 import { CompanyTimeline } from "./company-timeline";
 import { CompanyOnboarding } from "./company-onboarding";
 import { CompanyTags } from "./company-tags";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
   if (!a) return false;
@@ -103,14 +106,14 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
       {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <div className="flex items-center gap-3">
-          <Link href="/admin/clientes" className="p-2 rounded-lg bg-muted hover:bg-muted transition-colors text-muted-foreground hover:text-foreground">
+          <Link href="/admin/clientes" aria-label="Voltar para lista de clientes" className="p-2 rounded-lg bg-muted hover:bg-muted transition-colors text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">
             <ArrowLeft className="h-4 w-4" />
           </Link>
           <div>
             <div className="flex items-center gap-3">
               <h1 className="text-xl font-bold text-foreground">{company.name}</h1>
               {company.isBlocked && (
-                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-rose-100 text-rose-700 border border-rose-200">
+                <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-destructive/10 text-destructive border border-destructive/20">
                   Bloqueado
                 </span>
               )}
@@ -154,7 +157,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
                   {latestHealthScore.riskFactors && Array.isArray(latestHealthScore.riskFactors) && (latestHealthScore.riskFactors as string[]).length > 0 && (
                     <div className="mb-3">
-                      <p className="text-xs font-medium text-rose-600 mb-2">⚠️ Fatores de Risco:</p>
+                      <p className="text-xs font-medium text-destructive mb-2">⚠️ Fatores de Risco:</p>
                       <ul className="space-y-1">
                         {(latestHealthScore.riskFactors as string[]).map((risk, i) => (
                           <li key={i} className="text-xs text-muted-foreground pl-4">• {risk}</li>
@@ -165,7 +168,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
                   {latestHealthScore.opportunities && Array.isArray(latestHealthScore.opportunities) && (latestHealthScore.opportunities as string[]).length > 0 && (
                     <div>
-                      <p className="text-xs font-medium text-blue-600 mb-2">💡 Oportunidades:</p>
+                      <p className="text-xs font-medium text-info mb-2">💡 Oportunidades:</p>
                       <ul className="space-y-1">
                         {(latestHealthScore.opportunities as string[]).map((opp, i) => (
                           <li key={i} className="text-xs text-muted-foreground pl-4">• {opp}</li>
@@ -220,7 +223,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                         </div>
                         <div className="flex items-center gap-2">
                           <span className="text-xs px-2 py-0.5 rounded bg-muted text-muted-foreground">{u.role}</span>
-                          {!u.active && <span className="text-xs px-2 py-0.5 rounded bg-rose-100 text-rose-700">Inativo</span>}
+                          {!u.active && <span className="text-xs px-2 py-0.5 rounded bg-destructive/10 text-destructive">Inativo</span>}
                         </div>
                       </div>
                     ))}
@@ -428,59 +431,56 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
         {/* TAB: FATURAS */}
         <TabPanel tabId="faturas">
           {invoices.length === 0 ? (
-            <div className="rounded-xl border border-border bg-card p-12 text-center">
-              <DollarSign className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-              <p className="text-muted-foreground">Nenhuma fatura encontrada</p>
+            <div className="rounded-xl border border-border bg-card">
+              <EmptyState icon={DollarSign} message="Nenhuma fatura encontrada" />
             </div>
           ) : (
             <div className="rounded-xl border border-border bg-card overflow-hidden">
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b border-border">
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Número</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Emissão</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Vencimento</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Valor</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Tipo Pgto</th>
-                      <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Ações</th>
-                    </tr>
-                  </thead>
-                  <tbody>
-                    {invoices.map((inv) => (
-                      <tr key={inv.id} className="border-b border-border hover:bg-muted transition-colors">
-                        <td className="px-5 py-3">
-                          <span className="font-mono text-xs text-foreground">{inv.number}</span>
-                        </td>
-                        <td className="px-5 py-3 text-muted-foreground">
-                          {new Date(inv.issuedAt).toLocaleDateString("pt-BR")}
-                        </td>
-                        <td className="px-5 py-3 text-muted-foreground">
-                          {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
-                        </td>
-                        <td className="px-5 py-3 text-foreground font-medium">
-                          R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
-                        </td>
-                        <td className="px-5 py-3">
-                          <AdminStatusBadge kind="invoice" status={inv.status} />
-                        </td>
-                        <td className="px-5 py-3 text-muted-foreground text-xs">
-                          {inv.billingType || "—"}
-                        </td>
-                        <td className="px-5 py-3">
-                          <ResendChargeButton
-                            invoiceId={inv.id}
-                            invoiceSent={inv.invoiceSent}
-                            invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
-                            sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
-                          />
-                        </td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
+              <ResponsiveTable minWidth={880}>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Número</TableHead>
+                    <TableHead>Emissão</TableHead>
+                    <TableHead>Vencimento</TableHead>
+                    <TableHead>Valor</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Tipo Pgto</TableHead>
+                    <TableHead>Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {invoices.map((inv) => (
+                    <TableRow key={inv.id}>
+                      <TableCell>
+                        <span className="font-mono text-xs text-foreground">{inv.number}</span>
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {new Date(inv.issuedAt).toLocaleDateString("pt-BR")}
+                      </TableCell>
+                      <TableCell className="text-muted-foreground">
+                        {inv.dueDate ? new Date(inv.dueDate).toLocaleDateString("pt-BR") : "—"}
+                      </TableCell>
+                      <TableCell className="text-foreground font-medium">
+                        R$ {(inv.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
+                      </TableCell>
+                      <TableCell>
+                        <AdminStatusBadge kind="invoice" status={inv.status} />
+                      </TableCell>
+                      <TableCell className="text-muted-foreground text-xs">
+                        {inv.billingType || "—"}
+                      </TableCell>
+                      <TableCell>
+                        <ResendChargeButton
+                          invoiceId={inv.id}
+                          invoiceSent={inv.invoiceSent}
+                          invoiceSentAt={inv.invoiceSentAt ? inv.invoiceSentAt.toISOString() : null}
+                          sentToday={mesmoDia(inv.invoiceSentAt, new Date())}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </ResponsiveTable>
             </div>
           )}
         </TabPanel>
@@ -573,11 +573,12 @@ function MetricCard({ label, value, icon: Icon }: { label: string; value: number
 }
 
 function ScoreBar({ label, score }: { label: string; score: number }) {
+  // Tom semântico via token (theme-aware), não cor hardcoded.
   const getColor = (s: number) => {
-    if (s >= 80) return "bg-emerald-500";
-    if (s >= 60) return "bg-blue-500";
-    if (s >= 40) return "bg-amber-500";
-    return "bg-rose-500";
+    if (s >= 80) return "bg-success";
+    if (s >= 60) return "bg-info";
+    if (s >= 40) return "bg-warning";
+    return "bg-destructive";
   };
 
   return (

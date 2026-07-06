@@ -27,6 +27,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 interface UserData {
   id: string;
@@ -57,12 +67,15 @@ const ROLE_LABELS: Record<string, string> = {
   ATENDENTE: "Atendente",
 };
 
+// Badge de cargo mapeado por semântica (tokens theme-aware):
+// ADMIN = privilégio máximo → primary; GERENTE = info; papéis operacionais
+// (VENDEDOR/CAIXA) = success/warning; ATENDENTE = neutro (muted).
 const ROLE_STYLES: Record<string, string> = {
-  ADMIN: "bg-purple-100 text-purple-700",
-  GERENTE: "bg-blue-100 text-blue-700",
-  VENDEDOR: "bg-emerald-100 text-emerald-700",
-  CAIXA: "bg-amber-100 text-amber-700",
-  ATENDENTE: "bg-zinc-100 text-zinc-700",
+  ADMIN: "bg-primary/10 text-primary",
+  GERENTE: "bg-info/10 text-info",
+  VENDEDOR: "bg-success/10 text-success",
+  CAIXA: "bg-warning/10 text-warning",
+  ATENDENTE: "bg-muted text-muted-foreground",
 };
 
 interface CompanyUsersProps {
@@ -137,8 +150,8 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
 
   if (error) {
     return (
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-6 text-center">
-        <p className="text-rose-600">{error}</p>
+      <div className="rounded-xl border border-destructive/25 bg-destructive/10 p-6 text-center">
+        <p className="text-destructive">{error}</p>
       </div>
     );
   }
@@ -155,14 +168,10 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
             Plano {meta.planName}
           </p>
         </div>
-        <button
-          onClick={() => setShowCreateModal(true)}
-          disabled={limitReached}
-          className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 disabled:cursor-not-allowed text-sm"
-        >
+        <Button onClick={() => setShowCreateModal(true)} disabled={limitReached}>
           <Plus className="w-4 h-4" />
           Novo Usuário
-        </button>
+        </Button>
       </div>
 
       {/* Barra de limite */}
@@ -172,13 +181,14 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
             {activeCount} de {meta.maxUsers} usuários ativos
           </span>
           {limitReached && (
-            <span className="text-xs text-rose-600">Limite atingido!</span>
+            <span className="text-xs text-destructive">Limite atingido!</span>
           )}
         </div>
         <div className="w-full bg-muted rounded-full h-2">
+          {/* Barra de uso: limite estourado = destructive, quase-cheio = warning, ok = primary */}
           <div
             className={`h-2 rounded-full transition-all ${
-              limitReached ? "bg-rose-500" : activeCount / meta.maxUsers > 0.8 ? "bg-amber-500" : "bg-primary"
+              limitReached ? "bg-destructive" : activeCount / meta.maxUsers > 0.8 ? "bg-warning" : "bg-primary"
             }`}
             style={{ width: `${Math.min((activeCount / meta.maxUsers) * 100, 100)}%` }}
           />
@@ -187,119 +197,126 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
 
       {/* Tabela de usuários */}
       {users.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-12 text-center">
-          <Users className="h-12 w-12 text-muted-foreground mx-auto mb-3" />
-          <p className="text-muted-foreground">Nenhum usuário cadastrado</p>
-          <p className="text-xs text-muted-foreground mt-1">Clique em "Novo Usuário" para criar o primeiro</p>
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState
+            icon={Users}
+            message="Nenhum usuário cadastrado"
+            action={
+              <p className="text-xs text-muted-foreground">
+                Clique em &quot;Novo Usuário&quot; para criar o primeiro
+              </p>
+            }
+          />
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Nome</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Email</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cargo</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Filial</th>
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {users.map((user) => (
-                  <tr key={user.id} className="border-b border-border hover:bg-muted transition-colors">
-                    <td className="px-5 py-3">
-                      <p className="text-sm font-medium text-foreground">{user.name}</p>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground text-sm">{user.email}</td>
-                    <td className="px-5 py-3">
-                      <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ROLE_STYLES[user.role] ?? "bg-zinc-100 text-zinc-700"}`}>
-                        {ROLE_LABELS[user.role] ?? user.role}
+          <ResponsiveTable minWidth={720}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead>Email</TableHead>
+                <TableHead>Cargo</TableHead>
+                <TableHead>Filial</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {users.map((user) => (
+                <TableRow key={user.id}>
+                  <TableCell>
+                    <p className="text-sm font-medium text-foreground">{user.name}</p>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-sm">{user.email}</TableCell>
+                  <TableCell>
+                    <span className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${ROLE_STYLES[user.role] ?? "bg-muted text-muted-foreground"}`}>
+                      {ROLE_LABELS[user.role] ?? user.role}
+                    </span>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {user.branches.map((b) => b.name).join(", ") || "—"}
+                  </TableCell>
+                  <TableCell>
+                    {/* Status: ativo = success, inativo = destructive */}
+                    {user.active ? (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-success/10 text-success">
+                        Ativo
                       </span>
-                    </td>
-                    <td className="px-5 py-3 text-muted-foreground text-xs">
-                      {user.branches.map((b) => b.name).join(", ") || "—"}
-                    </td>
-                    <td className="px-5 py-3">
-                      {user.active ? (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-emerald-100 text-emerald-700">
-                          Ativo
-                        </span>
-                      ) : (
-                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-rose-100 text-rose-700">
-                          Inativo
-                        </span>
-                      )}
-                    </td>
-                    <td className="px-5 py-3 text-right relative">
-                      <button
-                        onClick={() => setDropdownOpen(dropdownOpen === user.id ? null : user.id)}
-                        className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
-                      >
-                        <MoreVertical className="w-4 h-4" />
-                      </button>
-                      {dropdownOpen === user.id && (
-                        <div className="absolute right-5 top-12 z-10 w-48 bg-card border border-border rounded-lg shadow-xl py-1">
-                          <button
-                            onClick={() => {
-                              setDropdownOpen(null);
-                              setShowPasswordModal({ userId: user.id, userName: user.name });
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            <KeyRound className="w-4 h-4" />
-                            Resetar Senha
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDropdownOpen(null);
-                              setShowEditModal(user);
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            <Pencil className="w-4 h-4" />
-                            Editar Dados
-                          </button>
-                          <button
-                            onClick={() => {
-                              setDropdownOpen(null);
-                              setShowPermissionsModal({ userId: user.id, userName: user.name, role: user.role });
-                            }}
-                            className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground"
-                          >
-                            <Shield className="w-4 h-4" />
-                            Gerenciar Permissões
-                          </button>
-                          <div className="border-t border-border my-1" />
-                          <button
-                            onClick={() => handleToggleActive(user.id, user.active)}
-                            className={`w-full flex items-center gap-2 px-4 py-2 text-sm ${
-                              user.active
-                                ? "text-rose-600 hover:bg-rose-50"
-                                : "text-emerald-600 hover:bg-emerald-50"
-                            }`}
-                          >
-                            {user.active ? (
-                              <>
-                                <UserX className="w-4 h-4" />
-                                Desativar
-                              </>
-                            ) : (
-                              <>
-                                <UserCheck className="w-4 h-4" />
-                                Reativar
-                              </>
-                            )}
-                          </button>
-                        </div>
-                      )}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+                    ) : (
+                      <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded text-xs font-medium bg-destructive/10 text-destructive">
+                        Inativo
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right relative">
+                    <button
+                      onClick={() => setDropdownOpen(dropdownOpen === user.id ? null : user.id)}
+                      aria-label={`Ações de ${user.name}`}
+                      className="p-1.5 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    >
+                      <MoreVertical className="w-4 h-4" />
+                    </button>
+                    {dropdownOpen === user.id && (
+                      <div className="absolute right-5 top-12 z-10 w-48 bg-card border border-border rounded-lg shadow-xl py-1">
+                        <button
+                          onClick={() => {
+                            setDropdownOpen(null);
+                            setShowPasswordModal({ userId: user.id, userName: user.name });
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <KeyRound className="w-4 h-4" />
+                          Resetar Senha
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDropdownOpen(null);
+                            setShowEditModal(user);
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Pencil className="w-4 h-4" />
+                          Editar Dados
+                        </button>
+                        <button
+                          onClick={() => {
+                            setDropdownOpen(null);
+                            setShowPermissionsModal({ userId: user.id, userName: user.name, role: user.role });
+                          }}
+                          className="w-full flex items-center gap-2 px-4 py-2 text-sm text-foreground hover:bg-muted hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        >
+                          <Shield className="w-4 h-4" />
+                          Gerenciar Permissões
+                        </button>
+                        <div className="border-t border-border my-1" />
+                        {/* Desativar = destructive; Reativar = success */}
+                        <button
+                          onClick={() => handleToggleActive(user.id, user.active)}
+                          className={`w-full flex items-center gap-2 px-4 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+                            user.active
+                              ? "text-destructive hover:bg-destructive/10"
+                              : "text-success hover:bg-success/10"
+                          }`}
+                        >
+                          {user.active ? (
+                            <>
+                              <UserX className="w-4 h-4" />
+                              Desativar
+                            </>
+                          ) : (
+                            <>
+                              <UserCheck className="w-4 h-4" />
+                              Reativar
+                            </>
+                          )}
+                        </button>
+                      </div>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
         </div>
       )}
 
@@ -425,14 +442,18 @@ function CreateUserModal({
       <div className="bg-card border border-border rounded-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-semibold text-foreground">Novo Usuário</h3>
-          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm">
+            <div className="bg-destructive/10 border border-destructive/25 text-destructive px-4 py-2 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -471,14 +492,10 @@ function CreateUserModal({
                 className="flex-1 px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
                 placeholder="Mínimo 8 caracteres"
               />
-              <button
-                type="button"
-                onClick={generatePassword}
-                className="flex items-center gap-1 px-3 py-2 bg-muted border border-border rounded-lg text-foreground hover:bg-muted hover:text-foreground transition-colors text-sm"
-              >
+              <Button type="button" variant="secondary" onClick={generatePassword}>
                 <RefreshCw className="w-3.5 h-3.5" />
                 Gerar
-              </button>
+              </Button>
             </div>
           </div>
 
@@ -511,21 +528,13 @@ function CreateUserModal({
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
-            >
+            <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm"
-            >
+            </Button>
+            <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Criar Usuário
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -579,7 +588,11 @@ function ResetPasswordModal({
       <div className="bg-card border border-border rounded-xl w-full max-w-md" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-semibold text-foreground">Resetar Senha</h3>
-          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -590,7 +603,7 @@ function ResetPasswordModal({
           </p>
 
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm">
+            <div className="bg-destructive/10 border border-destructive/25 text-destructive px-4 py-2 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -608,21 +621,18 @@ function ResetPasswordModal({
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
-            >
+            <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
-            </button>
-            <button
+            </Button>
+            {/* Reset de senha é ação sensível/atenção → variante warning */}
+            <Button
               type="submit"
               disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-orange-600 text-white rounded-lg hover:bg-orange-700 transition-colors disabled:opacity-50 text-sm"
+              className="bg-warning text-warning-foreground shadow-sm hover:bg-warning/90"
             >
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Resetar Senha
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -652,8 +662,9 @@ function PasswordResultModal({
       <div className="bg-card border border-border rounded-xl w-full max-w-sm" onClick={(e) => e.stopPropagation()}>
         <div className="p-6 space-y-4">
           <div className="text-center">
-            <div className="w-12 h-12 bg-emerald-100 rounded-full flex items-center justify-center mx-auto mb-3">
-              <Check className="w-6 h-6 text-emerald-600" />
+            {/* Sucesso → token success */}
+            <div className="w-12 h-12 bg-success/10 rounded-full flex items-center justify-center mx-auto mb-3">
+              <Check className="w-6 h-6 text-success" />
             </div>
             <h3 className="text-lg font-semibold text-foreground">Senha resetada!</h3>
           </div>
@@ -662,22 +673,21 @@ function PasswordResultModal({
             <code className="text-lg font-mono text-foreground">{password}</code>
             <button
               onClick={handleCopy}
-              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+              aria-label="Copiar senha"
+              className="p-2 rounded-lg hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
-              {copied ? <Check className="w-4 h-4 text-emerald-600" /> : <Copy className="w-4 h-4" />}
+              {copied ? <Check className="w-4 h-4 text-success" /> : <Copy className="w-4 h-4" />}
             </button>
           </div>
 
-          <p className="text-xs text-amber-600 text-center">
+          {/* Aviso importante → token warning */}
+          <p className="text-xs text-warning text-center">
             Envie esta senha ao usuário. Ela não será exibida novamente.
           </p>
 
-          <button
-            onClick={onClose}
-            className="w-full px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
-          >
+          <Button variant="secondary" onClick={onClose} className="w-full">
             Fechar
-          </button>
+          </Button>
         </div>
       </div>
     </div>
@@ -733,14 +743,18 @@ function EditUserModal({
       <div className="bg-card border border-border rounded-xl w-full max-w-lg" onClick={(e) => e.stopPropagation()}>
         <div className="flex items-center justify-between px-6 py-4 border-b border-border">
           <h3 className="text-lg font-semibold text-foreground">Editar Usuário</h3>
-          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
 
         <form onSubmit={handleSubmit} className="p-6 space-y-4">
           {error && (
-            <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm">
+            <div className="bg-destructive/10 border border-destructive/25 text-destructive px-4 py-2 rounded-lg text-sm">
               {error}
             </div>
           )}
@@ -796,21 +810,13 @@ function EditUserModal({
           </div>
 
           <div className="flex justify-end gap-3 pt-2">
-            <button
-              type="button"
-              onClick={onClose}
-              className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
-            >
+            <Button type="button" variant="secondary" onClick={onClose}>
               Cancelar
-            </button>
-            <button
-              type="submit"
-              disabled={loading}
-              className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm"
-            >
+            </Button>
+            <Button type="submit" disabled={loading}>
               {loading && <Loader2 className="w-4 h-4 animate-spin" />}
               Salvar
-            </button>
+            </Button>
           </div>
         </form>
       </div>
@@ -1002,7 +1008,11 @@ function PermissionsModal({
               {userName} ({ROLE_LABELS[userRole] ?? userRole})
             </p>
           </div>
-          <button onClick={onClose} className="p-1 text-muted-foreground hover:text-foreground">
+          <button
+            onClick={onClose}
+            aria-label="Fechar"
+            className="p-1 text-muted-foreground hover:text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
+          >
             <X className="w-5 h-5" />
           </button>
         </div>
@@ -1016,7 +1026,7 @@ function PermissionsModal({
             {/* Role selector + summary */}
             <div className="px-6 py-4 border-b border-border flex-shrink-0">
               {error && (
-                <div className="bg-rose-50 border border-rose-200 text-rose-700 px-4 py-2 rounded-lg text-sm mb-3">
+                <div className="bg-destructive/10 border border-destructive/25 text-destructive px-4 py-2 rounded-lg text-sm mb-3">
                   {error}
                 </div>
               )}
@@ -1042,7 +1052,7 @@ function PermissionsModal({
               </div>
 
               {roleChanged && (
-                <p className="text-xs text-amber-600 mt-2">
+                <p className="text-xs text-warning mt-2">
                   Alterar o cargo vai resetar as permissões customizadas para o padrão do novo cargo.
                 </p>
               )}
@@ -1082,7 +1092,7 @@ function PermissionsModal({
                             />
                             <span className="text-sm text-foreground flex-1">{perm.name}</span>
                             {isCustom && !roleChanged && (
-                              <span className="text-xs px-1.5 py-0.5 rounded bg-amber-100 text-amber-700">
+                              <span className="text-xs px-1.5 py-0.5 rounded bg-warning/10 text-warning">
                                 custom
                               </span>
                             )}
@@ -1100,30 +1110,23 @@ function PermissionsModal({
               <button
                 onClick={() => setShowResetConfirm(true)}
                 disabled={saving || data.summary.customOverrides === 0}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed"
+                className="text-sm text-muted-foreground hover:text-foreground transition-colors disabled:opacity-40 disabled:cursor-not-allowed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
               >
                 Resetar para padrão do cargo
               </button>
               <div className="flex gap-3">
-                <button
-                  onClick={onClose}
-                  className="px-4 py-2 bg-muted text-foreground rounded-lg hover:bg-muted/70 transition-colors text-sm"
-                >
+                <Button variant="secondary" onClick={onClose}>
                   Cancelar
-                </button>
-                <button
-                  onClick={handleSave}
-                  disabled={saving || !hasChanges}
-                  className="flex items-center gap-2 px-4 py-2 bg-primary text-primary-foreground rounded-lg hover:bg-primary/90 transition-colors disabled:opacity-50 text-sm"
-                >
+                </Button>
+                <Button onClick={handleSave} disabled={saving || !hasChanges}>
                   {saving && <Loader2 className="w-4 h-4 animate-spin" />}
                   Salvar Permissões
-                </button>
+                </Button>
               </div>
             </div>
           </>
         ) : (
-          <div className="p-8 text-center text-rose-600">{error || "Erro ao carregar"}</div>
+          <div className="p-8 text-center text-destructive">{error || "Erro ao carregar"}</div>
         )}
       </div>
 

@@ -1,9 +1,11 @@
 "use client";
 
 import { useState, useEffect } from "react";
-import { Plus, Pin, Trash2, Edit2, Save, X } from "lucide-react";
+import { Plus, Pin, Trash2, Edit2, Save, X, StickyNote } from "lucide-react";
 import { CompanyNote } from "@prisma/client";
 import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/admin/EmptyState";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -116,11 +118,12 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
     }
   }
 
+  // Tom semântico via token (theme-aware); fundo suave com opacidade.
   const typeColors: Record<string, string> = {
     general: "bg-muted text-muted-foreground",
-    commercial: "bg-blue-100 text-blue-700",
-    support: "bg-amber-100 text-amber-700",
-    billing: "bg-emerald-100 text-emerald-700",
+    commercial: "bg-info/10 text-info",
+    support: "bg-warning/10 text-warning",
+    billing: "bg-success/10 text-success",
   };
 
   if (loading) {
@@ -149,22 +152,22 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
             <option value="support">Suporte</option>
             <option value="billing">Financeiro</option>
           </select>
-          <button
+          <Button
             onClick={handleCreateNote}
             disabled={!newNoteContent.trim()}
-            className="flex items-center gap-2 px-4 py-2 bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground text-sm font-medium rounded-lg transition-colors"
           >
             <Plus className="w-4 h-4" />
             Adicionar Nota
-          </button>
+          </Button>
         </div>
       </div>
 
       {/* Lista de notas */}
       {notes.length === 0 ? (
-        <div className="text-center py-8 text-muted-foreground">
-          Nenhuma nota ainda. Adicione a primeira nota acima.
-        </div>
+        <EmptyState
+          icon={StickyNote}
+          message="Nenhuma nota ainda. Adicione a primeira nota acima."
+        />
       ) : (
         <div className="space-y-3">
           {notes.map((note) => (
@@ -191,8 +194,9 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
                 <div className="flex items-center gap-1">
                   <button
                     onClick={() => handleTogglePin(note.id, note.isPinned)}
-                    className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                    className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                     title={note.isPinned ? "Desafixar" : "Fixar"}
+                    aria-label={note.isPinned ? "Desafixar nota" : "Fixar nota"}
                   >
                     <Pin className={`w-4 h-4 ${note.isPinned ? "fill-primary text-primary" : ""}`} />
                   </button>
@@ -200,7 +204,8 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
                     <>
                       <button
                         onClick={() => handleSaveEdit(note.id)}
-                        className="p-1.5 text-emerald-600 hover:text-emerald-700 rounded transition-colors"
+                        className="p-1.5 text-success hover:text-success/80 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Salvar nota"
                       >
                         <Save className="w-4 h-4" />
                       </button>
@@ -209,7 +214,8 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
                           setEditingId(null);
                           setEditContent("");
                         }}
-                        className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                        className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Cancelar edição"
                       >
                         <X className="w-4 h-4" />
                       </button>
@@ -221,13 +227,15 @@ export function CompanyNotes({ companyId }: CompanyNotesProps) {
                           setEditingId(note.id);
                           setEditContent(note.content);
                         }}
-                        className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors"
+                        className="p-1.5 text-muted-foreground hover:text-foreground rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Editar nota"
                       >
                         <Edit2 className="w-4 h-4" />
                       </button>
                       <button
                         onClick={() => setDeletingId(note.id)}
-                        className="p-1.5 text-rose-600 hover:text-rose-700 rounded transition-colors"
+                        className="p-1.5 text-destructive hover:text-destructive/80 rounded transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                        aria-label="Deletar nota"
                       >
                         <Trash2 className="w-4 h-4" />
                       </button>

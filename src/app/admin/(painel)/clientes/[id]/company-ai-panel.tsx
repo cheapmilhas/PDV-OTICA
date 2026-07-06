@@ -4,6 +4,10 @@ import { useState, useEffect, useCallback, useId } from "react";
 import { Loader2, Sparkles, Zap, DollarSign, Save, Percent, TrendingUp, Tag } from "lucide-react";
 import { toast } from "sonner";
 import { KPICard } from "@/components/admin/KPICard";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { Button } from "@/components/ui/button";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   Area,
   AreaChart,
@@ -286,15 +290,20 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
 
   if (error || !data) {
     return (
-      <div className="rounded-xl border border-border bg-card p-8 text-center">
-        <Sparkles className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-        <p className="text-sm text-muted-foreground">{error ?? "Não foi possível carregar dados de IA"}</p>
-        <button
-          onClick={() => { setLoading(true); fetchData(); }}
-          className="mt-3 text-xs text-primary underline"
-        >
-          Tentar novamente
-        </button>
+      <div className="rounded-xl border border-border bg-card">
+        <EmptyState
+          icon={Sparkles}
+          message={error ?? "Não foi possível carregar dados de IA"}
+          action={
+            <Button
+              variant="link"
+              size="sm"
+              onClick={() => { setLoading(true); fetchData(); }}
+            >
+              Tentar novamente
+            </Button>
+          }
+        />
       </div>
     );
   }
@@ -355,14 +364,10 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
               placeholder="Ex: 1000000  (vazio = ilimitado)"
               className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <button
-              onClick={handleSaveQuota}
-              disabled={savingQuota}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50 transition-colors"
-            >
+            <Button onClick={handleSaveQuota} disabled={savingQuota}>
               {savingQuota ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar
-            </button>
+            </Button>
           </div>
           {iaMonthlyTokenLimit != null && (
             <p className="text-xs text-muted-foreground mt-1.5">
@@ -390,14 +395,10 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
               placeholder="Ex: 50  (vazio = usa o global)"
               className="flex-1 px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
             />
-            <button
-              onClick={handleSaveMarkup}
-              disabled={savingMarkup}
-              className="flex items-center gap-1.5 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50 transition-colors"
-            >
+            <Button onClick={handleSaveMarkup} disabled={savingMarkup}>
               {savingMarkup ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -450,39 +451,36 @@ export function CompanyAiPanel({ companyId }: CompanyAiPanelProps) {
           <div className="px-5 py-4 border-b border-border">
             <h2 className="text-sm font-semibold text-foreground">Consumo por funcionalidade</h2>
           </div>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Funcionalidade</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Tokens</th>
-                  <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground">% do total</th>
-                </tr>
-              </thead>
-              <tbody>
-                {featureRows.map(([feature, stats]) => {
-                  const pct = usage.totalTokens > 0
-                    ? ((stats.tokens / usage.totalTokens) * 100).toFixed(1)
-                    : "0.0";
-                  return (
-                    <tr key={feature} className="border-b border-border last:border-0 hover:bg-muted transition-colors">
-                      <td className="px-5 py-3 text-foreground font-mono text-xs">{feature}</td>
-                      <td className="px-5 py-3 text-right text-foreground">{stats.tokens.toLocaleString("pt-BR")}</td>
-                      <td className="px-5 py-3 text-right text-muted-foreground">{pct}%</td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable minWidth={480}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Funcionalidade</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead className="text-right">% do total</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {featureRows.map(([feature, stats]) => {
+                const pct = usage.totalTokens > 0
+                  ? ((stats.tokens / usage.totalTokens) * 100).toFixed(1)
+                  : "0.0";
+                return (
+                  <TableRow key={feature}>
+                    <TableCell className="text-foreground font-mono text-xs">{feature}</TableCell>
+                    <TableCell className="text-right text-foreground">{stats.tokens.toLocaleString("pt-BR")}</TableCell>
+                    <TableCell className="text-right text-muted-foreground">{pct}%</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </ResponsiveTable>
         </div>
       )}
 
       {/* Empty state when no usage */}
       {usage.totalTokens === 0 && daily.length === 0 && featureRows.length === 0 && (
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
-          <Sparkles className="h-10 w-10 text-muted-foreground/40 mx-auto mb-3" />
-          <p className="text-sm text-muted-foreground">Nenhum consumo de IA registrado este mês.</p>
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState icon={Sparkles} message="Nenhum consumo de IA registrado este mês." />
         </div>
       )}
     </div>

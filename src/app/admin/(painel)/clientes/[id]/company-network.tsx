@@ -8,9 +8,7 @@ import {
   Loader2,
   X,
   Building2,
-  Settings,
   Trash2,
-  UserPlus,
 } from "lucide-react";
 import { toast } from "sonner";
 import {
@@ -23,6 +21,16 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
+import { Button } from "@/components/ui/button";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  TableHeader,
+  TableBody,
+  TableRow,
+  TableHead,
+  TableCell,
+} from "@/components/ui/table";
 
 interface NetworkData {
   id: string;
@@ -188,25 +196,32 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
   if (!network && !networkId) {
     return (
       <div className="space-y-5">
-        <div className="rounded-xl border border-border bg-card p-8 text-center">
-          <Network className="h-12 w-12 text-muted-foreground/50 mx-auto mb-3" />
-          <p className="text-muted-foreground mb-4">Esta empresa não faz parte de nenhuma rede.</p>
-          <button
-            onClick={() => { setShowCreateForm(true); loadCompanies(); }}
-            className="px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg"
-          >
-            <Plus className="inline h-4 w-4 mr-1" />
-            Criar Nova Rede
-          </button>
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState
+            icon={Network}
+            message="Esta empresa não faz parte de nenhuma rede."
+            action={
+              <Button onClick={() => { setShowCreateForm(true); loadCompanies(); }}>
+                <Plus className="h-4 w-4" />
+                Criar Nova Rede
+              </Button>
+            }
+          />
         </div>
 
         {showCreateForm && (
           <div className="rounded-xl border border-border bg-muted p-5 space-y-4">
             <div className="flex items-center justify-between">
               <h3 className="text-sm font-semibold text-foreground">Nova Rede de Lojas</h3>
-              <button onClick={() => setShowCreateForm(false)} className="text-muted-foreground hover:text-foreground">
+              <Button
+                variant="ghost"
+                size="icon-sm"
+                onClick={() => setShowCreateForm(false)}
+                aria-label="Fechar formulário"
+                className="text-muted-foreground hover:text-foreground"
+              >
                 <X className="h-4 w-4" />
-              </button>
+              </Button>
             </div>
             <div>
               <label className="block text-xs text-muted-foreground mb-1">Nome da Rede *</label>
@@ -247,17 +262,13 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
               </div>
             </div>
             <div className="flex justify-end gap-2">
-              <button onClick={() => setShowCreateForm(false)} className="px-3 py-1.5 text-sm text-muted-foreground">
+              <Button variant="ghost" size="sm" onClick={() => setShowCreateForm(false)}>
                 Cancelar
-              </button>
-              <button
-                onClick={handleCreateNetwork}
-                disabled={saving}
-                className="flex items-center gap-1 px-4 py-1.5 text-sm bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg disabled:opacity-50"
-              >
+              </Button>
+              <Button size="sm" onClick={handleCreateNetwork} disabled={saving}>
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 Criar Rede
-              </button>
+              </Button>
             </div>
           </div>
         )}
@@ -281,21 +292,21 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
 
         {/* Empresas */}
         <div className="rounded-lg border border-border overflow-hidden mb-4">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">Empresa</th>
-                <th className="px-4 py-2 text-left text-xs font-medium text-muted-foreground">CNPJ</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Produtos</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Clientes</th>
-                <th className="px-4 py-2 text-center text-xs font-medium text-muted-foreground">Vendas</th>
-                <th className="px-4 py-2 text-right text-xs font-medium text-muted-foreground">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
+          <ResponsiveTable minWidth={720}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>CNPJ</TableHead>
+                <TableHead className="text-center">Produtos</TableHead>
+                <TableHead className="text-center">Clientes</TableHead>
+                <TableHead className="text-center">Vendas</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {network?.companies.map((c) => (
-                <tr key={c.id} className="border-b border-border">
-                  <td className="px-4 py-2">
+                <TableRow key={c.id}>
+                  <TableCell>
                     <div className="flex items-center gap-2">
                       <Building2 className="h-3.5 w-3.5 text-muted-foreground" />
                       <span className="text-foreground font-medium">{c.name}</span>
@@ -303,26 +314,29 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
                         <span className="text-[10px] px-1.5 py-0.5 rounded bg-primary/10 text-primary">Matriz</span>
                       )}
                     </div>
-                  </td>
-                  <td className="px-4 py-2 text-muted-foreground text-xs font-mono">{c.cnpj || "—"}</td>
-                  <td className="px-4 py-2 text-center text-muted-foreground">{c._count.products}</td>
-                  <td className="px-4 py-2 text-center text-muted-foreground">{c._count.customers}</td>
-                  <td className="px-4 py-2 text-center text-muted-foreground">{c._count.sales}</td>
-                  <td className="px-4 py-2 text-right">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs font-mono">{c.cnpj || "—"}</TableCell>
+                  <TableCell className="text-center text-muted-foreground">{c._count.products}</TableCell>
+                  <TableCell className="text-center text-muted-foreground">{c._count.customers}</TableCell>
+                  <TableCell className="text-center text-muted-foreground">{c._count.sales}</TableCell>
+                  <TableCell className="text-right">
                     {network.headquarters?.id !== c.id && (
-                      <button
+                      <Button
+                        variant="ghost"
+                        size="icon-sm"
                         onClick={() => setRemovingCompanyId(c.id)}
-                        className="p-1 rounded hover:bg-muted text-rose-600"
+                        aria-label={`Remover ${c.name} da rede`}
                         title="Remover da rede"
+                        className="text-destructive hover:text-destructive"
                       >
                         <X className="h-3.5 w-3.5" />
-                      </button>
+                      </Button>
                     )}
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </ResponsiveTable>
         </div>
 
         {/* Configurações de compartilhamento */}
@@ -356,15 +370,17 @@ export function CompanyNetwork({ companyId, networkId }: CompanyNetworkProps) {
       </div>
 
       {/* Zona de perigo */}
-      <div className="rounded-xl border border-rose-200 bg-rose-50 p-5">
-        <h3 className="text-xs font-semibold text-rose-600 uppercase mb-3">Zona de Perigo</h3>
-        <button
+      <div className="rounded-xl border border-destructive/30 bg-destructive/5 p-5">
+        <h3 className="text-xs font-semibold text-destructive uppercase mb-3">Zona de Perigo</h3>
+        <Button
+          variant="outline"
+          size="sm"
           onClick={() => setShowDeleteNetwork(true)}
-          className="flex items-center gap-2 px-3 py-1.5 text-sm text-rose-700 border border-rose-200 rounded-lg hover:bg-rose-100"
+          className="border-destructive/30 text-destructive hover:bg-destructive/10 hover:text-destructive"
         >
           <Trash2 className="h-3.5 w-3.5" />
           Desfazer Rede
-        </button>
+        </Button>
       </div>
 
       <AlertDialog open={removingCompanyId !== null} onOpenChange={(o) => !o && setRemovingCompanyId(null)}>

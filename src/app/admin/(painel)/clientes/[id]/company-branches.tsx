@@ -16,6 +16,9 @@ import {
   Wrench,
 } from "lucide-react";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { Button } from "@/components/ui/button";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -195,20 +198,20 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
             Filiais ({activeBranches} de {maxBranches === -1 ? "ilimitado" : maxBranches})
           </h2>
           {limitReached && (
-            <p className="text-xs text-amber-600 mt-1">
+            <p className="text-xs text-warning mt-1">
               Limite do plano atingido. Faça upgrade para adicionar mais filiais.
             </p>
           )}
         </div>
         {!showForm && (
-          <button
+          <Button
+            size="sm"
             onClick={() => { resetForm(); setShowForm(true); }}
             disabled={limitReached}
-            className="flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium bg-primary hover:bg-primary/90 disabled:bg-muted disabled:text-muted-foreground text-primary-foreground rounded-lg transition-colors"
           >
             <Plus className="h-3.5 w-3.5" />
             Adicionar Filial
-          </button>
+          </Button>
         )}
       </div>
 
@@ -219,7 +222,11 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
             <h3 className="text-sm font-semibold text-foreground">
               {editingBranch ? `Editar: ${editingBranch.name}` : "Nova Filial"}
             </h3>
-            <button onClick={resetForm} className="p-1 rounded hover:bg-muted text-muted-foreground">
+            <button
+              onClick={resetForm}
+              aria-label="Fechar formulário"
+              className="p-1 rounded hover:bg-muted text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+            >
               <X className="h-4 w-4" />
             </button>
           </div>
@@ -314,21 +321,13 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
               </div>
             </div>
             <div className="flex justify-end gap-3 pt-2">
-              <button
-                type="button"
-                onClick={resetForm}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
+              <Button type="button" variant="ghost" onClick={resetForm}>
                 Cancelar
-              </button>
-              <button
-                type="submit"
-                disabled={saving}
-                className="flex items-center gap-2 px-4 py-2 text-sm font-medium bg-primary hover:bg-primary/90 text-primary-foreground rounded-lg transition-colors disabled:opacity-50"
-              >
+              </Button>
+              <Button type="submit" disabled={saving}>
                 {saving && <Loader2 className="h-3.5 w-3.5 animate-spin" />}
                 {editingBranch ? "Salvar Alterações" : "Criar Filial"}
-              </button>
+              </Button>
             </div>
           </form>
         </div>
@@ -341,92 +340,94 @@ export function CompanyBranches({ companyId, maxBranches }: CompanyBranchesProps
         </div>
       ) : (
         <div className="rounded-xl border border-border bg-card overflow-hidden">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Filial</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Código</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Cidade</th>
-                <th className="px-5 py-3 text-center text-xs font-medium text-muted-foreground">Usuários</th>
-                <th className="px-5 py-3 text-center text-xs font-medium text-muted-foreground">Vendas</th>
-                <th className="px-5 py-3 text-center text-xs font-medium text-muted-foreground">OS</th>
-                <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Status</th>
-                <th className="px-5 py-3 text-right text-xs font-medium text-muted-foreground">Ações</th>
-              </tr>
-            </thead>
-            <tbody>
+          <ResponsiveTable minWidth={860}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Filial</TableHead>
+                <TableHead>Código</TableHead>
+                <TableHead>Cidade</TableHead>
+                <TableHead className="text-center">Usuários</TableHead>
+                <TableHead className="text-center">Vendas</TableHead>
+                <TableHead className="text-center">OS</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {branches.map((branch) => (
-                <tr
+                <TableRow
                   key={branch.id}
-                  className={`border-b border-border hover:bg-muted transition-colors ${!branch.active ? "opacity-50" : ""}`}
+                  className={!branch.active ? "opacity-50" : undefined}
                 >
-                  <td className="px-5 py-3">
+                  <TableCell>
                     <div className="flex items-center gap-2">
                       <MapPin className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                       <span className="font-medium text-foreground">{branch.name}</span>
                     </div>
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground font-mono text-xs">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-xs">
                     {branch.code || "—"}
-                  </td>
-                  <td className="px-5 py-3 text-muted-foreground">
+                  </TableCell>
+                  <TableCell className="text-muted-foreground">
                     {branch.city ? `${branch.city}/${branch.state}` : "—"}
-                  </td>
-                  <td className="px-5 py-3 text-center">
+                  </TableCell>
+                  <TableCell className="text-center">
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <Users className="h-3 w-3" />
                       {branch._count.userBranches}
                     </span>
-                  </td>
-                  <td className="px-5 py-3 text-center">
+                  </TableCell>
+                  <TableCell className="text-center">
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <ShoppingCart className="h-3 w-3" />
                       {branch._count.sales}
                     </span>
-                  </td>
-                  <td className="px-5 py-3 text-center">
+                  </TableCell>
+                  <TableCell className="text-center">
                     <span className="inline-flex items-center gap-1 text-muted-foreground">
                       <Wrench className="h-3 w-3" />
                       {branch._count.serviceOrders}
                     </span>
-                  </td>
-                  <td className="px-5 py-3">
+                  </TableCell>
+                  <TableCell>
                     <span
                       className={`inline-flex px-2 py-0.5 rounded text-xs font-medium ${
                         branch.active
-                          ? "bg-emerald-100 text-emerald-700"
-                          : "bg-rose-100 text-rose-700"
+                          ? "bg-success/10 text-success"
+                          : "bg-destructive/10 text-destructive"
                       }`}
                     >
                       {branch.active ? "Ativa" : "Inativa"}
                     </span>
-                  </td>
-                  <td className="px-5 py-3">
+                  </TableCell>
+                  <TableCell>
                     <div className="flex items-center justify-end gap-1">
                       <button
                         onClick={() => openEditForm(branch)}
-                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors"
+                        aria-label={`Editar ${branch.name}`}
+                        className="p-1.5 rounded hover:bg-muted text-muted-foreground hover:text-foreground transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                         title="Editar"
                       >
                         <Pencil className="h-3.5 w-3.5" />
                       </button>
                       <button
                         onClick={() => setTogglingBranch(branch)}
-                        className={`p-1.5 rounded hover:bg-muted transition-colors ${
+                        aria-label={branch.active ? `Desativar ${branch.name}` : `Reativar ${branch.name}`}
+                        className={`p-1.5 rounded hover:bg-muted transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                           branch.active
-                            ? "text-amber-600 hover:text-amber-700"
-                            : "text-emerald-600 hover:text-emerald-700"
+                            ? "text-warning hover:text-warning"
+                            : "text-success hover:text-success"
                         }`}
                         title={branch.active ? "Desativar" : "Reativar"}
                       >
                         {branch.active ? <PowerOff className="h-3.5 w-3.5" /> : <Power className="h-3.5 w-3.5" />}
                       </button>
                     </div>
-                  </td>
-                </tr>
+                  </TableCell>
+                </TableRow>
               ))}
-            </tbody>
-          </table>
+            </TableBody>
+          </ResponsiveTable>
         </div>
       )}
 
