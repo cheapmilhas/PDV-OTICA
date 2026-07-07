@@ -1,7 +1,7 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight, Clock } from "lucide-react";
+import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
 import { getReceivableThisWeek } from "@/services/invoice-receivable.service";
@@ -110,7 +110,7 @@ export default async function FinanceiroPage() {
         <div className="rounded-xl border border-border bg-card">
           <div className="flex items-center justify-between px-5 py-4 border-b border-border">
             <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-              <AlertTriangle className="w-4 h-4 text-red-600" />
+              <AlertTriangle className="w-4 h-4 text-destructive" />
               Faturas Vencidas ({faturasVencidas.length})
             </h2>
             <Link
@@ -122,8 +122,9 @@ export default async function FinanceiroPage() {
           </div>
           <div className="divide-y divide-border">
             {faturasVencidas.length === 0 ? (
-              <p className="px-5 py-8 text-center text-muted-foreground text-sm">
-                Nenhuma fatura vencida 🎉
+              <p className="px-5 py-8 text-center text-muted-foreground text-sm flex items-center justify-center gap-2">
+                <CheckCircle2 className="w-4 h-4 text-success" />
+                Nenhuma fatura vencida
               </p>
             ) : (
               faturasVencidas.map((inv) => {
@@ -139,7 +140,7 @@ export default async function FinanceiroPage() {
                       >
                         {inv.subscription.company.name}
                       </Link>
-                      <p className="text-xs text-red-600">
+                      <p className="text-xs text-destructive">
                         {diasAtraso} {diasAtraso === 1 ? "dia" : "dias"} de atraso
                       </p>
                     </div>
@@ -175,12 +176,7 @@ export default async function FinanceiroPage() {
             <QuickLink
               href="/admin/financeiro/inadimplencia"
               title="Inadimplência"
-              description="Ver clientes com pagamentos atrasados"
-            />
-            <QuickLink
-              href="/admin/clientes?status=PAST_DUE"
-              title="Clientes em Atraso"
-              description="Gerenciar clientes inadimplentes"
+              description="Ver e cobrar clientes com pagamentos atrasados"
             />
           </div>
         </div>
@@ -190,10 +186,10 @@ export default async function FinanceiroPage() {
       <div className="mt-6 rounded-xl border border-border bg-card">
         <div className="flex items-center justify-between px-5 py-4 border-b border-border">
           <h2 className="text-sm font-semibold text-foreground flex items-center gap-2">
-            <Clock className="w-4 h-4 text-blue-600" />
+            <Clock className="w-4 h-4 text-info" />
             A receber esta semana
           </h2>
-          <span className="text-sm font-semibold text-blue-600">
+          <span className="text-sm font-semibold text-info">
             R$ {(receivable.total / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}
           </span>
         </div>

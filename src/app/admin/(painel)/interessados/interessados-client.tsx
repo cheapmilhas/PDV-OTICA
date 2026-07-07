@@ -1,6 +1,7 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { Download, Loader2, Mail } from "lucide-react";
 import type { InteressadoItem } from "./page";
@@ -39,25 +40,46 @@ function formatDate(iso: string): string {
 }
 
 export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+  // filtro vive na URL (?plan=slug) para o link ser compartilhável e o botão "voltar" funcionar
+  const planSlug = searchParams.get("plan") ?? "";
+
   const [items, setItems] = useState<InteressadoItem[]>(initial);
-  const [planSlug, setPlanSlug] = useState("");
   const [loading, setLoading] = useState(false);
 
-  async function handleFilterChange(slug: string) {
-    setPlanSlug(slug);
-    setLoading(true);
-    try {
-      const qs = slug ? `?planSlug=${encodeURIComponent(slug)}` : "";
-      const res = await fetch(`/api/admin/plan-interests${qs}`);
-      if (res.ok) {
-        const data = await res.json();
-        setItems(Array.isArray(data.items) ? data.items : []);
-      }
-    } catch {
-      // mantém a lista atual em caso de erro de rede
-    } finally {
-      setLoading(false);
+  // reflete o filtro da URL na lista: busca client-side sempre que planSlug muda
+  useEffect(() => {
+    let cancelled = false;
+    // sem filtro: usa os dados iniciais renderizados no servidor (evita fetch redundante no primeiro load)
+    if (!planSlug) {
+      setItems(initial);
+      return;
     }
+    setLoading(true);
+    (async () => {
+      try {
+        const qs = `?planSlug=${encodeURIComponent(planSlug)}`;
+        const res = await fetch(`/api/admin/plan-interests${qs}`);
+        if (res.ok && !cancelled) {
+          const data = await res.json();
+          setItems(Array.isArray(data.items) ? data.items : []);
+        }
+      } catch {
+        // mantém a lista atual em caso de erro de rede
+      } finally {
+        if (!cancelled) setLoading(false);
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [planSlug]);
+
+  function handleFilterChange(slug: string) {
+    // empurra o filtro para a URL; o useEffect acima faz o fetch ao reagir à mudança
+    router.push(slug ? `?plan=${encodeURIComponent(slug)}` : "?");
   }
 
   const csvHref = planSlug

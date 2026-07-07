@@ -49,7 +49,7 @@ function Field({ label, children, hint, error }: { label: string; children: Reac
     <div>
       <label className="block text-xs font-medium text-muted-foreground mb-1.5">{label}</label>
       {children}
-      {error && <p className="text-xs text-rose-600 mt-1">{error}</p>}
+      {error && <p className="text-xs text-destructive mt-1">{error}</p>}
       {!error && hint && <p className="text-xs text-muted-foreground mt-1">{hint}</p>}
     </div>
   );
@@ -245,14 +245,14 @@ export function NewClientForm({ plans, networks }: Props) {
                 <div
                   className={`w-8 h-8 rounded-full flex items-center justify-center flex-shrink-0 transition-colors ${
                     isDone
-                      ? "bg-emerald-600"
+                      ? "bg-success"
                       : isActive
                       ? "bg-primary ring-2 ring-ring/30"
                       : "bg-muted border border-border"
                   }`}
                 >
                   {isDone ? (
-                    <CheckCircle className="h-4 w-4 text-white" />
+                    <CheckCircle className="h-4 w-4 text-success-foreground" />
                   ) : (
                     <Icon className={`h-4 w-4 ${isActive ? "text-primary-foreground" : "text-muted-foreground"}`} />
                   )}
@@ -270,7 +270,7 @@ export function NewClientForm({ plans, networks }: Props) {
               {idx < STEPS.length - 1 && (
                 <div
                   className={`flex-1 h-px mx-3 transition-colors ${
-                    currentStep > step.id ? "bg-emerald-600" : "bg-border"
+                    currentStep > step.id ? "bg-success" : "bg-border"
                   }`}
                 />
               )}
@@ -281,7 +281,7 @@ export function NewClientForm({ plans, networks }: Props) {
 
       {/* Erro global */}
       {error && (
-        <div className="mb-5 bg-rose-50 border border-rose-200 text-rose-700 px-4 py-3 rounded-lg text-sm">
+        <div className="mb-5 bg-destructive/10 border border-destructive/25 text-destructive px-4 py-3 rounded-lg text-sm">
           {error}
         </div>
       )}
@@ -301,7 +301,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={tradeName}
                   onChange={(e) => { setTradeName(e.target.value); setFieldErrors((p) => ({ ...p, tradeName: "" })); }}
                   placeholder="Ótica Visão Clara"
-                  className={fieldErrors.tradeName ? "border-rose-500" : ""}
+                  className={fieldErrors.tradeName ? "border-destructive" : ""}
                 />
               </Field>
               <Field label="Razão Social">
@@ -333,7 +333,7 @@ export function NewClientForm({ plans, networks }: Props) {
                 value={email}
                 onChange={(e) => { setEmail(e.target.value); setFieldErrors((p) => ({ ...p, email: "" })); }}
                 placeholder="contato@oticavisao.com"
-                className={fieldErrors.email ? "border-rose-500" : ""}
+                className={fieldErrors.email ? "border-destructive" : ""}
               />
             </Field>
             <div className="grid grid-cols-2 gap-4">
@@ -342,7 +342,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={phone}
                   onChange={(e) => { setPhone(e.target.value); setFieldErrors((p) => ({ ...p, phone: "" })); }}
                   placeholder="(85) 3333-4444"
-                  className={fieldErrors.phone ? "border-rose-500" : ""}
+                  className={fieldErrors.phone ? "border-destructive" : ""}
                 />
               </Field>
               <Field label="WhatsApp">
@@ -404,7 +404,7 @@ export function NewClientForm({ plans, networks }: Props) {
                 <Select
                   value={stateUF}
                   onChange={(e) => { setStateUF(e.target.value); setFieldErrors((p) => ({ ...p, stateUF: "" })); }}
-                  className={fieldErrors.stateUF ? "border-rose-500" : ""}
+                  className={fieldErrors.stateUF ? "border-destructive" : ""}
                 >
                   <option value="">UF</option>
                   {STATES.map((uf) => (
@@ -417,7 +417,7 @@ export function NewClientForm({ plans, networks }: Props) {
               <Input
                 value={city}
                 onChange={(e) => { setCity(e.target.value); setFieldErrors((p) => ({ ...p, city: "" })); }}
-                className={fieldErrors.city ? "border-rose-500" : ""}
+                className={fieldErrors.city ? "border-destructive" : ""}
                 placeholder="Fortaleza"
                 required
               />
@@ -459,7 +459,7 @@ export function NewClientForm({ plans, networks }: Props) {
                       </div>
                     </div>
                     {billingCycle === "YEARLY" && (
-                      <p className="text-xs text-emerald-600 mt-1">
+                      <p className="text-xs text-success mt-1">
                         R$ {(plan.priceYearly / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}/ano
                       </p>
                     )}
@@ -484,7 +484,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   >
                     {cycle === "MONTHLY" ? "Mensal" : "Anual"}
                     {cycle === "YEARLY" && (
-                      <span className="ml-1.5 text-xs text-emerald-600">~20% off</span>
+                      <span className="ml-1.5 text-xs text-success">~20% off</span>
                     )}
                   </button>
                 ))}
@@ -535,7 +535,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={ownerName}
                   onChange={(e) => { setOwnerName(e.target.value); setFieldErrors((p) => ({ ...p, ownerName: "" })); }}
                   placeholder="João da Silva"
-                  className={fieldErrors.ownerName ? "border-rose-500" : ""}
+                  className={fieldErrors.ownerName ? "border-destructive" : ""}
                 />
               </Field>
               <Field label="CPF">
@@ -557,7 +557,7 @@ export function NewClientForm({ plans, networks }: Props) {
                   value={ownerEmail}
                   onChange={(e) => { setOwnerEmail(e.target.value); setFieldErrors((p) => ({ ...p, ownerEmail: "" })); }}
                   placeholder="joao@otica.com"
-                  className={fieldErrors.ownerEmail ? "border-rose-500" : ""}
+                  className={fieldErrors.ownerEmail ? "border-destructive" : ""}
                 />
               </Field>
               <Field label="Telefone">
@@ -848,7 +848,7 @@ export function NewClientForm({ plans, networks }: Props) {
               type="button"
               onClick={handleSubmit}
               disabled={isPending}
-              className="flex items-center gap-2 px-5 py-2.5 bg-emerald-600 hover:bg-emerald-700 text-white text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
+              className="flex items-center gap-2 px-5 py-2.5 bg-success hover:bg-success/90 text-success-foreground text-sm font-medium rounded-lg transition-colors disabled:opacity-50"
             >
               {isPending ? (
                 <Loader2 className="h-4 w-4 animate-spin" />
