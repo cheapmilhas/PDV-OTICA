@@ -1,5 +1,15 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 
+// A config do Resend agora vem do banco (chave cifrada editável pela UI) com
+// fallback p/ env. Nestes testes o singleton está VAZIO → cai no fallback env,
+// mantendo o comportamento histórico (env-only).
+vi.mock("@/lib/prisma", () => ({
+  prisma: { saasEmailConfig: { findUnique: vi.fn().mockResolvedValue(null) } },
+}));
+vi.mock("@/lib/logger", () => ({
+  logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
+}));
+
 describe("Resend email client", () => {
   const ORIGINAL_ENV = { ...process.env };
   const fetchMock = vi.fn();
@@ -57,11 +67,11 @@ describe("Resend email client", () => {
     expect(fetchMock.mock.calls[0][0]).toBe("https://resend.test/emails");
   });
 
-  it("lança erro sem RESEND_API_KEY", async () => {
+  it("lança erro sem chave (nem no banco nem em RESEND_API_KEY)", async () => {
     delete process.env.RESEND_API_KEY;
     const { sendEmail } = await import("./resend");
     await expect(sendEmail({ to: "a@b.com", subject: "x", html: "<p>x</p>" })).rejects.toThrow(
-      /RESEND_API_KEY/
+      /Chave Resend ausente/
     );
   });
 

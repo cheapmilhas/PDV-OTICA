@@ -5,10 +5,16 @@ vi.mock("@/lib/admin-session", () => ({ getAdminSession: () => getAdminSession()
 
 const getSaasEmailConfig = vi.fn();
 const updateSaasEmailConfig = vi.fn();
+const getSaasEmailSenderView = vi.fn();
+const updateSaasEmailSender = vi.fn();
 vi.mock("@/services/saas-email-config.service", () => ({
   getSaasEmailConfig: () => getSaasEmailConfig(),
   updateSaasEmailConfig: (...a: unknown[]) => updateSaasEmailConfig(...a),
+  getSaasEmailSenderView: () => getSaasEmailSenderView(),
+  updateSaasEmailSender: (...a: unknown[]) => updateSaasEmailSender(...a),
 }));
+
+const SENDER_VIEW = { hasResendKey: false, emailFrom: null, emailReplyTo: null };
 
 const auditCreate = vi.fn();
 vi.mock("@/lib/prisma", () => ({
@@ -49,6 +55,8 @@ describe("GET /api/admin/saas-emails/config", () => {
   beforeEach(() => {
     getAdminSession.mockReset();
     getSaasEmailConfig.mockReset().mockResolvedValue(MOCK_CONFIG);
+    getSaasEmailSenderView.mockReset().mockResolvedValue(SENDER_VIEW);
+    updateSaasEmailSender.mockReset().mockResolvedValue({});
     auditCreate.mockReset().mockResolvedValue({});
   });
 
@@ -79,7 +87,10 @@ describe("GET /api/admin/saas-emails/config", () => {
 describe("PATCH /api/admin/saas-emails/config", () => {
   beforeEach(() => {
     getAdminSession.mockReset();
+    getSaasEmailConfig.mockReset().mockResolvedValue(MOCK_CONFIG);
     updateSaasEmailConfig.mockReset().mockResolvedValue(MOCK_CONFIG);
+    getSaasEmailSenderView.mockReset().mockResolvedValue(SENDER_VIEW);
+    updateSaasEmailSender.mockReset().mockResolvedValue({});
     auditCreate.mockReset().mockResolvedValue({});
   });
 
@@ -126,5 +137,46 @@ describe("PATCH /api/admin/saas-emails/config", () => {
     expect(updateSaasEmailConfig).toHaveBeenCalledWith({ masterEnabled: false, welcomeEnabled: true }, "a1");
     const audit = auditCreate.mock.calls[0][0].data;
     expect(audit.metadata).toMatchObject({ masterEnabled: false, welcomeEnabled: true });
+  });
+
+  it("chave Resend vai para updateSaasEmailSender e NÃO para updateSaasEmailConfig", async () => {
+    getAdminSession.mockResolvedValue({ id: "a1", email: "a@x.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true });
+    const res = await PATCH(req({ resendApiKey: "re_novo", emailFrom: "novo@vis.app.br" }));
+    expect(res.status).toBe(200);
+    expect(updateSaasEmailSender).toHaveBeenCalledWith(
+      { resendApiKey: "re_novo", emailFrom: "novo@vis.app.br", emailReplyTo: undefined },
+      "a1"
+    );
+    // body só de sender → não mexe nos toggles
+    expect(updateSaasEmailConfig).not.toHaveBeenCalled();
+  });
+
+  it("auditoria NUNCA registra a chave — só o booleano resendKeyChanged", async () => {
+    getAdminSession.mockResolvedValue({ id: "a1", email: "a@x.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true });
+    await PATCH(req({ resendApiKey: "re_super_secreta" }));
+    const audit = auditCreate.mock.calls[0][0].data;
+    expect(audit.metadata.resendKeyChanged).toBe(true);
+    expect(JSON.stringify(audit.metadata)).not.toContain("re_super_secreta");
+  });
+
+  it("body só de toggle não chama updateSaasEmailSender", async () => {
+    getAdminSession.mockResolvedValue({ id: "a1", email: "a@x.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true });
+    await PATCH(req({ testMode: false }));
+    expect(updateSaasEmailSender).not.toHaveBeenCalled();
+  });
+
+  it('aceita remetente no formato "Nome <email>" (não só email puro)', async () => {
+    getAdminSession.mockResolvedValue({ id: "a1", email: "a@x.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true });
+    const res = await PATCH(req({ emailFrom: "Vis <contato@vis.app.br>" }));
+    expect(res.status).toBe(200);
+    expect(updateSaasEmailSender).toHaveBeenCalledWith(
+      expect.objectContaining({ emailFrom: "Vis <contato@vis.app.br>" }),
+      "a1"
+    );
+  });
+
+  it("rejeita remetente claramente inválido (400)", async () => {
+    getAdminSession.mockResolvedValue({ id: "a1", email: "a@x.com", name: "Admin", role: "SUPER_ADMIN", isAdmin: true });
+    expect((await PATCH(req({ emailFrom: "isto não é email" }))).status).toBe(400);
   });
 });

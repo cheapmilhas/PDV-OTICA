@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Mail, AlertTriangle } from "lucide-react";
+import { Mail, AlertTriangle, KeyRound } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
@@ -43,6 +43,12 @@ interface LogRow {
   status: string;
   to: string;
   createdAt: string;
+}
+
+interface SenderView {
+  hasResendKey: boolean;
+  emailFrom: string | null;
+  emailReplyTo: string | null;
 }
 
 const EMAIL_TYPES = [
@@ -104,9 +110,11 @@ function statusBadge(status: string) {
 export function EmailsClient({
   config,
   logs,
+  sender,
 }: {
   config: EmailConfig;
   logs: LogRow[];
+  sender: SenderView;
 }) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
@@ -114,7 +122,19 @@ export function EmailsClient({
   const [testEmailValue, setTestEmailValue] = useState(config.testEmail ?? "");
   const [showDisableTestConfirm, setShowDisableTestConfirm] = useState(false);
 
-  async function patch(body: Partial<EmailConfig> & { testEmail?: string | null }) {
+  // Remetente + chave Resend (a chave nunca é reexibida — só o status hasResendKey).
+  const [resendKeyInput, setResendKeyInput] = useState("");
+  const [emailFromValue, setEmailFromValue] = useState(sender.emailFrom ?? "");
+  const [emailReplyToValue, setEmailReplyToValue] = useState(sender.emailReplyTo ?? "");
+
+  async function patch(
+    body: Partial<EmailConfig> & {
+      testEmail?: string | null;
+      resendApiKey?: string;
+      emailFrom?: string | null;
+      emailReplyTo?: string | null;
+    }
+  ) {
     setSaving(true);
     setError("");
     try {
@@ -184,6 +204,86 @@ export function EmailsClient({
         >
           {config.masterEnabled ? "Desligar" : "Ligar"}
         </Button>
+      </div>
+
+      {/* Remetente e chave Resend */}
+      <div className="bg-muted border border-border rounded-lg p-5 space-y-4">
+        <div>
+          <p className="font-semibold text-foreground flex items-center gap-1.5">
+            <KeyRound className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            Remetente e chave Resend
+          </p>
+          <p className="text-sm text-muted-foreground mt-0.5">
+            A chave fica cifrada e nunca é exibida. Deixe em branco para manter a atual. Se nada
+            estiver definido aqui, o sistema usa as variáveis de ambiente.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <label htmlFor="resend-key" className="text-sm font-medium text-foreground">
+            Chave da API Resend{" "}
+            <span
+              className={`ml-1 text-xs font-semibold ${sender.hasResendKey ? "text-success" : "text-warning"}`}
+            >
+              {sender.hasResendKey ? "✓ configurada" : "✗ não configurada (usando ambiente)"}
+            </span>
+          </label>
+          <input
+            id="resend-key"
+            type="password"
+            autoComplete="off"
+            value={resendKeyInput}
+            onChange={(e) => setResendKeyInput(e.target.value)}
+            placeholder="•••••••• (deixe em branco para manter)"
+            className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+          />
+        </div>
+
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="space-y-1.5">
+            <label htmlFor="email-from" className="text-sm font-medium text-foreground">
+              Remetente (From)
+            </label>
+            <input
+              id="email-from"
+              type="email"
+              value={emailFromValue}
+              onChange={(e) => setEmailFromValue(e.target.value)}
+              placeholder="Vis <contato@vis.app.br>"
+              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+          <div className="space-y-1.5">
+            <label htmlFor="email-replyto" className="text-sm font-medium text-foreground">
+              Responder para (Reply-To) — opcional
+            </label>
+            <input
+              id="email-replyto"
+              type="email"
+              value={emailReplyToValue}
+              onChange={(e) => setEmailReplyToValue(e.target.value)}
+              placeholder="suporte@vis.app.br"
+              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring"
+            />
+          </div>
+        </div>
+
+        <div className="flex justify-end">
+          <Button
+            onClick={async () => {
+              const body: { resendApiKey?: string; emailFrom?: string | null; emailReplyTo?: string | null } = {};
+              if (resendKeyInput.trim()) body.resendApiKey = resendKeyInput.trim();
+              // Envia sempre from/replyTo (string define; vazio limpa → volta ao ambiente).
+              body.emailFrom = emailFromValue.trim() || null;
+              body.emailReplyTo = emailReplyToValue.trim() || null;
+              await patch(body);
+              setResendKeyInput("");
+            }}
+            disabled={saving}
+          >
+            Salvar remetente e chave
+          </Button>
+        </div>
       </div>
 
       {/* Geração de cobrança */}
