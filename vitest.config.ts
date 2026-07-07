@@ -9,6 +9,14 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
+    // Fixa o fuso dos testes no fuso da aplicação (BRT). Sem isto, testes que
+    // dependem de data (ex.: computeMrrSeries) passavam em máquina local (BRT) e
+    // FALHAVAM no CI (UTC) — divergência determinística que travava todo PR.
+    // NOTA: a Vercel roda em UTC em produção; este pin torna os testes estáveis
+    // mas NÃO cobre o comportamento UTC-prod — ver dívida [[admin-metrics fuso]]
+    // (computeMrrSeries mistura getters locais no `key` com toLocaleString BRT no
+    // rótulo → série de MRR pode sair miskeyed em prod UTC). Corrigir à parte.
+    env: { TZ: "America/Sao_Paulo" },
     include: [
       "src/**/__tests__/**/*.test.{ts,tsx}",
       "src/**/*.{test,spec}.{ts,tsx}",
