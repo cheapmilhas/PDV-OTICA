@@ -4,7 +4,11 @@ vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
 const getOpenaiKeyMock = vi.fn();
-vi.mock("@/services/ai-config.service", () => ({ getOpenaiKey: (...a: unknown[]) => getOpenaiKeyMock(...a) }));
+const getAiConfigMock = vi.fn();
+vi.mock("@/services/ai-config.service", () => ({
+  getOpenaiKey: (...a: unknown[]) => getOpenaiKeyMock(...a),
+  getAiConfig: (...a: unknown[]) => getAiConfigMock(...a),
+}));
 const getMediaBase64Mock = vi.fn();
 vi.mock("@/lib/evolution", () => ({ evolution: { getMediaBase64: (...a: unknown[]) => getMediaBase64Mock(...a) } }));
 const logAiUsageMock = vi.fn();
@@ -23,6 +27,8 @@ let fetchMock: ReturnType<typeof vi.fn>;
 
 beforeEach(() => {
   vi.clearAllMocks();
+  // getAiConfig fornece o modelo de transcrição (Fase 3). Default = whisper-1.
+  getAiConfigMock.mockResolvedValue({ transcriptionModel: "whisper-1" });
   fetchMock = vi.fn();
   vi.stubGlobal("fetch", fetchMock);
 });

@@ -26,6 +26,8 @@ interface AiConfigView {
   qualifierModel: string;
   lensAdvisorModel: string;
   ocrModel: string;
+  copilotModel: string;
+  transcriptionModel: string;
   hasOpenaiKey: boolean;
 }
 

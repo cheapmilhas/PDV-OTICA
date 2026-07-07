@@ -4772,6 +4772,12 @@ model AiGlobalConfig {
   qualifierModel  String   @default("claude-haiku-4-5")
   lensAdvisorModel String  @default("claude-haiku-4-5")
   ocrModel        String   @default("claude-sonnet-4-6")
+  // Modelo do Copiloto de conversas (rascunho/resumo p/ o atendente). Antes era
+  // hardcoded em conversation-copilot.ts; agora ajustável pela Config (Fase 3).
+  copilotModel    String   @default("claude-sonnet-4-6")
+  // Modelo de transcrição de áudio (Whisper/OpenAI). Antes hardcoded em
+  // audio-transcription.service.ts. Provedor diferente dos Claude — allowlist própria.
+  transcriptionModel String @default("whisper-1")
   usdBrlRate      Decimal  @default(5.5) @db.Decimal(10, 4)
   markupPercent   Decimal  @default(0)   @db.Decimal(6, 2)
   creditTokenFactor Int    @default(1000)
