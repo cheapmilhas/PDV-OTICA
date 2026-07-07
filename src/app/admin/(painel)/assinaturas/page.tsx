@@ -26,7 +26,7 @@ export default async function AssinaturasPage({
   const [subscriptions, statusCounts] = await Promise.all([
     prisma.subscription.findMany({
       where: statusFilter ? { status: statusFilter as any } : {},
-      orderBy: { createdAt: "desc" },
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         company: { select: { id: true, name: true, email: true } },
         plan: { select: { name: true, priceMonthly: true } },

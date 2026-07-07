@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity } from "lucide-react";
 import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
+import { startOfLocalMonth } from "@/lib/date-utils";
 import { ReconcileBillingButton } from "./ReconcileBillingButton";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
@@ -12,7 +13,10 @@ export default async function RelatoriosPage() {
   await requireAdmin();
 
   const now = new Date();
-  const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  // Início do mês no fuso local (BRT), não no fuso do servidor (UTC na Vercel).
+  // Alimenta churn/tickets/base ativa: sem isso, eventos das últimas horas do
+  // mês (BRT) caíam no mês seguinte, distorcendo numerador E denominador do churn.
+  const startOfMonth = startOfLocalMonth(now);
 
   const [
     activeSubscriptions,

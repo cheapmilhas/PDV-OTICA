@@ -78,7 +78,8 @@ export default async function EmpresasPage({
       ],
     },
     include: companyInclude,
-    orderBy: { createdAt: "desc" },
+    // tiebreaker por id: createdAt não é único → truncamento em 100 estável.
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     take: 100,
   });
 
