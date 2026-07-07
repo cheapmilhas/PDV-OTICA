@@ -23,9 +23,10 @@ export default async function AssinaturasPage({
   const params = await searchParams;
   const statusFilter = params.status;
 
-  const [subscriptions, statusCounts] = await Promise.all([
+  const filterWhere = statusFilter ? { status: statusFilter as any } : {};
+  const [subscriptions, statusCounts, filteredTotal] = await Promise.all([
     prisma.subscription.findMany({
-      where: statusFilter ? { status: statusFilter as any } : {},
+      where: filterWhere,
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         company: { select: { id: true, name: true, email: true } },
@@ -34,6 +35,9 @@ export default async function AssinaturasPage({
       take: 100,
     }),
     prisma.subscription.groupBy({ by: ["status"], _count: true }),
+    // Total real respeitando o filtro atual — para o subtítulo não mentir
+    // quando a lista é truncada em 100.
+    prisma.subscription.count({ where: filterWhere }),
   ]);
 
   const counts = statusCounts.reduce((acc, item) => ({ ...acc, [item.status]: item._count }), {} as Record<string, number>);
@@ -41,7 +45,14 @@ export default async function AssinaturasPage({
 
   return (
     <div className="p-6">
-      <PageHeader title="Assinaturas" subtitle={`${total} assinatura${total !== 1 ? "s" : ""} no total`} />
+      <PageHeader
+        title="Assinaturas"
+        subtitle={
+          filteredTotal > subscriptions.length
+            ? `Mostrando ${subscriptions.length} de ${filteredTotal} assinaturas — refine os filtros para ver as demais`
+            : `${filteredTotal} assinatura${filteredTotal !== 1 ? "s" : ""}${statusFilter ? "" : " no total"}`
+        }
+      />
 
       {/* Filtros por status */}
       <FilterBar>

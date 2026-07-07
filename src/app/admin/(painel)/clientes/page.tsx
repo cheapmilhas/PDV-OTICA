@@ -119,17 +119,17 @@ export default async function EmpresasPage({
   return (
     <div className="p-6">
       <PageHeader
-        title="Empresas"
+        title="Clientes"
         subtitle={
           totalCount > companies.length
-            ? `Mostrando ${companies.length} de ${totalCount} empresas — refine os filtros para ver as demais`
-            : `${totalCount} empresa${totalCount !== 1 ? "s" : ""} encontrada${totalCount !== 1 ? "s" : ""}`
+            ? `Mostrando ${companies.length} de ${totalCount} clientes — refine os filtros para ver os demais`
+            : `${totalCount} cliente${totalCount !== 1 ? "s" : ""} encontrado${totalCount !== 1 ? "s" : ""}`
         }
         actions={
           <Button asChild>
             <Link href="/admin/clientes/novo">
               <UserPlus className="h-4 w-4" />
-              Nova Empresa
+              Novo Cliente
             </Link>
           </Button>
         }

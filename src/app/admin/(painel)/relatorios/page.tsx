@@ -72,10 +72,10 @@ export default async function RelatoriosPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <KPICard
           icon={DollarSign}
-          label="MRR Estimado"
+          label="MRR"
           value={`R$ ${(mrrEstimado / 100).toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
         />
         <KPICard
