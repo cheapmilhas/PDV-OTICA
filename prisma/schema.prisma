@@ -220,6 +220,10 @@ model Company {
   @@index([networkId])
   @@index([onboardingStatus])
   @@index([segment])
+  // Página Saúde: filtra/ordena por health; sem isto = seq scan + sort.
+  @@index([healthCategory, healthScore])
+  // Listas do admin ordenam por createdAt (com tiebreaker por id).
+  @@index([createdAt])
 }
 
 model Branch {
@@ -2517,6 +2521,9 @@ model Invoice {
   @@index([subscriptionId, status])
   @@index([dueDate, status])
   @@index([number])
+  // Agregações "recebido no mês" filtram status=PAID + paidAt; o índice
+  // [dueDate,status] não cobre paidAt.
+  @@index([status, paidAt])
 }
 
 model BillingEvent {

@@ -5,6 +5,8 @@
  * banco. As queries de contagem/soma ficam no server component; aqui só a
  * matemática da comparação — que é onde um sinal errado (↑ vs ↓) confunde.
  */
+import { toZonedTime } from "date-fns-tz";
+import { TIMEZONE, startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 export type TrendDirection = "up" | "down" | "flat";
 
@@ -124,16 +126,20 @@ export function computeMrrSeries(
   months: number
 ): MrrPoint[] {
   const points: MrrPoint[] = [];
-  const baseYear = now.getFullYear();
-  const baseMonth = now.getMonth(); // 0..11
+  // Âncora no fuso local (America/Sao_Paulo), NÃO no fuso do servidor (UTC na
+  // Vercel). Sem isso as fronteiras de mês saíam deslocadas 3h e assinaturas
+  // criadas nas últimas horas do mês (BRT) caíam no bucket errado — o mesmo bug
+  // de fuso que o resto do admin já corrigiu com startOfLocalMonth/endOfLocalMonth.
+  const anchorLocal = toZonedTime(now, TIMEZONE);
+  const baseYear = anchorLocal.getFullYear();
+  const baseMonth = anchorLocal.getMonth(); // 0..11
 
   for (let i = months - 1; i >= 0; i--) {
-    // Mês deste bucket (pode "voltar" o ano via overflow negativo, que o Date normaliza).
-    const monthDate = new Date(baseYear, baseMonth - i, 1, 0, 0, 0, 0);
-    const year = monthDate.getFullYear();
-    const monthIndex = monthDate.getMonth(); // 0..11
-    // Fim do mês = último instante do último dia (dia 0 do mês seguinte = último dia deste).
-    const endOfMonth = new Date(year, monthIndex + 1, 0, 23, 59, 59, 999);
+    // Data-âncora no meio do mês-alvo (dia 15, meio-dia local) — nunca vaza de
+    // mês por fuso. startOfLocalMonth/endOfLocalMonth resolvem as bordas em UTC.
+    const anchor = new Date(baseYear, baseMonth - i, 15, 12, 0, 0, 0);
+    const monthStart = startOfLocalMonth(anchor);
+    const endOfMonth = endOfLocalMonth(anchor);
     const endTime = endOfMonth.getTime();
 
     const totalCentavos = subscriptions.reduce((acc, sub) => {
@@ -141,8 +147,12 @@ export function computeMrrSeries(
       return acc + monthlyValueOfSubscription(sub, endOfMonth);
     }, 0);
 
-    const month = monthDate
-      .toLocaleString("pt-BR", { month: "short" })
+    // Rótulo/chave derivados do 1º instante local do mês (em BRT).
+    const monthLocal = toZonedTime(monthStart, TIMEZONE);
+    const year = monthLocal.getFullYear();
+    const monthIndex = monthLocal.getMonth();
+    const month = monthLocal
+      .toLocaleString("pt-BR", { month: "short", timeZone: TIMEZONE })
       .replace(".", "");
     const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
     const mrr = Math.round(totalCentavos) / 100;

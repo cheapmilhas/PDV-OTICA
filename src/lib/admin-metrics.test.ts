@@ -4,8 +4,10 @@ import {
   formatTrend,
   monthlyValueOfSubscription,
   computeMRR,
+  computeMrrSeries,
   computeChurnRate,
   type SubscriptionForMRR,
+  type SubscriptionForSeries,
 } from "./admin-metrics";
 
 const NOW = new Date("2026-06-02T12:00:00.000Z");
@@ -128,6 +130,38 @@ describe("computeMRR — soma do valor mensal efetivo", () => {
 
   it("lista vazia → 0", () => {
     expect(computeMRR([], NOW)).toBe(0);
+  });
+});
+
+describe("computeMrrSeries — série mensal (fuso local BRT)", () => {
+  function serieSub(createdAt: Date, overrides: Partial<SubscriptionForSeries> = {}): SubscriptionForSeries {
+    return { ...sub(), createdAt, ...overrides };
+  }
+
+  it("gera exatamente `months` pontos, em ordem cronológica", () => {
+    const series = computeMrrSeries([], NOW, 6);
+    expect(series).toHaveLength(6);
+    const keys = series.map((p) => p.key);
+    expect([...keys].sort()).toEqual(keys); // já ordenado asc
+    // último bucket = mês de NOW no fuso BRT (junho/2026)
+    expect(series[series.length - 1].key).toBe("2026-06");
+  });
+
+  it("assinatura criada nas últimas horas do mês (BRT) cai no mês CERTO, não no seguinte", () => {
+    // 2026-05-31T23:30 BRT = 2026-06-01T02:30 UTC. Com fronteira UTC (bug antigo),
+    // essa sub cairia no bucket de junho; com fronteira BRT deve contar já em maio.
+    const created = new Date("2026-06-01T02:30:00.000Z");
+    const series = computeMrrSeries([serieSub(created)], NOW, 3);
+    const maio = series.find((p) => p.key === "2026-05");
+    expect(maio?.mrr).toBe(100); // R$100 já contabilizado em maio
+  });
+
+  it("assinatura futura não aparece em meses anteriores à sua criação", () => {
+    const created = new Date("2026-06-15T12:00:00.000Z");
+    const series = computeMrrSeries([serieSub(created)], NOW, 3);
+    expect(series.find((p) => p.key === "2026-04")?.mrr).toBe(0);
+    expect(series.find((p) => p.key === "2026-05")?.mrr).toBe(0);
+    expect(series.find((p) => p.key === "2026-06")?.mrr).toBe(100);
   });
 });
 

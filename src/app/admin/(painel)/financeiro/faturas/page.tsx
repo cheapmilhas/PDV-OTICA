@@ -59,7 +59,7 @@ export default async function FaturasPage({
       ...(statusFilter ? { status: statusFilter as any } : {}),
       ...etapaWhere,
     },
-    orderBy: { createdAt: "desc" },
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     include: {
       subscription: {
         include: {

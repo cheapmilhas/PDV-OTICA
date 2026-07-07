@@ -40,7 +40,9 @@ export default async function AdminDashboardPage() {
     prisma.invoice.aggregate({ where: { status: "PAID" }, _sum: { total: true } }),
     prisma.company.findMany({
       take: 10,
-      orderBy: { createdAt: "desc" },
+      // tiebreaker por id: createdAt não é único (seed/import) → sem isto a
+      // lista truncada troca de itens entre refreshes.
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
       include: {
         subscriptions: { take: 1, orderBy: { createdAt: "desc" }, include: { plan: true } },
         _count: { select: { users: true } },
