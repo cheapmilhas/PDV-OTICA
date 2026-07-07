@@ -34,6 +34,7 @@ const viewFixture = {
   copilotModel: "claude-sonnet-4-6",
   transcriptionModel: "whisper-1",
   hasOpenaiKey: false,
+  modelPricing: [],
 };
 
 function makeGetRequest() {

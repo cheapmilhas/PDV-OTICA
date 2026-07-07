@@ -63,6 +63,7 @@ beforeEach(() => {
     markupPercent: 0,
     creditTokenFactor: 1000,
     hasOpenaiKey: false,
+    modelPricing: [],
   });
 });
 

@@ -124,6 +124,59 @@ describe("acoplamento modelo ↔ preço (IA-2)", () => {
   });
 });
 
+// Fase 4b: overrides de preço vindos da Config (banco).
+describe("computeCostUsd com overrides (Fase 4b)", () => {
+  it("override substitui o preço da tabela para aquele modelo", () => {
+    // haiku default input = $1/M; override para $2/M → 1M input = $2
+    const cost = computeCostUsd(
+      { provider: "anthropic", model: "claude-haiku-4-5", inputTokens: 1_000_000 },
+      { "claude-haiku-4-5": { inputPerMillion: 2 } }
+    );
+    expect(cost).toBeCloseTo(2, 4);
+  });
+
+  it("merge por CAMPO: campo sem override cai na tabela", () => {
+    // só o output é sobrescrito; o input segue o default ($1/M do haiku)
+    const cost = computeCostUsd(
+      { provider: "anthropic", model: "claude-haiku-4-5", inputTokens: 1_000_000, outputTokens: 1_000_000 },
+      { "claude-haiku-4-5": { outputPerMillion: 10 } }
+    );
+    // input 1 + output 10 = 11
+    expect(cost).toBeCloseTo(11, 4);
+  });
+
+  it("override de outro modelo NÃO afeta o modelo consultado", () => {
+    const cost = computeCostUsd(
+      { provider: "anthropic", model: "claude-haiku-4-5", inputTokens: 1_000_000 },
+      { "claude-opus-4-8": { inputPerMillion: 999 } }
+    );
+    expect(cost).toBeCloseTo(1, 4); // haiku default intacto
+  });
+
+  it("override inválido (negativo) é ignorado → cai no default", () => {
+    const cost = computeCostUsd(
+      { provider: "anthropic", model: "claude-haiku-4-5", inputTokens: 1_000_000 },
+      { "claude-haiku-4-5": { inputPerMillion: -5 } }
+    );
+    expect(cost).toBeCloseTo(1, 4);
+  });
+
+  it("override de áudio (perSecond) aplica no whisper", () => {
+    const cost = computeCostUsd(
+      { provider: "openai", model: "whisper-1", audioSeconds: 100 },
+      { "whisper-1": { perSecond: 0.001 } }
+    );
+    expect(cost).toBeCloseTo(0.1, 4);
+  });
+
+  it("sem overrides = comportamento idêntico ao anterior", () => {
+    const a = computeCostUsd({ provider: "anthropic", model: "claude-haiku-4-5", inputTokens: 1_000_000 });
+    const b = computeCostUsd({ provider: "anthropic", model: "claude-haiku-4-5", inputTokens: 1_000_000 }, {});
+    expect(a).toBe(b);
+    expect(a).toBeCloseTo(1, 4);
+  });
+});
+
 describe("priceForCompany", () => {
   it("aplica margem positiva (+50%)", () => {
     // 2 * 5.5 * 1.5 = 16.5

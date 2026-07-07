@@ -4781,6 +4781,11 @@ model AiGlobalConfig {
   usdBrlRate      Decimal  @default(5.5) @db.Decimal(10, 4)
   markupPercent   Decimal  @default(0)   @db.Decimal(6, 2)
   creditTokenFactor Int    @default(1000)
+  // Overrides de preço por modelo (Fase 4b). JSON { "<model>": { inputPerMillion,
+  // outputPerMillion, cacheReadPerMillion, cacheWritePerMillion } | { perSecond } }.
+  // null/ausente = usa a tabela hardcoded de ai-pricing.ts. Só afeta linhas de uso
+  // FUTURAS (o custo de cada AiTokenUsage é congelado no write) — não altera histórico.
+  modelPricingJson Json?
   updatedAt       DateTime @updatedAt
   createdAt       DateTime @default(now())
 }

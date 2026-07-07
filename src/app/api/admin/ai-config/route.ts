@@ -27,6 +27,21 @@ const aiConfigSchema = z.object({
   ocrModel: z.enum(QUALIFIER_MODELS).optional(),
   copilotModel: z.enum(QUALIFIER_MODELS).optional(),
   transcriptionModel: z.enum(TRANSCRIPTION_MODELS).optional(),
+  // Overrides de preço por modelo (Fase 4b): mapa model→{ campos numéricos >=0 }.
+  // O serviço sanitiza/filtra modelos desconhecidos; aqui garantimos que os valores
+  // presentes são números não-negativos (nunca negativo → custo negativo).
+  modelPricing: z
+    .record(
+      z.string(),
+      z.object({
+        inputPerMillion: z.number().nonnegative().optional(),
+        outputPerMillion: z.number().nonnegative().optional(),
+        cacheReadPerMillion: z.number().nonnegative().optional(),
+        cacheWritePerMillion: z.number().nonnegative().optional(),
+        perSecond: z.number().nonnegative().optional(),
+      })
+    )
+    .optional(),
 });
 
 /**
@@ -96,6 +111,7 @@ export async function PUT(request: Request) {
           ocrModel: patch.ocrModel,
           copilotModel: patch.copilotModel,
           transcriptionModel: patch.transcriptionModel,
+          pricingChanged: patch.modelPricing !== undefined,
         },
       },
     })

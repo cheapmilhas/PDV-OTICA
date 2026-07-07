@@ -18,6 +18,15 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 
+interface EffectiveTextPrice {
+  model: string;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion: number;
+  cacheWritePerMillion: number;
+  overridden: boolean;
+}
+
 interface AiConfigView {
   hasKey: boolean;
   usdBrlRate: number;
@@ -29,6 +38,7 @@ interface AiConfigView {
   copilotModel: string;
   transcriptionModel: string;
   hasOpenaiKey: boolean;
+  modelPricing: EffectiveTextPrice[];
 }
 
 interface Company {
