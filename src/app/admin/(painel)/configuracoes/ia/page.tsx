@@ -24,6 +24,8 @@ export default async function IaConfigPage() {
         qualifierModel: config.qualifierModel,
         lensAdvisorModel: config.lensAdvisorModel,
         ocrModel: config.ocrModel,
+        copilotModel: config.copilotModel,
+        transcriptionModel: config.transcriptionModel,
         hasOpenaiKey: config.hasOpenaiKey,
       }}
       companies={companies}

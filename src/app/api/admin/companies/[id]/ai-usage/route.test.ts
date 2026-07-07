@@ -55,6 +55,8 @@ const configFixture = {
   qualifierModel: "claude-haiku-4-5",
   lensAdvisorModel: "claude-haiku-4-5",
   ocrModel: "claude-sonnet-4-6",
+  copilotModel: "claude-sonnet-4-6",
+  transcriptionModel: "whisper-1",
   hasOpenaiKey: false,
 };
 

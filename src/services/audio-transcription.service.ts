@@ -1,4 +1,4 @@
-import { getOpenaiKey } from "@/services/ai-config.service";
+import { getOpenaiKey, getAiConfig } from "@/services/ai-config.service";
 import { evolution, type EvolutionMediaBase64 } from "@/lib/evolution";
 import { logAiUsage } from "@/services/ai-usage.service";
 import { logger } from "@/lib/logger";
@@ -6,7 +6,8 @@ import { logger } from "@/lib/logger";
 const log = logger.child({ service: "audio-transcription" });
 
 const WHISPER_URL = "https://api.openai.com/v1/audio/transcriptions";
-const WHISPER_MODEL = "whisper-1";
+// Modelo default se a Config não estiver acessível (mesmo valor do default do banco).
+const WHISPER_MODEL_FALLBACK = "whisper-1";
 
 interface WhisperResponse {
   text?: string;
@@ -36,6 +37,12 @@ export async function transcribeAudio(
       return null;
     }
 
+    // Modelo de transcrição vem da Config (Fase 3) — antes era WHISPER_MODEL fixo.
+    // Fail-safe: se a leitura da config falhar, cai no fallback (não derruba a transcrição).
+    const transcriptionModel = await getAiConfig()
+      .then((c) => c.transcriptionModel)
+      .catch(() => WHISPER_MODEL_FALLBACK);
+
     // 2. Baixa a mídia em base64 pela Evolution (pode lançar → fail-safe).
     let media: EvolutionMediaBase64;
     try {
@@ -61,7 +68,7 @@ export async function transcribeAudio(
     const form = new FormData();
     const blob = new Blob([buffer], { type: media.mimetype ?? "audio/ogg" });
     form.append("file", blob, "audio.ogg");
-    form.append("model", WHISPER_MODEL);
+    form.append("model", transcriptionModel);
     // verbose_json traz o campo `duration` (segundos) — necessário para medir o
     // custo real (Whisper é cobrado por minuto). Sem isso, o custo caía sempre a $0.
     form.append("response_format", "verbose_json");
@@ -100,7 +107,7 @@ export async function transcribeAudio(
       companyId,
       feature: "audio_transcription",
       provider: "openai",
-      model: WHISPER_MODEL,
+      model: transcriptionModel,
       audioSeconds,
     });
 

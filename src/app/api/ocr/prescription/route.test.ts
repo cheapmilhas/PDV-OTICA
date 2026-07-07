@@ -57,6 +57,8 @@ beforeEach(() => {
     ocrModel: "claude-sonnet-4-6",
     qualifierModel: "claude-haiku-4-5",
     lensAdvisorModel: "claude-haiku-4-5",
+    copilotModel: "claude-sonnet-4-6",
+    transcriptionModel: "whisper-1",
     usdBrlRate: 5.5,
     markupPercent: 0,
     creditTokenFactor: 1000,

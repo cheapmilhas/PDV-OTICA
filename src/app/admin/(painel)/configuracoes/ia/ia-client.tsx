@@ -12,6 +12,8 @@ interface AiConfigView {
   qualifierModel: string;
   lensAdvisorModel: string;
   ocrModel: string;
+  copilotModel: string;
+  transcriptionModel: string;
   hasOpenaiKey: boolean;
 }
 
@@ -20,6 +22,28 @@ const QUALIFIER_MODEL_OPTIONS: { value: string; label: string }[] = [
   { value: "claude-sonnet-4-6", label: "Sonnet 4.6 (equilibrado)" },
   { value: "claude-opus-4-8", label: "Opus 4.8 (mais capaz)" },
 ];
+
+// Transcrição usa Whisper (OpenAI) — família diferente dos Claude, opções próprias.
+const TRANSCRIPTION_MODEL_OPTIONS: { value: string; label: string }[] = [
+  { value: "whisper-1", label: "Whisper v1 (OpenAI — padrão)" },
+];
+
+// Preço (USD por 1M tokens) espelhado de ai-pricing.ts (TEXT_PRICING é privado no
+// servidor). SÓ para a calculadora de preview client-side — a cobrança real usa o
+// servidor. Se divergir do servidor, o preview é aproximado (rotulado como tal).
+const PREVIEW_PRICING: Record<string, { input: number; output: number }> = {
+  "claude-haiku-4-5": { input: 1, output: 5 },
+  "claude-sonnet-4-6": { input: 3, output: 15 },
+  "claude-opus-4-8": { input: 5, output: 25 },
+};
+
+// Cenário fixo de exemplo p/ o preview (uma qualificação típica de conversa).
+const PREVIEW_INPUT_TOKENS = 4000;
+const PREVIEW_OUTPUT_TOKENS = 500;
+
+function money(brl: number): string {
+  return brl.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 4 });
+}
 
 export function IaClient({ config }: { config: AiConfigView }) {
   const router = useRouter();
@@ -36,6 +60,22 @@ export function IaClient({ config }: { config: AiConfigView }) {
   const [qualifierModel, setQualifierModel] = useState(config.qualifierModel);
   const [lensAdvisorModel, setLensAdvisorModel] = useState(config.lensAdvisorModel);
   const [ocrModel, setOcrModel] = useState(config.ocrModel);
+  const [copilotModel, setCopilotModel] = useState(config.copilotModel);
+  const [transcriptionModel, setTranscriptionModel] = useState(config.transcriptionModel);
+
+  // Preview do impacto de câmbio/markup — client-side, NÃO salva nada. Recalcula
+  // ao vivo conforme o operador ajusta os campos, usando o modelo do qualificador
+  // como exemplo. Custo cru → ×câmbio → ×(1+markup) = preço de venda estimado.
+  const previewRate = parseFloat(usdBrlRate);
+  const previewMarkup = parseFloat(markupPercent);
+  const previewModelPrice = PREVIEW_PRICING[qualifierModel] ?? PREVIEW_PRICING["claude-haiku-4-5"];
+  const previewCostUsd =
+    (PREVIEW_INPUT_TOKENS / 1_000_000) * previewModelPrice.input +
+    (PREVIEW_OUTPUT_TOKENS / 1_000_000) * previewModelPrice.output;
+  const previewValid = !isNaN(previewRate) && previewRate >= 0 && !isNaN(previewMarkup) && previewMarkup >= 0;
+  const previewCostBrl = previewValid ? previewCostUsd * previewRate : 0;
+  const previewPriceBrl = previewValid ? previewCostBrl * (1 + previewMarkup / 100) : 0;
+  const previewProfitBrl = previewPriceBrl - previewCostBrl;
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -78,6 +118,8 @@ export function IaClient({ config }: { config: AiConfigView }) {
       qualifierModel?: string;
       lensAdvisorModel?: string;
       ocrModel?: string;
+      copilotModel?: string;
+      transcriptionModel?: string;
     } = {};
 
     // Only send the key if the user typed something
@@ -100,6 +142,8 @@ export function IaClient({ config }: { config: AiConfigView }) {
     if (qualifierModel) body.qualifierModel = qualifierModel;
     if (lensAdvisorModel) body.lensAdvisorModel = lensAdvisorModel;
     if (ocrModel) body.ocrModel = ocrModel;
+    if (copilotModel) body.copilotModel = copilotModel;
+    if (transcriptionModel) body.transcriptionModel = transcriptionModel;
 
     try {
       const res = await fetch("/api/admin/ai-config", {
@@ -345,7 +389,81 @@ export function IaClient({ config }: { config: AiConfigView }) {
                 Modelo Claude usado para ler a foto da receita (OCR). Sonnet lê manuscrito melhor que Haiku.
               </p>
             </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="copilot-model" className="text-sm font-medium text-foreground">
+                Modelo do Copiloto
+              </label>
+              <select
+                id="copilot-model"
+                value={copilotModel}
+                onChange={(e) => setCopilotModel(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {QUALIFIER_MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Modelo Claude do copiloto de conversas (resumo + rascunho de resposta pra atendente). Sonnet dá rascunhos melhores; Haiku é mais barato.
+              </p>
+            </div>
+
+            <div className="space-y-1.5 sm:col-span-2">
+              <label htmlFor="transcription-model" className="text-sm font-medium text-foreground">
+                Modelo de transcrição de áudio
+              </label>
+              <select
+                id="transcription-model"
+                value={transcriptionModel}
+                onChange={(e) => setTranscriptionModel(e.target.value)}
+                className="w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2"
+              >
+                {TRANSCRIPTION_MODEL_OPTIONS.map((opt) => (
+                  <option key={opt.value} value={opt.value}>
+                    {opt.label}
+                  </option>
+                ))}
+              </select>
+              <p className="text-xs text-muted-foreground">
+                Transcreve os áudios de WhatsApp (Whisper/OpenAI) antes de qualificar a conversa. Requer a chave OpenAI configurada.
+              </p>
+            </div>
           </div>
+        </div>
+
+        {/* Preview client-side do impacto de câmbio/markup — não salva nada */}
+        <div className="bg-muted border border-border rounded-lg p-5 space-y-3">
+          <div>
+            <p className="font-semibold text-foreground">Preview de preço</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Estimativa ao vivo de uma qualificação típica ({PREVIEW_INPUT_TOKENS.toLocaleString("pt-BR")} tokens de entrada +{" "}
+              {PREVIEW_OUTPUT_TOKENS.toLocaleString("pt-BR")} de saída) no modelo de qualificação selecionado, com o câmbio e o markup acima. Não salva nada.
+            </p>
+          </div>
+          {previewValid ? (
+            <div className="grid grid-cols-3 gap-3 text-center">
+              <div className="rounded-md bg-background border border-border p-3">
+                <p className="text-xs text-muted-foreground">Custo</p>
+                <p className="text-sm font-semibold text-foreground mt-1">{money(previewCostBrl)}</p>
+              </div>
+              <div className="rounded-md bg-background border border-border p-3">
+                <p className="text-xs text-muted-foreground">Preço de venda</p>
+                <p className="text-sm font-semibold text-foreground mt-1">{money(previewPriceBrl)}</p>
+              </div>
+              <div className="rounded-md bg-background border border-border p-3">
+                <p className="text-xs text-muted-foreground">Lucro</p>
+                <p className="text-sm font-semibold text-emerald-600 mt-1">{money(previewProfitBrl)}</p>
+              </div>
+            </div>
+          ) : (
+            <p className="text-xs text-muted-foreground">Preencha câmbio e markup com valores válidos (≥ 0) para ver o preview.</p>
+          )}
+          <p className="text-[11px] text-muted-foreground">
+            Aproximado — a cobrança real é calculada no servidor com a tabela de preços oficial.
+          </p>
         </div>
 
         <div className="flex justify-end">

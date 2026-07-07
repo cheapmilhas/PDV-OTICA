@@ -2,7 +2,8 @@ import { NextResponse } from "next/server";
 import { requireAuth, getCompanyId, requirePermission } from "@/lib/auth-helpers";
 import { assertAiAllowed } from "@/lib/ai-guard";
 import { prisma } from "@/lib/prisma";
-import { summarizeAndDraft, COPILOT_MODEL, type CopilotMessage } from "@/lib/ai/conversation-copilot";
+import { summarizeAndDraft, type CopilotMessage } from "@/lib/ai/conversation-copilot";
+import { getAiConfig } from "@/services/ai-config.service";
 import { logAiUsage } from "@/services/ai-usage.service";
 import { handleApiError, notFoundError, forbiddenError } from "@/lib/error-handler";
 
@@ -56,14 +57,16 @@ export async function POST(_request: Request, ctx: { params: Promise<{ id: strin
       text: m.text,
       type: m.type,
     }));
-    const result = await summarizeAndDraft(messages);
+    // Modelo do Copiloto vem da Config (Fase 3) — antes era o COPILOT_MODEL hardcoded.
+    const { copilotModel } = await getAiConfig();
+    const result = await summarizeAndDraft(messages, copilotModel);
 
     // Registra o gasto p/ a cota mensal enxergar o copiloto (senão assertAiAllowed
     // ficaria cego a essa feature e ela nunca contaria pro teto). Best-effort:
     // uma falha de telemetria não deve derrubar a resposta ao usuário.
     try {
       await logAiUsage({
-        companyId, feature: "whatsapp_copilot", provider: "anthropic", model: COPILOT_MODEL,
+        companyId, feature: "whatsapp_copilot", provider: "anthropic", model: copilotModel,
         inputTokens: result.usage.inputTokens, outputTokens: result.usage.outputTokens, cacheTokens: result.usage.cacheTokens, cacheWriteTokens: result.usage.cacheWriteTokens,
       });
     } catch { /* telemetria não bloqueia a resposta */ }

@@ -147,4 +147,34 @@ describe("ai-config.service", () => {
     const arg = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0];
     expect(arg.update.ocrModel).toBeUndefined();
   });
+
+  // --- Fase 3: copilotModel (allowlist Claude) + transcriptionModel (allowlist própria) ---
+  const rowWith = (extra: Record<string, unknown>) => ({ id: "global", usdBrlRate: "5.5", markupPercent: "0", creditTokenFactor: 1000, anthropicKeyEnc: null, qualifierModel: "claude-haiku-4-5", openaiKeyEnc: null, lensAdvisorModel: "claude-haiku-4-5", ocrModel: "claude-sonnet-4-6", copilotModel: "claude-sonnet-4-6", transcriptionModel: "whisper-1", ...extra });
+
+  it("getAiConfig retorna copilotModel e transcriptionModel", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({ copilotModel: "claude-opus-4-8", transcriptionModel: "whisper-1" }));
+    const c = await getAiConfig();
+    expect(c.copilotModel).toBe("claude-opus-4-8");
+    expect(c.transcriptionModel).toBe("whisper-1");
+  });
+  it("updateAiConfig seta copilotModel da allowlist Claude", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({ copilotModel: "claude-opus-4-8" }));
+    await updateAiConfig({ copilotModel: "claude-opus-4-8" });
+    expect((prisma.aiGlobalConfig.upsert as any).mock.calls[0][0].update.copilotModel).toBe("claude-opus-4-8");
+  });
+  it("updateAiConfig IGNORA copilotModel fora da allowlist (ex: whisper-1)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({}));
+    await updateAiConfig({ copilotModel: "whisper-1" });
+    expect((prisma.aiGlobalConfig.upsert as any).mock.calls[0][0].update.copilotModel).toBeUndefined();
+  });
+  it("updateAiConfig seta transcriptionModel da allowlist própria (whisper-1)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({ transcriptionModel: "whisper-1" }));
+    await updateAiConfig({ transcriptionModel: "whisper-1" });
+    expect((prisma.aiGlobalConfig.upsert as any).mock.calls[0][0].update.transcriptionModel).toBe("whisper-1");
+  });
+  it("updateAiConfig IGNORA transcriptionModel Claude (não roda por QUALIFIER_MODELS)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({}));
+    await updateAiConfig({ transcriptionModel: "claude-haiku-4-5" });
+    expect((prisma.aiGlobalConfig.upsert as any).mock.calls[0][0].update.transcriptionModel).toBeUndefined();
+  });
 });

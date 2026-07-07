@@ -7,6 +7,7 @@ vi.mock("@/services/ai-config.service", () => ({
   getAiConfig: vi.fn(),
   updateAiConfig: vi.fn(),
   QUALIFIER_MODELS: ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"],
+  TRANSCRIPTION_MODELS: ["whisper-1"],
 }));
 vi.mock("@/lib/prisma", () => ({
   prisma: { globalAudit: { create: vi.fn().mockResolvedValue({}) } },
@@ -30,6 +31,8 @@ const viewFixture = {
   qualifierModel: "claude-haiku-4-5",
   lensAdvisorModel: "claude-haiku-4-5",
   ocrModel: "claude-sonnet-4-6",
+  copilotModel: "claude-sonnet-4-6",
+  transcriptionModel: "whisper-1",
   hasOpenaiKey: false,
 };
 
@@ -117,23 +120,20 @@ describe("PUT /api/admin/ai-config", () => {
     expect(json.data).toEqual(updatedView);
   });
 
-  it("rejeita creditTokenFactor=0 (divisor → Infinity/NaN no medidor da ótica)", async () => {
+  it("400 em creditTokenFactor=0 (divisor → Infinity/NaN) — não salva nada", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
     const res = await PUT(makePutRequest({ creditTokenFactor: 0 }));
-    expect(res.status).toBe(200);
-    const callArg = mockUpdateAiConfig.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty("creditTokenFactor"); // guard >= 1 barra o 0
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
 
-  it("rejeita usdBrlRate/markupPercent negativos (custo R$ negativo)", async () => {
+  it("400 em usdBrlRate/markupPercent negativos (custo R$ negativo) — não salva", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
     const res = await PUT(makePutRequest({ usdBrlRate: -1, markupPercent: -5 }));
-    expect(res.status).toBe(200);
-    const callArg = mockUpdateAiConfig.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty("usdBrlRate");
-    expect(callArg).not.toHaveProperty("markupPercent");
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
 
   it("encaminha qualifierModel válido (allowlist) para updateAiConfig", async () => {
@@ -145,13 +145,12 @@ describe("PUT /api/admin/ai-config", () => {
     expect(callArg).toHaveProperty("qualifierModel", "claude-sonnet-4-6");
   });
 
-  it("ignora qualifierModel fora da allowlist (ex: gpt-4)", async () => {
+  it("400 em qualifierModel fora da allowlist (ex: gpt-4) — não salva", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
     const res = await PUT(makePutRequest({ qualifierModel: "gpt-4" }));
-    expect(res.status).toBe(200);
-    const callArg = mockUpdateAiConfig.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty("qualifierModel");
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
 
   it("encaminha lensAdvisorModel válido (allowlist) para updateAiConfig", async () => {
@@ -163,13 +162,12 @@ describe("PUT /api/admin/ai-config", () => {
     expect(callArg).toHaveProperty("lensAdvisorModel", "claude-sonnet-4-6");
   });
 
-  it("ignora lensAdvisorModel fora da allowlist (ex: gpt-4)", async () => {
+  it("400 em lensAdvisorModel fora da allowlist (ex: gpt-4) — não salva", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
     const res = await PUT(makePutRequest({ lensAdvisorModel: "gpt-4" }));
-    expect(res.status).toBe(200);
-    const callArg = mockUpdateAiConfig.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty("lensAdvisorModel");
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
 
   it("encaminha ocrModel válido (allowlist) para updateAiConfig", async () => {
@@ -181,13 +179,12 @@ describe("PUT /api/admin/ai-config", () => {
     expect(callArg).toHaveProperty("ocrModel", "claude-sonnet-4-6");
   });
 
-  it("ignora ocrModel fora da allowlist (ex: gpt-4)", async () => {
+  it("400 em ocrModel fora da allowlist (ex: gpt-4) — não salva", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
     const res = await PUT(makePutRequest({ ocrModel: "gpt-4" }));
-    expect(res.status).toBe(200);
-    const callArg = mockUpdateAiConfig.mock.calls[0][0];
-    expect(callArg).not.toHaveProperty("ocrModel");
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
 
   it("encaminha openaiKey (string) para updateAiConfig", async () => {
@@ -199,18 +196,57 @@ describe("PUT /api/admin/ai-config", () => {
     expect(callArg).toHaveProperty("openaiKey", "sk-openai-test");
   });
 
-  it("200 only passes numeric fields that are present and valid", async () => {
+  it("400 quando um campo tem tipo errado (usdBrlRate string) — não salva", async () => {
     mockGetAdminSession.mockResolvedValue(adminPayload);
     mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    // Antes: descartava usdBrlRate em silêncio e salvava o resto com 200.
+    // Agora: valor inválido → 400, nada salvo (o operador vê o erro).
+    const res = await PUT(makePutRequest({ creditTokenFactor: 500, usdBrlRate: "not-a-number" }));
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
+  });
 
-    // Only creditTokenFactor is a number here
-    const body = { creditTokenFactor: 500, usdBrlRate: "not-a-number" };
-    const res = await PUT(makePutRequest(body));
+  it("400 em JSON malformado no corpo", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    const req = new Request("http://localhost/api/admin/ai-config", {
+      method: "PUT",
+      headers: { "Content-Type": "application/json" },
+      body: "{ isso não é json",
+    });
+    const res = await PUT(req);
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("encaminha copilotModel válido (allowlist Claude) para updateAiConfig", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ copilotModel: "claude-opus-4-8" }));
     expect(res.status).toBe(200);
+    expect(mockUpdateAiConfig.mock.calls[0][0]).toHaveProperty("copilotModel", "claude-opus-4-8");
+  });
 
-    // usdBrlRate should not be forwarded since it is not a number
-    const callArg = mockUpdateAiConfig.mock.calls[0][0];
-    expect(callArg).toHaveProperty("creditTokenFactor", 500);
-    expect(callArg).not.toHaveProperty("usdBrlRate");
+  it("400 em copilotModel fora da allowlist (ex: whisper-1 não é Claude)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ copilotModel: "whisper-1" }));
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
+  });
+
+  it("encaminha transcriptionModel válido (whisper-1) para updateAiConfig", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ transcriptionModel: "whisper-1" }));
+    expect(res.status).toBe(200);
+    expect(mockUpdateAiConfig.mock.calls[0][0]).toHaveProperty("transcriptionModel", "whisper-1");
+  });
+
+  it("400 em transcriptionModel fora da allowlist (ex: claude não transcreve)", async () => {
+    mockGetAdminSession.mockResolvedValue(adminPayload);
+    mockUpdateAiConfig.mockResolvedValue(viewFixture);
+    const res = await PUT(makePutRequest({ transcriptionModel: "claude-haiku-4-5" }));
+    expect(res.status).toBe(400);
+    expect(mockUpdateAiConfig).not.toHaveBeenCalled();
   });
 });

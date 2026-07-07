@@ -1,7 +1,33 @@
 import { NextResponse } from "next/server";
+import { z } from "zod";
 import { getAdminSession } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
-import { getAiConfig, updateAiConfig, QUALIFIER_MODELS } from "@/services/ai-config.service";
+import {
+  getAiConfig,
+  updateAiConfig,
+  QUALIFIER_MODELS,
+  TRANSCRIPTION_MODELS,
+} from "@/services/ai-config.service";
+
+/**
+ * Schema de validação da config de IA. TODOS os campos são opcionais (PUT parcial),
+ * mas quando presentes DEVEM ser válidos — antes a rota descartava valor inválido
+ * em silêncio e devolvia 200 (o admin achava que salvou câmbio/modelo e não salvou).
+ * Agora valor inválido → 400 com a lista de erros.
+ */
+const aiConfigSchema = z.object({
+  anthropicKey: z.string().optional(),
+  openaiKey: z.string().optional(),
+  usdBrlRate: z.number().nonnegative().optional(),
+  markupPercent: z.number().nonnegative().optional(),
+  // Divisor (tokensToCredits = tokens/fator) → 0 daria Infinity/NaN no medidor.
+  creditTokenFactor: z.number().int().min(1).optional(),
+  qualifierModel: z.enum(QUALIFIER_MODELS).optional(),
+  lensAdvisorModel: z.enum(QUALIFIER_MODELS).optional(),
+  ocrModel: z.enum(QUALIFIER_MODELS).optional(),
+  copilotModel: z.enum(QUALIFIER_MODELS).optional(),
+  transcriptionModel: z.enum(TRANSCRIPTION_MODELS).optional(),
+});
 
 /**
  * GET /api/admin/ai-config
@@ -30,38 +56,23 @@ export async function PUT(request: Request) {
     return NextResponse.json({ error: "Acesso restrito" }, { status: 403 });
   }
 
-  const body = await request.json();
+  // JSON malformado → 400 (antes estourava 500 não tratado).
+  let raw: unknown;
+  try {
+    raw = await request.json();
+  } catch {
+    return NextResponse.json({ error: "JSON inválido no corpo da requisição" }, { status: 400 });
+  }
 
-  const patch: {
-    anthropicKey?: string;
-    usdBrlRate?: number;
-    markupPercent?: number;
-    creditTokenFactor?: number;
-    qualifierModel?: string;
-    lensAdvisorModel?: string;
-    ocrModel?: string;
-    openaiKey?: string;
-  } = {};
-
-  if (typeof body.anthropicKey === "string") patch.anthropicKey = body.anthropicKey;
-  // Bounds no servidor (o min do input HTML é burlável por chamada direta):
-  if (typeof body.usdBrlRate === "number" && body.usdBrlRate >= 0) patch.usdBrlRate = body.usdBrlRate;
-  if (typeof body.markupPercent === "number" && body.markupPercent >= 0) patch.markupPercent = body.markupPercent;
-  // creditTokenFactor é divisor (tokensToCredits = tokens/fator) → 0 daria Infinity/NaN no medidor da ótica.
-  if (typeof body.creditTokenFactor === "number" && body.creditTokenFactor >= 1) patch.creditTokenFactor = body.creditTokenFactor;
-  // qualifierModel: só encaminha se estiver na allowlist (o serviço também valida; aqui ignora silenciosamente como os demais campos).
-  if (typeof body.qualifierModel === "string" && (QUALIFIER_MODELS as readonly string[]).includes(body.qualifierModel)) {
-    patch.qualifierModel = body.qualifierModel;
+  // Valor inválido → 400 (antes: descartado em silêncio + 200).
+  const parsed = aiConfigSchema.safeParse(raw);
+  if (!parsed.success) {
+    return NextResponse.json(
+      { error: "Dados inválidos", details: parsed.error.flatten().fieldErrors },
+      { status: 400 }
+    );
   }
-  // lensAdvisorModel: mesma allowlist do qualifier (o serviço também valida; aqui ignora silenciosamente como os demais campos).
-  if (typeof body.lensAdvisorModel === "string" && (QUALIFIER_MODELS as readonly string[]).includes(body.lensAdvisorModel)) {
-    patch.lensAdvisorModel = body.lensAdvisorModel;
-  }
-  // ocrModel: mesma allowlist (o serviço também valida; aqui ignora silenciosamente como os demais).
-  if (typeof body.ocrModel === "string" && (QUALIFIER_MODELS as readonly string[]).includes(body.ocrModel)) {
-    patch.ocrModel = body.ocrModel;
-  }
-  if (typeof body.openaiKey === "string") patch.openaiKey = body.openaiKey;
+  const patch = parsed.data;
 
   const data = await updateAiConfig(patch);
 
@@ -83,6 +94,8 @@ export async function PUT(request: Request) {
           qualifierModel: patch.qualifierModel,
           lensAdvisorModel: patch.lensAdvisorModel,
           ocrModel: patch.ocrModel,
+          copilotModel: patch.copilotModel,
+          transcriptionModel: patch.transcriptionModel,
         },
       },
     })

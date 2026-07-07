@@ -10,6 +10,12 @@ const SINGLETON_ID = "global";
 export const QUALIFIER_MODELS = ["claude-haiku-4-5", "claude-sonnet-4-6", "claude-opus-4-8"] as const;
 export type QualifierModel = (typeof QUALIFIER_MODELS)[number];
 
+// Allowlist dos modelos de TRANSCRIÇÃO de áudio (provedor OpenAI/Whisper — família
+// diferente dos Claude, por isso allowlist própria; rodar por QUALIFIER_MODELS
+// descartaria "whisper-1" silenciosamente).
+export const TRANSCRIPTION_MODELS = ["whisper-1"] as const;
+export type TranscriptionModel = (typeof TRANSCRIPTION_MODELS)[number];
+
 /**
  * Modelos que NÃO aceitam o parâmetro `temperature` (a família Opus 4.7+ o
  * removeu — passar temperature devolve 400). Chamadas devem OMITIR temperature
@@ -31,6 +37,8 @@ export interface AiConfigView {
   qualifierModel: string;
   lensAdvisorModel: string;
   ocrModel: string;
+  copilotModel: string;
+  transcriptionModel: string;
   hasOpenaiKey: boolean;
 }
 
@@ -48,6 +56,8 @@ export async function getAiConfig(): Promise<AiConfigView> {
     qualifierModel: c.qualifierModel,
     lensAdvisorModel: c.lensAdvisorModel,
     ocrModel: c.ocrModel,
+    copilotModel: c.copilotModel,
+    transcriptionModel: c.transcriptionModel,
     hasOpenaiKey: !!c.openaiKeyEnc,
   };
 }
@@ -60,6 +70,8 @@ export interface UpdateAiConfigInput {
   qualifierModel?: string;
   lensAdvisorModel?: string;
   ocrModel?: string;
+  copilotModel?: string;
+  transcriptionModel?: string;
   openaiKey?: string;
 }
 
@@ -82,6 +94,14 @@ export async function updateAiConfig(patch: UpdateAiConfigInput): Promise<AiConf
   // Mesma allowlist (defesa em profundidade); ignora silenciosamente o resto.
   if (patch.ocrModel && (QUALIFIER_MODELS as readonly string[]).includes(patch.ocrModel)) {
     data.ocrModel = patch.ocrModel;
+  }
+  // Copiloto: modelos Claude (mesma allowlist do qualificador).
+  if (patch.copilotModel && (QUALIFIER_MODELS as readonly string[]).includes(patch.copilotModel)) {
+    data.copilotModel = patch.copilotModel;
+  }
+  // Transcrição: allowlist PRÓPRIA (Whisper/OpenAI, não Claude).
+  if (patch.transcriptionModel && (TRANSCRIPTION_MODELS as readonly string[]).includes(patch.transcriptionModel)) {
+    data.transcriptionModel = patch.transcriptionModel;
   }
   if (patch.openaiKey && patch.openaiKey.trim().length > 0) {
     data.openaiKeyEnc = encryptSecret(patch.openaiKey.trim());
