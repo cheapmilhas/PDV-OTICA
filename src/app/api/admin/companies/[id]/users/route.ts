@@ -160,9 +160,24 @@ export async function POST(
     return NextResponse.json({ error: "Este email já está em uso" }, { status: 400 });
   }
 
-  // Buscar branch (usar primeira da empresa se não especificada)
-  let targetBranchId: string | null = branchId || null;
-  if (!targetBranchId) {
+  // Buscar branch (usar primeira da empresa se não especificada).
+  let targetBranchId: string | null = null;
+  if (branchId) {
+    // branchId veio do body — validar que é uma filial DESTA empresa, senão
+    // um branchId arbitrário vincularia o usuário a filial de outro tenant
+    // (UserBranch inconsistente ou violação de FK → 500 genérico).
+    const branch = await prisma.branch.findFirst({
+      where: { id: branchId, companyId },
+      select: { id: true },
+    });
+    if (!branch) {
+      return NextResponse.json(
+        { error: "Filial inválida para esta empresa" },
+        { status: 400 }
+      );
+    }
+    targetBranchId = branch.id;
+  } else {
     const branch = await prisma.branch.findFirst({
       where: { companyId },
       orderBy: { createdAt: "asc" },

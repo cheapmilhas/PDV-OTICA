@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
+import { parseOptionalPositiveInt } from "@/lib/parse-int-field";
 
 const log = logger.child({ route: "admin/companies/[id]/branches/[branchId]" });
 
@@ -65,7 +66,13 @@ export async function PATCH(
     if (state !== undefined) updateData.state = state?.trim() || null;
     if (zipCode !== undefined) updateData.zipCode = zipCode?.trim() || null;
     if (phone !== undefined) updateData.phone = phone?.trim() || null;
-    if (nfeSeries !== undefined) updateData.nfeSeries = nfeSeries ? parseInt(nfeSeries, 10) : null;
+    if (nfeSeries !== undefined) {
+      const parsed = parseOptionalPositiveInt(nfeSeries, "Série NF-e");
+      if (!parsed.ok) {
+        return NextResponse.json({ error: parsed.error }, { status: 400 });
+      }
+      updateData.nfeSeries = parsed.value;
+    }
     if (active !== undefined) updateData.active = active;
 
     const updated = await prisma.branch.update({

@@ -12,10 +12,12 @@ export async function PATCH(
 
   const { id } = await params;
 
+  // Só marca a notificação se for DESTE admin. Globais (adminId: null) são
+  // compartilhadas — marcá-las aqui as faria sumir para todos os outros admins.
   await prisma.adminNotification.updateMany({
     where: {
       id,
-      OR: [{ adminId: admin.id }, { adminId: null }],
+      adminId: admin.id,
     },
     data: { isRead: true, readAt: new Date() },
   });

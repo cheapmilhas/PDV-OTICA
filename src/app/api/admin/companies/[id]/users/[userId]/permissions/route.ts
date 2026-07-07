@@ -154,12 +154,16 @@ export async function PUT(request: NextRequest, context: Params) {
           data: { role: role as any },
         });
 
-        // Clear custom permissions when role changes (reset to new role defaults)
+        // Clear custom permissions when role changes (reset to new role defaults).
+        // Os overrides do request (abaixo) são aplicados EM SEGUIDA sobre a base
+        // limpa — antes eram descartados silenciosamente quando o cargo mudava.
         await tx.userPermission.deleteMany({ where: { userId } });
       }
 
-      // Apply custom permissions if provided (and role didn't change)
-      if (permissions && Array.isArray(permissions) && (!role || role === user.role)) {
+      // Apply custom permissions if provided. Rodam mesmo quando o cargo muda:
+      // como o deleteMany acima já resetou para o padrão do novo cargo, aplicar
+      // os overrides aqui deixa o estado final igual ao que o request pediu.
+      if (permissions && Array.isArray(permissions)) {
         for (const perm of permissions) {
           const permission = await tx.permission.findUnique({
             where: { code: perm.code },

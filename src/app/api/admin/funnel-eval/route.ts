@@ -102,7 +102,8 @@ export async function GET(request: Request) {
     //   naoPerdeReclamacao = SAGRADO (~100%), capturaLead = recall, estagioCerto | é-lead.
     impacto: score,
     // Continuidade histórica (métrica de vaidade — NÃO decidir por ela):
-    pass, accuracy: +((pass / results.length) * 100).toFixed(1),
+    // guarda contra lista vazia (evita NaN quando não há casos de avaliação).
+    pass, accuracy: results.length > 0 ? +((pass / results.length) * 100).toFixed(1) : 0,
     dims: {
       intent: results.filter((r) => !r.failed.some((f) => f.startsWith("intent"))).length,
       isLead: results.filter((r) => !r.failed.some((f) => f.startsWith("isLead"))).length,

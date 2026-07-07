@@ -41,6 +41,32 @@ export async function PATCH(
     return NextResponse.json({ error: "Usuário já está neste estado" }, { status: 400 });
   }
 
+  // Ao REATIVAR, revalidar o limite de assentos do plano — senão dá para
+  // estourar o limite desativando/reativando (mesma regra do POST de criação).
+  if (body.active === true) {
+    const company = await prisma.company.findUnique({
+      where: { id: user.companyId },
+      select: {
+        maxUsers: true,
+        subscriptions: {
+          take: 1,
+          orderBy: { createdAt: "desc" },
+          select: { plan: { select: { maxUsers: true } } },
+        },
+      },
+    });
+    const activeUsers = await prisma.user.count({
+      where: { companyId: user.companyId, active: true },
+    });
+    const maxUsers = company?.subscriptions[0]?.plan?.maxUsers ?? company?.maxUsers ?? 999;
+    if (activeUsers >= maxUsers) {
+      return NextResponse.json(
+        { error: `Limite de ${maxUsers} usuários atingido. Faça upgrade do plano.` },
+        { status: 400 }
+      );
+    }
+  }
+
   await prisma.user.update({
     where: { id },
     data: { active: body.active },
