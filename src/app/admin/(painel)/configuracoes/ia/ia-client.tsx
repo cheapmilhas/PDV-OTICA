@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/admin/PageHeader";
+import type { AiConfigHistoryEntry } from "@/services/ai-config-history.service";
 
 interface AiConfigView {
   hasKey: boolean;
@@ -45,7 +46,13 @@ function money(brl: number): string {
   return brl.toLocaleString("pt-BR", { style: "currency", currency: "BRL", minimumFractionDigits: 4 });
 }
 
-export function IaClient({ config }: { config: AiConfigView }) {
+export function IaClient({
+  config,
+  history,
+}: {
+  config: AiConfigView;
+  history: AiConfigHistoryEntry[];
+}) {
   const router = useRouter();
   const [saving, setSaving] = useState(false);
   const [success, setSuccess] = useState(false);
@@ -476,6 +483,39 @@ export function IaClient({ config }: { config: AiConfigView }) {
           </button>
         </div>
       </form>
+
+      {/* Histórico de mudanças da config de IA (Fase 4) — colapsável, lê o GlobalAudit */}
+      <details className="bg-muted border border-border rounded-lg p-5">
+        <summary className="cursor-pointer text-sm font-semibold text-foreground select-none">
+          Histórico de mudanças ({history.length})
+        </summary>
+        <div className="mt-4 space-y-3">
+          {history.length === 0 && (
+            <p className="text-xs text-muted-foreground">Nenhuma mudança registrada ainda.</p>
+          )}
+          {history.map((entry) => (
+            <div key={entry.id} className="rounded-md bg-background border border-border p-3">
+              <div className="flex items-center justify-between gap-2">
+                <span className="text-xs font-medium text-foreground">{entry.actorName}</span>
+                <span className="text-[11px] text-muted-foreground">
+                  {new Date(entry.createdAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo" })}
+                </span>
+              </div>
+              {entry.changes.length > 0 ? (
+                <ul className="mt-1.5 space-y-0.5">
+                  {entry.changes.map((c, i) => (
+                    <li key={i} className="text-xs text-muted-foreground">
+                      <span className="text-foreground">{c.label}:</span> {c.value}
+                    </li>
+                  ))}
+                </ul>
+              ) : (
+                <p className="mt-1.5 text-xs text-muted-foreground italic">Sem campos legíveis nesta alteração.</p>
+              )}
+            </div>
+          ))}
+        </div>
+      </details>
     </div>
   );
 }

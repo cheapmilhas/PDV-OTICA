@@ -7,6 +7,7 @@ import { VisaoGeralClient } from "./visao-geral-client";
 import { OticasClient } from "./oticas-client";
 import { KnowledgeClient } from "./knowledge-client";
 import { PlaygroundClient } from "./playground-client";
+import type { AiConfigHistoryEntry } from "@/services/ai-config-history.service";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -49,9 +50,11 @@ const TABS: { key: TabKey; label: string }[] = [
 export function IaTabs({
   config,
   companies,
+  history,
 }: {
   config: AiConfigView;
   companies: Company[];
+  history: AiConfigHistoryEntry[];
 }) {
   const [active, setActive] = useState<TabKey>("overview");
   const [massLoading, setMassLoading] = useState<boolean>(false);
@@ -163,7 +166,7 @@ export function IaTabs({
 
       {active === "overview" && <VisaoGeralClient />}
       {active === "oticas" && <OticasClient />}
-      {active === "config" && <IaClient config={config} />}
+      {active === "config" && <IaClient config={config} history={history} />}
       {active === "knowledge" && <KnowledgeClient companies={companies} />}
       {active === "playground" && <PlaygroundClient companies={companies} />}
     </div>

@@ -1,5 +1,6 @@
 import { requireAdminRole } from "@/lib/admin-session";
 import { getAiConfig } from "@/services/ai-config.service";
+import { getAiConfigHistory } from "@/services/ai-config-history.service";
 import { prisma } from "@/lib/prisma";
 import { IaTabs } from "./ia-tabs";
 
@@ -8,11 +9,14 @@ export const dynamic = "force-dynamic";
 export default async function IaConfigPage() {
   await requireAdminRole(["SUPER_ADMIN"]);
 
-  const config = await getAiConfig();
-  const companies = await prisma.company.findMany({
-    select: { id: true, name: true },
-    orderBy: { name: "asc" },
-  });
+  const [config, companies, history] = await Promise.all([
+    getAiConfig(),
+    prisma.company.findMany({
+      select: { id: true, name: true },
+      orderBy: { name: "asc" },
+    }),
+    getAiConfigHistory(30),
+  ]);
 
   return (
     <IaTabs
@@ -29,6 +33,7 @@ export default async function IaConfigPage() {
         hasOpenaiKey: config.hasOpenaiKey,
       }}
       companies={companies}
+      history={history}
     />
   );
 }
