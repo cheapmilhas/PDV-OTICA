@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { toast } from "sonner";
 import { IaClient } from "./ia-client";
+import { VisaoGeralClient } from "./visao-geral-client";
 import { OticasClient } from "./oticas-client";
 import { KnowledgeClient } from "./knowledge-client";
 import { PlaygroundClient } from "./playground-client";
@@ -33,9 +34,10 @@ interface Company {
   name: string;
 }
 
-type TabKey = "oticas" | "config" | "knowledge" | "playground";
+type TabKey = "overview" | "oticas" | "config" | "knowledge" | "playground";
 
 const TABS: { key: TabKey; label: string }[] = [
+  { key: "overview", label: "Visão Geral" },
   { key: "oticas", label: "Óticas" },
   { key: "config", label: "Configuração" },
   { key: "knowledge", label: "Base de Conhecimento" },
@@ -49,7 +51,7 @@ export function IaTabs({
   config: AiConfigView;
   companies: Company[];
 }) {
-  const [active, setActive] = useState<TabKey>("oticas");
+  const [active, setActive] = useState<TabKey>("overview");
   const [massLoading, setMassLoading] = useState<boolean>(false);
   const [pendingToggle, setPendingToggle] = useState<boolean | null>(null);
 
@@ -157,6 +159,7 @@ export function IaTabs({
         </nav>
       </div>
 
+      {active === "overview" && <VisaoGeralClient />}
       {active === "oticas" && <OticasClient />}
       {active === "config" && <IaClient config={config} />}
       {active === "knowledge" && <KnowledgeClient companies={companies} />}

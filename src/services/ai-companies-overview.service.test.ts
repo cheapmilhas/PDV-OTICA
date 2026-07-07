@@ -12,6 +12,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { prisma } from "@/lib/prisma";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 import { getAllCompaniesAiOverview } from "./ai-companies-overview.service";
 
 function mockGlobalConfig(over: Partial<{ usdBrlRate: number; markupPercent: number; creditTokenFactor: number }> = {}) {
@@ -124,6 +125,20 @@ describe("getAllCompaniesAiOverview", () => {
     expect(groupByArg.by).toEqual(["companyId"]);
     expect(groupByArg.where.createdAt.gte).toBeInstanceOf(Date);
     expect(groupByArg.where.createdAt.lte).toBeInstanceOf(Date);
+  });
+
+  it("usa a fronteira do mês em BRT (startOfLocalMonth/endOfLocalMonth), não UTC", async () => {
+    mockGlobalConfig();
+    (prisma.companySettings.findMany as any).mockResolvedValue([]);
+    (prisma.aiTokenUsage.groupBy as any).mockResolvedValue([]);
+
+    const now = new Date("2026-06-15T15:00:00Z");
+    await getAllCompaniesAiOverview(now);
+
+    const where = (prisma.aiTokenUsage.groupBy as any).mock.calls[0][0].where;
+    expect(where.companyId).toEqual({ not: null });
+    expect(where.createdAt.gte.getTime()).toBe(startOfLocalMonth(now).getTime());
+    expect(where.createdAt.lte.getTime()).toBe(endOfLocalMonth(now).getTime());
   });
 
   it("ordena por lucro desc por padrão (quem dá mais lucro primeiro)", async () => {

@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { computeCostUsd } from "@/lib/ai-pricing";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 const log = logger.child({ service: "ai-usage" });
 
@@ -51,12 +52,22 @@ export interface MonthlyUsage {
   byFeature: Record<string, { tokens: number; costUsd: number }>;
 }
 
-/** Início do mês corrente (UTC) — janela da cota mensal.
- *  v1 usa UTC; numa virada de mês a atribuição pode diferir do horário BR (UTC-3)
- *  por até 3h. Aceitável para a cota; revisitar ao exibir "este mês" nas telas C2/C3. */
-function startOfCurrentMonth(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
+/** Janela [início, fim] de um mês. gte inclusivo, lte inclusivo (fim do mês). */
+export interface UsageWindow {
+  gte: Date;
+  lte: Date;
+}
+
+/**
+ * Janela do mês corrente no fuso local (BRT), em instantes UTC.
+ * Corrige o bug de fuso (antes usava borda de mês em UTC → virada de mês
+ * atribuía até 3h ao mês errado, divergindo do MRR/painel). Fix feito de uma vez
+ * aqui e no ai-companies-overview.service (Fase 2 da Central de IA).
+ * IMPORTANTE: agora a janela é FECHADA (gte..lte) — antes era só `gte` aberto;
+ * com a borda em BRT, sem o teto `lte` vazariam linhas do mês seguinte.
+ */
+function currentMonthWindow(now: Date = new Date()): UsageWindow {
+  return { gte: startOfLocalMonth(now), lte: endOfLocalMonth(now) };
 }
 
 /**
@@ -64,9 +75,12 @@ function startOfCurrentMonth(): Date {
  * Usado pelas telas C2/C3 para exibir o gráfico histórico diário.
  * Multi-tenant por companyId.
  */
-export async function getDailyUsage(companyId: string): Promise<{ date: string; tokens: number; costUsd: number }[]> {
+export async function getDailyUsage(
+  companyId: string,
+  window: UsageWindow = currentMonthWindow()
+): Promise<{ date: string; tokens: number; costUsd: number }[]> {
   const rows = await prisma.aiTokenUsage.findMany({
-    where: { companyId, createdAt: { gte: startOfCurrentMonth() } },
+    where: { companyId, createdAt: { gte: window.gte, lte: window.lte } },
     select: { createdAt: true, inputTokens: true, outputTokens: true, cacheTokens: true, cacheWriteTokens: true, costUsd: true },
   });
   const byDay = new Map<string, { tokens: number; costUsd: number }>();
@@ -90,9 +104,11 @@ export async function getDailyUsage(companyId: string): Promise<{ date: string; 
  * mas não pertence a nenhuma ótica — sem isto, não aparecia em painel nenhum.
  * Só para o super admin.
  */
-export async function getInternalMonthlyUsage(): Promise<MonthlyUsage> {
+export async function getInternalMonthlyUsage(
+  window: UsageWindow = currentMonthWindow()
+): Promise<MonthlyUsage> {
   const rows = await prisma.aiTokenUsage.findMany({
-    where: { companyId: null, createdAt: { gte: startOfCurrentMonth() } },
+    where: { companyId: null, createdAt: { gte: window.gte, lte: window.lte } },
     select: { feature: true, inputTokens: true, outputTokens: true, cacheTokens: true, cacheWriteTokens: true, costUsd: true },
   });
 
@@ -118,9 +134,12 @@ export async function getInternalMonthlyUsage(): Promise<MonthlyUsage> {
  * Soma o uso de IA do mês corrente de uma empresa (tokens + custo + breakdown por feature).
  * Usado pelo guard (cota) e pelas telas (C2/C3). Multi-tenant por companyId.
  */
-export async function getMonthlyUsage(companyId: string): Promise<MonthlyUsage> {
+export async function getMonthlyUsage(
+  companyId: string,
+  window: UsageWindow = currentMonthWindow()
+): Promise<MonthlyUsage> {
   const rows = await prisma.aiTokenUsage.findMany({
-    where: { companyId, createdAt: { gte: startOfCurrentMonth() } },
+    where: { companyId, createdAt: { gte: window.gte, lte: window.lte } },
     select: { feature: true, inputTokens: true, outputTokens: true, cacheTokens: true, cacheWriteTokens: true, costUsd: true },
   });
 

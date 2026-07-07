@@ -81,10 +81,23 @@ describe("getMonthlyUsage", () => {
     expect(r.byFeature.ocr_prescription.tokens).toBe(100 + 50 + 200 + 30 + 10);
     expect(r.byFeature.lead_qualification.tokens).toBe(600);
 
-    // multi-tenant: WHERE filtra companyId + janela do mês
+    // multi-tenant: WHERE filtra companyId + janela do mês (FECHADA: gte..lte)
     const where = (prisma.aiTokenUsage.findMany as any).mock.calls[0][0].where;
     expect(where.companyId).toBe("co1");
     expect(where.createdAt.gte).toBeInstanceOf(Date);
+    // janela fechada em BRT — o teto lte evita vazar linhas do mês seguinte
+    expect(where.createdAt.lte).toBeInstanceOf(Date);
+    expect(where.createdAt.lte.getTime()).toBeGreaterThan(where.createdAt.gte.getTime());
+  });
+
+  it("aceita uma janela custom (window) e a usa no WHERE", async () => {
+    (prisma.aiTokenUsage.findMany as any).mockResolvedValue([]);
+    const gte = new Date("2026-01-01T03:00:00Z");
+    const lte = new Date("2026-02-01T02:59:59Z");
+    await getMonthlyUsage("co1", { gte, lte });
+    const where = (prisma.aiTokenUsage.findMany as any).mock.calls[0][0].where;
+    expect(where.createdAt.gte).toBe(gte);
+    expect(where.createdAt.lte).toBe(lte);
   });
 
   it("mês sem uso → zeros", async () => {
@@ -108,9 +121,10 @@ describe("getDailyUsage", () => {
     expect(r.find(d => d.date === "2026-06-16")?.costUsd).toBeCloseTo(0.03, 6);
     expect(r.find(d => d.date === "2026-06-17")?.tokens).toBe(100);
     expect(Array.isArray(r)).toBe(true);
-    // multi-tenant + janela do mês no WHERE
+    // multi-tenant + janela do mês FECHADA no WHERE
     const where = (prisma.aiTokenUsage.findMany as any).mock.calls[0][0].where;
     expect(where.companyId).toBe("co1");
     expect(where.createdAt.gte).toBeInstanceOf(Date);
+    expect(where.createdAt.lte).toBeInstanceOf(Date);
   });
 });
