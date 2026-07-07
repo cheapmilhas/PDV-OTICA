@@ -1,9 +1,47 @@
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { encryptSecret, decryptSecret } from "@/lib/secret-cipher";
 import { logger } from "@/lib/logger";
+import { defaultTextPricing, type PricingOverrides } from "@/lib/ai-pricing";
 
 const log = logger.child({ service: "ai-config" });
 const SINGLETON_ID = "global";
+
+/**
+ * Cache em processo dos overrides de preço (Fase 4b). computeCostUsd roda no
+ * caminho quente (toda qualificação via logAiUsage) — sem cache seria 1 query ao
+ * banco por chamada de IA. TTL curto: uma mudança de preço reflete em ≤ TTL.
+ */
+const PRICING_CACHE_TTL_MS = 60_000;
+let pricingCache: { at: number; value: PricingOverrides } | null = null;
+
+/**
+ * Overrides de preço por modelo (do banco), com cache de 60s. Vazio ({}) quando
+ * não há overrides → computeCostUsd usa a tabela hardcoded. Best-effort: em erro
+ * de leitura retorna {} (nunca quebra a medição de custo).
+ */
+export async function getPricingOverrides(now: number = Date.now()): Promise<PricingOverrides> {
+  if (pricingCache && now - pricingCache.at < PRICING_CACHE_TTL_MS) {
+    return pricingCache.value;
+  }
+  try {
+    const c = await prisma.aiGlobalConfig.findUnique({
+      where: { id: SINGLETON_ID },
+      select: { modelPricingJson: true },
+    });
+    const value = (c?.modelPricingJson as PricingOverrides | null) ?? {};
+    pricingCache = { at: now, value };
+    return value;
+  } catch (err) {
+    log.warn("getPricingOverrides: falha ao ler — usando tabela padrão", { err });
+    return pricingCache?.value ?? {};
+  }
+}
+
+/** Invalida o cache de overrides (chamar após salvar novos preços). */
+export function invalidatePricingCache(): void {
+  pricingCache = null;
+}
 
 // Allowlist dos modelos Claude válidos para o qualificador de leads.
 // Exportado para reuso na rota/UI (defesa em profundidade: rota também valida).
@@ -29,6 +67,17 @@ export function modelSupportsTemperature(model: string): boolean {
   return !MODELS_WITHOUT_TEMPERATURE.has(model);
 }
 
+/** Preço EFETIVO de um modelo de texto na view (default + override aplicado). */
+export interface EffectiveTextPrice {
+  model: string;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion: number;
+  cacheWritePerMillion: number;
+  /** true se algum campo veio de override do banco (≠ tabela padrão). */
+  overridden: boolean;
+}
+
 export interface AiConfigView {
   hasKey: boolean;
   usdBrlRate: number;
@@ -40,6 +89,8 @@ export interface AiConfigView {
   copilotModel: string;
   transcriptionModel: string;
   hasOpenaiKey: boolean;
+  /** Preços efetivos dos modelos de texto (default + overrides) para a UI editar. */
+  modelPricing: EffectiveTextPrice[];
 }
 
 export async function getAiConfig(): Promise<AiConfigView> {
@@ -47,6 +98,27 @@ export async function getAiConfig(): Promise<AiConfigView> {
     where: { id: SINGLETON_ID },
     update: {},
     create: { id: SINGLETON_ID },
+  });
+  const overrides = (c.modelPricingJson as PricingOverrides | null) ?? {};
+  const defaults = defaultTextPricing();
+  const modelPricing: EffectiveTextPrice[] = Object.entries(defaults).map(([model, base]) => {
+    const ov = overrides[model] ?? {};
+    const pick = (k: keyof typeof base) =>
+      typeof ov[k] === "number" && Number.isFinite(ov[k] as number) && (ov[k] as number) >= 0
+        ? (ov[k] as number)
+        : base[k];
+    const overridden =
+      ["inputPerMillion", "outputPerMillion", "cacheReadPerMillion", "cacheWritePerMillion"].some(
+        (k) => typeof ov[k as keyof typeof ov] === "number"
+      );
+    return {
+      model,
+      inputPerMillion: pick("inputPerMillion"),
+      outputPerMillion: pick("outputPerMillion"),
+      cacheReadPerMillion: pick("cacheReadPerMillion"),
+      cacheWritePerMillion: pick("cacheWritePerMillion"),
+      overridden,
+    };
   });
   return {
     hasKey: !!c.anthropicKeyEnc,
@@ -59,6 +131,7 @@ export async function getAiConfig(): Promise<AiConfigView> {
     copilotModel: c.copilotModel,
     transcriptionModel: c.transcriptionModel,
     hasOpenaiKey: !!c.openaiKeyEnc,
+    modelPricing,
   };
 }
 
@@ -73,6 +146,8 @@ export interface UpdateAiConfigInput {
   copilotModel?: string;
   transcriptionModel?: string;
   openaiKey?: string;
+  /** Overrides de preço por modelo (Fase 4b). Substitui o JSON inteiro quando presente. */
+  modelPricing?: PricingOverrides;
 }
 
 export async function updateAiConfig(patch: UpdateAiConfigInput): Promise<AiConfigView> {
@@ -106,12 +181,47 @@ export async function updateAiConfig(patch: UpdateAiConfigInput): Promise<AiConf
   if (patch.openaiKey && patch.openaiKey.trim().length > 0) {
     data.openaiKeyEnc = encryptSecret(patch.openaiKey.trim());
   }
+  // Overrides de preço (Fase 4b): grava só campos numéricos válidos (>=0), por
+  // modelo conhecido. Sanitiza aqui — a rota também valida com Zod (defesa em prof.).
+  if (patch.modelPricing) {
+    const sanitized = sanitizePricingOverrides(patch.modelPricing);
+    data.modelPricingJson = sanitized as Prisma.InputJsonValue;
+  }
   await prisma.aiGlobalConfig.upsert({
     where: { id: SINGLETON_ID },
     update: data,
     create: { id: SINGLETON_ID, ...data },
   });
+  // Preço mudou → derruba o cache pra refletir já (senão espera o TTL de 60s).
+  if (patch.modelPricing) invalidatePricingCache();
   return getAiConfig();
+}
+
+const PRICE_FIELDS = [
+  "inputPerMillion",
+  "outputPerMillion",
+  "cacheReadPerMillion",
+  "cacheWritePerMillion",
+  "perSecond",
+] as const;
+
+/**
+ * Mantém só modelos conhecidos e campos numéricos válidos (>=0). Descarta lixo,
+ * garantindo que o JSON gravado é sempre um mapa limpo model→{campos numéricos}.
+ */
+function sanitizePricingOverrides(input: PricingOverrides): PricingOverrides {
+  const known = new Set(Object.keys(defaultTextPricing()));
+  const out: PricingOverrides = {};
+  for (const [model, price] of Object.entries(input)) {
+    if (!known.has(model) || !price || typeof price !== "object") continue;
+    const clean: Record<string, number> = {};
+    for (const f of PRICE_FIELDS) {
+      const v = (price as Record<string, unknown>)[f];
+      if (typeof v === "number" && Number.isFinite(v) && v >= 0) clean[f] = v;
+    }
+    if (Object.keys(clean).length > 0) out[model] = clean;
+  }
+  return out;
 }
 
 export async function getAnthropicKey(): Promise<string | undefined> {

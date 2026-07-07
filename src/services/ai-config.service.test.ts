@@ -4,7 +4,7 @@ const encMock = vi.fn((s: string) => `enc(${s})`);
 const decMock = vi.fn((s: string) => s.replace(/^enc\(|\)$/g, ""));
 vi.mock("@/lib/secret-cipher", () => ({ encryptSecret: (s: string) => encMock(s), decryptSecret: (s: string) => decMock(s) }));
 import { prisma } from "@/lib/prisma";
-import { getAiConfig, updateAiConfig, getAnthropicKey, getOpenaiKey, QUALIFIER_MODELS } from "./ai-config.service";
+import { getAiConfig, updateAiConfig, getAnthropicKey, getOpenaiKey, QUALIFIER_MODELS, getPricingOverrides, invalidatePricingCache } from "./ai-config.service";
 
 beforeEach(() => { vi.clearAllMocks(); delete process.env.ANTHROPIC_API_KEY; delete process.env.OPENAI_API_KEY; });
 
@@ -176,5 +176,53 @@ describe("ai-config.service", () => {
     (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({}));
     await updateAiConfig({ transcriptionModel: "claude-haiku-4-5" });
     expect((prisma.aiGlobalConfig.upsert as any).mock.calls[0][0].update.transcriptionModel).toBeUndefined();
+  });
+
+  // --- Fase 4b: preços editáveis ---
+  it("getAiConfig monta modelPricing com os 4 modelos default (sem override)", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({ modelPricingJson: null }));
+    const c = await getAiConfig();
+    const haiku = c.modelPricing.find((p) => p.model === "claude-haiku-4-5");
+    expect(haiku).toBeDefined();
+    expect(haiku!.inputPerMillion).toBe(1); // default do haiku
+    expect(haiku!.overridden).toBe(false);
+  });
+  it("getAiConfig aplica override no modelPricing e marca overridden", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({ modelPricingJson: { "claude-haiku-4-5": { inputPerMillion: 9 } } }));
+    const c = await getAiConfig();
+    const haiku = c.modelPricing.find((p) => p.model === "claude-haiku-4-5")!;
+    expect(haiku.inputPerMillion).toBe(9);
+    expect(haiku.overridden).toBe(true);
+    // outro campo segue default
+    expect(haiku.outputPerMillion).toBe(5);
+  });
+  it("updateAiConfig sanitiza modelPricing: descarta modelo desconhecido e campo negativo", async () => {
+    (prisma.aiGlobalConfig.upsert as any).mockResolvedValue(rowWith({}));
+    await updateAiConfig({ modelPricing: {
+      "claude-haiku-4-5": { inputPerMillion: 3, outputPerMillion: -1 },
+      "modelo-fantasma": { inputPerMillion: 5 },
+    } as any });
+    const written = (prisma.aiGlobalConfig.upsert as any).mock.calls[0][0].update.modelPricingJson;
+    expect(written["claude-haiku-4-5"]).toEqual({ inputPerMillion: 3 }); // output -1 caiu
+    expect(written["modelo-fantasma"]).toBeUndefined(); // modelo desconhecido caiu
+  });
+
+  it("getPricingOverrides cacheia (2ª chamada não consulta o banco de novo)", async () => {
+    invalidatePricingCache();
+    (prisma.aiGlobalConfig.findUnique as any).mockResolvedValue({ modelPricingJson: { "claude-haiku-4-5": { inputPerMillion: 2 } } });
+    const t = 1_000_000;
+    const a = await getPricingOverrides(t);
+    const b = await getPricingOverrides(t + 30_000); // dentro do TTL de 60s
+    expect(a).toEqual({ "claude-haiku-4-5": { inputPerMillion: 2 } });
+    expect(b).toBe(a); // mesma referência = veio do cache
+    expect((prisma.aiGlobalConfig.findUnique as any)).toHaveBeenCalledTimes(1);
+  });
+  it("getPricingOverrides recarrega após o TTL", async () => {
+    invalidatePricingCache();
+    (prisma.aiGlobalConfig.findUnique as any).mockResolvedValue({ modelPricingJson: {} });
+    const t = 2_000_000;
+    await getPricingOverrides(t);
+    await getPricingOverrides(t + 61_000); // além do TTL
+    expect((prisma.aiGlobalConfig.findUnique as any)).toHaveBeenCalledTimes(2);
   });
 });

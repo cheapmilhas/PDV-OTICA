@@ -14,7 +14,7 @@ const log = logger.child({ lib: "ai-pricing" });
 export const USD_BRL_RATE = 5.5; // taxa fixa v1 (atualizar manualmente)
 export const CREDIT_TOKEN_FACTOR = 1000; // 1 crédito = 1000 tokens
 
-interface TokenPrice {
+export interface TokenPrice {
   /** USD por 1M de input tokens */
   inputPerMillion: number;
   /** USD por 1M de output tokens */
@@ -32,9 +32,25 @@ export function knownTextModels(): string[] {
   return Object.keys(TEXT_PRICING);
 }
 
-interface AudioPrice {
+export interface AudioPrice {
   /** USD por segundo de áudio */
   perSecond: number;
+}
+
+/**
+ * Overrides de preço (Fase 4b) vindos da Config no banco. Chave = model id.
+ * O valor pode ser um TokenPrice (texto) ou AudioPrice (áudio). Ausente = usa a
+ * tabela hardcoded abaixo. computeCostUsd aplica o override quando presente.
+ */
+export type PricingOverrides = Record<string, Partial<TokenPrice> & Partial<AudioPrice>>;
+
+/** Preço DEFAULT de texto (cópia pública p/ a UI montar a tabela editável). */
+export function defaultTextPricing(): Record<string, TokenPrice> {
+  return { ...TEXT_PRICING };
+}
+/** Preço DEFAULT de áudio (cópia pública). */
+export function defaultAudioPricing(): Record<string, AudioPrice> {
+  return { ...AUDIO_PRICING };
 }
 
 /** Preço por modelo de texto (Anthropic). Chave = model string exata da API. */
@@ -96,19 +112,28 @@ export interface CostInput {
  * e não deve passar silenciosamente (ex.: alguém adicionou um modelo à allowlist
  * sem cadastrar o preço aqui).
  */
-export function computeCostUsd(input: CostInput): number {
-  const audio = AUDIO_PRICING[input.model];
-  if (audio) {
+export function computeCostUsd(input: CostInput, overrides?: PricingOverrides): number {
+  const ov = overrides?.[input.model];
+
+  // Áudio: override.perSecond tem prioridade sobre a tabela; senão a tabela.
+  const audioBase = AUDIO_PRICING[input.model];
+  const perSecond = numOr(ov?.perSecond, audioBase?.perSecond);
+  if (perSecond !== undefined) {
     const seconds = input.audioSeconds ?? 0;
-    return round6(seconds * audio.perSecond);
+    return round6(seconds * perSecond);
   }
 
-  const text = TEXT_PRICING[input.model];
-  if (text) {
-    const inputCost = ((input.inputTokens ?? 0) / 1_000_000) * text.inputPerMillion;
-    const outputCost = ((input.outputTokens ?? 0) / 1_000_000) * text.outputPerMillion;
-    const cacheReadCost = ((input.cacheTokens ?? 0) / 1_000_000) * text.cacheReadPerMillion;
-    const cacheWriteCost = ((input.cacheWriteTokens ?? 0) / 1_000_000) * text.cacheWritePerMillion;
+  // Texto: cada campo do override cai na tabela quando ausente (merge por campo).
+  const textBase = TEXT_PRICING[input.model];
+  if (textBase || ov) {
+    const inputPerMillion = numOr(ov?.inputPerMillion, textBase?.inputPerMillion) ?? 0;
+    const outputPerMillion = numOr(ov?.outputPerMillion, textBase?.outputPerMillion) ?? 0;
+    const cacheReadPerMillion = numOr(ov?.cacheReadPerMillion, textBase?.cacheReadPerMillion) ?? 0;
+    const cacheWritePerMillion = numOr(ov?.cacheWritePerMillion, textBase?.cacheWritePerMillion) ?? 0;
+    const inputCost = ((input.inputTokens ?? 0) / 1_000_000) * inputPerMillion;
+    const outputCost = ((input.outputTokens ?? 0) / 1_000_000) * outputPerMillion;
+    const cacheReadCost = ((input.cacheTokens ?? 0) / 1_000_000) * cacheReadPerMillion;
+    const cacheWriteCost = ((input.cacheWriteTokens ?? 0) / 1_000_000) * cacheWritePerMillion;
     return round6(inputCost + outputCost + cacheReadCost + cacheWriteCost);
   }
 
@@ -117,6 +142,12 @@ export function computeCostUsd(input: CostInput): number {
     model: input.model,
   });
   return 0; // modelo desconhecido — fail-safe
+}
+
+/** Retorna `a` se for número finito >= 0; senão `b`; senão undefined. */
+function numOr(a: unknown, b: number | undefined): number | undefined {
+  if (typeof a === "number" && Number.isFinite(a) && a >= 0) return a;
+  return b;
 }
 
 /** Converte custo USD em BRL. Aceita taxa custom (ex: do banco); padrão = USD_BRL_RATE fixo. */

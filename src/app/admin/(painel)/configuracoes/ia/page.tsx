@@ -31,6 +31,7 @@ export default async function IaConfigPage() {
         copilotModel: config.copilotModel,
         transcriptionModel: config.transcriptionModel,
         hasOpenaiKey: config.hasOpenaiKey,
+        modelPricing: config.modelPricing,
       }}
       companies={companies}
       history={history}

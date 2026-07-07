@@ -2,6 +2,7 @@ import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { computeCostUsd } from "@/lib/ai-pricing";
+import { getPricingOverrides } from "@/services/ai-config.service";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 const log = logger.child({ service: "ai-usage" });
@@ -26,7 +27,10 @@ export interface LogAiUsageInput {
  */
 export async function logAiUsage(input: LogAiUsageInput): Promise<void> {
   try {
-    const costUsd = computeCostUsd(input);
+    // Overrides de preço (Fase 4b) vêm do cache de 60s — sem query por chamada no
+    // caminho quente. Vazio = tabela hardcoded (comportamento anterior).
+    const overrides = await getPricingOverrides();
+    const costUsd = computeCostUsd(input, overrides);
     await prisma.aiTokenUsage.create({
       data: {
         companyId: input.companyId,

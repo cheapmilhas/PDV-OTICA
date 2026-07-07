@@ -5,6 +5,15 @@ import { useRouter } from "next/navigation";
 import { PageHeader } from "@/components/admin/PageHeader";
 import type { AiConfigHistoryEntry } from "@/services/ai-config-history.service";
 
+interface EffectiveTextPrice {
+  model: string;
+  inputPerMillion: number;
+  outputPerMillion: number;
+  cacheReadPerMillion: number;
+  cacheWritePerMillion: number;
+  overridden: boolean;
+}
+
 interface AiConfigView {
   hasKey: boolean;
   usdBrlRate: number;
@@ -16,6 +25,7 @@ interface AiConfigView {
   copilotModel: string;
   transcriptionModel: string;
   hasOpenaiKey: boolean;
+  modelPricing: EffectiveTextPrice[];
 }
 
 const QUALIFIER_MODEL_OPTIONS: { value: string; label: string }[] = [
@@ -28,15 +38,6 @@ const QUALIFIER_MODEL_OPTIONS: { value: string; label: string }[] = [
 const TRANSCRIPTION_MODEL_OPTIONS: { value: string; label: string }[] = [
   { value: "whisper-1", label: "Whisper v1 (OpenAI — padrão)" },
 ];
-
-// Preço (USD por 1M tokens) espelhado de ai-pricing.ts (TEXT_PRICING é privado no
-// servidor). SÓ para a calculadora de preview client-side — a cobrança real usa o
-// servidor. Se divergir do servidor, o preview é aproximado (rotulado como tal).
-const PREVIEW_PRICING: Record<string, { input: number; output: number }> = {
-  "claude-haiku-4-5": { input: 1, output: 5 },
-  "claude-sonnet-4-6": { input: 3, output: 15 },
-  "claude-opus-4-8": { input: 5, output: 25 },
-};
 
 // Cenário fixo de exemplo p/ o preview (uma qualificação típica de conversa).
 const PREVIEW_INPUT_TOKENS = 4000;
@@ -70,15 +71,44 @@ export function IaClient({
   const [copilotModel, setCopilotModel] = useState(config.copilotModel);
   const [transcriptionModel, setTranscriptionModel] = useState(config.transcriptionModel);
 
+  // Preços editáveis por modelo (Fase 4b). Guardamos como string por campo pra
+  // não brigar com o input; convertemos na hora de montar o body.
+  const [pricing, setPricing] = useState<Record<string, {
+    inputPerMillion: string;
+    outputPerMillion: string;
+    cacheReadPerMillion: string;
+    cacheWritePerMillion: string;
+  }>>(() => {
+    const init: Record<string, {
+      inputPerMillion: string; outputPerMillion: string; cacheReadPerMillion: string; cacheWritePerMillion: string;
+    }> = {};
+    for (const p of config.modelPricing) {
+      init[p.model] = {
+        inputPerMillion: String(p.inputPerMillion),
+        outputPerMillion: String(p.outputPerMillion),
+        cacheReadPerMillion: String(p.cacheReadPerMillion),
+        cacheWritePerMillion: String(p.cacheWritePerMillion),
+      };
+    }
+    return init;
+  });
+
+  function setPrice(model: string, field: keyof (typeof pricing)[string], value: string) {
+    setPricing((prev) => ({ ...prev, [model]: { ...prev[model], [field]: value } }));
+  }
+
   // Preview do impacto de câmbio/markup — client-side, NÃO salva nada. Recalcula
   // ao vivo conforme o operador ajusta os campos, usando o modelo do qualificador
-  // como exemplo. Custo cru → ×câmbio → ×(1+markup) = preço de venda estimado.
+  // e os PREÇOS EDITADOS na tabela (Fase 4b) como exemplo. Custo cru → ×câmbio →
+  // ×(1+markup) = preço de venda estimado.
   const previewRate = parseFloat(usdBrlRate);
   const previewMarkup = parseFloat(markupPercent);
-  const previewModelPrice = PREVIEW_PRICING[qualifierModel] ?? PREVIEW_PRICING["claude-haiku-4-5"];
+  const previewRow = pricing[qualifierModel] ?? pricing["claude-haiku-4-5"];
+  const previewInputPrice = previewRow ? parseFloat(previewRow.inputPerMillion) || 0 : 0;
+  const previewOutputPrice = previewRow ? parseFloat(previewRow.outputPerMillion) || 0 : 0;
   const previewCostUsd =
-    (PREVIEW_INPUT_TOKENS / 1_000_000) * previewModelPrice.input +
-    (PREVIEW_OUTPUT_TOKENS / 1_000_000) * previewModelPrice.output;
+    (PREVIEW_INPUT_TOKENS / 1_000_000) * previewInputPrice +
+    (PREVIEW_OUTPUT_TOKENS / 1_000_000) * previewOutputPrice;
   const previewValid = !isNaN(previewRate) && previewRate >= 0 && !isNaN(previewMarkup) && previewMarkup >= 0;
   const previewCostBrl = previewValid ? previewCostUsd * previewRate : 0;
   const previewPriceBrl = previewValid ? previewCostBrl * (1 + previewMarkup / 100) : 0;
@@ -127,6 +157,12 @@ export function IaClient({
       ocrModel?: string;
       copilotModel?: string;
       transcriptionModel?: string;
+      modelPricing?: Record<string, {
+        inputPerMillion: number;
+        outputPerMillion: number;
+        cacheReadPerMillion: number;
+        cacheWritePerMillion: number;
+      }>;
     } = {};
 
     // Only send the key if the user typed something
@@ -151,6 +187,20 @@ export function IaClient({
     if (ocrModel) body.ocrModel = ocrModel;
     if (copilotModel) body.copilotModel = copilotModel;
     if (transcriptionModel) body.transcriptionModel = transcriptionModel;
+
+    // Sempre envia a tabela de preços atual (o servidor sobrescreve o JSON inteiro).
+    // Converte strings→números; campo inválido cai pro valor default exibido (0 no
+    // pior caso, mas os inputs vêm pré-preenchidos com o preço efetivo).
+    const pricingBody: NonNullable<typeof body.modelPricing> = {};
+    for (const [model, row] of Object.entries(pricing)) {
+      pricingBody[model] = {
+        inputPerMillion: parseFloat(row.inputPerMillion) || 0,
+        outputPerMillion: parseFloat(row.outputPerMillion) || 0,
+        cacheReadPerMillion: parseFloat(row.cacheReadPerMillion) || 0,
+        cacheWritePerMillion: parseFloat(row.cacheWritePerMillion) || 0,
+      };
+    }
+    body.modelPricing = pricingBody;
 
     try {
       const res = await fetch("/api/admin/ai-config", {
@@ -439,6 +489,63 @@ export function IaClient({
               </p>
             </div>
           </div>
+        </div>
+
+        {/* Preços por modelo (Fase 4b) — USD por 1M de tokens. Editar só afeta o
+            custo de USOS FUTUROS; o histórico já está congelado. */}
+        <div className="bg-muted border border-border rounded-lg p-5 space-y-3">
+          <div>
+            <p className="font-semibold text-foreground">Preços dos modelos (USD por 1M tokens)</p>
+            <p className="text-sm text-muted-foreground mt-0.5">
+              Custo real cobrado pelo provedor. Alterar aqui afeta apenas o cálculo de usos futuros — o custo já registrado não muda.
+            </p>
+          </div>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-xs text-muted-foreground">
+                <tr>
+                  <th className="text-left font-medium py-1 pr-2">Modelo</th>
+                  <th className="text-right font-medium py-1 px-1">Input</th>
+                  <th className="text-right font-medium py-1 px-1">Output</th>
+                  <th className="text-right font-medium py-1 px-1">Cache leitura</th>
+                  <th className="text-right font-medium py-1 pl-1">Cache escrita</th>
+                </tr>
+              </thead>
+              <tbody>
+                {config.modelPricing.map((p) => {
+                  const row = pricing[p.model];
+                  if (!row) return null;
+                  const priceInput = (field: keyof typeof row) => (
+                    <input
+                      type="number"
+                      min={0}
+                      step="0.01"
+                      value={row[field]}
+                      onChange={(e) => setPrice(p.model, field, e.target.value)}
+                      className="w-20 rounded-md border border-input bg-background px-2 py-1 text-xs text-right ring-offset-background focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+                    />
+                  );
+                  return (
+                    <tr key={p.model} className="border-t border-border">
+                      <td className="py-1.5 pr-2 font-mono text-xs text-foreground">
+                        {p.model}
+                        {p.overridden && (
+                          <span className="ml-1 text-[10px] text-amber-600" title="Preço personalizado (≠ padrão)">•</span>
+                        )}
+                      </td>
+                      <td className="py-1.5 px-1 text-right">{priceInput("inputPerMillion")}</td>
+                      <td className="py-1.5 px-1 text-right">{priceInput("outputPerMillion")}</td>
+                      <td className="py-1.5 px-1 text-right">{priceInput("cacheReadPerMillion")}</td>
+                      <td className="py-1.5 pl-1 text-right">{priceInput("cacheWritePerMillion")}</td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+          <p className="text-[11px] text-muted-foreground">
+            O ponto âmbar (•) marca um modelo com preço personalizado. Deixar igual ao padrão do provedor mantém o comportamento original.
+          </p>
         </div>
 
         {/* Preview client-side do impacto de câmbio/markup — não salva nada */}
