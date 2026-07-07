@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { usdToBrl, priceForCompany } from "@/lib/ai-pricing";
+import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 const log = logger.child({ service: "ai-companies-overview" });
 const SINGLETON_ID = "global";
@@ -32,23 +33,6 @@ export interface CompanyAiOverviewRow {
   lucroBrl: number;
 }
 
-/**
- * Início do mês corrente (UTC) — MESMA fronteira usada por getMonthlyUsage no
- * ai-usage.service, de propósito: a tabela central e o painel por-cliente têm
- * que exibir o MESMO "gasto do mês". A correção de fuso (BRT) é da Fase 2 e será
- * feita nos dois lugares de uma vez para não divergirem. NÃO trocar isto sozinho.
- */
-function startOfCurrentMonthUtc(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth(), 1));
-}
-
-/** Primeiro instante do próximo mês (UTC), exclusivo — teto da janela. */
-function startOfNextMonthUtc(): Date {
-  const now = new Date();
-  return new Date(Date.UTC(now.getUTCFullYear(), now.getUTCMonth() + 1, 1));
-}
-
 function toNum(v: unknown): number {
   if (v == null) return 0;
   return Number((v as { toString(): string }).toString());
@@ -67,9 +51,13 @@ const round6 = (n: number): number => Math.round(n * 1_000_000) / 1_000_000;
  * As linhas vêm ordenadas por lucro desc (quem dá mais lucro primeiro) — o
  * dono pediu "achar quem consome/rende mais". A UI pode reordenar client-side.
  */
-export async function getAllCompaniesAiOverview(): Promise<CompanyAiOverviewRow[]> {
-  const gte = startOfCurrentMonthUtc();
-  const lte = startOfNextMonthUtc();
+export async function getAllCompaniesAiOverview(now: Date = new Date()): Promise<CompanyAiOverviewRow[]> {
+  // Janela do mês no fuso local (BRT). MESMA fronteira usada por getMonthlyUsage
+  // no ai-usage.service, de propósito: a tabela central e o painel por-cliente
+  // exibem o MESMO "gasto do mês". O fix de fuso foi feito nos dois lugares de uma
+  // vez (Fase 2 da Central de IA) — não divergir.
+  const gte = startOfLocalMonth(now);
+  const lte = endOfLocalMonth(now);
 
   // 1 config global (câmbio + markup global) — lido uma vez, reusado p/ todas.
   const [config, settingsRows, usageRows] = await Promise.all([
