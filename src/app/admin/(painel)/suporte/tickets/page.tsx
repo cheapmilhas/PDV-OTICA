@@ -68,7 +68,7 @@ export default async function TicketsPage() {
       />
 
       {/* KPIs */}
-      <div className="grid grid-cols-4 gap-4 mb-6">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4 mb-6">
         <KPICard icon={Inbox} label="Abertos" value={String(openCount)} />
         <KPICard icon={Loader} label="Em Andamento" value={String(inProgressCount)} />
         <KPICard icon={Clock} label="Aguardando" value={String(waitingCount)} />

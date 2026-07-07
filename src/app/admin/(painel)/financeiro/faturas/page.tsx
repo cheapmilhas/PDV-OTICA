@@ -54,22 +54,27 @@ export default async function FaturasPage({
     etapaWhere = { nfGenerated: true, nfSent: false };
   }
 
-  const invoices = await prisma.invoice.findMany({
-    where: {
-      ...(statusFilter ? { status: statusFilter as any } : {}),
-      ...etapaWhere,
-    },
-    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
-    include: {
-      subscription: {
-        include: {
-          company: { select: { id: true, name: true, email: true, phone: true } },
-          plan: { select: { name: true } },
+  const listWhere = {
+    ...(statusFilter ? { status: statusFilter as any } : {}),
+    ...etapaWhere,
+  };
+  const [invoices, filteredTotal] = await Promise.all([
+    prisma.invoice.findMany({
+      where: listWhere,
+      orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+      include: {
+        subscription: {
+          include: {
+            company: { select: { id: true, name: true, email: true, phone: true } },
+            plan: { select: { name: true } },
+          },
         },
       },
-    },
-    take: 100,
-  });
+      take: 100,
+    }),
+    // Total real respeitando o filtro atual — para não truncar em silêncio.
+    prisma.invoice.count({ where: listWhere }),
+  ]);
 
   // Contadores
   const [totalPending, totalPaid, totalOverdue, aguardandoEnvio, aguardandoPagamento, aguardandoNf] = await Promise.all([
@@ -102,7 +107,11 @@ export default async function FaturasPage({
     <div className="p-6 text-foreground">
       <PageHeader
         title="Faturas"
-        subtitle="Gestão de cobranças manuais"
+        subtitle={
+          filteredTotal > invoices.length
+            ? `Mostrando ${invoices.length} de ${filteredTotal} faturas — refine os filtros para ver as demais`
+            : "Gestão de cobranças manuais"
+        }
         actions={
           <div className="flex items-center gap-3">
             <SyncInvoicesButton />

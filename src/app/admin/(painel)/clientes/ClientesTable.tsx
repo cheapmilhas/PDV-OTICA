@@ -5,6 +5,7 @@ import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { monthlyValueOfSubscription } from "@/lib/admin-metrics";
 import type { Prisma } from "@prisma/client";
 import type { companyInclude } from "./page";
 
@@ -62,10 +63,20 @@ export function ClientesTable({ companies }: ClientesTableProps) {
             const sub = c.subscriptions[0];
             const status = sub?.status ?? "NO_SUBSCRIPTION";
 
+            // MRR pela MESMA função dos totais do dashboard/relatórios
+            // (aplica ciclo YEARLY/12 + desconto vigente). Antes calculava à
+            // mão sem desconto, divergindo do "MRR" das telas de topo.
             const mrr = sub
-              ? sub.billingCycle === "YEARLY"
-                ? Math.round(sub.plan.priceYearly / 12)
-                : sub.plan.priceMonthly
+              ? monthlyValueOfSubscription(
+                  {
+                    priceMonthly: sub.plan.priceMonthly,
+                    priceYearly: sub.plan.priceYearly,
+                    billingCycle: sub.billingCycle,
+                    discountPercent: sub.discountPercent,
+                    discountExpiresAt: sub.discountExpiresAt,
+                  },
+                  new Date(),
+                )
               : null;
 
             const checklist = c.onboardingChecklist;
