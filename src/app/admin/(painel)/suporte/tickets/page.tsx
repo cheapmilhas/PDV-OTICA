@@ -10,11 +10,19 @@ import { Button } from "@/components/ui/button";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
-const PRIORITY_ICONS: Record<string, string> = {
-  LOW: "🟢",
-  MEDIUM: "🟡",
-  HIGH: "🟠",
-  URGENT: "🔴",
+// Prioridade → cor do "dot" via token semântico (sem emoji, theme-aware).
+const PRIORITY_DOT: Record<string, string> = {
+  LOW: "bg-success",
+  MEDIUM: "bg-warning",
+  HIGH: "bg-warning",
+  URGENT: "bg-destructive",
+};
+
+const PRIORITY_LABELS: Record<string, string> = {
+  LOW: "Baixa",
+  MEDIUM: "Média",
+  HIGH: "Alta",
+  URGENT: "Urgente",
 };
 
 export default async function TicketsPage() {
@@ -107,8 +115,12 @@ export default async function TicketsPage() {
                   </TableCell>
                   <TableCell className="text-foreground">{ticket.company.tradeName}</TableCell>
                   <TableCell>
-                    <span>
-                      {PRIORITY_ICONS[ticket.priority]} {ticket.priority}
+                    <span className="inline-flex items-center gap-1.5 text-sm text-foreground">
+                      <span
+                        aria-hidden="true"
+                        className={`h-2 w-2 rounded-full ${PRIORITY_DOT[ticket.priority] ?? "bg-muted-foreground"}`}
+                      />
+                      {PRIORITY_LABELS[ticket.priority] ?? ticket.priority}
                     </span>
                   </TableCell>
                   <TableCell>

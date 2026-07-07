@@ -7,6 +7,9 @@ import { RecalcOneButton } from "./RecalcOneButton";
 import { Activity } from "lucide-react";
 import Link from "next/link";
 import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 const CATEGORY_ORDER: HealthCategory[] = ["CRITICAL", "AT_RISK", "HEALTHY", "THRIVING"];
 const CATEGORY_LABEL: Record<HealthCategory, string> = {
@@ -95,28 +98,37 @@ export default async function AdminSaudePage({
       </FilterBar>
 
       {companies.length === 0 ? (
-        <div className="rounded-xl border border-border bg-card p-12 text-center text-muted-foreground">
-          <Activity className="h-10 w-10 mx-auto mb-3 opacity-30" />
-          <p className="font-medium text-muted-foreground">
-            {totalScored === 0 ? "Nenhuma saúde calculada ainda" : "Nenhum cliente nesta categoria"}
-          </p>
-          <p className="text-sm mt-1">
-            {totalScored === 0
-              ? 'Clique em "Recalcular saúde" para gerar os scores.'
-              : "Tente outro filtro."}
-          </p>
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState
+            icon={Activity}
+            message={
+              totalScored === 0 ? "Nenhuma saúde calculada ainda" : "Nenhum cliente nesta categoria"
+            }
+            action={
+              <p className="text-sm text-muted-foreground">
+                {totalScored === 0
+                  ? 'Clique em "Recalcular saúde" para gerar os scores.'
+                  : "Tente outro filtro."}
+              </p>
+            }
+          />
         </div>
       ) : (
-        <div className="rounded-xl border border-border bg-card overflow-x-auto">
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="border-b border-border">
-                {["Empresa", "Saúde", "Uso", "Billing", "Engaj.", "Suporte", "Fatores de risco", ""].map((h) => (
-                  <th key={h} className="px-4 py-3 text-left text-xs font-medium text-muted-foreground">{h}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
+        <div className="rounded-xl border border-border bg-card overflow-hidden">
+          <ResponsiveTable minWidth={900}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Saúde</TableHead>
+                <TableHead>Uso</TableHead>
+                <TableHead>Billing</TableHead>
+                <TableHead>Engaj.</TableHead>
+                <TableHead>Suporte</TableHead>
+                <TableHead>Fatores de risco</TableHead>
+                <TableHead className="w-10" />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
               {companies.map((c) => {
                 const sub = c.healthScores[0];
                 // riskFactors é Json? — narrow de verdade (só strings), não cast cego.
@@ -125,25 +137,25 @@ export default async function AdminSaudePage({
                   ? rawRisks.filter((r): r is string => typeof r === "string")
                   : [];
                 return (
-                  <tr key={c.id} className="border-b border-border hover:bg-muted transition-colors align-top">
-                    <td className="px-4 py-3">
+                  <TableRow key={c.id} className="align-top">
+                    <TableCell>
                       <Link href={`/admin/clientes/${c.id}`} className="font-medium text-foreground hover:text-primary">{c.name}</Link>
                       {c.healthUpdatedAt && (
                         <p className="text-xs text-muted-foreground mt-0.5">
                           {new Date(c.healthUpdatedAt).toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })}
                         </p>
                       )}
-                    </td>
-                    <td className="px-4 py-3">
+                    </TableCell>
+                    <TableCell>
                       {c.healthScore != null && c.healthCategory && (
                         <HealthBadge score={c.healthScore} category={c.healthCategory} size="sm" />
                       )}
-                    </td>
+                    </TableCell>
                     <SubCell value={sub?.usageScore} />
                     <SubCell value={sub?.billingScore} />
                     <SubCell value={sub?.engagementScore} />
                     <SubCell value={sub?.supportScore} />
-                    <td className="px-4 py-3 max-w-xs">
+                    <TableCell className="max-w-xs">
                       {risks.length === 0 ? (
                         <span className="text-muted-foreground text-xs">—</span>
                       ) : (
@@ -152,13 +164,13 @@ export default async function AdminSaudePage({
                           {risks.length > 3 && <li className="text-muted-foreground/70">+{risks.length - 3} mais</li>}
                         </ul>
                       )}
-                    </td>
-                    <td className="px-4 py-3"><RecalcOneButton companyId={c.id} /></td>
-                  </tr>
+                    </TableCell>
+                    <TableCell><RecalcOneButton companyId={c.id} /></TableCell>
+                  </TableRow>
                 );
               })}
-            </tbody>
-          </table>
+            </TableBody>
+          </ResponsiveTable>
         </div>
       )}
     </div>
@@ -166,7 +178,8 @@ export default async function AdminSaudePage({
 }
 
 function SubCell({ value }: { value?: number | null }) {
-  if (value == null) return <td className="px-4 py-3 text-muted-foreground text-xs">—</td>;
-  const color = value >= 70 ? "text-emerald-600" : value >= 40 ? "text-amber-600" : "text-red-600";
-  return <td className={`px-4 py-3 text-xs font-medium ${color}`}>{value}</td>;
+  if (value == null) return <TableCell className="text-muted-foreground text-xs">—</TableCell>;
+  // Tom semântico via token (theme-aware): saudável→success, risco→warning, crítico→destructive.
+  const color = value >= 70 ? "text-success" : value >= 40 ? "text-warning" : "text-destructive";
+  return <TableCell className={`text-xs font-medium ${color}`}>{value}</TableCell>;
 }

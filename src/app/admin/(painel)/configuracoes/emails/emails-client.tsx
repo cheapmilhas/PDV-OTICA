@@ -2,8 +2,13 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
+import { Mail, AlertTriangle } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { EmptyState } from "@/components/admin/EmptyState";
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
+import { Button } from "@/components/ui/button";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -70,7 +75,7 @@ function statusBadge(status: string) {
   switch (status) {
     case "SENT":
       return (
-        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-emerald-100 text-emerald-700">
+        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-success/10 text-success">
           Enviado
         </span>
       );
@@ -82,14 +87,14 @@ function statusBadge(status: string) {
       );
     case "FAILED":
       return (
-        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-rose-100 text-rose-700">
+        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-destructive/10 text-destructive">
           Falhou
         </span>
       );
     case "PENDING":
     default:
       return (
-        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-amber-100 text-amber-700">
+        <span className="px-2 py-0.5 rounded text-xs font-semibold bg-warning/10 text-warning">
           Pendente
         </span>
       );
@@ -138,17 +143,18 @@ export function EmailsClient({
         subtitle="Controle os emails transacionais enviados aos clientes do SaaS: boas-vindas, trial, cobranças, suspensão e cancelamento."
       />
 
-      {error && <p className="text-sm text-rose-600">{error}</p>}
+      {error && <p className="text-sm text-destructive">{error}</p>}
 
       {/* Modo teste — banner de aviso quando ligado */}
       {config.testMode && (
-        <div className="bg-amber-50 border border-amber-200 rounded-lg p-4">
-          <p className="text-sm font-semibold text-amber-700">
-            ⚠️ Modo teste ligado — os emails vão só para{" "}
+        <div className="bg-warning/10 border border-warning/30 rounded-lg p-4">
+          <p className="text-sm font-semibold text-warning flex items-center gap-1.5">
+            <AlertTriangle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+            Modo teste ligado — os emails vão só para{" "}
             <span className="font-mono">{config.testEmail || "(sem endereço definido)"}</span>
             , não para os clientes.
           </p>
-          <p className="text-xs text-amber-600 mt-1">
+          <p className="text-xs text-warning/90 mt-1">
             Desative o modo teste abaixo quando estiver pronto para enviar aos clientes reais.
           </p>
         </div>
@@ -157,8 +163,13 @@ export function EmailsClient({
       {/* Interruptor mestre */}
       <div className="bg-muted border border-border rounded-lg p-5 flex items-center justify-between">
         <div>
-          <p className="font-semibold text-foreground">
-            Status: {config.masterEnabled ? "🟢 Emails ativados" : "⚪ Emails desativados"}
+          <p className="font-semibold text-foreground flex items-center gap-1.5">
+            Status:
+            <span
+              aria-hidden="true"
+              className={`h-2 w-2 rounded-full ${config.masterEnabled ? "bg-success" : "bg-muted-foreground"}`}
+            />
+            {config.masterEnabled ? "Emails ativados" : "Emails desativados"}
           </p>
           <p className="text-sm text-muted-foreground">
             {config.masterEnabled
@@ -166,17 +177,13 @@ export function EmailsClient({
               : "Nenhum email é disparado enquanto desligado."}
           </p>
         </div>
-        <button
+        <Button
           onClick={() => patch({ masterEnabled: !config.masterEnabled })}
           disabled={saving}
-          className={`px-4 py-2 rounded-md font-semibold text-sm disabled:opacity-50 ${
-            config.masterEnabled
-              ? "bg-rose-600 hover:bg-rose-700 text-white"
-              : "bg-emerald-600 hover:bg-emerald-700 text-white"
-          }`}
+          variant={config.masterEnabled ? "destructive" : "success"}
         >
           {config.masterEnabled ? "Desligar" : "Ligar"}
-        </button>
+        </Button>
       </div>
 
       {/* Geração de cobrança */}
@@ -188,17 +195,13 @@ export function EmailsClient({
               Controla se o sistema busca faturas Asaas e envia emails de cobrança.
             </p>
           </div>
-          <button
+          <Button
             onClick={() => patch({ invoiceGenerationEnabled: !config.invoiceGenerationEnabled })}
             disabled={saving}
-            className={`px-4 py-2 rounded-md font-semibold text-sm disabled:opacity-50 ${
-              config.invoiceGenerationEnabled
-                ? "bg-rose-600 hover:bg-rose-700 text-white"
-                : "bg-emerald-600 hover:bg-emerald-700 text-white"
-            }`}
+            variant={config.invoiceGenerationEnabled ? "destructive" : "success"}
           >
             {config.invoiceGenerationEnabled ? "Desligar" : "Ligar"}
-          </button>
+          </Button>
         </div>
 
         {/* Status banner */}
@@ -210,22 +213,23 @@ export function EmailsClient({
             </p>
           </div>
         ) : config.testMode ? (
-          <div className="bg-amber-50 border border-amber-200 rounded-md p-3">
-            <p className="text-sm text-amber-700">
+          <div className="bg-warning/10 border border-warning/30 rounded-md p-3">
+            <p className="text-sm text-warning">
               Cobranças sendo processadas, mas emails vão só para{" "}
               <span className="font-mono">{config.testEmail || "(sem endereço)"}</span>.
             </p>
           </div>
         ) : !config.masterEnabled ? (
-          <div className="bg-rose-50 border border-rose-200 rounded-md p-3">
-            <p className="text-sm text-rose-700">
-              ⚠️ Geração ligada, mas o interruptor mestre de emails está DESLIGADO — nenhum email
+          <div className="bg-destructive/10 border border-destructive/30 rounded-md p-3">
+            <p className="text-sm text-destructive flex items-center gap-1.5">
+              <AlertTriangle className="h-4 w-4 flex-shrink-0" aria-hidden="true" />
+              Geração ligada, mas o interruptor mestre de emails está DESLIGADO — nenhum email
               sai.
             </p>
           </div>
         ) : (
-          <div className="bg-emerald-50 border border-emerald-200 rounded-md p-3">
-            <p className="text-sm text-emerald-700">
+          <div className="bg-success/10 border border-success/30 rounded-md p-3">
+            <p className="text-sm text-success">
               Geração de cobrança ativa — cobranças são buscadas e comunicadas aos clientes.
             </p>
           </div>
@@ -243,7 +247,7 @@ export function EmailsClient({
               Quando ligado, todos os emails vão para o endereço de teste abaixo.
             </p>
           </div>
-          <button
+          <Button
             onClick={() => {
               if (!config.testMode) {
                 patch({ testMode: true });
@@ -252,14 +256,13 @@ export function EmailsClient({
               }
             }}
             disabled={saving}
-            className={`px-4 py-2 rounded-md font-semibold text-sm disabled:opacity-50 ${
-              config.testMode
-                ? "bg-blue-600 hover:bg-blue-700 text-white"
-                : "bg-background hover:bg-muted text-foreground"
-            }`}
+            variant={config.testMode ? "default" : "outline"}
+            className={
+              config.testMode ? "bg-info text-info-foreground hover:bg-info/90" : undefined
+            }
           >
             {config.testMode ? "🔍 Teste ligado" : "Ligar teste"}
-          </button>
+          </Button>
         </div>
         <div>
           <label className="block text-sm text-muted-foreground mb-1">Endereço de teste</label>
@@ -269,15 +272,14 @@ export function EmailsClient({
               value={testEmailValue}
               onChange={(e) => setTestEmailValue(e.target.value)}
               placeholder="admin@exemplo.com"
-              className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus:outline-none focus:border-primary"
+              className="flex-1 bg-background border border-input rounded-md px-3 py-2 text-sm text-foreground placeholder-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             />
-            <button
+            <Button
               onClick={() => patch({ testEmail: testEmailValue || null })}
               disabled={saving || testEmailValue === (config.testEmail ?? "")}
-              className="px-4 py-2 bg-primary hover:bg-primary/90 disabled:opacity-50 text-primary-foreground rounded-md text-sm font-semibold"
             >
               Salvar
-            </button>
+            </Button>
           </div>
         </div>
       </div>
@@ -294,14 +296,15 @@ export function EmailsClient({
                   <button
                     role="switch"
                     aria-checked={enabled}
+                    aria-label={`${enabled ? "Desativar" : "Ativar"} email: ${label}`}
                     onClick={() => patch({ [flag]: !enabled })}
                     disabled={saving}
-                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50 focus:outline-none ${
+                    className={`relative inline-flex h-5 w-9 flex-shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors disabled:opacity-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                       enabled ? "bg-primary" : "bg-muted-foreground/40"
                     }`}
                   >
                     <span
-                      className={`inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform ${
+                      className={`inline-block h-4 w-4 transform rounded-full bg-background shadow transition-transform ${
                         enabled ? "translate-x-4" : "translate-x-0"
                       }`}
                     />
@@ -312,7 +315,7 @@ export function EmailsClient({
                   onClick={() =>
                     window.open(`/api/admin/saas-emails/preview?type=${key}`, "_blank")
                   }
-                  className="text-xs text-primary hover:text-primary/80 underline"
+                  className="text-xs text-primary hover:text-primary/80 underline focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring rounded"
                 >
                   Pré-visualizar
                 </button>
@@ -326,36 +329,34 @@ export function EmailsClient({
       <div className="bg-muted border border-border rounded-lg p-5">
         <p className="font-semibold text-foreground mb-3">Histórico de envios (últimos 50)</p>
         {logs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum envio registrado ainda.</p>
+          <EmptyState icon={Mail} message="Nenhum envio registrado ainda." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="text-left text-xs text-muted-foreground border-b border-border">
-                  <th className="pb-2 pr-4 font-medium">Empresa</th>
-                  <th className="pb-2 pr-4 font-medium">Tipo</th>
-                  <th className="pb-2 pr-4 font-medium">Status</th>
-                  <th className="pb-2 pr-4 font-medium">Destinatário</th>
-                  <th className="pb-2 font-medium">Data</th>
-                </tr>
-              </thead>
-              <tbody>
-                {logs.map((l) => (
-                  <tr key={l.id} className="border-b border-border">
-                    <td className="py-2 pr-4 text-foreground">{l.companyName}</td>
-                    <td className="py-2 pr-4 text-foreground">
-                      {LABEL_BY_TYPE[l.eventType] ?? l.eventType}
-                    </td>
-                    <td className="py-2 pr-4">{statusBadge(l.status)}</td>
-                    <td className="py-2 pr-4 text-muted-foreground font-mono text-xs">{l.to}</td>
-                    <td className="py-2 text-muted-foreground text-xs">
-                      {new Date(l.createdAt).toLocaleString("pt-BR")}
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable minWidth={720}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Tipo</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Destinatário</TableHead>
+                <TableHead>Data</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell className="text-foreground">{l.companyName}</TableCell>
+                  <TableCell className="text-foreground">
+                    {LABEL_BY_TYPE[l.eventType] ?? l.eventType}
+                  </TableCell>
+                  <TableCell>{statusBadge(l.status)}</TableCell>
+                  <TableCell className="text-muted-foreground font-mono text-xs">{l.to}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {new Date(l.createdAt).toLocaleString("pt-BR")}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
         )}
       </div>
 

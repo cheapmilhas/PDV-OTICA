@@ -1,7 +1,12 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
+import { FileText } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { Button } from "@/components/ui/button";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 import {
   AlertDialog,
   AlertDialogAction,
@@ -165,8 +170,8 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
       />
 
       {error && (
-        <div className="bg-rose-50 border border-rose-200 rounded-lg p-4">
-          <p className="text-sm text-rose-700">{error}</p>
+        <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-4">
+          <p className="text-sm text-destructive">{error}</p>
         </div>
       )}
 
@@ -177,63 +182,65 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
         {loading ? (
           <p className="text-sm text-muted-foreground">Carregando…</p>
         ) : docs.length === 0 ? (
-          <p className="text-sm text-muted-foreground">Nenhum documento cadastrado ainda.</p>
+          <EmptyState icon={FileText} message="Nenhum documento cadastrado ainda." />
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b border-border text-left text-muted-foreground">
-                  <th className="py-2 pr-3 font-medium">Título</th>
-                  <th className="py-2 pr-3 font-medium">Escopo</th>
-                  <th className="py-2 pr-3 font-medium text-right">Tokens</th>
-                  <th className="py-2 pr-3 font-medium">Status</th>
-                  <th className="py-2 font-medium text-right">Ações</th>
-                </tr>
-              </thead>
-              <tbody>
-                {docs.map((doc) => (
-                  <tr key={doc.id} className="border-b border-border/60">
-                    <td className="py-2 pr-3 text-foreground">{doc.title}</td>
-                    <td className="py-2 pr-3 text-muted-foreground">{companyName(doc.companyId)}</td>
-                    <td className="py-2 pr-3 text-right text-muted-foreground tabular-nums">
-                      {doc.tokensEstimate.toLocaleString("pt-BR")}
-                    </td>
-                    <td className="py-2 pr-3">
-                      {doc.active ? (
-                        <span className="inline-flex rounded-full bg-emerald-50 px-2 py-0.5 text-xs font-medium text-emerald-700">
-                          Ativo
-                        </span>
-                      ) : (
-                        <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
-                          Inativo
-                        </span>
-                      )}
-                    </td>
-                    <td className="py-2 whitespace-nowrap">
-                      <div className="flex justify-end gap-1">
-                        <button
-                          type="button"
-                          onClick={() => handleToggle(doc)}
-                          disabled={pendingId === doc.id}
-                          className="inline-flex items-center px-2 py-1.5 rounded-md text-xs font-medium text-primary hover:bg-muted focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          {pendingId === doc.id ? "Salvando…" : doc.active ? "Desativar" : "Ativar"}
-                        </button>
-                        <button
-                          type="button"
-                          onClick={() => setDocToDelete(doc)}
-                          disabled={pendingId === doc.id}
-                          className="inline-flex items-center px-2 py-1.5 rounded-md text-xs font-medium text-rose-600 hover:bg-rose-50 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
-                        >
-                          Excluir
-                        </button>
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
-          </div>
+          <ResponsiveTable minWidth={720}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Título</TableHead>
+                <TableHead>Escopo</TableHead>
+                <TableHead className="text-right">Tokens</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead className="text-right">Ações</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {docs.map((doc) => (
+                <TableRow key={doc.id}>
+                  <TableCell className="text-foreground">{doc.title}</TableCell>
+                  <TableCell className="text-muted-foreground">{companyName(doc.companyId)}</TableCell>
+                  <TableCell className="text-right text-muted-foreground tabular-nums">
+                    {doc.tokensEstimate.toLocaleString("pt-BR")}
+                  </TableCell>
+                  <TableCell>
+                    {doc.active ? (
+                      <span className="inline-flex rounded-full bg-success/10 px-2 py-0.5 text-xs font-medium text-success">
+                        Ativo
+                      </span>
+                    ) : (
+                      <span className="inline-flex rounded-full bg-muted px-2 py-0.5 text-xs font-medium text-muted-foreground">
+                        Inativo
+                      </span>
+                    )}
+                  </TableCell>
+                  <TableCell className="whitespace-nowrap">
+                    <div className="flex justify-end gap-1">
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => handleToggle(doc)}
+                        disabled={pendingId === doc.id}
+                        className="text-primary"
+                      >
+                        {pendingId === doc.id ? "Salvando…" : doc.active ? "Desativar" : "Ativar"}
+                      </Button>
+                      <Button
+                        type="button"
+                        variant="ghost"
+                        size="sm"
+                        onClick={() => setDocToDelete(doc)}
+                        disabled={pendingId === doc.id}
+                        className="text-destructive hover:bg-destructive/10 hover:text-destructive"
+                      >
+                        Excluir
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
         )}
       </div>
 
@@ -250,8 +257,8 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
         </div>
 
         {formError && (
-          <div className="bg-rose-50 border border-rose-200 rounded-lg p-3">
-            <p className="text-sm text-rose-700">{formError}</p>
+          <div className="bg-destructive/10 border border-destructive/20 rounded-lg p-3">
+            <p className="text-sm text-destructive">{formError}</p>
           </div>
         )}
 
@@ -305,13 +312,9 @@ export function KnowledgeClient({ companies }: { companies: Company[] }) {
         </div>
 
         <div className="flex justify-end">
-          <button
-            type="submit"
-            disabled={saving}
-            className="px-5 py-2 rounded-md bg-primary text-primary-foreground font-semibold text-sm hover:bg-primary/90 disabled:opacity-50 transition-colors"
-          >
+          <Button type="submit" disabled={saving}>
             {saving ? "Salvando…" : "Adicionar documento"}
-          </button>
+          </Button>
         </div>
       </form>
 

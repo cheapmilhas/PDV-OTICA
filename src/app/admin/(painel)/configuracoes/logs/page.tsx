@@ -3,6 +3,9 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ScrollText, User, Building2, Calendar } from "lucide-react";
 import { LogsFilters } from "./logs-filters";
+import { EmptyState } from "@/components/admin/EmptyState";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
 
 const ACTION_LABELS: Record<string, string> = {
   COMPANY_CREATED: "Empresa criada",
@@ -132,7 +135,7 @@ export default async function LogsPage({
           <p className="text-xs text-muted-foreground w-full mb-1">FILTRAR POR AÇÃO:</p>
           <Link
             href={buildUrl(baseFilters, { action: undefined, page: undefined })}
-            className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+            className={`px-3 py-1.5 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
               !actionFilter ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
             }`}
           >
@@ -142,7 +145,7 @@ export default async function LogsPage({
             <Link
               key={action}
               href={buildUrl(baseFilters, { action, page: undefined })}
-              className={`px-3 py-1.5 rounded-lg text-sm transition-colors ${
+              className={`px-3 py-1.5 rounded-lg text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
                 actionFilter === action ? "bg-primary text-primary-foreground" : "bg-muted text-muted-foreground hover:text-foreground"
               }`}
             >
@@ -154,41 +157,39 @@ export default async function LogsPage({
 
       {/* Tabela */}
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        <table className="w-full text-sm">
-          <thead>
-            <tr className="border-b border-border">
-              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Data/Hora</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Ação</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Admin</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Empresa</th>
-              <th className="px-5 py-3 text-left text-xs font-medium text-muted-foreground">Detalhes</th>
-            </tr>
-          </thead>
-          <tbody>
-            {logs.length === 0 ? (
-              <tr>
-                <td colSpan={5} className="px-5 py-12 text-center">
-                  <ScrollText className="w-8 h-8 text-muted-foreground/50 mx-auto mb-2" />
-                  <p className="text-muted-foreground">Nenhum log encontrado</p>
-                </td>
-              </tr>
-            ) : (
-              logs.map((log) => (
-                <tr key={log.id} className="border-b border-border hover:bg-muted transition-colors">
-                  <td className="px-5 py-4">
+        {logs.length === 0 ? (
+          <EmptyState icon={ScrollText} message="Nenhum log encontrado" />
+        ) : (
+          <ResponsiveTable minWidth={900}>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Data/Hora</TableHead>
+                <TableHead>Ação</TableHead>
+                <TableHead>Admin</TableHead>
+                <TableHead>Empresa</TableHead>
+                <TableHead>Detalhes</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {logs.map((log) => (
+                <TableRow key={log.id}>
+                  {/* Data/Hora */}
+                  <TableCell>
                     <div className="flex items-center gap-2 text-muted-foreground">
                       <Calendar className="w-3 h-3" />
                       <span className="text-xs">
                         {new Date(log.createdAt).toLocaleString("pt-BR")}
                       </span>
                     </div>
-                  </td>
-                  <td className="px-5 py-4">
+                  </TableCell>
+                  {/* Ação */}
+                  <TableCell>
                     <span className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-primary/10 text-primary">
                       {ACTION_LABELS[log.action] || log.action}
                     </span>
-                  </td>
-                  <td className="px-5 py-4">
+                  </TableCell>
+                  {/* Admin */}
+                  <TableCell>
                     {log.adminUser ? (
                       <div className="flex items-center gap-2">
                         <User className="w-3 h-3 text-muted-foreground" />
@@ -197,12 +198,13 @@ export default async function LogsPage({
                     ) : (
                       <span className="text-muted-foreground">Sistema</span>
                     )}
-                  </td>
-                  <td className="px-5 py-4">
+                  </TableCell>
+                  {/* Empresa */}
+                  <TableCell>
                     {log.company ? (
                       <Link
                         href={`/admin/clientes/${log.company.id}`}
-                        className="flex items-center gap-2 text-foreground hover:text-primary"
+                        className="flex items-center gap-2 text-foreground hover:text-primary rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
                       >
                         <Building2 className="w-3 h-3" />
                         {log.company.name}
@@ -210,11 +212,12 @@ export default async function LogsPage({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
-                  </td>
-                  <td className="px-5 py-4">
+                  </TableCell>
+                  {/* Detalhes */}
+                  <TableCell>
                     {log.metadata && typeof log.metadata === "object" ? (
                       <details className="text-xs text-muted-foreground">
-                        <summary className="cursor-pointer hover:text-foreground">Ver detalhes</summary>
+                        <summary className="cursor-pointer hover:text-foreground rounded focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring">Ver detalhes</summary>
                         <pre className="mt-2 p-2 bg-muted rounded text-xs overflow-auto max-w-md">
                           {JSON.stringify(log.metadata, null, 2)}
                         </pre>
@@ -222,12 +225,12 @@ export default async function LogsPage({
                     ) : (
                       <span className="text-muted-foreground">—</span>
                     )}
-                  </td>
-                </tr>
-              ))
-            )}
-          </tbody>
-        </table>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </ResponsiveTable>
+        )}
       </div>
 
       {/* Paginação */}
@@ -236,7 +239,7 @@ export default async function LogsPage({
           {page > 1 && (
             <Link
               href={buildUrl(baseFilters, { page: String(page - 1) })}
-              className="px-4 py-2 bg-muted text-foreground rounded hover:bg-muted/80 text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded hover:bg-muted/80 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Anterior
             </Link>
@@ -247,7 +250,7 @@ export default async function LogsPage({
           {page < totalPages && (
             <Link
               href={buildUrl(baseFilters, { page: String(page + 1) })}
-              className="px-4 py-2 bg-muted text-foreground rounded hover:bg-muted/80 text-sm"
+              className="px-4 py-2 bg-muted text-foreground rounded hover:bg-muted/80 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
             >
               Próxima
             </Link>
