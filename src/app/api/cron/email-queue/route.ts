@@ -7,6 +7,7 @@
 import { NextResponse } from "next/server";
 import { processEmailQueue } from "@/services/email-queue.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -29,9 +30,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processEmailQueue(parseLimit(request));
-    log.info("Fila de emails processada", { ...result });
-    return NextResponse.json({ ok: true, ...result });
+    return await withHeartbeat("email-queue", async () => {
+      const result = await processEmailQueue(parseLimit(request));
+      log.info("Fila de emails processada", { ...result });
+      return NextResponse.json({ ok: true, ...result });
+    });
   } catch (error) {
     log.error("Falha geral no processamento da fila de emails", {
       error: error instanceof Error ? error.message : String(error),

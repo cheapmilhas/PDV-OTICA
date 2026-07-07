@@ -8,6 +8,7 @@
 import { NextResponse } from "next/server";
 import { runWhatsappRetention } from "@/services/whatsapp-retention.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -22,13 +23,15 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await runWhatsappRetention();
-    log.info("Retenção do inbox processada", {
-      deletedAnalyzed: result.deletedAnalyzed,
-      deletedMaxAge: result.deletedMaxAge,
-      deletedEmptyConversations: result.deletedEmptyConversations,
+    return await withHeartbeat("whatsapp-retention", async () => {
+      const result = await runWhatsappRetention();
+      log.info("Retenção do inbox processada", {
+        deletedAnalyzed: result.deletedAnalyzed,
+        deletedMaxAge: result.deletedMaxAge,
+        deletedEmptyConversations: result.deletedEmptyConversations,
+      });
+      return NextResponse.json({ ok: true, ...result });
     });
-    return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     log.error("Falha no cron de retenção", { error: errMsg });

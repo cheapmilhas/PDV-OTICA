@@ -11,6 +11,7 @@
 import { NextResponse } from "next/server";
 import { processRetries } from "@/services/finance-retry.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,9 +27,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processRetries();
-    log.info("Batch processado", { ...result });
-    return NextResponse.json({ ok: true, ...result });
+    return await withHeartbeat("retry-finance-entries", async () => {
+      const result = await processRetries();
+      log.info("Batch processado", { ...result });
+      return NextResponse.json({ ok: true, ...result });
+    });
   } catch (err) {
     log.error("Falha geral no processamento de retries", {
       error: err instanceof Error ? err.message : String(err),

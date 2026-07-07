@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { reconcilePendingBilling } from "@/services/billing-reconcile.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 const log = logger.child({ route: "cron/reconcile-billing" });
 
@@ -29,11 +30,13 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Limite conservador por execução (1 HTTP/item, sequencial) — o resto fica para
-    // o próximo cron. Idempotente, então reprocessar não causa dano.
-    const summary = await reconcilePendingBilling({ limit: 80 });
-    log.info("Reconciliação concluída", { ...summary });
-    return NextResponse.json({ success: true, ...summary });
+    return await withHeartbeat("reconcile-billing", async () => {
+      // Limite conservador por execução (1 HTTP/item, sequencial) — o resto fica para
+      // o próximo cron. Idempotente, então reprocessar não causa dano.
+      const summary = await reconcilePendingBilling({ limit: 80 });
+      log.info("Reconciliação concluída", { ...summary });
+      return NextResponse.json({ success: true, ...summary });
+    });
   } catch (error) {
     log.error("Erro na reconciliação", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });

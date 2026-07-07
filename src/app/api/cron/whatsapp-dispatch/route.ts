@@ -12,6 +12,7 @@
 import { NextResponse } from "next/server";
 import { processWhatsappQueue } from "@/services/whatsapp-queue-processor";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -26,16 +27,18 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await processWhatsappQueue();
-    log.info("Fila de WhatsApp processada", {
-      skippedOutOfHours: result.skippedOutOfHours,
-      claimed: result.claimed,
-      sent: result.sent,
-      skipped: result.skipped,
-      failed: result.failed,
-      pendingRestantes: result.pendingRestantes,
+    return await withHeartbeat("whatsapp-dispatch", async () => {
+      const result = await processWhatsappQueue();
+      log.info("Fila de WhatsApp processada", {
+        skippedOutOfHours: result.skippedOutOfHours,
+        claimed: result.claimed,
+        sent: result.sent,
+        skipped: result.skipped,
+        failed: result.failed,
+        pendingRestantes: result.pendingRestantes,
+      });
+      return NextResponse.json({ ok: true, ...result });
     });
-    return NextResponse.json({ ok: true, ...result });
   } catch (err) {
     const errMsg = err instanceof Error ? err.message : String(err);
     log.error("Falha no acionador da fila de WhatsApp", { error: errMsg });
