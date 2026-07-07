@@ -9,6 +9,7 @@ import {
   RefreshCw,
   ShieldCheck,
   PlugZap,
+  HeartPulse,
 } from "lucide-react";
 
 /**
@@ -94,6 +95,14 @@ export const CONFIG_SECTIONS: ConfigSection[] = [
     group: "integracoes",
   },
   // ── Sistema ──────────────────────────────────────────────────────────────────
+  {
+    href: "/admin/configuracoes/saude",
+    icon: HeartPulse,
+    title: "Saúde do Sistema",
+    desc: "O Pulso — banco, hospedagem, crons, integrações e incidentes",
+    navLabel: "Saúde do Sistema",
+    group: "sistema",
+  },
   {
     href: "/admin/configuracoes/logs",
     icon: ScrollText,

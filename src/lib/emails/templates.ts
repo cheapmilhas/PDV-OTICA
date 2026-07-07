@@ -278,6 +278,46 @@ function renderSaasInvoiceDueSoon(data: unknown): RenderedEmail {
   return renderInvoiceBody(invoiceCreatedSchema.parse(data), true);
 }
 
+// ─── Saúde do Sistema: alerta de incidente ────────────────────────────────────
+const systemAlertSchema = z.object({
+  /** Estado geral no momento do alerta ("crítico" | "atenção"). */
+  severityLabel: z.string().min(1),
+  /** Um ou mais incidentes abertos que dispararam o alerta. */
+  incidents: z
+    .array(z.object({ title: z.string().min(1), detail: z.string().nullable().optional() }))
+    .min(1),
+  /** Link direto pra tela "O Pulso". */
+  dashboardUrl: z.string().url(),
+});
+function renderSystemAlert(data: unknown): RenderedEmail {
+  const p = systemAlertSchema.parse(data);
+  // bodyHtml é injetado CRU pelo layout → escapar cada dado dinâmico aqui.
+  const items = p.incidents
+    .map((i) => {
+      const title = escapeHtml(i.title);
+      const detail = i.detail ? `<br /><span style="color:#6b7280;font-size:13px;">${escapeHtml(i.detail)}</span>` : "";
+      return `<li style="margin:0 0 10px;"><strong>${title}</strong>${detail}</li>`;
+    })
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 16px;">O monitoramento do Vis detectou um incidente que precisa da sua atenção (estado: <strong>${escapeHtml(p.severityLabel)}</strong>).</p>
+<ul style="margin:0 0 22px;padding-left:20px;">${items}</ul>
+<p style="margin:0 0 22px;color:#6b7280;font-size:13px;">Você está recebendo isto porque um sinal do sistema saiu do verde. Abra o painel para ver os detalhes e o histórico.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Alerta do sistema Vis",
+    heading: "Alerta do sistema",
+    bodyHtml,
+    cta: { label: "Abrir o Pulso", url: p.dashboardUrl },
+  });
+  const text = [
+    `ALERTA DO SISTEMA VIS (${p.severityLabel})`,
+    "",
+    ...p.incidents.map((i) => `- ${i.title}${i.detail ? `: ${i.detail}` : ""}`),
+    "",
+    `Abra o painel: ${p.dashboardUrl}`,
+  ].join("\n");
+  return { html, text };
+}
+
 // ─── router ───────────────────────────────────────────────────────────────────
 
 export function renderEmailTemplate(template: string, data: unknown): RenderedEmail {
@@ -302,6 +342,8 @@ export function renderEmailTemplate(template: string, data: unknown): RenderedEm
       return renderSaasInvoiceCreated(data);
     case "saas-invoice-due-soon":
       return renderSaasInvoiceDueSoon(data);
+    case "system-alert":
+      return renderSystemAlert(data);
     default:
       throw new Error(`Unsupported email template: ${template}`);
   }

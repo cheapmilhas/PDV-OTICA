@@ -4840,6 +4840,10 @@ model SystemEvent {
   resolvedBy  String?
   resolveNote String?
   dedupeKey   String?   @unique
+  // Quando o e-mail de alerta deste evento foi ENFILEIRADO. Null = ainda não
+  // alertado. O cron health-alert só e-maila eventos abertos com alertedAt=null
+  // e o marca em seguida — idempotência sem tabela extra (um e-mail por evento).
+  alertedAt   DateTime?
   createdAt   DateTime  @default(now())
 
   @@index([status, createdAt])

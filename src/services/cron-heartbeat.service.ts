@@ -26,6 +26,9 @@ const EXPECTED_EVERY_MS: Record<string, number> = {
   "sync-all-companies": DAY,
   "whatsapp-messages": DAY,
   "whatsapp-retention": DAY,
+  // Saúde do Sistema: alerta de incidentes. Vercel roda 1×/h; se apontarem o
+  // cron-job.org p/ */15, roda mais — a cadência aqui (1h) é o piso esperado.
+  "health-alert": HOUR,
   // Acionador externo (cron-job.org), alta frequência:
   "whatsapp-qualify": 5 * MINUTE,
   "whatsapp-dispatch": 5 * MINUTE,

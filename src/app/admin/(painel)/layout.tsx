@@ -1,15 +1,20 @@
 import type { Metadata } from "next";
 import { Toaster } from "sonner";
 import { NotificationBell } from "@/components/admin/NotificationBell";
+import { SystemHealthBadge } from "@/components/admin/SystemHealthBadge";
 import { AdminSidebar, AdminMobileMenu } from "@/components/admin/AdminSidebar";
 import { AdminBreadcrumb } from "./admin-breadcrumb";
+import { countOpenEvents } from "@/services/system-event.service";
 
 export const metadata: Metadata = {
   title: "PDV Ótica - Admin",
   description: "Portal de administração do PDV Ótica SaaS",
 };
 
-export default function AdminLayout({ children }: { children: React.ReactNode }) {
+export default async function AdminLayout({ children }: { children: React.ReactNode }) {
+  // Zero-polling: contagem lida no servidor a cada navegação (best-effort → 0).
+  const openIncidents = await countOpenEvents();
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar (desktop fixa + drawer mobile) */}
@@ -25,7 +30,10 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
             <AdminMobileMenu />
             <AdminBreadcrumb />
           </div>
-          <NotificationBell />
+          <div className="flex items-center gap-1">
+            <SystemHealthBadge openCount={openIncidents} />
+            <NotificationBell />
+          </div>
         </header>
         {/* Cada página gerencia seu próprio padding (p-6). A padronização do
             container entra na fase de redesign de cada tela. */}
