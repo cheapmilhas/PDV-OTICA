@@ -4808,3 +4808,40 @@ enum WhatsappMessageStatus {
   FAILED
   SKIPPED
 }
+
+/// Saúde do Sistema (Fase S1). Batimento de vida de cada cron: gravado ao rodar.
+/// lastStartedAt e lastSucceededAt são SEPARADOS de propósito — um cron que
+/// quebra no meio tem started recente mas succeeded antigo ("vivo mas quebrando"
+/// ≠ "morto"). Ausência de linha = "nunca configurado" (estado próprio, não
+/// vermelho falso). A saúde é derivada por DELTA de tempo, nunca wall-clock.
+model CronHeartbeat {
+  id              String    @id @default(cuid())
+  jobKey          String    @unique
+  lastStartedAt   DateTime?
+  lastSucceededAt DateTime?
+  lastStatus      String? // "ok" | "error"
+  lastError       String?
+  lastDurationMs  Int?
+  updatedAt       DateTime  @updatedAt
+}
+
+/// Feed de incidentes da Saúde do Sistema (Fase S1). Auto (um limiar/erro criou)
+/// e manual (o dono anotou) convivem. dedupeKey garante idempotência do auto
+/// (não duplica enquanto a mesma condição está aberta). Resolver não apaga —
+/// guarda resolvedAt/resolveNote (memória do "o que foi feito").
+model SystemEvent {
+  id          String    @id @default(cuid())
+  source      String // "vercel" | "database" | "cron" | "integration" | "sentry" | "manual"
+  severity    String // "warning" | "critical" | "info"
+  title       String
+  detail      String?
+  status      String    @default("open") // "open" | "resolved"
+  resolvedAt  DateTime?
+  resolvedBy  String?
+  resolveNote String?
+  dedupeKey   String?   @unique
+  createdAt   DateTime  @default(now())
+
+  @@index([status, createdAt])
+  @@index([source, createdAt])
+}

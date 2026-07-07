@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { recalcAllActiveHealthScores } from "@/lib/health-score";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 const log = logger.child({ route: "cron/recalc-health" });
 
@@ -33,15 +34,17 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await recalcAllActiveHealthScores((companyId, error) =>
-      log.error("Falha ao recalcular health de empresa", {
-        companyId,
-        error: error instanceof Error ? error.message : String(error),
-      })
-    );
+    return await withHeartbeat("recalc-health", async () => {
+      const result = await recalcAllActiveHealthScores((companyId, error) =>
+        log.error("Falha ao recalcular health de empresa", {
+          companyId,
+          error: error instanceof Error ? error.message : String(error),
+        })
+      );
 
-    log.info("Health scores recalculados pelo cron", { ...result });
-    return NextResponse.json({ success: true, ...result });
+      log.info("Health scores recalculados pelo cron", { ...result });
+      return NextResponse.json({ success: true, ...result });
+    });
   } catch (error) {
     log.error("Erro no cron recalc-health", {
       error: error instanceof Error ? error.message : String(error),
