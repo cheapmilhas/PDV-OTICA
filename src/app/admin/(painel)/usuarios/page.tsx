@@ -72,7 +72,7 @@ export default async function UsuariosPage({
     ],
   };
 
-  const [users, total, companies] = await Promise.all([
+  const [users, total, activeCount, inactiveCount, companies] = await Promise.all([
     prisma.user.findMany({
       where,
       select: {
@@ -92,6 +92,9 @@ export default async function UsuariosPage({
       take:  limit,
     }),
     prisma.user.count({ where }),
+    // Totais reais (respeitam os MESMOS filtros da listagem), não só a página.
+    prisma.user.count({ where: { AND: [where, { active: true }] } }),
+    prisma.user.count({ where: { AND: [where, { active: false }] } }),
     prisma.company.findMany({
       where: accessible === null ? undefined : { id: { in: accessible } },
       select: { id: true, tradeName: true, name: true },
@@ -100,8 +103,6 @@ export default async function UsuariosPage({
   ]);
 
   const totalPages = Math.ceil(total / limit);
-  const activeCount   = users.filter((u) => u.active).length;
-  const inactiveCount = users.filter((u) => !u.active).length;
 
   function buildHref(overrides: Record<string, string>) {
     const p = new URLSearchParams({
@@ -126,11 +127,11 @@ export default async function UsuariosPage({
           <div className="flex items-center gap-3">
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-success/10 border border-success/25 text-success text-xs font-medium">
               <CheckCircle className="h-3.5 w-3.5" />
-              {activeCount} ativos (página)
+              {activeCount} ativos
             </div>
             <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-destructive/10 border border-destructive/25 text-destructive text-xs font-medium">
               <XCircle className="h-3.5 w-3.5" />
-              {inactiveCount} inativos (página)
+              {inactiveCount} inativos
             </div>
           </div>
         }
