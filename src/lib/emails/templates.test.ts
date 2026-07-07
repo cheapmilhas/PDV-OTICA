@@ -21,6 +21,32 @@ describe("email templates", () => {
   });
 });
 
+describe("template system-alert (Saúde do Sistema)", () => {
+  const dashboardUrl = "https://vis.app.br/admin/configuracoes/saude";
+
+  it("lista incidentes, escapa HTML e inclui o link do painel", () => {
+    const { html, text } = renderEmailTemplate("system-alert", {
+      severityLabel: "crítico",
+      incidents: [
+        { title: "Banco <caiu>", detail: "SELECT 1 & timeout" },
+        { title: "Cron morto", detail: null },
+      ],
+      dashboardUrl,
+    });
+    expect(html).toContain("&lt;caiu&gt;");
+    expect(html).toContain("SELECT 1 &amp; timeout");
+    expect(html).toContain(dashboardUrl);
+    expect(text).toContain("Banco <caiu>");
+    expect(text).toContain("Cron morto");
+  });
+
+  it("exige ao menos 1 incidente", () => {
+    expect(() =>
+      renderEmailTemplate("system-alert", { severityLabel: "crítico", incidents: [], dashboardUrl })
+    ).toThrow();
+  });
+});
+
 describe("templates SaaS (Fase 1)", () => {
   const base = "https://app.vis.app.br";
 

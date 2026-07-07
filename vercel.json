@@ -52,6 +52,10 @@
     {
       "path": "/api/cron/whatsapp-dispatch",
       "schedule": "30 12 * * *"
+    },
+    {
+      "path": "/api/cron/health-alert",
+      "schedule": "0 * * * *"
     }
   ]
 }
