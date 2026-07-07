@@ -9,6 +9,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { serviceOrderService } from "@/services/service-order.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -23,34 +24,36 @@ export async function GET(request: Request) {
   }
 
   try {
-    // Varre todas as companies com plano ativo. accessEnabled filtra
-    // trial expirado/canceladas — não desperdiça query em conta morta.
-    const companies = await prisma.company.findMany({
-      where: { accessEnabled: true },
-      select: { id: true },
-    });
+    return await withHeartbeat("mark-delayed", async () => {
+      // Varre todas as companies com plano ativo. accessEnabled filtra
+      // trial expirado/canceladas — não desperdiça query em conta morta.
+      const companies = await prisma.company.findMany({
+        where: { accessEnabled: true },
+        select: { id: true },
+      });
 
-    let totalMarked = 0;
-    for (const company of companies) {
-      try {
-        const marked = await serviceOrderService.checkAndMarkDelayed(company.id);
-        if (marked > 0) {
-          totalMarked += marked;
-          log.info("OS atrasadas marcadas", { companyId: company.id, marked });
+      let totalMarked = 0;
+      for (const company of companies) {
+        try {
+          const marked = await serviceOrderService.checkAndMarkDelayed(company.id);
+          if (marked > 0) {
+            totalMarked += marked;
+            log.info("OS atrasadas marcadas", { companyId: company.id, marked });
+          }
+        } catch (err) {
+          log.error("Falha ao marcar atrasadas para company", {
+            companyId: company.id,
+            error: err instanceof Error ? err.message : String(err),
+          });
+          // Continua varredura mesmo se uma company falhar.
         }
-      } catch (err) {
-        log.error("Falha ao marcar atrasadas para company", {
-          companyId: company.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-        // Continua varredura mesmo se uma company falhar.
       }
-    }
 
-    return NextResponse.json({
-      ok: true,
-      companiesScanned: companies.length,
-      totalMarked,
+      return NextResponse.json({
+        ok: true,
+        companiesScanned: companies.length,
+        totalMarked,
+      });
     });
   } catch (err) {
     log.error("Falha geral no cron mark-delayed", {

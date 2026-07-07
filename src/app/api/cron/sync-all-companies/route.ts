@@ -6,6 +6,7 @@
 import { NextResponse } from "next/server";
 import { syncAllCompanies } from "@/services/company-resync.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,9 +28,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const result = await syncAllCompanies();
-    log.info("Auto-sync executado", { ...result });
-    return NextResponse.json({ success: true, ...result });
+    return await withHeartbeat("sync-all-companies", async () => {
+      const result = await syncAllCompanies();
+      log.info("Auto-sync executado", { ...result });
+      return NextResponse.json({ success: true, ...result });
+    });
   } catch (error) {
     log.error("Erro geral no auto-sync", {
       error: error instanceof Error ? error.message : String(error),

@@ -15,16 +15,31 @@ import { beginCronRun, finishCronRun } from "@/services/cron-heartbeat.service";
  */
 export async function withHeartbeat<T>(jobKey: string, handler: () => Promise<T>): Promise<T> {
   const startedAt = Date.now();
-  await beginCronRun(jobKey);
+  // O batimento é um EFEITO COLATERAL de monitoramento: jamais pode alterar o
+  // resultado do cron monitorado. beginCronRun/finishCronRun já engolem seus
+  // erros, mas blindamos aqui também (defesa em profundidade) — se até o log de
+  // erro deles falhar (ex.: logger sem `warn`, DB fora), o cron segue igual.
+  await safeBeat(() => beginCronRun(jobKey));
   try {
     const result = await handler();
-    await finishCronRun(jobKey, true, { durationMs: Date.now() - startedAt });
+    await safeBeat(() => finishCronRun(jobKey, true, { durationMs: Date.now() - startedAt }));
     return result;
   } catch (err) {
-    await finishCronRun(jobKey, false, {
-      durationMs: Date.now() - startedAt,
-      error: err instanceof Error ? err.message : String(err),
-    });
+    await safeBeat(() =>
+      finishCronRun(jobKey, false, {
+        durationMs: Date.now() - startedAt,
+        error: err instanceof Error ? err.message : String(err),
+      })
+    );
     throw err;
+  }
+}
+
+/** Executa uma gravação de batimento sem NUNCA propagar erro (nem síncrono). */
+async function safeBeat(fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch {
+    // Batimento é best-effort — silêncio total aqui; nada pode escapar.
   }
 }

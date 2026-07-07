@@ -6,7 +6,10 @@ vi.mock("@/services/company-resync.service", () => ({
 }));
 
 vi.mock("@/lib/logger", () => ({
-  logger: { child: () => ({ info: vi.fn(), error: vi.fn() }) },
+  // warn incluso: o withHeartbeat (batimento best-effort) chama log.warn quando a
+  // gravação do heartbeat falha (ex.: DB fora no CI). Sem warn no mock, esse warn
+  // estourava dentro do catch → 500 no teste "200 autorizado".
+  logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
 
 import { GET } from "./route";

@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { runInvoiceReminders } from "@/services/invoice-reminders.service";
 import { logger } from "@/lib/logger";
+import { withHeartbeat } from "@/lib/cron-instrument";
 
 const log = logger.child({ route: "cron/invoice-reminders" });
 export const maxDuration = 60;
@@ -27,9 +28,11 @@ export async function GET(request: Request) {
   }
 
   try {
-    const summary = await runInvoiceReminders();
-    log.info("invoice-reminders concluído", { ...summary });
-    return NextResponse.json({ success: true, ...summary });
+    return await withHeartbeat("invoice-reminders", async () => {
+      const summary = await runInvoiceReminders();
+      log.info("invoice-reminders concluído", { ...summary });
+      return NextResponse.json({ success: true, ...summary });
+    });
   } catch (error) {
     log.error("Erro no invoice-reminders", { error: error instanceof Error ? error.message : String(error) });
     return NextResponse.json({ error: "Erro interno" }, { status: 500 });
