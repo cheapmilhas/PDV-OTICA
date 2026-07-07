@@ -16,7 +16,11 @@ import toast from "react-hot-toast";
 import { Can } from "@/components/permissions/can";
 
 /** Intervalo de polling do inbox (ms). Padrão do projeto p/ telas "ao vivo". */
-const POLL_MS = 7000;
+// Intervalo de polling da lista de conversas. Subiu de 7s→30s para cortar
+// invocations no Vercel (o inbox fica aberto o dia todo = fonte dominante de
+// chamadas). 30s continua responsivo para o atendimento (mensagens novas
+// aparecem em até 30s); ao clicar numa conversa a thread carrega na hora.
+const POLL_MS = 30000;
 
 interface InboxConversation {
   id: string;

@@ -56,7 +56,7 @@ export function NotificationBell() {
 
   useEffect(() => {
     fetchNotifications();
-    const interval = setInterval(fetchNotifications, 30000); // atualiza a cada 30s
+    const interval = setInterval(fetchNotifications, 120000); // atualiza a cada 2min (era 30s — cortar invocations Vercel)
     return () => clearInterval(interval);
   }, []);
 

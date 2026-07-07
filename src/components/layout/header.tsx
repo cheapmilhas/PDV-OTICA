@@ -218,7 +218,9 @@ export function Header() {
       }
     };
     run();
-    const interval = setInterval(run, 60 * 1000);
+    // 60s→3min: notificações persistentes não precisam de frescor de 1min e este
+    // loop (aberto o dia todo por usuário) era grande fonte de invocations Vercel.
+    const interval = setInterval(run, 3 * 60 * 1000);
     return () => {
       active = false;
       clearInterval(interval);
