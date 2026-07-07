@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
+import { parseOptionalPositiveInt } from "@/lib/parse-int-field";
 
 const log = logger.child({ route: "admin/companies/[id]/branches" });
 
@@ -62,6 +63,11 @@ export async function POST(
       return NextResponse.json({ error: "Nome da filial é obrigatório" }, { status: 400 });
     }
 
+    const nfeSeriesParsed = parseOptionalPositiveInt(nfeSeries, "Série NF-e");
+    if (!nfeSeriesParsed.ok) {
+      return NextResponse.json({ error: nfeSeriesParsed.error }, { status: 400 });
+    }
+
     // Verificar se a empresa existe
     const company = await prisma.company.findUnique({
       where: { id: companyId },
@@ -91,42 +97,47 @@ export async function POST(
       }
     }
 
-    // Criar filial
-    const branch = await prisma.branch.create({
-      data: {
-        companyId,
-        name: name.trim(),
-        code: code?.trim() || null,
-        address: address?.trim() || null,
-        city: city?.trim() || null,
-        state: state?.trim() || null,
-        zipCode: zipCode?.trim() || null,
-        phone: phone?.trim() || null,
-        nfeSeries: nfeSeries ? parseInt(nfeSeries, 10) : null,
-      },
-    });
-
-    // Vincular todos os admins da empresa à nova filial
+    // Admins da empresa a vincular à nova filial (leitura, fora da transação).
     const adminUsers = await prisma.user.findMany({
       where: { companyId, role: "ADMIN", active: true },
       select: { id: true },
     });
-    if (adminUsers.length > 0) {
-      await prisma.userBranch.createMany({
-        data: adminUsers.map((u) => ({ userId: u.id, branchId: branch.id })),
-        skipDuplicates: true,
-      });
-    }
 
-    // Audit log
-    await prisma.globalAudit.create({
-      data: {
-        actorType: "ADMIN_USER",
-        actorId: admin.id,
-        companyId,
-        action: "BRANCH_CREATED",
-        metadata: { branchId: branch.id, branchName: branch.name },
-      },
+    // Criar filial + vínculos + audit de forma ATÔMICA: se qualquer passo
+    // falhar, não fica filial órfã (sem vínculos/log) contando para o limite.
+    const branch = await prisma.$transaction(async (tx) => {
+      const created = await tx.branch.create({
+        data: {
+          companyId,
+          name: name.trim(),
+          code: code?.trim() || null,
+          address: address?.trim() || null,
+          city: city?.trim() || null,
+          state: state?.trim() || null,
+          zipCode: zipCode?.trim() || null,
+          phone: phone?.trim() || null,
+          nfeSeries: nfeSeriesParsed.value,
+        },
+      });
+
+      if (adminUsers.length > 0) {
+        await tx.userBranch.createMany({
+          data: adminUsers.map((u) => ({ userId: u.id, branchId: created.id })),
+          skipDuplicates: true,
+        });
+      }
+
+      await tx.globalAudit.create({
+        data: {
+          actorType: "ADMIN_USER",
+          actorId: admin.id,
+          companyId,
+          action: "BRANCH_CREATED",
+          metadata: { branchId: created.id, branchName: created.name },
+        },
+      });
+
+      return created;
     });
 
     return NextResponse.json({ success: true, data: branch }, { status: 201 });
