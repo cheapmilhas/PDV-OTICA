@@ -1,22 +1,12 @@
-const DEFAULT_RESEND_API_URL = "https://api.resend.com";
+import { getResendConfig } from "@/services/saas-email-config.service";
 
+/**
+ * Config do Resend. Delega ao serviço, que resolve banco (chave cifrada + from
+ * configuráveis pela UI) com fallback para as variáveis de ambiente. Assíncrona
+ * porque agora consulta o banco — o único consumidor (`sendEmail`) já é async.
+ */
 function getConfig() {
-  const apiKey = process.env.RESEND_API_KEY;
-  if (!apiKey) {
-    throw new Error("RESEND_API_KEY environment variable is required");
-  }
-
-  const from = process.env.EMAIL_FROM;
-  if (!from) {
-    throw new Error("EMAIL_FROM environment variable is required");
-  }
-
-  return {
-    apiKey,
-    baseUrl: process.env.RESEND_API_URL || DEFAULT_RESEND_API_URL,
-    from,
-    replyTo: process.env.EMAIL_REPLY_TO || undefined,
-  };
+  return getResendConfig();
 }
 
 export interface ResendTag {
@@ -73,7 +63,7 @@ async function parseBody(response: Response): Promise<unknown> {
 }
 
 export async function sendEmail(input: SendEmailInput): Promise<SendEmailResponse> {
-  const { apiKey, baseUrl, from, replyTo } = getConfig();
+  const { apiKey, baseUrl, from, replyTo } = await getConfig();
   const headers: Record<string, string> = {
     Authorization: `Bearer ${apiKey}`,
     "Content-Type": "application/json",

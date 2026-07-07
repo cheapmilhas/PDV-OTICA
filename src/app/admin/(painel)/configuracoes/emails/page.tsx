@@ -1,12 +1,12 @@
 import { requireAdminRole } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
-import { getSaasEmailConfig } from "@/services/saas-email-config.service";
+import { getSaasEmailConfig, getSaasEmailSenderView } from "@/services/saas-email-config.service";
 import { EmailsClient } from "./emails-client";
 
 export default async function EmailsConfigPage() {
   await requireAdminRole(["SUPER_ADMIN"]);
 
-  const config = await getSaasEmailConfig();
+  const [config, sender] = await Promise.all([getSaasEmailConfig(), getSaasEmailSenderView()]);
   const logs = await prisma.saasEmailLog.findMany({
     orderBy: { createdAt: "desc" },
     take: 50,
@@ -38,6 +38,11 @@ export default async function EmailsConfigPage() {
         to: l.to,
         createdAt: l.createdAt.toISOString(),
       }))}
+      sender={{
+        hasResendKey: sender.hasResendKey,
+        emailFrom: sender.emailFrom,
+        emailReplyTo: sender.emailReplyTo,
+      }}
     />
   );
 }

@@ -4,10 +4,10 @@ import Link from "next/link";
 import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
-  Package, UserCog, ScrollText, Ticket,
-  FileBarChart, UsersRound, Activity, Mail, RefreshCw,
-  CreditCard, ShieldCheck, Sparkles, MessageCircle,
+  Ticket, FileBarChart, UsersRound, Activity, Mail,
+  CreditCard,
 } from "lucide-react";
+import { CONFIG_SECTIONS } from "./configuracoes/sections";
 
 const menuItems = [
   {
@@ -42,17 +42,14 @@ const menuItems = [
     ],
   },
   {
+    // Fonte única: CONFIG_SECTIONS (compartilhada com o hub configuracoes/page.tsx).
     section: "Configurações",
-    items: [
-      { href: "/admin/configuracoes/planos",  icon: Package,  label: "Planos",  exact: false },
-      { href: "/admin/configuracoes/equipe",  icon: UserCog,  label: "Equipe",  exact: false },
-      { href: "/admin/configuracoes/ia",      icon: Sparkles, label: "IA",      exact: false },
-      { href: "/admin/configuracoes/whatsapp", icon: MessageCircle, label: "WhatsApp", exact: false },
-      { href: "/admin/configuracoes/logs",    icon: ScrollText, label: "Logs",  exact: false },
-      { href: "/admin/configuracoes/sincronizacao", icon: RefreshCw, label: "Sincronização", exact: false },
-      { href: "/admin/configuracoes/emails",    icon: Mail,        label: "Emails",    exact: false },
-      { href: "/admin/configuracoes/seguranca", icon: ShieldCheck, label: "Segurança", exact: false },
-    ],
+    items: CONFIG_SECTIONS.map((s) => ({
+      href: s.href,
+      icon: s.icon,
+      label: s.navLabel,
+      exact: false,
+    })),
   },
 ];
 

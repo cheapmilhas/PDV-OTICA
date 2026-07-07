@@ -4495,6 +4495,12 @@ model SaasEmailConfig {
   masterEnabled                Boolean  @default(true)
   testMode                     Boolean  @default(true)
   testEmail                    String?
+  // Remetente + chave Resend configuráveis pela UI (antes só env). A chave fica
+  // CIFRADA (nunca reexibida); emailFrom/emailReplyTo em claro. Fallback p/ env
+  // quando nulos — ver getResendConfig no saas-email-config.service.
+  resendApiKeyEnc              String?
+  emailFrom                    String?
+  emailReplyTo                 String?
   welcomeEnabled               Boolean  @default(true)
   trialEndingEnabled           Boolean  @default(true)
   trialExpiredEnabled          Boolean  @default(true)
