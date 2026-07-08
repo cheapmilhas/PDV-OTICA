@@ -26,8 +26,8 @@ Se um dia forem necessários, são a "Onda 2" documentada no painel (exigem migr
 
 **Correção:**
 - Novo helper puro `sanitizeCronError(raw: string | null): string | null` (arquivo próprio, ex. `src/lib/cron-error-sanitizer.ts`).
-  - Redige por regex: e-mail, CPF (`###.###.###-##` e 11 dígitos soltos), CNPJ, telefone brasileiro → substitui por marcador (`[redigido]`).
-  - Trunca a um teto (ex. 300 caracteres) com reticências.
+  - Redige por regex: e-mail, CPF (`###.###.###-##` e 11 dígitos soltos), CNPJ, telefone brasileiro → substitui por marcador (`[redigido]`). **A lista de redação é best-effort** (erros Prisma podem embutir connection strings, tokens, UUIDs que a regex não cobre) — não sobre-investir em regex exaustiva.
+  - Trunca a um teto (ex. 300 caracteres) com reticências. **Esta truncagem é o backstop real de contenção**, não a lista de regex.
   - Retorna `null` se a entrada é `null`.
 - Em `cron-heartbeat.service.ts` (onde monta `CronHealthRow`), o campo cru **deixa de ser exposto**: substituir `lastError` por `lastErrorSafe` (aplicando `sanitizeCronError`). O `CronHealthRow` que vai ao client passa a conter **apenas** a versão sanitizada. Nenhum consumidor do client recebe mais o texto cru.
 - O campo cru continua no banco (`CronHeartbeat.lastError`) — a sanitização é só na fronteira de exibição.
@@ -50,7 +50,7 @@ Sheet do shadcn (já instalado). Props: `row: CronHealthRow | null`, `onOpenChan
 
 Conteúdo (de cima para baixo), tudo derivado do `row` + `cronMeta(row.jobKey)`:
 1. **Título** = `label`.
-2. **Selo de situação** = `state` (healthy/warning/critical/unknown) — reusa os estilos/paleta de estado já existentes em `pulso-view.tsx` (`STATE_STYLES` ou equivalente).
+2. **Selo de situação** = `state` (healthy/warning/critical/unknown) — reusa os estilos/paleta de estado já existentes em `pulso-view.tsx` (`STATE_STYLES`). **Nota de implementação:** `STATE_STYLES` é hoje módulo-privado em `pulso-view.tsx`; o plano deve exportá-lo ou lift para um módulo compartilhado (ex. `saude/state-styles.ts`) para o `CronDetailSheet` reusar sem duplicar a paleta.
 3. **"O que faz"** = `does`.
 4. **"Se esta tarefa parar"** = `cronMeta(...).ifStops` (só se presente).
 5. **Frequência** = `frequencyLabel` (ou derivada de `expectedEveryMs`).
