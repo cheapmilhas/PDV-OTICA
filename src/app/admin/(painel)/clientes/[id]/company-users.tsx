@@ -137,8 +137,12 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
     }
   };
 
-  const limitReached = meta.total >= meta.maxUsers;
+  // maxUsers === -1 significa ilimitado (mesma convenção do backend/plan-limits).
+  const unlimited = meta.maxUsers === -1;
+  const limitReached = !unlimited && meta.total >= meta.maxUsers;
   const activeCount = users.filter((u) => u.active).length;
+  const maxUsersLabel = unlimited ? "∞" : meta.maxUsers;
+  const usagePct = unlimited ? 0 : Math.min((activeCount / meta.maxUsers) * 100, 100);
 
   if (loading) {
     return (
@@ -162,7 +166,7 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-sm font-semibold text-foreground">
-            Usuários ({activeCount}/{meta.maxUsers})
+            Usuários ({activeCount}/{maxUsersLabel})
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
             Plano {meta.planName}
@@ -178,19 +182,22 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
       <div>
         <div className="flex items-center justify-between mb-1">
           <span className="text-xs text-muted-foreground">
-            {activeCount} de {meta.maxUsers} usuários ativos
+            {unlimited
+              ? `${activeCount} usuários ativos (ilimitado)`
+              : `${activeCount} de ${meta.maxUsers} usuários ativos`}
           </span>
           {limitReached && (
             <span className="text-xs text-destructive">Limite atingido!</span>
           )}
         </div>
         <div className="w-full bg-muted rounded-full h-2">
-          {/* Barra de uso: limite estourado = destructive, quase-cheio = warning, ok = primary */}
+          {/* Barra de uso: limite estourado = destructive, quase-cheio = warning, ok = primary.
+              Plano ilimitado: barra sempre "ok" e vazia (não há teto a preencher). */}
           <div
             className={`h-2 rounded-full transition-all ${
-              limitReached ? "bg-destructive" : activeCount / meta.maxUsers > 0.8 ? "bg-warning" : "bg-primary"
+              limitReached ? "bg-destructive" : !unlimited && usagePct > 80 ? "bg-warning" : "bg-primary"
             }`}
-            style={{ width: `${Math.min((activeCount / meta.maxUsers) * 100, 100)}%` }}
+            style={{ width: `${usagePct}%` }}
           />
         </div>
       </div>

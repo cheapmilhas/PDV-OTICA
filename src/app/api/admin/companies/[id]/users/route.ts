@@ -141,7 +141,10 @@ export async function POST(
     where: { companyId, active: true },
   });
   const maxUsers = company.subscriptions[0]?.plan?.maxUsers ?? company.maxUsers ?? 999;
-  if (activeUsers >= maxUsers) {
+  // maxUsers === -1 significa ilimitado (mesma convenção de plan-limits.ts).
+  // Sem este guard, `activeUsers >= -1` é sempre verdadeiro e trava a criação
+  // de usuários em planos ilimitados.
+  if (maxUsers !== -1 && activeUsers >= maxUsers) {
     return NextResponse.json(
       { error: `Limite de ${maxUsers} usuários atingido. Faça upgrade do plano.` },
       { status: 400 }
