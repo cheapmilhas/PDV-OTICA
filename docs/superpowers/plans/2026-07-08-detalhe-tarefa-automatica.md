@@ -385,7 +385,11 @@ Em `src/app/admin/(painel)/configuracoes/saude/pulso-view.tsx`, DELETAR o bloco 
 import { STATE_STYLES } from "./state-styles";
 ```
 
-Remover dos imports de `lucide-react` os ícones que ficaram só para o `STATE_STYLES` **apenas se não forem mais usados** no arquivo (`CheckCircle2`, `XCircle`, `HelpCircle`). Manter `AlertTriangle` se ainda usado. Se o typecheck reclamar de import não usado, remover; se reclamar de faltante, manter.
+Ajustar os imports de `lucide-react`. Após deletar o `STATE_STYLES`:
+- **MANTER `CheckCircle2`** — ainda é usado em `pulso-view.tsx:327` (check de incidentes resolvidos).
+- **REMOVER `XCircle`, `HelpCircle`, `AlertTriangle`** — ficam sem uso.
+
+⚠️ Antes de remover qualquer ícone, faça `grep -n "XCircle\|HelpCircle\|AlertTriangle\|CheckCircle2" src/app/admin/\(painel\)/configuracoes/saude/pulso-view.tsx` e remova apenas os que aparecem SÓ no import (0 usos no corpo). `noUnusedLocals` está OFF no tsconfig, então o `tsc` NÃO acusa import não usado — o `next lint`/build (Task 7) é quem pega. Não confie no typecheck para essa limpeza; confie no grep.
 
 - [ ] **Step 3: Verificar typecheck**
 
@@ -635,12 +639,17 @@ Expected: todos PASS.
 Run: `./node_modules/.bin/vitest run`
 Expected: todos PASS (nenhuma regressão).
 
-- [ ] **Step 4: Build de produção**
+- [ ] **Step 4: Lint (pega imports não usados que o tsc não vê)**
+
+Run: `./node_modules/.bin/next lint --file "src/app/admin/(painel)/configuracoes/saude/pulso-view.tsx" 2>&1 | tail -20 || ./node_modules/.bin/next lint 2>&1 | tail -20`
+Expected: sem erro de `no-unused-vars` nos arquivos tocados (especialmente ícones de `pulso-view.tsx`). Se acusar, remover o import ocioso e recommitar.
+
+- [ ] **Step 5: Build de produção**
 
 Run: `./node_modules/.bin/next build`
 Expected: sucesso (o log `Dynamic server usage` em `/api/dashboard/onboarding-status` é ruído pré-existente, não fatal).
 
-- [ ] **Step 5: Commit final (se sobrou algo)**
+- [ ] **Step 6: Commit final (se sobrou algo)**
 
 ```bash
 git add -A
