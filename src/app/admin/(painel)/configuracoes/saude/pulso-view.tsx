@@ -8,9 +8,6 @@ import {
   Clock,
   PlugZap,
   CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  HelpCircle,
   EyeOff,
   Lightbulb,
   CreditCard,
@@ -26,45 +23,7 @@ import type {
   BusinessAreaHealth,
 } from "@/services/system-health.service";
 import type { BusinessArea } from "@/services/system-health-labels";
-
-/** Paleta dos 4 estados, agora com rótulos em linguagem de dono. */
-const STATE_STYLES: Record<
-  HealthState,
-  { label: string; dot: string; text: string; bg: string; border: string; Icon: LucideIcon }
-> = {
-  healthy: {
-    label: "Tudo certo",
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    border: "border-emerald-200 dark:border-emerald-900",
-    Icon: CheckCircle2,
-  },
-  warning: {
-    label: "Atenção",
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    border: "border-amber-200 dark:border-amber-900",
-    Icon: AlertTriangle,
-  },
-  critical: {
-    label: "Problema",
-    dot: "bg-rose-500",
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50 dark:bg-rose-950/40",
-    border: "border-rose-200 dark:border-rose-900",
-    Icon: XCircle,
-  },
-  unknown: {
-    label: "Aguardando",
-    dot: "bg-slate-400",
-    text: "text-slate-600 dark:text-slate-400",
-    bg: "bg-slate-50 dark:bg-slate-900/40",
-    border: "border-slate-200 dark:border-slate-800",
-    Icon: HelpCircle,
-  },
-};
+import { STATE_STYLES } from "./state-styles";
 
 const SIGNAL_ICONS: Record<string, LucideIcon> = {
   database: Database,
