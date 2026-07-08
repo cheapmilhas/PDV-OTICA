@@ -1,6 +1,7 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { cronMeta, type BusinessArea } from "@/services/system-health-labels";
+import { sanitizeCronError } from "@/lib/cron-error-sanitizer";
 
 const log = logger.child({ service: "cron-heartbeat" });
 
@@ -54,7 +55,7 @@ export interface CronHealthRow {
   lastStartedAt: string | null;
   lastSucceededAt: string | null;
   lastStatus: string | null;
-  lastError: string | null;
+  lastErrorSafe: string | null; // sanitizado — NUNCA o err.message cru (PII/LGPD)
   lastDurationMs: number | null;
   /** ms desde o último SUCESSO (null se nunca teve sucesso). */
   sinceLastSuccessMs: number | null;
@@ -155,7 +156,7 @@ export async function getCronHealth(now: Date = new Date()): Promise<CronHealthR
       lastStartedAt: hb?.lastStartedAt?.toISOString() ?? null,
       lastSucceededAt: hb?.lastSucceededAt?.toISOString() ?? null,
       lastStatus: hb?.lastStatus ?? null,
-      lastError: hb?.lastError ?? null,
+      lastErrorSafe: sanitizeCronError(hb?.lastError ?? null),
       lastDurationMs: hb?.lastDurationMs ?? null,
       sinceLastSuccessMs,
     });

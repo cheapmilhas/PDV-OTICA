@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   HeartPulse,
   Database,
@@ -8,9 +9,6 @@ import {
   Clock,
   PlugZap,
   CheckCircle2,
-  AlertTriangle,
-  XCircle,
-  HelpCircle,
   EyeOff,
   Lightbulb,
   CreditCard,
@@ -26,45 +24,9 @@ import type {
   BusinessAreaHealth,
 } from "@/services/system-health.service";
 import type { BusinessArea } from "@/services/system-health-labels";
-
-/** Paleta dos 4 estados, agora com rótulos em linguagem de dono. */
-const STATE_STYLES: Record<
-  HealthState,
-  { label: string; dot: string; text: string; bg: string; border: string; Icon: LucideIcon }
-> = {
-  healthy: {
-    label: "Tudo certo",
-    dot: "bg-emerald-500",
-    text: "text-emerald-700 dark:text-emerald-400",
-    bg: "bg-emerald-50 dark:bg-emerald-950/40",
-    border: "border-emerald-200 dark:border-emerald-900",
-    Icon: CheckCircle2,
-  },
-  warning: {
-    label: "Atenção",
-    dot: "bg-amber-500",
-    text: "text-amber-700 dark:text-amber-400",
-    bg: "bg-amber-50 dark:bg-amber-950/40",
-    border: "border-amber-200 dark:border-amber-900",
-    Icon: AlertTriangle,
-  },
-  critical: {
-    label: "Problema",
-    dot: "bg-rose-500",
-    text: "text-rose-700 dark:text-rose-400",
-    bg: "bg-rose-50 dark:bg-rose-950/40",
-    border: "border-rose-200 dark:border-rose-900",
-    Icon: XCircle,
-  },
-  unknown: {
-    label: "Aguardando",
-    dot: "bg-slate-400",
-    text: "text-slate-600 dark:text-slate-400",
-    bg: "bg-slate-50 dark:bg-slate-900/40",
-    border: "border-slate-200 dark:border-slate-800",
-    Icon: HelpCircle,
-  },
-};
+import type { CronHealthRow } from "@/services/cron-heartbeat.service";
+import { STATE_STYLES } from "./state-styles";
+import { CronDetailSheet } from "./cron-detail-sheet";
 
 const SIGNAL_ICONS: Record<string, LucideIcon> = {
   database: Database,
@@ -150,6 +112,7 @@ function SignalCard({ signal }: { signal: HealthSignal }) {
 }
 
 export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
+  const [selectedCron, setSelectedCron] = useState<CronHealthRow | null>(null);
   const overall = STATE_STYLES[snapshot.overall];
   const OverallIcon = overall.Icon;
   const captured = new Date(snapshot.capturedAt).toLocaleString("pt-BR", {
@@ -263,7 +226,20 @@ export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
               {snapshot.cronRows.map((row) => {
                 const s = STATE_STYLES[row.state as HealthState];
                 return (
-                  <tr key={row.jobKey} className="border-t border-border">
+                  <tr
+                    key={row.jobKey}
+                    onClick={() => setSelectedCron(row)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedCron(row);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ver detalhes de ${row.label}`}
+                    className="border-t border-border cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:bg-muted/40"
+                  >
                     <td className="px-3 py-2">
                       <div className="text-xs font-medium text-foreground">{row.label}</div>
                       <div className="text-[11px] text-muted-foreground">{row.does}</div>
@@ -290,6 +266,7 @@ export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
             </tbody>
           </table>
         </div>
+        <CronDetailSheet row={selectedCron} onOpenChange={(open) => !open && setSelectedCron(null)} />
       </div>
 
       {/* Feed de incidentes */}
