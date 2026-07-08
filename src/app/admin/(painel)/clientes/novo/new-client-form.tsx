@@ -2,6 +2,7 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
+import { useDraftState, useClearDraft } from "./use-draft-state";
 import Link from "next/link";
 import {
   Loader2, Building2, User, CreditCard, Users, BarChart3,
@@ -91,60 +92,112 @@ export function NewClientForm({ plans, networks }: Props) {
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
 
+  // Campos do wizard — persistidos em sessionStorage (useDraftState) para não
+  // perder o preenchimento ao sair/recarregar. EXCEÇÃO: adminPassword (credencial)
+  // usa useState normal e nunca é persistido.
+
   // Step 1 — Empresa
-  const [tradeName, setTradeName] = useState("");
-  const [companyName, setCompanyName] = useState("");
-  const [cnpj, setCnpj] = useState("");
-  const [stateRegistration, setStateRegistration] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [whatsapp, setWhatsapp] = useState("");
-  const [zipCode, setZipCode] = useState("");
-  const [address, setAddress] = useState("");
-  const [addressNumber, setAddressNumber] = useState("");
-  const [complement, setComplement] = useState("");
-  const [neighborhood, setNeighborhood] = useState("");
-  const [city, setCity] = useState("");
-  const [stateUF, setStateUF] = useState("");
+  const [tradeName, setTradeName] = useDraftState("tradeName", "");
+  const [companyName, setCompanyName] = useDraftState("companyName", "");
+  const [cnpj, setCnpj] = useDraftState("cnpj", "");
+  const [stateRegistration, setStateRegistration] = useDraftState("stateRegistration", "");
+  const [email, setEmail] = useDraftState("email", "");
+  const [phone, setPhone] = useDraftState("phone", "");
+  const [whatsapp, setWhatsapp] = useDraftState("whatsapp", "");
+  const [zipCode, setZipCode] = useDraftState("zipCode", "");
+  const [address, setAddress] = useDraftState("address", "");
+  const [addressNumber, setAddressNumber] = useDraftState("addressNumber", "");
+  const [complement, setComplement] = useDraftState("complement", "");
+  const [neighborhood, setNeighborhood] = useDraftState("neighborhood", "");
+  const [city, setCity] = useDraftState("city", "");
+  const [stateUF, setStateUF] = useDraftState("stateUF", "");
 
   // Step 2 — Assinatura
-  const [planId, setPlanId] = useState(plans[0]?.id || "");
-  const [billingCycle, setBillingCycle] = useState<"MONTHLY" | "YEARLY">("MONTHLY");
-  const [trialDays, setTrialDays] = useState(14);
-  const [discountPercent, setDiscountPercent] = useState(0);
+  const [planId, setPlanId] = useDraftState("planId", plans[0]?.id || "");
+  const [billingCycle, setBillingCycle] = useDraftState<"MONTHLY" | "YEARLY">("billingCycle", "MONTHLY");
+  const [trialDays, setTrialDays] = useDraftState("trialDays", 14);
+  const [discountPercent, setDiscountPercent] = useDraftState("discountPercent", 0);
 
   // Step 3 — Responsável + Admin
-  const [ownerName, setOwnerName] = useState("");
-  const [ownerCpf, setOwnerCpf] = useState("");
-  const [ownerEmail, setOwnerEmail] = useState("");
-  const [ownerPhone, setOwnerPhone] = useState("");
-  const [adminName, setAdminName] = useState("");
-  const [adminEmail, setAdminEmail] = useState("");
-  const [adminPassword, setAdminPassword] = useState("");
+  const [ownerName, setOwnerName] = useDraftState("ownerName", "");
+  const [ownerCpf, setOwnerCpf] = useDraftState("ownerCpf", "");
+  const [ownerEmail, setOwnerEmail] = useDraftState("ownerEmail", "");
+  const [ownerPhone, setOwnerPhone] = useDraftState("ownerPhone", "");
+  const [adminName, setAdminName] = useDraftState("adminName", "");
+  const [adminEmail, setAdminEmail] = useDraftState("adminEmail", "");
+  const [adminPassword, setAdminPassword] = useState(""); // credencial — NÃO persistir
 
   // Step 4 — Rede + Aquisição
-  const [isNetwork, setIsNetwork] = useState(false);
-  const [networkMode, setNetworkMode] = useState<"new" | "existing">("new");
-  const [newNetworkName, setNewNetworkName] = useState("");
-  const [existingNetworkId, setExistingNetworkId] = useState("");
-  const [acquisitionChannel, setAcquisitionChannel] = useState("");
-  const [notes, setNotes] = useState("");
-  const [sendInviteEmail, setSendInviteEmail] = useState(true);
+  const [isNetwork, setIsNetwork] = useDraftState("isNetwork", false);
+  const [networkMode, setNetworkMode] = useDraftState<"new" | "existing">("networkMode", "new");
+  const [newNetworkName, setNewNetworkName] = useDraftState("newNetworkName", "");
+  const [existingNetworkId, setExistingNetworkId] = useDraftState("existingNetworkId", "");
+  const [acquisitionChannel, setAcquisitionChannel] = useDraftState("acquisitionChannel", "");
+  const [notes, setNotes] = useDraftState("notes", "");
+  const [sendInviteEmail, setSendInviteEmail] = useDraftState("sendInviteEmail", true);
 
-  // Busca CEP
+  // Todas as chaves de rascunho — para limpar o sessionStorage após cadastrar.
+  const clearDraft = useClearDraft([
+    "tradeName", "companyName", "cnpj", "stateRegistration", "email", "phone",
+    "whatsapp", "zipCode", "address", "addressNumber", "complement",
+    "neighborhood", "city", "stateUF", "planId", "billingCycle", "trialDays",
+    "discountPercent", "ownerName", "ownerCpf", "ownerEmail", "ownerPhone",
+    "adminName", "adminEmail", "isNetwork", "networkMode", "newNetworkName",
+    "existingNetworkId", "acquisitionChannel", "notes", "sendInviteEmail",
+  ]);
+
+  // Havia rascunho salvo ao abrir a tela? (campos-chave já preenchidos.)
+  // Detecção lazy na 1ª renderização — mostra o aviso "rascunho restaurado".
+  const [draftRestored, setDraftRestored] = useState(
+    () => Boolean(tradeName || companyName || email || ownerName),
+  );
+
+  function discardDraft() {
+    clearDraft();
+    setDraftRestored(false);
+    // Zera os campos persistidos (senha não é persistida, mas limpamos por higiene).
+    setTradeName(""); setCompanyName(""); setCnpj(""); setStateRegistration("");
+    setEmail(""); setPhone(""); setWhatsapp(""); setZipCode(""); setAddress("");
+    setAddressNumber(""); setComplement(""); setNeighborhood(""); setCity("");
+    setStateUF(""); setPlanId(plans[0]?.id || ""); setBillingCycle("MONTHLY");
+    setTrialDays(14); setDiscountPercent(0); setOwnerName(""); setOwnerCpf("");
+    setOwnerEmail(""); setOwnerPhone(""); setAdminName(""); setAdminEmail("");
+    setAdminPassword(""); setIsNetwork(false); setNetworkMode("new");
+    setNewNetworkName(""); setExistingNetworkId(""); setAcquisitionChannel("");
+    setNotes(""); setSendInviteEmail(true); setCurrentStep(1);
+  }
+
+  // Busca CEP — com feedback (antes o erro/CEP-inexistente falhava em silêncio).
+  const [cepStatus, setCepStatus] = useState<
+    { kind: "idle" | "loading" | "found" } | { kind: "error"; message: string }
+  >({ kind: "idle" });
+
   const handleCepBlur = async () => {
     const cep = zipCode.replace(/\D/g, "");
-    if (cep.length !== 8) return;
+    if (cep.length === 0) {
+      setCepStatus({ kind: "idle" });
+      return;
+    }
+    if (cep.length !== 8) {
+      setCepStatus({ kind: "error", message: "CEP deve ter 8 dígitos" });
+      return;
+    }
+    setCepStatus({ kind: "loading" });
     try {
       const res = await fetch(`https://viacep.com.br/ws/${cep}/json/`);
       const data = await res.json();
-      if (!data.erro) {
-        setAddress(data.logradouro || "");
-        setNeighborhood(data.bairro || "");
-        setCity(data.localidade || "");
-        setStateUF(data.uf || "");
+      if (data.erro) {
+        setCepStatus({ kind: "error", message: "CEP não encontrado. Preencha o endereço manualmente." });
+        return;
       }
-    } catch {}
+      setAddress(data.logradouro || "");
+      setNeighborhood(data.bairro || "");
+      setCity(data.localidade || "");
+      setStateUF(data.uf || "");
+      setCepStatus({ kind: "found" });
+    } catch {
+      setCepStatus({ kind: "error", message: "Não foi possível buscar o CEP. Preencha o endereço manualmente." });
+    }
   };
 
   // Gerar senha
@@ -216,6 +269,7 @@ export function NewClientForm({ plans, networks }: Props) {
 
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao cadastrar cliente");
+        clearDraft(); // cadastro concluído — descarta o rascunho.
         router.push(`/admin/clientes/${data.company.id}?created=true`);
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Erro inesperado");
@@ -278,6 +332,23 @@ export function NewClientForm({ plans, networks }: Props) {
           );
         })}
       </div>
+
+      {/* Aviso de rascunho restaurado — deixa o usuário recomeçar do zero. */}
+      {draftRestored && (
+        <div className="mb-5 flex items-center justify-between gap-3 bg-primary/5 border border-primary/20 text-foreground px-4 py-3 rounded-lg text-sm">
+          <span className="flex items-center gap-2 text-muted-foreground">
+            <RefreshCw className="h-4 w-4 text-primary flex-shrink-0" />
+            Recuperamos um cadastro em andamento. Continue de onde parou.
+          </span>
+          <button
+            type="button"
+            onClick={discardDraft}
+            className="text-xs font-medium text-primary hover:underline flex-shrink-0"
+          >
+            Começar do zero
+          </button>
+        </div>
+      )}
 
       {/* Erro global */}
       {error && (
@@ -362,10 +433,23 @@ export function NewClientForm({ plans, networks }: Props) {
               Endereço
             </h3>
             <div className="grid grid-cols-3 gap-4">
-              <Field label="CEP">
+              <Field
+                label="CEP"
+                error={cepStatus.kind === "error" ? cepStatus.message : undefined}
+                hint={
+                  cepStatus.kind === "loading"
+                    ? "Buscando endereço…"
+                    : cepStatus.kind === "found"
+                      ? "Endereço preenchido pelo CEP."
+                      : undefined
+                }
+              >
                 <Input
                   value={zipCode}
-                  onChange={(e) => setZipCode(e.target.value)}
+                  onChange={(e) => {
+                    setZipCode(e.target.value);
+                    if (cepStatus.kind !== "idle") setCepStatus({ kind: "idle" });
+                  }}
                   onBlur={handleCepBlur}
                   placeholder="60000-000"
                 />

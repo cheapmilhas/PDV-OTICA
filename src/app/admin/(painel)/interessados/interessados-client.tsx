@@ -1,12 +1,9 @@
-"use client";
-
-import { useEffect, useState } from "react";
-import { useRouter, useSearchParams } from "next/navigation";
 import Link from "next/link";
-import { Download, Loader2, Mail } from "lucide-react";
+import { Download, Mail } from "lucide-react";
 import type { InteressadoItem } from "./page";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
+import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
@@ -39,49 +36,18 @@ function formatDate(iso: string): string {
   }
 }
 
-export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) {
-  const router = useRouter();
-  const searchParams = useSearchParams();
-  // filtro vive na URL (?plan=slug) para o link ser compartilhável e o botão "voltar" funcionar
-  const planSlug = searchParams.get("plan") ?? "";
-
-  const [items, setItems] = useState<InteressadoItem[]>(initial);
-  const [loading, setLoading] = useState(false);
-
-  // reflete o filtro da URL na lista: busca client-side sempre que planSlug muda
-  useEffect(() => {
-    let cancelled = false;
-    // sem filtro: usa os dados iniciais renderizados no servidor (evita fetch redundante no primeiro load)
-    if (!planSlug) {
-      setItems(initial);
-      return;
-    }
-    setLoading(true);
-    (async () => {
-      try {
-        const qs = `?planSlug=${encodeURIComponent(planSlug)}`;
-        const res = await fetch(`/api/admin/plan-interests${qs}`);
-        if (res.ok && !cancelled) {
-          const data = await res.json();
-          setItems(Array.isArray(data.items) ? data.items : []);
-        }
-      } catch {
-        // mantém a lista atual em caso de erro de rede
-      } finally {
-        if (!cancelled) setLoading(false);
-      }
-    })();
-    return () => {
-      cancelled = true;
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [planSlug]);
-
-  function handleFilterChange(slug: string) {
-    // empurra o filtro para a URL; o useEffect acima faz o fetch ao reagir à mudança
-    router.push(slug ? `?plan=${encodeURIComponent(slug)}` : "?");
-  }
-
+/**
+ * Lista de interessados. O filtro por plano é aplicado no servidor (page.tsx lê
+ * ?plan=slug) e navegado por chips (FilterChip como Link) — mesmo padrão de
+ * assinaturas/faturas. URL shareable e botão "voltar" continuam funcionando.
+ */
+export function InteressadosClient({
+  items,
+  planSlug,
+}: {
+  items: InteressadoItem[];
+  planSlug: string;
+}) {
   const csvHref = planSlug
     ? `/api/admin/plan-interests?planSlug=${encodeURIComponent(planSlug)}&format=csv`
     : `/api/admin/plan-interests?format=csv`;
@@ -92,38 +58,29 @@ export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) 
         title="Interessados"
         subtitle='Visitantes que pediram para ser avisados sobre planos "Em breve".'
         actions={
-          <div className="flex items-center gap-3">
-            <select
-              aria-label="Filtrar por plano"
-              value={planSlug}
-              onChange={(e) => handleFilterChange(e.target.value)}
-              disabled={loading}
-              className="px-3 py-2 rounded-lg bg-background border border-input text-sm text-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring disabled:opacity-60"
-            >
-              {PLAN_OPTIONS.map((opt) => (
-                <option key={opt.slug || "all"} value={opt.slug}>
-                  {opt.label}
-                </option>
-              ))}
-            </select>
-
-            <Button asChild>
-              <Link href={csvHref}>
-                <Download className="h-4 w-4" />
-                Exportar CSV
-              </Link>
-            </Button>
-          </div>
+          <Button asChild>
+            <Link href={csvHref}>
+              <Download className="h-4 w-4" />
+              Exportar CSV
+            </Link>
+          </Button>
         }
       />
 
+      <FilterBar>
+        {PLAN_OPTIONS.map((opt) => (
+          <FilterChip
+            key={opt.slug || "all"}
+            href={opt.slug ? `/admin/interessados?plan=${encodeURIComponent(opt.slug)}` : "/admin/interessados"}
+            active={planSlug === opt.slug}
+          >
+            {opt.label}
+          </FilterChip>
+        ))}
+      </FilterBar>
+
       <div className="rounded-xl border border-border bg-card overflow-hidden">
-        {loading ? (
-          <div className="flex items-center justify-center py-16 text-muted-foreground">
-            <Loader2 className="h-5 w-5 animate-spin mr-2" />
-            Carregando...
-          </div>
-        ) : items.length === 0 ? (
+        {items.length === 0 ? (
           <EmptyState icon={Mail} message="Nenhum interessado ainda" />
         ) : (
           <ResponsiveTable minWidth={720}>
@@ -159,7 +116,7 @@ export function InteressadosClient({ initial }: { initial: InteressadoItem[] }) 
         )}
       </div>
 
-      {!loading && items.length > 0 && (
+      {items.length > 0 && (
         <p className="mt-3 text-xs text-muted-foreground">
           {items.length} {items.length === 1 ? "interessado" : "interessados"}
         </p>
