@@ -158,14 +158,19 @@ export class CashService {
       // Relê movimentos DEPOIS do lock — pega qualquer venda que acabou de entrar.
       const movements = await tx.cashMovement.findMany({ where: { cashShiftId: shiftId } });
       const cashMovements = movements.filter((m) => m.method === "CASH");
-      const totalIn = cashMovements
-        .filter((m) => m.direction === "IN")
-        .reduce((sum, m) => sum + Number(m.amount), 0);
-      const totalOut = cashMovements
-        .filter((m) => m.direction === "OUT")
-        .reduce((sum, m) => sum + Number(m.amount), 0);
-      const closingExpectedCash = totalIn - totalOut;
-      const differenceCash = closingDeclaredCash - closingExpectedCash;
+      // Soma em Decimal (não Number) para evitar acúmulo de erro de ponto
+      // flutuante em valores monetários — mesmo padrão de sale-totals/commission.
+      const expectedD = cashMovements.reduce(
+        (acc, m) =>
+          m.direction === "IN"
+            ? acc.plus(m.amount)
+            : acc.minus(m.amount),
+        new Prisma.Decimal(0),
+      );
+      const closingExpectedCash = expectedD.toNumber();
+      const differenceCash = new Prisma.Decimal(closingDeclaredCash)
+        .minus(expectedD)
+        .toNumber();
 
       // Validar justificativa se há diferença (com o valor já protegido pelo lock).
       if (Math.abs(differenceCash) > 0.01 && !differenceJustification) {

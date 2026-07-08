@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { z } from "zod";
+import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession, getAccessibleCompanyIds, requireCompanyScope } from "@/lib/admin-session";
 
@@ -114,10 +115,14 @@ export async function POST(request: Request) {
         where: { cashShiftId: s.id, method: "CASH" },
         select: { amount: true, direction: true },
       });
-      const expectedCash = movements.reduce(
-        (sum, m) => sum + (m.direction === "IN" ? Number(m.amount) : -Number(m.amount)),
-        0,
-      );
+      // Soma em Decimal (não Number) para não acumular erro de ponto flutuante
+      // em valor monetário — mesmo padrão do fechamento normal (cash.service).
+      const expectedCash = movements
+        .reduce(
+          (acc, m) => (m.direction === "IN" ? acc.plus(m.amount) : acc.minus(m.amount)),
+          new Prisma.Decimal(0),
+        )
+        .toNumber();
 
       await prisma.$transaction(async (tx) => {
         await tx.cashShift.update({
