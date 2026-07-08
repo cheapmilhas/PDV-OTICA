@@ -5,7 +5,7 @@ import { usePathname } from "next/navigation";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
   Ticket, FileBarChart, UsersRound, Activity, Mail,
-  CreditCard,
+  CreditCard, Settings,
 } from "lucide-react";
 import { CONFIG_SECTIONS } from "./configuracoes/sections";
 
@@ -43,13 +43,18 @@ const menuItems = [
   },
   {
     // Fonte única: CONFIG_SECTIONS (compartilhada com o hub configuracoes/page.tsx).
+    // Primeiro item = link para o próprio hub (antes ficava órfão: só se chegava
+    // nele por URL direta). `exact` evita que fique ativo dentro das subseções.
     section: "Configurações",
-    items: CONFIG_SECTIONS.map((s) => ({
-      href: s.href,
-      icon: s.icon,
-      label: s.navLabel,
-      exact: false,
-    })),
+    items: [
+      { href: "/admin/configuracoes", icon: Settings, label: "Visão Geral", exact: true },
+      ...CONFIG_SECTIONS.map((s) => ({
+        href: s.href,
+        icon: s.icon,
+        label: s.navLabel,
+        exact: false,
+      })),
+    ],
   },
 ];
 

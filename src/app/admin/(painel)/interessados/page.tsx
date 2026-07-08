@@ -12,12 +12,23 @@ export interface InteressadoItem {
   createdAt: string;
 }
 
-export default async function InteressadosPage() {
+export default async function InteressadosPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ plan?: string }>;
+}) {
   await requireAdmin();
+
+  // Filtro por plano vive na URL (?plan=slug) e é aplicado NO SERVIDOR — mesmo
+  // padrão de assinaturas/faturas (chips como Link). Antes o interessados
+  // filtrava via <select> + fetch client-side, um 3º padrão divergente.
+  const { plan } = await searchParams;
+  const planSlug = plan ?? "";
 
   let items: InteressadoItem[] = [];
   try {
     const records = await prisma.planInterest.findMany({
+      where: planSlug ? { planSlug } : undefined,
       orderBy: { createdAt: "desc" },
     });
     items = records.map((r) => ({
@@ -35,5 +46,5 @@ export default async function InteressadosPage() {
     items = [];
   }
 
-  return <InteressadosClient initial={items} />;
+  return <InteressadosClient items={items} planSlug={planSlug} />;
 }
