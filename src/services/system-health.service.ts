@@ -3,6 +3,7 @@ import { logger } from "@/lib/logger";
 import { getCronHealth, type CronHealthRow, type CronHealthState } from "@/services/cron-heartbeat.service";
 import { getIntegrationsStatus, type IntegrationStatus } from "@/services/integrations-status.service";
 import { listEvents, type SystemEventView } from "@/services/system-event.service";
+import { AREA_LABELS, type BusinessArea } from "@/services/system-health-labels";
 
 const log = logger.child({ service: "system-health" });
 
@@ -25,12 +26,25 @@ export interface HealthSignal {
   state: HealthState;
   /** Frase curta pro humano ("banco respondeu", "sem token, não monitoro"). */
   detail: string;
+  /** O que fazer quando este sinal não está verde (null = nada a fazer). */
+  action?: string | null;
+}
+
+/** Um cartão do "resumo pro dono": uma área de negócio agregada. */
+export interface BusinessAreaHealth {
+  area: BusinessArea;
+  label: string;
+  state: HealthState;
+  /** Frase de 1 linha explicando o estado em termos de negócio. */
+  summary: string;
 }
 
 export interface SystemHealthSnapshot {
   /** Estado geral = PIOR sinal (unknown não piora além de warning). */
   overall: HealthState;
   capturedAt: string;
+  /** Resumo pro dono: os sinais técnicos agrupados por área de negócio. */
+  businessAreas: BusinessAreaHealth[];
   signals: {
     database: HealthSignal;
     vercel: HealthSignal;
@@ -65,14 +79,15 @@ export function worstState(states: HealthState[]): HealthState {
 async function pingDatabase(): Promise<HealthSignal> {
   try {
     await prisma.$queryRaw`SELECT 1`;
-    return { key: "database", label: "Banco de dados", state: "healthy", detail: "Respondeu ao ping." };
+    return { key: "database", label: "Banco de dados", state: "healthy", detail: "Está respondendo normalmente." };
   } catch (err) {
     log.error("db-ping falhou", { err });
     return {
       key: "database",
       label: "Banco de dados",
       state: "critical",
-      detail: "Não respondeu ao ping (SELECT 1 falhou).",
+      detail: "O banco não respondeu — o sistema pode estar fora do ar.",
+      action: "Verifique o status do banco (Neon) e se o site está no ar. Se persistir, é urgente.",
     };
   }
 }
@@ -88,9 +103,10 @@ async function checkVercel(): Promise<HealthSignal> {
   if (!token) {
     return {
       key: "vercel",
-      label: "Hospedagem (Vercel)",
+      label: "Hospedagem (site)",
       state: "unknown",
-      detail: "Sem VERCEL_TOKEN — não monitoro o status da conta.",
+      detail: "Não estou monitorando a conta de hospedagem (falta configurar o acesso).",
+      action: "Opcional: defina a variável VERCEL_TOKEN na Vercel para acompanhar o status da conta.",
     };
   }
 
@@ -105,9 +121,10 @@ async function checkVercel(): Promise<HealthSignal> {
     if (!res.ok) {
       return {
         key: "vercel",
-        label: "Hospedagem (Vercel)",
+        label: "Hospedagem (site)",
         state: "unknown",
-        detail: `API do Vercel respondeu ${res.status} — não consegui ler o status.`,
+        detail: "Não consegui ler o status da conta de hospedagem agora.",
+        action: "Confira se o VERCEL_TOKEN ainda é válido (pode ter expirado).",
       };
     }
     const body = (await res.json()) as { user?: { softBlock?: unknown } };
@@ -115,14 +132,15 @@ async function checkVercel(): Promise<HealthSignal> {
     if (softBlock) {
       return {
         key: "vercel",
-        label: "Hospedagem (Vercel)",
+        label: "Hospedagem (site)",
         state: "critical",
-        detail: "Conta com softBlock ativo — o site pode estar fora do ar.",
+        detail: "A conta de hospedagem está bloqueada — o site pode estar fora do ar.",
+        action: "Abra o painel da Vercel → Spend Management e libere o limite (ou aguarde o próximo ciclo).",
       };
     }
     return {
       key: "vercel",
-      label: "Hospedagem (Vercel)",
+      label: "Hospedagem (site)",
       state: "healthy",
       detail: "Conta ativa, sem bloqueio.",
     };
@@ -130,9 +148,9 @@ async function checkVercel(): Promise<HealthSignal> {
     log.warn("checkVercel falhou", { err });
     return {
       key: "vercel",
-      label: "Hospedagem (Vercel)",
+      label: "Hospedagem (site)",
       state: "unknown",
-      detail: "Não consegui falar com a API do Vercel.",
+      detail: "Não consegui falar com a hospedagem agora.",
     };
   }
 }
@@ -147,31 +165,51 @@ function checkSentry(): HealthSignal {
   if (!dsn) {
     return {
       key: "sentry",
-      label: "Monitoramento de erros (Sentry)",
+      label: "Captura de erros",
       state: "unknown",
-      detail: "Sem SENTRY_DSN — não estou capturando erros.",
+      detail: "Não estou capturando os erros do sistema (falta configurar o Sentry).",
+      action: "Opcional: crie um projeto no Sentry e defina SENTRY_DSN para registrar os erros.",
     };
   }
   return {
     key: "sentry",
-    label: "Monitoramento de erros (Sentry)",
+    label: "Captura de erros",
     state: "healthy",
-    detail: "DSN configurado — capturando erros.",
+    detail: "Ligada — os erros do sistema estão sendo registrados.",
   };
 }
 
-/** Resume o array de crons num sinal único (pior estado entre eles). */
+/**
+ * Resume o array de crons num sinal único. Distingue "atrasado de verdade" de
+ * "ainda não rodou" (unknown): um monitor recém-ligado tem vários crons sem
+ * batimento, o que NÃO é problema — a mensagem deixa isso claro pro dono.
+ */
 function summarizeCrons(rows: CronHealthRow[]): HealthSignal {
   const state = worstState(rows.map((r) => r.state as HealthState));
-  const critical = rows.filter((r) => r.state === "critical").length;
-  const warning = rows.filter((r) => r.state === "warning").length;
+  const critical = rows.filter((r) => r.state === "critical");
+  const warning = rows.filter((r) => r.state === "warning");
   const unknown = rows.filter((r) => r.state === "unknown").length;
+
   let detail: string;
-  if (critical > 0) detail = `${critical} cron(s) atrasado(s) muito além do esperado.`;
-  else if (warning > 0) detail = `${warning} cron(s) atrasado(s).`;
-  else if (unknown > 0) detail = `${unknown} cron(s) ainda sem batimento registrado.`;
-  else detail = "Todos os crons rodaram dentro do esperado.";
-  return { key: "crons", label: "Tarefas agendadas (crons)", state, detail };
+  let action: string | null = null;
+  if (critical.length > 0) {
+    detail = `${critical.length} tarefa(s) parada(s) muito além do esperado — ex.: ${critical[0].label}.`;
+    action = "Veja a lista abaixo qual está parada e há quanto tempo.";
+  } else if (warning.length > 0) {
+    const ext = warning.find((r) => r.external);
+    if (ext) {
+      detail = `${warning.length} tarefa(s) atrasada(s) — ex.: ${ext.label}, que depende de um gatilho externo.`;
+      action = "Reative o gatilho no cron-job.org (aponta para /api/cron/… com o CRON_SECRET). Se o WhatsApp está funcionando normal, não é urgente.";
+    } else {
+      detail = `${warning.length} tarefa(s) atrasada(s) — ex.: ${warning[0].label}.`;
+      action = "Acompanhe: se não normalizar em algumas horas, investigue a tarefa na lista abaixo.";
+    }
+  } else if (unknown > 0) {
+    detail = `${unknown} tarefa(s) ainda sem registro — normal se o monitor foi ligado há pouco (rodam ao longo do dia).`;
+  } else {
+    detail = "Todas as tarefas rodaram dentro do esperado.";
+  }
+  return { key: "crons", label: "Tarefas automáticas", state, detail, action };
 }
 
 /** Resume as integrações num sinal. Faltar integração NÃO é erro — é unknown. */
@@ -180,17 +218,80 @@ function summarizeIntegrations(rows: IntegrationStatus[]): HealthSignal {
   const state: HealthState = missing.length === 0 ? "healthy" : "unknown";
   const detail =
     missing.length === 0
-      ? "Todas as integrações conhecidas estão configuradas."
-      : `${missing.length} integração(ões) sem configuração: ${missing.map((r) => r.label).join(", ")}.`;
-  return { key: "integrations", label: "Integrações externas", state, detail };
+      ? "Todos os serviços externos estão configurados."
+      : `${missing.length} serviço(s) ainda sem configuração: ${missing.map((r) => r.label).join(", ")}.`;
+  const action =
+    missing.length === 0
+      ? null
+      : "Não é erro — cada serviço só precisa ser ligado quando você for usá-lo (ex.: nota fiscal).";
+  return { key: "integrations", label: "Serviços externos", state, detail, action };
 }
 
 const NOT_MONITORED: string[] = [
-  "Uso/custo por rota no Vercel (a API pública não expõe — só softBlock da conta).",
-  "Latência real das requisições dos usuários.",
-  "Fila do WhatsApp / entrega de mensagens ponta a ponta.",
-  "Erros de front-end no navegador do usuário (a menos que o Sentry esteja ligado).",
+  "Quanto o site está custando por página (a hospedagem não fornece esse dado — só se a conta está bloqueada).",
+  "A velocidade real que o cliente sente ao usar o sistema.",
+  "Se cada mensagem de WhatsApp chegou de fato no celular do cliente.",
+  "Erros que acontecem no navegador do cliente (só se a captura de erros estiver ligada).",
 ];
+
+/**
+ * Cartões do "resumo pro dono": agrupa os sinais técnicos por ÁREA DE NEGÓCIO.
+ * Cada cartão = pior estado entre os sinais/tarefas daquela área + 1 frase.
+ * "unknown" (nunca rodou / não monitorado) NÃO derruba a área pra vermelho.
+ */
+function buildBusinessAreas(
+  signals: HealthSignal[],
+  cronRows: CronHealthRow[]
+): BusinessAreaHealth[] {
+  // Mapeia sinais técnicos → área de negócio.
+  const signalArea: Record<string, BusinessArea> = {
+    database: "sistema",
+    vercel: "sistema",
+    sentry: "sistema",
+    integrations: "sistema",
+    // "crons" é distribuído por cron individual (cada um tem sua área), não aqui.
+  };
+
+  const areas: BusinessArea[] = ["cobrancas", "emails", "whatsapp", "sistema"];
+  return areas.map((area) => {
+    const areaSignals = signals.filter((s) => signalArea[s.key] === area);
+    const areaCrons = cronRows.filter((c) => c.area === area);
+    const states: HealthState[] = [
+      ...areaSignals.map((s) => s.state),
+      ...areaCrons.map((c) => c.state as HealthState),
+    ];
+    const state = states.length > 0 ? worstState(states) : "unknown";
+    const summary = businessSummary(area, state, areaCrons);
+    return { area, label: AREA_LABELS[area], state, summary };
+  });
+}
+
+/** Frase de negócio por área conforme o pior estado. */
+function businessSummary(area: BusinessArea, state: HealthState, crons: CronHealthRow[]): string {
+  const bad = crons.find((c) => c.state === "critical" || c.state === "warning");
+  if (state === "healthy") {
+    const ok: Record<BusinessArea, string> = {
+      cobrancas: "Cobranças, faturas e avisos de inadimplência rodando normalmente.",
+      emails: "Os e-mails do sistema estão saindo normalmente.",
+      whatsapp: "Automações e envio de WhatsApp funcionando.",
+      sistema: "Banco, hospedagem e serviços de apoio no ar.",
+    };
+    return ok[area];
+  }
+  if (state === "critical" || state === "warning") {
+    return bad
+      ? `Atenção em "${bad.label}" — veja os detalhes abaixo.`
+      : "Um sinal desta área precisa de atenção — veja abaixo.";
+  }
+  // unknown
+  const wait: Record<BusinessArea, string> = {
+    cobrancas: "Aguardando a 1ª execução das tarefas de cobrança (rodam ao longo do dia).",
+    emails: "Aguardando a 1ª execução do envio de e-mails.",
+    whatsapp: "Aguardando a 1ª execução das tarefas de WhatsApp.",
+    sistema: "Alguns itens de apoio ainda sem dados — normal se o monitor foi ligado há pouco.",
+  };
+  return wait[area];
+}
 
 /**
  * Monta o snapshot inteiro. Cada sinal é isolado: a falha de um (ex.: API do
@@ -226,9 +327,15 @@ export async function getSystemHealthSnapshot(now: Date = new Date()): Promise<S
     integrations.state,
   ]);
 
+  const businessAreas = buildBusinessAreas(
+    [database, vercel, sentry, integrations],
+    cronRows
+  );
+
   return {
     overall,
     capturedAt: now.toISOString(),
+    businessAreas,
     signals: { database, vercel, sentry, crons, integrations },
     cronRows,
     integrationRows,

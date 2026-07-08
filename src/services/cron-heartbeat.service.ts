@@ -1,5 +1,6 @@
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { cronMeta, type BusinessArea } from "@/services/system-health-labels";
 
 const log = logger.child({ service: "cron-heartbeat" });
 
@@ -40,6 +41,14 @@ export type CronHealthState = "healthy" | "warning" | "critical" | "unknown";
 
 export interface CronHealthRow {
   jobKey: string;
+  /** Nome amigável (ex.: "Cobrança de inadimplentes"). */
+  label: string;
+  /** O que a tarefa faz, em 1 frase. */
+  does: string;
+  /** Área de negócio (cobrancas/emails/whatsapp/sistema). */
+  area: BusinessArea;
+  /** true = acionado por gatilho externo (cron-job.org). */
+  external: boolean;
   state: CronHealthState;
   expectedEveryMs: number;
   lastStartedAt: string | null;
@@ -96,19 +105,26 @@ export async function finishCronRun(
 
 /**
  * Classifica a saúde de um cron por DELTA de tempo (imune a fuso — nunca compara
- * horário de parede). Sem sucesso registrado = unknown ("nunca configurado /
- * nunca rodou"), NÃO crítico — não assustar com vermelho falso no dia 1.
+ * horário de parede). Sem sucesso registrado = unknown ("nunca rodou desde que o
+ * monitor foi ligado"), NÃO crítico — não assustar com vermelho falso no dia 1.
+ *
+ * `external`: crons acionados por gatilho EXTERNO (cron-job.org). Se o gatilho
+ * para, o negócio não necessariamente parou — então esses NUNCA chegam a
+ * "critical" (teto em "warning"). Um cron do Vercel atrasado além de 4× o
+ * esperado é de fato um problema do sistema; um externo é "reative o gatilho".
  */
 export function classifyCron(
   lastSucceededAt: Date | null,
   expectedEveryMs: number,
-  now: Date = new Date()
+  now: Date = new Date(),
+  external = false
 ): { state: CronHealthState; sinceLastSuccessMs: number | null } {
   if (!lastSucceededAt) return { state: "unknown", sinceLastSuccessMs: null };
   const since = now.getTime() - lastSucceededAt.getTime();
   if (since <= expectedEveryMs * 2) return { state: "healthy", sinceLastSuccessMs: since };
   if (since <= expectedEveryMs * 4) return { state: "warning", sinceLastSuccessMs: since };
-  return { state: "critical", sinceLastSuccessMs: since };
+  // Externo atrasado demais = "warning" (reative o gatilho), não "critical".
+  return { state: external ? "warning" : "critical", sinceLastSuccessMs: since };
 }
 
 /**
@@ -124,10 +140,16 @@ export async function getCronHealth(now: Date = new Date()): Promise<CronHealthR
   const result: CronHealthRow[] = [];
   for (const jobKey of keys) {
     const hb = byKey.get(jobKey);
+    const meta = cronMeta(jobKey);
+    const external = meta.external ?? false;
     const expectedEveryMs = EXPECTED_EVERY_MS[jobKey] ?? DEFAULT_EXPECTED_MS;
-    const { state, sinceLastSuccessMs } = classifyCron(hb?.lastSucceededAt ?? null, expectedEveryMs, now);
+    const { state, sinceLastSuccessMs } = classifyCron(hb?.lastSucceededAt ?? null, expectedEveryMs, now, external);
     result.push({
       jobKey,
+      label: meta.label,
+      does: meta.does,
+      area: meta.area,
+      external,
       state,
       expectedEveryMs,
       lastStartedAt: hb?.lastStartedAt?.toISOString() ?? null,

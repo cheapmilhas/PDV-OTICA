@@ -76,11 +76,44 @@ describe("getSystemHealthSnapshot", () => {
 
   it("cron crítico eleva overall a critical", async () => {
     cronHealth.mockResolvedValue([
-      { jobKey: "dunning", state: "critical", expectedEveryMs: 1, lastStartedAt: null, lastSucceededAt: null, lastStatus: null, lastError: null, lastDurationMs: null, sinceLastSuccessMs: 999 },
+      { jobKey: "dunning", label: "Cobrança de inadimplentes", does: "x", area: "cobrancas", external: false, state: "critical", expectedEveryMs: 1, lastStartedAt: null, lastSucceededAt: null, lastStatus: null, lastError: null, lastDurationMs: null, sinceLastSuccessMs: 999 },
     ]);
     const snap = await getSystemHealthSnapshot();
     expect(snap.signals.crons.state).toBe("critical");
     expect(snap.overall).toBe("critical");
+  });
+
+  it("businessAreas: cron crítico de cobrança deixa a área Cobranças crítica", async () => {
+    cronHealth.mockResolvedValue([
+      { jobKey: "dunning", label: "Cobrança de inadimplentes", does: "x", area: "cobrancas", external: false, state: "critical", expectedEveryMs: 1, lastStartedAt: null, lastSucceededAt: null, lastStatus: null, lastError: null, lastDurationMs: null, sinceLastSuccessMs: 999 },
+    ]);
+    const snap = await getSystemHealthSnapshot();
+    const cobrancas = snap.businessAreas.find((a) => a.area === "cobrancas");
+    expect(cobrancas?.state).toBe("critical");
+    expect(cobrancas?.summary).toContain("Cobrança de inadimplentes");
+    // sempre 4 áreas fixas
+    expect(snap.businessAreas.map((a) => a.area)).toEqual(["cobrancas", "emails", "whatsapp", "sistema"]);
+  });
+
+  it("businessAreas: cron externo atrasado vira warning (não critical) e sugere reativar gatilho", async () => {
+    cronHealth.mockResolvedValue([
+      { jobKey: "whatsapp-qualify", label: "IA lê as conversas do WhatsApp", does: "x", area: "whatsapp", external: true, state: "warning", expectedEveryMs: 1, lastStartedAt: null, lastSucceededAt: "2026-07-07T00:00:00Z", lastStatus: "ok", lastError: null, lastDurationMs: 5, sinceLastSuccessMs: 999 },
+    ]);
+    const snap = await getSystemHealthSnapshot();
+    expect(snap.signals.crons.state).toBe("warning");
+    expect(snap.signals.crons.action).toContain("cron-job.org");
+    const wpp = snap.businessAreas.find((a) => a.area === "whatsapp");
+    expect(wpp?.state).toBe("warning");
+  });
+
+  it("crons só com 'unknown' (nunca rodou) NÃO é problema — mensagem tranquiliza", async () => {
+    cronHealth.mockResolvedValue([
+      { jobKey: "dunning", label: "Cobrança de inadimplentes", does: "x", area: "cobrancas", external: false, state: "unknown", expectedEveryMs: 1, lastStartedAt: null, lastSucceededAt: null, lastStatus: null, lastError: null, lastDurationMs: null, sinceLastSuccessMs: null },
+    ]);
+    const snap = await getSystemHealthSnapshot();
+    expect(snap.signals.crons.state).toBe("unknown");
+    expect(snap.signals.crons.detail).toMatch(/ainda sem registro|monitor foi ligado/i);
+    expect(snap.signals.crons.action ?? null).toBeNull();
   });
 
   it("SENTRY_DSN presente → sentry healthy", async () => {

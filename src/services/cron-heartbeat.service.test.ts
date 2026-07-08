@@ -56,13 +56,28 @@ describe("getCronHealth", () => {
     expect(rows[idxHealthy].state).toBe("healthy");
   });
 
-  it("whatsapp-qualify usa cadência de 5min (alta frequência), não diária", async () => {
-    // 30min sem sucesso: p/ cadência diária seria healthy; p/ 5min (>4×) é critical.
+  it("whatsapp-qualify usa cadência de 5min (não diária) e, por ser EXTERNO, satura em warning (não critical)", async () => {
+    // 30min sem sucesso: p/ cadência diária seria healthy; p/ 5min está >4× o esperado.
+    // Mas whatsapp-qualify é acionado por gatilho externo (cron-job.org) → teto em
+    // "warning" (reative o gatilho), nunca "critical" (o negócio não parou).
     findMany.mockResolvedValue([
       { jobKey: "whatsapp-qualify", lastStartedAt: NOW, lastSucceededAt: new Date(NOW.getTime() - 30 * 60_000), lastStatus: "ok", lastError: null, lastDurationMs: 5 },
     ]);
     const rows = await getCronHealth(NOW);
-    expect(rows.find((r) => r.jobKey === "whatsapp-qualify")!.state).toBe("critical");
+    const row = rows.find((r) => r.jobKey === "whatsapp-qualify")!;
+    expect(row.state).toBe("warning"); // 5min cadence aplicada (não healthy) + teto externo
+    expect(row.external).toBe(true);
+  });
+
+  it("cron INTERNO (Vercel) atrasado >4× vira critical — só os externos saturam em warning", async () => {
+    // dunning é diário e interno; 5 dias sem sucesso (>4×) → critical de fato.
+    findMany.mockResolvedValue([
+      { jobKey: "dunning", lastStartedAt: NOW, lastSucceededAt: new Date(NOW.getTime() - 5 * 24 * 60 * 60_000), lastStatus: "ok", lastError: null, lastDurationMs: 5 },
+    ]);
+    const rows = await getCronHealth(NOW);
+    const row = rows.find((r) => r.jobKey === "dunning")!;
+    expect(row.state).toBe("critical");
+    expect(row.external).toBe(false);
   });
 });
 
