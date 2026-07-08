@@ -639,10 +639,11 @@ Expected: todos PASS.
 Run: `./node_modules/.bin/vitest run`
 Expected: todos PASS (nenhuma regressão).
 
-- [ ] **Step 4: Lint (pega imports não usados que o tsc não vê)**
+- [ ] **Step 4: Imports não usados (grep — `next lint` NÃO existe no Next 16.2.6)**
 
-Run: `./node_modules/.bin/next lint --file "src/app/admin/(painel)/configuracoes/saude/pulso-view.tsx" 2>&1 | tail -20 || ./node_modules/.bin/next lint 2>&1 | tail -20`
-Expected: sem erro de `no-unused-vars` nos arquivos tocados (especialmente ícones de `pulso-view.tsx`). Se acusar, remover o import ocioso e recommitar.
+`next lint` foi removido no Next 16; o `tsc` não acusa import não usado (`noUnusedLocals` off). Verificar manualmente os ícones tocados em `pulso-view.tsx`:
+Run: `for ic in AlertTriangle XCircle HelpCircle; do n=$(grep -c "$ic" "src/app/admin/(painel)/configuracoes/saude/pulso-view.tsx"); echo "$ic: $n"; done`
+Expected: `0` para cada ícone que foi removido do STATE_STYLES (se aparecer só no import, é dead import → remover).
 
 - [ ] **Step 5: Build de produção**
 
