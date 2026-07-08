@@ -1,5 +1,6 @@
 "use client";
 
+import { useState } from "react";
 import {
   HeartPulse,
   Database,
@@ -23,7 +24,9 @@ import type {
   BusinessAreaHealth,
 } from "@/services/system-health.service";
 import type { BusinessArea } from "@/services/system-health-labels";
+import type { CronHealthRow } from "@/services/cron-heartbeat.service";
 import { STATE_STYLES } from "./state-styles";
+import { CronDetailSheet } from "./cron-detail-sheet";
 
 const SIGNAL_ICONS: Record<string, LucideIcon> = {
   database: Database,
@@ -109,6 +112,7 @@ function SignalCard({ signal }: { signal: HealthSignal }) {
 }
 
 export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
+  const [selectedCron, setSelectedCron] = useState<CronHealthRow | null>(null);
   const overall = STATE_STYLES[snapshot.overall];
   const OverallIcon = overall.Icon;
   const captured = new Date(snapshot.capturedAt).toLocaleString("pt-BR", {
@@ -222,7 +226,20 @@ export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
               {snapshot.cronRows.map((row) => {
                 const s = STATE_STYLES[row.state as HealthState];
                 return (
-                  <tr key={row.jobKey} className="border-t border-border">
+                  <tr
+                    key={row.jobKey}
+                    onClick={() => setSelectedCron(row)}
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" || e.key === " ") {
+                        e.preventDefault();
+                        setSelectedCron(row);
+                      }
+                    }}
+                    role="button"
+                    tabIndex={0}
+                    aria-label={`Ver detalhes de ${row.label}`}
+                    className="border-t border-border cursor-pointer hover:bg-muted/40 focus-visible:outline-none focus-visible:bg-muted/40"
+                  >
                     <td className="px-3 py-2">
                       <div className="text-xs font-medium text-foreground">{row.label}</div>
                       <div className="text-[11px] text-muted-foreground">{row.does}</div>
@@ -249,6 +266,7 @@ export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
             </tbody>
           </table>
         </div>
+        <CronDetailSheet row={selectedCron} onOpenChange={(open) => !open && setSelectedCron(null)} />
       </div>
 
       {/* Feed de incidentes */}
