@@ -6,9 +6,14 @@ const { prismaMock } = vi.hoisted(() => ({
       count: vi.fn(),
       createMany: vi.fn(),
       findMany: vi.fn(),
+      findFirst: vi.fn(),
       update: vi.fn(),
       updateMany: vi.fn(),
       create: vi.fn(),
+      delete: vi.fn(),
+    },
+    lead: {
+      count: vi.fn(),
     },
     // Roda o callback com o mesmo mock (create + shift são atômicos no código real).
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock)),
@@ -20,6 +25,7 @@ import {
   DEFAULT_LEAD_STAGES,
   ensureOpticalStages,
   createStage,
+  deleteStage,
 } from "@/services/lead-stage.service";
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 
@@ -244,5 +250,41 @@ describe("createStage — insert-and-shift", () => {
     // Tudo dentro de uma transação (atômico).
     expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
     expect(result).toBe(created);
+  });
+});
+
+describe("deleteStage — bloqueios", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("bloqueia apagar coluna de sistema (systemKey) mesmo sem leads dentro", async () => {
+    prismaMock.leadStage.findFirst.mockResolvedValue({
+      id: "s_exam",
+      companyId: "company_1",
+      isWon: false,
+      isLost: false,
+      systemKey: LEAD_STAGE_KEYS.EXAM_DONE,
+    });
+    prismaMock.lead.count.mockResolvedValue(0);
+
+    await expect(deleteStage("s_exam", "company_1")).rejects.toThrow(
+      "Não é possível apagar uma coluna de sistema",
+    );
+    expect(prismaMock.leadStage.delete).not.toHaveBeenCalled();
+  });
+
+  it("permite apagar coluna comum (sem systemKey, não-terminal, sem leads)", async () => {
+    prismaMock.leadStage.findFirst.mockResolvedValue({
+      id: "s_custom",
+      companyId: "company_1",
+      isWon: false,
+      isLost: false,
+      systemKey: null,
+    });
+    prismaMock.lead.count.mockResolvedValue(0);
+    prismaMock.leadStage.delete.mockResolvedValue({ id: "s_custom" });
+
+    await deleteStage("s_custom", "company_1");
+
+    expect(prismaMock.leadStage.delete).toHaveBeenCalledWith({ where: { id: "s_custom" } });
   });
 });

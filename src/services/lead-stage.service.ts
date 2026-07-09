@@ -58,11 +58,12 @@ export async function updateStage(
   return prisma.leadStage.update({ where: { id }, data });
 }
 
-/** Bloqueia apagar etapa terminal ou com leads dentro. */
+/** Bloqueia apagar etapa terminal, coluna de sistema (systemKey), ou com leads dentro. */
 export async function deleteStage(id: string, companyId: string) {
   const stage = await prisma.leadStage.findFirst({ where: { id, companyId } });
   if (!stage) throw new Error("Etapa não encontrada");
   if (stage.isWon || stage.isLost) throw new Error("Não é possível apagar etapas Fechado/Perdido");
+  if (stage.systemKey) throw new Error("Não é possível apagar uma coluna de sistema (ex.: Exame feito)");
   const leadsInStage = await prisma.lead.count({ where: { stageId: id, deletedAt: null } });
   if (leadsInStage > 0) throw new Error("Mova os leads desta etapa antes de apagá-la");
   await prisma.leadStage.delete({ where: { id } });
