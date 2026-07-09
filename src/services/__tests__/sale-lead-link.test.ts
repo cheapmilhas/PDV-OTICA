@@ -5,6 +5,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { linkLeadAndMaybeWinInTx } from "@/services/sale-side-effects.service";
+import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 
 /**
  * Funil Inteligente — Fatia 1: elo determinístico Lead↔Sale + auto-Ganho.
@@ -23,6 +24,7 @@ describe("linkLeadAndMaybeWinInTx — elo Lead↔Sale + auto-Ganho", () => {
       lead: { findFirst: vi.fn(), updateMany: vi.fn() },
       leadStage: { findFirst: vi.fn() },
       sale: { updateMany: vi.fn() },
+      saleItem: { findMany: vi.fn().mockResolvedValue([]) }, // default: sem itens
       ...overrides,
     } as any;
   }
@@ -233,5 +235,94 @@ describe("linkLeadAndMaybeWinInTx — elo Lead↔Sale + auto-Ganho", () => {
         companyId: "company_1",
       }),
     ).resolves.toBeUndefined();
+  });
+
+  const EXAM_DONE_STAGE = { id: "stage_exam_done", isWon: false, isLost: false };
+
+  it("venda SÓ de exame: move p/ 'Exame feito' (EXAM_DONE), não p/ Fechado", async () => {
+    const tx = makeTx();
+    leadFound(tx, { id: "lead_1", stage: OPEN_STAGE });
+    tx.saleItem.findMany.mockResolvedValue([{ product: { isEyeExam: true } }]);
+    tx.leadStage.findFirst.mockResolvedValue(EXAM_DONE_STAGE);
+
+    await linkLeadAndMaybeWinInTx(tx, {
+      saleId: "sale_1",
+      customerId: "cust_1",
+      companyId: "company_1",
+    });
+
+    const stageQuery = tx.leadStage.findFirst.mock.calls[0][0];
+    expect(stageQuery.where).toMatchObject({
+      companyId: "company_1",
+      systemKey: LEAD_STAGE_KEYS.EXAM_DONE,
+    });
+    expect(tx.lead.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "lead_1", companyId: "company_1" },
+        data: expect.objectContaining({ stageId: "stage_exam_done" }),
+      }),
+    );
+  });
+
+  it("venda de exame + óculos: move p/ Fechado (comportamento atual), NÃO p/ Exame", async () => {
+    const tx = makeTx();
+    leadFound(tx, { id: "lead_1", stage: OPEN_STAGE });
+    tx.saleItem.findMany.mockResolvedValue([
+      { product: { isEyeExam: true } },
+      { product: { isEyeExam: false } },
+    ]);
+    tx.leadStage.findFirst.mockResolvedValue(WON_STAGE);
+
+    await linkLeadAndMaybeWinInTx(tx, {
+      saleId: "sale_1",
+      customerId: "cust_1",
+      companyId: "company_1",
+    });
+
+    const stageQuery = tx.leadStage.findFirst.mock.calls[0][0];
+    expect(stageQuery.where).toMatchObject({ companyId: "company_1", isWon: true });
+    expect(tx.lead.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ stageId: "stage_won" }) }),
+    );
+  });
+
+  it("venda de exame mas ótica SEM estágio EXAM_DONE: cai no Fechado (fallback)", async () => {
+    const tx = makeTx();
+    leadFound(tx, { id: "lead_1", stage: OPEN_STAGE });
+    tx.saleItem.findMany.mockResolvedValue([{ product: { isEyeExam: true } }]);
+    tx.leadStage.findFirst
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce(WON_STAGE);
+
+    await linkLeadAndMaybeWinInTx(tx, {
+      saleId: "sale_1",
+      customerId: "cust_1",
+      companyId: "company_1",
+    });
+
+    expect(tx.lead.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ stageId: "stage_won" }) }),
+    );
+  });
+
+  it("venda sem itens de exame: não consulta EXAM_DONE, vai p/ Fechado", async () => {
+    const tx = makeTx();
+    leadFound(tx, { id: "lead_1", stage: OPEN_STAGE });
+    tx.saleItem.findMany.mockResolvedValue([{ product: { isEyeExam: false } }]);
+    tx.leadStage.findFirst.mockResolvedValue(WON_STAGE);
+
+    await linkLeadAndMaybeWinInTx(tx, {
+      saleId: "sale_1",
+      customerId: "cust_1",
+      companyId: "company_1",
+    });
+
+    const usedExamKey = tx.leadStage.findFirst.mock.calls.some(
+      (c: any[]) => c[0]?.where?.systemKey === LEAD_STAGE_KEYS.EXAM_DONE,
+    );
+    expect(usedExamKey).toBe(false);
+    expect(tx.lead.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ stageId: "stage_won" }) }),
+    );
   });
 });

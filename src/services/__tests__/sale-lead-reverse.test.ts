@@ -5,6 +5,7 @@ vi.mock("@/lib/logger", () => ({
 }));
 
 import { reverseLeadWinForSaleInTx } from "@/services/sale-side-effects.service";
+import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 
 /**
  * Funil Inteligente — reversão do auto-Ganho no estorno/cancelamento.
@@ -13,7 +14,8 @@ import { reverseLeadWinForSaleInTx } from "@/services/sale-side-effects.service"
  * lead deve SAIR de "Ganho" (senão o funil mente: card Ganho de venda que não
  * existe mais). Regras:
  *  - só reverte se a venda tem leadId;
- *  - só se o lead AINDA está em estágio isWon (não mexe se humano já moveu);
+ *  - só se o lead está num estágio que ESTE serviço auto-moveu: Ganho (isWon) OU
+ *    "Exame feito" (systemKey EXAM_DONE). Não mexe se humano já moveu p/ outro lugar;
  *  - volta p/ o 1º estágio não-terminal (menor order) da ótica;
  *  - fail-safe: erro NÃO propaga (não pode travar o cancelamento da venda).
  *  - multi-tenant: companyId em todo filtro/update.
@@ -28,7 +30,8 @@ describe("reverseLeadWinForSaleInTx — desfaz o auto-Ganho no estorno", () => {
     } as any;
   }
 
-  const WON = { id: "s_won", isWon: true, isLost: false };
+  const WON = { id: "s_won", isWon: true, isLost: false, systemKey: null };
+  const EXAM_DONE = { id: "s_exam", isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE };
   const FIRST_OPEN = { id: "s_novo" };
 
   beforeEach(() => vi.clearAllMocks());
@@ -63,11 +66,47 @@ describe("reverseLeadWinForSaleInTx — desfaz o auto-Ganho no estorno", () => {
     );
   });
 
+  it("reverte: lead em 'Exame feito' (EXAM_DONE, isWon=false) volta p/ o 1º estágio aberto", async () => {
+    const tx = makeTx();
+    tx.sale.findUnique.mockResolvedValue({ leadId: "lead_1" });
+    tx.lead.findFirst.mockResolvedValue({ id: "lead_1", stage: EXAM_DONE });
+    tx.leadStage.findFirst.mockResolvedValue(FIRST_OPEN);
+
+    await reverseLeadWinForSaleInTx(tx, { saleId: "sale_1", companyId: "co_1" });
+
+    // resolve o 1º estágio não-terminal (mesmo caminho de volta do Ganho)
+    const stageQuery = tx.leadStage.findFirst.mock.calls[0][0];
+    expect(stageQuery.where).toMatchObject({ companyId: "co_1", isWon: false, isLost: false });
+    expect(stageQuery.orderBy).toMatchObject({ order: "asc" });
+    // move o card de "Exame feito" de volta — senão fica preso p/ uma venda estornada
+    expect(tx.lead.updateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: "lead_1", companyId: "co_1" },
+        data: expect.objectContaining({ stageId: "s_novo" }),
+      }),
+    );
+  });
+
   it("NÃO mexe se o lead já saiu de Ganho (humano moveu p/ outro estágio)", async () => {
     const tx = makeTx();
     tx.sale.findUnique.mockResolvedValue({ leadId: "lead_1" });
     // lead atualmente NÃO está em isWon
-    tx.lead.findFirst.mockResolvedValue({ id: "lead_1", stage: { id: "s_atend", isWon: false, isLost: false } });
+    tx.lead.findFirst.mockResolvedValue({ id: "lead_1", stage: { id: "s_atend", isWon: false, isLost: false, systemKey: null } });
+
+    await reverseLeadWinForSaleInTx(tx, { saleId: "sale_1", companyId: "co_1" });
+
+    expect(tx.leadStage.findFirst).not.toHaveBeenCalled();
+    expect(tx.lead.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("NÃO mexe se humano moveu p/ um estágio comum não-terminal (nem isWon nem EXAM_DONE)", async () => {
+    const tx = makeTx();
+    tx.sale.findUnique.mockResolvedValue({ leadId: "lead_1" });
+    // "Em atendimento": aberto, sem flag de sistema → decisão humana, respeita
+    tx.lead.findFirst.mockResolvedValue({
+      id: "lead_1",
+      stage: { id: "s_atend", isWon: false, isLost: false, systemKey: null },
+    });
 
     await reverseLeadWinForSaleInTx(tx, { saleId: "sale_1", companyId: "co_1" });
 
@@ -78,7 +117,7 @@ describe("reverseLeadWinForSaleInTx — desfaz o auto-Ganho no estorno", () => {
   it("NÃO mexe se o lead foi para Perdido depois (terminal isLost)", async () => {
     const tx = makeTx();
     tx.sale.findUnique.mockResolvedValue({ leadId: "lead_1" });
-    tx.lead.findFirst.mockResolvedValue({ id: "lead_1", stage: { id: "s_lost", isWon: false, isLost: true } });
+    tx.lead.findFirst.mockResolvedValue({ id: "lead_1", stage: { id: "s_lost", isWon: false, isLost: true, systemKey: null } });
 
     await reverseLeadWinForSaleInTx(tx, { saleId: "sale_1", companyId: "co_1" });
 

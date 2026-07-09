@@ -26,6 +26,7 @@ import { processaSaleForCampaigns } from "@/services/product-campaign.service";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
 import { assertCashbackLimits } from "@/lib/cashback-math";
 import { logger } from "@/lib/logger";
+import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 
 const log = logger.child({ service: "sale-side-effects" });
 
@@ -776,24 +777,50 @@ export async function linkLeadAndMaybeWinInTx(
     // Card terminal: não mexe (decisão #5 — idempotente, não reabre Ganho/Perdido).
     if (lead.stage.isWon || lead.stage.isLost) return;
 
-    // Resolve o estágio "Ganho" da ótica (maior order se houver mais de um).
-    const wonStage = await tx.leadStage.findFirst({
-      where: { companyId, isWon: true },
-      orderBy: { order: "desc" },
-      select: { id: true },
+    // Régua de EXAME (2026-07-09): se a venda é SÓ de exame de vista, o card não
+    // "fecha" — vai p/ "Exame feito" (o cliente ainda vai comprar os óculos). Venda
+    // com exame + óculos, ou sem exame, mantém o Ganho determinístico de sempre.
+    const items = await tx.saleItem.findMany({
+      where: { saleId, sale: { companyId } },
+      select: { product: { select: { isEyeExam: true } } },
     });
-    if (!wonStage) {
-      // Ótica não configurou estágio Ganho — não inventa. Só o vínculo fica.
-      log.warn("lead_link_no_won_stage", { saleId, companyId, leadId: lead.id });
-      return;
+    const hasItems = items.length > 0;
+    const isExamOnly = hasItems && items.every((it) => it.product?.isEyeExam === true);
+
+    // Resolve o estágio de destino. Exame-puro → tenta "Exame feito" pela flag
+    // ESTÁVEL (imune a rename). Se a ótica não tem esse estágio (funil legado),
+    // cai no Ganho — nunca deixa o card parado.
+    let targetStageId: string | null = null;
+    if (isExamOnly) {
+      const examStage = await tx.leadStage.findFirst({
+        where: { companyId, systemKey: LEAD_STAGE_KEYS.EXAM_DONE },
+        select: { id: true },
+      });
+      targetStageId = examStage?.id ?? null;
+    }
+    if (!targetStageId) {
+      // Caminho padrão (venda normal, ou exame sem estágio EXAM_DONE): estágio Ganho.
+      const wonStage = await tx.leadStage.findFirst({
+        where: { companyId, isWon: true },
+        orderBy: { order: "desc" },
+        select: { id: true },
+      });
+      if (!wonStage) {
+        // Ótica não configurou estágio Ganho — não inventa. Só o vínculo fica.
+        log.warn("lead_link_no_won_stage", { saleId, companyId, leadId: lead.id });
+        return;
+      }
+      targetStageId = wonStage.id;
     }
 
-    // Auto-Ganho determinístico. updateMany + companyId: guard multi-tenant.
+    // Move determinístico. updateMany + companyId: guard multi-tenant.
     await tx.lead.updateMany({
       where: { id: lead.id, companyId },
-      data: { stageId: wonStage.id, lastActivityAt: new Date() },
+      data: { stageId: targetStageId, lastActivityAt: new Date() },
     });
-    log.info("lead_auto_won_by_sale", { saleId, companyId, leadId: lead.id, stageId: wonStage.id });
+    log.info("lead_auto_moved_by_sale", {
+      saleId, companyId, leadId: lead.id, stageId: targetStageId, isExamOnly,
+    });
   } catch (linkError) {
     // NÃO propaga — venda não pode quebrar por causa do elo do funil.
     log.error("lead_link_failed", {
@@ -813,8 +840,9 @@ export async function linkLeadAndMaybeWinInTx(
  *
  * Regras (espelham a cautela do link):
  *  - só age se a venda tem leadId;
- *  - só reverte se o lead AINDA está em estágio isWon — se um humano já moveu
- *    o card p/ outro lugar (ou p/ Perdido), respeita e não mexe;
+ *  - só reverte se o card está num estágio que ESTE serviço auto-moveu por venda:
+ *    Ganho (isWon) OU "Exame feito" (systemKey EXAM_DONE, da régua de exame). Se um
+ *    humano já moveu o card p/ qualquer outro lugar (ou p/ Perdido), respeita e não mexe;
  *  - volta p/ o 1º estágio NÃO-terminal (menor order) da ótica;
  *  - se a ótica não tem estágio aberto, no-op seguro;
  *  - fail-safe: erro NÃO propaga (não pode travar o cancelamento da venda);
@@ -834,11 +862,14 @@ export async function reverseLeadWinForSaleInTx(
 
     const lead = await tx.lead.findFirst({
       where: { id: sale.leadId, companyId, deletedAt: null },
-      select: { id: true, stage: { select: { id: true, isWon: true, isLost: true } } },
+      select: { id: true, stage: { select: { id: true, isWon: true, isLost: true, systemKey: true } } },
     });
-    // Só reverte se o card AINDA está em Ganho. Se humano já moveu (incl. p/
-    // Perdido), respeita — não reabre nem arrasta o que a pessoa decidiu.
-    if (!lead || !lead.stage.isWon) return;
+    if (!lead) return;
+    // Reverte se o card está num estágio que ESTE serviço auto-moveu por venda:
+    // Ganho (isWon) OU "Exame feito" (systemKey EXAM_DONE, que a régua de exame usa).
+    // Qualquer outro estágio = decisão humana → respeita, não mexe.
+    const autoMoved = lead.stage.isWon || lead.stage.systemKey === LEAD_STAGE_KEYS.EXAM_DONE;
+    if (!autoMoved) return;
 
     // Tradeoff de produto (consciente): o lead não guarda de ONDE veio antes do
     // auto-Ganho, então volta p/ o 1º estágio aberto (menor order). Para o caso
