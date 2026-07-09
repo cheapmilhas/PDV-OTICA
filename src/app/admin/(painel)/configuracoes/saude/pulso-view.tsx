@@ -15,6 +15,7 @@ import {
   Mail,
   MessageCircle,
   Cog,
+  BrainCircuit,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
 import type {
@@ -34,6 +35,7 @@ const SIGNAL_ICONS: Record<string, LucideIcon> = {
   sentry: Bug,
   crons: Clock,
   integrations: PlugZap,
+  ai: BrainCircuit,
 };
 
 const AREA_ICONS: Record<BusinessArea, LucideIcon> = {
@@ -125,6 +127,7 @@ export function PulsoView({ snapshot }: { snapshot: SystemHealthSnapshot }) {
     snapshot.signals.crons,
     snapshot.signals.integrations,
     snapshot.signals.sentry,
+    snapshot.signals.ai,
   ];
 
   const hasUnknownCron = snapshot.cronRows.some((c) => c.state === "unknown");

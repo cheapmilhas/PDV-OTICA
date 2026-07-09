@@ -9,6 +9,7 @@ export type SystemEventSource =
   | "cron"
   | "integration"
   | "sentry"
+  | "ai"
   | "manual";
 export type SystemEventSeverity = "warning" | "critical" | "info";
 

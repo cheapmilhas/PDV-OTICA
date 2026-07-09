@@ -33,12 +33,13 @@ const SEVERITY_BY_STATE: Record<HealthState, "critical" | "warning" | null> = {
   healthy: null,
 };
 
-const SOURCE_BY_SIGNAL: Record<string, "vercel" | "database" | "cron" | "integration" | "sentry"> = {
+const SOURCE_BY_SIGNAL: Record<string, "vercel" | "database" | "cron" | "integration" | "sentry" | "ai"> = {
   database: "database",
   vercel: "vercel",
   crons: "cron",
   integrations: "integration",
   sentry: "sentry",
+  ai: "ai",
 };
 
 export async function GET(request: Request) {
