@@ -14,6 +14,8 @@ import {
 import { Loader2, MessageCircle, Sparkles, RefreshCw } from "lucide-react";
 import toast from "react-hot-toast";
 import { Can } from "@/components/permissions/can";
+import { MoverColunaInbox } from "@/components/funil/mover-coluna-inbox";
+import type { LeadStage } from "@/components/funil/funil-board";
 
 /** Intervalo de polling do inbox (ms). Padrão do projeto p/ telas "ao vivo". */
 // Intervalo de polling da lista de conversas. Subiu de 7s→30s para cortar
@@ -111,6 +113,15 @@ export function WhatsappInbox({ active }: { active: boolean }) {
     () => conversations.find((c) => c.id === selectedId) ?? null,
     [conversations, selectedId],
   );
+  // Colunas do funil p/ o "Mover para…" no header da thread (ação secundária:
+  // falha em silêncio, não bloqueia o inbox).
+  const [stages, setStages] = useState<LeadStage[]>([]);
+  useEffect(() => {
+    fetch("/api/lead-stages")
+      .then((res) => res.json())
+      .then((json) => setStages(json.data || []))
+      .catch(() => {});
+  }, []);
 
   const fetchConversations = useCallback(
     async (showSpinner = false) => {
@@ -338,7 +349,16 @@ export function WhatsappInbox({ active }: { active: boolean }) {
             <CardContent className="space-y-3 p-4">
               <div className="flex items-center justify-between gap-2">
                 <p className="text-sm font-medium">Mensagens</p>
-                <div className="flex items-center gap-2">
+                <div className="flex flex-wrap items-center gap-2">
+                  {selectedConv?.leadId && stages.length > 0 && (
+                    <Can permission="leads.edit">
+                      <MoverColunaInbox
+                        leadId={selectedConv.leadId}
+                        stages={stages}
+                        onMoved={() => fetchConversations(false)}
+                      />
+                    </Can>
+                  )}
                   {/* Copiloto: mesma permissão que já gate a tela (leads.access). */}
                   <Can permission="leads.access">
                     <Button

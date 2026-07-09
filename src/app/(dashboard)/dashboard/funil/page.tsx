@@ -22,6 +22,7 @@ import {
   Sparkles,
   Clock,
   AlertTriangle,
+  Settings2,
 } from "lucide-react";
 import toast from "react-hot-toast";
 import { useBranchContext } from "@/hooks/use-branch-context";
@@ -31,6 +32,7 @@ import {
   NovoLeadModal,
   type Seller,
 } from "@/components/funil/novo-lead-modal";
+import { GerenciarColunasDialog } from "@/components/funil/gerenciar-colunas-dialog";
 import { Can } from "@/components/permissions/can";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
@@ -109,6 +111,7 @@ function FunilPage() {
   const [sellers, setSellers] = useState<Seller[]>([]);
   const [loading, setLoading] = useState(true);
   const [showNewLead, setShowNewLead] = useState(false);
+  const [colunasOpen, setColunasOpen] = useState(false);
 
   // Filtros
   const [search, setSearch] = useState("");
@@ -123,13 +126,19 @@ function FunilPage() {
     [activeBranchId]
   );
 
-  // Carrega etapas (uma vez por filial).
-  useEffect(() => {
+  // Carrega etapas (uma vez por filial). Extraído em useCallback para poder
+  // ser reusado como callback de recarga após criar/renomear/reordenar/excluir
+  // uma coluna no diálogo "Gerenciar colunas".
+  const refetchStages = useCallback(() => {
     fetch("/api/lead-stages")
       .then((res) => res.json())
       .then((json) => setStages(json.data || []))
       .catch(() => toast.error("Erro ao carregar etapas do funil"));
   }, []);
+
+  useEffect(() => {
+    refetchStages();
+  }, [refetchStages]);
 
   // Vendedores para o filtro / modal.
   useEffect(() => {
@@ -503,6 +512,18 @@ function FunilPage() {
             Precisa de atenção ({attentionCount})
           </Button>
         )}
+
+        <Can permission="leads.edit">
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            onClick={() => setColunasOpen(true)}
+          >
+            <Settings2 className="mr-1 h-4 w-4" />
+            Gerenciar colunas
+          </Button>
+        </Can>
       </div>
 
       {/* Board */}
@@ -519,6 +540,13 @@ function FunilPage() {
       ) : (
         <FunilBoard stages={stages} leads={visibleLeads} onRefresh={handleRefresh} />
       )}
+
+      <GerenciarColunasDialog
+        open={colunasOpen}
+        onOpenChange={setColunasOpen}
+        stages={stages}
+        onChanged={refetchStages}
+      />
     </>
   );
 

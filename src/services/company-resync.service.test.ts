@@ -8,9 +8,14 @@ vi.mock("@/services/finance-setup.service", async (importOriginal) => {
 });
 
 const ensureDefaultStages = vi.fn();
+const ensureOpticalStages = vi.fn();
 vi.mock("@/services/lead-stage.service", async (importOriginal) => {
   const actual = await importOriginal<typeof import("@/services/lead-stage.service")>();
-  return { ...actual, ensureDefaultStages: (...a: unknown[]) => ensureDefaultStages(...a) };
+  return {
+    ...actual,
+    ensureDefaultStages: (...a: unknown[]) => ensureDefaultStages(...a),
+    ensureOpticalStages: (...a: unknown[]) => ensureOpticalStages(...a),
+  };
 });
 
 vi.mock("@/lib/logger", () => ({

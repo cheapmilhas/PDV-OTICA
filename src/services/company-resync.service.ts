@@ -13,7 +13,7 @@ import {
   type MessageKey,
 } from "@/lib/default-messages-history";
 import { getAutoSyncConfig } from "@/services/auto-sync-config.service";
-import { ensureDefaultStages } from "@/services/lead-stage.service";
+import { ensureDefaultStages, ensureOpticalStages } from "@/services/lead-stage.service";
 import { logger } from "@/lib/logger";
 
 const log = logger.child({ service: "company-resync" });
@@ -164,6 +164,9 @@ export async function resyncCompanySetup(
       // Seed do funil de leads: aditivo + idempotente (no-op se já há etapas).
       await ensureDefaultStages(companyId, tx);
     });
+    // Colunas de ótica: aditivo + idempotente. FORA da tx acima porque
+    // ensureOpticalStages roda a própria transação (read+shift+createMany).
+    await ensureOpticalStages(companyId);
     after = await countFinance(companyId);
     created = {
       chartOfAccounts: after.chartOfAccounts - before.chartOfAccounts,
