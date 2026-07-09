@@ -51,6 +51,7 @@ export interface SystemHealthSnapshot {
     sentry: HealthSignal;
     crons: HealthSignal;
     integrations: HealthSignal;
+    ai: HealthSignal;
   };
   cronRows: CronHealthRow[];
   integrationRows: IntegrationStatus[];
@@ -322,6 +323,7 @@ function buildBusinessAreas(
     vercel: "sistema",
     sentry: "sistema",
     integrations: "sistema",
+    ai: "whatsapp",
     // "crons" é distribuído por cron individual (cada um tem sua área), não aqui.
   };
 
@@ -391,6 +393,7 @@ export async function getSystemHealthSnapshot(now: Date = new Date()): Promise<S
   const sentry = checkSentry();
   const crons = summarizeCrons(cronRows);
   const integrations = summarizeIntegrations(integrationRows);
+  const ai = await summarizeAiQualification(now);
 
   const overall = worstState([
     database.state,
@@ -398,10 +401,11 @@ export async function getSystemHealthSnapshot(now: Date = new Date()): Promise<S
     sentry.state,
     crons.state,
     integrations.state,
+    ai.state,
   ]);
 
   const businessAreas = buildBusinessAreas(
-    [database, vercel, sentry, integrations],
+    [database, vercel, sentry, integrations, ai],
     cronRows
   );
 
@@ -409,7 +413,7 @@ export async function getSystemHealthSnapshot(now: Date = new Date()): Promise<S
     overall,
     capturedAt: now.toISOString(),
     businessAreas,
-    signals: { database, vercel, sentry, crons, integrations },
+    signals: { database, vercel, sentry, crons, integrations, ai },
     cronRows,
     integrationRows,
     events,
