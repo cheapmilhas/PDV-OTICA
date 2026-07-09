@@ -227,6 +227,79 @@ function summarizeIntegrations(rows: IntegrationStatus[]): HealthSignal {
   return { key: "integrations", label: "Serviços externos", state, detail, action };
 }
 
+/** Silêncio máximo tolerado da IA de qualificação antes de acender o alarme. */
+const AI_QUALIFY_STALE_MS = 24 * 60 * 60 * 1000;
+
+/**
+ * "A IA parou de qualificar?" — mede RESULTADO (última qualificação com sucesso),
+ * não execução do cron. O cron pode responder 200 e a IA estar morta (incidente
+ * 02/07: chave Anthropic ausente, falha por-conversa silenciosa).
+ *
+ * Regra (limiar chapado, por DELTA de tempo — nunca horário de parede):
+ *  - nenhuma ótica com iaEnabled=true → unknown (desligada por opção).
+ *  - IA ligada + sem qualificação há > 24h (ou nunca) → critical.
+ *  - IA ligada + última <= 24h → healthy.
+ * Fail-safe: erro de leitura → unknown.
+ */
+export async function summarizeAiQualification(now: Date = new Date()): Promise<HealthSignal> {
+  const LABEL = "Inteligência do funil";
+  try {
+    const anyEnabled = await prisma.companySettings.findFirst({
+      where: { iaEnabled: true },
+      select: { companyId: true },
+    });
+    if (!anyEnabled) {
+      return {
+        key: "ai",
+        label: LABEL,
+        state: "unknown",
+        detail: "A IA de qualificação está desligada em todas as óticas — isto é uma escolha, não um problema.",
+        action: null,
+      };
+    }
+
+    const last = await prisma.aiTokenUsage.findFirst({
+      where: { feature: "lead_qualification" },
+      orderBy: { createdAt: "desc" },
+      select: { createdAt: true },
+    });
+
+    const ageMs = last ? now.getTime() - last.createdAt.getTime() : Infinity;
+    if (ageMs > AI_QUALIFY_STALE_MS) {
+      const desde = last
+        ? last.createdAt.toLocaleDateString("pt-BR", { timeZone: "America/Sao_Paulo" })
+        : null;
+      return {
+        key: "ai",
+        label: LABEL,
+        state: "critical",
+        detail: desde
+          ? `A IA parou de transformar conversas em oportunidades — sem qualificações desde ${desde}.`
+          : "A IA está ligada, mas nunca transformou uma conversa em oportunidade.",
+        action: "Verifique a configuração de IA no super admin (a chave da Anthropic pode ter caído) ou avise o suporte técnico.",
+      };
+    }
+
+    const horas = Math.max(1, Math.round(ageMs / (60 * 60 * 1000)));
+    return {
+      key: "ai",
+      label: LABEL,
+      state: "healthy",
+      detail: `A IA está transformando conversas em oportunidades — última há ${horas}h.`,
+      action: null,
+    };
+  } catch (err) {
+    log.warn("summarizeAiQualification falhou (fail-safe → unknown)", { err });
+    return {
+      key: "ai",
+      label: LABEL,
+      state: "unknown",
+      detail: "Não consegui verificar a IA de qualificação agora.",
+      action: null,
+    };
+  }
+}
+
 const NOT_MONITORED: string[] = [
   "Quanto o site está custando por página (a hospedagem não fornece esse dado — só se a conta está bloqueada).",
   "A velocidade real que o cliente sente ao usar o sistema.",
