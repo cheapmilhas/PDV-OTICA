@@ -15,7 +15,7 @@ Adicionar um 6º `HealthSignal` (`key: "ai"`) que detecta "a IA parou de qualifi
 ## Regra (limiar chapado, sem lógica de horário)
 
 Duas leituras baratas:
-- `lastQualifiedAt` = `MAX(createdAt)` em `AiTokenUsage` where `feature = "lead_qualification"`.
+- `lastQualifiedAt` = última qualificação: `AiTokenUsage` where `feature = "lead_qualification"` ordenado por `createdAt desc`, take 1 (ou `MAX(createdAt)`). **Nota de índice:** NÃO há índice em `feature` sozinho nem `(feature, createdAt)` — os índices são `(companyId, createdAt)` e `(companyId, feature)`. Como a query é global (sem companyId), ela é um scan de `AiTokenUsage`. É aceitável a N=1 ótica / ~900 linhas (cron 1×/h + on-demand), mas o plano NÃO deve assumir que um índice a torna grátis. `findFirst({ orderBy: createdAt desc })` pode ser mais barato que `aggregate MAX`.
 - `anyAiEnabled` = existe alguma `CompanySettings` com `iaEnabled = true`.
 
 Estados (`HealthState`):
@@ -42,6 +42,7 @@ Nova função no padrão dos 5 sinais existentes (`checkVercel`, `checkSentry`, 
 ### 2. Adicionar `ai` ao snapshot
 - `SystemHealthSnapshot.signals` ganha o campo `ai: HealthSignal`.
 - `getSystemHealthSnapshot` chama `summarizeAiQualification()` (junto com os outros, no `Promise.all` existente) e o inclui no objeto `signals`.
+- **`overall` (worstState):** `getSystemHealthSnapshot` calcula `overall = worstState([...estados dos sinais])`. Adicionar `ai.state` a esse array — senão um sinal `ai` crítico NÃO deixa o pulso geral vermelho no topo da tela (o e-mail sai mesmo assim pelo cron, mas o headline sub-reporta).
 - Incluir o sinal `ai` na agregação de `businessAreas` — mapear para a área **`whatsapp`** (a IA de qualificação é do funil/WhatsApp, é onde o dono espera ver "minhas conversas viram oportunidades"). Confirmar no plano como `buildBusinessAreas` mapeia sinais→área e adicionar `ai` ali.
 
 ### 3. Renderização em `pulso-view.tsx`
