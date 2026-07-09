@@ -1213,6 +1213,10 @@ model LeadStage {
   order     Int
   isWon     Boolean  @default(false)
   isLost    Boolean  @default(false)
+  /// Flag ESTÁVEL de identidade de estágio (ex.: "EXAM_DONE"), imune a rename do
+  /// nome pelo dono. Nullable: só estágios com semântica de sistema a usam. NÃO é
+  /// um systemKey global — decisão /forja 2026-07-09 (sem backfill do seed).
+  systemKey String?
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
