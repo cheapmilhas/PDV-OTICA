@@ -7,8 +7,8 @@ vi.mock("@/lib/prisma", () => ({
 import { prisma } from "@/lib/prisma";
 
 describe("DEFAULT_LEAD_STAGES", () => {
-  it("tem 5 etapas com exatamente 1 isWon e 1 isLost", () => {
-    expect(DEFAULT_LEAD_STAGES).toHaveLength(5);
+  it("tem 8 etapas com exatamente 1 isWon e 1 isLost", () => {
+    expect(DEFAULT_LEAD_STAGES).toHaveLength(8);
     expect(DEFAULT_LEAD_STAGES.filter((s) => s.isWon)).toHaveLength(1);
     expect(DEFAULT_LEAD_STAGES.filter((s) => s.isLost)).toHaveLength(1);
   });
