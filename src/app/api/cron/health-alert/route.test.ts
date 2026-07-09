@@ -85,6 +85,27 @@ describe("GET /api/cron/health-alert", () => {
     expect(b.overall).toBe("critical");
   });
 
+  it("sinal 'ai' crítico → cria incidente auto com source 'ai'", async () => {
+    snapshot.mockResolvedValue(
+      snap("critical", {
+        database: sig("database", "Banco", "healthy"),
+        vercel: sig("vercel", "Vercel", "unknown"),
+        sentry: sig("sentry", "Sentry", "unknown"),
+        crons: sig("crons", "Crons", "healthy"),
+        integrations: sig("integrations", "Integrações", "healthy"),
+        ai: sig("ai", "Inteligência do funil", "critical", "parou de qualificar"),
+      })
+    );
+    const res = await GET(req("Bearer s3cr3t"));
+    const b = await res.json();
+    expect(res.status).toBe(200);
+    expect(ensureAuto).toHaveBeenCalledTimes(1);
+    expect(ensureAuto.mock.calls[0][0]).toBe("ai:auto");
+    expect(ensureAuto.mock.calls[0][1]()).toMatchObject({ source: "ai", severity: "critical" });
+    expect(sendAlert).toHaveBeenCalledWith("crítico");
+    expect(b.overall).toBe("critical");
+  });
+
   it("sinal que voltou ao verde resolve o incidente auto aberto", async () => {
     list.mockResolvedValue({
       open: [{ id: "old1", source: "cron", severity: "critical", title: "Cron morto", detail: null, status: "open", resolvedAt: null, resolvedBy: null, resolveNote: null, createdAt: "2026-07-07T00:00:00Z" }],
