@@ -7,6 +7,8 @@ const { prismaMock } = vi.hoisted(() => ({
       createMany: vi.fn(),
       findMany: vi.fn(),
       update: vi.fn(),
+      updateMany: vi.fn(),
+      create: vi.fn(),
     },
     // Roda o callback com o mesmo mock (create + shift são atômicos no código real).
     $transaction: vi.fn(async (fn: (tx: unknown) => unknown) => fn(prismaMock)),
@@ -14,7 +16,11 @@ const { prismaMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { DEFAULT_LEAD_STAGES, ensureOpticalStages } from "@/services/lead-stage.service";
+import {
+  DEFAULT_LEAD_STAGES,
+  ensureOpticalStages,
+  createStage,
+} from "@/services/lead-stage.service";
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 
 describe("colunas de ótica", () => {
@@ -204,5 +210,39 @@ describe("colunas de ótica", () => {
       "Perdido",
       "Garantia",
     ]);
+  });
+});
+
+describe("createStage — insert-and-shift", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("empurra +1 todo estágio com order >= o pedido ANTES de criar (sem colisão de order)", async () => {
+    const created = {
+      id: "new1",
+      name: "Nova",
+      order: 6,
+      companyId: "company_1",
+    };
+    prismaMock.leadStage.updateMany.mockResolvedValue({ count: 2 });
+    prismaMock.leadStage.create.mockResolvedValue(created);
+
+    const result = await createStage("company_1", { name: "Nova", order: 6 });
+
+    // Abre o vão: UPDATE em lote (não loop) em todo order >= 6 desta empresa.
+    expect(prismaMock.leadStage.updateMany).toHaveBeenCalledWith({
+      where: { companyId: "company_1", order: { gte: 6 } },
+      data: { order: { increment: 1 } },
+    });
+    // A nova coluna é criada com o companyId e o order pedido.
+    expect(prismaMock.leadStage.create).toHaveBeenCalledWith({
+      data: { name: "Nova", order: 6, companyId: "company_1" },
+    });
+    // O shift acontece ANTES do create (invariante: espaço aberto primeiro).
+    const shiftOrder = prismaMock.leadStage.updateMany.mock.invocationCallOrder[0];
+    const createOrder = prismaMock.leadStage.create.mock.invocationCallOrder[0];
+    expect(shiftOrder).toBeLessThan(createOrder);
+    // Tudo dentro de uma transação (atômico).
+    expect(prismaMock.$transaction).toHaveBeenCalledTimes(1);
+    expect(result).toBe(created);
   });
 });

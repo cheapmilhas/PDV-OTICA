@@ -35,7 +35,16 @@ export async function createStage(
   companyId: string,
   data: { name: string; order: number; isWon?: boolean; isLost?: boolean }
 ) {
-  return prisma.leadStage.create({ data: { ...data, companyId } });
+  return prisma.$transaction(async (tx) => {
+    // Abre espaço: empurra +1 todo estágio da empresa com order >= o pedido, p/
+    // que a nova coluna não colida no order (order não é único; a colisão deixaria
+    // a posição no board ambígua). Espelha a lógica de ensureOpticalStages.
+    await tx.leadStage.updateMany({
+      where: { companyId, order: { gte: data.order } },
+      data: { order: { increment: 1 } },
+    });
+    return tx.leadStage.create({ data: { ...data, companyId } });
+  });
 }
 
 export async function updateStage(

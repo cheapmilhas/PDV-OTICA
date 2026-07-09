@@ -24,6 +24,8 @@ export interface LeadStage {
   order: number;
   isWon: boolean;
   isLost: boolean;
+  /** Flag estável de sistema (ex.: "EXAM_DONE"); null p/ colunas comuns. */
+  systemKey?: string | null;
 }
 
 // Cards visíveis por coluna antes do "Carregar mais". 25 evita a confusão de
