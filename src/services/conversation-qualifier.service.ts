@@ -4,7 +4,6 @@ import { logAiUsage, getMonthlyUsage } from "@/services/ai-usage.service";
 import { qualifyConversationText } from "@/lib/ai/lead-qualifier";
 import { listStages } from "@/services/lead-stage.service";
 import { createLead, updateLeadAiFields } from "@/services/lead.service";
-import { getOrCreateAiSellerUser } from "@/services/ai-seller-user.service";
 import { transcribeAudio } from "@/services/audio-transcription.service";
 import { instanceNameForCompany } from "@/lib/whatsapp-instance";
 import { getAiConfig } from "@/services/ai-config.service";
@@ -327,7 +326,6 @@ export async function qualifyConversation(conversationId: string, opts?: { force
     leadId = conv.leadId;
     log.info("lead re-qualificado pela IA", { conversationId, leadId, companyId: conv.companyId });
   } else {
-    const sellerUserId = await getOrCreateAiSellerUser(conv.companyId);
     // Mapeia o kind do match (minúsculo no serviço) → enum do banco (maiúsculo).
     const matchKind = match.kind === "single" ? "SINGLE" : match.kind === "ambiguous" ? "AMBIGUOUS" : "NONE";
     // Tráfego pago APROXIMADO (#9): só no NASCIMENTO do lead. Se a PRIMEIRA
@@ -345,8 +343,9 @@ export async function qualifyConversation(conversationId: string, opts?: { force
         interest: result.interest ?? undefined,
         stageId: result.stageId ?? undefined,
         notes: `Lead criado pela IA do funil. Motivo: ${safeReason}`.slice(0, 500),
+        sellerUserId: null, // lead "da loja": funil coletivo, vendedor definido só na venda
       },
-      conv.companyId, sellerUserId, null,
+      conv.companyId, "", null,
       {
         intent: result.intent,
         contactNotPatient: result.contactNotPatient,

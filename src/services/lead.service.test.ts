@@ -104,6 +104,26 @@ describe("createLead", () => {
     expect(data.intent).toBe("RENOVACAO");
     expect(data.intentPredicted).toBe("RENOVACAO");
   });
+
+  it("sellerUserId: null explícito grava null (lead da loja)", async () => {
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_novo" });
+    (prisma.lead.findFirst as any).mockResolvedValue(null);
+    (prisma.lead.create as any).mockResolvedValue({ id: "lead_n", name: "Bot" });
+
+    await createLead({ name: "Bot", sellerUserId: null }, "co_1", "user_fallback", "br_1");
+    const data = (prisma.lead.create as any).mock.calls[0][0].data;
+    expect(data.sellerUserId).toBeNull();
+  });
+
+  it("sellerUserId undefined usa o userId (dono = quem criou)", async () => {
+    (prisma.leadStage.findFirst as any).mockResolvedValue({ id: "stg_novo" });
+    (prisma.lead.findFirst as any).mockResolvedValue(null);
+    (prisma.lead.create as any).mockResolvedValue({ id: "lead_u", name: "Ana" });
+
+    await createLead({ name: "Ana" }, "co_1", "user_fallback", "br_1");
+    const data = (prisma.lead.create as any).mock.calls[0][0].data;
+    expect(data.sellerUserId).toBe("user_fallback");
+  });
 });
 
 describe("createLead — IDOR cross-tenant (Fase 0b)", () => {

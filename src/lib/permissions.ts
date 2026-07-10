@@ -221,6 +221,7 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     Permission.LEADS_ACCESS,
     Permission.LEADS_CREATE,
     Permission.LEADS_VIEW_OWN,
+    Permission.LEADS_VIEW_ALL, // Funil coletivo por loja: vendedor vê todos os leads (fila coletiva). Vendas seguem por vendedor (SALES_VIEW_ALL fica fora).
     Permission.LEADS_EDIT,
     Permission.LEADS_CONVERT,
 
