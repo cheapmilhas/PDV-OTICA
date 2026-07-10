@@ -94,7 +94,7 @@ export async function GET(request: Request) {
 export async function POST(request: Request) {
   try {
     // Requer autenticação
-    await requireAuth();
+    const session = await requireAuth();
     const companyId = await getCompanyId();
     // F1/F2: bloqueia cadastro com assinatura inadimplente/suspensa.
     await requireWriteAccess(companyId);
@@ -109,7 +109,10 @@ export async function POST(request: Request) {
     const sanitizedData = sanitizeProductDTO(data) as CreateProductDTO;
 
     // Cria produto via service
-    const product = await productService.create(sanitizedData, companyId);
+    const product = await productService.create(sanitizedData, companyId, {
+      role: session.user.role,
+      userBranchId: session.user.branchId ?? null,
+    });
 
     // Serializa Decimals para number
     const serializedProduct = {
