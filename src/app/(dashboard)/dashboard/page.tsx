@@ -301,6 +301,14 @@ export default function DashboardPage() {
             <DollarSign className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {loading ? (
+              <div className="space-y-2">
+                <div className="h-8 w-28 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-24 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-36 rounded bg-muted animate-pulse" />
+              </div>
+            ) : (
+            <>
             <div className="text-2xl font-bold">{formatCurrency(metrics.salesToday)}</div>
             <div className="flex items-center gap-1 text-xs mt-1">
               {Number(crescimentoDia) >= 0 ? (
@@ -329,6 +337,8 @@ export default function DashboardPage() {
                 ))}
               </div>
             )}
+            </>
+            )}
           </CardContent>
         </Card>
 
@@ -338,6 +348,13 @@ export default function DashboardPage() {
             <Calendar className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {loading ? (
+              <div className="space-y-2">
+                <div className="h-8 w-28 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+              </div>
+            ) : (
+            <>
             <div className="text-2xl font-bold">{formatCurrency(metrics.salesMonth)}</div>
             <div className="flex items-center gap-1 text-xs mt-1">
               {monthGrowth >= 0 ? (
@@ -353,6 +370,8 @@ export default function DashboardPage() {
               )}
               <span className="text-muted-foreground">vs mês anterior</span>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
 
@@ -362,10 +381,19 @@ export default function DashboardPage() {
             <Users className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {loading ? (
+              <div className="space-y-2">
+                <div className="h-8 w-16 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-28 rounded bg-muted animate-pulse" />
+              </div>
+            ) : (
+            <>
             <div className="text-2xl font-bold">{metrics.customersTotal}</div>
             <p className="text-xs text-muted-foreground mt-1">
               +{metrics.customersNew} novos este mês
             </p>
+            </>
+            )}
           </CardContent>
         </Card>
 
@@ -375,6 +403,13 @@ export default function DashboardPage() {
             <Package className="h-4 w-4 text-muted-foreground" />
           </CardHeader>
           <CardContent>
+            {loading ? (
+              <div className="space-y-2">
+                <div className="h-8 w-16 rounded bg-muted animate-pulse" />
+                <div className="h-3 w-32 rounded bg-muted animate-pulse" />
+              </div>
+            ) : (
+            <>
             <div className="text-2xl font-bold">{metrics.productsTotal}</div>
             <div className="flex items-center gap-1 text-xs mt-1">
               <AlertTriangle className="h-3 w-3 text-orange-600" />
@@ -382,6 +417,8 @@ export default function DashboardPage() {
                 {metrics.productsLowStock} com estoque baixo
               </span>
             </div>
+            </>
+            )}
           </CardContent>
         </Card>
       </div>
