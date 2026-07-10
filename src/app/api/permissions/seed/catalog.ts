@@ -115,6 +115,10 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     // Orçamentos
     Permission.QUOTES_CREATE, Permission.QUOTES_VIEW, Permission.QUOTES_VIEW_ALL,
     Permission.QUOTES_EDIT, Permission.QUOTES_DELETE, Permission.QUOTES_CONVERT,
+    // Funil de Leads — gerente acessa e vê todos os leads da loja.
+    Permission.LEADS_ACCESS, Permission.LEADS_CREATE, Permission.LEADS_VIEW_OWN,
+    Permission.LEADS_VIEW_ALL, Permission.LEADS_EDIT, Permission.LEADS_DELETE,
+    Permission.LEADS_CONVERT,
     // Clientes
     Permission.CUSTOMERS_CREATE, Permission.CUSTOMERS_VIEW,
     Permission.CUSTOMERS_EDIT, Permission.CUSTOMERS_DELETE,
@@ -153,6 +157,11 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
   VENDEDOR: [
     // Vendas
     Permission.SALES_CREATE, Permission.SALES_VIEW,
+    // Funil de Leads — funil coletivo por loja: vendedor acessa e vê TODOS os
+    // leads (fila coletiva por dia). leads.access é exigido pela página do funil
+    // (funil/page.tsx:606). SALES_VIEW_ALL fica de fora: vendas seguem por vendedor.
+    Permission.LEADS_ACCESS, Permission.LEADS_CREATE, Permission.LEADS_VIEW_OWN,
+    Permission.LEADS_VIEW_ALL, Permission.LEADS_EDIT, Permission.LEADS_CONVERT,
     // Orçamentos
     Permission.QUOTES_CREATE, Permission.QUOTES_VIEW,
     Permission.QUOTES_EDIT, Permission.QUOTES_CONVERT,
