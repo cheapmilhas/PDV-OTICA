@@ -50,7 +50,7 @@ export function buildLeadBranchScope(
  * notFoundError no primeiro inválido. Cada checagem só roda se o campo veio.
  */
 async function assertLeadFksOwnedByCompany(
-  data: { customerId?: string; quoteId?: string; sellerUserId?: string; stageId?: string },
+  data: { customerId?: string; quoteId?: string; sellerUserId?: string | null; stageId?: string },
   companyId: string,
 ): Promise<void> {
   if (data.customerId) {
@@ -130,7 +130,9 @@ export async function createLead(
       interest: data.interest,
       source: data.source,
       stageId,
-      sellerUserId: data.sellerUserId ?? userId,
+      // null explícito = lead "da loja" (sem vendedor, ex.: robô do funil).
+      // undefined = usa quem criou (comportamento humano padrão).
+      sellerUserId: data.sellerUserId === null ? null : (data.sellerUserId ?? userId),
       estimatedValue: data.estimatedValue,
       customerId: data.customerId,
       quoteId: data.quoteId,
