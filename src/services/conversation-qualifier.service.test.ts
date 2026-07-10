@@ -128,14 +128,17 @@ describe("qualifyConversation", () => {
     expect(claim.data.analysisAttempts.increment).toBe(1);
     expect(claim.data.needsAnalysis).toBe(false);
 
-    expect(getBotMock).toHaveBeenCalledWith("co1");
     const [data, companyId, userId, branchId] = createLeadMock.mock.calls[0];
     expect(data.name).toBe("Maria");
     expect(data.phone).toBe("5585999");
     expect(data.source).toBe("WHATSAPP");
     expect(data.stageId).toBe("s_novo");
+    // Funil coletivo por loja: o robô cria o lead SEM vendedor (da loja).
+    // O vendedor é definido só na venda. Ver createLead: data.sellerUserId===null
+    // curto-circuita o fallback p/ o userId posicional (que aqui é "").
+    expect(data.sellerUserId).toBeNull();
     expect(companyId).toBe("co1");
-    expect(userId).toBe("u_bot");
+    expect(userId).toBe("");
     expect(branchId).toBeNull();
     expect(logAiUsageMock).toHaveBeenCalledWith(expect.objectContaining({ companyId: "co1", feature: "lead_qualification", inputTokens: 100, model: "claude-haiku-4-5" }));
     const upd = (prisma.whatsappConversation.update as any).mock.calls.at(-1)[0];
