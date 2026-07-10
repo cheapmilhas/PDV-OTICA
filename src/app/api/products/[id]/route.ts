@@ -45,7 +45,7 @@ export async function PUT(
 ) {
   try {
     // Requer autenticação
-    await requireAuth();
+    const session = await requireAuth();
     const companyId = await getCompanyId();
     await requirePermission("products.edit");
     const { id } = await params;
@@ -61,7 +61,11 @@ export async function PUT(
     const product = await productService.update(
       id,
       sanitizedData,
-      companyId
+      companyId,
+      {
+        role: session.user.role,
+        userBranchId: session.user.branchId ?? null,
+      }
     );
 
     return successResponse(product);

@@ -14,6 +14,8 @@ import { ArrowLeft, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { sanitizeSkuInput } from "@/lib/validations/product.schema";
+import { useBranchContext } from "@/hooks/use-branch-context";
+import { useSession } from "next-auth/react";
 
 function EditarProdutoContent() {
   const router = useRouter();
@@ -24,6 +26,26 @@ function EditarProdutoContent() {
   const [fetching, setFetching] = useState(true);
   const [brands, setBrands] = useState<{ id: string; name: string }[]>([]);
   const [categories, setCategories] = useState<{ id: string; name: string }[]>([]);
+
+  // Estoque por filial: só ADMIN/GERENTE escolhem; multi-filial (>=2 filiais) mostra o bloco.
+  const { branches, activeBranchId } = useBranchContext();
+  const { data: session } = useSession();
+  const canPickBranch = session?.user?.role === "ADMIN" || session?.user?.role === "GERENTE";
+  const isMultiBranch = branches.length >= 2;
+  const [stockBranchId, setStockBranchId] = useState<string>("");
+  const [branchStocks, setBranchStocks] = useState<Array<{ branchId: string; quantity: number }>>([]);
+  useEffect(() => {
+    if (!stockBranchId) {
+      // Non-admin: trava na filial da sessão (é onde o servidor vai gravar).
+      // ADMIN/GERENTE: default = filial ativa do topo, senão a principal.
+      const seed = canPickBranch
+        ? activeBranchId !== "ALL"
+          ? activeBranchId
+          : branches[0]?.id ?? ""
+        : session?.user?.branchId ?? branches[0]?.id ?? "";
+      setStockBranchId(seed);
+    }
+  }, [activeBranchId, branches, stockBranchId, canPickBranch, session]);
 
   const [formData, setFormData] = useState({
     type: "",
@@ -86,6 +108,9 @@ function EditarProdutoContent() {
           setCategories(cData.data || []);
         }
 
+        // Estoque por filial: guarda as quantidades por filial para reabastecer o campo ao trocar.
+        setBranchStocks(Array.isArray(data.branchStocks) ? data.branchStocks : []);
+
         setFormData({
           type: data.type || "",
           name: data.name || "",
@@ -129,6 +154,17 @@ function EditarProdutoContent() {
     fetchData();
   }, [id, router]);
 
+  function qtyForBranch(branchId: string): number {
+    return branchStocks.find((bs) => bs.branchId === branchId)?.quantity ?? 0;
+  }
+  // Quando multi-filial: o campo de estoque reflete a filial selecionada.
+  useEffect(() => {
+    if (isMultiBranch && stockBranchId) {
+      setFormData((prev) => ({ ...prev, stockQty: String(qtyForBranch(stockBranchId)) }));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [stockBranchId, branchStocks, isMultiBranch]);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setLoading(true);
@@ -164,6 +200,12 @@ function EditarProdutoContent() {
       if (formData.frameColor) sanitizedData.frameColor = formData.frameColor;
       if (formData.frameSize) sanitizedData.frameSize = formData.frameSize;
       if (formData.frameMaterial) sanitizedData.frameMaterial = formData.frameMaterial;
+
+      // Estoque por filial: só envia branchId quando o usuário PODE escolher a
+      // filial (ADMIN/GERENTE). Non-admin não envia — o servidor força a filial
+      // da sessão. Sem isso, um non-admin com filial ativa ≠ da sessão levaria
+      // 403 num save legítimo. Servidor é a fonte de verdade em qualquer caso.
+      if (isMultiBranch && canPickBranch && stockBranchId) sanitizedData.branchId = stockBranchId;
 
       const res = await fetch(`/api/products/${id}`, {
         method: "PUT",
@@ -452,6 +494,34 @@ function EditarProdutoContent() {
                     : "(Permite vendas independente do estoque)"}
                 </span>
               </div>
+
+              {isMultiBranch && formData.stockControlled && (
+                <div className="space-y-2 mb-4">
+                  <Label>Estoque nesta filial</Label>
+                  {canPickBranch ? (
+                    <Select value={stockBranchId} onValueChange={setStockBranchId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a filial" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Estoque entra em:{" "}
+                      <strong>{branches.find((b) => b.id === stockBranchId)?.name ?? "sua filial"}</strong>
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Para dividir entre filiais, use Transferências.
+                  </p>
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">

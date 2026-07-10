@@ -112,6 +112,10 @@ export const createProductSchema = z.object({
     .min(0, "Quantidade em estoque não pode ser negativa")
     .default(0),
 
+  // Filial-alvo do estoque (só usada em multi-filial). Sugestão validada no
+  // servidor por resolveStockBranchId; nunca autoridade.
+  branchId: z.string().optional(),
+
   stockMin: z.coerce.number()
     .int("Estoque mínimo deve ser um número inteiro")
     .min(0, "Estoque mínimo não pode ser negativo")

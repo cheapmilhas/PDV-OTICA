@@ -13,6 +13,8 @@ import { endOfLocalDay } from "@/lib/date-utils";
 import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { Product } from "@prisma/client";
 import { Prisma } from "@prisma/client";
+import { resolveStockBranchId, type StockActor } from "@/lib/resolve-stock-branch";
+import { resyncProductStockCache } from "@/services/stock-recalc";
 
 /**
  * Service de produtos
@@ -263,49 +265,51 @@ export class ProductService {
   }
 
   /**
-   * Sincroniza a linha BranchStock da filial principal (mais antiga/Matriz) com
-   * o estoque informado no cadastro/edição do produto.
+   * Grava a linha BranchStock da filial-alvo com a quantidade informada e
+   * recalcula Product.stockQty como SUM(BranchStock). A filial-alvo é resolvida
+   * com gate de papel (resolveStockBranchId). Em multi-filial NÃO aborta mais:
+   * a quantidade é o estoque DAQUELA filial (não a soma global).
    *
-   * Por que isto existe: a venda DEBITA de `BranchStock.quantity` da filial, mas
-   * `Product.stockQty` é só um cache da soma global. Se um produto é criado/
-   * editado com estoque e NUNCA ganha a linha BranchStock correspondente, a tela
-   * mostra estoque (cache) mas a venda falha ("Disponível: 0") — o bug "estoque
-   * fantasma". Mantemos as duas fontes em sincronia na origem.
-   *
-   * SÓ atua em LOJA ÚNICA (1 filial ativa), onde Product.stockQty e o BranchStock
-   * dessa filial representam a mesma coisa — então BranchStock = stockQty.
-   * Multi-filial é deliberadamente IGNORADO: ali Product.stockQty é a SOMA das
-   * filiais e o estoque é distribuído por transferência; escrever essa soma numa
-   * única filial corromperia a distribuição. (Hoje nenhuma empresa multi-filial
-   * tem divergência — gerem estoque pelo fluxo de transferência.)
-   *
-   * Produto sem controle de estoque é ignorado (estoque não é rastreado).
+   * Produto sem controle de estoque é ignorado.
    */
   private async syncBranchStock(
     tx: Prisma.TransactionClient,
-    params: { productId: string; companyId: string; stockQty: number; stockControlled: boolean }
+    params: {
+      productId: string;
+      companyId: string;
+      quantity: number;
+      stockControlled: boolean;
+      actor: StockActor;
+      requestedBranchId?: string | null;
+    }
   ): Promise<void> {
     if (!params.stockControlled) return;
 
-    const branches = await tx.branch.findMany({
-      where: { companyId: params.companyId, active: true },
-      orderBy: { createdAt: "asc" },
-      select: { id: true },
-    });
-    // Só loja única: a equivalência stockQty == BranchStock da filial é exata.
-    if (branches.length !== 1) return;
+    const targetBranchId = await resolveStockBranchId(
+      params.requestedBranchId,
+      params.actor,
+      params.companyId,
+      tx
+    );
+    // Empresa sem filial ativa: não grava (não quebra o cadastro).
+    if (!targetBranchId) return;
+
+    // Guard defensivo: BranchStock.quantity é Int sem CHECK; nunca negativo.
+    const quantity = Math.max(0, params.quantity);
 
     await tx.branchStock.upsert({
-      where: { branchId_productId: { branchId: branches[0].id, productId: params.productId } },
-      create: { branchId: branches[0].id, productId: params.productId, quantity: params.stockQty },
-      update: { quantity: params.stockQty },
+      where: { branchId_productId: { branchId: targetBranchId, productId: params.productId } },
+      create: { branchId: targetBranchId, productId: params.productId, quantity },
+      update: { quantity },
     });
+
+    await resyncProductStockCache(tx, params.productId);
   }
 
   /**
    * Cria novo produto
    */
-  async create(data: CreateProductDTO, companyId: string): Promise<Product> {
+  async create(data: CreateProductDTO, companyId: string, actor: StockActor): Promise<Product> {
     // Validação: SKU duplicado
     const existingSKU = await prisma.product.findFirst({
       where: {
@@ -346,7 +350,7 @@ export class ProductService {
     }
 
     // Extrair campos de FrameDetail do DTO
-    const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+    const { branchId: requestedBranchId, frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
     const hasFrameDetail = frameModel || frameColor || frameSize || frameMaterial;
 
     // Cria produto + sincroniza BranchStock atomicamente. Sem a sincronização, o
@@ -380,8 +384,10 @@ export class ProductService {
       await this.syncBranchStock(tx, {
         productId: created.id,
         companyId,
-        stockQty: created.stockQty,
+        quantity: created.stockQty,
         stockControlled: created.stockControlled,
+        actor,
+        requestedBranchId: requestedBranchId ?? null,
       });
 
       return created;
@@ -393,7 +399,7 @@ export class ProductService {
   /**
    * Atualiza produto existente
    */
-  async update(id: string, data: UpdateProductDTO, companyId: string): Promise<Product> {
+  async update(id: string, data: UpdateProductDTO, companyId: string, actor: StockActor): Promise<Product> {
     // Verifica se produto existe
     await this.getById(id, companyId, true);
 
@@ -428,7 +434,7 @@ export class ProductService {
     }
 
     // Extrair campos de FrameDetail do DTO
-    const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+    const { branchId: requestedBranchId, frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
     const hasFrameDetail = frameModel || frameColor || frameSize || frameMaterial;
 
     // Só re-sincroniza BranchStock quando o estoque foi REALMENTE editado nesta
@@ -473,8 +479,10 @@ export class ProductService {
         await this.syncBranchStock(tx, {
           productId: updated.id,
           companyId,
-          stockQty: updated.stockQty,
+          quantity: updated.stockQty,
           stockControlled: updated.stockControlled,
+          actor,
+          requestedBranchId: requestedBranchId ?? null,
         });
       }
 

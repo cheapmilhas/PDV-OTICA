@@ -9,6 +9,7 @@ import {
 } from "@/lib/validations/stock-movement.schema";
 import { resolveStockOperation } from "@/lib/stock-operation";
 import { atomicStockDebit, atomicStockCredit } from "@/services/stock.service";
+import { resyncProductStockCache } from "@/services/stock-recalc";
 import { validateBranchOwnership } from "@/lib/validate-branch";
 import {
   notFoundError,
@@ -289,16 +290,7 @@ export class StockMovementService {
             create: { branchId, productId: data.productId, quantity: data.quantity },
             update: { quantity: data.quantity },
           });
-          await tx.$executeRaw`
-            UPDATE "Product"
-            SET "stockQty" = (
-              SELECT COALESCE(SUM("quantity"), 0)
-              FROM "branch_stocks"
-              WHERE "product_id" = ${data.productId}
-            ),
-            "updatedAt" = NOW()
-            WHERE "id" = ${data.productId}
-          `;
+          await resyncProductStockCache(tx, data.productId);
         } else {
           await tx.product.update({
             where: { id: data.productId },
