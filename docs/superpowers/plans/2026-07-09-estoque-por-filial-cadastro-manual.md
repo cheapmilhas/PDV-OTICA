@@ -320,10 +320,10 @@ E adicione o import no topo do arquivo:
 import { resyncProductStockCache } from "@/services/stock-recalc";
 ```
 
-- [ ] **Step 3: Run the stock-movement tests para garantir zero regressão**
+- [ ] **Step 3: Rodar os testes de estoque adjacentes (sanidade, não cobertura direta)**
 
 Run: `./node_modules/.bin/vitest run src/services/product-import-stock.test.ts src/services/__tests__/stock-adjustment-branchstock-sync.test.ts`
-Expected: PASS. (Se algum teste mockar `$executeRaw` e agora esperar 1 chamada onde há 2, ajuste o mock para aceitar as duas chamadas — o SELECT FOR UPDATE é a nova primeira chamada.)
+Expected: PASS. **Aviso de cobertura:** NÃO existe teste que importe `stock-movement.service` diretamente, então estes testes não cobrem o caminho ADJUSTMENT-com-branchId modificado — servem só como sanidade de que nada adjacente quebrou. Nenhum teste hoje mocka `$executeRaw` do stock-movement, então o `SELECT ... FOR UPDATE` adicional não quebra suíte existente. (A cobertura real do `resyncProductStockCache` vem dos testes do service em Task 3/4.)
 
 - [ ] **Step 4: Typecheck**
 
@@ -629,6 +629,18 @@ para:
   async create(data: CreateProductDTO, companyId: string, actor: StockActor): Promise<Product> {
 ```
 
+**CRÍTICO — remover `branchId` do `productData` antes do Prisma.** `Product` NÃO tem coluna `branchId` (só a relação `branchStocks`). A linha de destructuring atual (≈349) é:
+
+```typescript
+    const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+```
+
+Troque para extrair também `branchId` (senão ele vaza para `tx.product.create({ data: { ...productData } })` e o Prisma lança `Unknown argument 'branchId'`):
+
+```typescript
+    const { branchId: requestedBranchId, frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+```
+
 E a chamada a `syncBranchStock` dentro da transação (linhas ~380-385) de:
 
 ```typescript
@@ -649,9 +661,11 @@ para (passa a quantidade da filial-alvo = o número que o usuário digitou, disp
         quantity: created.stockQty,
         stockControlled: created.stockControlled,
         actor,
-        requestedBranchId: (data as any).branchId ?? null,
+        requestedBranchId: requestedBranchId ?? null,
       });
 ```
+
+> `requestedBranchId` é a variável destructurada no Step anterior — NÃO use `(data as any).branchId` aqui, pois o objetivo é justamente removê-lo do `productData`.
 
 - [ ] **Step 4: Atualizar a assinatura e a chamada em `update`**
 
@@ -665,6 +679,18 @@ para:
 
 ```typescript
   async update(id: string, data: UpdateProductDTO, companyId: string, actor: StockActor): Promise<Product> {
+```
+
+**CRÍTICO — mesmo destructuring de `branchId` do `create`.** A linha atual (≈431) é:
+
+```typescript
+    const { frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
+```
+
+Troque para:
+
+```typescript
+    const { branchId: requestedBranchId, frameModel, frameColor, frameSize, frameMaterial, ...productData } = data as any;
 ```
 
 E a chamada a `syncBranchStock` (linhas ~472-479) de:
@@ -690,10 +716,12 @@ para:
           quantity: updated.stockQty,
           stockControlled: updated.stockControlled,
           actor,
-          requestedBranchId: (data as any).branchId ?? null,
+          requestedBranchId: requestedBranchId ?? null,
         });
       }
 ```
+
+> `requestedBranchId` = variável destructurada acima. NÃO usar `(data as any).branchId`.
 
 > Nota: `updated.stockQty` aqui é o valor que veio do payload (o número que o form da filial selecionada enviou) — o form em multi-filial envia a quantidade DAQUELA filial (ver Task 7). O `product.update` grava esse número em `Product.stockQty` momentaneamente, mas o `resyncProductStockCache` logo em seguida corrige o cache para a SOMA real. O upsert usa esse número como a quantidade da filial-alvo. Correto por construção.
 
