@@ -835,6 +835,10 @@ function PDVPage() {
       // remover o aviso de "mudanças não salvas" (um F5 nos 1.5s não dispara
       // mais o beforeunload falso, já que a venda foi concluída).
       setCarrinho([]);
+      // Fecha o modal de pagamento junto com a limpeza do carrinho — senão ele
+      // fica aberto ~1.5s (até o redirect) re-renderizando com Total R$ 0 /
+      // "Falta" negativa. Espelha o ramo do crediário, que já fecha o modal.
+      setModalVendaOpen(false);
 
       // Redirecionar via router (Next) em vez de window.location pra preservar
       // state e cache. router.refresh() força re-fetch da lista de vendas.
