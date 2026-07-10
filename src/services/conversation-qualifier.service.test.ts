@@ -24,8 +24,6 @@ vi.mock("@/services/lead.service", () => ({
   createLead: (...a: unknown[]) => createLeadMock(...a),
   updateLeadAiFields: (...a: unknown[]) => updateLeadAiFieldsMock(...a),
 }));
-const getBotMock = vi.fn();
-vi.mock("@/services/ai-seller-user.service", () => ({ getOrCreateAiSellerUser: (...a: unknown[]) => getBotMock(...a) }));
 const transcribeAudioMock = vi.fn();
 vi.mock("@/services/audio-transcription.service", () => ({ transcribeAudio: (...a: unknown[]) => transcribeAudioMock(...a) }));
 vi.mock("@/lib/whatsapp-instance", () => ({ instanceNameForCompany: (companyId: string) => `inst_${companyId}` }));
@@ -55,7 +53,6 @@ const conv = {
 beforeEach(() => {
   vi.clearAllMocks();
   listStagesMock.mockResolvedValue([{ id: "s_novo", name: "Novo" }]);
-  getBotMock.mockResolvedValue("u_bot");
   transcribeAudioMock.mockResolvedValue(null); // sem transcrição por padrão (conversas só-texto inalteradas)
   getAiConfigMock.mockResolvedValue({ qualifierModel: "claude-haiku-4-5", hasKey: true, usdBrlRate: 5, markupPercent: 0, creditTokenFactor: 1, hasOpenaiKey: true });
   matchCustomerMock.mockResolvedValue({ kind: "none", customerId: null, customerName: null, summary: null, candidateCount: 0 });
