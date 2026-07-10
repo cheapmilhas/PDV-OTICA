@@ -65,8 +65,8 @@ interface ReportData {
     averageTicket: number;
     totalCustomers: number;
     overdueCustomers: number;
-    totalPayments: number;
-    overduePayments: number;
+    totalReceivables: number;
+    overdueReceivables: number;
   };
   receivables: ReceivableData[];
   customerBreakdown: Array<{
@@ -177,8 +177,8 @@ function RelatorioContasReceberPageContent() {
             { metric: "Ticket Médio", value: formatCurrency(data.summary.averageTicket) },
             { metric: "Total de Clientes", value: data.summary.totalCustomers },
             { metric: "Clientes com Atraso", value: data.summary.overdueCustomers },
-            { metric: "Total de Pagamentos", value: data.summary.totalPayments },
-            { metric: "Pagamentos Vencidos", value: data.summary.overduePayments },
+            { metric: "Total de Títulos", value: data.summary.totalReceivables },
+            { metric: "Títulos Vencidos", value: data.summary.overdueReceivables },
           ],
         },
         {
@@ -311,13 +311,13 @@ function RelatorioContasReceberPageContent() {
             <KPICard
               title="Total a Receber"
               value={formatCurrency(data.summary.totalReceivable)}
-              subtitle={`${data.summary.totalPayments} pagamentos`}
+              subtitle={`${data.summary.totalReceivables} títulos`}
               icon={DollarSign}
             />
             <KPICard
               title="Vencidos"
               value={formatCurrency(data.summary.overdue)}
-              subtitle={`${data.summary.overduePayments} pagamentos`}
+              subtitle={`${data.summary.overdueReceivables} títulos`}
               icon={AlertTriangle}
             />
             <KPICard
