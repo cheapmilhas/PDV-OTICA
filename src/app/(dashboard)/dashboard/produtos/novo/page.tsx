@@ -22,6 +22,8 @@ import {
 import Link from "next/link";
 import { calculateMargin, sanitizeSkuInput } from "@/lib/validations/product.schema";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { useBranchContext } from "@/hooks/use-branch-context";
+import { useSession } from "next-auth/react";
 
 function NovoProdutoPageContent() {
   const router = useRouter();
@@ -33,6 +35,18 @@ function NovoProdutoPageContent() {
   const [quickCreate, setQuickCreate] = useState<null | "brand" | "category">(null);
   const [quickName, setQuickName] = useState("");
   const [quickSaving, setQuickSaving] = useState(false);
+
+  // Estoque por filial: só ADMIN/GERENTE escolhem; multi-filial (>=2 filiais) mostra o bloco.
+  const { branches, activeBranchId } = useBranchContext();
+  const { data: session } = useSession();
+  const canPickBranch = session?.user?.role === "ADMIN" || session?.user?.role === "GERENTE";
+  const isMultiBranch = branches.length >= 2;
+  const [stockBranchId, setStockBranchId] = useState<string>("");
+  useEffect(() => {
+    if (!stockBranchId) {
+      setStockBranchId(activeBranchId !== "ALL" ? activeBranchId : branches[0]?.id ?? "");
+    }
+  }, [activeBranchId, branches, stockBranchId]);
 
   const [formData, setFormData] = useState({
     type: "",
@@ -190,6 +204,9 @@ function NovoProdutoPageContent() {
       if (formData.frameColor) sanitizedData.frameColor = formData.frameColor;
       if (formData.frameSize) sanitizedData.frameSize = formData.frameSize;
       if (formData.frameMaterial) sanitizedData.frameMaterial = formData.frameMaterial;
+
+      // Estoque por filial: só envia branchId em contexto multi-filial (servidor é a fonte de verdade).
+      if (isMultiBranch && stockBranchId) sanitizedData.branchId = stockBranchId;
 
       const res = await fetch("/api/products", {
         method: "POST",
@@ -519,6 +536,34 @@ function NovoProdutoPageContent() {
                     : "(Permite vendas independente do estoque)"}
                 </span>
               </div>
+
+              {isMultiBranch && formData.stockControlled && (
+                <div className="space-y-2 mb-4">
+                  <Label>Estoque nesta filial</Label>
+                  {canPickBranch ? (
+                    <Select value={stockBranchId} onValueChange={setStockBranchId}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione a filial" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {branches.map((b) => (
+                          <SelectItem key={b.id} value={b.id}>
+                            {b.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  ) : (
+                    <p className="text-sm text-muted-foreground">
+                      Estoque entra em:{" "}
+                      <strong>{branches.find((b) => b.id === stockBranchId)?.name ?? "sua filial"}</strong>
+                    </p>
+                  )}
+                  <p className="text-xs text-muted-foreground">
+                    Para dividir entre filiais, use Transferências.
+                  </p>
+                </div>
+              )}
 
               <div className="grid gap-4 md:grid-cols-3">
                 <div className="space-y-2">
