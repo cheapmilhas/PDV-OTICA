@@ -213,6 +213,22 @@ por:
       sellerUserId: data.sellerUserId === null ? null : (data.sellerUserId ?? userId),
 ```
 
+**Também obrigatório (senão o tsc do Step 5 falha):** o helper `assertLeadFksOwnedByCompany` tem o param `sellerUserId?: string` (`lead.service.ts:53`). Como `data.sellerUserId` agora é `string | null | undefined` e é passado a ele na linha ~97, sob `strict: true` isso é erro TS2322. Alargar o tipo do param na linha 53 de:
+
+```typescript
+  data: { customerId?: string; quoteId?: string; sellerUserId?: string; stageId?: string },
+```
+
+para (só o `sellerUserId`):
+
+```typescript
+  data: { customerId?: string; quoteId?: string; sellerUserId?: string | null; stageId?: string },
+```
+
+O runtime já está correto: o guard `if (data.sellerUserId)` (linha 64) trata `null` como falsy e pula a validação — que é o comportamento desejado (null não precisa validar dono).
+
+> A MESMA correção de tipo cobre o 2º call-site: `updateLead` também chama `assertLeadFksOwnedByCompany` (linha ~327) com `data.sellerUserId`. Alargar o param na linha 53 resolve os dois de uma vez. O `updateLead` escreve `sellerUserId: data.sellerUserId` direto no `prisma.lead.update` (linha ~346) — `Lead.sellerUserId` é nullable, então null é aceito (semântica "desatribuir", coerente). Nenhuma mudança extra em `updateLead`.
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `./node_modules/.bin/vitest run src/services/lead.service.test.ts`
