@@ -44,9 +44,16 @@ function NovoProdutoPageContent() {
   const [stockBranchId, setStockBranchId] = useState<string>("");
   useEffect(() => {
     if (!stockBranchId) {
-      setStockBranchId(activeBranchId !== "ALL" ? activeBranchId : branches[0]?.id ?? "");
+      // Non-admin: trava na filial da sessão (é onde o servidor vai gravar).
+      // ADMIN/GERENTE: default = filial ativa do topo, senão a principal.
+      const seed = canPickBranch
+        ? activeBranchId !== "ALL"
+          ? activeBranchId
+          : branches[0]?.id ?? ""
+        : session?.user?.branchId ?? branches[0]?.id ?? "";
+      setStockBranchId(seed);
     }
-  }, [activeBranchId, branches, stockBranchId]);
+  }, [activeBranchId, branches, stockBranchId, canPickBranch, session]);
 
   const [formData, setFormData] = useState({
     type: "",
@@ -205,8 +212,11 @@ function NovoProdutoPageContent() {
       if (formData.frameSize) sanitizedData.frameSize = formData.frameSize;
       if (formData.frameMaterial) sanitizedData.frameMaterial = formData.frameMaterial;
 
-      // Estoque por filial: só envia branchId em contexto multi-filial (servidor é a fonte de verdade).
-      if (isMultiBranch && stockBranchId) sanitizedData.branchId = stockBranchId;
+      // Estoque por filial: só envia branchId quando o usuário PODE escolher a
+      // filial (ADMIN/GERENTE). Non-admin não envia — o servidor força a filial
+      // da sessão. Sem isso, um non-admin com filial ativa ≠ da sessão levaria
+      // 403 num save legítimo. Servidor é a fonte de verdade em qualquer caso.
+      if (isMultiBranch && canPickBranch && stockBranchId) sanitizedData.branchId = stockBranchId;
 
       const res = await fetch("/api/products", {
         method: "POST",
