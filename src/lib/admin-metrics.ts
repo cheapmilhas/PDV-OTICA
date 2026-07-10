@@ -5,7 +5,8 @@
  * banco. As queries de contagem/soma ficam no server component; aqui só a
  * matemática da comparação — que é onde um sinal errado (↑ vs ↓) confunde.
  */
-import { toZonedTime } from "date-fns-tz";
+import { toZonedTime, formatInTimeZone } from "date-fns-tz";
+import { ptBR } from "date-fns/locale";
 import { TIMEZONE, startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
 
 export type TrendDirection = "up" | "down" | "flat";
@@ -147,14 +148,15 @@ export function computeMrrSeries(
       return acc + monthlyValueOfSubscription(sub, endOfMonth);
     }, 0);
 
-    // Rótulo/chave derivados do 1º instante local do mês (em BRT).
-    const monthLocal = toZonedTime(monthStart, TIMEZONE);
-    const year = monthLocal.getFullYear();
-    const monthIndex = monthLocal.getMonth();
-    const month = monthLocal
-      .toLocaleString("pt-BR", { month: "short", timeZone: TIMEZONE })
-      .replace(".", "");
-    const key = `${year}-${String(monthIndex + 1).padStart(2, "0")}`;
+    // Rótulo E chave derivados da MESMA fonte de fuso: formatInTimeZone aplica
+    // UMA única conversão do instante UTC `monthStart` para BRT. O código antigo
+    // misturava getters locais (fuso do runtime) no `key` com toLocaleString+
+    // timeZone (dupla conversão) no rótulo — sob UTC na Vercel os dois discordavam
+    // por 1 mês (key '2026-01' vs rótulo 'dez'). Ver admin-metrics.series.utc.test.
+    const key = formatInTimeZone(monthStart, TIMEZONE, "yyyy-MM");
+    const month = formatInTimeZone(monthStart, TIMEZONE, "MMM", {
+      locale: ptBR,
+    }).replace(".", "");
     const mrr = Math.round(totalCentavos) / 100;
 
     points.push({ month, key, mrr });
