@@ -8,7 +8,7 @@ export const createLeadSchema = z.object({
   interest: z.string().optional(),
   source: z.nativeEnum(LeadFunnelSource).optional(),
   stageId: z.string().optional(), // se ausente, service usa a 1ª etapa
-  sellerUserId: z.string().optional(),
+  sellerUserId: z.string().nullable().optional(), // null = lead "da loja" (sem vendedor); undefined = usa quem criou
   estimatedValue: z.coerce.number().min(0).optional(),
   customerId: z.string().optional(),
   quoteId: z.string().optional(),

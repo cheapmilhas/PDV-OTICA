@@ -37,3 +37,18 @@ describe("moveLeadSchema", () => {
     expect(r.stageId).toBe("stg_1");
   });
 });
+
+describe("createLeadSchema — sellerUserId nullable", () => {
+  it("aceita sellerUserId: null (lead sem vendedor / da loja)", () => {
+    const r = createLeadSchema.safeParse({ name: "Maria", sellerUserId: null });
+    expect(r.success).toBe(true);
+  });
+  it("aceita sellerUserId ausente (undefined)", () => {
+    const r = createLeadSchema.safeParse({ name: "Maria" });
+    expect(r.success).toBe(true);
+  });
+  it("aceita sellerUserId string", () => {
+    const r = createLeadSchema.safeParse({ name: "Maria", sellerUserId: "u_1" });
+    expect(r.success).toBe(true);
+  });
+});
