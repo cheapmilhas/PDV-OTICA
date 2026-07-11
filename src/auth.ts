@@ -6,6 +6,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { checkRateLimit } from "@/lib/rate-limit";
 import { applyRevalidatedClaims } from "./auth-claims";
+import { shouldRevokeForPasswordChange } from "./auth-password-revocation";
 
 // SEGURANÇA: hash dummy bcrypt VÁLIDO (60 chars, cost 10) para comparar quando
 // não há candidato. Sem isso há timing leak: !user retorna ~0ms, user existente
@@ -129,6 +130,10 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
             branchId: firstBranch.id,
             companyId: user.companyId,
             networkId: user.company?.networkId || null,
+            // Baseline de revogação por troca de senha (epoch ms | null).
+            passwordChangedAt: user.passwordChangedAt
+              ? user.passwordChangedAt.getTime()
+              : null,
           };
 
           return authData;
@@ -164,6 +169,9 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
         token.branchId = user.branchId;
         token.companyId = user.companyId;
         token.networkId = user.networkId;
+        // Baseline de revogação por troca de senha, fixado no login. NÃO é
+        // reescrito depois (a revalidação M12 compara este valor com o banco).
+        token.passwordChangedAt = user.passwordChangedAt ?? null;
         token.revalidatedAt = Date.now();
         return token;
       }
@@ -214,6 +222,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
               active: true,
               name: true,
               companyId: true,
+              passwordChangedAt: true,
               company: { select: { networkId: true } },
               branches: {
                 take: 1,
@@ -224,6 +233,19 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
 
           if (!fresh || fresh.active === false) {
             // Usuário demitido/desativado/excluído → invalida o token.
+            return null;
+          }
+
+          // Reset de senha: se a senha foi trocada DEPOIS deste login, a sessão é
+          // anterior à troca e cai. Compara o baseline fixado no login com o
+          // banco (fonte de verdade). NÃO atualiza token.passwordChangedAt a
+          // partir do fresh — o baseline precisa permanecer o do login.
+          if (
+            shouldRevokeForPasswordChange(
+              token.passwordChangedAt,
+              fresh.passwordChangedAt
+            )
+          ) {
             return null;
           }
 
