@@ -90,11 +90,16 @@ async function doWork(email: string): Promise<void> {
       include: { company: true },
     });
 
-    // 5. Entregável se tem recoveryEmail (destino real garantido) OU se o
-    //    próprio email não é um login interno sintético.
+    // 5. Entregável se tem recoveryEmail NÃO-VAZIO (destino real garantido) OU se
+    //    o próprio email não é um login interno sintético. Usamos `.trim()` em vez
+    //    de `!= null`: a normalização grava vazio como null, mas dado legado /
+    //    importação / SQL manual pode ter deixado "" — sem o trim, uma conta com
+    //    recoveryEmail="" passaria o filtro e tentaria enviar para endereço vazio.
+    const hasRecovery = (u: { recoveryEmail?: string | null }) =>
+      !!u.recoveryEmail?.trim();
     const deliverable = users.filter(
       (u) =>
-        u.recoveryEmail != null ||
+        hasRecovery(u) ||
         !INTERNAL_LOGIN_SUFFIXES.some((suffix) => u.email.endsWith(suffix))
     );
 
@@ -146,7 +151,9 @@ async function doWork(email: string): Promise<void> {
         verifier,
         companyName: u.company?.name,
         name: u.name,
-        targetEmail: u.recoveryEmail ?? u.email,
+        // Destino real: recoveryEmail se NÃO-VAZIO (trim), senão o email. Espelha
+        // a decisão do filtro `hasRecovery` — nunca envia para "" acidental.
+        targetEmail: u.recoveryEmail?.trim() ? u.recoveryEmail.trim() : u.email,
       });
     }
 

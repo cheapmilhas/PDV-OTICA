@@ -193,6 +193,18 @@ describe("POST /api/auth/esqueci-senha — anti-enumeração", () => {
     expect(sendEmail).not.toHaveBeenCalled();
   });
 
+  it("conta sintética com recoveryEmail VAZIO (dado legado): NÃO entregável, sem envio", async () => {
+    // Robustez: a normalização grava vazio como null, mas importação/SQL manual
+    // pode deixar "". O filtro usa .trim() truthy → "" não é destino válido.
+    findMany.mockResolvedValueOnce([
+      { id: "u9", name: "Zé", email: "ze@login", recoveryEmail: "", company: { name: "Loja A" } },
+    ]);
+    const res = await callWithFloor(makeReq({ email: "ze@ninguem.com" }, "10.9.0.9"));
+    expect(res.status).toBe(200);
+    expect($transaction).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
   it("label do botão mostra nome + loja, sem role", async () => {
     findMany.mockResolvedValueOnce([
       { id: "u3", name: "Leila", email: "leila@x.com", recoveryEmail: null, company: { name: "Atacadão" } },
