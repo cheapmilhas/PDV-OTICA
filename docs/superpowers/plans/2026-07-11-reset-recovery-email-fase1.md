@@ -173,10 +173,15 @@ it("conta sintética COM recoveryEmail: token criado e link enviado ao recoveryE
   expect((sendEmail.mock.calls[0][0] as { to: unknown }).to).toBe("fs@gmail.com");
 });
 it("conta sintética SEM recoveryEmail: nenhum token, nenhum envio, 200 genérico", async () => {
+  // ⚠️ O input é um e-mail VÁLIDO (o bodySchema exige .email()); uma conta @login
+  // só seria achada se alguém digitasse o e-mail real dela — e ela não tem. Aqui
+  // simulamos: alguém digita um e-mail real; o findMany devolve uma conta sintética
+  // homônima SEM recoveryEmail (não deveria acontecer com esse input, mas garante
+  // que o FILTRO exclui sintética-sem-recovery mesmo se ela vier no resultado).
   findMany.mockResolvedValueOnce([
     { id: "u2", name: "Ada", email: "ada@login", recoveryEmail: null, company: { name: "Loja A" } },
   ]);
-  const res = await callWithFloor(makeReq({ email: "ada@login" }, "10.9.0.2"));
+  const res = await callWithFloor(makeReq({ email: "ada@ninguem.com" }, "10.9.0.2"));
   expect(res.status).toBe(200);
   expect($transaction).not.toHaveBeenCalled();
   expect(sendEmail).not.toHaveBeenCalled();
@@ -190,21 +195,26 @@ it("label do botão mostra nome + loja, sem role", async () => {
   expect(arg.html).toContain("Leila");
   expect(arg.html).toContain("Atacadão");
 });
-it("destinos distintos (email real vs recoveryEmail): um envio por destino", async () => {
+it("agrupamento: 2 contas com destinos distintos → um envio por destino", async () => {
+  // O findMany é mockado (não filtra de verdade), então simulamos o caso em que
+  // a busca devolveu 2 contas elegíveis com targetEmail distintos — exercita o
+  // agrupamento por destino (Map). Input é um e-mail válido qualquer.
   findMany.mockResolvedValueOnce([
     { id: "u4", name: "A", email: "a@x.com", recoveryEmail: null, company: { name: "L1" } },
     { id: "u5", name: "B", email: "b@login", recoveryEmail: "b@gmail.com", company: { name: "L2" } },
   ]);
   await callWithFloor(makeReq({ email: "a@x.com" }, "10.9.0.4"));
-  // Só a conta cujo email/recoveryEmail casa "a@x.com" é elegível → 1 envio.
-  // (Este teste garante que a busca OR + agrupamento não vaza a conta B.)
-  expect(sendEmail).toHaveBeenCalledTimes(1);
-  expect((sendEmail.mock.calls[0][0] as { to: unknown }).to).toBe("a@x.com");
+  // Dois destinos distintos (a@x.com via email; b@gmail.com via recoveryEmail) → 2 envios.
+  expect(sendEmail).toHaveBeenCalledTimes(2);
+  const tos = sendEmail.mock.calls.map((c) => (c[0] as { to: string }).to).sort();
+  expect(tos).toEqual(["a@x.com", "b@gmail.com"]);
 });
 ```
 (Ajustar os mocks de findMany para INCLUIR `name` e `recoveryEmail` nos objetos — os testes existentes que não têm esses campos continuam válidos com `recoveryEmail: undefined`.)
 
 - [ ] **Step 2: Rodar → novos falham.** `npm test -- src/app/api/auth/esqueci-senha/route.test.ts`
+
+⚠️ **NÃO adicionar `select` ao findMany do endpoint.** Ele usa `include: { company: true }` e retorna TODOS os escalares — `name` já vem, e `recoveryEmail` passa a vir automaticamente após a migração. Diferente dos 4 `select` restritos do service (Task 3), aqui um select restritivo QUEBRARIA tudo. Só mexer no `where`, no filtro e na montagem.
 
 - [ ] **Step 3: Implementar em `doWork`.**
   (a) Busca OR (o `where` do findMany):
