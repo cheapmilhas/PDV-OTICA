@@ -1,11 +1,12 @@
 "use client";
 
 import { useState } from "react";
-import { Loader2, Lock } from "lucide-react";
+import { Loader2, Lock, Eye, EyeOff } from "lucide-react";
 
 export default function AdminLoginPage() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [showPassword, setShowPassword] = useState(false);
   const [mfaToken, setMfaToken] = useState("");
   const [mfaRequired, setMfaRequired] = useState(false);
   const [error, setError] = useState("");
@@ -54,7 +55,7 @@ export default function AdminLoginPage() {
           <div className="w-12 h-12 bg-primary rounded-xl flex items-center justify-center shadow-card mb-4">
             <Lock className="w-5 h-5 text-primary-foreground" aria-hidden="true" />
           </div>
-          <h1 className="font-display text-2xl font-bold text-foreground">PDV Ótica</h1>
+          <h1 className="font-display text-2xl font-bold text-foreground">Vis</h1>
           <p className="text-sm text-muted-foreground mt-1">Portal de administração</p>
         </div>
 
@@ -92,17 +93,31 @@ export default function AdminLoginPage() {
               >
                 Senha
               </label>
-              <input
-                id="admin-password"
-                type="password"
-                autoComplete="current-password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                className="w-full px-3.5 py-2.5 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
-                placeholder="••••••••"
-                required
-                disabled={loading}
-              />
+              <div className="relative">
+                <input
+                  id="admin-password"
+                  type={showPassword ? "text" : "password"}
+                  autoComplete="current-password"
+                  value={password}
+                  onChange={(e) => setPassword(e.target.value)}
+                  className="w-full px-3.5 py-2.5 pr-11 bg-background border border-input rounded-lg text-foreground placeholder:text-muted-foreground focus:outline-none focus:ring-2 focus:ring-ring focus:border-transparent transition-shadow"
+                  placeholder="••••••••"
+                  required
+                  disabled={loading}
+                />
+                <button
+                  type="button"
+                  onClick={() => setShowPassword((v) => !v)}
+                  aria-label={showPassword ? "Ocultar senha" : "Mostrar senha"}
+                  className="absolute inset-y-0 right-0 flex items-center px-3 text-muted-foreground hover:text-foreground"
+                >
+                  {showPassword ? (
+                    <EyeOff className="w-4 h-4" aria-hidden="true" />
+                  ) : (
+                    <Eye className="w-4 h-4" aria-hidden="true" />
+                  )}
+                </button>
+              </div>
             </div>
 
             {mfaRequired && (
