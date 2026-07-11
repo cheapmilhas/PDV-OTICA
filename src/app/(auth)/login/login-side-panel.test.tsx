@@ -14,26 +14,32 @@ const unordered: LoginPanelContent = { releases: [
 ] };
 
 describe("LoginSidePanel", () => {
-  it("mostra a novidade quando fresca (10 dias)", () => {
+  it("mostra a novidade (rodapé) quando fresca — 10 dias", () => {
     render(<LoginSidePanel content={fresh} today={HOJE} />);
+    // Rodapé compacto: badge "Novidade" + o título.
+    expect(screen.getByText("Novidade")).toBeTruthy();
     expect(screen.getByText("Novo X")).toBeTruthy();
-    expect(screen.getByRole("heading", { name: "Novidades" })).toBeTruthy();
   });
-  it("FRONTEIRA: 14 dias ainda mostra", () => {
+  it("FRONTEIRA: 14 dias ainda mostra o título da novidade", () => {
     render(<LoginSidePanel content={borderIn} today={HOJE} />);
     expect(screen.getByText("Borda 14")).toBeTruthy();
   });
   it("FRONTEIRA: 15 dias esconde a novidade", () => {
     render(<LoginSidePanel content={borderOut} today={HOJE} />);
     expect(screen.queryByText("Borda 15")).toBeNull();
+    expect(screen.queryByText("Novidade")).toBeNull();
   });
-  it("sem releases: não quebra e não mostra novidade", () => {
+  it("sem releases: não quebra e não mostra o rodapé de novidade", () => {
     render(<LoginSidePanel content={{ releases: [] }} today={HOJE} />);
-    expect(screen.queryByRole("heading", { name: "Novidades" })).toBeNull();
+    expect(screen.queryByText("Novidade")).toBeNull();
   });
-  it("ordena defensivamente: usa a de date mais recente, não releases[0]", () => {
+  it("ordena defensivamente: usa a release de date mais recente, não releases[0]", () => {
     render(<LoginSidePanel content={unordered} today={HOJE} />);
     expect(screen.getByText("Recente")).toBeTruthy();
     expect(screen.queryByText("Velha")).toBeNull();
+  });
+  it("sempre renderiza o carrossel de funcionalidades (landmark 'Conheça o Vis')", () => {
+    render(<LoginSidePanel content={{ releases: [] }} today={HOJE} />);
+    expect(screen.getByRole("group", { name: "Funcionalidades do Vis" })).toBeTruthy();
   });
 });
