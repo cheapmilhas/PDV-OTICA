@@ -305,25 +305,55 @@ export function LoginSidePanel({ content, today }: LoginSidePanelProps) {
 Run: `npm test -- "src/app/(auth)/login/login-side-panel.test.tsx"`
 Expected: PASS (5 tests). NOTA: o teste do guard de suporte real depende de `WHATSAPP_NUMBER` ser o placeholder no momento (é) — então `showSupport` é `false` e o link não renderiza. Se quiser um teste explícito do guard, ver Step 5.
 
-- [ ] **Step 5: Add support-guard test**
+- [ ] **Step 5: Add support-guard test (ambos os ramos, à prova de troca de número)**
 
-Adicione ao arquivo de teste:
+O guard depende de `WHATSAPP_NUMBER`. NÃO testar contra o valor real (quebra no dia em que o dono trocar o número — falso-vermelho não relacionado). Em vez disso, mockar `@/lib/constants` para cobrir os DOIS ramos independente do valor real. Criar um arquivo de teste separado (mock por-módulo é mais limpo isolado):
+
+Criar `src/app/(auth)/login/login-side-panel.support.test.tsx`:
 
 ```tsx
-it("guard de suporte: esconde o link enquanto WHATSAPP_NUMBER é placeholder", () => {
-  // WHATSAPP_NUMBER real ainda é o placeholder 5585999999999 → link não deve aparecer.
-  render(<LoginSidePanel content={fresh} today={HOJE} />);
-  expect(screen.queryByText(/Falar no suporte/)).toBeNull();
+/** @vitest-environment jsdom */
+import { describe, it, expect, vi, afterEach } from "vitest";
+import { render, screen } from "@testing-library/react";
+import type { LoginPanelContent } from "./login-panel-content";
+
+const HOJE = "2026-07-11";
+const fresh: LoginPanelContent = { releases: [{ date: "2026-07-01", title: "Novo X", items: ["a"] }] };
+
+afterEach(() => vi.resetModules());
+
+describe("LoginSidePanel — guard de suporte", () => {
+  it("esconde o link quando WHATSAPP_NUMBER é o placeholder", async () => {
+    vi.doMock("@/lib/constants", () => ({
+      WHATSAPP_NUMBER: "5585999999999",
+      WHATSAPP_URL: "https://wa.me/5585999999999",
+    }));
+    const { LoginSidePanel } = await import("./login-side-panel");
+    render(<LoginSidePanel content={fresh} today={HOJE} />);
+    expect(screen.queryByText(/Falar no suporte/)).toBeNull();
+  });
+
+  it("mostra o link quando WHATSAPP_NUMBER é um número real", async () => {
+    vi.doMock("@/lib/constants", () => ({
+      WHATSAPP_NUMBER: "5511988887777",
+      WHATSAPP_URL: "https://wa.me/5511988887777",
+    }));
+    const { LoginSidePanel } = await import("./login-side-panel");
+    render(<LoginSidePanel content={fresh} today={HOJE} />);
+    expect(screen.getByText(/Falar no suporte/)).toBeTruthy();
+  });
 });
 ```
 
-Run: `npm test -- "src/app/(auth)/login/login-side-panel.test.tsx"`
-Expected: PASS (6 tests).
+Run: `npm test -- "src/app/(auth)/login/login-side-panel.support.test.tsx"`
+Expected: PASS (2 tests). Este arquivo é imune à troca do número real porque mocka a constante.
+
+NOTA: por isso o teste principal (Task 3 Step 1) NÃO deve assertar sobre o link de suporte — o guard tem cobertura própria aqui.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add "src/app/(auth)/login/login-side-panel.tsx" "src/app/(auth)/login/login-side-panel.test.tsx"
+git add "src/app/(auth)/login/login-side-panel.tsx" "src/app/(auth)/login/login-side-panel.test.tsx" "src/app/(auth)/login/login-side-panel.support.test.tsx"
 git commit -m "feat(login-painel): componente LoginSidePanel (aside a11y, some >14d, guard suporte)"
 ```
 
