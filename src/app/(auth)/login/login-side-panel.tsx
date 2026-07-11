@@ -1,8 +1,9 @@
-import Image from "next/image";
-import { Sparkles, MessageCircle } from "lucide-react";
+import { MessageCircle } from "lucide-react";
 import { WHATSAPP_NUMBER, WHATSAPP_URL } from "@/lib/constants";
 import { daysAgo, formatRelative } from "@/lib/relative-date";
 import type { LoginPanelContent } from "./login-panel-content";
+import { loginCarouselSlides } from "./login-panel-content";
+import { LoginFeatureCarousel } from "./login-feature-carousel";
 
 const MAX_RELEASE_AGE_DAYS = 14;
 const SUPPORT_PLACEHOLDER = "5585999999999";
@@ -26,28 +27,40 @@ export function LoginSidePanel({ content, today }: LoginSidePanelProps) {
 
   return (
     <aside
-      aria-label="Novidades e suporte"
-      className="hidden lg:flex w-80 flex-col justify-center gap-6 rounded-2xl border border-slate-200/70 bg-white/60 p-8"
-      style={{ borderColor: "var(--lp-border)" }}
+      aria-label="Conheça o Vis"
+      className="hidden lg:flex w-[26rem] flex-col justify-center gap-6 rounded-3xl border p-9"
+      style={{
+        borderColor: "var(--lp-border)",
+        background: "var(--gradient-brand-wash)",
+        boxShadow: "0 24px 60px rgba(10,31,68,0.08)",
+      }}
     >
-      <Image src="/vis-logo.png" alt="Vis" width={100} height={33} style={{ height: 33, width: "auto" }} />
+      <div>
+        <h2 className="text-lg font-bold leading-tight" style={{ color: "var(--lp-foreground)" }}>
+          Tudo o que sua ótica precisa,
+          <br />
+          <span style={{ color: "var(--brand-primary)" }}>num só lugar.</span>
+        </h2>
+      </div>
+
+      <LoginFeatureCarousel slides={loginCarouselSlides} />
 
       {showRelease && latest && (
-        <div className="space-y-3">
-          <div className="flex items-center gap-2">
-            <Sparkles className="h-4 w-4" aria-hidden="true" style={{ color: "var(--brand-primary)" }} />
-            <h2 className="text-sm font-semibold text-slate-900">Novidades</h2>
-            <span className="ml-auto text-xs text-muted-foreground">{formatRelative(latest.date, today)}</span>
+        <div
+          className="rounded-xl px-3 py-2.5"
+          style={{ background: "var(--brand-tint)" }}
+        >
+          <div className="flex items-center gap-1.5">
+            <span className="text-[11px] font-bold uppercase tracking-wide" style={{ color: "var(--brand-primary)" }}>
+              Novidade
+            </span>
+            <span className="ml-auto text-[10px]" style={{ color: "var(--lp-subtle)" }}>
+              {formatRelative(latest.date, today)}
+            </span>
           </div>
-          <p className="text-sm font-medium text-slate-800">{latest.title}</p>
-          <ul className="space-y-1.5">
-            {latest.items.map((item, i) => (
-              <li key={i} className="flex gap-2 text-sm text-muted-foreground">
-                <span aria-hidden="true" style={{ color: "var(--brand-primary)" }}>•</span>
-                <span>{item}</span>
-              </li>
-            ))}
-          </ul>
+          <p className="mt-0.5 text-xs font-medium" style={{ color: "var(--lp-foreground)" }}>
+            {latest.title}
+          </p>
         </div>
       )}
 
@@ -56,7 +69,7 @@ export function LoginSidePanel({ content, today }: LoginSidePanelProps) {
           href={WHATSAPP_URL}
           target="_blank"
           rel="noopener noreferrer"
-          className="flex items-center gap-2 text-sm font-medium text-primary hover:underline"
+          className="flex items-center gap-2 text-xs font-medium text-primary hover:underline"
         >
           <MessageCircle className="h-4 w-4" aria-hidden="true" />
           Precisa de ajuda? Falar no suporte

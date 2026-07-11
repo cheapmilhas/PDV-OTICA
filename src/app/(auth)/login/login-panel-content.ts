@@ -27,3 +27,52 @@ export const loginPanelContent: LoginPanelContent = {
     },
   ],
 };
+
+/**
+ * Slides do carrossel de funcionalidades (painel de login). Ordem: maior "uau"
+ * primeiro. Cada slug tem um mini-mockup CSS em login-feature-mockups.tsx e o
+ * texto vem daqui (blurb curto, linguagem de balcão).
+ */
+export interface CarouselSlide {
+  slug: string;
+  name: string;
+  blurb: string;
+}
+
+export const loginCarouselSlides: CarouselSlide[] = [
+  {
+    slug: "leitura-de-receita-ia",
+    name: "Leitura de receita por IA",
+    blurb: "Fotografe a receita e a IA preenche grau, eixo e DNP direto na ordem de serviço.",
+  },
+  {
+    slug: "ordem-de-servico-otica",
+    name: "Ordens de serviço de lente",
+    blurb: "Acompanhe cada lente do pedido à entrega, com status, prazo e laboratório sempre à vista.",
+  },
+  {
+    slug: "funil-whatsapp",
+    name: "Funil de vendas + WhatsApp",
+    blurb: "Leads do WhatsApp entram direto no funil. Atenda, acompanhe e feche mais vendas.",
+  },
+  {
+    slug: "gestao-financeira-otica",
+    name: "Gestão financeira completa",
+    blurb: "DRE, fluxo de caixa e contas a pagar e receber. Saiba quanto entrou, saiu e sobrou.",
+  },
+  {
+    slug: "controle-de-estoque-otica",
+    name: "Estoque por filial",
+    blurb: "Armações e lentes sob controle, com alerta de baixa e visão de cada loja.",
+  },
+  {
+    slug: "cashback-otica",
+    name: "Cashback e fidelização",
+    blurb: "Gere e resgate cashback na venda para o cliente voltar mais vezes.",
+  },
+  {
+    slug: "pdv-para-otica",
+    name: "PDV para óticas",
+    blurb: "Venda no balcão em segundos. Vendeu lente, a ordem de serviço já nasce automática.",
+  },
+];

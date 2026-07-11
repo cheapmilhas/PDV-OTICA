@@ -103,7 +103,7 @@ export default function LoginPage() {
 
   return (
     <div className="flex min-h-screen items-center justify-center bg-gradient-to-br from-[#EAF0FB] via-white to-[#E6FAFF] p-4">
-      <div className="flex w-full max-w-4xl items-center justify-center gap-8 lg:justify-between">
+      <div className="flex w-full max-w-5xl items-center justify-center gap-10 lg:justify-between">
         <div className="w-full max-w-md">
           <Card className="w-full border-slate-200/80 shadow-xl shadow-slate-900/[0.06]">
             <CardHeader className="space-y-4 text-center">
