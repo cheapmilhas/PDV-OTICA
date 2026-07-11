@@ -252,7 +252,7 @@ Expected: FAIL ("createExamAppointment is not a function").
 
 ```typescript
 import { prisma } from "@/lib/prisma";
-import { notFoundError } from "@/lib/errors"; // conferir o nome real do helper no projeto
+import { notFoundError } from "@/lib/error-handler"; // verificado: exportado em error-handler.ts:269
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 import { logger } from "@/lib/logger";
 import type { Prisma } from "@prisma/client";
