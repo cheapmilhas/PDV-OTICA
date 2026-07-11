@@ -72,6 +72,20 @@ Sessão é **JWT** (`strategy: "jwt"`). ⚠️ **NÃO criar um segundo fetch de 
 - **`/redefinir-senha?t=`**: **troca o token da URL por estado efêmero ASAP** (lê o `t`, guarda em memória, limpa a URL via `history.replaceState`) + headers `Referrer-Policy: no-referrer` e `Cache-Control: no-store` (Codex: token em query string vaza em histórico/logs/referrer). Campos: nova senha + confirmar, **toggle mostrar/ocultar** (padrão do login redesenhado), **medidor de força client-side**. Mostra pra qual loja/usuário é. Becos: link expirado/usado → "Solicitar novo link".
 - **Atualizar `/login`**: o link "Esqueci minha senha" (hoje → WhatsApp placeholder) passa a apontar para `/esqueci-senha`.
 
+## Design system (irmão do login redesenhado — NÃO inventar novo)
+
+As duas páginas são da MESMA família visual do login (`src/app/(auth)/login/page.tsx`), coerência total. Ambas são páginas próprias centradas e responsivas (375/768/1024/1440) — NÃO somem no mobile.
+
+- **Container:** `min-h-screen flex items-center justify-center` com fundo `bg-gradient-to-br from-[#EAF0FB] via-white to-[#E6FAFF] p-4`. Card shadcn `max-w-md` centrado, `border-slate-200/80 shadow-xl`. Logo `<VisLogo height={44}>` no topo (aqui SIM tem logo — é a marca da página, não redundante como era no painel lateral).
+- **Cores/tokens:** `--brand-primary #2E6BFF`, `--brand-accent #22C3E6`, `--lp-*`. Botão primário com o gradiente do login: `linear-gradient(135deg,#2E6BFF,#22C3E6)`, texto branco, `hover:opacity-95`.
+- **Inputs:** shadcn `Input`+`Label` (label com `htmlFor`, nunca placeholder-only), foco automático no 1º campo, `aria-invalid` quando erro. Senha com toggle `Eye`/`EyeOff` (lucide) — mesmo componente do login.
+- **Erro inline:** `role="alert"` + `aria-live="assertive"`, caixa `border-destructive/30 bg-destructive/5` — idêntico ao login (nunca cor sozinha como indicador).
+- **Estado de sucesso** (`/esqueci-senha` após enviar): substitui o form por um bloco com ícone `MailCheck`/`CheckCircle` (lucide) verde + a mensagem genérica + botão secundário "Solicitar novo link". Feedback de sucesso visível (UX guideline).
+- **Loading:** botão com `Loader2` girando + texto "Enviando…"/"Salvando…", desabilitado durante async (target ≥44px).
+- **Medidor de força de senha** (`/redefinir-senha`, client-side, só visual — a regra server-side é comprimento 8-72): barra segmentada de 3-4 níveis (fraca/média/forte) com cor (`--brand-warning`→`--brand-primary`→`--brand-success`) + rótulo textual ("Senha fraca"/"média"/"forte"). Cor NUNCA é o único indicador — sempre com o rótulo textual junto (acessibilidade). Heurística simples client-side (comprimento + variedade de caracteres); não bloqueia o submit (a validação real é server-side).
+- **Confirmar senha:** erro inline "As senhas não coincidem" quando divergem, validado no blur/submit.
+- **prefers-reduced-motion:** respeitar (sem animações de barra se reduzido).
+
 ## Templates de e-mail
 
 Novos `case` em `src/lib/emails/templates.ts` (molde: `renderInviteEmail` — botão + link copiável):
