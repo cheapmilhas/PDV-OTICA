@@ -31,10 +31,12 @@ Carrossel **client-side, CSS puro, conteúdo estático em TS**. O Codex confirmo
 Adicionar um tipo discriminado e a lista de slides derivada:
 ```ts
 type PanelSlide =
-  | { kind: "feature"; slug: string; name: string; icon: string; caption: string; blurb: string }
+  | { kind: "feature"; slug: string; name: string; icon: string; caption: string; blurb: string; screenshot?: string }
   | { kind: "release"; date: string; title: string; items: string[] };
 ```
 Uma função `buildSlides(today?)` que: monta os slides de feature a partir de `features.ts` (na ordem definida), e prepende o slide de release SE houver release fresca. `loginPanelContent.releases` permanece como está (fonte da novidade).
+
+**Screenshots reais (fornecidos pelo dono):** cada feature pode ter um `screenshot` — caminho para um PNG **real da tela do sistema**, capturado pelo dono no dogfood de produção (dados reais/populados, sem PII visível). Os arquivos vão em `public/features/<slug>.png`. Um mapa `featureScreenshots: Record<slug, string>` em `login-panel-content.ts` associa slug→caminho; `buildSlides` preenche `screenshot` quando o arquivo estiver mapeado. **Fallback:** enquanto um slug não tiver screenshot, o slide usa o mockup CSS (BrowserFrame + ícone). Assim a feature funciona já, e cada print que o dono enviar substitui um mockup por tela real — incremental, sem bloquear.
 
 ### 2. `login-feature-carousel.tsx` (novo, `"use client"`)
 `"use client"` só pelo estado do índice + timer.
@@ -44,7 +46,7 @@ Uma função `buildSlides(today?)` que: monta os slides de feature a partir de `
 - **reduced-motion**: `matchMedia("(prefers-reduced-motion: reduce)")` → sem auto-avanço, sem translateX (troca instantânea), dots continuam funcionais.
 - **A11y**: container com `role="group"` + `aria-roledescription="carrossel"` + `aria-label`. `aria-live="off"` **sempre** (auto-rotação nunca anuncia; navegação manual muda o slide visível, suficiente para o contexto de login — decisão explícita, não alterna para polite). Dots são `<button>` com `aria-label` ("Ir para novidade N" / "Ir para funcionalidade: {name}") e `aria-current="true"` no ativo. **Foco visível**: dots com `:focus-visible` usando anel `--brand-primary` (WCAG 2.4.7 — o fundo do painel é claro, o foco default não seria visível).
 - **Teclado**: `ArrowRight`/`ArrowLeft` no container avançam/retrocedem o slide **e pausam o auto-avanço** (o usuário assumiu controle); Tab alcança os dots, Enter/Space ativa. Sem Cima/Baixo (evita conflito com scroll).
-- Cada slide: mini-mockup em CSS usando `BrowserFrame` (`src/components/landing-layout/browser-frame.tsx`) com ícone lucide grande + `caption`; abaixo, `name` + `blurb`. Slide de release: mostra "Novidades" + título + bullets + selo de recência (como hoje).
+- Cada slide de feature: se `screenshot` existe → renderiza o PNG real dentro do `BrowserFrame` (via `next/image`, `width`/`height` explícitos + `style={{width:"auto"}}`, padrão do projeto); senão → fallback mockup CSS (`BrowserFrame` + ícone lucide grande + `caption`). Abaixo do frame: `name` + `blurb`. Slide de release: "Novidades" + título + bullets + selo de recência (como hoje).
 - Máx. 6 slides.
 
 ### 3. `login-side-panel.tsx` (integrar)
@@ -79,11 +81,15 @@ Puramente visual. NÃO toca `signIn`/`signOut`/`handleSubmit`/`formData` em `pag
 - Teclado: `ArrowRight`/`ArrowLeft` no container mudam o slide e pausam o auto-avanço.
 - `buildSlides` com 1 slide → sem dots e sem auto-avanço; com 0 → carrossel não renderiza.
 - Fallback: feature sem `mockupCaption` → caption = `name`.
+- Slide com `screenshot` → renderiza `<img>`/next-image do PNG; slide sem → renderiza o mockup CSS (BrowserFrame + ícone). Ambos os caminhos testados.
 - Zero fetch: nenhum `fetch`/`XMLHttpRequest` chamado (spy).
 - `document.hidden` → pausa.
 
+## Dependência do dono (fora do código)
+Screenshots reais das telas do Vis, capturados no dogfood de produção (dados populados, **sem PII visível** — recortar/escolher telas seguras, pois a imagem fica pública na tela de login). Formato: PNG, proporção de tela de navegador. Salvar em `public/features/<slug>.png` (slugs: `leitura-de-receita-ia`, `ordem-de-servico-otica`, `gestao-financeira-otica`, `controle-de-estoque-otica`, `pdv-para-otica`). O carrossel funciona SEM eles (fallback mockup CSS); cada print enviado melhora um slide. Não bloqueante para a v1.
+
 ## Fora de escopo
 - Funil/WhatsApp como feature (v2, precisa texto novo).
-- Screenshots reais PNG do produto (mockup CSS basta).
 - Fotos de pessoas (decidido: não).
 - CMS/banco (estático basta).
+- Popular seed fake para gerar screenshots (decidido: dono captura no dogfood real).
