@@ -196,3 +196,55 @@ describe("saas-invoice-created — hardening (Fase 2)", () => {
     ).toThrow();
   });
 });
+
+describe("template password-reset (reset self-service)", () => {
+  it("renderiza 1 link com URL, label e menção a 1 hora", () => {
+    const { html, text } = renderEmailTemplate("password-reset", {
+      links: [{ label: "Loja A", url: "https://vis.app.br/redefinir-senha?t=a.b" }],
+    });
+    expect(html).toContain("https://vis.app.br/redefinir-senha?t=a.b");
+    expect(html).toContain("Loja A");
+    expect(html).toContain("1 hora");
+    expect(text).toContain("https://vis.app.br/redefinir-senha?t=a.b");
+  });
+
+  it("renderiza 2 links (um botão por loja)", () => {
+    const { html } = renderEmailTemplate("password-reset", {
+      links: [
+        { label: "Loja A", url: "https://vis.app.br/redefinir-senha?t=a" },
+        { label: "Loja B", url: "https://vis.app.br/redefinir-senha?t=b" },
+      ],
+    });
+    expect(html).toContain("Loja A");
+    expect(html).toContain("Loja B");
+    expect(html).toContain("https://vis.app.br/redefinir-senha?t=a");
+    expect(html).toContain("https://vis.app.br/redefinir-senha?t=b");
+  });
+
+  it("escapa HTML do label (anti-injeção)", () => {
+    const { html } = renderEmailTemplate("password-reset", {
+      links: [{ label: "Loja <script>", url: "https://vis.app.br/redefinir-senha?t=a" }],
+    });
+    expect(html).not.toContain("<script>");
+    expect(html).toContain("&lt;script&gt;");
+  });
+
+  it("exige ao menos 1 link (schema .min(1))", () => {
+    expect(() => renderEmailTemplate("password-reset", { links: [] })).toThrow();
+  });
+});
+
+describe("template password-changed (confirmação de senha alterada)", () => {
+  it("renderiza com horário e menção a suporte", () => {
+    const { html } = renderEmailTemplate("password-changed", { when: "11/07/2026 14:30" });
+    expect(html).toContain("alterada");
+    expect(html).toContain("11/07/2026 14:30");
+    expect(html.toLowerCase()).toContain("suporte");
+  });
+
+  it("renderiza sem `when` sem quebrar", () => {
+    const { html } = renderEmailTemplate("password-changed", {});
+    expect(html).toContain("alterada");
+    expect(html.toLowerCase()).toContain("suporte");
+  });
+});
