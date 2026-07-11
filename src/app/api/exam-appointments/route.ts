@@ -4,7 +4,6 @@ import {
   requirePermission,
   getCompanyId,
   getUserId,
-  getBranchId,
 } from "@/lib/auth-helpers";
 import { createdResponse, successResponse } from "@/lib/api-response";
 import { handleApiError } from "@/lib/error-handler";
@@ -45,9 +44,8 @@ export async function GET(req: NextRequest) {
     const { searchParams } = new URL(req.url);
     const dateParam = searchParams.get("date");
     const day = dateParam ? new Date(dateParam) : new Date();
-    const sessionBranch = await getBranchId().catch(() => null);
-    const queryBranch = searchParams.get("branchId");
-    const branchId = sessionBranch ?? queryBranch ?? null;
+    const qb = searchParams.get("branchId");
+    const branchId = qb && qb !== "ALL" ? qb : null;
     const list = await listExamAppointmentsForDay(day, companyId, branchId);
     return successResponse(list);
   } catch (error) {

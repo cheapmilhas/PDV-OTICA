@@ -121,4 +121,30 @@ describe("GET /api/exam-appointments", () => {
     const [, companyIdArg] = listExamAppointmentsForDay.mock.calls[0];
     expect(companyIdArg).toBe(COMPANY_ID);
   });
+
+  it("sem ?branchId (Todas as filiais) -> branchId=null, NÃO usa a filial da sessão", async () => {
+    const res = await GET(makeGetRequest());
+
+    expect(res.status).toBe(200);
+    expect(listExamAppointmentsForDay).toHaveBeenCalledTimes(1);
+    const [, , branchIdArg] = listExamAppointmentsForDay.mock.calls[0];
+    expect(branchIdArg).toBeNull();
+    expect(branchIdArg).not.toBe(BRANCH_ID);
+  });
+
+  it("?branchId=ALL -> branchId=null", async () => {
+    const res = await GET(makeGetRequest("?branchId=ALL"));
+
+    expect(res.status).toBe(200);
+    const [, , branchIdArg] = listExamAppointmentsForDay.mock.calls[0];
+    expect(branchIdArg).toBeNull();
+  });
+
+  it("?branchId=branch-2 -> chama com 'branch-2' (seletor do cliente manda)", async () => {
+    const res = await GET(makeGetRequest("?branchId=branch-2"));
+
+    expect(res.status).toBe(200);
+    const [, , branchIdArg] = listExamAppointmentsForDay.mock.calls[0];
+    expect(branchIdArg).toBe("branch-2");
+  });
 });
