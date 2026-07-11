@@ -74,9 +74,10 @@ Contexto: `createUserSchema` (linha 82) tem `email: z.string().email()`. Checage
 - [ ] **Step 3: implementar:**
   - `createUserSchema` (linha 82): `email: z.string().email()` → **`email: z.string().min(1)`**; adicionar `recoveryEmail: z.string().email().or(z.literal("")).nullable().optional()`.
   - Importar `normalizeLoginEmail` (Task 1) e `normalizeRecoveryEmail` de `@/services/user.service`.
-  - Antes de criar: `const email = normalizeLoginEmail(parsed.data.email)`. Usar esse `email` normalizado tanto na checagem de duplicidade (156-161) quanto no `create`.
-  - No `create`, adicionar `recoveryEmail: normalizeRecoveryEmail(parsed.data.recoveryEmail)`.
+  - ⚠️ O `email` vem do `parsed.data`. Normalizar UMA vez logo após o parse: `const email = normalizeLoginEmail(parsed.data.email)`. Usar esse `email` na checagem de duplicidade (156-161).
+  - ⚠️ O `create` real é `tx.user.create` DENTRO de um `$transaction` (linhas **207-216**), escrevendo `email: email.toLowerCase().trim()` na **linha 211**. Trocar a linha 211 por `email,` (já normalizado acima — NÃO re-aplicar toLowerCase) e adicionar `recoveryEmail: normalizeRecoveryEmail(parsed.data.recoveryEmail),` no mesmo `data`.
   - GET de lista (select 51-63): adicionar `recoveryEmail: true`.
+  - (Opcional) a resposta 201 do POST não devolve recoveryEmail — só adicionar se algum consumidor precisar; a lista (GET) já basta para o modal.
 - [ ] **Step 4: rodar → passa.** + `./node_modules/.bin/tsc --noEmit` sem novos erros.
 - [ ] **Step 5: commit** — `feat(fase2): POST super admin aceita login-curto (normalizado) + recoveryEmail; GET lista devolve recoveryEmail`
 
@@ -118,7 +119,7 @@ Contexto: `interface UserData` (41-49) sem recoveryEmail. `CreateUserModal` (399
 - [ ] **Step 3: implementar:**
   - `interface UserData` (41-49): adicionar `recoveryEmail?: string | null;`.
   - **EditUserModal:**
-    - state: adicionar `const [recoveryEmail, setRecoveryEmail] = useState(user.recoveryEmail ?? "")`. REMOVER o `setEmail` do uso no body.
+    - state: adicionar `const [recoveryEmail, setRecoveryEmail] = useState(user.recoveryEmail ?? "")`. **REMOVER a declaração `const [email, setEmail] = useState(user.email)` (linha 720) inteira** — o login vira read-only usando `user.email` direto, então o state `email`/`setEmail` fica órfão (código morto; remover para não deixar var não-usada).
     - campo de login: virar READ-ONLY. Trocar por um Input `readOnly` (ou texto) com `value={user.email.endsWith("@login") ? user.email.replace("@login","") : user.email}`, `className` com `bg-muted`, `aria-readonly`, SEM `type="email"`, SEM `required`. Label "Login (usuário)". Nota discreta se sintético: "não é um e-mail — é o usuário de acesso".
     - adicionar campo "E-mail de recuperação": `<Label>` + `<Input type="email" value={recoveryEmail} onChange={e=>setRecoveryEmail(e.target.value)} />` + ajuda "Para onde enviamos o link se a senha for esquecida."
     - body do PATCH (~735): trocar `{name, email, role, branchId}` por `{name, role, branchId, recoveryEmail}` (SEM email).
@@ -140,7 +141,7 @@ Contexto: campo de login rotulado hoje; normalização inline `${login}@login` n
 - [ ] **Step 1: teste (jsdom, se viável)** — o form de criar mostra label "Login (usuário)"; comportamento de submit inalterado. Se inviável, teste mínimo/documentar.
 - [ ] **Step 2: rodar → falha (ou ajustar assert do rótulo).**
 - [ ] **Step 3: implementar:**
-  - Rótulo do campo de login → **"Login (usuário)"** + microcopy `text-xs text-muted-foreground` "Nome curto que a pessoa usa para entrar; não precisa ser e-mail."
+  - Rótulo do campo de login → **"Login (usuário)"** — há DOIS labels a trocar: o de criar (`<Label>Login *</Label>` ~linha 444) e o de editar (`<Label>Login</Label>` ~linha 520). + microcopy `text-xs text-muted-foreground` "Nome curto que a pessoa usa para entrar; não precisa ser e-mail." (ao menos no de criar).
   - Importar `normalizeLoginEmail` e substituir as 2 cópias inline (144, 196): `loginValue.includes("@") ? loginValue : ${loginValue.toLowerCase()}@login` → `normalizeLoginEmail(loginValue)`. Comportamento idêntico.
 - [ ] **Step 4: rodar → passa.** + tsc.
 - [ ] **Step 5: commit** — `feat(fase2): dashboard usuarios — rótulo "Login (usuário)" + normalizeLoginEmail`
