@@ -37,6 +37,7 @@ interface Employee {
   role: string;
   active: boolean;
   defaultCommissionPercent: number | null;
+  recoveryEmail?: string | null;
   createdAt: string;
 }
 
@@ -55,6 +56,7 @@ function FuncionariosPage() {
   const [form, setForm] = useState({
     name: "",
     defaultCommissionPercent: "" as string | number,
+    recoveryEmail: "",
   });
 
   useEffect(() => {
@@ -90,7 +92,7 @@ function FuncionariosPage() {
 
   function openCreate() {
     setSelectedEmployee(null);
-    setForm({ name: "", defaultCommissionPercent: "" });
+    setForm({ name: "", defaultCommissionPercent: "", recoveryEmail: "" });
     setCreateDialogOpen(true);
   }
 
@@ -99,6 +101,7 @@ function FuncionariosPage() {
     setForm({
       name: emp.name,
       defaultCommissionPercent: emp.defaultCommissionPercent ?? "",
+      recoveryEmail: emp.recoveryEmail ?? "",
     });
     setEditDialogOpen(true);
   }
@@ -126,6 +129,10 @@ function FuncionariosPage() {
 
       if (form.defaultCommissionPercent !== "" && form.defaultCommissionPercent !== null) {
         body.defaultCommissionPercent = Number(form.defaultCommissionPercent);
+      }
+
+      if (form.recoveryEmail.trim()) {
+        body.recoveryEmail = form.recoveryEmail.trim();
       }
 
       const res = await fetch("/api/users", {
@@ -163,6 +170,10 @@ function FuncionariosPage() {
       } else {
         body.defaultCommissionPercent = null;
       }
+
+      // Envia mesmo vazio para permitir LIMPAR o e-mail de recuperação;
+      // o backend (sanitizeUserDTO) mapeia "" -> null.
+      body.recoveryEmail = form.recoveryEmail.trim();
 
       const res = await fetch(`/api/users/${selectedEmployee.id}`, {
         method: "PUT",
@@ -367,6 +378,17 @@ function FuncionariosPage() {
                 placeholder="Ex: 5"
               />
             </div>
+
+            <div className="space-y-2">
+              <Label>E-mail de recuperação</Label>
+              <Input
+                type="email"
+                value={form.recoveryEmail}
+                onChange={(e) => setForm({ ...form, recoveryEmail: e.target.value })}
+                placeholder="email@exemplo.com"
+              />
+              <p className="text-xs text-muted-foreground">Serve para a pessoa recuperar a senha sozinha por e-mail.</p>
+            </div>
           </div>
 
           <DialogFooter>
@@ -407,6 +429,17 @@ function FuncionariosPage() {
                 onChange={(e) => setForm({ ...form, defaultCommissionPercent: e.target.value })}
                 placeholder="Ex: 5"
               />
+            </div>
+
+            <div className="space-y-2">
+              <Label>E-mail de recuperação</Label>
+              <Input
+                type="email"
+                value={form.recoveryEmail}
+                onChange={(e) => setForm({ ...form, recoveryEmail: e.target.value })}
+                placeholder="email@exemplo.com"
+              />
+              <p className="text-xs text-muted-foreground">Serve para a pessoa recuperar a senha sozinha por e-mail.</p>
             </div>
           </div>
 
