@@ -4,6 +4,7 @@ import { z } from "zod";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { sendEmail } from "@/lib/emails/resend";
+import { renderEmailTemplate } from "@/lib/emails/templates";
 import {
   checkRateLimit,
   clientIp,
@@ -120,28 +121,16 @@ async function doWork(email: string, request: Request): Promise<void> {
     // 8. Envia UM e-mail com N links rotulados por empresa.
     if (links.length === 0) return;
 
-    const linkFor = (selector: string, verifier: string) =>
-      `${baseUrl}/redefinir-senha?t=${selector}.${verifier}`;
+    const templateLinks = links.map((l) => ({
+      label: l.companyName
+        ? `Redefinir senha — ${l.companyName}`
+        : "Redefinir senha",
+      url: `${baseUrl}/redefinir-senha?t=${l.selector}.${l.verifier}`,
+    }));
 
-    // TODO Task 6: trocar por renderEmailTemplate("password-reset", ...)
-    const rows = links
-      .map((l) => {
-        const url = linkFor(l.selector, l.verifier);
-        const label = l.companyName
-          ? `Redefinir senha — ${l.companyName}`
-          : "Redefinir senha";
-        return {
-          html: `<p><a href="${url}">${label}</a></p>`,
-          text: `${label}: ${url}`,
-        };
-      });
-
-    const html = `<p>Recebemos um pedido para recuperar seu acesso ao Vis.</p>${rows
-      .map((r) => r.html)
-      .join("")}<p>Se não foi você, ignore este e-mail. Os links expiram em 1 hora.</p>`;
-    const text = `Recebemos um pedido para recuperar seu acesso ao Vis.\n\n${rows
-      .map((r) => r.text)
-      .join("\n")}\n\nSe não foi você, ignore este e-mail. Os links expiram em 1 hora.`;
+    const { html, text } = renderEmailTemplate("password-reset", {
+      links: templateLinks,
+    });
 
     try {
       await sendEmail({

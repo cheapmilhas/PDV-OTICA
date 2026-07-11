@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { sendEmail } from "@/lib/emails/resend";
+import { renderEmailTemplate } from "@/lib/emails/templates";
 import { clientIp, rateLimitResponse } from "@/lib/rate-limit";
 import { splitToken, verifyToken } from "@/services/password-reset.service";
 
@@ -139,13 +140,12 @@ export async function POST(request: Request) {
   );
   if (!isInternal) {
     try {
-      // TODO Task 6: renderEmailTemplate("password-changed", ...)
-      const html =
-        "<p>Sua senha de acesso ao Vis foi alterada.</p>" +
-        "<p>Se não foi você, entre em contato com o suporte imediatamente.</p>";
-      const text =
-        "Sua senha de acesso ao Vis foi alterada.\n\n" +
-        "Se não foi você, entre em contato com o suporte imediatamente.";
+      const when = new Intl.DateTimeFormat("pt-BR", {
+        dateStyle: "short",
+        timeStyle: "short",
+        timeZone: "America/Fortaleza",
+      }).format(new Date());
+      const { html, text } = renderEmailTemplate("password-changed", { when });
       await sendEmail({
         to: email,
         subject: "Sua senha foi alterada",
