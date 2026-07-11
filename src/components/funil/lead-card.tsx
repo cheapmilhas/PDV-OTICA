@@ -17,11 +17,13 @@ import {
   UserCheck,
   Flame,
   FileText,
+  CalendarClock,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { differenceInCalendarDays } from "date-fns";
 import { intentLabel, INTENT_OPTIONS } from "@/lib/contact-intent-label";
 import { useState } from "react";
+import { AgendarExameDialog } from "./agendar-exame-dialog";
 
 /** Estrutura do lead consumida do GET /api/leads (envelope `.data`). */
 export interface Lead {
@@ -57,6 +59,8 @@ interface LeadCardProps {
   onCorrectIntent?: (leadId: string, intent: string) => void;
   /** Busca a última receita do cliente vinculado (gancho de 2ª via). */
   onPrescriptionHint?: (leadId: string) => void;
+  /** Chamado após agendar um exame com sucesso (para o container recarregar). */
+  onExamScheduled?: () => void;
 }
 
 const SOURCE_ICON: Record<string, React.ElementType> = {
@@ -77,10 +81,11 @@ const SOURCE_LABEL: Record<string, string> = {
   OTHER: "Outro",
 };
 
-export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent, onPrescriptionHint }: LeadCardProps) {
+export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent, onPrescriptionHint, onExamScheduled }: LeadCardProps) {
   const { attributes, listeners, setNodeRef, transform, isDragging } =
     useDraggable({ id: lead.id, data: { lead } });
   const [intentMenuOpen, setIntentMenuOpen] = useState(false);
+  const [agendarOpen, setAgendarOpen] = useState(false);
 
   const style = {
     transform: CSS.Translate.toString(transform),
@@ -272,6 +277,26 @@ export function LeadCard({ lead, onConfirmCustomer, onCorrectIntent, onPrescript
       {lead.lostReason && (
         <p className="mt-1 text-xs text-red-600">Motivo: {lead.lostReason}</p>
       )}
+
+      <button
+        type="button"
+        onPointerDown={(e) => e.stopPropagation()}
+        onClick={(e) => {
+          e.stopPropagation();
+          setAgendarOpen(true);
+        }}
+        className="mt-2 inline-flex items-center gap-1 rounded-full border border-border px-2 py-0.5 text-[10px] font-medium text-muted-foreground hover:bg-muted"
+      >
+        <CalendarClock className="h-2.5 w-2.5" />
+        Agendar exame
+      </button>
+
+      <AgendarExameDialog
+        leadId={lead.id}
+        open={agendarOpen}
+        onOpenChange={setAgendarOpen}
+        onScheduled={onExamScheduled}
+      />
     </div>
   );
 }
