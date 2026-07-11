@@ -45,6 +45,8 @@ describe("colunas de ótica", () => {
     ]);
     const examDone = DEFAULT_LEAD_STAGES.find((s) => s.name === "Exame feito");
     expect(examDone?.systemKey).toBe(LEAD_STAGE_KEYS.EXAM_DONE);
+    const examScheduled = DEFAULT_LEAD_STAGES.find((s) => s.name === "Exame agendado");
+    expect(examScheduled?.systemKey).toBe(LEAD_STAGE_KEYS.EXAM_SCHEDULED);
     const orders = DEFAULT_LEAD_STAGES.map((s) => s.order);
     expect(orders).toEqual([...orders].sort((a, b) => a - b));
     expect(DEFAULT_LEAD_STAGES.filter((s) => s.isWon)).toHaveLength(1);

@@ -5,7 +5,7 @@ import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 export const DEFAULT_LEAD_STAGES = [
   { name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null as string | null },
   { name: "Em atendimento", order: 1, isWon: false, isLost: false, systemKey: null as string | null },
-  { name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: null as string | null },
+  { name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED as string | null },
   { name: "Exame feito", order: 3, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE as string | null },
   { name: "Orçamento enviado", order: 4, isWon: false, isLost: false, systemKey: null as string | null },
   { name: "Aguardando OS/lab", order: 5, isWon: false, isLost: false, systemKey: null as string | null },
