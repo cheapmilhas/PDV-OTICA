@@ -13,6 +13,16 @@ import { createPaginationMeta, getPaginationParams } from "@/lib/api-response";
 import type { User } from "@prisma/client";
 
 /**
+ * Normaliza o recoveryEmail: trim + lowercase; vazio ou não-string → null.
+ * Fonte única usada por create/update para consistência com o índice/login.
+ */
+export const normalizeRecoveryEmail = (v: unknown): string | null => {
+  if (typeof v !== "string") return null;
+  const t = v.trim().toLowerCase();
+  return t === "" ? null : t;
+};
+
+/**
  * Service de usuários/funcionários
  * Camada de business logic para operações de User
  */
@@ -67,6 +77,7 @@ export class UserService {
           id: true,
           name: true,
           email: true,
+          recoveryEmail: true,
           role: true,
           active: true,
           defaultCommissionPercent: true,
@@ -101,6 +112,7 @@ export class UserService {
         id: true,
         name: true,
         email: true,
+        recoveryEmail: true,
         role: true,
         active: true,
         defaultCommissionPercent: true,
@@ -146,6 +158,7 @@ export class UserService {
       data: {
         ...userData,
         email: data.email.toLowerCase().trim(),
+        recoveryEmail: normalizeRecoveryEmail((data as any).recoveryEmail),
         passwordHash,
         companyId,
       },
@@ -153,6 +166,7 @@ export class UserService {
         id: true,
         name: true,
         email: true,
+        recoveryEmail: true,
         role: true,
         active: true,
         defaultCommissionPercent: true,
@@ -212,6 +226,10 @@ export class UserService {
     if (updateData.email) {
       updateData.email = String(updateData.email).toLowerCase().trim();
     }
+    // Normaliza recoveryEmail se veio no payload (trim/lowercase/vazio→null).
+    if ("recoveryEmail" in updateData) {
+      updateData.recoveryEmail = normalizeRecoveryEmail(updateData.recoveryEmail);
+    }
 
     // Atualiza
     const user = await prisma.user.update({
@@ -221,6 +239,7 @@ export class UserService {
         id: true,
         name: true,
         email: true,
+        recoveryEmail: true,
         role: true,
         active: true,
         defaultCommissionPercent: true,
