@@ -77,7 +77,7 @@ describe("colunas de ótica", () => {
     expect(call.data.every((s: { companyId: string }) => s.companyId === "company_1")).toBe(true);
   });
 
-  it("ensureOpticalStages: idempotente — ótica que já tem as colunas não cria nada", async () => {
+  it("ensureOpticalStages: idempotente — ótica que já tem as colunas não cria nada (mas 'Exame agendado' sem flag ainda recebe o backfill)", async () => {
     prismaMock.leadStage.findMany.mockResolvedValue([
       { id: "s0", name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null },
       { id: "s2", name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: null },
@@ -89,7 +89,12 @@ describe("colunas de ótica", () => {
 
     expect(created).toBe(0);
     expect(prismaMock.leadStage.createMany).not.toHaveBeenCalled();
-    expect(prismaMock.leadStage.update).not.toHaveBeenCalled();
+    // Backfill da flag EXAM_SCHEDULED — "Exame agendado" já existia por nome mas
+    // sem systemKey (fixture reflete o cenário Atacadão pré-feature).
+    expect(prismaMock.leadStage.update).toHaveBeenCalledWith({
+      where: { id: "s2" },
+      data: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+    });
   });
 
   it("ensureOpticalStages: colunas novas entram ANTES das terminais (Fechado/Perdido ficam por último)", async () => {
@@ -218,6 +223,70 @@ describe("colunas de ótica", () => {
       "Perdido",
       "Garantia",
     ]);
+  });
+  it("ensureOpticalStages: backfill Atacadão — ótica já tem TODAS as colunas mas 'Exame agendado' está com systemKey null → grava a flag EXAM_SCHEDULED", async () => {
+    prismaMock.leadStage.findMany.mockResolvedValue([
+      { id: "s0", name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null },
+      { id: "s1", name: "Em atendimento", order: 1, isWon: false, isLost: false, systemKey: null },
+      { id: "s2", name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: null },
+      { id: "s3", name: "Exame feito", order: 3, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE },
+      { id: "s4", name: "Orçamento enviado", order: 4, isWon: false, isLost: false, systemKey: null },
+      { id: "s5", name: "Aguardando OS/lab", order: 5, isWon: false, isLost: false, systemKey: null },
+      { id: "s6", name: "Fechado", order: 6, isWon: true, isLost: false, systemKey: null },
+      { id: "s7", name: "Perdido", order: 7, isWon: false, isLost: true, systemKey: null },
+    ]);
+
+    const created = await ensureOpticalStages("company_1");
+
+    expect(created).toBe(0);
+    expect(prismaMock.leadStage.createMany).not.toHaveBeenCalled();
+    expect(prismaMock.leadStage.update).toHaveBeenCalledWith({
+      where: { id: "s2" },
+      data: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+    });
+  });
+
+  it("ensureOpticalStages: idempotente — 'Exame agendado' já com a flag EXAM_SCHEDULED não dispara update de novo", async () => {
+    prismaMock.leadStage.findMany.mockResolvedValue([
+      { id: "s0", name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null },
+      { id: "s1", name: "Em atendimento", order: 1, isWon: false, isLost: false, systemKey: null },
+      { id: "s2", name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+      { id: "s3", name: "Exame feito", order: 3, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE },
+      { id: "s4", name: "Orçamento enviado", order: 4, isWon: false, isLost: false, systemKey: null },
+      { id: "s5", name: "Aguardando OS/lab", order: 5, isWon: false, isLost: false, systemKey: null },
+      { id: "s6", name: "Fechado", order: 6, isWon: true, isLost: false, systemKey: null },
+      { id: "s7", name: "Perdido", order: 7, isWon: false, isLost: true, systemKey: null },
+    ]);
+
+    const created = await ensureOpticalStages("company_1");
+
+    expect(created).toBe(0);
+    expect(prismaMock.leadStage.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED } }),
+    );
+  });
+
+  it("ensureOpticalStages: anti-colisão — se OUTRA coluna já tem EXAM_SCHEDULED, não grava a flag numa segunda coluna 'Exame agendado' sem flag", async () => {
+    prismaMock.leadStage.findMany.mockResolvedValue([
+      { id: "s0", name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null },
+      { id: "s1", name: "Em atendimento", order: 1, isWon: false, isLost: false, systemKey: null },
+      // Coluna renomeada por engano, mas já detém a flag estável.
+      { id: "sOld", name: "Agendamento antigo", order: 2, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+      // Uma segunda coluna com o NOME "Exame agendado", sem flag (cenário raro/defensivo).
+      { id: "s2", name: "Exame agendado", order: 3, isWon: false, isLost: false, systemKey: null },
+      { id: "s3", name: "Exame feito", order: 4, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE },
+      { id: "s4", name: "Orçamento enviado", order: 5, isWon: false, isLost: false, systemKey: null },
+      { id: "s5", name: "Aguardando OS/lab", order: 6, isWon: false, isLost: false, systemKey: null },
+      { id: "s6", name: "Fechado", order: 7, isWon: true, isLost: false, systemKey: null },
+      { id: "s7", name: "Perdido", order: 8, isWon: false, isLost: true, systemKey: null },
+    ]);
+
+    const created = await ensureOpticalStages("company_1");
+
+    expect(created).toBe(0);
+    expect(prismaMock.leadStage.update).not.toHaveBeenCalledWith(
+      expect.objectContaining({ data: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED } }),
+    );
   });
 });
 

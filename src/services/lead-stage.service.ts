@@ -106,6 +106,25 @@ export async function ensureOpticalStages(companyId: string): Promise<number> {
   const existingNames = new Set(existing.map((s) => s.name));
   const hasExamDoneKey = existing.some((s) => s.systemKey === LEAD_STAGE_KEYS.EXAM_DONE);
 
+  // Backfill de flag: óticas criadas ANTES desta feature já têm a coluna "Exame
+  // agendado" por nome, mas sem a systemKey estável (o create em lote abaixo só
+  // roda para colunas FALTANTES). Sem isto, o move de card (que acha o estágio
+  // por `findFirst({ systemKey: EXAM_SCHEDULED })`) nunca localiza a coluna em
+  // óticas legadas. Roda ANTES do early-return (não depende de haver coluna
+  // faltando). Idempotente: no-op se a flag já estiver gravada em algum estágio.
+  const hasExamScheduledKey = existing.some((s) => s.systemKey === LEAD_STAGE_KEYS.EXAM_SCHEDULED);
+  if (!hasExamScheduledKey) {
+    const legacyExamScheduled = existing.find(
+      (s) => s.name === "Exame agendado" && s.systemKey !== LEAD_STAGE_KEYS.EXAM_SCHEDULED,
+    );
+    if (legacyExamScheduled) {
+      await prisma.leadStage.update({
+        where: { id: legacyExamScheduled.id },
+        data: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+      });
+    }
+  }
+
   const missing = OPTICAL_STAGES.filter((s) => !existingNames.has(s.name));
   if (missing.length === 0) return 0;
 
