@@ -72,7 +72,7 @@ describe("recoveryEmail no schema de usuário", () => {
     expect(createUserSchema.safeParse({ name: "A", email: "a", password: "12345678", role: "VENDEDOR" }).success).toBe(true);
     expect(createUserSchema.safeParse({ name: "A", email: "a", password: "12345678", role: "VENDEDOR", recoveryEmail: "nao-email" }).success).toBe(false);
   });
-  it("sanitizeUserDTO PRESERVA recoveryeMail e mapeia vazio para null (permite limpar)", () => {
+  it("sanitizeUserDTO PRESERVA recoveryEmail e mapeia vazio para null (permite limpar)", () => {
     expect(sanitizeUserDTO({ name: "A", recoveryEmail: "" }).recoveryEmail).toBeNull();
     expect(sanitizeUserDTO({ name: "A", recoveryEmail: "x@y.com" }).recoveryEmail).toBe("x@y.com");
     expect("recoveryEmail" in sanitizeUserDTO({ name: "A" })).toBe(false); // ausente → não aparece
