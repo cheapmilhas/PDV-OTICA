@@ -4,6 +4,8 @@
  * sistema recebem uma flag (não é um systemKey global — decisão /forja 2026-07-09).
  */
 export const LEAD_STAGE_KEYS = {
+  /** "Exame agendado": destino do agendamento de exame (ExamAppointment). */
+  EXAM_SCHEDULED: "EXAM_SCHEDULED",
   /** "Exame feito": destino do sinal automático de venda só-de-exame. */
   EXAM_DONE: "EXAM_DONE",
 } as const;

@@ -289,7 +289,7 @@ export function FunilBoard({ stages, leads, onRefresh }: FunilBoardProps) {
                 totalValue={totalValue}
               >
                 {shown.map((lead) => (
-                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} onCorrectIntent={handleCorrectIntent} onPrescriptionHint={handlePrescriptionHint} />
+                  <LeadCard key={lead.id} lead={lead} onConfirmCustomer={handleConfirmCustomer} onCorrectIntent={handleCorrectIntent} onPrescriptionHint={handlePrescriptionHint} onExamScheduled={onRefresh} />
                 ))}
 
                 {stageLeads.length === 0 && (

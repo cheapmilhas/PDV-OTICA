@@ -8,9 +8,10 @@ import {
   DropdownMenuItem,
 } from "@/components/ui/dropdown-menu";
 import { Button } from "@/components/ui/button";
-import { ChevronDown, Loader2 } from "lucide-react";
+import { ChevronDown, Loader2, CalendarClock } from "lucide-react";
 import toast from "react-hot-toast";
 import type { LeadStage } from "@/components/funil/funil-board";
+import { AgendarExameDialog } from "@/components/funil/agendar-exame-dialog";
 
 interface MoverColunaInboxProps {
   leadId: string;
@@ -30,6 +31,7 @@ interface MoverColunaInboxProps {
  */
 export function MoverColunaInbox({ leadId, stages, onMoved }: MoverColunaInboxProps) {
   const [busy, setBusy] = useState(false);
+  const [agendarOpen, setAgendarOpen] = useState(false);
   const options = [...stages].filter((s) => !s.isLost).sort((a, b) => a.order - b.order);
 
   async function handleMove(stageId: string) {
@@ -52,21 +54,34 @@ export function MoverColunaInbox({ leadId, stages, onMoved }: MoverColunaInboxPr
   }
 
   return (
-    <DropdownMenu>
-      <DropdownMenuTrigger asChild>
-        <Button type="button" variant="outline" size="sm" disabled={busy} aria-label="Mover lead para coluna">
-          {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
-          Mover para…
-          <ChevronDown className="ml-1 h-4 w-4" />
-        </Button>
-      </DropdownMenuTrigger>
-      <DropdownMenuContent align="end">
-        {options.map((s) => (
-          <DropdownMenuItem key={s.id} onSelect={() => handleMove(s.id)}>
-            {s.name}
+    <>
+      <DropdownMenu>
+        <DropdownMenuTrigger asChild>
+          <Button type="button" variant="outline" size="sm" disabled={busy} aria-label="Mover lead para coluna">
+            {busy ? <Loader2 className="mr-1 h-4 w-4 animate-spin" /> : null}
+            Mover para…
+            <ChevronDown className="ml-1 h-4 w-4" />
+          </Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuContent align="end">
+          {options.map((s) => (
+            <DropdownMenuItem key={s.id} onSelect={() => handleMove(s.id)}>
+              {s.name}
+            </DropdownMenuItem>
+          ))}
+          <DropdownMenuItem onSelect={() => setAgendarOpen(true)}>
+            <CalendarClock className="mr-2 h-4 w-4" />
+            Agendar exame
           </DropdownMenuItem>
-        ))}
-      </DropdownMenuContent>
-    </DropdownMenu>
+        </DropdownMenuContent>
+      </DropdownMenu>
+
+      <AgendarExameDialog
+        leadId={leadId}
+        open={agendarOpen}
+        onOpenChange={setAgendarOpen}
+        onScheduled={onMoved}
+      />
+    </>
   );
 }

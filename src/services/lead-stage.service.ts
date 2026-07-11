@@ -5,7 +5,7 @@ import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 export const DEFAULT_LEAD_STAGES = [
   { name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null as string | null },
   { name: "Em atendimento", order: 1, isWon: false, isLost: false, systemKey: null as string | null },
-  { name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: null as string | null },
+  { name: "Exame agendado", order: 2, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED as string | null },
   { name: "Exame feito", order: 3, isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE as string | null },
   { name: "Orçamento enviado", order: 4, isWon: false, isLost: false, systemKey: null as string | null },
   { name: "Aguardando OS/lab", order: 5, isWon: false, isLost: false, systemKey: null as string | null },
@@ -71,7 +71,7 @@ export async function deleteStage(id: string, companyId: string) {
 
 /** As 3 colunas de ótica que uma ótica legada (funil de 5) ainda não tem. */
 const OPTICAL_STAGES = [
-  { name: "Exame agendado", isWon: false, isLost: false, systemKey: null as string | null },
+  { name: "Exame agendado", isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED as string | null },
   { name: "Exame feito", isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE as string | null },
   { name: "Aguardando OS/lab", isWon: false, isLost: false, systemKey: null as string | null },
 ] as const;
@@ -106,6 +106,25 @@ export async function ensureOpticalStages(companyId: string): Promise<number> {
   const existingNames = new Set(existing.map((s) => s.name));
   const hasExamDoneKey = existing.some((s) => s.systemKey === LEAD_STAGE_KEYS.EXAM_DONE);
 
+  // Backfill de flag: óticas criadas ANTES desta feature já têm a coluna "Exame
+  // agendado" por nome, mas sem a systemKey estável (o create em lote abaixo só
+  // roda para colunas FALTANTES). Sem isto, o move de card (que acha o estágio
+  // por `findFirst({ systemKey: EXAM_SCHEDULED })`) nunca localiza a coluna em
+  // óticas legadas. Roda ANTES do early-return (não depende de haver coluna
+  // faltando). Idempotente: no-op se a flag já estiver gravada em algum estágio.
+  const hasExamScheduledKey = existing.some((s) => s.systemKey === LEAD_STAGE_KEYS.EXAM_SCHEDULED);
+  if (!hasExamScheduledKey) {
+    const legacyExamScheduled = existing.find(
+      (s) => s.name === "Exame agendado" && s.systemKey !== LEAD_STAGE_KEYS.EXAM_SCHEDULED,
+    );
+    if (legacyExamScheduled) {
+      await prisma.leadStage.update({
+        where: { id: legacyExamScheduled.id },
+        data: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+      });
+    }
+  }
+
   const missing = OPTICAL_STAGES.filter((s) => !existingNames.has(s.name));
   if (missing.length === 0) return 0;
 
@@ -120,9 +139,18 @@ export async function ensureOpticalStages(companyId: string): Promise<number> {
     name: s.name,
     isWon: s.isWon,
     isLost: s.isLost,
-    // Não duplica a flag EXAM_DONE se a ótica já tem um estágio com ela (evita
-    // colisão do índice único parcial (companyId, systemKey)).
-    systemKey: s.systemKey === LEAD_STAGE_KEYS.EXAM_DONE && hasExamDoneKey ? null : s.systemKey,
+    // Não duplica a flag EXAM_DONE/EXAM_SCHEDULED se a ótica já tem um estágio
+    // com ela (evita colisão do índice único parcial (companyId, systemKey)).
+    // hasExamScheduledKey é lido de `existing` (ANTES do backfill acima já ter
+    // rodado) — mas isso não colide: se o backfill acabou de gravar a flag numa
+    // coluna EXISTENTE, essa coluna "Exame agendado" já estava em `existingNames`,
+    // logo não entra em `missing`/`toCreate`. As duas gravações (backfill de
+    // coluna existente vs. flag em coluna nova) são mutuamente exclusivas.
+    systemKey:
+      (s.systemKey === LEAD_STAGE_KEYS.EXAM_DONE && hasExamDoneKey) ||
+      (s.systemKey === LEAD_STAGE_KEYS.EXAM_SCHEDULED && hasExamScheduledKey)
+        ? null
+        : s.systemKey,
     order: insertAt + i,
     companyId,
   }));
