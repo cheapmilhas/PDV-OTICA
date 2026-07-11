@@ -1,5 +1,5 @@
-import Image from "next/image";
 import { Sparkles, MessageCircle } from "lucide-react";
+import { VisLogo } from "@/components/landing-layout/vis-logo";
 import { WHATSAPP_NUMBER, WHATSAPP_URL } from "@/lib/constants";
 import { daysAgo, formatRelative } from "@/lib/relative-date";
 import type { LoginPanelContent } from "./login-panel-content";
@@ -30,7 +30,7 @@ export function LoginSidePanel({ content, today }: LoginSidePanelProps) {
       className="hidden lg:flex w-80 flex-col justify-center gap-6 rounded-2xl border border-slate-200/70 bg-white/60 p-8"
       style={{ borderColor: "var(--lp-border)" }}
     >
-      <Image src="/vis-logo.png" alt="Vis" width={100} height={33} style={{ height: 33, width: "auto" }} />
+      <VisLogo height={33} />
 
       {showRelease && latest && (
         <div className="space-y-3">
