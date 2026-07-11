@@ -18,6 +18,13 @@ Carrossel **client-side, CSS puro, conteúdo estático em TS**. O Codex confirmo
 
 **+ Novidade quando houver:** se `loginPanelContent.releases` tem uma release fresca (≤14 dias, regra atual), ela entra como slide adicional NO INÍCIO do carrossel. Reaproveita o `daysAgo`/`MAX_RELEASE_AGE_DAYS` existentes. Funil/WhatsApp fora de escopo v1 (não está em `features.ts`).
 
+**Mapeamento `FeaturePage` (features.ts) → slide de feature** (explícito — `FeaturePage` tem `name`/`icon`/`subtitle`/`mockupCaption?`/`slug`, NÃO tem `caption`/`blurb`):
+- `slug ← slug`
+- `name ← name`
+- `icon ← icon`
+- `caption ← mockupCaption` (é opcional; **fallback para `name` se ausente**)
+- `blurb ← subtitle`
+
 ## Componentes
 
 ### 1. `login-panel-content.ts` (estender)
@@ -35,7 +42,8 @@ Uma função `buildSlides(today?)` que: monta os slides de feature a partir de `
 - Transição por **CSS** (`opacity` + leve `translateX`, ~200ms) — sem framer-motion.
 - **Pausa**: `onMouseEnter`/`onFocusCapture` no container zera o timer; `onMouseLeave`/`onBlurCapture` retoma. Pausa também quando `document.hidden` (listener `visibilitychange`).
 - **reduced-motion**: `matchMedia("(prefers-reduced-motion: reduce)")` → sem auto-avanço, sem translateX (troca instantânea), dots continuam funcionais.
-- **A11y**: container com `role="group"` + `aria-roledescription="carrossel"` + `aria-label`; `aria-live="off"` durante auto-rotação; dots são `<button>` com `aria-label` ("Ir para slide N") e `aria-current`; navegável por teclado (setas ou tab nos dots).
+- **A11y**: container com `role="group"` + `aria-roledescription="carrossel"` + `aria-label`. `aria-live="off"` **sempre** (auto-rotação nunca anuncia; navegação manual muda o slide visível, suficiente para o contexto de login — decisão explícita, não alterna para polite). Dots são `<button>` com `aria-label` ("Ir para novidade N" / "Ir para funcionalidade: {name}") e `aria-current="true"` no ativo. **Foco visível**: dots com `:focus-visible` usando anel `--brand-primary` (WCAG 2.4.7 — o fundo do painel é claro, o foco default não seria visível).
+- **Teclado**: `ArrowRight`/`ArrowLeft` no container avançam/retrocedem o slide **e pausam o auto-avanço** (o usuário assumiu controle); Tab alcança os dots, Enter/Space ativa. Sem Cima/Baixo (evita conflito com scroll).
 - Cada slide: mini-mockup em CSS usando `BrowserFrame` (`src/components/landing-layout/browser-frame.tsx`) com ícone lucide grande + `caption`; abaixo, `name` + `blurb`. Slide de release: mostra "Novidades" + título + bullets + selo de recência (como hoje).
 - Máx. 6 slides.
 
@@ -55,6 +63,8 @@ Puramente visual. NÃO toca `signIn`/`signOut`/`handleSubmit`/`formData` em `pag
 
 ## Erros / casos-limite
 - Sem release fresca → carrossel só com as 5 features. Não quebra.
+- **≤1 slide** (invariante: as 5 features são fixas, então o mínimo real é 5 — mas `buildSlides` deve degradar): com 1 slide, **sem auto-avanço e sem dots** (nada a rotacionar); com 0 slides, o carrossel não renderiza (o painel fica só com logo + suporte).
+- `mockupCaption` ausente numa feature → `caption` usa `name` (fallback já no mapeamento).
 - `matchMedia` indisponível (SSR/jsdom) → tratar como "sem reduced-motion" com guard (`typeof window`).
 - Timer limpo no unmount (evitar leak).
 - Ícone lucide não encontrado em `featureIcons` → fallback para um ícone padrão.
@@ -66,6 +76,9 @@ Puramente visual. NÃO toca `signIn`/`signOut`/`handleSubmit`/`formData` em `pag
 - Pausa: `mouseenter`/foco para o avanço; `mouseleave` retoma.
 - reduced-motion: `matchMedia` mockado como `matches:true` → sem auto-avanço; dots presentes.
 - Dots: clique navega ao slide certo; `aria-current` no ativo.
+- Teclado: `ArrowRight`/`ArrowLeft` no container mudam o slide e pausam o auto-avanço.
+- `buildSlides` com 1 slide → sem dots e sem auto-avanço; com 0 → carrossel não renderiza.
+- Fallback: feature sem `mockupCaption` → caption = `name`.
 - Zero fetch: nenhum `fetch`/`XMLHttpRequest` chamado (spy).
 - `document.hidden` → pausa.
 
