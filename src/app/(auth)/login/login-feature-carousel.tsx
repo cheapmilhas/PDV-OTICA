@@ -20,19 +20,30 @@ function prefersReducedMotion(): boolean {
 
 export function LoginFeatureCarousel({ slides, intervalMs = DEFAULT_INTERVAL }: LoginFeatureCarouselProps) {
   const [active, setActive] = useState(0);
-  const [paused, setPaused] = useState(false);
+  // Causas de pausa independentes (Codex): um único `paused` conflava-as e um
+  // `mouseLeave` retomava mesmo com pausa manual/foco/aba oculta ativos.
+  const [hovered, setHovered] = useState(false);
+  const [focusWithin, setFocusWithin] = useState(false);
+  const [hidden, setHidden] = useState(false);
+  const [manualPaused, setManualPaused] = useState(false);
+  const paused = hovered || focusWithin || hidden || manualPaused;
   const reduced = useRef(false);
 
   useEffect(() => {
     reduced.current = prefersReducedMotion();
   }, []);
 
+  // Se a lista encolher (defensivo — hoje é estática), reancora o índice.
+  useEffect(() => {
+    if (active >= slides.length && slides.length > 0) setActive(0);
+  }, [active, slides.length]);
+
   const go = useCallback(
     (next: number) => setActive((prev) => (next + slides.length) % slides.length),
     [slides.length],
   );
 
-  // Auto-rotação — pausada por hover/foco, aba oculta, reduced-motion, ou ≤1 slide.
+  // Auto-rotação — pausada por qualquer causa, reduced-motion, ou ≤1 slide.
   useEffect(() => {
     if (paused || reduced.current || slides.length <= 1) return;
     const id = setInterval(() => setActive((p) => (p + 1) % slides.length), intervalMs);
@@ -41,18 +52,20 @@ export function LoginFeatureCarousel({ slides, intervalMs = DEFAULT_INTERVAL }: 
 
   // Pausa quando a aba vai para background.
   useEffect(() => {
-    const onVis = () => setPaused(document.hidden);
+    const onVis = () => setHidden(document.hidden);
     document.addEventListener("visibilitychange", onVis);
     return () => document.removeEventListener("visibilitychange", onVis);
   }, []);
 
   const onKeyDown = (e: React.KeyboardEvent) => {
-    if (e.key === "ArrowRight") { setPaused(true); go(active + 1); }
-    else if (e.key === "ArrowLeft") { setPaused(true); go(active - 1); }
+    if (e.key === "ArrowRight") { setManualPaused(true); go(active + 1); }
+    else if (e.key === "ArrowLeft") { setManualPaused(true); go(active - 1); }
+    else if (e.key === "Home") { setManualPaused(true); setActive(0); }
+    else if (e.key === "End") { setManualPaused(true); setActive(slides.length - 1); }
   };
 
   if (slides.length === 0) return null;
-  const current = slides[active];
+  const current = slides[active] ?? slides[0];
   const Mockup = featureMockups[current.slug];
 
   return (
@@ -61,12 +74,11 @@ export function LoginFeatureCarousel({ slides, intervalMs = DEFAULT_INTERVAL }: 
       aria-roledescription="carrossel"
       aria-label="Funcionalidades do Vis"
       className="flex flex-col gap-4"
-      onMouseEnter={() => setPaused(true)}
-      onMouseLeave={() => setPaused(false)}
-      onFocusCapture={() => setPaused(true)}
-      onBlurCapture={() => setPaused(false)}
+      onMouseEnter={() => setHovered(true)}
+      onMouseLeave={() => setHovered(false)}
+      onFocusCapture={() => setFocusWithin(true)}
+      onBlurCapture={() => setFocusWithin(false)}
       onKeyDown={onKeyDown}
-      tabIndex={0}
     >
       <BrowserFrame url="vis.app.br/dashboard">
         {/* min-height mata o "pulo" de altura entre slides na transição */}
@@ -94,7 +106,8 @@ export function LoginFeatureCarousel({ slides, intervalMs = DEFAULT_INTERVAL }: 
               aria-selected={i === active}
               aria-current={i === active ? "true" : undefined}
               aria-label={`Ver: ${s.name}`}
-              onClick={() => { setPaused(true); setActive(i); }}
+              tabIndex={i === active ? 0 : -1}
+              onClick={() => { setManualPaused(true); setActive(i); }}
               className="lfc-dot"
               data-active={i === active}
               data-paused={paused || undefined}

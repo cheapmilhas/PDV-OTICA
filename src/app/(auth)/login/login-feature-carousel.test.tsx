@@ -65,6 +65,18 @@ describe("LoginFeatureCarousel", () => {
     expect(screen.getByText("Receita IA")).toBeTruthy();
   });
 
+  it("pausa manual (clique no dot) NÃO é cancelada por mouseLeave", () => {
+    // Regressão do achado do Codex: clicar num dot pausa; mover o mouse pra
+    // fora não deve retomar o auto-avanço.
+    render(<LoginFeatureCarousel slides={slides} intervalMs={1000} />);
+    const group = screen.getByRole("group", { name: "Funcionalidades do Vis" });
+    fireEvent.mouseEnter(group);
+    fireEvent.click(screen.getAllByRole("tab")[0]); // pausa manual
+    fireEvent.mouseLeave(group); // só limpa o hover, não a pausa manual
+    act(() => { vi.advanceTimersByTime(3000); });
+    expect(screen.getByText("Receita IA")).toBeTruthy(); // continua pausado
+  });
+
   it("dots navegam para o slide certo", () => {
     render(<LoginFeatureCarousel slides={slides} />);
     const dots = screen.getAllByRole("tab");
