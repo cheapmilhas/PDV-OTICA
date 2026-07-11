@@ -171,4 +171,46 @@ describe("POST /api/auth/esqueci-senha — anti-enumeração", () => {
     expect($transaction).not.toHaveBeenCalled();
     expect(sendEmail).not.toHaveBeenCalled();
   });
+
+  it("conta sintética COM recoveryEmail: token criado e link enviado ao recoveryEmail", async () => {
+    findMany.mockResolvedValueOnce([
+      { id: "u1", name: "Francisco", email: "francisco@login", recoveryEmail: "fs@gmail.com", company: { name: "Loja A" } },
+    ]);
+    const res = await callWithFloor(makeReq({ email: "fs@gmail.com" }, "10.9.0.1"));
+    expect(res.status).toBe(200);
+    expect($transaction).toHaveBeenCalledTimes(1);
+    expect(sendEmail).toHaveBeenCalledTimes(1);
+    expect((sendEmail.mock.calls[0][0] as { to: unknown }).to).toBe("fs@gmail.com");
+  });
+
+  it("conta sintética SEM recoveryEmail: nenhum token, nenhum envio, 200 genérico", async () => {
+    findMany.mockResolvedValueOnce([
+      { id: "u2", name: "Ada", email: "ada@login", recoveryEmail: null, company: { name: "Loja A" } },
+    ]);
+    const res = await callWithFloor(makeReq({ email: "ada@ninguem.com" }, "10.9.0.2"));
+    expect(res.status).toBe(200);
+    expect($transaction).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
+  });
+
+  it("label do botão mostra nome + loja, sem role", async () => {
+    findMany.mockResolvedValueOnce([
+      { id: "u3", name: "Leila", email: "leila@x.com", recoveryEmail: null, company: { name: "Atacadão" } },
+    ]);
+    await callWithFloor(makeReq({ email: "leila@x.com" }, "10.9.0.3"));
+    const arg = sendEmail.mock.calls[0][0] as { html: string };
+    expect(arg.html).toContain("Leila");
+    expect(arg.html).toContain("Atacadão");
+  });
+
+  it("agrupamento: 2 contas com destinos distintos → um envio por destino", async () => {
+    findMany.mockResolvedValueOnce([
+      { id: "u4", name: "A", email: "a@x.com", recoveryEmail: null, company: { name: "L1" } },
+      { id: "u5", name: "B", email: "b@login", recoveryEmail: "b@gmail.com", company: { name: "L2" } },
+    ]);
+    await callWithFloor(makeReq({ email: "a@x.com" }, "10.9.0.4"));
+    expect(sendEmail).toHaveBeenCalledTimes(2);
+    const tos = sendEmail.mock.calls.map((c) => (c[0] as { to: string }).to).sort();
+    expect(tos).toEqual(["a@x.com", "b@gmail.com"]);
+  });
 });

@@ -77,15 +77,25 @@ async function doWork(email: string): Promise<void> {
   try {
     const emailLower = email.toLowerCase();
 
-    // 4. Busca contas com este e-mail (case-insensitive).
+    // 4. Busca contas por e-mail OU recoveryEmail (case-insensitive). O
+    //    recoveryEmail permite alcançar contas com login sintético (@login /
+    //    @funcionario.interno) ou caixa fake, cujo `email` não é entregável.
     const users = await prisma.user.findMany({
-      where: { email: { equals: emailLower, mode: "insensitive" } },
+      where: {
+        OR: [
+          { email: { equals: emailLower, mode: "insensitive" } },
+          { recoveryEmail: { equals: emailLower, mode: "insensitive" } },
+        ],
+      },
       include: { company: true },
     });
 
-    // 5. Exclui logins internos (não são e-mails reais entregáveis).
+    // 5. Entregável se tem recoveryEmail (destino real garantido) OU se o
+    //    próprio email não é um login interno sintético.
     const deliverable = users.filter(
-      (u) => !INTERNAL_LOGIN_SUFFIXES.some((suffix) => u.email.endsWith(suffix))
+      (u) =>
+        u.recoveryEmail != null ||
+        !INTERNAL_LOGIN_SUFFIXES.some((suffix) => u.email.endsWith(suffix))
     );
 
     // 6. Rate-limit por e-mail (anti-spam do MESMO alvo). Se estourado, NÃO
@@ -113,7 +123,13 @@ async function doWork(email: string): Promise<void> {
     }
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
-    const links: { selector: string; verifier: string; companyName?: string }[] = [];
+    const links: {
+      selector: string;
+      verifier: string;
+      companyName?: string;
+      name: string;
+      targetEmail: string;
+    }[] = [];
 
     for (const u of deliverable) {
       const { selector, verifier, verifierHash } = generateTokenParts();
@@ -125,35 +141,50 @@ async function doWork(email: string): Promise<void> {
           data: { userId: u.id, selector, verifierHash, expiresAt },
         }),
       ]);
-      links.push({ selector, verifier, companyName: u.company?.name });
+      links.push({
+        selector,
+        verifier,
+        companyName: u.company?.name,
+        name: u.name,
+        targetEmail: u.recoveryEmail ?? u.email,
+      });
     }
 
-    // 8. Envia UM e-mail com N links rotulados por empresa.
+    // 8. Agrupa por destino real e envia UM e-mail por destino. O destino é o
+    //    recoveryEmail quando presente (contas sintéticas), senão o próprio
+    //    email. Cada botão é rotulado por nome + loja (nunca papel/role).
     if (links.length === 0) return;
 
-    const templateLinks = links.map((l) => ({
-      label: l.companyName
-        ? `Redefinir senha — ${l.companyName}`
-        : "Redefinir senha",
-      url: `${baseUrl}/redefinir-senha?t=${l.selector}.${l.verifier}`,
-    }));
+    const byDest = new Map<string, typeof links>();
+    for (const l of links) {
+      const arr = byDest.get(l.targetEmail) ?? [];
+      arr.push(l);
+      byDest.set(l.targetEmail, arr);
+    }
 
-    const { html, text } = renderEmailTemplate("password-reset", {
-      links: templateLinks,
-    });
+    for (const [targetEmail, group] of byDest) {
+      const templateLinks = group.map((l) => ({
+        label: l.companyName ? `${l.name} · ${l.companyName}` : l.name,
+        url: `${baseUrl}/redefinir-senha?t=${l.selector}.${l.verifier}`,
+      }));
 
-    try {
-      await sendEmail({
-        to: emailLower,
-        subject: "Recuperar acesso ao Vis",
-        html,
-        text,
+      const { html, text } = renderEmailTemplate("password-reset", {
+        links: templateLinks,
       });
-    } catch (err) {
-      // Não relança: falha de envio não pode virar oráculo de timing/erro.
-      log.error("Falha ao enviar e-mail de recuperação", {
-        error: err instanceof Error ? err.message : String(err),
-      });
+
+      try {
+        await sendEmail({
+          to: targetEmail,
+          subject: "Recuperar acesso ao Vis",
+          html,
+          text,
+        });
+      } catch (err) {
+        // Não relança: falha de envio não pode virar oráculo de timing/erro.
+        log.error("Falha ao enviar e-mail de recuperação", {
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
     }
   } catch (err) {
     // Qualquer falha inesperada: loga e engole (fluxo simétrico).
