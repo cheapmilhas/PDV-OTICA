@@ -11,6 +11,8 @@ const { prismaMock } = vi.hoisted(() => ({
     },
     examAppointment: {
       create: vi.fn(),
+      findFirst: vi.fn(),
+      update: vi.fn(),
     },
     leadStage: {
       findFirst: vi.fn(),
@@ -20,7 +22,7 @@ const { prismaMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { createExamAppointment } from "@/services/exam-appointment.service";
+import { createExamAppointment, updateExamAppointment } from "@/services/exam-appointment.service";
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 
 const COMPANY_ID = "company_1";
@@ -206,5 +208,159 @@ describe("createExamAppointment", () => {
 
     expect(prismaMock.examAppointment.create).toHaveBeenCalled();
     expect(prismaMock.lead.updateMany).not.toHaveBeenCalled();
+  });
+});
+
+describe("updateExamAppointment", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const APPT_ID = "appt_1";
+
+  it("CANCELLED: muda status E, se o card ainda está em EXAM_SCHEDULED, move p/ o 1º estágio aberto", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue({
+      id: APPT_ID,
+      leadId: "lead_1",
+      status: "SCHEDULED",
+    });
+    prismaMock.examAppointment.update.mockResolvedValue({ id: APPT_ID, status: "CANCELLED" });
+    prismaMock.lead.findFirst.mockResolvedValue({
+      id: "lead_1",
+      stage: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+    });
+    prismaMock.leadStage.findFirst.mockResolvedValue({ id: "stage_first_open" });
+    prismaMock.lead.updateMany.mockResolvedValue({ count: 1 });
+
+    await updateExamAppointment(APPT_ID, { status: "CANCELLED" }, COMPANY_ID);
+
+    expect(prismaMock.examAppointment.update).toHaveBeenCalledWith({
+      where: { id: APPT_ID },
+      data: { status: "CANCELLED" },
+    });
+    expect(prismaMock.leadStage.findFirst).toHaveBeenCalledWith({
+      where: { companyId: COMPANY_ID, isWon: false, isLost: false },
+      orderBy: { order: "asc" },
+      select: { id: true },
+    });
+    expect(prismaMock.lead.updateMany).toHaveBeenCalledWith({
+      where: { id: "lead_1", companyId: COMPANY_ID },
+      data: { stageId: "stage_first_open", lastActivityAt: expect.any(Date) },
+    });
+  });
+
+  it("NO_SHOW: muda status E reverte o card (mesmo padrão do CANCELLED)", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue({
+      id: APPT_ID,
+      leadId: "lead_1",
+      status: "SCHEDULED",
+    });
+    prismaMock.examAppointment.update.mockResolvedValue({ id: APPT_ID, status: "NO_SHOW" });
+    prismaMock.lead.findFirst.mockResolvedValue({
+      id: "lead_1",
+      stage: { systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED },
+    });
+    prismaMock.leadStage.findFirst.mockResolvedValue({ id: "stage_first_open" });
+    prismaMock.lead.updateMany.mockResolvedValue({ count: 1 });
+
+    await updateExamAppointment(APPT_ID, { status: "NO_SHOW" }, COMPANY_ID);
+
+    expect(prismaMock.examAppointment.update).toHaveBeenCalledWith({
+      where: { id: APPT_ID },
+      data: { status: "NO_SHOW" },
+    });
+    expect(prismaMock.lead.updateMany).toHaveBeenCalledWith({
+      where: { id: "lead_1", companyId: COMPANY_ID },
+      data: { stageId: "stage_first_open", lastActivityAt: expect.any(Date) },
+    });
+  });
+
+  it("ATTENDED: muda status, card NÃO se move", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue({
+      id: APPT_ID,
+      leadId: "lead_1",
+      status: "SCHEDULED",
+    });
+    prismaMock.examAppointment.update.mockResolvedValue({ id: APPT_ID, status: "ATTENDED" });
+
+    await updateExamAppointment(APPT_ID, { status: "ATTENDED" }, COMPANY_ID);
+
+    expect(prismaMock.examAppointment.update).toHaveBeenCalledWith({
+      where: { id: APPT_ID },
+      data: { status: "ATTENDED" },
+    });
+    expect(prismaMock.lead.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.lead.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("cancelar quando o card já foi movido por humano p/ outro estágio → status muda, card fica (não reverte)", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue({
+      id: APPT_ID,
+      leadId: "lead_1",
+      status: "SCHEDULED",
+    });
+    prismaMock.examAppointment.update.mockResolvedValue({ id: APPT_ID, status: "CANCELLED" });
+    prismaMock.lead.findFirst.mockResolvedValue({
+      id: "lead_1",
+      stage: { systemKey: "OUTRO_ESTAGIO" },
+    });
+
+    await updateExamAppointment(APPT_ID, { status: "CANCELLED" }, COMPANY_ID);
+
+    expect(prismaMock.examAppointment.update).toHaveBeenCalledWith({
+      where: { id: APPT_ID },
+      data: { status: "CANCELLED" },
+    });
+    expect(prismaMock.leadStage.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.lead.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("remarcar (só scheduledAt, sem status) → só atualiza a data, card não mexe", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue({
+      id: APPT_ID,
+      leadId: "lead_1",
+      status: "SCHEDULED",
+    });
+    const novaData = new Date("2026-09-01T10:00:00Z");
+    prismaMock.examAppointment.update.mockResolvedValue({ id: APPT_ID, scheduledAt: novaData });
+
+    await updateExamAppointment(APPT_ID, { scheduledAt: novaData }, COMPANY_ID);
+
+    expect(prismaMock.examAppointment.update).toHaveBeenCalledWith({
+      where: { id: APPT_ID },
+      data: { scheduledAt: novaData },
+    });
+    expect(prismaMock.lead.findFirst).not.toHaveBeenCalled();
+    expect(prismaMock.lead.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("remarcar com status SCHEDULED → só atualiza, card não mexe", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue({
+      id: APPT_ID,
+      leadId: "lead_1",
+      status: "SCHEDULED",
+    });
+    const novaData = new Date("2026-09-02T10:00:00Z");
+    prismaMock.examAppointment.update.mockResolvedValue({ id: APPT_ID, scheduledAt: novaData, status: "SCHEDULED" });
+
+    await updateExamAppointment(APPT_ID, { status: "SCHEDULED", scheduledAt: novaData }, COMPANY_ID);
+
+    expect(prismaMock.examAppointment.update).toHaveBeenCalledWith({
+      where: { id: APPT_ID },
+      data: { status: "SCHEDULED", scheduledAt: novaData },
+    });
+    expect(prismaMock.lead.updateMany).not.toHaveBeenCalled();
+  });
+
+  it("agendamento de outra empresa (findFirst null) → throw notFoundError, não chama update", async () => {
+    prismaMock.examAppointment.findFirst.mockResolvedValue(null);
+
+    await expect(
+      updateExamAppointment("appt_alheio", { status: "CANCELLED" }, COMPANY_ID),
+    ).rejects.toThrow();
+
+    expect(prismaMock.examAppointment.findFirst).toHaveBeenCalledWith({
+      where: { id: "appt_alheio", companyId: COMPANY_ID },
+      select: expect.any(Object),
+    });
+    expect(prismaMock.examAppointment.update).not.toHaveBeenCalled();
   });
 });

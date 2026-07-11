@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFoundError } from "@/lib/error-handler";
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 import { logger } from "@/lib/logger";
+import type { ExamAppointmentStatus } from "@prisma/client";
 
 const log = logger.child({ service: "exam-appointment" });
 
@@ -80,5 +81,66 @@ export async function createExamAppointment(
     }
 
     return appointment;
+  });
+}
+
+export interface UpdateExamAppointmentInput {
+  status?: ExamAppointmentStatus;
+  scheduledAt?: Date;
+}
+
+/**
+ * Atualiza status e/ou data do agendamento. Reverse espelhado de
+ * `reverseLeadWinForSaleInTx`: cancelar/faltar volta o card para o 1º estágio
+ * aberto (menor order, não-terminal) — SÓ se o card ainda está em
+ * EXAM_SCHEDULED (se um humano já moveu o card p/ outro lugar, respeita e não
+ * mexe). Remarcar a data ou marcar ATTENDED nunca move o card.
+ */
+export async function updateExamAppointment(
+  id: string,
+  input: UpdateExamAppointmentInput,
+  companyId: string,
+) {
+  return prisma.$transaction(async (tx) => {
+    const appt = await tx.examAppointment.findFirst({
+      where: { id, companyId },
+      select: { id: true, leadId: true, status: true },
+    });
+    if (!appt) throw notFoundError("Agendamento não encontrado");
+
+    const updated = await tx.examAppointment.update({
+      where: { id: appt.id },
+      data: {
+        ...(input.status ? { status: input.status } : {}),
+        ...(input.scheduledAt ? { scheduledAt: input.scheduledAt } : {}),
+      },
+    });
+
+    // Reverse: cancelar/faltar → volta pro 1º aberto SÓ se o card ainda está
+    // em EXAM_SCHEDULED. Remarcar (só scheduledAt) e ATTENDED não movem.
+    const reverts = input.status === "CANCELLED" || input.status === "NO_SHOW";
+    if (reverts) {
+      const lead = await tx.lead.findFirst({
+        where: { id: appt.leadId, companyId, deletedAt: null },
+        select: { id: true, stage: { select: { systemKey: true } } },
+      });
+      if (lead?.stage.systemKey === LEAD_STAGE_KEYS.EXAM_SCHEDULED) {
+        const firstOpen = await tx.leadStage.findFirst({
+          where: { companyId, isWon: false, isLost: false },
+          orderBy: { order: "asc" },
+          select: { id: true },
+        });
+        if (firstOpen) {
+          await tx.lead.updateMany({
+            where: { id: lead.id, companyId },
+            data: { stageId: firstOpen.id, lastActivityAt: new Date() },
+          });
+        } else {
+          log.warn("exam_revert_no_open_stage", { companyId, leadId: lead.id });
+        }
+      }
+    }
+
+    return updated;
   });
 }
