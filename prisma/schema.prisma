@@ -216,6 +216,7 @@ model Company {
   leads                   Lead[]
   leadStages              LeadStage[]
   aiTokenUsages           AiTokenUsage[]
+  examAppointments        ExamAppointment[]
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -297,6 +298,7 @@ model Branch {
   cardReceivables       CardReceivable[]
   recurringExpenses     RecurringExpense[]
   leads                 Lead[]
+  examAppointments      ExamAppointment[]
 
   @@unique([companyId, code])
   @@index([companyId, name])
@@ -368,6 +370,7 @@ model User {
   transfersApproved          StockTransfer[]          @relation("TransferApprover")
   transfersRequested         StockTransfer[]          @relation("TransferRequester")
   leadsAsSeller              Lead[]                   @relation("LeadSeller")
+  assignedExamAppointments   ExamAppointment[]        @relation("AssignedExamAppointments")
 
   @@index([companyId, email])
   @@index([companyId, role])
@@ -469,6 +472,7 @@ model Customer {
   accessLogs         CustomerAccessLog[]
   leads              Lead[]                 @relation("LeadCustomer")
   leadsSuggested     Lead[]                 @relation("LeadSuggestedCustomer")
+  examAppointments   ExamAppointment[]      @relation("CustomerExamAppointments")
 
   @@unique([companyId, cpf])
   // cnpj: único POR EMPRESA via índice PARCIAL (WHERE cnpj IS NOT NULL) criado na
@@ -1294,11 +1298,43 @@ model Lead {
   // Gravado fail-safe na tx da venda quando há customerId. Sem @unique: um lead
   // pode, em tese, gerar mais de uma venda (re-compra do mesmo cliente).
   sales    Sale[]    @relation("LeadSale")
+  examAppointments ExamAppointment[] @relation("LeadExamAppointments")
 
   @@index([companyId, stageId])
   @@index([companyId, sellerUserId])
   @@index([companyId, deletedAt])
   @@index([companyId, intentPredicted])
+}
+
+enum ExamAppointmentStatus {
+  SCHEDULED
+  ATTENDED
+  NO_SHOW
+  CANCELLED
+}
+
+model ExamAppointment {
+  id              String                @id @default(cuid())
+  companyId       String
+  leadId          String
+  customerId      String?
+  branchId        String?
+  assignedUserId  String?
+  scheduledAt     DateTime              @db.Timestamptz
+  status          ExamAppointmentStatus @default(SCHEDULED)
+  note            String?
+  createdByUserId String
+  createdAt       DateTime              @default(now())
+  updatedAt       DateTime              @updatedAt
+
+  company      Company   @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  lead         Lead      @relation("LeadExamAppointments", fields: [leadId], references: [id], onDelete: Cascade)
+  customer     Customer? @relation("CustomerExamAppointments", fields: [customerId], references: [id], onDelete: SetNull)
+  branch       Branch?   @relation(fields: [branchId], references: [id], onDelete: SetNull)
+  assignedUser User?     @relation("AssignedExamAppointments", fields: [assignedUserId], references: [id], onDelete: SetNull)
+
+  @@index([companyId, scheduledAt])
+  @@index([companyId, leadId])
 }
 
 // Funil Inteligente — Fatia 3: trilha de auditoria APPEND-ONLY do auto-move da IA.
