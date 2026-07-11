@@ -6,6 +6,9 @@ import type { LoginPanelContent } from "./login-panel-content";
 
 const MAX_RELEASE_AGE_DAYS = 14;
 const SUPPORT_PLACEHOLDER = "5585999999999";
+// Falha segura: só mostra o suporte para um número real (12-15 dígitos) que NÃO
+// seja o placeholder. Vazio/malformado/sentinel → esconde.
+const REAL_PHONE = /^\d{12,15}$/;
 
 interface LoginSidePanelProps {
   content: LoginPanelContent;
@@ -19,7 +22,7 @@ export function LoginSidePanel({ content, today }: LoginSidePanelProps) {
 
   const age = latest ? daysAgo(latest.date, today) : null;
   const showRelease = latest != null && age !== null && age <= MAX_RELEASE_AGE_DAYS;
-  const showSupport = WHATSAPP_NUMBER !== SUPPORT_PLACEHOLDER;
+  const showSupport = REAL_PHONE.test(WHATSAPP_NUMBER) && WHATSAPP_NUMBER !== SUPPORT_PLACEHOLDER;
 
   return (
     <aside

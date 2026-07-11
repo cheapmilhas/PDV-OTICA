@@ -2,12 +2,34 @@
 // `today` é injetável para testes determinísticos; default = agora.
 
 const MS_PER_DAY = 1000 * 60 * 60 * 24;
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/;
 
-/** Dias inteiros desde `date` até `today`. null se inválida ou futura. */
-export function daysAgo(date: string, today: string = new Date().toISOString().slice(0, 10)): number | null {
-  const then = Date.parse(`${date}T00:00:00`);
-  const now = Date.parse(`${today}T00:00:00`);
-  if (Number.isNaN(then) || Number.isNaN(now)) return null;
+/**
+ * Converte "YYYY-MM-DD" em ms UTC da meia-noite. null se o formato não for ISO
+ * estrito OU se a data de calendário for impossível (ex: 2026-02-30 — validado
+ * por round-trip: o Date normalizaria pra 03-02, então os componentes não batem).
+ */
+function parseIsoDateUtc(value: string): number | null {
+  if (!ISO_DATE.test(value)) return null;
+  const [y, m, d] = value.split("-").map(Number);
+  const ms = Date.UTC(y, m - 1, d);
+  const back = new Date(ms);
+  if (back.getUTCFullYear() !== y || back.getUTCMonth() !== m - 1 || back.getUTCDate() !== d) {
+    return null;
+  }
+  return ms;
+}
+
+/** "Hoje" em UTC (YYYY-MM-DD). UTC evita o bug de a data virar cedo em fusos negativos. */
+function todayUtc(): string {
+  return new Date().toISOString().slice(0, 10);
+}
+
+/** Dias inteiros desde `date` até `today`. null se inválida ou futura. Tudo em UTC. */
+export function daysAgo(date: string, today: string = todayUtc()): number | null {
+  const then = parseIsoDateUtc(date);
+  const now = parseIsoDateUtc(today);
+  if (then === null || now === null) return null;
   const diff = Math.floor((now - then) / MS_PER_DAY);
   return diff < 0 ? null : diff;
 }

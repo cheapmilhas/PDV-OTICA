@@ -16,6 +16,16 @@ describe("daysAgo", () => {
   it("retorna null para data inválida", () => {
     expect(daysAgo("não-é-data", HOJE)).toBeNull();
   });
+  it("retorna null para data de calendário impossível (2026-02-30)", () => {
+    expect(daysAgo("2026-02-30", HOJE)).toBeNull();
+  });
+  it("retorna null para formato não-ISO (30/02/2026)", () => {
+    expect(daysAgo("30/02/2026", HOJE)).toBeNull();
+  });
+  it("é estável independente do fuso (usa UTC, não meia-noite local)", () => {
+    // Mesma data, mesmo resultado — não deve variar com o horário/fuso da máquina.
+    expect(daysAgo("2026-07-01", "2026-07-11")).toBe(10);
+  });
 });
 
 describe("formatRelative", () => {
