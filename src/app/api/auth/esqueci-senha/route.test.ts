@@ -61,10 +61,13 @@ beforeEach(() => {
   // Padrão: transação e envio resolvem OK.
   $transaction.mockResolvedValue([{ count: 0 }, { id: "tok" }]);
   sendEmail.mockResolvedValue({ id: "email-1" });
+  // Origem confiável para o link (fonte ÚNICA — nunca o Host da requisição).
+  vi.stubEnv("NEXT_PUBLIC_APP_URL", "https://vis.app.br");
 });
 
 afterEach(() => {
   vi.useRealTimers();
+  vi.unstubAllEnvs();
 });
 
 const GENERIC_MESSAGE =
@@ -127,6 +130,22 @@ describe("POST /api/auth/esqueci-senha — anti-enumeração", () => {
     } else {
       expect(arg.to).toBe("maria@x.com");
     }
+  });
+
+  it("sem NEXT_PUBLIC_APP_URL: não envia e-mail (anti reset-poisoning via Host)", async () => {
+    // Fecha o vetor: a origem do link NÃO pode vir do Host da requisição. Sem
+    // env confiável, nenhum link é montado e nenhum e-mail sai — resposta segue
+    // idêntica (genérica 200), sem virar oráculo.
+    vi.stubEnv("NEXT_PUBLIC_APP_URL", "");
+    findMany.mockResolvedValueOnce([
+      { id: "u1", email: "joao@x.com", company: { name: "Loja A" } },
+    ]);
+    const res = await callWithFloor(makeReq({ email: "joao@x.com" }, "10.0.0.7"));
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body).toEqual({ message: GENERIC_MESSAGE });
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("sempre 200: body sem email → genérico, sem token, sem e-mail", async () => {

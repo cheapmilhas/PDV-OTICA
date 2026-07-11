@@ -62,7 +62,7 @@ export async function POST(request: Request) {
   // 3. Piso de latência: trabalho real (passos 4-8) roda em paralelo ao sleep;
   //    a resposta só sai quando AMBOS terminam. Se não há e-mail válido, o
   //    trabalho é no-op mas o sleep AINDA roda — timing uniforme.
-  await Promise.all([email ? doWork(email, request) : Promise.resolve(), sleep(LATENCY_FLOOR_MS)]);
+  await Promise.all([email ? doWork(email) : Promise.resolve(), sleep(LATENCY_FLOOR_MS)]);
 
   // 9. SEMPRE a mesma resposta 200.
   return genericResponse();
@@ -73,7 +73,7 @@ export async function POST(request: Request) {
  * e-mail e — se couber — cria tokens e envia UM e-mail. Nunca relança: qualquer
  * falha é logada e engolida para não virar oráculo de timing/erro.
  */
-async function doWork(email: string, request: Request): Promise<void> {
+async function doWork(email: string): Promise<void> {
   try {
     const emailLower = email.toLowerCase();
 
@@ -99,8 +99,18 @@ async function doWork(email: string, request: Request): Promise<void> {
     if (emailLimited || deliverable.length === 0) return;
 
     // 7. Para CADA conta: uma transação que apaga tokens ativos e cria um novo.
-    const baseUrl =
-      process.env.NEXT_PUBLIC_APP_URL || new URL(request.url).origin;
+    //    SEGURANÇA: a origem do link vem SÓ de env confiável — NUNCA de
+    //    `request.url`/Host header. Derivar do Host permitiria "password reset
+    //    poisoning": um atacante forja o Host, o link do e-mail aponta para o
+    //    domínio dele e a vítima entrega o token ao clicar. Sem env → não
+    //    montamos link nem enviamos (o usuário pode pedir de novo); logamos.
+    const baseUrl = process.env.NEXT_PUBLIC_APP_URL;
+    if (!baseUrl) {
+      log.error(
+        "NEXT_PUBLIC_APP_URL ausente — link de reset não montado (não usar Host da requisição)"
+      );
+      return;
+    }
     const expiresAt = new Date(Date.now() + TOKEN_TTL_MS);
 
     const links: { selector: string; verifier: string; companyName?: string }[] = [];

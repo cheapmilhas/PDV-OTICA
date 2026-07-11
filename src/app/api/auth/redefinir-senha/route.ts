@@ -24,7 +24,16 @@ const INTERNAL_LOGIN_SUFFIXES = ["@login", "@funcionario.interno"];
  */
 const bodySchema = z.object({
   token: z.string().min(1),
-  password: z.string().min(8).max(72),
+  // 8 a 72 caracteres E no máximo 72 BYTES (utf-8): bcrypt trunca a partir de
+  // 72 bytes, então uma senha com acentos/emoji poderia passar em chars mas ser
+  // silenciosamente cortada em bytes. Validar os dois evita a truncagem oculta.
+  password: z
+    .string()
+    .min(8)
+    .max(72)
+    .refine((p) => Buffer.byteLength(p, "utf8") <= 72, {
+      message: "Senha muito longa",
+    }),
 });
 
 /**
@@ -83,11 +92,18 @@ export async function POST(request: Request) {
     await prisma.$transaction(async (tx) => {
       // 7a. Consome o token: só UMA requisição concorrente vence o WHERE usedAt:null.
       const consumed = await tx.passwordResetToken.updateMany({
-        where: { selector: parts.selector, usedAt: null },
+        // expiresAt reavaliado AQUI (não só no passo 5): o token podia estar
+        // válido na leitura e expirar durante o bcrypt. O WHERE atômico fecha
+        // essa janela — expirou nesse meio-tempo → count 0 → aborta.
+        where: {
+          selector: parts.selector,
+          usedAt: null,
+          expiresAt: { gt: new Date() },
+        },
         data: { usedAt: new Date() },
       });
       if (consumed.count === 0) {
-        // Outra requisição já consumiu este token (corrida perdida).
+        // Token já consumido (corrida perdida) OU expirou durante o bcrypt.
         throw new Error("ALREADY_CONSUMED");
       }
 
