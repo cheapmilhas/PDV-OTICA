@@ -65,6 +65,7 @@ Sinal **objetivo** (não-IA), espelhando `linkLeadAndMaybeWinInTx` / `reverseLea
 - **Criar agendamento (SCHEDULED):** na mesma transação, move o card do lead para o estágio com flag **`EXAM_SCHEDULED`**. Regra **só-avança**: NUNCA move um card que já está em `isWon`, `isLost` ou `EXAM_DONE` (não regride quem fechou).
 - **Cancelar (CANCELLED) / Faltar (NO_SHOW):** reverse espelhado — **só** se o card ainda está no estágio `EXAM_SCHEDULED`, volta para o **1º estágio aberto** (menor `order`, não-terminal), igual a `reverseLeadWinForSaleInTx`. Se um humano já moveu o card, respeita e não mexe.
 - **Compareceu (ATTENDED):** **não move o card.** "Exame feito" continua exclusivamente pela venda `isEyeExam`/`EXAM_DONE`.
+- **Remarcar (editar `scheduledAt` com status SCHEDULED):** **não mexe no card.** Só atualiza a data/hora. Não re-afirma `EXAM_SCHEDULED` (se um humano tirou o card de lá, remarcar não o traz de volta — respeita o humano). O card só é movido na criação e revertido no cancelar/faltar; editar horário é operação neutra para o funil.
 - **Divergência aceita:** se o atendente arrastar o card para fora de "Exame agendado" com o agendamento ainda SCHEDULED, **não reconciliar à força** (não brigar com o usuário). O card exibe o status do agendamento para o buraco ficar visível.
 
 **Flag `EXAM_SCHEDULED`:** nova entrada em `LEAD_STAGE_KEYS` (ao lado de `EXAM_DONE`, `src/lib/lead-stage-keys.ts`). O seed/`ensureOpticalStages` acha o estágio "Exame agendado" por `name` **uma vez** e grava a flag — idempotente por `[companyId, systemKey]` (padrão validado no `EXAM_DONE`; índice único parcial `WHERE systemKey IS NOT NULL` já existe). Localização por `findStageByKey`, nunca por `name` (o `name` é editável).
@@ -80,13 +81,13 @@ Sinal **objetivo** (não-IA), espelhando `linkLeadAndMaybeWinInTx` / `reverseLea
 ## 4. Endpoints, segurança e testes
 
 **Endpoints** (multi-tenant, guards do padrão da casa):
-- `POST /api/exam-appointments` — cria + move card na tx. Body: `{ leadId, scheduledAt, assignedUserId?, note? }`. `companyId` e `createdByUserId` **sempre da sessão** (`getCompanyId`/`getUserId`), nunca do body.
+- `POST /api/exam-appointments` — cria + move card na tx. Body: `{ leadId, scheduledAt, assignedUserId?, note? }`. `companyId` e `createdByUserId` **sempre da sessão** (`getCompanyId`/`getUserId`), nunca do body. `customerId` e `branchId` **derivados do lead** (do registro `Lead` já validado por `{ id, companyId }`), **não aceitos do body** — o agendamento herda o cliente/filial do lead, evitando FK forjada.
 - `PATCH /api/exam-appointments/[id]` — muda status (ATTENDED/NO_SHOW/CANCELLED) ou remarca (`scheduledAt`). Cancelar/faltar dispara o reverse.
 - `GET /api/exam-appointments?date=&branchId=` — agenda do dia, escopo de filial.
 
 **Segurança inegociável** (crítico de tenancy — já houve IDOR de leads):
 1. `companyId`/`createdByUserId` sempre da sessão, nunca do body.
-2. Toda FK recebida (`leadId`, `assignedUserId`) revalidada por `findFirst({ id, companyId })` antes de agir (padrão `moveLead`, `lead.service.ts:220`).
+2. FK recebida do body revalidada por `findFirst({ id, companyId })` antes de agir (padrão `moveLead`, `lead.service.ts:220`): `leadId` e `assignedUserId`. `customerId`/`branchId` NÃO vêm do body — são herdados do `Lead` já validado (ver POST acima), logo não precisam de revalidação separada.
 3. Gate de papel: agendar/mudar status exige `leads.edit` (mesma permissão do move de card).
 4. GET com escopo de filial (`branchId OR null`); `?branchId` do query nunca sobrepõe a filial da sessão sem checar papel.
 5. A IA nunca cria/agenda por conta própria (respeitado — sinal é humano/objetivo).
