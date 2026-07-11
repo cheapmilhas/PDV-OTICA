@@ -57,6 +57,8 @@ deliverable = users.filter(u =>
 )
 ```
 
+**Coleta do `name` (correção de plumbing):** o array intermediário `links` do endpoint (hoje `{ selector, verifier, companyName }`, montado no loop ~linha 116/128) passa a incluir **`name: u.name`**. O schema do template NÃO muda (`links: [{ label, url }]`) — quem monta o `label = "{name} · {companyName}"` é o endpoint, a partir da struct intermediária. Não adicionar `role` em lugar nenhum.
+
 **Destino do link (passo 7/8 atual):** para cada conta entregável, o endereço de envio é:
 ```
 targetEmail = recoveryEmail se preenchido
@@ -66,7 +68,7 @@ targetEmail = recoveryEmail se preenchido
 - Conta sintética com `recoveryEmail`: link vai pro `recoveryEmail`.
 - Conta com `email` de formato válido mas caixa fake + `recoveryEmail` preenchido: `recoveryEmail` (o real) tem prioridade.
 
-Quando N contas casam o mesmo e-mail digitado, o e-mail continua sendo UM `sendEmail` com N botões (comportamento atual). Nota: se contas diferentes tiverem `targetEmail` diferentes (uma pelo email, outra pelo recoveryEmail), agrupar por `targetEmail` e enviar um e-mail por destino distinto (cada e-mail lista só as contas daquele destino) — não misturar contas de destinos diferentes num só envio.
+Quando N contas casam o mesmo e-mail digitado, o e-mail continua sendo UM `sendEmail` com N botões (comportamento atual). Nota: se contas diferentes tiverem `targetEmail` diferentes (uma pelo email, outra pelo recoveryEmail), agrupar por `targetEmail` e enviar um e-mail por destino distinto (cada e-mail lista só as contas daquele destino) — não misturar contas de destinos diferentes num só envio. Para cada grupo: `to = targetEmail` do grupo, `subject` = o mesmo atual ("Recuperar acesso ao Vis").
 
 **Preservado sem alteração:** resposta genérica 200 sempre idêntica; piso de latência 1200ms (`Promise.all([doWork, sleep])`); rate-limit por IP (429) e por e-mail (não curto-circuita); `NEXT_PUBLIC_APP_URL` como fonte única do link (anti-poisoning); token selector/verifier; `sendEmail` em try/catch que não relança.
 
@@ -85,9 +87,16 @@ O campo opcional "E-mail de recuperação" entra nos dois forms do dashboard:
 - `src/app/(dashboard)/dashboard/funcionarios/page.tsx` — hoje gera `@funcionario.interno` e não mostra campo de e-mail. Ganha o campo opcional.
 - `src/app/(dashboard)/dashboard/usuarios/page.tsx` — hoje tem o campo "login" (vira `@login`). Ganha o campo opcional ao lado.
 
-Ambos postam em `POST /api/users` (criar) e `PUT /api/users/[id]` (editar). A rota (`src/app/api/users/route.ts`, `src/app/api/users/[id]/route.ts`) e/ou `src/services/user.service.ts` passam a aceitar e persistir `recoveryEmail`:
-- validação: formato de e-mail ou vazio→null; grava lowercase;
-- ajuda curta no campo: "Serve para a pessoa recuperar a senha sozinha por e-mail."
+Ambos postam em `POST /api/users` (criar) e `PUT /api/users/[id]` (editar). Persistir `recoveryEmail` exige tocar **4 pontos** (achados na revisão da spec):
+
+1. **Schemas zod** (`src/lib/validations/user.schema.ts`, `createUserSchema` + `updateUserSchema`): adicionar `recoveryEmail`. ⚠️ O campo `email` desses schemas é `z.string().min(1)` (é *login*, não e-mail) — NÃO confundir. Forma que aceita vazio→null:
+   `recoveryEmail: z.string().email().or(z.literal("")).nullable().optional()` (ou refino equivalente que aceite `""`, senão um `.email()` cru rejeita vazio e colide com a regra "vazio→null").
+
+2. **`sanitizeUserDTO`** (mesmo arquivo): ⚠️ **BLOQUEANTE se ignorado.** Ele hoje REMOVE qualquer campo `""`/`null`/`undefined` do DTO — então mandar `recoveryEmail: ""` para *limpar* nunca chega ao serviço (o valor antigo persiste). Correção: tratar `recoveryEmail` explicitamente — mapear `""`→`null` e deixá-lo PASSAR (não ser engolido), para que limpar o campo funcione no update.
+
+3. **`user.service.ts` (create + update)**: normalizar `recoveryEmail` (trim + lowercase; `""`/whitespace → `null`), análogo ao que já é feito com `email` (linha 148). E adicionar **`recoveryEmail: true`** aos `select` (linhas ~66, ~100, ~152) para a UI reexibir o valor salvo.
+
+4. **Forms** (funcionarios/usuarios): campo opcional "E-mail de recuperação", ajuda curta: "Serve para a pessoa recuperar a senha sozinha por e-mail." Pré-preencher no modo edição a partir do `recoveryEmail` retornado.
 
 Isso permite ao dono/gerente abrir cada uma das 5 contas atuais (e contas ADMIN/GERENTE com e-mail fake como `admin@pdvotica.com`) e preencher o e-mail real — o reset passa a alcançá-las.
 
@@ -107,7 +116,7 @@ usuário digita e-mail X em /esqueci-senha
 - Conta sintética SEM `recoveryEmail` → continua descartada (não recebe nada). Correto.
 - `recoveryEmail` = string vazia/whitespace → gravado `NULL`, não `""`.
 - Mesmo `recoveryEmail` em N contas → cada conta recebe seu link (multi-conta).
-- Conta achada tanto por `email` quanto por `recoveryEmail` (digitou o próprio recoveryEmail que por acaso é o email de outra) → dedup por `userId` (não gerar 2 tokens para o mesmo usuário no mesmo pedido).
+- Conta única aparece só uma vez no `findMany` mesmo casando os dois campos (Prisma não duplica rows num OR) — dedup por `userId` é defensivo/no-op aqui, não o mecanismo principal. O agrupamento real que importa é **por `targetEmail`** (contas DISTINTAS com o mesmo destino → um envio; destinos diferentes → um envio cada).
 - `sendEmail` falha (Resend fora) → logado, engolido, resposta genérica não revela. Token criado; usuário pode pedir de novo.
 - Anti-enumeração: e-mail existente vs. inexistente → resposta idêntica, tempo uniforme.
 
