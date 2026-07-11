@@ -266,6 +266,25 @@ describe("colunas de ótica", () => {
     );
   });
 
+  it("ensureOpticalStages: ótica legada de 5 colunas (sem 'Exame agendado') cria a coluna JÁ com a flag EXAM_SCHEDULED", async () => {
+    prismaMock.leadStage.findMany.mockResolvedValue([
+      { id: "s0", name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null },
+      { id: "s1", name: "Em atendimento", order: 1, isWon: false, isLost: false, systemKey: null },
+      { id: "s2", name: "Orçamento enviado", order: 2, isWon: false, isLost: false, systemKey: null },
+      { id: "s3", name: "Fechado", order: 3, isWon: true, isLost: false, systemKey: null },
+      { id: "s4", name: "Perdido", order: 4, isWon: false, isLost: true, systemKey: null },
+    ]);
+    prismaMock.leadStage.createMany.mockResolvedValue({ count: 3 });
+
+    const created = await ensureOpticalStages("company_1");
+
+    expect(created).toBe(3);
+    const call = prismaMock.leadStage.createMany.mock.calls[0][0];
+    const examScheduled = call.data.find((s: { name: string }) => s.name === "Exame agendado");
+    expect(examScheduled).toBeDefined();
+    expect(examScheduled.systemKey).toBe(LEAD_STAGE_KEYS.EXAM_SCHEDULED);
+  });
+
   it("ensureOpticalStages: anti-colisão — se OUTRA coluna já tem EXAM_SCHEDULED, não grava a flag numa segunda coluna 'Exame agendado' sem flag", async () => {
     prismaMock.leadStage.findMany.mockResolvedValue([
       { id: "s0", name: "Novo", order: 0, isWon: false, isLost: false, systemKey: null },

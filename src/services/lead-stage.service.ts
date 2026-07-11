@@ -71,7 +71,7 @@ export async function deleteStage(id: string, companyId: string) {
 
 /** As 3 colunas de ótica que uma ótica legada (funil de 5) ainda não tem. */
 const OPTICAL_STAGES = [
-  { name: "Exame agendado", isWon: false, isLost: false, systemKey: null as string | null },
+  { name: "Exame agendado", isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_SCHEDULED as string | null },
   { name: "Exame feito", isWon: false, isLost: false, systemKey: LEAD_STAGE_KEYS.EXAM_DONE as string | null },
   { name: "Aguardando OS/lab", isWon: false, isLost: false, systemKey: null as string | null },
 ] as const;
@@ -139,9 +139,18 @@ export async function ensureOpticalStages(companyId: string): Promise<number> {
     name: s.name,
     isWon: s.isWon,
     isLost: s.isLost,
-    // Não duplica a flag EXAM_DONE se a ótica já tem um estágio com ela (evita
-    // colisão do índice único parcial (companyId, systemKey)).
-    systemKey: s.systemKey === LEAD_STAGE_KEYS.EXAM_DONE && hasExamDoneKey ? null : s.systemKey,
+    // Não duplica a flag EXAM_DONE/EXAM_SCHEDULED se a ótica já tem um estágio
+    // com ela (evita colisão do índice único parcial (companyId, systemKey)).
+    // hasExamScheduledKey é lido de `existing` (ANTES do backfill acima já ter
+    // rodado) — mas isso não colide: se o backfill acabou de gravar a flag numa
+    // coluna EXISTENTE, essa coluna "Exame agendado" já estava em `existingNames`,
+    // logo não entra em `missing`/`toCreate`. As duas gravações (backfill de
+    // coluna existente vs. flag em coluna nova) são mutuamente exclusivas.
+    systemKey:
+      (s.systemKey === LEAD_STAGE_KEYS.EXAM_DONE && hasExamDoneKey) ||
+      (s.systemKey === LEAD_STAGE_KEYS.EXAM_SCHEDULED && hasExamScheduledKey)
+        ? null
+        : s.systemKey,
     order: insertAt + i,
     companyId,
   }));
