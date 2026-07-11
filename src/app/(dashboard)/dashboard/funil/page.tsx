@@ -38,6 +38,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { WhatsappInbox } from "@/components/funil/whatsapp-inbox";
 import { FunilTodayQueue } from "@/components/funil/funil-today-queue";
 import { FunilRecuperar } from "@/components/funil/funil-recuperar";
+import { AgendaExame } from "@/components/funil/agenda-exame";
 import { useWhatsappEnabled } from "@/hooks/useWhatsappEnabled";
 import { ACCURACY_MIN_SAMPLE } from "@/lib/intent-accuracy";
 import { intentLabel } from "@/lib/contact-intent-label";
@@ -573,6 +574,7 @@ function FunilPage() {
           <TabsTrigger value="hoje">Fila de Hoje</TabsTrigger>
           <TabsTrigger value="funil">Funil</TabsTrigger>
           <TabsTrigger value="recuperar">Recuperar</TabsTrigger>
+          <TabsTrigger value="agenda">Agenda</TabsTrigger>
           {whatsappEnabled && <TabsTrigger value="conversas">Conversas</TabsTrigger>}
         </TabsList>
         <TabsContent value="hoje" className="mt-4">
@@ -583,6 +585,9 @@ function FunilPage() {
         </TabsContent>
         <TabsContent value="recuperar" className="mt-4">
           <FunilRecuperar active={activeTab === "recuperar"} branchId={branchParam} />
+        </TabsContent>
+        <TabsContent value="agenda" className="mt-4">
+          <AgendaExame active={activeTab === "agenda"} branchId={branchParam} />
         </TabsContent>
         {whatsappEnabled && (
           <TabsContent value="conversas" className="mt-4">
