@@ -49,7 +49,8 @@ DECISÃO CRAVADA (sem "OU"): **manter a chave `email` no schema**, relaxando a v
 ### 2. Rota super admin — PATCH (editar) `.../users/[userId]/route.ts`
 
 DECISÃO CRAVADA: **remover `email` do `updateUserSchema`** (linha 54-60) — login é read-only, não editável. O modal para de enviar `email` (ver §3). Se alguma chave `email` chegar, o Zod default (`.strip()`) a ignora. Resultado: o login NÃO é alterado por esta rota → BUG-1 neutralizado.
-- Adicionar `recoveryEmail: z.string().email().or(z.literal("")).nullable().optional()` ao `updateUserSchema` e persistir normalizado.
+- Adicionar `recoveryEmail: z.string().email().or(z.literal("")).nullable().optional()` ao `updateUserSchema`.
+- ⚠️ **Persistir de forma que LIMPAR funcione** (a rota usa hoje o padrão `...(campo && { campo })` que DESCARTA string vazia — então `recoveryEmail: ""` não limparia). Cravar: `if ("recoveryEmail" in parsed.data) data.recoveryEmail = normalizeRecoveryEmail(parsed.data.recoveryEmail);` — NÃO usar o `&&`, senão vazio vira no-op silencioso (mesmo cuidado que o dashboard já tem em `usuarios/page.tsx:205-207`).
 - **Corrigir BUG-2 (cravado, não condicional):** adicionar `companyId` ao `where` da checagem de duplicidade (linhas 98-100), seguindo o padrão correto do POST (156-161). Fazer isso mesmo com o email virando read-only, por higiene (a checagem hoje é cross-tenant e está em prod). Nota: com `email` fora do schema, o bloco `if (email && ...)` fica morto — remover o bloco inteiro OU corrigi-lo; preferir remover (login não muda mais).
 - **GET individual** `[userId]/route.ts` (select linhas 28-42): adicionar `recoveryEmail: true`.
 - ⚠️ **GET de LISTA** `route.ts` (select linhas 51-63): adicionar `recoveryEmail: true` TAMBÉM — o `EditUserModal` é alimentado pelo objeto da LISTA (`fetchUsers`), não por um GET individual (ver §3). Sem isso o modal de edição não pré-preenche.
