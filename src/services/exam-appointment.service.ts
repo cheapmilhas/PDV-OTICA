@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { notFoundError } from "@/lib/error-handler";
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
 import { logger } from "@/lib/logger";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 import type { ExamAppointmentStatus } from "@prisma/client";
 
 const log = logger.child({ service: "exam-appointment" });
@@ -142,5 +143,35 @@ export async function updateExamAppointment(
     }
 
     return updated;
+  });
+}
+
+/**
+ * Agenda-do-dia: lista os agendamentos de exame cuja `scheduledAt` cai dentro
+ * do dia LOCAL (BRT), não do dia UTC cru — evita que um exame marcado às 22h
+ * BRT (01h UTC do dia seguinte) vaze para a agenda do dia seguinte.
+ */
+export async function listExamAppointmentsForDay(
+  day: Date,
+  companyId: string,
+  branchId?: string | null,
+) {
+  const gte = startOfLocalDay(day);
+  const lte = endOfLocalDay(day);
+  return prisma.examAppointment.findMany({
+    where: {
+      companyId,
+      scheduledAt: { gte, lte },
+      ...(branchId ? { branchId } : {}),
+    },
+    orderBy: { scheduledAt: "asc" },
+    select: {
+      id: true,
+      scheduledAt: true,
+      status: true,
+      note: true,
+      lead: { select: { id: true, name: true, phone: true } },
+      assignedUser: { select: { id: true, name: true } },
+    },
   });
 }

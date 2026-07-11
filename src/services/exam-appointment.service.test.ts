@@ -13,6 +13,7 @@ const { prismaMock } = vi.hoisted(() => ({
       create: vi.fn(),
       findFirst: vi.fn(),
       update: vi.fn(),
+      findMany: vi.fn(),
     },
     leadStage: {
       findFirst: vi.fn(),
@@ -22,8 +23,13 @@ const { prismaMock } = vi.hoisted(() => ({
 }));
 vi.mock("@/lib/prisma", () => ({ prisma: prismaMock }));
 
-import { createExamAppointment, updateExamAppointment } from "@/services/exam-appointment.service";
+import {
+  createExamAppointment,
+  updateExamAppointment,
+  listExamAppointmentsForDay,
+} from "@/services/exam-appointment.service";
 import { LEAD_STAGE_KEYS } from "@/lib/lead-stage-keys";
+import { startOfLocalDay, endOfLocalDay } from "@/lib/date-utils";
 
 const COMPANY_ID = "company_1";
 const CREATED_BY = "user_creator";
@@ -362,5 +368,66 @@ describe("updateExamAppointment", () => {
       select: expect.any(Object),
     });
     expect(prismaMock.examAppointment.update).not.toHaveBeenCalled();
+  });
+});
+
+describe("listExamAppointmentsForDay", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  const DAY = new Date("2026-08-15T22:00:00-03:00"); // 22h BRT = 01h UTC do dia seguinte
+
+  it("filtra por companyId e pela janela do dia LOCAL (BRT), via startOfLocalDay/endOfLocalDay, orderBy scheduledAt asc", async () => {
+    prismaMock.examAppointment.findMany.mockResolvedValue([]);
+
+    await listExamAppointmentsForDay(DAY, COMPANY_ID);
+
+    const expectedGte = startOfLocalDay(DAY);
+    const expectedLte = endOfLocalDay(DAY);
+
+    expect(prismaMock.examAppointment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          companyId: COMPANY_ID,
+          scheduledAt: { gte: expectedGte, lte: expectedLte },
+        }),
+        orderBy: { scheduledAt: "asc" },
+      }),
+    );
+
+    // Prova de fuso: a janela NÃO é a UTC crua do dia (00:00Z–23:59:59.999Z),
+    // e sim o instante UTC correspondente a 00:00/23:59:59.999 em BRT — o que
+    // garante que um exame às 22h BRT não vaza para o dia seguinte.
+    expect(expectedGte.toISOString()).not.toBe("2026-08-15T00:00:00.000Z");
+    expect(expectedLte.toISOString()).not.toBe("2026-08-15T23:59:59.999Z");
+  });
+
+  it("com branchId → where inclui branchId", async () => {
+    prismaMock.examAppointment.findMany.mockResolvedValue([]);
+
+    await listExamAppointmentsForDay(DAY, COMPANY_ID, "branch_1");
+
+    expect(prismaMock.examAppointment.findMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ branchId: "branch_1" }),
+      }),
+    );
+  });
+
+  it("sem branchId (undefined) → where NÃO inclui a chave branchId (retorna todos da empresa)", async () => {
+    prismaMock.examAppointment.findMany.mockResolvedValue([]);
+
+    await listExamAppointmentsForDay(DAY, COMPANY_ID);
+
+    const call = prismaMock.examAppointment.findMany.mock.calls[0][0];
+    expect(Object.prototype.hasOwnProperty.call(call.where, "branchId")).toBe(false);
+  });
+
+  it("com branchId null → where NÃO inclui a chave branchId", async () => {
+    prismaMock.examAppointment.findMany.mockResolvedValue([]);
+
+    await listExamAppointmentsForDay(DAY, COMPANY_ID, null);
+
+    const call = prismaMock.examAppointment.findMany.mock.calls[0][0];
+    expect(Object.prototype.hasOwnProperty.call(call.where, "branchId")).toBe(false);
   });
 });
