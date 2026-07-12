@@ -12,13 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, AlertTriangle, ArrowRight } from "lucide-react";
 
@@ -185,7 +185,7 @@ export function CommissionPreviewTab() {
                   Nenhum vendedor com vendas nesse mês.
                 </p>
               ) : (
-                <Table>
+                <ResponsiveTable cards minWidth={760}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Vendedor</TableHead>
@@ -198,15 +198,15 @@ export function CommissionPreviewTab() {
                   <TableBody>
                     {report.rows.map((r) => (
                       <TableRow key={r.userId}>
-                        <TableCell className="font-medium">{r.userName}</TableCell>
-                        <TableCell className="text-right">{brl(r.current)}</TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell className="font-medium" data-label="Vendedor">{r.userName}</TableCell>
+                        <TableCell className="text-right" data-label="Atual">{brl(r.current)}</TableCell>
+                        <TableCell className="text-right font-medium" data-label="Nova">
                           <span className="inline-flex items-center gap-1">
                             <ArrowRight className="h-3 w-3 text-muted-foreground" />
                             {brl(r.proposed)}
                           </span>
                         </TableCell>
-                        <TableCell className={`text-right font-medium ${diffClass(r.diff)}`}>
+                        <TableCell className={`text-right font-medium ${diffClass(r.diff)}`} data-label="Diferença">
                           {Number(r.diff) >= 0 ? "+" : ""}{brl(r.diff)}
                           {r.diffPercent !== null && (
                             <span className="block text-xs text-muted-foreground">
@@ -214,7 +214,7 @@ export function CommissionPreviewTab() {
                             </span>
                           )}
                         </TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
+                        <TableCell className="text-right text-xs text-muted-foreground" data-label="Detalhe (nova)">
                           meta {brl(r.proposedDetail.metaCommission)} ({r.proposedDetail.appliedPercent}%)
                           <br />
                           campanha {brl(r.proposedDetail.campaignBonus)}
@@ -222,7 +222,7 @@ export function CommissionPreviewTab() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                </ResponsiveTable>
               )}
             </CardContent>
           </Card>

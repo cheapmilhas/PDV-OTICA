@@ -6,13 +6,13 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -264,7 +264,7 @@ export default function CashbackPage() {
                 )}
               </div>
             ) : (
-              <Table>
+              <ResponsiveTable cards minWidth={760}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Cliente</TableHead>
@@ -278,7 +278,7 @@ export default function CashbackPage() {
                 <TableBody>
                   {filteredCustomers.map((customer) => (
                     <TableRow key={customer.customerId}>
-                      <TableCell className="font-medium">
+                      <TableCell className="font-medium" data-label="Cliente">
                         <Link
                           href={`/dashboard/clientes/${customer.customerId}`}
                           className="hover:underline text-primary"
@@ -286,21 +286,21 @@ export default function CashbackPage() {
                           {customer.customerName}
                         </Link>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" data-label="Saldo">
                         <span className="font-semibold text-green-600">
                           {formatCurrency(customer.balance)}
                         </span>
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell className="text-right" data-label="Total Ganho">
                         {formatCurrency(customer.totalEarned)}
                       </TableCell>
-                      <TableCell className="text-right text-blue-600">
+                      <TableCell className="text-right text-blue-600" data-label="Total Usado">
                         {formatCurrency(customer.totalUsed)}
                       </TableCell>
-                      <TableCell className="text-right text-muted-foreground">
+                      <TableCell className="text-right text-muted-foreground" data-label="Expirado">
                         {formatCurrency(customer.totalExpired)}
                       </TableCell>
-                      <TableCell className="text-right text-sm text-muted-foreground">
+                      <TableCell className="text-right text-sm text-muted-foreground" data-label="Último Movimento">
                         {customer.lastMovement
                           ? format(new Date(customer.lastMovement), "dd/MM/yyyy", { locale: ptBR })
                           : "-"}
@@ -308,7 +308,7 @@ export default function CashbackPage() {
                     </TableRow>
                   ))}
                 </TableBody>
-              </Table>
+              </ResponsiveTable>
             )}
           </CardContent>
         </Card>

@@ -435,7 +435,7 @@ export default function DetalhesVendaPage() {
       ]} />
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <Button
             variant="ghost"
@@ -446,7 +446,7 @@ export default function DetalhesVendaPage() {
             Voltar
           </Button>
           <div>
-            <h1 className="text-3xl font-bold">
+            <h1 className="text-2xl md:text-3xl font-bold">
               Venda {saleDisplayNumber(sale)}
             </h1>
             <p className="text-muted-foreground">
@@ -456,7 +456,7 @@ export default function DetalhesVendaPage() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {sale.status !== "CANCELED" && sale.status !== "REFUNDED" ? (
             <>
               <Badge variant="default">Ativa</Badge>
@@ -466,7 +466,7 @@ export default function DetalhesVendaPage() {
                   variant="outline"
                   size="sm"
                   onClick={() => router.push(`/dashboard/ordens-servico/${sale.serviceOrder!.id}/detalhes`)}
-                  className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                  className="flex-1 md:flex-none border-blue-600 text-blue-600 hover:bg-blue-50"
                 >
                   <ClipboardList className="h-4 w-4 mr-2" />
                   Ver OS #{String(sale.serviceOrder.number).padStart(6, "0")}
@@ -480,7 +480,7 @@ export default function DetalhesVendaPage() {
                     size="sm"
                     onClick={handleGerarOS}
                     disabled={generatingOS}
-                    className="border-blue-600 text-blue-600 hover:bg-blue-50"
+                    className="flex-1 md:flex-none border-blue-600 text-blue-600 hover:bg-blue-50"
                   >
                     <ClipboardList className="h-4 w-4 mr-2" />
                     {generatingOS ? "Gerando..." : "Gerar OS"}
@@ -493,7 +493,7 @@ export default function DetalhesVendaPage() {
                   size="sm"
                   onClick={handleThankYouWhatsApp}
                   disabled={sendingWhatsApp}
-                  className="border-green-600 text-green-600 hover:bg-green-50"
+                  className="flex-1 md:flex-none border-green-600 text-green-600 hover:bg-green-50"
                 >
                   <MessageCircle className="h-4 w-4 mr-2" />
                   {sendingWhatsApp ? "Enviando..." : "Agradecer pelo WhatsApp"}
@@ -502,6 +502,7 @@ export default function DetalhesVendaPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="flex-1 md:flex-none"
                 onClick={() => router.push(`/dashboard/vendas/${id}/imprimir`)}
               >
                 <Printer className="h-4 w-4 mr-2" />
@@ -510,6 +511,7 @@ export default function DetalhesVendaPage() {
               <Button
                 variant="outline"
                 size="sm"
+                className="flex-1 md:flex-none"
                 onClick={() => window.open(`/api/sales/${id}/pdf`, "_blank")}
               >
                 <FileText className="h-4 w-4 mr-2" />
@@ -519,6 +521,7 @@ export default function DetalhesVendaPage() {
                 <Button
                   variant="outline"
                   size="sm"
+                  className="flex-1 md:flex-none"
                   onClick={() => window.open(`/api/sales/${id}/carne`, "_blank")}
                 >
                   <FileText className="h-4 w-4 mr-2" />
@@ -529,6 +532,7 @@ export default function DetalhesVendaPage() {
                 <Button
                   variant="destructive"
                   size="sm"
+                  className="flex-1 md:flex-none"
                   onClick={() => setCancelDialogOpen(true)}
                   disabled={canceling}
                 >
@@ -543,6 +547,7 @@ export default function DetalhesVendaPage() {
                 <Button
                   variant="default"
                   size="sm"
+                  className="flex-1 md:flex-none"
                   onClick={handleReactivate}
                   disabled={reactivating}
                 >

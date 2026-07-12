@@ -203,15 +203,15 @@ function ConfiguracoesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Configurações</h1>
+          <h1 className="text-2xl font-bold md:text-3xl">Configurações</h1>
           <p className="text-muted-foreground">
             Gerencie as configurações do sistema
           </p>
         </div>
         {hasPermission("settings.edit") && (
-          <Button onClick={handleSalvarConfiguracoes} disabled={loading}>
+          <Button onClick={handleSalvarConfiguracoes} disabled={loading} className="flex-1 md:flex-none">
             <Save className="mr-2 h-4 w-4" />
             {loading ? "Salvando..." : "Salvar Alterações"}
           </Button>

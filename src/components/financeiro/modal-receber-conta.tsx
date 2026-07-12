@@ -177,8 +177,9 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
           </DialogDescription>
         </DialogHeader>
 
-        {/* Conteúdo Compacto SEM Scroll */}
-        <div className="flex-1 px-6 py-3 space-y-3 overflow-hidden">
+        {/* Conteúdo — rola no mobile (inputs maiores podem exceder a altura);
+            compacto sem scroll no desktop. */}
+        <div className="flex-1 px-6 py-3 space-y-3 overflow-y-auto md:overflow-hidden">
           {/* Resumo com penalidades */}
           <div className="rounded-lg border p-2 bg-muted/50 space-y-1">
             <div className="flex items-center justify-between text-xs px-1">
@@ -230,7 +231,7 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             {/* Coluna Esquerda - Adicionar Pagamento */}
             <div className="space-y-2">
               {/* Formas de Pagamento */}
@@ -243,16 +244,16 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
                       <button
                         key={method.id}
                         onClick={() => setSelectedMethod(method.id)}
-                        className={`flex flex-col items-center gap-1 rounded border-2 p-1.5 transition-all hover:bg-accent ${
+                        className={`flex flex-col items-center justify-center md:justify-normal gap-1 rounded border-2 p-2 min-h-16 md:min-h-0 md:p-1.5 transition-all hover:bg-accent ${
                           selectedMethod === method.id
                             ? "border-primary bg-accent"
                             : "border-border"
                         }`}
                       >
                         <div className={`rounded-full p-1 ${method.color} text-white`}>
-                          <Icon className="h-3 w-3" />
+                          <Icon className="h-5 w-5 md:h-3 md:w-3" />
                         </div>
-                        <span className="text-[10px] text-center leading-tight">{method.label}</span>
+                        <span className="text-xs md:text-[10px] text-center leading-tight">{method.label}</span>
                       </button>
                     );
                   })}
@@ -266,12 +267,13 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
                   <Input
                     id="discount"
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     min="0"
                     placeholder="0,00"
                     value={discount}
                     onChange={(e) => setDiscount(e.target.value)}
-                    className="h-8 text-sm"
+                    className="h-11 md:h-8 text-base md:text-sm"
                   />
                 </div>
               )}
@@ -283,26 +285,27 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
                   <Input
                     id="amount"
                     type="number"
+                    inputMode="decimal"
                     step="0.01"
                     placeholder="0,00"
                     value={amount}
                     onChange={(e) => setAmount(e.target.value)}
                     disabled={!selectedMethod}
-                    className="h-8 text-sm"
+                    className="h-11 md:h-8 text-base md:text-sm"
                   />
                   <Button
                     variant="outline"
                     size="sm"
                     onClick={quickFill}
                     disabled={!selectedMethod || remaining <= 0}
-                    className="h-8 text-xs px-2"
+                    className="h-11 md:h-8 text-sm md:text-xs px-3 md:px-2"
                   >
                     Total
                   </Button>
                 </div>
               </div>
 
-              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-8 text-sm">
+              <Button onClick={addPayment} disabled={!selectedMethod || !amount} className="w-full h-11 md:h-8 text-sm">
                 Adicionar Pagamento
               </Button>
             </div>
@@ -341,9 +344,10 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
                             variant="ghost"
                             size="sm"
                             onClick={() => removePayment(payment.id)}
-                            className="h-6 w-6 p-0"
+                            aria-label="Remover pagamento"
+                            className="h-9 w-9 md:h-6 md:w-6 p-0"
                           >
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                            <Trash2 className="h-4 w-4 md:h-3 md:w-3 text-destructive" />
                           </Button>
                         </div>
                       </div>
@@ -360,14 +364,14 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 h-9"
+              className="flex-1 h-11 md:h-9"
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancelar
             </Button>
             <Button
-              className="flex-1 h-9"
+              className="flex-1 h-11 md:h-9"
               onClick={handleConfirm}
               disabled={payments.length === 0 || loading}
             >

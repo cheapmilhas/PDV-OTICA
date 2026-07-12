@@ -715,7 +715,7 @@ function ClienteDetalhesPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <Button variant="ghost" size="icon" asChild>
             <Link href="/dashboard/clientes">
@@ -727,7 +727,7 @@ function ClienteDetalhesPage() {
               <AvatarFallback className="text-xl">{getInitials(customer?.name)}</AvatarFallback>
             </Avatar>
             <div>
-              <h1 className="text-3xl font-bold">{customer.name}</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">{customer.name}</h1>
               <p className="text-sm text-muted-foreground">
                 Cliente desde {formatCivilDate(customer.createdAt)}
               </p>
@@ -735,11 +735,11 @@ function ClienteDetalhesPage() {
           </div>
         </div>
 
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {customer.phone && (
             <Button
               variant="outline"
-              className="text-green-600 border-green-300 hover:bg-green-50"
+              className="flex-1 md:flex-none text-green-600 border-green-300 hover:bg-green-50"
               onClick={() => handleOpenWhatsApp()}
             >
               <MessageCircle className="mr-2 h-4 w-4" />
@@ -748,13 +748,14 @@ function ClienteDetalhesPage() {
           )}
           <Button
             variant="outline"
+            className="flex-1 md:flex-none"
             onClick={() => setShowContactDialog(true)}
           >
             <PhoneCall className="mr-2 h-4 w-4" />
             Registrar Contato
           </Button>
           {hasPermission("customers.edit") && (
-            <Button asChild>
+            <Button asChild className="flex-1 md:flex-none">
               <Link href={`/dashboard/clientes/${customerId}/editar`}>
                 <Edit className="mr-2 h-4 w-4" />
                 Editar

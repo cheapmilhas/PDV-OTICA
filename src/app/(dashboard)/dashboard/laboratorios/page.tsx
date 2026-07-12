@@ -8,13 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -397,7 +397,7 @@ function LaboratoriosPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <ResponsiveTable cards minWidth={760}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Laboratório</TableHead>
@@ -411,7 +411,7 @@ function LaboratoriosPage() {
               <TableBody>
                 {laboratories.map((lab) => (
                   <TableRow key={lab.id}>
-                    <TableCell>
+                    <TableCell data-label="Laboratório">
                       <div className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback className="bg-purple-100 text-purple-600">
@@ -428,7 +428,7 @@ function LaboratoriosPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Contato">
                       <div className="space-y-1">
                         {lab.contactPerson && (
                           <p className="text-sm font-medium">
@@ -449,7 +449,7 @@ function LaboratoriosPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Prazos">
                       <div className="space-y-1 text-xs">
                         <div className="flex items-center gap-1">
                           <Clock className="h-3 w-3 text-muted-foreground" />
@@ -461,7 +461,7 @@ function LaboratoriosPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Estatísticas">
                       <div className="space-y-1">
                         <div className="flex items-center justify-center gap-1 text-sm">
                           <Star className="h-4 w-4 text-yellow-500 fill-yellow-500" />
@@ -477,12 +477,12 @@ function LaboratoriosPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Status">
                       <Badge variant={lab.active ? "default" : "secondary"}>
                         {lab.active ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -494,7 +494,7 @@ function LaboratoriosPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           </CardContent>
         </Card>
       )}

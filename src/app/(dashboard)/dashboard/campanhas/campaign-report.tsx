@@ -4,13 +4,13 @@ import { useState, useEffect } from "react";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TrendingUp, Users, Package, DollarSign } from "lucide-react";
 import { useToast } from "@/hooks/use-toast";
 
@@ -159,7 +159,7 @@ export function CampaignReport({ campaignId }: CampaignReportProps) {
           <CardDescription>Distribuição dos bônus por status de pagamento</CardDescription>
         </CardHeader>
         <CardContent>
-          <Table>
+          <ResponsiveTable cards minWidth={640}>
             <TableHeader>
               <TableRow>
                 <TableHead>Status</TableHead>
@@ -170,17 +170,17 @@ export function CampaignReport({ campaignId }: CampaignReportProps) {
             <TableBody>
               {report.summary.byStatus.map((item) => (
                 <TableRow key={item.status}>
-                  <TableCell>
+                  <TableCell data-label="Status">
                     <Badge variant="outline">{STATUS_LABELS[item.status]}</Badge>
                   </TableCell>
-                  <TableCell className="text-right">{item._count}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell className="text-right" data-label="Quantidade">{item._count}</TableCell>
+                  <TableCell className="text-right" data-label="Total (R$)">
                     R$ {(item._sum.bonusAmount || 0).toFixed(2)}
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
         </CardContent>
       </Card>
 
@@ -196,7 +196,7 @@ export function CampaignReport({ campaignId }: CampaignReportProps) {
               Nenhum vendedor com bonificação
             </div>
           ) : (
-            <Table>
+            <ResponsiveTable cards minWidth={640}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Vendedor</TableHead>
@@ -206,16 +206,16 @@ export function CampaignReport({ campaignId }: CampaignReportProps) {
               <TableBody>
                 {report.topSellers.map((seller, index) => (
                   <TableRow key={seller.sellerId}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium" data-label="Vendedor">
                       {index + 1}. {seller.sellerName}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="Total de Bônus (R$)">
                       R$ {seller.totalBonus.toFixed(2)}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           )}
         </CardContent>
       </Card>
@@ -232,7 +232,7 @@ export function CampaignReport({ campaignId }: CampaignReportProps) {
               Nenhum produto vendido
             </div>
           ) : (
-            <Table>
+            <ResponsiveTable cards minWidth={640}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Produto</TableHead>
@@ -243,17 +243,17 @@ export function CampaignReport({ campaignId }: CampaignReportProps) {
               <TableBody>
                 {report.topProducts.map((product, index) => (
                   <TableRow key={product.productId}>
-                    <TableCell className="font-medium">
+                    <TableCell className="font-medium" data-label="Produto">
                       {index + 1}. {product.productName}
                     </TableCell>
-                    <TableCell className="text-right">{product.totalQuantity}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="Quantidade">{product.totalQuantity}</TableCell>
+                    <TableCell className="text-right" data-label="Total de Bônus (R$)">
                       R$ {product.totalBonus.toFixed(2)}
                     </TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           )}
         </CardContent>
       </Card>

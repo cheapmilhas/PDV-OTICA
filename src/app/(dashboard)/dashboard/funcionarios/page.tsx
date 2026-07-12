@@ -8,13 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -277,7 +277,7 @@ function FuncionariosPage() {
       {!loading && employees.length > 0 && (
         <Card>
           <CardContent className="p-0">
-            <Table>
+            <ResponsiveTable cards minWidth={640}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
@@ -289,7 +289,7 @@ function FuncionariosPage() {
               <TableBody>
                 {employees.map((emp) => (
                   <TableRow key={emp.id}>
-                    <TableCell>
+                    <TableCell data-label="Nome">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
                           <AvatarFallback className="bg-green-100 text-green-700">
@@ -299,7 +299,7 @@ function FuncionariosPage() {
                         <p className="font-medium">{emp.name}</p>
                       </div>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Comissão">
                       {emp.defaultCommissionPercent ? (
                         <span className="inline-flex items-center gap-1 text-sm font-medium">
                           {emp.defaultCommissionPercent}%
@@ -308,7 +308,7 @@ function FuncionariosPage() {
                         <span className="text-muted-foreground text-sm">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Status">
                       <Badge
                         variant={emp.active ? "default" : "secondary"}
                         className="cursor-pointer"
@@ -317,7 +317,7 @@ function FuncionariosPage() {
                         {emp.active ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -330,7 +330,7 @@ function FuncionariosPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           </CardContent>
         </Card>
       )}

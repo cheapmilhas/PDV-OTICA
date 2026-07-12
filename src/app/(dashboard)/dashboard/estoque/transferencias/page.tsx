@@ -276,14 +276,14 @@ function TransferenciasContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-3">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:flex-wrap">
         <div>
           <h1 className="text-2xl md:text-3xl font-bold">Transferências de Estoque</h1>
           <p className="text-muted-foreground text-sm hidden sm:block">
             Movimentação de produtos entre filiais
           </p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex items-center gap-2 flex-wrap">
           <Select value={statusFilter} onValueChange={setStatusFilter}>
             <SelectTrigger className="w-[160px]">
               <SelectValue placeholder="Status" />

@@ -15,13 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -215,7 +215,7 @@ function ConciliacaoListPage() {
       {/* Batch Table */}
       {!loading && batches.length > 0 && (
         <Card>
-          <Table>
+          <ResponsiveTable cards minWidth={760}>
             <TableHeader>
               <TableRow>
                 <TableHead>Adquirente</TableHead>
@@ -241,23 +241,23 @@ function ConciliacaoListPage() {
                     className="cursor-pointer hover:bg-muted/50"
                     onClick={() => router.push(`/dashboard/financeiro/conciliacao/${batch.id}`)}
                   >
-                    <TableCell>
+                    <TableCell data-label="Adquirente">
                       <div>
                         <p className="font-medium">{batch.acquirerName || batch.name || "-"}</p>
                         <p className="text-xs text-muted-foreground">{batch.description || batch.name || ""}</p>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Período">
                       {batch.periodStart && batch.periodEnd
                         ? formatPeriod(batch.periodStart, batch.periodEnd)
                         : "-"}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Status">
                       <Badge className={config.className}>
                         {config.label}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Conciliados" className="text-right">
                       <span className="text-green-600 font-medium">
                         {matched}
                       </span>
@@ -265,17 +265,17 @@ function ConciliacaoListPage() {
                         /{total}
                       </span>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Pendentes" className="text-right">
                       {pendingCount > 0 ? (
                         <span className="text-yellow-600 font-medium">{pendingCount}</span>
                       ) : (
                         <span className="text-muted-foreground">0</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-right font-semibold">
+                    <TableCell data-label="Valor Total" className="text-right font-semibold">
                       {formatCurrency(externalAmount)}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="" className="text-right">
                       <Button
                         size="sm"
                         variant="outline"
@@ -292,7 +292,7 @@ function ConciliacaoListPage() {
                 );
               })}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
         </Card>
       )}
 

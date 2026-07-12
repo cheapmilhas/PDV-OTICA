@@ -241,17 +241,17 @@ function ProdutosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between flex-wrap gap-4">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:flex-wrap">
         <div>
-          <h1 className="text-3xl font-bold">Produtos</h1>
+          <h1 className="text-2xl font-bold md:text-3xl">Produtos</h1>
           <p className="text-muted-foreground">Gerencie o catálogo de produtos da ótica</p>
         </div>
         <div className="flex gap-2 flex-wrap">
-          <Button variant="outline" onClick={handleDownloadTemplate}>
+          <Button variant="outline" onClick={handleDownloadTemplate} className="flex-1 md:flex-none">
             <FileDown className="mr-2 h-4 w-4" />
             Baixar Template
           </Button>
-          <Button variant="outline" onClick={handleExport} disabled={exporting}>
+          <Button variant="outline" onClick={handleExport} disabled={exporting} className="flex-1 md:flex-none">
             {exporting ? (
               <Loader2 className="mr-2 h-4 w-4 animate-spin" />
             ) : (
@@ -260,7 +260,7 @@ function ProdutosPage() {
             Exportar
           </Button>
           {hasPermission("products.create") && (
-            <Button variant="outline" disabled={importing} asChild>
+            <Button variant="outline" disabled={importing} asChild className="flex-1 md:flex-none">
               <label className="cursor-pointer">
                 {importing ? (
                   <Loader2 className="mr-2 h-4 w-4 animate-spin" />
@@ -279,7 +279,7 @@ function ProdutosPage() {
             </Button>
           )}
           <CanPermission permission="products.create">
-            <Button onClick={() => router.push("/dashboard/produtos/novo")}>
+            <Button onClick={() => router.push("/dashboard/produtos/novo")} className="flex-1 md:flex-none">
               <Plus className="mr-2 h-4 w-4" />
               Novo Produto
             </Button>

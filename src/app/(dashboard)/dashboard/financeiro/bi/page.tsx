@@ -14,13 +14,13 @@ import {
 import { Badge } from "@/components/ui/badge";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Calendar } from "@/components/ui/calendar";
 import {
   Popover,
@@ -529,13 +529,17 @@ function BIPageContent() {
         onValueChange={handleDimensionChange}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-5">
-          {DIMENSION_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* Mobile: rola horizontalmente (5 abas não cabem no iPhone).
+            Desktop: grid de 5 colunas iguais. */}
+        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+          <TabsList className="inline-flex w-max md:grid md:w-full md:grid-cols-5">
+            {DIMENSION_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         {DIMENSION_TABS.map((tab) => (
           <TabsContent key={tab.value} value={tab.value} className="space-y-6">
@@ -573,7 +577,7 @@ function BIPageContent() {
                       </p>
                     ) : (
                       <div className="overflow-x-auto">
-                        <Table>
+                        <ResponsiveTable cards minWidth={700}>
                           <TableHeader>
                             <TableRow>
                               <TableHead className="w-12">#</TableHead>
@@ -589,22 +593,22 @@ function BIPageContent() {
                               .sort((a, b) => b.revenue - a.revenue)
                               .map((row, index) => (
                                 <TableRow key={row.dimension}>
-                                  <TableCell className="font-medium text-muted-foreground">
+                                  <TableCell data-label="#" className="font-medium text-muted-foreground">
                                     {index + 1}
                                   </TableCell>
-                                  <TableCell className="font-medium">
+                                  <TableCell data-label="Nome" className="font-medium">
                                     {row.dimension}
                                   </TableCell>
-                                  <TableCell className="text-right font-semibold">
+                                  <TableCell data-label="Receita" className="text-right font-semibold">
                                     {formatCurrency(row.revenue)}
                                   </TableCell>
-                                  <TableCell className="text-right">
+                                  <TableCell data-label="Qtd" className="text-right">
                                     {row.quantity.toLocaleString("pt-BR")}
                                   </TableCell>
-                                  <TableCell className="text-right">
+                                  <TableCell data-label="Ticket Médio" className="text-right">
                                     {formatCurrency(row.avgTicket)}
                                   </TableCell>
-                                  <TableCell className="text-right">
+                                  <TableCell data-label="Margem %" className="text-right">
                                     <Badge
                                       variant={row.margin >= 50 ? "default" : row.margin >= 30 ? "secondary" : "destructive"}
                                     >
@@ -614,7 +618,7 @@ function BIPageContent() {
                                 </TableRow>
                               ))}
                           </TableBody>
-                        </Table>
+                        </ResponsiveTable>
                       </div>
                     )}
                   </CardContent>
@@ -805,7 +809,7 @@ function BIPageContent() {
                   </p>
                 ) : (
                   <div className="overflow-x-auto">
-                    <Table>
+                    <ResponsiveTable cards minWidth={640}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>Produto</TableHead>
@@ -817,10 +821,10 @@ function BIPageContent() {
                       <TableBody>
                         {stockData.data.map((row, index) => (
                           <TableRow key={index} className={getRowColorByAge(row.ageRange)}>
-                            <TableCell className="font-medium">
+                            <TableCell data-label="Produto" className="font-medium">
                               {row.productName}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell data-label="Dias Parado" className="text-right">
                               <Badge
                                 variant="outline"
                                 className={
@@ -830,16 +834,16 @@ function BIPageContent() {
                                 {row.daysInStock} dias
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell data-label="Qtd" className="text-right">
                               {row.quantity.toLocaleString("pt-BR")}
                             </TableCell>
-                            <TableCell className="text-right font-semibold">
+                            <TableCell data-label="Custo Total" className="text-right font-semibold">
                               {formatCurrency(row.totalCost)}
                             </TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
-                    </Table>
+                    </ResponsiveTable>
                   </div>
                 )}
               </CardContent>

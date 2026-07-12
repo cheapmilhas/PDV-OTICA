@@ -8,13 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -489,7 +489,7 @@ function FornecedoresPage() {
             </CardDescription>
           </CardHeader>
           <CardContent>
-            <Table>
+            <ResponsiveTable cards minWidth={640}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Fornecedor</TableHead>
@@ -502,7 +502,7 @@ function FornecedoresPage() {
               <TableBody>
                 {suppliers.map((supplier) => (
                   <TableRow key={supplier.id}>
-                    <TableCell>
+                    <TableCell data-label="Fornecedor">
                       <div className="flex items-center gap-3">
                         <Avatar>
                           <AvatarFallback className="bg-blue-100 text-blue-600">
@@ -519,7 +519,7 @@ function FornecedoresPage() {
                         </div>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Contato">
                       <div className="space-y-1">
                         {supplier.email && (
                           <p className="text-sm flex items-center gap-1">
@@ -535,7 +535,7 @@ function FornecedoresPage() {
                         )}
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Localização">
                       {supplier.city || supplier.state ? (
                         <div className="space-y-1">
                           {supplier.address && (
@@ -552,12 +552,12 @@ function FornecedoresPage() {
                         <span className="text-sm text-muted-foreground">-</span>
                       )}
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Status">
                       <Badge variant={supplier.active ? "default" : "secondary"}>
                         {supplier.active ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="">
                       <Button
                         variant="ghost"
                         size="sm"
@@ -569,7 +569,7 @@ function FornecedoresPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           </CardContent>
         </Card>
       )}

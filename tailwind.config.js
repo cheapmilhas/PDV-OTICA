@@ -8,6 +8,19 @@ module.exports = {
   ],
   theme: {
     extend: {
+      // Screens explícitos espelhando BREAKPOINTS em src/hooks/use-media-query.ts.
+      // `tab` (834px = iPad portrait real) faz o iPad resolver para o layout de
+      // estação de trabalho, não para o layout de phone. Aditivo: sm/md/lg/xl
+      // mantêm os defaults do Tailwind, então telas existentes não mudam.
+      screens: {
+        xs: "475px",
+        sm: "640px",
+        md: "768px",
+        tab: "834px",
+        lg: "1024px",
+        xl: "1280px",
+        "2xl": "1536px",
+      },
       fontFamily: {
         sans: ['var(--font-body)', 'system-ui', 'sans-serif'],
         // Display face (Bricolage Grotesque) for landing headings; falls back to

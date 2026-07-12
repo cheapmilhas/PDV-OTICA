@@ -15,13 +15,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -465,7 +465,7 @@ function LancamentosPage() {
         <>
           <Card>
             <div className="overflow-x-auto">
-              <Table>
+              <ResponsiveTable cards minWidth={700}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Data</TableHead>
@@ -481,10 +481,10 @@ function LancamentosPage() {
                     const typeConfig = TYPE_CONFIG[entry.type] || TYPE_CONFIG.OTHER;
                     return (
                       <TableRow key={entry.id}>
-                        <TableCell className="whitespace-nowrap">
+                        <TableCell data-label="Data" className="whitespace-nowrap">
                           {formatEntryDate(entry.entryDate)}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Tipo">
                           <Badge
                             variant="secondary"
                             className={typeConfig.className}
@@ -492,7 +492,7 @@ function LancamentosPage() {
                             {typeConfig.label}
                           </Badge>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Descrição">
                           <p className="font-medium">
                             {entry.description || "-"}
                           </p>
@@ -502,7 +502,7 @@ function LancamentosPage() {
                             </p>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Débito">
                           {entry.debitAccount ? (
                             <span
                               className="max-w-[150px] truncate block"
@@ -515,7 +515,7 @@ function LancamentosPage() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Crédito">
                           {entry.creditAccount ? (
                             <span
                               className="max-w-[150px] truncate block"
@@ -529,6 +529,7 @@ function LancamentosPage() {
                           )}
                         </TableCell>
                         <TableCell
+                          data-label="Valor"
                           className={`text-right font-semibold whitespace-nowrap ${
                             entry.side === "DEBIT"
                               ? "text-green-600"
@@ -541,7 +542,7 @@ function LancamentosPage() {
                     );
                   })}
                 </TableBody>
-              </Table>
+              </ResponsiveTable>
             </div>
           </Card>
 

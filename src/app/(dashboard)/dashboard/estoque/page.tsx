@@ -8,13 +8,13 @@ import { Badge } from "@/components/ui/badge";
 import { Input } from "@/components/ui/input";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import { Progress } from "@/components/ui/progress";
 import { Search, Plus, Minus, AlertTriangle, Package, Loader2, History, Printer, Barcode } from "lucide-react";
@@ -156,25 +156,25 @@ function EstoquePage() {
       />
 
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* Header — empilha no mobile, lado a lado no desktop */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Gestão de Estoque</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Gestão de Estoque</h1>
             <p className="text-muted-foreground">
               Controle de entrada, saída e inventário
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => window.open("/api/products/print", "_blank")}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="flex-1 md:flex-none" onClick={() => window.open("/api/products/print", "_blank")}>
               <Printer className="mr-2 h-4 w-4" />
               Imprimir Estoque
             </Button>
             <Can permission="stock.adjust">
-              <Button variant="outline" onClick={() => abrirModalSaida()}>
+              <Button variant="outline" className="flex-1 md:flex-none" onClick={() => abrirModalSaida()}>
                 <Minus className="mr-2 h-4 w-4" />
                 Saída de Estoque
               </Button>
-              <Button onClick={() => abrirModalEntrada()}>
+              <Button className="flex-1 md:flex-none" onClick={() => abrirModalEntrada()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Entrada de Estoque
               </Button>
@@ -320,24 +320,27 @@ function EstoquePage() {
 
         {/* Tabs */}
         <Tabs defaultValue="estoque" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="scanner">
-              <Barcode className="mr-2 h-4 w-4" />
-              Leitor de Código
-            </TabsTrigger>
-            <TabsTrigger value="estoque">
-              <Package className="mr-2 h-4 w-4" />
-              Estoque Atual
-            </TabsTrigger>
-            <TabsTrigger value="historico">
-              <History className="mr-2 h-4 w-4" />
-              Histórico de Movimentações
-            </TabsTrigger>
-            <TabsTrigger value="impressao">
-              <Printer className="mr-2 h-4 w-4" />
-              Imprimir Estoque
-            </TabsTrigger>
-          </TabsList>
+          {/* Rola horizontalmente no mobile em vez de estourar a largura */}
+          <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <TabsList className="w-max md:w-auto">
+              <TabsTrigger value="scanner">
+                <Barcode className="mr-2 h-4 w-4" />
+                Leitor de Código
+              </TabsTrigger>
+              <TabsTrigger value="estoque">
+                <Package className="mr-2 h-4 w-4" />
+                Estoque Atual
+              </TabsTrigger>
+              <TabsTrigger value="historico">
+                <History className="mr-2 h-4 w-4" />
+                Histórico de Movimentações
+              </TabsTrigger>
+              <TabsTrigger value="impressao">
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir Estoque
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Tab Leitor de Código */}
           <TabsContent value="scanner" className="space-y-4">
@@ -441,7 +444,7 @@ function EstoquePage() {
                   </CardDescription>
                 </CardHeader>
                 <CardContent>
-                  <Table>
+                  <ResponsiveTable cards minWidth={760}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Produto</TableHead>
@@ -464,7 +467,7 @@ function EstoquePage() {
 
                         return (
                           <TableRow key={produto.id}>
-                            <TableCell>
+                            <TableCell data-label="Produto">
                               <div>
                                 <p className="font-medium">{produto.name}</p>
                                 <p className="text-xs text-muted-foreground">
@@ -472,12 +475,12 @@ function EstoquePage() {
                                 </p>
                               </div>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Categoria">
                               <Badge variant="outline">
                                 {produto.category?.name || PRODUCT_TYPE_LABELS[produto.type] || "Sem categoria"}
                               </Badge>
                             </TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center" data-label="Estoque">
                               <div className="space-y-1">
                                 <p className="font-bold">{produto.stockQty}</p>
                                 <Progress value={progresso} className="h-1 w-20 mx-auto" />
@@ -487,23 +490,23 @@ function EstoquePage() {
                                 </p>
                               </div>
                             </TableCell>
-                            <TableCell className="text-center">
+                            <TableCell className="text-center" data-label="Status">
                               <Badge variant={status.variant} className={status.color}>
                                 {status.label}
                               </Badge>
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Fornecedor">
                               <p className="text-sm">
                                 {produto.supplier?.name || "-"}
                               </p>
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right" data-label="Custo Unit.">
                               {formatCurrency(Number(produto.costPrice))}
                             </TableCell>
-                            <TableCell className="text-right font-semibold">
+                            <TableCell className="text-right font-semibold" data-label="Valor Total">
                               {formatCurrency(Number(produto.costPrice) * produto.stockQty)}
                             </TableCell>
-                            <TableCell className="text-right">
+                            <TableCell className="text-right" data-label="">
                               <div className="flex justify-end gap-1">
                                 {hasPermission("stock.adjust") && (
                                   <Button
@@ -529,7 +532,7 @@ function EstoquePage() {
                         );
                       })}
                     </TableBody>
-                  </Table>
+                  </ResponsiveTable>
                 </CardContent>
               </Card>
             )}
@@ -577,7 +580,7 @@ function EstoquePage() {
                     Preview: Primeiros 10 produtos (total: {products.length})
                   </p>
                   <div className="border rounded-lg overflow-hidden">
-                    <Table className="text-xs">
+                    <ResponsiveTable cards className="text-xs" minWidth={480}>
                       <TableHeader>
                         <TableRow>
                           <TableHead>#</TableHead>
@@ -589,14 +592,14 @@ function EstoquePage() {
                       <TableBody>
                         {products.slice(0, 10).map((produto, index) => (
                           <TableRow key={produto.id}>
-                            <TableCell>{index + 1}</TableCell>
-                            <TableCell className="font-mono">{produto.sku}</TableCell>
-                            <TableCell>{produto.name}</TableCell>
-                            <TableCell className="text-center font-bold">{produto.stockQty}</TableCell>
+                            <TableCell data-label="#">{index + 1}</TableCell>
+                            <TableCell className="font-mono" data-label="Código/SKU">{produto.sku}</TableCell>
+                            <TableCell data-label="Produto">{produto.name}</TableCell>
+                            <TableCell className="text-center font-bold" data-label="Estoque">{produto.stockQty}</TableCell>
                           </TableRow>
                         ))}
                       </TableBody>
-                    </Table>
+                    </ResponsiveTable>
                   </div>
                 </div>
               </CardContent>

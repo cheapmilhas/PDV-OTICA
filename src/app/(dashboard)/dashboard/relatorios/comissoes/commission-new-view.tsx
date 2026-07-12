@@ -12,13 +12,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useToast } from "@/hooks/use-toast";
 import { Loader2, DollarSign } from "lucide-react";
 import { Can } from "@/components/permissions/can";
@@ -220,7 +220,7 @@ export function CommissionNewView() {
                   Nenhum vendedor com vendas nesse mês.
                 </p>
               ) : (
-                <Table>
+                <ResponsiveTable cards minWidth={760}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Vendedor</TableHead>
@@ -233,15 +233,15 @@ export function CommissionNewView() {
                   <TableBody>
                     {report.rows.map((r) => (
                       <TableRow key={r.userId}>
-                        <TableCell className="font-medium">{r.userName}</TableCell>
-                        <TableCell className="text-right">{brl(r.netSales)}</TableCell>
-                        <TableCell className="text-right font-semibold">{brl(r.total)}</TableCell>
-                        <TableCell className="text-right text-xs text-muted-foreground">
+                        <TableCell className="font-medium" data-label="Vendedor">{r.userName}</TableCell>
+                        <TableCell className="text-right" data-label="Vendido (líq.)">{brl(r.netSales)}</TableCell>
+                        <TableCell className="text-right font-semibold" data-label="Comissão">{brl(r.total)}</TableCell>
+                        <TableCell className="text-right text-xs text-muted-foreground" data-label="Detalhe">
                           meta {brl(r.metaCommission)} ({r.appliedPercent}%)
                           <br />
                           campanha {brl(r.campaignBonus)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell className="text-right" data-label="Pagamento">
                           {r.paid ? (
                             <div className="flex flex-col items-end gap-1">
                               <span className="inline-flex items-center rounded-full bg-green-100 px-2 py-0.5 text-xs font-medium text-green-700">
@@ -297,7 +297,7 @@ export function CommissionNewView() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                </ResponsiveTable>
               )}
             </CardContent>
           </Card>

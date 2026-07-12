@@ -303,16 +303,16 @@ function CaixaPage() {
         )}
 
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Fluxo de Caixa</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Fluxo de Caixa</h1>
             <p className="text-muted-foreground">
               Controle de abertura, fechamento e movimentações
             </p>
           </div>
-          <div className="flex gap-2">
-            <Link href="/dashboard/caixa/historico">
-              <Button variant="outline">
+          <div className="flex flex-wrap gap-2">
+            <Link href="/dashboard/caixa/historico" className="flex-1 md:flex-none">
+              <Button variant="outline" className="w-full md:w-auto">
                 <History className="mr-2 h-4 w-4" />
                 Histórico
               </Button>
@@ -326,6 +326,7 @@ function CaixaPage() {
                   <>
                     <Button
                       variant="outline"
+                      className="flex-1 md:flex-none"
                       onClick={() => setModalSangriaOpen(true)}
                     >
                       <ArrowDownCircle className="mr-2 h-4 w-4" />
@@ -333,6 +334,7 @@ function CaixaPage() {
                     </Button>
                     <Button
                       variant="outline"
+                      className="flex-1 md:flex-none"
                       onClick={() => setModalReforcoOpen(true)}
                     >
                       <ArrowUpCircle className="mr-2 h-4 w-4" />
@@ -343,6 +345,7 @@ function CaixaPage() {
                 {hasPermission("cash_shift.close") && (
                   <Button
                     variant="destructive"
+                    className="flex-1 md:flex-none"
                     onClick={() => setModalFechamentoOpen(true)}
                   >
                     <Lock className="mr-2 h-4 w-4" />
@@ -361,6 +364,7 @@ function CaixaPage() {
                     setModalAberturaOpen(true);
                   }}
                   variant={isAllBranches ? "outline" : "default"}
+                  className="flex-1 md:flex-none"
                 >
                   <Unlock className="mr-2 h-4 w-4" />
                   Abrir Caixa

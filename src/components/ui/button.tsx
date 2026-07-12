@@ -29,6 +29,10 @@ const buttonVariants = cva(
         xl: "h-11 rounded-lg px-8 text-base",
         icon: "h-9 w-9",
         "icon-sm": "h-7 w-7",
+        // Piso de toque Apple HIG (44px). Use em telas operadas pelo dedo
+        // (checkout, receita) sem alterar a densidade do default no desktop.
+        touch: "h-11 px-5 text-base",
+        "icon-touch": "h-11 w-11",
       },
     },
     defaultVariants: {

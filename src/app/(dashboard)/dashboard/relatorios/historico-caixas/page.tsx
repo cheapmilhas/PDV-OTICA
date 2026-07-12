@@ -246,9 +246,9 @@ function RelatorioHistoricoCaixasPageContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Histórico de Caixas</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Histórico de Caixas</h1>
           <p className="text-muted-foreground">
             Análise completa de abertura e fechamento de caixas
           </p>

@@ -33,6 +33,7 @@ import { ModalFinalizarVenda } from "@/components/pdv/modal-finalizar-venda";
 import { ModalNovoCliente } from "@/components/pdv/modal-novo-cliente";
 import { ManagerApprovalModal } from "@/components/pdv/manager-approval-modal";
 import { useBranchContext } from "@/hooks/use-branch-context";
+import { useIsMobile } from "@/hooks/use-media-query";
 import toast from "react-hot-toast";
 import { track } from "@/lib/analytics";
 
@@ -73,6 +74,10 @@ function PDVPage() {
   const quoteId = searchParams.get("quoteId");
   const serviceOrderId = searchParams.get("serviceOrderId");
   const [carrinho, setCarrinho] = useState<CartItem[]>([]);
+  // Aba ativa no layout de phone (< md). No iPad/desktop ambas as colunas
+  // aparecem lado a lado e este estado é ignorado.
+  const [mobileTab, setMobileTab] = useState<"produtos" | "carrinho">("produtos");
+  const isMobile = useIsMobile();
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
@@ -198,6 +203,7 @@ function PDVPage() {
     if (carrinho.length === 0 || modalVendaOpen) return;
     if (sellers.length > 0 && !selectedSellerId) {
       toast.error("Selecione um vendedor antes de finalizar");
+      setMobileTab("carrinho"); // leva ao campo de correção no layout de phone
       return;
     }
     const temLente = carrinho.some(
@@ -205,6 +211,7 @@ function PDVPage() {
     );
     if (temLente && !clienteSelecionado?.id) {
       toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
+      setMobileTab("carrinho");
       return;
     }
     setModalVendaOpen(true);
@@ -213,6 +220,7 @@ function PDVPage() {
   const acaoF8Limpar = useCallback(() => {
     if (carrinho.length === 0) return;
     setCarrinho([]);
+    setMobileTab("produtos");
     setClienteSelecionado(null);
     setBuscaCliente("");
     setDescontoVendaValor("");
@@ -655,6 +663,28 @@ function PDVPage() {
     (item) => item.type && LENS_PRODUCT_TYPES.includes(item.type)
   );
 
+  // Guarda + abre o modal de fechamento. Reutilizado pelo botão da coluna
+  // (desktop/iPad) e pela barra de ação fixa (phone), sem duplicar validação.
+  const abrirFinalizacao = () => {
+    if (sellers.length > 0 && !selectedSellerId) {
+      toast.error("Selecione um vendedor");
+      setMobileTab("carrinho");
+      return;
+    }
+    if (vendaTemLente && !clienteSelecionado?.id) {
+      toast.error(
+        "Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.",
+        { duration: 6000, icon: "⚠️" }
+      );
+      setMobileTab("carrinho");
+      return;
+    }
+    setModalVendaOpen(true);
+  };
+
+  const finalizarDisabled =
+    carrinho.length === 0 || (sellers.length > 0 && !selectedSellerId);
+
   const handleConfirmarVenda = async (
     payments: any[],
     cashbackUsed?: number,
@@ -786,6 +816,7 @@ function PDVPage() {
         // M17: venda JÁ gravada — limpa o carrinho para remover o aviso de
         // "mudanças não salvas" (beforeunload) antes do dialog do carnê.
         setCarrinho([]);
+        setMobileTab("produtos");
         // Limpa o desconto da venda — senão fica pré-preenchido na próxima venda
         // se o usuário não navegar para fora após o dialog do carnê.
         setDescontoVendaValor("");
@@ -1067,7 +1098,12 @@ function PDVPage() {
         </DialogContent>
       </Dialog>
 
-    <div className="flex flex-col h-[calc(100vh-3.5rem)] -m-4 md:-m-6">
+    {/* Mobile: preenche exatamente o <main> (que já exclui header) via h-full —
+        NÃO 100dvh, que transbordaria o main e jogaria a barra de ação para fora
+        da dobra. `-mb-20 md:mb-0` cancela o pb-20 do <main> (reserva da bottom-nav
+        global, que ocultamos nesta rota). Desktop: altura fixa que o scroll
+        interno das colunas exige. */}
+    <div className="flex flex-col h-full lg:h-[calc(100vh-3.5rem)] -m-4 -mb-20 md:-m-6">
       {/* Header compacto */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-background flex-shrink-0">
         <div className="flex items-center gap-3">
@@ -1116,10 +1152,49 @@ function PDVPage() {
         </div>
       </div>
 
-      {/* Conteúdo principal — sem scroll na página */}
-      <div className="flex-1 grid grid-cols-1 lg:grid-cols-3 gap-0 lg:gap-0 overflow-hidden">
-        {/* Produtos e Busca - 2 colunas */}
-        <div className="lg:col-span-2 flex flex-col border-r overflow-hidden">
+      {/* Abas Produtos/Carrinho — apenas no phone (< tab). No iPad/desktop
+          as colunas ficam lado a lado e as abas somem. */}
+      <div className="flex tab:hidden border-b flex-shrink-0">
+        <button
+          type="button"
+          onClick={() => setMobileTab("produtos")}
+          className={`flex-1 h-11 text-sm font-medium border-b-2 transition-colors ${
+            mobileTab === "produtos"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground"
+          }`}
+        >
+          Produtos
+        </button>
+        <button
+          type="button"
+          onClick={() => setMobileTab("carrinho")}
+          className={`flex-1 h-11 text-sm font-medium border-b-2 transition-colors inline-flex items-center justify-center gap-1.5 ${
+            mobileTab === "carrinho"
+              ? "border-primary text-primary"
+              : "border-transparent text-muted-foreground"
+          }`}
+        >
+          <ShoppingCart className="h-4 w-4" />
+          Carrinho
+          {totalItens > 0 && (
+            <Badge variant="secondary" className="ml-0.5 h-5 min-w-5 justify-center px-1 text-xs">
+              {totalItens}
+            </Badge>
+          )}
+        </button>
+      </div>
+
+      {/* Conteúdo principal — sem scroll na página.
+          Phone: uma coluna por vez via mobileTab. iPad (tab): lado a lado
+          catálogo + carrinho sticky. Desktop (lg): grid 2:1 original. */}
+      <div className="flex-1 grid grid-cols-1 tab:grid-cols-[1fr_minmax(340px,380px)] lg:grid-cols-3 gap-0 overflow-hidden">
+        {/* Produtos e Busca */}
+        <div
+          className={`lg:col-span-2 flex-col border-r overflow-hidden ${
+            mobileTab === "produtos" ? "flex" : "hidden"
+          } tab:flex`}
+        >
           {/* Busca */}
           <div className="p-3 border-b flex-shrink-0">
             <div className="flex gap-2">
@@ -1208,8 +1283,13 @@ function PDVPage() {
           </div>
         </div>
 
-        {/* Coluna direita — Cliente + Vendedor + Carrinho + Resumo */}
-        <div className="flex flex-col overflow-hidden">
+        {/* Coluna direita — Cliente + Vendedor + Carrinho + Resumo.
+            Phone: visível quando a aba Carrinho está ativa. iPad/desktop: sempre. */}
+        <div
+          className={`flex-col overflow-hidden ${
+            mobileTab === "carrinho" ? "flex" : "hidden"
+          } tab:flex`}
+        >
           {/* Cliente + Vendedor — compacto */}
           <div className="p-3 border-b space-y-2 flex-shrink-0">
             {/* Cliente */}
@@ -1476,25 +1556,35 @@ function PDVPage() {
               <span>{formatCurrency(total)}</span>
             </div>
             <Button
-              className="w-full"
+              className="w-full hidden tab:flex"
               size="lg"
-              disabled={carrinho.length === 0 || (sellers.length > 0 && !selectedSellerId)}
-              onClick={() => {
-                if (sellers.length > 0 && !selectedSellerId) {
-                  toast.error("Selecione um vendedor");
-                  return;
-                }
-                if (vendaTemLente && !clienteSelecionado?.id) {
-                  toast.error("Vendas com lente exigem um cliente vinculado (será gerada uma Ordem de Serviço). Selecione o cliente.", { duration: 6000, icon: "⚠️" });
-                  return;
-                }
-                setModalVendaOpen(true);
-              }}
+              disabled={finalizarDisabled}
+              onClick={abrirFinalizacao}
             >
               <CreditCard className="mr-2 h-4 w-4" />
               {sellers.length > 0 && !selectedSellerId ? "Selecione o vendedor" : "Finalizar Venda (F4)"}
             </Button>
           </div>
+        </div>
+      </div>
+
+      {/* Barra de ação fixa — apenas phone (< tab). Mantém Total + Finalizar
+          sempre ao alcance do polegar, de qualquer aba, respeitando safe-area. */}
+      <div className="tab:hidden flex-shrink-0 border-t bg-background px-4 py-2 pb-safe">
+        <div className="flex items-center gap-3">
+          <div className="flex-1 min-w-0">
+            <p className="text-xs text-muted-foreground">Total ({totalItens} itens)</p>
+            <p className="text-lg font-bold leading-tight truncate">{formatCurrency(total)}</p>
+          </div>
+          <Button
+            size="touch"
+            className="flex-1"
+            disabled={finalizarDisabled}
+            onClick={abrirFinalizacao}
+          >
+            <CreditCard className="mr-2 h-4 w-4" />
+            {sellers.length > 0 && !selectedSellerId ? "Vendedor" : "Finalizar"}
+          </Button>
         </div>
       </div>
     </div>

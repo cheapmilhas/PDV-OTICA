@@ -89,6 +89,12 @@ export function MobileNav() {
   const { hasFeature } = usePlanFeatures();
   const { enabled: whatsappEnabled } = useWhatsappEnabled();
 
+  // O PDV é tela de foco no mobile e traz a própria barra de ação fixa
+  // (Total + Finalizar). Ocultamos a bottom-nav global lá para não empilhar
+  // duas barras no rodapé. (Após os hooks — não viola as regras de hooks.)
+  const isPdv = pathname === "/dashboard/pdv" || pathname.startsWith("/dashboard/pdv/");
+  if (isPdv) return null;
+
   function isActive(href: string) {
     if (href === "/dashboard") return pathname === href;
     return pathname === href || pathname.startsWith(href + "/");

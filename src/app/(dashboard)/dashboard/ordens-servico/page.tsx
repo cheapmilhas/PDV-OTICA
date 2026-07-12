@@ -612,12 +612,12 @@ function OrdensServicoPage() {
       )}
 
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Ordens de Serviço</h1>
+          <h1 className="text-2xl md:text-3xl font-bold">Ordens de Serviço</h1>
           <p className="text-muted-foreground">Controle completo do fluxo de OS</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           {/* Toggle lista/kanban */}
           <div className="flex items-center rounded-lg border bg-muted p-0.5">
             <button
@@ -654,6 +654,7 @@ function OrdensServicoPage() {
                 router.push("/dashboard/ordens-servico/nova");
               }}
               variant={isAllBranches ? "outline" : "default"}
+              className="flex-1 md:flex-none"
             >
               <Plus className="mr-2 h-4 w-4" />
               Nova OS

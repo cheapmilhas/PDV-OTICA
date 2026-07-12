@@ -18,6 +18,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -329,7 +330,7 @@ function TabComparativoMensal() {
           <CardTitle>Comparativo Mensal</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          <ResponsiveTable cards minWidth={640}>
             <TableHeader>
               <TableRow>
                 <TableHead>Metrica</TableHead>
@@ -344,18 +345,18 @@ function TabComparativoMensal() {
                 const positive = isPositive(row.metric, row.variation);
                 return (
                   <TableRow key={row.metric}>
-                    <TableCell className="font-medium">{row.metric}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="font-medium" data-label="Metrica">{row.metric}</TableCell>
+                    <TableCell className="text-right" data-label="Mes Atual">
                       {row.isCurrency ? formatCurrency(row.current) : row.current}
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="Mes Anterior">
                       {row.isCurrency ? formatCurrency(row.previous) : row.previous}
                     </TableCell>
-                    <TableCell className={`text-right font-semibold ${positive ? "text-green-600" : "text-red-600"}`}>
+                    <TableCell className={`text-right font-semibold ${positive ? "text-green-600" : "text-red-600"}`} data-label="Variacao (%)">
                       {row.variation >= 0 ? "+" : ""}
                       {row.variation.toFixed(1)}%
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Tendencia">
                       {positive ? (
                         <ArrowUpRight className="h-5 w-5 text-green-600 inline" />
                       ) : (
@@ -366,7 +367,7 @@ function TabComparativoMensal() {
                 );
               })}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
         </CardContent>
       </Card>
 
@@ -567,7 +568,7 @@ function TabEvolucao12Meses() {
         </CardHeader>
         <CardContent>
           <div className="overflow-x-auto">
-            <Table>
+            <ResponsiveTable cards minWidth={900}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Mes</TableHead>
@@ -584,23 +585,23 @@ function TabEvolucao12Meses() {
               <TableBody>
                 {monthlyData.map((m) => (
                   <TableRow key={m.month}>
-                    <TableCell className="font-medium whitespace-nowrap">
+                    <TableCell className="font-medium whitespace-nowrap" data-label="Mes">
                       {m.monthLabel}
                     </TableCell>
-                    <TableCell className="text-right">{formatCurrency(m.netRevenue)}</TableCell>
-                    <TableCell className="text-right text-red-600">{formatCurrency(m.cogs)}</TableCell>
-                    <TableCell className="text-right text-green-600">{formatCurrency(m.grossMargin)}</TableCell>
-                    <TableCell className="text-right text-red-600">{formatCurrency(m.expenses)}</TableCell>
-                    <TableCell className={`text-right font-semibold ${m.netProfit >= 0 ? "text-green-600" : "text-red-600"}`}>
+                    <TableCell className="text-right" data-label="Receita Liq.">{formatCurrency(m.netRevenue)}</TableCell>
+                    <TableCell className="text-right text-red-600" data-label="CMV">{formatCurrency(m.cogs)}</TableCell>
+                    <TableCell className="text-right text-green-600" data-label="Margem Bruta">{formatCurrency(m.grossMargin)}</TableCell>
+                    <TableCell className="text-right text-red-600" data-label="Despesas">{formatCurrency(m.expenses)}</TableCell>
+                    <TableCell className={`text-right font-semibold ${m.netProfit >= 0 ? "text-green-600" : "text-red-600"}`} data-label="Lucro Liq.">
                       {formatCurrency(m.netProfit)}
                     </TableCell>
-                    <TableCell className="text-right">{m.grossMarginPercent.toFixed(1)}%</TableCell>
-                    <TableCell className="text-right">{m.salesCount}</TableCell>
-                    <TableCell className="text-right">{formatCurrency(m.avgTicket)}</TableCell>
+                    <TableCell className="text-right" data-label="Mg. Bruta %">{m.grossMarginPercent.toFixed(1)}%</TableCell>
+                    <TableCell className="text-right" data-label="Vendas">{m.salesCount}</TableCell>
+                    <TableCell className="text-right" data-label="Ticket Med.">{formatCurrency(m.avgTicket)}</TableCell>
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           </div>
         </CardContent>
       </Card>
@@ -1060,7 +1061,7 @@ function TabRentabilidadeProduto() {
           <CardTitle>Rentabilidade por Tipo de Produto</CardTitle>
         </CardHeader>
         <CardContent>
-          <Table>
+          <ResponsiveTable cards minWidth={760}>
             <TableHeader>
               <TableRow>
                 <TableHead>Tipo Produto</TableHead>
@@ -1075,21 +1076,21 @@ function TabRentabilidadeProduto() {
             <TableBody>
               {products.map((p) => (
                 <TableRow key={p.name} className={getRowClass(p.marginPercent)}>
-                  <TableCell className="font-medium">{p.name}</TableCell>
-                  <TableCell className="text-right">{p.qty}</TableCell>
-                  <TableCell className="text-right">{formatCurrency(p.revenue)}</TableCell>
-                  <TableCell className="text-right text-red-600">{formatCurrency(p.cost)}</TableCell>
-                  <TableCell className="text-right text-green-600 font-semibold">
+                  <TableCell className="font-medium" data-label="Tipo Produto">{p.name}</TableCell>
+                  <TableCell className="text-right" data-label="Vendas (Qtd)">{p.qty}</TableCell>
+                  <TableCell className="text-right" data-label="Receita">{formatCurrency(p.revenue)}</TableCell>
+                  <TableCell className="text-right text-red-600" data-label="CMV">{formatCurrency(p.cost)}</TableCell>
+                  <TableCell className="text-right text-green-600 font-semibold" data-label="Margem R$">
                     {formatCurrency(p.margin)}
                   </TableCell>
-                  <TableCell className="text-right font-semibold">
+                  <TableCell className="text-right font-semibold" data-label="Margem %">
                     {p.marginPercent.toFixed(1)}%
                   </TableCell>
-                  <TableCell className="text-center">{getMarginBadge(p.marginPercent)}</TableCell>
+                  <TableCell className="text-center" data-label="Status">{getMarginBadge(p.marginPercent)}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
         </CardContent>
       </Card>
 
