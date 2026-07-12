@@ -4,12 +4,13 @@ import { useState, useEffect } from "react";
 import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { useToast } from "@/hooks/use-toast";
 import { Unlock, Loader2, Banknote } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { parseMoneyPtBR } from "@/lib/decimal-parse";
 
 interface ModalAberturaCaixaProps {
   open: boolean;
@@ -21,7 +22,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
   const { data: session } = useSession();
   const [loading, setLoading] = useState(false);
   const [formData, setFormData] = useState({
-    valorAbertura: "0.00",
+    valorAbertura: "0,00",
     observacoes: "",
   });
 
@@ -37,7 +38,8 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
         const data = await res.json();
         const suggested = Number(data?.suggestedFloat);
         if (!cancelled && Number.isFinite(suggested)) {
-          setFormData((prev) => ({ ...prev, valorAbertura: suggested.toFixed(2) }));
+          // pt-BR (vírgula decimal) para casar com o DecimalInput / parseMoneyPtBR.
+          setFormData((prev) => ({ ...prev, valorAbertura: suggested.toFixed(2).replace(".", ",") }));
         }
       } catch {
         // mantém o valor atual em caso de erro de rede
@@ -57,7 +59,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          openingFloatAmount: Number(formData.valorAbertura),
+          openingFloatAmount: parseMoneyPtBR(formData.valorAbertura) ?? 0,
           notes: formData.observacoes || undefined,
         }),
       });
@@ -69,12 +71,12 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
 
       toast({
         title: "Caixa aberto com sucesso!",
-        description: `Valor de abertura: ${formatCurrency(Number(formData.valorAbertura))}`,
+        description: `Valor de abertura: ${formatCurrency(parseMoneyPtBR(formData.valorAbertura) ?? 0)}`,
       });
 
       // Limpar formulário
       setFormData({
-        valorAbertura: "0.00",
+        valorAbertura: "0,00",
         observacoes: "",
       });
 
@@ -132,16 +134,12 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
             </Label>
             <div className="relative">
               <Banknote className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-              <Input
+              <DecimalInput
                 id="valor"
-                type="number"
-                step="0.01"
-                min="0"
-                placeholder="200.00"
+                placeholder="200,00"
                 className="pl-9"
                 value={formData.valorAbertura}
-                onChange={(e) => setFormData({ ...formData, valorAbertura: e.target.value })}
-                required
+                onValueChange={(v) => setFormData({ ...formData, valorAbertura: v })}
                 disabled={loading}
               />
             </div>
@@ -171,7 +169,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
             <div className="rounded-lg border bg-green-50 p-4">
               <p className="text-sm font-medium text-green-900">Valor de Abertura</p>
               <p className="text-3xl font-bold text-green-600 mt-1">
-                {formatCurrency(Number(formData.valorAbertura))}
+                {formatCurrency(parseMoneyPtBR(formData.valorAbertura) ?? 0)}
               </p>
             </div>
           )}
