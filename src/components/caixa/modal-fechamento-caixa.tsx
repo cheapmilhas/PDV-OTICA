@@ -10,7 +10,7 @@ import {
   DialogTitle,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Checkbox } from "@/components/ui/checkbox";
@@ -28,6 +28,7 @@ import {
   Printer,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { parseMoneyPtBR } from "@/lib/decimal-parse";
 import ConferenciaFormas, { SalesByMethodEntry } from "@/components/caixa/conferencia-formas";
 import MovimentacoesTable, { type MovRow } from "@/components/caixa/movimentacoes-table";
 
@@ -105,10 +106,10 @@ export function ModalFechamentoCaixa({
   };
 
   const contadoPorForma: Record<string, number> = {
-    dinheiro: Number(formData.valorDinheiro) || 0,
-    pix: Number(formData.valorPix) || 0,
-    debito: Number(formData.valorDebito) || 0,
-    credito: Number(formData.valorCredito) || 0,
+    dinheiro: parseMoneyPtBR(formData.valorDinheiro) ?? 0,
+    pix: parseMoneyPtBR(formData.valorPix) ?? 0,
+    debito: parseMoneyPtBR(formData.valorDebito) ?? 0,
+    credito: parseMoneyPtBR(formData.valorCredito) ?? 0,
   };
 
   const diferencaPorForma: Record<string, number> = {
@@ -145,12 +146,15 @@ export function ModalFechamentoCaixa({
       }, 300);
       return () => clearTimeout(t);
     }
+    // Pré-preenche em pt-BR (vírgula decimal) para casar com o DecimalInput /
+    // parseMoneyPtBR — toFixed(2) emite ponto, então convertemos.
+    const brl = (v: number) => v.toFixed(2).replace(".", ",");
     setFormData((prev) => ({
       ...prev,
-      valorDinheiro: prev.valorDinheiro || (valorEsperadoDinheiro > 0 ? valorEsperadoDinheiro.toFixed(2) : ""),
-      valorPix: prev.valorPix || (valorEsperadoPix > 0 ? valorEsperadoPix.toFixed(2) : ""),
-      valorDebito: prev.valorDebito || (valorEsperadoDebito > 0 ? valorEsperadoDebito.toFixed(2) : ""),
-      valorCredito: prev.valorCredito || (valorEsperadoCredito > 0 ? valorEsperadoCredito.toFixed(2) : ""),
+      valorDinheiro: prev.valorDinheiro || (valorEsperadoDinheiro > 0 ? brl(valorEsperadoDinheiro) : ""),
+      valorPix: prev.valorPix || (valorEsperadoPix > 0 ? brl(valorEsperadoPix) : ""),
+      valorDebito: prev.valorDebito || (valorEsperadoDebito > 0 ? brl(valorEsperadoDebito) : ""),
+      valorCredito: prev.valorCredito || (valorEsperadoCredito > 0 ? brl(valorEsperadoCredito) : ""),
     }));
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
@@ -336,14 +340,11 @@ export function ModalFechamentoCaixa({
                         </span>
                       </span>
                     </div>
-                    <Input
+                    <DecimalInput
                       id={f.key}
-                      type="number"
-                      step="0.01"
-                      min="0"
                       placeholder="0,00"
                       value={value}
-                      onChange={(e) => setValue(e.target.value)}
+                      onValueChange={setValue}
                       className="tabular-nums"
                       disabled={loading}
                     />
