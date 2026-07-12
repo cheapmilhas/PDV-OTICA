@@ -214,6 +214,63 @@ body {
   }
 }
 
+/* Grade de receita OD/OE responsiva (CSS-only, sem tocar lógica/onChange).
+ * No phone (< md) cada <tr> vira um cartão e cada <td> vira uma linha
+ * rótulo→valor usando o atributo data-label. Rótulos grandes e tapáveis,
+ * sem scroll horizontal. Em md+ volta a ser tabela idêntica à original.
+ * Aplicar a classe .grade-responsive na <table> e data-label em cada <td>. */
+@media (max-width: 767px) {
+  .grade-responsive,
+  .grade-responsive thead,
+  .grade-responsive tbody,
+  .grade-responsive tr,
+  .grade-responsive td {
+    display: block;
+    width: 100%;
+  }
+  /* cabeçalho da tabela é redundante no modo cartão (rótulo vem do data-label) */
+  .grade-responsive thead {
+    display: none;
+  }
+  .grade-responsive tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 0.25rem 0.5rem 0.5rem;
+  }
+  /* a 1ª célula (OD/OE) vira o título do cartão */
+  .grade-responsive td:first-child {
+    font-weight: 700;
+    text-align: left !important;
+    background: transparent !important;
+    border: 0 !important;
+    padding: 0.25rem 0 0.5rem !important;
+    font-size: 0.875rem;
+  }
+  .grade-responsive td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 0.75rem;
+    border: 0 !important;
+    padding: 0.25rem 0 !important;
+  }
+  /* rótulo do campo (Esférico, Cilíndrico, Eixo…) via data-label */
+  .grade-responsive td[data-label]::before {
+    content: attr(data-label);
+    font-size: 0.75rem;
+    color: hsl(var(--muted-foreground));
+    flex-shrink: 0;
+  }
+  /* inputs tapáveis (44px) e valor calculado alinhado à direita */
+  .grade-responsive td input {
+    height: 2.75rem !important;
+    font-size: 1rem !important;
+    text-align: right !important;
+    max-width: 55%;
+  }
+}
+
 /* Safe area para iPhone com notch/Dynamic Island */
 .pb-safe {
   padding-bottom: env(safe-area-inset-bottom, 0px);

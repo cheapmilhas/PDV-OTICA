@@ -8,11 +8,13 @@ const emptyValue = { od: {}, oe: {}, adicao: "" };
 describe("PrescriptionGradeForm", () => {
   it("renderiza a grade OD/OE com as colunas do grau", () => {
     render(<PrescriptionGradeForm value={emptyValue} onChange={() => {}} />);
-    expect(screen.getByText("OD")).toBeTruthy();
-    expect(screen.getByText("OE")).toBeTruthy();
-    expect(screen.getByText("Esférico")).toBeTruthy();
-    expect(screen.getByText("Cilíndrico")).toBeTruthy();
-    expect(screen.getByText("Eixo")).toBeTruthy();
+    // Dois layouts coexistem no DOM (cartão < md + tabela md+): cada rótulo
+    // aparece 2×. jsdom renderiza ambos, então usamos getAllByText.
+    expect(screen.getAllByText(/^OD/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText(/^OE/).length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Esférico").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Cilíndrico").length).toBeGreaterThan(0);
+    expect(screen.getAllByText("Eixo").length).toBeGreaterThan(0);
   });
 
   it("emite onChange com {od,oe,adicao} ao digitar (preserva vírgula)", () => {

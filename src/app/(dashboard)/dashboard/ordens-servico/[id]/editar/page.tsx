@@ -614,8 +614,8 @@ function EditarOrdemServicoContent() {
               {/* BLOCO 1: VISÃO DE LONGE */}
               <div>
                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Visão de Longe</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
+                <div className="md:overflow-x-auto">
+                  <table className="grade-responsive w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-gray-100">
                         <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
@@ -630,47 +630,52 @@ function EditarOrdemServicoContent() {
                       {(["od", "oe"] as const).map((eye) => (
                         <tr key={eye}>
                           <td className="border p-1.5 font-bold bg-gray-50 text-center">
-                            {eye === "od" ? "OD" : "OE"}
+                            <span className="md:hidden">{eye === "od" ? "OD — Olho Direito" : "OE — Olho Esquerdo"}</span><span className="hidden md:inline">{eye === "od" ? "OD" : "OE"}</span>
                           </td>
-                          <td className="border p-0.5">
+                          <td className="border p-0.5" data-label="Esférico">
                             <Input
                               className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Esférico`}
                               value={prescriptionData[eye].esf}
                               onChange={(e) => updatePrescription(eye, "esf", e.target.value)}
                               placeholder="+0.00"
                               inputMode="decimal"
                             />
                           </td>
-                          <td className="border p-0.5">
+                          <td className="border p-0.5" data-label="Cilíndrico">
                             <Input
                               className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Cilíndrico`}
                               value={prescriptionData[eye].cil}
                               onChange={(e) => updatePrescription(eye, "cil", e.target.value)}
                               placeholder="-0.00"
                               inputMode="decimal"
                             />
                           </td>
-                          <td className="border p-0.5">
+                          <td className="border p-0.5" data-label="Eixo">
                             <Input
                               className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Eixo`}
                               value={prescriptionData[eye].eixo}
                               onChange={(e) => updatePrescription(eye, "eixo", e.target.value)}
                               placeholder="0-180"
                               inputMode="numeric"
                             />
                           </td>
-                          <td className="border p-0.5">
+                          <td className="border p-0.5" data-label="DNP">
                             <Input
                               className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — DNP`}
                               value={prescriptionData[eye].dnp}
                               onChange={(e) => updatePrescription(eye, "dnp", e.target.value)}
                               placeholder="mm"
                               inputMode="decimal"
                             />
                           </td>
-                          <td className="border p-0.5">
+                          <td className="border p-0.5" data-label="Altura">
                             <Input
                               className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Altura`}
                               value={prescriptionData[eye].altura}
                               onChange={(e) => updatePrescription(eye, "altura", e.target.value)}
                               placeholder="mm"
@@ -687,8 +692,8 @@ function EditarOrdemServicoContent() {
               {/* BLOCO 2: ADIÇÃO / VISÃO DE PERTO */}
               <div>
                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Adição / Visão de Perto</h3>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm border-collapse">
+                <div className="md:overflow-x-auto">
+                  <table className="grade-responsive w-full text-sm border-collapse">
                     <thead>
                       <tr className="bg-gray-100">
                         <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
@@ -707,29 +712,31 @@ function EditarOrdemServicoContent() {
                         return (
                           <tr key={eye}>
                             <td className="border p-1.5 font-bold bg-gray-50 text-center">
-                              {eye === "od" ? "OD" : "OE"}
+                              <span className="md:hidden">{eye === "od" ? "OD — Olho Direito" : "OE — Olho Esquerdo"}</span><span className="hidden md:inline">{eye === "od" ? "OD" : "OE"}</span>
                             </td>
-                            <td className="border p-0.5">
+                            <td className="border p-0.5" data-label="Adição">
                               <Input
                                 className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Adição`}
                                 value={prescriptionData[eye].add}
                                 onChange={(e) => updatePrescription(eye, "add", e.target.value)}
                                 placeholder="+0.00"
                                 inputMode="decimal"
                               />
                             </td>
-                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50">
+                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50" data-label="Esf. Perto">
                               {esfPerto ? (parseFloat(esfPerto) > 0 ? `+${esfPerto}` : esfPerto) : "—"}
                             </td>
-                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50">
+                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50" data-label="Cil. Perto">
                               {prescriptionData[eye].cil || "—"}
                             </td>
-                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50">
+                            <td className="border p-1.5 text-center text-sm text-muted-foreground bg-gray-50" data-label="Eixo Perto">
                               {prescriptionData[eye].eixo ? `${prescriptionData[eye].eixo}°` : "—"}
                             </td>
-                            <td className="border p-0.5">
+                            <td className="border p-0.5" data-label="DNP Perto">
                               <Input
                                 className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — DNP Perto`}
                                 value={eye === "od"
                                   ? (prescriptionData as any).dnpPertoOd || ""
                                   : (prescriptionData as any).dnpPertoOe || ""}
@@ -1024,8 +1031,8 @@ function EditarOrdemServicoContent() {
                   <ChevronDown className={`h-4 w-4 transition-transform ${showCeratometria ? "rotate-180" : ""}`} />
                 </button>
                 {showCeratometria && (
-                  <div className="px-2.5 pb-2.5">
-                    <table className="w-full text-sm border-collapse">
+                  <div className="md:overflow-x-auto px-2.5 pb-2.5">
+                    <table className="grade-responsive w-full text-sm border-collapse">
                       <thead>
                         <tr className="bg-gray-100">
                           <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
@@ -1039,11 +1046,12 @@ function EditarOrdemServicoContent() {
                         {(["od", "oe"] as const).map((eye) => (
                           <tr key={eye}>
                             <td className="border p-1.5 font-bold bg-gray-50 text-center">
-                              {eye === "od" ? "OD" : "OE"}
+                              <span className="md:hidden">{eye === "od" ? "OD — Olho Direito" : "OE — Olho Esquerdo"}</span><span className="hidden md:inline">{eye === "od" ? "OD" : "OE"}</span>
                             </td>
-                            <td className="border p-0.5">
+                            <td className="border p-0.5" data-label="Horiz.">
                               <Input
                                 className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Horiz.`}
                                 value={prescriptionData.ceratometria[`${eye}H`]}
                                 onChange={(e) =>
                                   setPrescriptionData({
@@ -1058,9 +1066,10 @@ function EditarOrdemServicoContent() {
                                 inputMode="decimal"
                               />
                             </td>
-                            <td className="border p-0.5">
+                            <td className="border p-0.5" data-label="Eixo H">
                               <Input
                                 className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Eixo H`}
                                 value={prescriptionData.ceratometria[`${eye}HEixo`]}
                                 onChange={(e) =>
                                   setPrescriptionData({
@@ -1075,9 +1084,10 @@ function EditarOrdemServicoContent() {
                                 inputMode="numeric"
                               />
                             </td>
-                            <td className="border p-0.5">
+                            <td className="border p-0.5" data-label="Vert.">
                               <Input
                                 className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Vert.`}
                                 value={prescriptionData.ceratometria[`${eye}V`]}
                                 onChange={(e) =>
                                   setPrescriptionData({
@@ -1092,9 +1102,10 @@ function EditarOrdemServicoContent() {
                                 inputMode="decimal"
                               />
                             </td>
-                            <td className="border p-0.5">
+                            <td className="border p-0.5" data-label="Eixo V">
                               <Input
                                 className="h-8 text-center text-sm border-0 focus-visible:ring-1"
+                                aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Eixo V`}
                                 value={prescriptionData.ceratometria[`${eye}VEixo`]}
                                 onChange={(e) =>
                                   setPrescriptionData({
