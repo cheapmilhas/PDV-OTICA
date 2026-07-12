@@ -241,7 +241,7 @@ function ProdutosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between md:flex-wrap">
         <div>
           <h1 className="text-2xl font-bold md:text-3xl">Produtos</h1>
           <p className="text-muted-foreground">Gerencie o catálogo de produtos da ótica</p>
