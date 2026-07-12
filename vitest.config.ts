@@ -9,6 +9,7 @@ export default defineConfig({
   test: {
     environment: "node",
     globals: true,
+    setupFiles: ["./src/test/setup.ts"],
     // Fixa o fuso dos testes no fuso da aplicação (BRT). Sem isto, testes que
     // dependem de data (ex.: computeMrrSeries) passavam em máquina local (BRT) e
     // FALHAVAM no CI (UTC) — divergência determinística que travava todo PR.
