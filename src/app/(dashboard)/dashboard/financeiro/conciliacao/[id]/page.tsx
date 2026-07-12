@@ -15,13 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -726,7 +726,7 @@ function ConciliacaoDetailPage() {
         <>
           <Card>
             <div className="overflow-x-auto">
-              <Table>
+              <ResponsiveTable cards minWidth={900}>
                 <TableHeader>
                   <TableRow>
                     <TableHead>Data</TableHead>
@@ -747,20 +747,20 @@ function ConciliacaoDetailPage() {
 
                     return (
                       <TableRow key={item.id}>
-                        <TableCell>{formatDate(item.externalDate)}</TableCell>
-                        <TableCell>
+                        <TableCell data-label="Data">{formatDate(item.externalDate)}</TableCell>
+                        <TableCell data-label="NSU">
                           <span className="font-mono text-sm">{item.nsu}</span>
                         </TableCell>
-                        <TableCell>{item.cardBrand || "-"}</TableCell>
-                        <TableCell className="text-right font-medium">
+                        <TableCell data-label="Bandeira">{item.cardBrand || "-"}</TableCell>
+                        <TableCell data-label="Valor Externo" className="text-right font-medium">
                           {formatCurrency(item.externalAmount)}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Valor Interno" className="text-right">
                           {item.internalAmount != null
                             ? formatCurrency(item.internalAmount)
                             : "-"}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Diferenca" className="text-right">
                           {diff !== 0 ? (
                             <span
                               className={
@@ -773,12 +773,12 @@ function ConciliacaoDetailPage() {
                             <span className="text-muted-foreground">-</span>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Status">
                           <Badge className={config.className}>
                             {config.label}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="" className="text-right">
                           {!isFinal && !isClosed && (
                             <Button
                               size="sm"
@@ -793,7 +793,7 @@ function ConciliacaoDetailPage() {
                     );
                   })}
                 </TableBody>
-              </Table>
+              </ResponsiveTable>
             </div>
           </Card>
 

@@ -25,13 +25,13 @@ import {
   DialogDescription,
 } from "@/components/ui/dialog";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Popover,
   PopoverContent,
@@ -556,7 +556,7 @@ function ContasFinanceirasPage() {
                 </Card>
               ) : (
                 <Card>
-                  <Table>
+                  <ResponsiveTable cards minWidth={700}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Data</TableHead>
@@ -572,12 +572,12 @@ function ContasFinanceirasPage() {
                         const isInflow = entry.side === "CREDIT";
                         return (
                           <TableRow key={entry.id}>
-                            <TableCell className="whitespace-nowrap">
+                            <TableCell data-label="Data" className="whitespace-nowrap">
                               {format(new Date(entry.entryDate), "dd/MM/yyyy", {
                                 locale: ptBR,
                               })}
                             </TableCell>
-                            <TableCell>
+                            <TableCell data-label="Tipo">
                               <div className="flex items-center gap-2">
                                 {isInflow ? (
                                   <ArrowUpCircle className="h-4 w-4 text-green-600 shrink-0" />
@@ -589,27 +589,27 @@ function ContasFinanceirasPage() {
                                 </span>
                               </div>
                             </TableCell>
-                            <TableCell className="max-w-[200px] truncate">
+                            <TableCell data-label="Descrição" className="max-w-[200px] truncate">
                               {entry.description || "-"}
                             </TableCell>
-                            <TableCell className="text-right font-medium text-green-600">
+                            <TableCell data-label="Entrada" className="text-right font-medium text-green-600">
                               {isInflow
                                 ? formatCurrency(entry.amount)
                                 : ""}
                             </TableCell>
-                            <TableCell className="text-right font-medium text-red-600">
+                            <TableCell data-label="Saída" className="text-right font-medium text-red-600">
                               {!isInflow
                                 ? formatCurrency(entry.amount)
                                 : ""}
                             </TableCell>
-                            <TableCell className="text-right font-semibold">
+                            <TableCell data-label="Saldo" className="text-right font-semibold">
                               {formatCurrency(entry.runningBalance)}
                             </TableCell>
                           </TableRow>
                         );
                       })}
                     </TableBody>
-                  </Table>
+                  </ResponsiveTable>
                 </Card>
               )}
             </div>

@@ -8,13 +8,13 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Button } from "@/components/ui/button";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -318,7 +318,7 @@ function UsuariosPage() {
       {!loading && users.length > 0 && (
         <Card>
           <CardContent className="p-0">
-            <Table>
+            <ResponsiveTable cards minWidth={640}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
@@ -331,7 +331,7 @@ function UsuariosPage() {
               <TableBody>
                 {users.map((user) => (
                   <TableRow key={user.id}>
-                    <TableCell>
+                    <TableCell data-label="Nome">
                       <div className="flex items-center gap-3">
                         <Avatar className="h-9 w-9">
                           <AvatarFallback className={getRoleColor(user.role)}>
@@ -341,22 +341,22 @@ function UsuariosPage() {
                         <p className="font-medium">{user.name}</p>
                       </div>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Login">
                       <span className="text-sm text-muted-foreground">
                         {user.email.endsWith("@login") ? user.email.replace("@login", "") : user.email}
                       </span>
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Cargo">
                       <span className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium ${getRoleColor(user.role)}`}>
                         {getRoleLabel(user.role)}
                       </span>
                     </TableCell>
-                    <TableCell className="text-center">
+                    <TableCell className="text-center" data-label="Status">
                       <Badge variant={user.active ? "default" : "secondary"}>
                         {user.active ? "Ativo" : "Inativo"}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-right">
+                    <TableCell className="text-right" data-label="">
                       <div className="flex items-center justify-end gap-1">
                         {hasPermission("permissions.manage") && (
                           <Button
@@ -415,7 +415,7 @@ function UsuariosPage() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           </CardContent>
         </Card>
       )}

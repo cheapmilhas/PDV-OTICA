@@ -4,7 +4,8 @@ import { useState, useEffect, useCallback } from "react";
 import { Card, CardContent } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
-import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { TableBody, TableCell, TableHead, TableHeader, TableRow } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { Loader2, MessageSquare, CheckCircle2, XCircle, MinusCircle } from "lucide-react";
 
 interface HistoryItem {
@@ -111,7 +112,7 @@ export function WhatsappHistoryClient({ refreshKey = 0 }: WhatsappHistoryClientP
     <div className="space-y-4">
       <Card>
         <CardContent className="p-0">
-          <Table>
+          <ResponsiveTable cards minWidth={640}>
             <TableHeader>
               <TableRow>
                 <TableHead>Data</TableHead>
@@ -124,24 +125,24 @@ export function WhatsappHistoryClient({ refreshKey = 0 }: WhatsappHistoryClientP
             <TableBody>
               {items.map((item) => (
                 <TableRow key={item.id}>
-                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground">
+                  <TableCell className="whitespace-nowrap text-sm text-muted-foreground" data-label="Data">
                     {new Date(item.createdAt).toLocaleString("pt-BR", { day: "2-digit", month: "2-digit", hour: "2-digit", minute: "2-digit" })}
                   </TableCell>
-                  <TableCell className="text-sm">
+                  <TableCell className="text-sm" data-label="Cliente">
                     {item.customerName ?? <span className="text-muted-foreground">—</span>}
                     <div className="text-xs text-muted-foreground">{item.phone}</div>
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Tipo">
                     <Badge variant="outline">{TYPE_LABEL[item.type] ?? item.type}</Badge>
                   </TableCell>
-                  <TableCell><StatusBadge item={item} /></TableCell>
-                  <TableCell className="hidden md:table-cell max-w-xs">
+                  <TableCell data-label="Status"><StatusBadge item={item} /></TableCell>
+                  <TableCell className="hidden md:table-cell max-w-xs" data-label="Mensagem">
                     <span className="text-sm text-muted-foreground line-clamp-2">{item.content}</span>
                   </TableCell>
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
         </CardContent>
       </Card>
       {hasMore && (

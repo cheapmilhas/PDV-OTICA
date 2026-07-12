@@ -15,13 +15,13 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -526,7 +526,7 @@ function DevolucoesPageContent() {
                   description="Esta venda não possui itens para devolução."
                 />
               ) : (
-                <Table>
+                <ResponsiveTable cards minWidth={640}>
                   <TableHeader>
                     <TableRow>
                       <TableHead className="w-10" />
@@ -545,7 +545,7 @@ function DevolucoesPageContent() {
                       const state = selectedItems[item.id];
                       return (
                         <TableRow key={item.id}>
-                          <TableCell>
+                          <TableCell data-label="">
                             <Checkbox
                               checked={state?.checked || false}
                               onCheckedChange={(checked) =>
@@ -553,13 +553,13 @@ function DevolucoesPageContent() {
                               }
                             />
                           </TableCell>
-                          <TableCell className="font-medium">
+                          <TableCell data-label="Produto" className="font-medium">
                             {item.product?.name || "Produto removido"}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell data-label="Qtd Vendida" className="text-center">
                             {item.quantity}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell data-label="Qtd Devolver" className="text-center">
                             <Input
                               type="number"
                               min={1}
@@ -576,14 +576,14 @@ function DevolucoesPageContent() {
                               className="mx-auto w-20 text-center"
                             />
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell data-label="Preco Unit." className="text-right">
                             {formatCurrency(item.unitPrice)}
                           </TableCell>
                         </TableRow>
                       );
                     })}
                   </TableBody>
-                </Table>
+                </ResponsiveTable>
               )}
             </CardContent>
           </Card>

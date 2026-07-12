@@ -15,13 +15,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Plus,
   Loader2,
@@ -796,7 +796,7 @@ function FinanceiroPage() {
           {!payableLoading && accountsPayable.length > 0 && (
             <>
               <Card>
-                <Table>
+                <ResponsiveTable cards minWidth={760}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Vencimento</TableHead>
@@ -811,13 +811,13 @@ function FinanceiroPage() {
                   <TableBody>
                     {accountsPayable.map((account) => (
                       <TableRow key={account.id}>
-                        <TableCell>
+                        <TableCell data-label="Vencimento">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             {formatDate(account.dueDate)}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Descrição">
                           <div>
                             <p className="font-medium">{account.description}</p>
                             {account.invoiceNumber && (
@@ -827,25 +827,25 @@ function FinanceiroPage() {
                             )}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Fornecedor">
                           {account.supplier?.tradeName ||
                             account.supplier?.name ||
                             "-"}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Categoria">
                           {translateCategory(account.category)}
                         </TableCell>
-                        <TableCell className="text-right font-semibold">
+                        <TableCell data-label="Valor" className="text-right font-semibold">
                           {formatCurrency(account.amount)}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Status">
                           <Badge
                             variant={getPayableStatusVariant(account.status)}
                           >
                             {translatePayableStatus(account.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="" className="text-right">
                           <div className="flex justify-end gap-2">
                             {account.status === "PENDING" && hasPermission("accounts_payable.manage") && (
                               <>
@@ -894,7 +894,7 @@ function FinanceiroPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                </ResponsiveTable>
               </Card>
 
               {/* Paginação */}
@@ -1122,7 +1122,7 @@ function FinanceiroPage() {
           {!receivableLoading && accountsReceivable.length > 0 && (
             <>
               <Card>
-                <Table>
+                <ResponsiveTable cards minWidth={760}>
                   <TableHeader>
                     <TableRow>
                       <TableHead>Vencimento</TableHead>
@@ -1137,20 +1137,20 @@ function FinanceiroPage() {
                   <TableBody>
                     {accountsReceivable.map((account) => (
                       <TableRow key={account.id}>
-                        <TableCell>
+                        <TableCell data-label="Vencimento">
                           <div className="flex items-center gap-2">
                             <Calendar className="h-4 w-4 text-muted-foreground" />
                             {formatDate(account.dueDate)}
                           </div>
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Descrição">
                           <p className="font-medium">{account.description}</p>
                         </TableCell>
-                        <TableCell>{account.customer?.name || "-"}</TableCell>
-                        <TableCell>
+                        <TableCell data-label="Cliente">{account.customer?.name || "-"}</TableCell>
+                        <TableCell data-label="Parcela">
                           {account.installmentNumber}/{account.totalInstallments}
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="Valor" className="text-right">
                           <span className="font-semibold">{formatCurrency(account.amount)}</span>
                           {(account.daysLate ?? 0) > 0 && (account.calculatedFine ?? 0) + (account.calculatedInterest ?? 0) > 0 && (
                             <p className="text-xs text-red-600">
@@ -1158,7 +1158,7 @@ function FinanceiroPage() {
                             </p>
                           )}
                         </TableCell>
-                        <TableCell>
+                        <TableCell data-label="Status">
                           <Badge
                             variant={getReceivableStatusVariant(
                               account.status
@@ -1167,7 +1167,7 @@ function FinanceiroPage() {
                             {translateReceivableStatus(account.status)}
                           </Badge>
                         </TableCell>
-                        <TableCell className="text-right">
+                        <TableCell data-label="" className="text-right">
                           <div className="flex justify-end gap-2">
                             {(account.status === "PENDING" || account.status === "OVERDUE") && hasPermission("accounts_receivable.manage") && (
                               <>
@@ -1222,7 +1222,7 @@ function FinanceiroPage() {
                       </TableRow>
                     ))}
                   </TableBody>
-                </Table>
+                </ResponsiveTable>
               </Card>
 
               {/* Paginação */}

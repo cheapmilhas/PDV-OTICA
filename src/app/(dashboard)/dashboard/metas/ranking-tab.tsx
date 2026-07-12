@@ -18,13 +18,13 @@ import {
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useToast } from "@/hooks/use-toast";
 import { usePermissions } from "@/hooks/usePermissions";
 import {
@@ -427,7 +427,7 @@ function GoalsPageContent({ showCommission }: { showCommission: boolean }) {
                     Nenhuma comissão calculada para este mês
                   </p>
                 ) : (
-                  <Table>
+                  <ResponsiveTable cards minWidth={760}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>Vendedor</TableHead>
@@ -442,7 +442,7 @@ function GoalsPageContent({ showCommission }: { showCommission: boolean }) {
                     <TableBody>
                       {commissions.map((commission) => (
                         <TableRow key={commission.id}>
-                          <TableCell>
+                          <TableCell data-label="Vendedor">
                             <div>
                               <p className="font-medium">{commission.user.name}</p>
                               {commission.goalAchieved && (
@@ -453,28 +453,28 @@ function GoalsPageContent({ showCommission }: { showCommission: boolean }) {
                               )}
                             </div>
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right" data-label="Vendas">
                             {formatCurrency(commission.totalSales)}
                           </TableCell>
-                          <TableCell className="text-right">
+                          <TableCell className="text-right" data-label="Base">
                             {formatCurrency(commission.baseCommission)}
                           </TableCell>
-                          <TableCell className="text-right text-green-600">
+                          <TableCell className="text-right text-green-600" data-label="Bônus">
                             {commission.bonusCommission > 0
                               ? formatCurrency(commission.bonusCommission)
                               : "-"}
                           </TableCell>
-                          <TableCell className="text-right font-bold">
+                          <TableCell className="text-right font-bold" data-label="Total">
                             {formatCurrency(commission.totalCommission)}
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center" data-label="Status">
                             <Badge
                               variant={commission.status === "PAID" ? "default" : "secondary"}
                             >
                               {commission.status === "PAID" ? "Pago" : "Pendente"}
                             </Badge>
                           </TableCell>
-                          <TableCell className="text-center">
+                          <TableCell className="text-center" data-label="">
                             {commission.status !== "PAID" && hasPermission("goals.manage") && (
                               <Button
                                 size="sm"
@@ -489,7 +489,7 @@ function GoalsPageContent({ showCommission }: { showCommission: boolean }) {
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                  </ResponsiveTable>
                 )}
               </CardContent>
             </Card>
@@ -643,7 +643,7 @@ function RankingCard({
             Nenhuma venda registrada neste mês
           </p>
         ) : (
-          <Table>
+          <ResponsiveTable cards minWidth={760}>
             <TableHeader>
               <TableRow>
                 <TableHead className="w-12">#</TableHead>
@@ -657,13 +657,13 @@ function RankingCard({
             <TableBody>
               {dashboard?.ranking?.map((seller: any, index: number) => (
                 <TableRow key={seller.userId}>
-                  <TableCell>
+                  <TableCell data-label="#">
                     {index === 0 && <Trophy className="h-5 w-5 text-yellow-500" />}
                     {index === 1 && <Award className="h-5 w-5 text-gray-400" />}
                     {index === 2 && <Award className="h-5 w-5 text-orange-400" />}
                     {index > 2 && <span className="text-muted-foreground">{index + 1}</span>}
                   </TableCell>
-                  <TableCell>
+                  <TableCell data-label="Vendedor">
                     <div>
                       <p className="font-medium">{seller.userName}</p>
                       <p className="text-xs text-muted-foreground">
@@ -671,13 +671,13 @@ function RankingCard({
                       </p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-right font-medium">
+                  <TableCell className="text-right font-medium" data-label="Vendas">
                     {formatCurrency(seller.totalSales)}
                   </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
+                  <TableCell className="text-right text-muted-foreground" data-label="Meta">
                     {formatCurrency(seller.goalAmount)}
                   </TableCell>
-                  <TableCell className="w-[150px]">
+                  <TableCell className="w-[150px]" data-label="Progresso">
                     <div className="space-y-1">
                       <Progress value={seller.progress} className="h-2" />
                       <p className="text-xs text-center text-muted-foreground">
@@ -685,7 +685,7 @@ function RankingCard({
                       </p>
                     </div>
                   </TableCell>
-                  <TableCell className="text-center">
+                  <TableCell className="text-center" data-label="Status">
                     {seller.goalAchieved ? (
                       <Badge className="bg-green-500">
                         <Check className="h-3 w-3 mr-1" />
@@ -698,7 +698,7 @@ function RankingCard({
                 </TableRow>
               ))}
             </TableBody>
-          </Table>
+          </ResponsiveTable>
         )}
       </CardContent>
     </Card>

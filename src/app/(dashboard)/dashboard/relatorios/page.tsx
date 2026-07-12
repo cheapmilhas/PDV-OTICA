@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Progress } from "@/components/ui/progress";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { useToast } from "@/hooks/use-toast";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
@@ -310,7 +310,7 @@ export default function ReportsPage() {
               </CardHeader>
               <CardContent>
                 {products && products.ranking.length > 0 ? (
-                  <Table>
+                  <ResponsiveTable cards minWidth={760}>
                     <TableHeader>
                       <TableRow>
                         <TableHead>#</TableHead>
@@ -325,19 +325,19 @@ export default function ReportsPage() {
                     <TableBody>
                       {products.ranking.map((item, idx) => (
                         <TableRow key={item.productId}>
-                          <TableCell className="font-medium">{idx + 1}</TableCell>
-                          <TableCell>{item.name}</TableCell>
-                          <TableCell>{item.sku}</TableCell>
-                          <TableCell>{item.category || "-"}</TableCell>
-                          <TableCell className="text-right">{item.quantity}</TableCell>
-                          <TableCell className="text-right">{formatCurrency(item.averagePrice)}</TableCell>
-                          <TableCell className="text-right font-medium">
+                          <TableCell className="font-medium" data-label="#">{idx + 1}</TableCell>
+                          <TableCell data-label="Produto">{item.name}</TableCell>
+                          <TableCell data-label="SKU">{item.sku}</TableCell>
+                          <TableCell data-label="Categoria">{item.category || "-"}</TableCell>
+                          <TableCell className="text-right" data-label="Qtd">{item.quantity}</TableCell>
+                          <TableCell className="text-right" data-label="Preço Médio">{formatCurrency(item.averagePrice)}</TableCell>
+                          <TableCell className="text-right font-medium" data-label="Faturamento">
                             {formatCurrency(item.revenue)}
                           </TableCell>
                         </TableRow>
                       ))}
                     </TableBody>
-                  </Table>
+                  </ResponsiveTable>
                 ) : (
                   <p className="text-center text-muted-foreground py-8">Nenhum dado disponível</p>
                 )}

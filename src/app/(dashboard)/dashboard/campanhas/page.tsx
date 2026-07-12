@@ -8,13 +8,13 @@ import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
 import {
-  Table,
   TableBody,
   TableCell,
   TableHead,
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -247,7 +247,7 @@ function CampanhasPageContent() {
               Nenhuma campanha cadastrada
             </div>
           ) : (
-            <Table>
+            <ResponsiveTable cards minWidth={900}>
               <TableHeader>
                 <TableRow>
                   <TableHead>Nome</TableHead>
@@ -263,14 +263,14 @@ function CampanhasPageContent() {
               <TableBody>
                 {campaigns.map((campaign) => (
                   <TableRow key={campaign.id}>
-                    <TableCell className="font-medium">{campaign.name}</TableCell>
-                    <TableCell>
+                    <TableCell className="font-medium" data-label="Nome">{campaign.name}</TableCell>
+                    <TableCell data-label="Tipo">
                       <Badge variant="outline">
                         {BONUS_TYPE_LABELS[campaign.bonusType]}
                       </Badge>
                     </TableCell>
-                    <TableCell>{SCOPE_LABELS[campaign.scope]}</TableCell>
-                    <TableCell>
+                    <TableCell data-label="Escopo">{SCOPE_LABELS[campaign.scope]}</TableCell>
+                    <TableCell data-label="Produtos">
                       {campaign.products && campaign.products.length > 0 ? (
                         <div className="flex gap-1 flex-wrap">
                           {campaign.products.slice(0, 2).map((item) => (
@@ -296,17 +296,17 @@ function CampanhasPageContent() {
                         </Badge>
                       )}
                     </TableCell>
-                    <TableCell>
+                    <TableCell data-label="Status">
                       <Badge variant={STATUS_LABELS[campaign.status].variant as any}>
                         {STATUS_LABELS[campaign.status].label}
                       </Badge>
                     </TableCell>
-                    <TableCell className="text-sm text-muted-foreground">
+                    <TableCell className="text-sm text-muted-foreground" data-label="Período">
                       {new Date(campaign.startDate).toLocaleDateString()} até{" "}
                       {new Date(campaign.endDate).toLocaleDateString()}
                     </TableCell>
-                    <TableCell>{campaign.priority}</TableCell>
-                    <TableCell className="text-right">
+                    <TableCell data-label="Prioridade">{campaign.priority}</TableCell>
+                    <TableCell className="text-right" data-label="">
                       <div className="flex items-center justify-end gap-2">
                         {campaign.status === "DRAFT" && hasPermission("campaigns.manage") && (
                           <Button
@@ -366,7 +366,7 @@ function CampanhasPageContent() {
                   </TableRow>
                 ))}
               </TableBody>
-            </Table>
+            </ResponsiveTable>
           )}
         </CardContent>
       </Card>
