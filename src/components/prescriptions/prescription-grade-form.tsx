@@ -111,7 +111,7 @@ export function PrescriptionGradeForm({ value, onChange, disabled }: Props) {
           disabled={disabled}
           onClick={() => setOpenKeypad({ eye, field: c.key as "esf" | "cil" })}
         >
-          {raw ? formatDiopter(raw) : <span className="text-muted-foreground">{c.placeholder}</span>}
+          {raw ? formatDiopter(raw, false) : <span className="text-muted-foreground">{c.placeholder}</span>}
         </button>
       );
     }
@@ -215,7 +215,7 @@ export function PrescriptionGradeForm({ value, onChange, disabled }: Props) {
             onClick={() => setOpenKeypad({ eye: "adicao", field: "adicao" })}
           >
             {value.adicao ? (
-              formatDiopter(value.adicao)
+              formatDiopter(value.adicao, false)
             ) : (
               <span className="text-muted-foreground">+0.00</span>
             )}

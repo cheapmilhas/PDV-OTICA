@@ -23,12 +23,17 @@ export function flipSign(raw: string): string {
   return clean.startsWith("-") ? clean.slice(1) : `-${clean}`;
 }
 
-/** Exibição no visor do teclado. Aceita ponto ou vírgula na entrada. */
-export function formatDiopter(raw: string): string {
+/**
+ * Exibição do valor de dioptria. Aceita ponto ou vírgula na entrada.
+ * `withUnit=true` (padrão) anexa " D" (dioptria) — usado no visor grande do
+ * teclado. No campo compacto da grade passe `false`: a coluna já diz
+ * Esférico/Cilíndrico, então o "D" só polui.
+ */
+export function formatDiopter(raw: string, withUnit = true): string {
   if (!raw || raw === "-" || raw === "+") return "—";
   const clean = sanitizeSign(raw).replace(".", ",");
   if (clean === "" || clean === "-") return "—";
   const sign = clean.startsWith("-") ? "−" : "+";
   const body = clean.replace("-", "");
-  return `${sign}${body} D`;
+  return withUnit ? `${sign}${body} D` : `${sign}${body}`;
 }

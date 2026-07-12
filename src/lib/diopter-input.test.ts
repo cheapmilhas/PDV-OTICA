@@ -36,4 +36,10 @@ describe("formatDiopter", () => {
     expect(formatDiopter("2.25")).toBe("+2,25 D"); // ponto=decimal na dioptria
     expect(formatDiopter("")).toBe("—");
   });
+
+  it("withUnit=false omite o sufixo D (campo compacto da grade)", () => {
+    expect(formatDiopter("-2,25", false)).toBe("−2,25");
+    expect(formatDiopter("2.25", false)).toBe("+2,25");
+    expect(formatDiopter("", false)).toBe("—");
+  });
 });
