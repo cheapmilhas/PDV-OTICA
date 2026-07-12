@@ -195,6 +195,13 @@
 
 /* ===== MOBILE ===== */
 
+/* Guard anti-scroll-horizontal: nenhuma tela pode causar barra lateral no body.
+ * `clip` (não `hidden`) não cria contexto de scroll nem quebra position:sticky. */
+html,
+body {
+  overflow-x: clip;
+}
+
 /* Cards compactos em mobile dentro de grids de métricas */
 @media (max-width: 767px) {
   .metrics-grid [class*="CardHeader"],
