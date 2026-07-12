@@ -26,10 +26,17 @@ const DIGITS = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "0"] as const;
 const KEY_CLASS =
   "flex min-h-11 min-w-11 items-center justify-center rounded-md border border-input bg-background text-lg font-medium transition-all duration-150 hover:bg-accent hover:text-accent-foreground active:scale-[0.98] focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-/** Número atual do value controlado (0 se vazio/NaN). */
+/**
+ * Número atual do value controlado.
+ * Vazio/só-espaços → 0 (stepar a partir do zero é legítimo).
+ * Não-vazio mas inválido (ex.: "1,2,3") → NaN (o chamador deve tratar como no-op,
+ * para NÃO substituir silenciosamente um valor legado malformado).
+ */
 function parseValue(value: string): number {
-  const n = Number(sanitizeSign(value).replace(",", "."));
-  return Number.isFinite(n) ? n : 0;
+  const raw = sanitizeSign(value).trim();
+  if (raw === "") return 0;
+  const n = Number(raw.replace(",", "."));
+  return Number.isFinite(n) ? n : NaN;
 }
 
 /** Re-stringifica em pt-BR: no máx. 2 decimais, separador vírgula, "-" na frente. */
@@ -66,7 +73,12 @@ export function DiopterKeypad({
   };
 
   const handleStep = (delta: number) => {
-    const next = parseValue(value) + delta;
+    const base = parseValue(value);
+    // Valor não-vazio e inválido → no-op (não sobrescreve valor legado malformado).
+    if (Number.isNaN(base)) return;
+    let next = base + delta;
+    // Adição é sempre positiva (+0,50..+4,00): nunca deixar ficar negativa.
+    if (field === "adicao") next = Math.max(0, next);
     onChange(stringify(next));
   };
 

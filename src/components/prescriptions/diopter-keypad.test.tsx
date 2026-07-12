@@ -49,4 +49,34 @@ describe("DiopterKeypad", () => {
     fireEvent.click(screen.getByTestId("keypad-comma"));
     expect(onChange).not.toHaveBeenCalled();
   });
+
+  it("adição nunca fica negativa pelo stepper −0,25 (clamp em 0)", () => {
+    const onChange = vi.fn();
+    render(
+      <DiopterKeypad open value="" field="adicao" label="Adição" onChange={onChange} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByTestId("keypad-step-down"));
+    // de vazio (0), −0,25 em adição deve permanecer não-negativo → "0"
+    const emitted = onChange.mock.calls.at(-1)?.[0];
+    expect(emitted === "0" || emitted === "").toBe(true);
+    expect(emitted?.startsWith("-")).toBeFalsy();
+  });
+
+  it("esf/cil AINDA vão negativos pelo stepper (não clampa)", () => {
+    const onChange = vi.fn();
+    render(
+      <DiopterKeypad open value="" field="esf" label="OD · Esférico" onChange={onChange} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByTestId("keypad-step-down"));
+    expect(onChange).toHaveBeenLastCalledWith("-0,25");
+  });
+
+  it("stepper é no-op quando o valor atual é inválido (não apaga valor legado)", () => {
+    const onChange = vi.fn();
+    render(
+      <DiopterKeypad open value="1,2,3" field="esf" label="OD · Esférico" onChange={onChange} onClose={() => {}} />,
+    );
+    fireEvent.click(screen.getByTestId("keypad-step-up"));
+    expect(onChange).not.toHaveBeenCalled();
+  });
 });
