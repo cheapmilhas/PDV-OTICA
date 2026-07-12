@@ -53,7 +53,7 @@ export function LensAdvisorFab() {
           ref={balloonRef}
           role="dialog"
           aria-label="Assistente de Lentes"
-          className="fixed bottom-20 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-xl border bg-background p-4 shadow-xl"
+          className="fixed bottom-36 right-4 z-40 w-[360px] max-w-[calc(100vw-2rem)] max-h-[70vh] overflow-y-auto rounded-xl border bg-background p-4 shadow-xl md:bottom-20"
         >
           <div className="mb-3 flex items-center justify-between">
             <div className="flex items-center gap-2 text-sm font-semibold text-foreground">
@@ -79,7 +79,7 @@ export function LensAdvisorFab() {
         aria-label="Assistente de Lentes"
         aria-expanded={open}
         onClick={() => (open ? setOpen(false) : handleOpen())}
-        className="fixed bottom-4 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer"
+        className="fixed bottom-20 right-4 z-40 flex h-14 w-14 items-center justify-center rounded-full bg-primary text-primary-foreground shadow-lg transition-colors hover:bg-primary/90 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 cursor-pointer md:bottom-4"
       >
         <Glasses className="h-6 w-6" aria-hidden="true" />
       </button>

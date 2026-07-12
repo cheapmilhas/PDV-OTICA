@@ -6,6 +6,8 @@
  * Aceita vírgula decimal ("-1,75"). Todos os campos são opcionais.
  */
 
+import { GRADE_RANGES, type GradeRangeField } from "./prescription-grade-ranges";
+
 export interface EyeGrade {
   esf?: string | null;
   cil?: string | null;
@@ -34,25 +36,26 @@ function toNum(v: string | null | undefined): number | undefined {
   return Number.isFinite(n) ? n : NaN;
 }
 
-// Faixas idênticas ao Zod backend (prescription.schema.ts).
-const RANGES: Record<string, [number, number, string]> = {
-  esf: [-30, 30, "Esférico deve estar entre -30 e +30"],
-  cil: [-10, 10, "Cilíndrico deve estar entre -10 e +10"],
-  eixo: [0, 180, "Eixo deve estar entre 0 e 180"],
-  add: [0.5, 4, "Adição deve estar entre +0,50 e +4,00"],
-  dnp: [20, 80, "DNP deve estar entre 20 e 80"],
-  altura: [10, 40, "Altura deve estar entre 10 e 40"],
+// Mensagens por campo. As FAIXAS numéricas vêm de GRADE_RANGES (fonte única,
+// compartilhada com o backend) — aqui só mora o texto do erro, nunca os limites.
+const MESSAGES: Record<GradeRangeField, string> = {
+  esf: "Esférico deve estar entre -30 e +30",
+  cil: "Cilíndrico deve estar entre -10 e +10",
+  eixo: "Eixo deve estar entre 0 e 180",
+  add: "Adição deve estar entre +0,50 e +4,00",
+  dnp: "DNP deve estar entre 20 e 80",
+  altura: "Altura deve estar entre 10 e 40",
 };
 
 function checkEye(eye: EyeGrade | null | undefined, lado: string, errors: string[]) {
   if (!eye) return;
-  for (const field of Object.keys(RANGES)) {
+  for (const field of Object.keys(MESSAGES) as GradeRangeField[]) {
     const raw = eye[field as keyof EyeGrade];
     const n = toNum(raw);
     if (n === undefined) continue; // vazio = ok
-    const [min, max, msg] = RANGES[field];
+    const [min, max] = GRADE_RANGES[field];
     if (Number.isNaN(n) || n < min || n > max) {
-      errors.push(`${lado}: ${msg}`);
+      errors.push(`${lado}: ${MESSAGES[field]}`);
     }
   }
 }
@@ -62,8 +65,9 @@ export function validateGrade(input: GradeInput): GradeValidationResult {
   checkEye(input.od, "OD", errors);
   checkEye(input.oe, "OE", errors);
   const adicao = toNum(input.adicao);
-  if (adicao !== undefined && (Number.isNaN(adicao) || adicao < 0.5 || adicao > 4)) {
-    errors.push("Adição deve estar entre +0,50 e +4,00");
+  const [addMin, addMax] = GRADE_RANGES.add;
+  if (adicao !== undefined && (Number.isNaN(adicao) || adicao < addMin || adicao > addMax)) {
+    errors.push(MESSAGES.add);
   }
   return { ok: errors.length === 0, errors };
 }

@@ -15,6 +15,9 @@ import { useRouter, useParams, useSearchParams } from "next/navigation";
 import Link from "next/link";
 import { PrescriptionImageUpload, type OcrPrescriptionData } from "@/components/ordens-servico/prescription-image-upload";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
+import { PrescriptionGradeForm } from "@/components/prescriptions/prescription-grade-form";
+import { mergePrescriptionGrade } from "@/lib/merge-prescription-grade";
+import { validateGrade } from "@/lib/prescription-grade-validation";
 
 interface ServiceItem {
   description: string;
@@ -314,8 +317,29 @@ function EditarOrdemServicoContent() {
       payload.laboratoryId = formData.laboratoryId || undefined;
       payload.notes = formData.notes || undefined;
 
-      // Montar receita se preenchida
-      if (showPrescription && (prescriptionData.od.esf || prescriptionData.oe.esf)) {
+      // Montar receita se QUALQUER campo de grade estiver preenchido — não só
+      // esf (achado Codex A2: uma receita só com cil/eixo/adição/prisma era
+      // silenciosamente omitida do PATCH e a alteração se perdia).
+      const hasAnyGradeField =
+        prescriptionData.od.esf || prescriptionData.od.cil || prescriptionData.od.eixo ||
+        prescriptionData.od.dnp || prescriptionData.od.altura || prescriptionData.od.add ||
+        prescriptionData.od.prisma || prescriptionData.od.base ||
+        prescriptionData.oe.esf || prescriptionData.oe.cil || prescriptionData.oe.eixo ||
+        prescriptionData.oe.dnp || prescriptionData.oe.altura || prescriptionData.oe.add ||
+        prescriptionData.oe.prisma || prescriptionData.oe.base ||
+        prescriptionData.adicao;
+      if (showPrescription && hasAnyGradeField) {
+        // Bloqueia o submit se a grade estiver fora da faixa (fonte única) — a
+        // tela de editar NÃO validava faixa antes; agora herda a mesma regra do
+        // form e do servidor.
+        const gradeCheck = validateGrade({
+          od: prescriptionData.od,
+          oe: prescriptionData.oe,
+          adicao: prescriptionData.adicao,
+        });
+        if (!gradeCheck.ok) {
+          throw new Error(gradeCheck.errors[0]);
+        }
         payload.prescription = JSON.stringify(prescriptionData);
       } else if (!showPrescription) {
         payload.prescription = undefined;
@@ -611,82 +635,13 @@ function EditarOrdemServicoContent() {
                 />
               </div>
 
-              {/* BLOCO 1: VISÃO DE LONGE */}
+              {/* BLOCO 1: VISÃO DE LONGE — grade unificada (PrescriptionGradeForm) */}
               <div>
                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Visão de Longe</h3>
-                <div className="md:overflow-x-auto">
-                  <table className="grade-responsive w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
-                        <th className="border p-1.5 text-center font-semibold">Esférico</th>
-                        <th className="border p-1.5 text-center font-semibold">Cilíndrico</th>
-                        <th className="border p-1.5 text-center font-semibold">Eixo</th>
-                        <th className="border p-1.5 text-center font-semibold">DNP</th>
-                        <th className="border p-1.5 text-center font-semibold">Altura</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(["od", "oe"] as const).map((eye) => (
-                        <tr key={eye}>
-                          <td className="border p-1.5 font-bold bg-gray-50 text-center">
-                            <span className="md:hidden">{eye === "od" ? "OD — Olho Direito" : "OE — Olho Esquerdo"}</span><span className="hidden md:inline">{eye === "od" ? "OD" : "OE"}</span>
-                          </td>
-                          <td className="border p-0.5" data-label="Esférico">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Esférico`}
-                              value={prescriptionData[eye].esf}
-                              onChange={(e) => updatePrescription(eye, "esf", e.target.value)}
-                              placeholder="+0.00"
-                              inputMode="decimal"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="Cilíndrico">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Cilíndrico`}
-                              value={prescriptionData[eye].cil}
-                              onChange={(e) => updatePrescription(eye, "cil", e.target.value)}
-                              placeholder="-0.00"
-                              inputMode="decimal"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="Eixo">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Eixo`}
-                              value={prescriptionData[eye].eixo}
-                              onChange={(e) => updatePrescription(eye, "eixo", e.target.value)}
-                              placeholder="0-180"
-                              inputMode="numeric"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="DNP">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — DNP`}
-                              value={prescriptionData[eye].dnp}
-                              onChange={(e) => updatePrescription(eye, "dnp", e.target.value)}
-                              placeholder="mm"
-                              inputMode="decimal"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="Altura">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Altura`}
-                              value={prescriptionData[eye].altura}
-                              onChange={(e) => updatePrescription(eye, "altura", e.target.value)}
-                              placeholder="mm"
-                              inputMode="decimal"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <PrescriptionGradeForm
+                  value={{ od: prescriptionData.od, oe: prescriptionData.oe, adicao: prescriptionData.adicao }}
+                  onChange={(patch) => setPrescriptionData((prev) => mergePrescriptionGrade(prev, patch))}
+                />
               </div>
 
               {/* BLOCO 2: ADIÇÃO / VISÃO DE PERTO */}

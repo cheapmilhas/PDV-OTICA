@@ -34,6 +34,25 @@ describe("PrescriptionGradeDialog", () => {
     await waitFor(() => expect(onSaved).toHaveBeenCalled());
   });
 
+  it("NÃO salva quando a grade está fora da faixa (submit bloqueado)", async () => {
+    const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
+    vi.stubGlobal("fetch", fetchMock);
+    const onSaved = vi.fn();
+
+    render(
+      <PrescriptionGradeDialog prescriptionId="rx-3" open onClose={() => {}} onSaved={onSaved} />
+    );
+
+    // cilíndrico +11 está fora da faixa (-10..+10) → salvar deve ser bloqueado
+    fireEvent.change(screen.getByTestId("grade-od-cil"), { target: { value: "+11" } });
+    fireEvent.click(screen.getByRole("button", { name: /salvar/i }));
+
+    // dá tempo de um fetch acontecer se fosse acontecer
+    await new Promise((r) => setTimeout(r, 50));
+    expect(fetchMock).not.toHaveBeenCalled();
+    expect(onSaved).not.toHaveBeenCalled();
+  });
+
   it("marca dependente envia isDependente + patientName", async () => {
     const fetchMock = vi.fn().mockResolvedValue({ ok: true, json: async () => ({ success: true }) });
     vi.stubGlobal("fetch", fetchMock);

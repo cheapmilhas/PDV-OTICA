@@ -3,7 +3,7 @@
 import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import {
   CreditCard,
@@ -16,6 +16,7 @@ import {
   FileText,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { parseMoneyPtBR } from "@/lib/decimal-parse";
 import toast from "react-hot-toast";
 
 interface Payment {
@@ -98,7 +99,7 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
   const fine = penaltyData?.fine ?? account?.calculatedFine ?? 0;
   const interest = penaltyData?.interest ?? account?.calculatedInterest ?? 0;
   const daysLate = penaltyData?.daysLate ?? account?.daysLate ?? 0;
-  const discountValue = parseFloat(discount) || 0;
+  const discountValue = parseMoneyPtBR(discount) ?? 0;
 
   const totalOriginal = account?.amount || 0;
   const totalWithPenalties = Math.round((totalOriginal + fine + interest - discountValue) * 100) / 100;
@@ -106,9 +107,9 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
   const remaining = Math.round((totalWithPenalties - totalPaid) * 100) / 100;
 
   const addPayment = () => {
-    if (!selectedMethod || !amount || parseFloat(amount) <= 0) return;
+    if (!selectedMethod || !amount || (parseMoneyPtBR(amount) ?? 0) <= 0) return;
 
-    const paymentAmount = parseFloat(amount);
+    const paymentAmount = parseMoneyPtBR(amount) ?? 0;
 
     // Validar se não excede o total com penalidades
     if (totalPaid + paymentAmount > totalWithPenalties + 0.01) {
@@ -157,7 +158,9 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
   };
 
   const quickFill = () => {
-    setAmount(remaining.toFixed(2));
+    // DecimalInput é pt-BR (vírgula decimal); parseMoneyPtBR trata ponto como
+    // milhar. toFixed(2) emite ponto → converter para vírgula antes de setar.
+    setAmount(remaining.toFixed(2).replace(".", ","));
   };
 
   return (
@@ -264,15 +267,12 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
               {(daysLate > 0 || discountValue > 0) && (
                 <div className="space-y-1">
                   <Label htmlFor="discount" className="text-xs">Desconto (R$)</Label>
-                  <Input
+                  <DecimalInput
                     id="discount"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
-                    min="0"
+                    money
                     placeholder="0,00"
                     value={discount}
-                    onChange={(e) => setDiscount(e.target.value)}
+                    onValueChange={setDiscount}
                     className="h-11 md:h-8 text-base md:text-sm"
                   />
                 </div>
@@ -282,14 +282,12 @@ export function ModalReceberConta({ open, onOpenChange, account, onConfirm, load
               <div className="space-y-1">
                 <Label htmlFor="amount" className="text-xs">Valor</Label>
                 <div className="flex gap-1">
-                  <Input
+                  <DecimalInput
                     id="amount"
-                    type="number"
-                    inputMode="decimal"
-                    step="0.01"
+                    money
                     placeholder="0,00"
                     value={amount}
-                    onChange={(e) => setAmount(e.target.value)}
+                    onValueChange={setAmount}
                     disabled={!selectedMethod}
                     className="h-11 md:h-8 text-base md:text-sm"
                   />

@@ -4,6 +4,7 @@ import { useState, useEffect } from "react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
@@ -125,7 +126,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
     }
   }, [open]);
 
-  const cashbackUsed = useCashback ? parseFloat(cashbackAmount) || 0 : 0;
+  const cashbackUsed = useCashback ? parseAmount(cashbackAmount) || 0 : 0;
   const totalPaid = payments.reduce((acc, p) => acc + p.amount, 0);
   // Arredondar para 2 casas decimais para evitar erro de precisão de ponto flutuante
   const totalAfterCashback = Math.round((total - cashbackUsed) * 100) / 100;
@@ -306,7 +307,8 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
     // Usar o menor valor entre: saldo de cashback e total da venda
     // Não podemos usar mais cashback do que o total da venda
     const maxUsable = Math.min(cashbackBalance, total);
-    setCashbackAmount(maxUsable.toFixed(2));
+    // pt-BR (vírgula decimal); parseAmount normaliza na hora de usar.
+    setCashbackAmount(maxUsable.toFixed(2).replace(".", ","));
   };
 
   const quickFill = () => {
@@ -373,15 +375,11 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                   </div>
                   {useCashback && (
                     <>
-                      <Input
-                        type="number"
-                        inputMode="decimal"
-                        step="0.01"
+                      <DecimalInput
                         placeholder="Valor"
                         value={cashbackAmount}
-                        onChange={(e) => setCashbackAmount(e.target.value)}
+                        onValueChange={setCashbackAmount}
                         className="w-24 md:w-20 h-11 md:h-6 text-base md:text-[11px]"
-                        max={cashbackBalance}
                       />
                       <Button
                         variant="outline"

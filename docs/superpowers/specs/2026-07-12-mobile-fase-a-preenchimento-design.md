@@ -59,6 +59,7 @@ A auditoria confirmou o relato do dono e o painel achou um problema mais grave q
   - **Sem estado-espelho.** O keypad deriva a exibição do `value` prop a cada render; não mantém magnitude/sinal internos que possam dessincronizar. Ao editar OS com `−3,00` salvo, ou quando o form muda o value por fora (OCR), o visor reflete a prop.
   - Emite string já passada por um **sanitizador de sinal** que colapsa sinais múltiplos e força `−` na posição 0 → `--2,25`/`2-,25`/`+-2,25` nunca ocorrem.
 - **Gate de ativação:** capacidade de toque (`coarse pointer`, ex. `matchMedia("(pointer: coarse)")` via hook SSR-safe), **não largura de tela**. Garante o teclado no **iPad** (estação de trabalho do dono). No desktop com mouse, o campo permanece input normal.
+  - **Limitação conhecida (revisão Codex A1, aceita):** `(pointer: coarse)` consulta só o ponteiro *primário*. Cobre iPad/iPhone e exclui desktop-mouse típico, mas em laptops híbridos/conversíveis a classificação pode divergir (conversível em modo tablet pode reportar `coarse`; híbrido com trackpad primário fica `fine` mesmo tocando a tela). Trade-off aceito — o alvo real são iPhone/iPad. Se virar dor, evoluir para combinar `any-pointer: coarse` + preferência persistida (fase futura).
 - **Ligações:** substituir os inputs de esf/cil/adição por um gatilho (botão-visor no toque; input direto no mouse) em `prescription-grade-form.tsx` (layout phone e, via gate coarse, também iPad) e nas grades das OS **após** a unificação A2.
 
 **Utilitário puro novo:** `src/lib/diopter-input.ts` — `flipSign(raw)`, `sanitizeSign(raw)`, `formatDiopter(raw)`. Testável isoladamente.
@@ -147,3 +148,17 @@ Todas as sub-fases são 100% UI + validação de request. **Zero migration de ba
 - Aposentar o hamburger deslizante (8 rotas só nele → sheet "Mais" da bottom-nav).
 - Hydration error `/admin/clientes/novo` (bug separado, [[hydration-error-clientes-novo]]).
 - NF-e (adiado por decisão do dono).
+
+## Achados da revisão Codex A3 — resolução
+
+- **CRÍTICO (corrigido):** `modal-abertura-caixa.tsx` perdeu o guard ao migrar de `type=number` (que tinha `required`/`min="0"`) — vazio/inválido abria o caixa com R$ 0 sem aviso, negativo passava. Reposto guard manual: `parseMoneyPtBR(valor) === null || < 0` bloqueia; **R$ 0,00 permanece válido** (caixa sem troco inicial). Sangria/reforço/receber-conta já tinham guard `<= 0` correto.
+- **REJEITADO (falso-positivo de bug):** Codex apontou que o cashback do PDV usa `parseAmount` (não `parseMoneyPtBR`), violando o "pareamento". Verificado: `parseAmount` (`modal-finalizar-venda.tsx:60`) É pt-BR-aware — quando há vírgula faz `.replace(/\./g,"").replace(",",".")` (idêntico ao `parseMoneyPtBR`). O próprio Codex admitiu "não encontrei bug de 100x hoje". Trocar mudaria o contorno `NaN`→`null` exigindo mexer no guard `Number.isFinite` de um fluxo de venda em produção — risco > benefício de consistência cosmética. Mantido `parseAmount`.
+- **FOLLOW-UP (pré-existente):** prefill do `modal-fechamento-caixa.tsx` só reage a `[open]` (`eslint-disable exhaustive-deps` já existia antes da A3) — se movimentos chegarem após abrir o modal, não recalcula. A A3 só trocou `<Input>`→`<DecimalInput>`, não tocou o effect. Corrigir junto com o saneamento de deps numa fase futura.
+
+## Follow-up conhecido (achado revisão A3, pré-existente — fora de escopo)
+
+- **`modal-finalizar-venda.tsx:464`**: o *preview* de parcelas do cartão calcula com `parseFloat(amount)` sobre um valor pt-BR (ex. "2.400,00" vira 2,4 → mostra "3x R$ 0,80" em vez de "3x R$ 800,00"). É **só display** — o valor persistido no submit usa o parser correto (`parseAmount`), então nenhum valor salvo/calculado é afetado. Pré-existente (commit `f446212b`, não introduzido pela A3). Corrigir junto quando migrar o resto dos ~140 campos.
+
+## Dívida conhecida (achado Codex A2, pré-existente — NÃO corrigido nesta fase)
+
+- **Dessincronização `adicao` (top-level) vs `od.add`/`oe.add`.** A OS carrega tanto um campo `adicao` global quanto `add` por olho; editar um não sincroniza o outro, então o save pode conter valores de adição contraditórios. É um problema de MODELO DE DADOS pré-existente (não introduzido pela unificação da grade) e mexer nele altera semântica de negócio. Fica registrado para uma fase futura de saneamento do schema da receita. Relaciona [[vis-medical-forja-painel]] (onde a `Prescription` vira fonte única do grau).

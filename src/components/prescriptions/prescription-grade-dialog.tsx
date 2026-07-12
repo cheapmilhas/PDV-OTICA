@@ -14,6 +14,7 @@ import {
   PrescriptionGradeForm,
   type PrescriptionGradeValue,
 } from "./prescription-grade-form";
+import { validateGrade } from "@/lib/prescription-grade-validation";
 import toast from "react-hot-toast";
 
 /**
@@ -40,6 +41,13 @@ export function PrescriptionGradeDialog({ prescriptionId, open, onClose, onSaved
   const [saving, setSaving] = useState(false);
 
   const handleSave = async () => {
+    // Bloqueia o submit se a grade estiver fora da faixa (fonte única). Antes o
+    // dialog salvava mesmo com erro (só pintava vermelho no form).
+    const gradeCheck = validateGrade({ od: grade.od, oe: grade.oe, adicao: grade.adicao });
+    if (!gradeCheck.ok) {
+      toast.error(gradeCheck.errors[0]);
+      return;
+    }
     setSaving(true);
     try {
       const res = await fetch(`/api/prescriptions/${prescriptionId}/grau`, {
