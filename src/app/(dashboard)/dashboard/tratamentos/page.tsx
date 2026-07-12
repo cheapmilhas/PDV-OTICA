@@ -167,15 +167,15 @@ function TratamentosPage() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div>
-          <h1 className="text-3xl font-bold">Tratamentos de Lentes</h1>
+          <h1 className="text-2xl font-bold md:text-3xl">Tratamentos de Lentes</h1>
           <p className="text-muted-foreground">
             Gerencie os tratamentos disponíveis (anti-reflexo, transitions, etc.)
           </p>
         </div>
         {hasPermission("products.edit") && (
-          <Button onClick={handleNew}>
+          <Button onClick={handleNew} className="flex-1 md:flex-none">
             <Plus className="mr-2 h-4 w-4" />
             Novo Tratamento
           </Button>

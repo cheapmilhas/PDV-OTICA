@@ -213,17 +213,17 @@ export default function DespesasRecorrentesPage() {
     <ProtectedRoute permission="financial.view">
       <div className="p-6 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between">
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
             <h1 className="text-2xl font-bold text-gray-900">Despesas Fixas</h1>
             <p className="text-sm text-gray-500">Gerencie despesas recorrentes e gere contas a pagar automaticamente</p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={handleGenerate} disabled={generating}>
+          <div className="flex gap-2 flex-wrap">
+            <Button variant="outline" onClick={handleGenerate} disabled={generating} className="flex-1 md:flex-none">
               <RefreshCw className={`h-4 w-4 mr-2 ${generating ? "animate-spin" : ""}`} />
               Gerar Contas do Mês
             </Button>
-            <Button onClick={openCreate}>
+            <Button onClick={openCreate} className="flex-1 md:flex-none">
               <Plus className="h-4 w-4 mr-2" />
               Nova Despesa
             </Button>

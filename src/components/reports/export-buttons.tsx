@@ -50,7 +50,7 @@ export function ExportButtons({
   };
 
   return (
-    <div className="flex gap-2">
+    <div className="flex gap-2 flex-wrap">
       {onExportPDF && (
         <Button
           variant="outline"

@@ -174,7 +174,7 @@ function CompanySettingsPageContent() {
   return (
     <div className="p-6 max-w-4xl mx-auto">
       {/* Header */}
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between mb-6">
         <div>
           <Button
             variant="ghost"
@@ -185,12 +185,12 @@ function CompanySettingsPageContent() {
             <ArrowLeft className="h-4 w-4 mr-2" />
             Voltar
           </Button>
-          <h1 className="text-3xl font-bold">Configurações da Empresa</h1>
+          <h1 className="text-2xl font-bold md:text-3xl">Configurações da Empresa</h1>
           <p className="text-gray-600 mt-1">
             Gerencie as informações e aparência da sua empresa
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
+        <Button onClick={handleSave} disabled={saving} className="flex-1 md:flex-none">
           <Save className="h-4 w-4 mr-2" />
           {saving ? "Salvando..." : "Salvar"}
         </Button>

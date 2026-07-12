@@ -447,7 +447,7 @@ function EditarOrdemServicoContent() {
 
   return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <Link href={`/dashboard/ordens-servico/${id}/detalhes`}>
             <Button variant="ghost" size="sm">
@@ -456,7 +456,7 @@ function EditarOrdemServicoContent() {
             </Button>
           </Link>
           <div>
-            <h1 className="text-3xl font-bold">Editar Ordem de Serviço</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Editar Ordem de Serviço</h1>
             <p className="text-muted-foreground">Atualize os dados da ordem de serviço</p>
           </div>
         </div>

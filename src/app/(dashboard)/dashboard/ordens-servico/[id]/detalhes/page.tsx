@@ -195,7 +195,7 @@ function DetalhesOrdemServicoContent() {
   return (
     <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
         <div className="flex items-center gap-4">
           <Link href="/dashboard/ordens-servico">
             <Button variant="ghost" size="sm">
@@ -205,7 +205,7 @@ function DetalhesOrdemServicoContent() {
           </Link>
           <div>
             <div className="flex items-center gap-2">
-              <h1 className="text-3xl font-bold">Detalhes da OS</h1>
+              <h1 className="text-2xl md:text-3xl font-bold">Detalhes da OS</h1>
               {order.number && (
                 <span className="text-2xl font-black text-blue-600">
                   {osDisplayNumber(order)}
@@ -219,13 +219,14 @@ function DetalhesOrdemServicoContent() {
             </p>
           </div>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <Badge variant={getStatusVariant(order.status)}>
             {getStatusLabel(order.status)}
           </Badge>
           <Button
             size="sm"
             variant="outline"
+            className="flex-1 md:flex-none"
             onClick={() => window.open(`/dashboard/ordens-servico/${id}/imprimir`, "_blank")}
           >
             <Printer className="h-4 w-4 mr-2" />
@@ -234,6 +235,7 @@ function DetalhesOrdemServicoContent() {
           {order.status !== "DELIVERED" && order.status !== "CANCELED" && (
             <Button
               size="sm"
+              className="flex-1 md:flex-none"
               onClick={() => router.push(`/dashboard/ordens-servico/${id}/editar`)}
             >
               <Edit className="h-4 w-4 mr-2" />
@@ -246,7 +248,7 @@ function DetalhesOrdemServicoContent() {
               size="sm"
               onClick={handleConvertToSale}
               disabled={converting}
-              className="bg-green-600 hover:bg-green-700 text-white"
+              className="flex-1 md:flex-none bg-green-600 hover:bg-green-700 text-white"
             >
               {converting ? (
                 <Loader2 className="h-4 w-4 animate-spin mr-2" />
@@ -260,7 +262,7 @@ function DetalhesOrdemServicoContent() {
             <Button
               size="sm"
               variant="outline"
-              className="border-green-300 text-green-700"
+              className="flex-1 md:flex-none border-green-300 text-green-700"
               onClick={() => router.push(`/dashboard/vendas/${order.sale!.id}/detalhes`)}
             >
               <ShoppingCart className="h-4 w-4 mr-2" />

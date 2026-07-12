@@ -529,13 +529,17 @@ function BIPageContent() {
         onValueChange={handleDimensionChange}
         className="space-y-4"
       >
-        <TabsList className="grid w-full grid-cols-5">
-          {DIMENSION_TABS.map((tab) => (
-            <TabsTrigger key={tab.value} value={tab.value}>
-              {tab.label}
-            </TabsTrigger>
-          ))}
-        </TabsList>
+        {/* Mobile: rola horizontalmente (5 abas não cabem no iPhone).
+            Desktop: grid de 5 colunas iguais. */}
+        <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+          <TabsList className="inline-flex w-max md:grid md:w-full md:grid-cols-5">
+            {DIMENSION_TABS.map((tab) => (
+              <TabsTrigger key={tab.value} value={tab.value}>
+                {tab.label}
+              </TabsTrigger>
+            ))}
+          </TabsList>
+        </div>
 
         {DIMENSION_TABS.map((tab) => (
           <TabsContent key={tab.value} value={tab.value} className="space-y-6">

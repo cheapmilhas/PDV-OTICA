@@ -12,7 +12,10 @@ export function MobileSidebar() {
   return (
     <Sheet open={open} onOpenChange={setOpen}>
       <SheetTrigger asChild>
-        <Button variant="ghost" size="icon" className="md:hidden">
+        {/* Oculto: no mobile a navegação é a bottom-nav (mobile-nav.tsx) —
+            evita dois menus redundantes (☰ topo + "Mais" na barra inferior).
+            Mantido no código caso se queira reativar; nunca renderiza. */}
+        <Button variant="ghost" size="icon" className="hidden">
           <Menu className="h-5 w-5" />
           <span className="sr-only">Abrir menu</span>
         </Button>
