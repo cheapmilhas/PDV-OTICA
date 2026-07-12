@@ -10,6 +10,7 @@
 
 **Environment notes:**
 - Worktree dedicado: `.worktrees/mobile-fase-a` (branch `feat/mobile-fase-a`, base `8b78da0d`). `node_modules` é symlink do repo pai.
+- ⚠️ **Testes de COMPONENTE (que usam `render`/`screen` do Testing Library) DEVEM começar com `/** @vitest-environment jsdom */` na linha 1** — o env global do vitest é `node` (`vitest.config.ts`). Sem o pragma, o teste falha com "document is not defined" (não com a falha TDD pretendida). Vale para `diopter-keypad.test.tsx` e `decimal-input.test.tsx`. Testes de lógica pura (`diopter-input.test.ts`, `decimal-parse.test.ts`, `prescription-grade-ranges.test.ts`) NÃO precisam do pragma.
 - Comandos: testes `./node_modules/.bin/vitest run <path>`; typecheck `./node_modules/.bin/tsc --noEmit`; build `npm run build`. `next lint` NÃO existe (usar `eslint src` se precisar).
 - **ZERO migration de banco.** Nenhuma tabela muda. A2 mexe só em schema Zod de request.
 - **Alto risco:** receita = lente errada. Após cada sub-fase, o Codex revisa o diff antes de qualquer deploy. Não declarar pronto sem a revisão.
@@ -160,6 +161,7 @@ git commit -m "feat(mobile-a1): util puro de sinal/formatação de dioptria"
 - [ ] **Step 1: Escrever o teste falho**
 
 ```tsx
+/** @vitest-environment jsdom */
 // src/components/prescriptions/diopter-keypad.test.tsx
 import { describe, it, expect, vi } from "vitest";
 import { render, screen, fireEvent } from "@testing-library/react";
@@ -395,7 +397,7 @@ describe("checkRange", () => {
 
 - [ ] **Step 2: Rodar e ver falhar** → FAIL (hoje `handleSave` ignora `validateGrade`).
 
-- [ ] **Step 3: Implementar** — o `PrescriptionGradeForm` já roda `validateGrade`; expor o resultado (`onValidityChange(ok)` prop) ou o dialog chama `validateGrade(grade)` antes do fetch e, se `!ok`, faz `toast.error` + return sem enviar. Mesma trava no botão salvar das OS (o submit já roda o validateGrade do form).
+- [ ] **Step 3: Implementar** — rota preferida: o `PrescriptionGradeForm` já roda `validateGrade`; expor o resultado via prop `onValidityChange(ok: boolean)` e o pai (dialog/OS) desabilita o Salvar / faz `toast.error` + return quando `!ok`. (Evita o import extra de `validateGrade` no dialog, que hoje só importa `PrescriptionGradeForm`.) As OS herdam a mesma trava via o form.
 
 - [ ] **Step 4: Rodar e ver passar** → PASS.
 
