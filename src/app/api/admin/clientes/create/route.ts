@@ -80,7 +80,15 @@ export async function POST(request: Request) {
   }
 
   // Vis Medical (F0): normaliza o produto e decide se roda o finance setup de ótica.
+  // Ausente → VIS_APP (compat); presente e inválido → 400 (nunca classificar conta
+  // silenciosamente no produto errado).
   const provision = resolveProvisionProduct(rawPlatformProduct);
+  if (!provision) {
+    return NextResponse.json(
+      { error: "platformProduct inválido (use VIS_APP ou VIS_MEDICAL)" },
+      { status: 400 },
+    );
+  }
 
   // SEGURANÇA: rejeitar HTML em campos de texto livre que vão para o banco
   // (XSS/clickjacking armazenado em Company/Branch/Network/Note).
