@@ -149,6 +149,10 @@ Todas as sub-fases são 100% UI + validação de request. **Zero migration de ba
 - Hydration error `/admin/clientes/novo` (bug separado, [[hydration-error-clientes-novo]]).
 - NF-e (adiado por decisão do dono).
 
+## Follow-up conhecido (achado revisão A3, pré-existente — fora de escopo)
+
+- **`modal-finalizar-venda.tsx:464`**: o *preview* de parcelas do cartão calcula com `parseFloat(amount)` sobre um valor pt-BR (ex. "2.400,00" vira 2,4 → mostra "3x R$ 0,80" em vez de "3x R$ 800,00"). É **só display** — o valor persistido no submit usa o parser correto (`parseAmount`), então nenhum valor salvo/calculado é afetado. Pré-existente (commit `f446212b`, não introduzido pela A3). Corrigir junto quando migrar o resto dos ~140 campos.
+
 ## Dívida conhecida (achado Codex A2, pré-existente — NÃO corrigido nesta fase)
 
 - **Dessincronização `adicao` (top-level) vs `od.add`/`oe.add`.** A OS carrega tanto um campo `adicao` global quanto `add` por olho; editar um não sincroniza o outro, então o save pode conter valores de adição contraditórios. É um problema de MODELO DE DADOS pré-existente (não introduzido pela unificação da grade) e mexer nele altera semântica de negócio. Fica registrado para uma fase futura de saneamento do schema da receita. Relaciona [[vis-medical-forja-painel]] (onde a `Prescription` vira fonte única do grau).
