@@ -4,6 +4,8 @@ import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import bcrypt from "bcryptjs";
 import { logger } from "@/lib/logger";
+import { normalizeLoginEmail } from "@/lib/normalize-login";
+import { normalizeRecoveryEmail } from "@/services/user.service";
 
 const log = logger.child({ route: "admin/companies/[id]/users" });
 
@@ -52,6 +54,7 @@ export async function GET(
       id: true,
       name: true,
       email: true,
+      recoveryEmail: true,
       role: true,
       active: true,
       createdAt: true,
@@ -81,7 +84,8 @@ export async function GET(
 
 const createUserSchema = z.object({
   name: z.string().min(2, "Nome deve ter no mínimo 2 caracteres"),
-  email: z.string().email("Email inválido"),
+  email: z.string().min(1, "Login obrigatório"),
+  recoveryEmail: z.string().trim().email("Email de recuperação inválido").or(z.literal("")).nullable().optional(),
   password: z.string().min(8, "Senha deve ter no mínimo 8 caracteres"),
   role: z.enum(["ADMIN", "GERENTE", "VENDEDOR", "CAIXA", "ATENDENTE"]),
   branchId: z.string().optional(),
@@ -114,7 +118,10 @@ export async function POST(
     );
   }
 
-  const { name, email, password, role, branchId } = parsed.data;
+  const { name, password, role, branchId } = parsed.data;
+  // Normaliza o login UMA vez: sem "@" → "<valor>@login"; com "@" → minúsculo+trim.
+  // A partir daqui `email` já está normalizado — não re-aplicar toLowerCase/trim.
+  const email = normalizeLoginEmail(parsed.data.email);
 
   // Verificar se empresa existe
   const company = await prisma.company.findUnique({
@@ -156,7 +163,7 @@ export async function POST(
   const existingUser = await prisma.user.findFirst({
     where: {
       companyId,
-      email: { equals: email.toLowerCase().trim(), mode: "insensitive" },
+      email: { equals: email, mode: "insensitive" },
     },
   });
   if (existingUser) {
@@ -208,7 +215,8 @@ export async function POST(
         data: {
           companyId,
           name: name.trim(),
-          email: email.toLowerCase().trim(),
+          email,
+          recoveryEmail: normalizeRecoveryEmail(parsed.data.recoveryEmail),
           passwordHash,
           role: role as any,
           active: true,
