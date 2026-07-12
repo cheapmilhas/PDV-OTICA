@@ -4,13 +4,14 @@ import { useState } from "react";
 import { useSession } from "next-auth/react";
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
+import { DecimalInput } from "@/components/ui/decimal-input";
 import { Label } from "@/components/ui/label";
 import { Textarea } from "@/components/ui/textarea";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { useToast } from "@/hooks/use-toast";
 import { ArrowUpCircle, Loader2 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
+import { parseMoneyPtBR } from "@/lib/decimal-parse";
 
 const MOTIVO_LABELS: Record<string, string> = {
   troco: "Reposição de Troco",
@@ -37,7 +38,7 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
-    const amount = Number(formData.valor);
+    const amount = parseMoneyPtBR(formData.valor) ?? 0;
     if (!amount || amount <= 0) {
       toast({
         title: "Valor inválido",
@@ -126,15 +127,12 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
             <Label htmlFor="valor">
               Valor do Reforço <span className="text-destructive">*</span>
             </Label>
-            <Input
+            <DecimalInput
               id="valor"
-              type="number"
-              step="0.01"
-              min="0.01"
-              placeholder="0.00"
+              money
+              placeholder="0,00"
               value={formData.valor}
-              onChange={(e) => setFormData({ ...formData, valor: e.target.value })}
-              required
+              onValueChange={(v) => setFormData({ ...formData, valor: v })}
               disabled={loading}
             />
             <p className="text-xs text-muted-foreground">
@@ -182,7 +180,7 @@ export function ModalReforco({ open, onOpenChange }: ModalReforcoProps) {
             <div className="rounded-lg border border-blue-200 bg-blue-50 p-4">
               <p className="text-sm font-medium text-blue-900">Valor do Reforço</p>
               <p className="text-3xl font-bold text-blue-600 mt-1">
-                +{formatCurrency(Number(formData.valor))}
+                +{formatCurrency(parseMoneyPtBR(formData.valor) ?? 0)}
               </p>
             </div>
           )}
