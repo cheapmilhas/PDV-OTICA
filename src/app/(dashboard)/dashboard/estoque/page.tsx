@@ -156,25 +156,25 @@ function EstoquePage() {
       />
 
       <div className="space-y-6">
-        {/* Header */}
-        <div className="flex items-center justify-between">
+        {/* Header — empilha no mobile, lado a lado no desktop */}
+        <div className="flex flex-col gap-3 md:flex-row md:items-center md:justify-between">
           <div>
-            <h1 className="text-3xl font-bold">Gestão de Estoque</h1>
+            <h1 className="text-2xl md:text-3xl font-bold">Gestão de Estoque</h1>
             <p className="text-muted-foreground">
               Controle de entrada, saída e inventário
             </p>
           </div>
-          <div className="flex gap-2">
-            <Button variant="outline" onClick={() => window.open("/api/products/print", "_blank")}>
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" className="flex-1 md:flex-none" onClick={() => window.open("/api/products/print", "_blank")}>
               <Printer className="mr-2 h-4 w-4" />
               Imprimir Estoque
             </Button>
             <Can permission="stock.adjust">
-              <Button variant="outline" onClick={() => abrirModalSaida()}>
+              <Button variant="outline" className="flex-1 md:flex-none" onClick={() => abrirModalSaida()}>
                 <Minus className="mr-2 h-4 w-4" />
                 Saída de Estoque
               </Button>
-              <Button onClick={() => abrirModalEntrada()}>
+              <Button className="flex-1 md:flex-none" onClick={() => abrirModalEntrada()}>
                 <Plus className="mr-2 h-4 w-4" />
                 Entrada de Estoque
               </Button>
@@ -320,24 +320,27 @@ function EstoquePage() {
 
         {/* Tabs */}
         <Tabs defaultValue="estoque" className="space-y-4">
-          <TabsList>
-            <TabsTrigger value="scanner">
-              <Barcode className="mr-2 h-4 w-4" />
-              Leitor de Código
-            </TabsTrigger>
-            <TabsTrigger value="estoque">
-              <Package className="mr-2 h-4 w-4" />
-              Estoque Atual
-            </TabsTrigger>
-            <TabsTrigger value="historico">
-              <History className="mr-2 h-4 w-4" />
-              Histórico de Movimentações
-            </TabsTrigger>
-            <TabsTrigger value="impressao">
-              <Printer className="mr-2 h-4 w-4" />
-              Imprimir Estoque
-            </TabsTrigger>
-          </TabsList>
+          {/* Rola horizontalmente no mobile em vez de estourar a largura */}
+          <div className="-mx-4 overflow-x-auto px-4 md:mx-0 md:px-0">
+            <TabsList className="w-max md:w-auto">
+              <TabsTrigger value="scanner">
+                <Barcode className="mr-2 h-4 w-4" />
+                Leitor de Código
+              </TabsTrigger>
+              <TabsTrigger value="estoque">
+                <Package className="mr-2 h-4 w-4" />
+                Estoque Atual
+              </TabsTrigger>
+              <TabsTrigger value="historico">
+                <History className="mr-2 h-4 w-4" />
+                Histórico de Movimentações
+              </TabsTrigger>
+              <TabsTrigger value="impressao">
+                <Printer className="mr-2 h-4 w-4" />
+                Imprimir Estoque
+              </TabsTrigger>
+            </TabsList>
+          </div>
 
           {/* Tab Leitor de Código */}
           <TabsContent value="scanner" className="space-y-4">
