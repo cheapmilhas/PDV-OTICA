@@ -148,3 +148,7 @@ Todas as sub-fases são 100% UI + validação de request. **Zero migration de ba
 - Aposentar o hamburger deslizante (8 rotas só nele → sheet "Mais" da bottom-nav).
 - Hydration error `/admin/clientes/novo` (bug separado, [[hydration-error-clientes-novo]]).
 - NF-e (adiado por decisão do dono).
+
+## Dívida conhecida (achado Codex A2, pré-existente — NÃO corrigido nesta fase)
+
+- **Dessincronização `adicao` (top-level) vs `od.add`/`oe.add`.** A OS carrega tanto um campo `adicao` global quanto `add` por olho; editar um não sincroniza o outro, então o save pode conter valores de adição contraditórios. É um problema de MODELO DE DADOS pré-existente (não introduzido pela unificação da grade) e mexer nele altera semântica de negócio. Fica registrado para uma fase futura de saneamento do schema da receita. Relaciona [[vis-medical-forja-painel]] (onde a `Prescription` vira fonte única do grau).
