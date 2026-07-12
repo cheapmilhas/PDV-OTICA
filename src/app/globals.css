@@ -214,6 +214,60 @@ body {
   }
 }
 
+/* Tabela em modo cartão no phone (< md), ativada por <ResponsiveTable cards>.
+ * Cada linha do corpo vira um cartão; cada célula vira uma linha rótulo→valor
+ * usando data-label. Célula com data-label="" ocupa a largura toda sem rótulo
+ * (para estados vazios com colSpan). Em md+ volta a ser tabela normal. */
+@media (max-width: 767px) {
+  .card-table {
+    min-width: 0 !important; /* anula o minWidth inline do ResponsiveTable */
+    display: block;
+    width: 100%;
+  }
+  .card-table thead {
+    display: none; /* rótulos vêm do data-label no modo cartão */
+  }
+  .card-table tbody,
+  .card-table tr,
+  .card-table td {
+    display: block;
+    width: 100%;
+  }
+  .card-table tr {
+    margin-bottom: 0.75rem;
+    border: 1px solid hsl(var(--border));
+    border-radius: var(--radius);
+    padding: 0.5rem 0.75rem;
+    background: hsl(var(--card));
+  }
+  .card-table td {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    border: 0 !important;
+    padding: 0.35rem 0 !important;
+    text-align: right;
+    min-height: 2.25rem;
+  }
+  .card-table td[data-label]::before {
+    content: attr(data-label);
+    font-size: 0.75rem;
+    font-weight: 500;
+    color: hsl(var(--muted-foreground));
+    text-align: left;
+    flex-shrink: 0;
+  }
+  /* célula full-width sem rótulo: estados vazios (colSpan) e blocos de ações */
+  .card-table td[data-label=""] {
+    justify-content: center;
+    text-align: center;
+  }
+  .card-table td[data-label=""]::before {
+    content: none;
+  }
+}
+
 /* Grade de receita OD/OE responsiva (CSS-only, sem tocar lógica/onChange).
  * No phone (< md) cada <tr> vira um cartão e cada <td> vira uma linha
  * rótulo→valor usando o atributo data-label. Rótulos grandes e tapáveis,
