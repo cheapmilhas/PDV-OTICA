@@ -28,6 +28,7 @@ const txUserUpdateMock = vi.fn();
 const txUserBranchDeleteManyMock = vi.fn();
 const txUserBranchCreateMock = vi.fn();
 const txGlobalAuditCreateMock = vi.fn();
+const txBranchFindFirstMock = vi.fn();
 const transactionMock = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
@@ -79,10 +80,13 @@ describe("PATCH /admin/companies/[id]/users/[userId]", () => {
           deleteMany: txUserBranchDeleteManyMock,
           create: txUserBranchCreateMock,
         },
+        branch: { findFirst: txBranchFindFirstMock },
         globalAudit: { create: txGlobalAuditCreateMock },
       };
       return cb(tx);
     });
+    // Padrão: a filial existe e pertence à empresa.
+    txBranchFindFirstMock.mockResolvedValue({ id: "branch-A" });
     txUserUpdateMock.mockImplementation(async (args: any) => ({
       id: "user-A",
       email: "matheusr@login",
@@ -140,5 +144,18 @@ describe("PATCH /admin/companies/[id]/users/[userId]", () => {
 
     expect(res.status).toBe(400);
     expect(txUserUpdateMock).not.toHaveBeenCalled();
+  });
+
+  it("400 quando branchId não pertence à empresa (multi-tenant)", async () => {
+    // Filial de OUTRO tenant → findFirst { id, companyId } não acha → INVALID_BRANCH → 400.
+    txBranchFindFirstMock.mockResolvedValueOnce(null);
+    const res = await PATCH(
+      makePatchRequest("company-A", "user-A", { branchId: "branch-de-outra-empresa" }),
+      { params: Promise.resolve({ id: "company-A", userId: "user-A" }) }
+    );
+
+    expect(res.status).toBe(400);
+    // NÃO deve ter vinculado o usuário à filial de outra empresa.
+    expect(txUserBranchCreateMock).not.toHaveBeenCalled();
   });
 });

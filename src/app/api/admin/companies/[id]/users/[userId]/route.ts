@@ -115,9 +115,19 @@ export async function PATCH(request: NextRequest, context: Params) {
         },
       });
 
-      // Se alterando branch, atualizar UserBranch
+      // Se alterando branch, atualizar UserBranch. SEGURANÇA (multi-tenant): a
+      // filial DEVE pertencer a esta empresa — senão um branchId arbitrário de
+      // outro tenant vincularia o usuário a uma filial de outra empresa (mesmo
+      // padrão já validado no POST). Sem isso, o login (auth.ts) pega a 1ª filial
+      // vinculada sem checar a empresa dela.
       if (branchId) {
-        // Remover vínculos anteriores
+        const branch = await tx.branch.findFirst({
+          where: { id: branchId, companyId },
+          select: { id: true },
+        });
+        if (!branch) {
+          throw new Error("INVALID_BRANCH");
+        }
         await tx.userBranch.deleteMany({ where: { userId } });
         await tx.userBranch.create({
           data: { userId, branchId },
@@ -153,6 +163,12 @@ export async function PATCH(request: NextRequest, context: Params) {
       },
     });
   } catch (error: any) {
+    if (error instanceof Error && error.message === "INVALID_BRANCH") {
+      return NextResponse.json(
+        { error: "Filial inválida para esta empresa" },
+        { status: 400 }
+      );
+    }
     log.error("Erro ao atualizar usuário", { error: error instanceof Error ? error.message : String(error) });
     if (error.code === "P2002") {
       return NextResponse.json({ error: "Email já em uso" }, { status: 400 });
