@@ -36,6 +36,7 @@ import toast from "react-hot-toast";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/permissions/can";
 import { usePermissions } from "@/hooks/usePermissions";
+import { normalizeLoginEmail } from "@/lib/normalize-login";
 
 /**
  * Extrai a mensagem de erro mais útil da resposta da API.
@@ -139,9 +140,9 @@ function UsuariosPage() {
 
     setSaving(true);
     try {
-      // Se não tem @, adiciona @login para o banco aceitar
+      // Normaliza o login (sem "@" → "<valor>@login"; com "@" → minúsculo+trim).
       const loginValue = form.email.trim();
-      const email = loginValue.includes("@") ? loginValue : `${loginValue.toLowerCase()}@login`;
+      const email = normalizeLoginEmail(loginValue);
 
       const body: any = {
         name: form.name.trim(),
@@ -193,7 +194,7 @@ function UsuariosPage() {
       };
 
       const editLogin = form.email.trim();
-      const editEmail = editLogin.includes("@") ? editLogin : `${editLogin.toLowerCase()}@login`;
+      const editEmail = normalizeLoginEmail(editLogin);
       if (editEmail !== selectedUser.email) {
         body.email = editEmail;
       }
@@ -441,13 +442,13 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Login *</Label>
+              <Label>Login (usuário) *</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="Ex: pacajus"
               />
-              <p className="text-xs text-muted-foreground">Usado para entrar no sistema</p>
+              <p className="text-xs text-muted-foreground">Nome curto que a pessoa usa para entrar; não precisa ser e-mail.</p>
             </div>
 
             <div className="space-y-2">
@@ -517,7 +518,7 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Login</Label>
+              <Label>Login (usuário)</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}

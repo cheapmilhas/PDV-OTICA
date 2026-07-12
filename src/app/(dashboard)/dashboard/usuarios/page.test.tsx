@@ -29,6 +29,20 @@ describe("UsuariosPage — campo e-mail de recuperação", () => {
     vi.restoreAllMocks();
   });
 
+  it("rotula o campo de login como 'Login (usuário)' no dialog de criar", async () => {
+    render(<Page />);
+
+    fireEvent.click(screen.getByRole("button", { name: /Novo Usuário/i }));
+
+    await waitFor(() =>
+      expect(screen.getByText(/Login \(usuário\)/i)).toBeDefined()
+    );
+    // microcopy de ajuda no form de criar
+    expect(
+      screen.getByText(/Nome curto que a pessoa usa para entrar/i)
+    ).toBeDefined();
+  });
+
   it("mostra o input 'E-mail de recuperação' no dialog de criar", async () => {
     render(<Page />);
 
