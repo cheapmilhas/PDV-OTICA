@@ -69,7 +69,8 @@ Três mudanças que andam juntas por tocarem o mesmo save path.
 
 **(a) Fonte única de faixas + validação server-side.**
 - Centralizar a tabela de faixas de `prescription-grade-validation.ts` como fonte única reutilizável por cliente **e** servidor (esf −30..+30, cil −10..+10, add +0,50..+4,00, eixo 0..180, dnp 20..80, altura 10..40).
-- Aplicar validação de faixa Zod real em `service-order.schema.ts` (a receita deixa de ser `z.string()` opaca — vira objeto validado ou string parseada e validada) e em `grau/route.ts`.
+- Aplicar validação de faixa Zod real em `service-order.schema.ts` e em `grau/route.ts`, contra a fonte única de faixas.
+- **Formato de payload por save path (cravar no plano):** hoje `editar/page.tsx` envia `prescription` como **string JSON** dentro do payload da OS, enquanto a rota `grau` já recebe **objeto estruturado**. O plano deve declarar explicitamente a forma que cada caminho adota — o Zod da OS ou faz `.transform`/`JSON.parse` da string e valida o objeto resultante, ou o wire format da OS muda para objeto estruturado. Escolher um e escrever o schema uma vez contra contrato conhecido.
 - **Validar só o que for editado:** a validação roda no payload de escrita; leitura de dado legado não é bloqueada. Sem migração.
 
 **(b) Unificar a grade da OS no `PrescriptionGradeForm`.**
@@ -121,7 +122,7 @@ Dinheiro: `value` (string) → `DecimalInput` sanitiza on change → consumidor 
 - Faixas: fonte única cliente e servidor produzem o mesmo veredito.
 
 **Regressão (trava a unificação A2):**
-- Salvar OS pela grade unificada e assertar prisma/base/ceratometria/olhoDominante/dnpPerto/cálculo-perto **intactos** — nenhum campo some no merge.
+- Salvar OS pela grade unificada e assertar prisma/base/ceratometria/olhoDominante/dnpPerto/cálculo-perto **intactos** — nenhum campo some no merge. ⚠️ O plano deve **conferir o conjunto completo de campos contra os objetos de estado reais de `nova`/`editar`** — o `dnpPerto` é injetado via `as any` (`nova:820-827`), sinal de que o shape do estado da OS é mais frouxo que o patch tipado do form; é onde um campo pode ser silenciosamente descartado.
 
 **Bloqueio:** grau fora da faixa não passa no cliente nem no servidor.
 
