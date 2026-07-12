@@ -324,8 +324,9 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
           </DialogDescription>
         </DialogHeader>
 
-        {/* Conteúdo compacto — tudo visível sem scroll */}
-        <div className="flex-1 px-6 py-2 space-y-2 overflow-hidden">
+        {/* Conteúdo — rola no mobile (inputs maiores podem exceder a altura);
+            compacto sem scroll no desktop. */}
+        <div className="flex-1 px-6 py-2 space-y-2 overflow-y-auto md:overflow-hidden">
           {/* Resumo Compacto - Uma Linha */}
           <div className="rounded border p-1.5 bg-muted/50">
             <div className="flex items-center justify-around gap-2 text-sm">
@@ -374,18 +375,19 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                     <>
                       <Input
                         type="number"
+                        inputMode="decimal"
                         step="0.01"
                         placeholder="Valor"
                         value={cashbackAmount}
                         onChange={(e) => setCashbackAmount(e.target.value)}
-                        className="w-20 h-6 text-[11px]"
+                        className="w-24 md:w-20 h-11 md:h-6 text-base md:text-[11px]"
                         max={cashbackBalance}
                       />
                       <Button
                         variant="outline"
                         size="sm"
                         onClick={useMaxCashback}
-                        className="h-6 text-[11px] px-2"
+                        className="h-11 md:h-6 text-sm md:text-[11px] px-3 md:px-2"
                       >
                         Máx
                       </Button>
@@ -396,7 +398,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
             </div>
           )}
 
-          <div className="grid grid-cols-2 gap-3">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
             {/* Coluna Esquerda - Adicionar Pagamento */}
             <div className="space-y-1.5">
               {/* Formas de Pagamento */}
@@ -409,16 +411,16 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                       <button
                         key={method.id}
                         onClick={() => setSelectedMethod(method.id)}
-                        className={`flex flex-col items-center gap-0.5 rounded border-2 p-1 transition-all hover:bg-accent ${
+                        className={`flex flex-col items-center justify-center md:justify-normal gap-1 rounded border-2 p-2 min-h-16 md:min-h-0 md:p-1 md:gap-0.5 transition-all hover:bg-accent ${
                           selectedMethod === method.id
                             ? "border-primary bg-accent"
                             : "border-border"
                         }`}
                       >
-                        <div className={`rounded-full p-0.5 ${method.color} text-white`}>
-                          <Icon className="h-3 w-3" />
+                        <div className={`rounded-full p-1 md:p-0.5 ${method.color} text-white`}>
+                          <Icon className="h-5 w-5 md:h-3 md:w-3" />
                         </div>
-                        <span className="text-[9px] text-center leading-tight">{method.label}</span>
+                        <span className="text-xs md:text-[9px] text-center leading-tight">{method.label}</span>
                       </button>
                     );
                   })}
@@ -444,9 +446,9 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                         }
                       }}
                       disabled={!selectedMethod}
-                      className="h-7 text-xs"
+                      className="h-11 md:h-7 text-base md:text-xs"
                     />
-                    <Button variant="outline" size="sm" onClick={quickFill} disabled={!selectedMethod || remaining <= 0} className="h-7 text-[10px] px-1.5">
+                    <Button variant="outline" size="sm" onClick={quickFill} disabled={!selectedMethod || remaining <= 0} className="h-11 md:h-7 text-xs md:text-[10px] px-3 md:px-1.5">
                       Total
                     </Button>
                   </div>
@@ -456,7 +458,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                   <div className="space-y-0.5">
                     <Label htmlFor="installments" className="text-[11px]">Parcelas</Label>
                     <Select value={installments} onValueChange={setInstallments}>
-                      <SelectTrigger className="h-7 text-xs">
+                      <SelectTrigger className="h-11 md:h-7 text-base md:text-xs">
                         <SelectValue />
                       </SelectTrigger>
                       <SelectContent>
@@ -481,9 +483,9 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
               {/* Dados do cartão — 2 linhas compactas */}
               {(selectedMethod === "CREDIT_CARD" || selectedMethod === "DEBIT_CARD") && (
                 <div className="border rounded p-1.5 bg-muted/30 space-y-1">
-                  <div className="grid grid-cols-2 gap-1">
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-1">
                     <Select value={cardBrand} onValueChange={setCardBrand}>
-                      <SelectTrigger className="h-6 text-[10px]">
+                      <SelectTrigger className="h-11 md:h-6 text-base md:text-[10px]">
                         <SelectValue placeholder="Bandeira" />
                       </SelectTrigger>
                       <SelectContent>
@@ -495,7 +497,7 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                       </SelectContent>
                     </Select>
                     <Select value={acquirer} onValueChange={setAcquirer}>
-                      <SelectTrigger className="h-6 text-[10px]">
+                      <SelectTrigger className="h-11 md:h-6 text-base md:text-[10px]">
                         <SelectValue placeholder="Operadora" />
                       </SelectTrigger>
                       <SelectContent>
@@ -507,15 +509,15 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                       </SelectContent>
                     </Select>
                   </div>
-                  <div className="grid grid-cols-3 gap-1">
-                    <Input placeholder="NSU" value={nsu} onChange={(e) => setNsu(e.target.value)} className="h-6 text-[10px]" />
-                    <Input placeholder="Cod. Autoriz." value={authorizationCode} onChange={(e) => setAuthorizationCode(e.target.value)} className="h-6 text-[10px]" />
-                    <Input placeholder="4 digitos" maxLength={4} value={cardLastDigits} onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))} className="h-6 text-[10px]" />
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-1">
+                    <Input placeholder="NSU" value={nsu} onChange={(e) => setNsu(e.target.value)} className="h-11 md:h-6 text-base md:text-[10px]" />
+                    <Input placeholder="Cod. Autoriz." value={authorizationCode} onChange={(e) => setAuthorizationCode(e.target.value)} className="h-11 md:h-6 text-base md:text-[10px]" />
+                    <Input placeholder="4 digitos" inputMode="numeric" maxLength={4} value={cardLastDigits} onChange={(e) => setCardLastDigits(e.target.value.replace(/\D/g, ""))} className="h-11 md:h-6 text-base md:text-[10px]" />
                   </div>
                 </div>
               )}
 
-              <Button type="button" onClick={addPayment} disabled={!selectedMethod} className="w-full h-7 text-xs">
+              <Button type="button" onClick={addPayment} disabled={!selectedMethod} className="w-full h-11 md:h-7 text-sm md:text-xs">
                 Adicionar Pagamento
               </Button>
             </div>
@@ -572,9 +574,10 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
                             variant="ghost"
                             size="sm"
                             onClick={() => removePayment(payment.id)}
-                            className="h-5 w-5 p-0"
+                            aria-label="Remover pagamento"
+                            className="h-9 w-9 md:h-5 md:w-5 p-0"
                           >
-                            <Trash2 className="h-3 w-3 text-destructive" />
+                            <Trash2 className="h-4 w-4 md:h-3 md:w-3 text-destructive" />
                           </Button>
                         </div>
                       </div>
@@ -592,14 +595,14 @@ export function ModalFinalizarVenda({ open, onOpenChange, total, customerId, onC
           <div className="flex gap-2">
             <Button
               variant="outline"
-              className="flex-1 h-8"
+              className="flex-1 h-11 md:h-8"
               onClick={() => onOpenChange(false)}
               disabled={loading}
             >
               Cancelar
             </Button>
             <Button
-              className="flex-1 h-8"
+              className="flex-1 h-11 md:h-8"
               onClick={handleConfirm}
               disabled={Math.abs(remaining) >= 0.01 || loading}
             >
