@@ -193,22 +193,14 @@ Criar `prisma/migrations/20260712120100_vis_medical_f0_user_role_clinical/migrat
 -- Vis Medical F0: papéis clínicos no enum UserRole.
 -- Migração DEDICADA e idempotente. Postgres exige que ADD VALUE não seja usado
 -- na mesma transação que o adiciona → esta migração NÃO usa os valores, só os cria.
+--
+-- IMPORTANTE: ADD VALUE deve ser TOP-LEVEL, nunca dentro de DO $$ (bloco = transação
+-- implícita → "ALTER TYPE ... ADD cannot run inside a transaction block").
+-- Padrão idempotente do projeto: ADD VALUE IF NOT EXISTS (ver
+-- 20260702160000_paid_traffic_source_and_ad_bait, 20260603030000_finance_retry_abandoned).
 
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
-                 WHERE t.typname = 'UserRole' AND e.enumlabel = 'OFTALMOLOGISTA') THEN
-    ALTER TYPE "UserRole" ADD VALUE 'OFTALMOLOGISTA';
-  END IF;
-END$$;
-
-DO $$
-BEGIN
-  IF NOT EXISTS (SELECT 1 FROM pg_enum e JOIN pg_type t ON e.enumtypid = t.oid
-                 WHERE t.typname = 'UserRole' AND e.enumlabel = 'OPTOMETRISTA') THEN
-    ALTER TYPE "UserRole" ADD VALUE 'OPTOMETRISTA';
-  END IF;
-END$$;
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'OFTALMOLOGISTA';
+ALTER TYPE "UserRole" ADD VALUE IF NOT EXISTS 'OPTOMETRISTA';
 ```
 
 - [ ] **Step 3: Regenerar client e validar**
@@ -261,6 +253,23 @@ describe("permissões clínicas (Vis Medical F0)", () => {
     for (const role of ["SELLER", "CASHIER", "STOCK_MANAGER"] as const) {
       expect(ROLE_PERMISSIONS[role]).not.toContain(Permission.CLINICAL_ENCOUNTER_VIEW);
     }
+  });
+
+  it("papéis clínicos recebem o conjunto clínico", () => {
+    for (const role of ["OPHTHALMOLOGIST", "OPTOMETRIST"] as const) {
+      expect(ROLE_PERMISSIONS[role]).toContain(Permission.CLINICAL_PRESCRIPTION_ISSUE);
+    }
+  });
+
+  // DECISÃO EXPLÍCITA (F0): ADMIN = Object.values(Permission) → herda os códigos
+  // clínicos automaticamente. É SEGURO na F0 porque não há tela nem dado clínico
+  // ainda (permissões órfãs). Quando a fase clínica introduzir dado real, a
+  // autorização clínica NÃO pode se apoiar só em requirePermission — precisa de
+  // gate adicional por platformProduct (um ADMIN de conta VIS_APP não deve ler
+  // prontuário de conta VIS_MEDICAL). Este teste documenta a decisão para não virar
+  // surpresa silenciosa. Ver spec Seção 5.
+  it("ADMIN herda os códigos clínicos (esperado na F0; gate por produto vem na fase clínica)", () => {
+    expect(ROLE_PERMISSIONS.ADMIN).toContain(Permission.CLINICAL_ENCOUNTER_VIEW);
   });
 });
 ```
@@ -383,7 +392,11 @@ git commit -m "feat(vis-medical): F0 RBAC — esqueleto de permissões clínicas
 Criar `src/lib/__tests__/admin-product-context.test.ts`:
 
 ```ts
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
+// admin-product-context importa `cookies` de next/headers no topo. As funções puras
+// testadas aqui NÃO chamam cookies(), mas mockamos preventivamente (padrão do projeto,
+// ver src/lib/__tests__/admin-session.test.ts) para blindar contra o import.
+vi.mock("next/headers", () => ({ cookies: vi.fn() }));
 import { parseProductContext, productWhereFilter } from "@/lib/admin-product-context";
 
 describe("admin product context", () => {
@@ -397,9 +410,15 @@ describe("admin product context", () => {
     expect(productWhereFilter("VIS_MEDICAL")).toEqual({ platformProduct: "VIS_MEDICAL" });
   });
 
-  it("gera o filtro via relação company para entidades sem o campo", () => {
+  it("gera o filtro via relação company para entidades sem o campo (Subscription)", () => {
     expect(productWhereFilter("VIS_APP", { via: "company" })).toEqual({
       company: { platformProduct: "VIS_APP" },
+    });
+  });
+
+  it("gera o filtro via subscription.company para Invoice (não tem companyId nem company)", () => {
+    expect(productWhereFilter("VIS_APP", { via: "subscription.company" })).toEqual({
+      subscription: { company: { platformProduct: "VIS_APP" } },
     });
   });
 });
@@ -434,16 +453,22 @@ export async function getProductContext(): Promise<PlatformProduct> {
 }
 
 /**
- * Filtro Prisma por produto. Sem opts → filtra direto (`platformProduct`).
- * `{ via: "company" }` → filtra via relação, para entidades que não têm o campo
- * (Subscription, Invoice).
+ * Filtro Prisma por produto.
+ * - Sem opts → filtra direto (`platformProduct`) — para `Company`.
+ * - `{ via: "company" }` → via relação, para entidades com FK `companyId`/relação
+ *   `company` mas sem o campo (ex.: `Subscription`).
+ * - `{ via: "subscription.company" }` → dois níveis, para `Invoice`, que NÃO tem
+ *   `companyId` nem relação `company` — só `subscriptionId` → `subscription.company`.
  */
 export function productWhereFilter(
   product: PlatformProduct,
-  opts?: { via: "company" },
+  opts?: { via: "company" | "subscription.company" },
 ): Record<string, unknown> {
   if (opts?.via === "company") {
     return { company: { platformProduct: product } };
+  }
+  if (opts?.via === "subscription.company") {
+    return { subscription: { company: { platformProduct: product } } };
   }
   return { platformProduct: product };
 }
@@ -526,11 +551,16 @@ import { describe, it, expect } from "vitest";
 import { buildDashboardFilters } from "@/app/admin/(painel)/dashboard-filters";
 
 describe("dashboard filters por produto", () => {
-  it("VIS_MEDICAL filtra company direto e subscription/invoice via relação", () => {
+  it("cada entidade recebe o caminho de relação correto", () => {
     const f = buildDashboardFilters("VIS_MEDICAL");
+    // Company tem o campo direto
     expect(f.company).toEqual({ platformProduct: "VIS_MEDICAL" });
+    // Subscription: FK companyId → relação company (1 nível)
     expect(f.subscriptionCompany).toEqual({ company: { platformProduct: "VIS_MEDICAL" } });
-    expect(f.invoiceCompany).toEqual({ company: { platformProduct: "VIS_MEDICAL" } });
+    // Invoice: NÃO tem companyId nem company → só subscriptionId → 2 níveis
+    expect(f.invoiceCompany).toEqual({
+      subscription: { company: { platformProduct: "VIS_MEDICAL" } },
+    });
   });
 });
 ```
@@ -550,11 +580,12 @@ import { productWhereFilter, type PlatformProduct } from "@/lib/admin-product-co
 /** Fragmentos de `where` para as queries do dashboard, segmentados por produto. */
 export function buildDashboardFilters(product: PlatformProduct) {
   return {
-    // entidades com o campo direto
+    // Company: campo direto
     company: productWhereFilter(product),
-    // entidades sem o campo → filtram via relação company
+    // Subscription: relação company (1 nível)
     subscriptionCompany: productWhereFilter(product, { via: "company" }),
-    invoiceCompany: productWhereFilter(product, { via: "company" }),
+    // Invoice: só tem subscriptionId → subscription.company (2 níveis)
+    invoiceCompany: productWhereFilter(product, { via: "subscription.company" }),
   };
 }
 ```
@@ -596,14 +627,31 @@ Padrão para as de `subscription` (L36-40, L51, L58) — combinar via relação:
 prisma.subscription.count({ where: { status: "ACTIVE", ...pf.subscriptionCompany } }),
 ```
 
-Padrão para as de `invoice` (L40, L61, L100, L101):
+Padrão para as de `invoice` — **atenção: `Invoice` NÃO tem `companyId` nem relação `company`, só `subscriptionId`** (schema `model Invoice` L2533, `subscription Subscription @relation` L56). O filtro é de DOIS níveis via `pf.invoiceCompany`:
 
 ```ts
 // L40 antes:  prisma.invoice.aggregate({ where: { status: "PAID" }, _sum: { total: true } }),
 prisma.invoice.aggregate({ where: { status: "PAID", ...pf.invoiceCompany }, _sum: { total: true } }),
 ```
 
-Aplicar o spread correspondente a TODAS as ~15 queries listadas nas âncoras do spec (company direto vs subscription/invoice via relação). `recentCompanies` (L41) recebe `where: { ...pf.company }`.
+**Enumeração completa das queries a filtrar** (verificar cada linha no arquivo antes de editar — as âncoras podem ter deslocado 1-2 linhas):
+
+| Query | Entidade | Fragmento a mesclar no `where` |
+|---|---|---|
+| `totalCompanies` (L35) | company | `...pf.company` |
+| `activeCount`/`trialCount`/`pastDueCount`/`suspendedCount` (L36-39) | subscription | `...pf.subscriptionCompany` |
+| `totalRevenue` (L40) | invoice | `...pf.invoiceCompany` |
+| `recentCompanies` (L41) | company | `where: { ...pf.company }` |
+| `expiringTrials` (L51) | subscription | `...pf.subscriptionCompany` (no `where` de topo, não no include) |
+| `activeSubs` (L58, alimenta MRR) | subscription | `...pf.subscriptionCompany` |
+| `criticalHealthCount` (L59) | company | `...pf.company` |
+| `atRiskHealthCount` (L60) | company | `...pf.company` |
+| `pendingInvoices` (L61) | invoice | `...pf.invoiceCompany` |
+| `lastHealthCalc` (L77) | company | `...pf.company` |
+| `newCompaniesCur`/`newCompaniesPrev` (L98-99) | company | `...pf.company` |
+| `revenueCur`/`revenuePrev` (L100-101) | invoice | `...pf.invoiceCompany` |
+
+`recentCompanies` (L41) recebe `where: { ...pf.company }`; o filtro de produto vai sempre no `where` de TOPO da query, nunca dentro de um `include` aninhado.
 
 - [ ] **Step 6: Adicionar o switcher na nav**
 
