@@ -315,7 +315,17 @@ model User {
   // aqui de propósito, senão o Prisma esperaria um índice case-sensitive e
   // acusaria drift. Aplicação trata P2002 na criação; login em src/auth.ts.
   email                      String
+  // Reset de senha: e-mail de contato REAL para contas cujo `email` principal é
+  // sintético (@login/@funcionario.interno) ou uma caixa inexistente. Nullable,
+  // sem unicidade (dois funcionários podem compartilhar um e-mail da loja). O
+  // reset envia o link para cá quando preenchido. NÃO afeta o login (usa email).
+  recoveryEmail              String?
   passwordHash               String
+  // Marco temporal da última troca de senha. Usado no callback jwt (auth.ts, bloco
+  // M12) para revogar sessões antigas: se o token foi emitido ANTES desta data, a
+  // senha mudou depois do login → sessão inválida. Null = nunca trocou via este
+  // fluxo (contas antigas); nesse caso não há o que revogar.
+  passwordChangedAt          DateTime?
   role                       UserRole
   active                     Boolean                  @default(true)
   isSystem                   Boolean                  @default(false)  // usuário-robô (IA). Excluído da tela de equipe.
@@ -371,10 +381,31 @@ model User {
   transfersRequested         StockTransfer[]          @relation("TransferRequester")
   leadsAsSeller              Lead[]                   @relation("LeadSeller")
   assignedExamAppointments   ExamAppointment[]        @relation("AssignedExamAppointments")
+  passwordResetTokens        PasswordResetToken[]
 
   @@index([companyId, email])
   @@index([companyId, role])
   @@index([companyId, name])
+}
+
+// Token de reset de senha self-service. Padrão selector/verifier: o `selector`
+// é público (viaja no link, indexado para lookup O(1)) e o `verifierHash` é o
+// SHA-256 do segredo `verifier` (que NUNCA é persistido em claro). A validação
+// compara hashes com timingSafeEqual. Uso único via `usedAt`. Um índice único
+// PARCIAL (WHERE usedAt IS NULL, hand-written no .sql) garante no máximo 1 token
+// ativo por usuário sem impedir histórico de tokens já consumidos.
+model PasswordResetToken {
+  id           String    @id @default(cuid())
+  userId       String
+  selector     String    @unique
+  verifierHash String
+  expiresAt    DateTime
+  usedAt       DateTime?
+  createdAt    DateTime  @default(now())
+  user         User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model UserBranch {

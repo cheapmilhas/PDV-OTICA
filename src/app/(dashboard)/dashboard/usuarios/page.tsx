@@ -36,6 +36,7 @@ import toast from "react-hot-toast";
 import { EmptyState } from "@/components/shared/empty-state";
 import { Can } from "@/components/permissions/can";
 import { usePermissions } from "@/hooks/usePermissions";
+import { normalizeLoginEmail } from "@/lib/normalize-login";
 
 /**
  * Extrai a mensagem de erro mais útil da resposta da API.
@@ -56,6 +57,7 @@ interface UserType {
   role: "ADMIN" | "GERENTE" | "VENDEDOR" | "CAIXA" | "ATENDENTE";
   active: boolean;
   defaultCommissionPercent: number | null;
+  recoveryEmail?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,6 +76,7 @@ function UsuariosPage() {
     email: "",
     password: "",
     role: "" as string,
+    recoveryEmail: "",
   });
 
   useEffect(() => {
@@ -109,7 +112,7 @@ function UsuariosPage() {
 
   function openCreate() {
     setSelectedUser(null);
-    setForm({ name: "", email: "", password: "", role: "" });
+    setForm({ name: "", email: "", password: "", role: "", recoveryEmail: "" });
     setCreateDialogOpen(true);
   }
 
@@ -120,6 +123,7 @@ function UsuariosPage() {
       email: user.email.endsWith("@login") ? user.email.replace("@login", "") : user.email,
       password: "",
       role: user.role,
+      recoveryEmail: user.recoveryEmail ?? "",
     });
     setEditDialogOpen(true);
   }
@@ -136,9 +140,9 @@ function UsuariosPage() {
 
     setSaving(true);
     try {
-      // Se não tem @, adiciona @login para o banco aceitar
+      // Normaliza o login (sem "@" → "<valor>@login"; com "@" → minúsculo+trim).
       const loginValue = form.email.trim();
-      const email = loginValue.includes("@") ? loginValue : `${loginValue.toLowerCase()}@login`;
+      const email = normalizeLoginEmail(loginValue);
 
       const body: any = {
         name: form.name.trim(),
@@ -147,6 +151,10 @@ function UsuariosPage() {
         role: form.role,
         active: true,
       };
+
+      if (form.recoveryEmail.trim()) {
+        body.recoveryEmail = form.recoveryEmail.trim();
+      }
 
       const res = await fetch("/api/users", {
         method: "POST",
@@ -186,7 +194,7 @@ function UsuariosPage() {
       };
 
       const editLogin = form.email.trim();
-      const editEmail = editLogin.includes("@") ? editLogin : `${editLogin.toLowerCase()}@login`;
+      const editEmail = normalizeLoginEmail(editLogin);
       if (editEmail !== selectedUser.email) {
         body.email = editEmail;
       }
@@ -194,6 +202,10 @@ function UsuariosPage() {
       if (form.password) {
         body.password = form.password;
       }
+
+      // Envia mesmo vazio para permitir LIMPAR o e-mail de recuperação;
+      // o backend (sanitizeUserDTO) mapeia "" -> null.
+      body.recoveryEmail = form.recoveryEmail.trim();
 
       const res = await fetch(`/api/users/${selectedUser.id}`, {
         method: "PUT",
@@ -430,13 +442,13 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Login *</Label>
+              <Label>Login (usuário) *</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
                 placeholder="Ex: pacajus"
               />
-              <p className="text-xs text-muted-foreground">Usado para entrar no sistema</p>
+              <p className="text-xs text-muted-foreground">Nome curto que a pessoa usa para entrar; não precisa ser e-mail.</p>
             </div>
 
             <div className="space-y-2">
@@ -464,6 +476,17 @@ function UsuariosPage() {
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>E-mail de recuperação</Label>
+              <Input
+                type="email"
+                value={form.recoveryEmail}
+                onChange={(e) => setForm({ ...form, recoveryEmail: e.target.value })}
+                placeholder="email@exemplo.com"
+              />
+              <p className="text-xs text-muted-foreground">Serve para a pessoa recuperar a senha sozinha por e-mail.</p>
             </div>
           </div>
 
@@ -495,7 +518,7 @@ function UsuariosPage() {
             </div>
 
             <div className="space-y-2">
-              <Label>Login</Label>
+              <Label>Login (usuário)</Label>
               <Input
                 value={form.email}
                 onChange={(e) => setForm({ ...form, email: e.target.value })}
@@ -526,6 +549,17 @@ function UsuariosPage() {
                   <SelectItem value="ADMIN">Administrador</SelectItem>
                 </SelectContent>
               </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label>E-mail de recuperação</Label>
+              <Input
+                type="email"
+                value={form.recoveryEmail}
+                onChange={(e) => setForm({ ...form, recoveryEmail: e.target.value })}
+                placeholder="email@exemplo.com"
+              />
+              <p className="text-xs text-muted-foreground">Serve para a pessoa recuperar a senha sozinha por e-mail.</p>
             </div>
           </div>
 

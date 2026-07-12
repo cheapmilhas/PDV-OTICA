@@ -11,13 +11,9 @@ import { Card, CardContent, CardHeader } from "@/components/ui/card";
 import { Loader2, Eye, EyeOff } from "lucide-react";
 import Image from "next/image";
 import { useToast } from "@/hooks/use-toast";
-import { REGISTER_URL, WHATSAPP_NUMBER } from "@/lib/constants";
+import { REGISTER_URL } from "@/lib/constants";
 import { LoginSidePanel } from "./login-side-panel";
 import { loginPanelContent } from "./login-panel-content";
-
-const FORGOT_PASSWORD_WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent(
-  "Olá! Esqueci minha senha de acesso ao Vis e preciso de ajuda."
-)}`;
 
 export default function LoginPage() {
   const router = useRouter();
@@ -155,14 +151,12 @@ export default function LoginPage() {
                 <div className="space-y-2">
                   <div className="flex items-center justify-between">
                     <Label htmlFor="password">Senha</Label>
-                    <a
-                      href={FORGOT_PASSWORD_WHATSAPP_URL}
-                      target="_blank"
-                      rel="noopener noreferrer"
+                    <Link
+                      href="/esqueci-senha"
                       className="text-xs font-medium text-primary hover:underline"
                     >
                       Esqueci minha senha
-                    </a>
+                    </Link>
                   </div>
                   <div className="relative">
                     <Input

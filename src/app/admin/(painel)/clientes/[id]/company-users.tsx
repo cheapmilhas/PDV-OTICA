@@ -38,7 +38,7 @@ import {
   TableCell,
 } from "@/components/ui/table";
 
-interface UserData {
+export interface UserData {
   id: string;
   name: string;
   email: string;
@@ -46,6 +46,7 @@ interface UserData {
   active: boolean;
   createdAt: string;
   branches: { id: string; name: string }[];
+  recoveryEmail?: string | null;
 }
 
 interface Branch {
@@ -396,7 +397,7 @@ export function CompanyUsers({ companyId, branches }: CompanyUsersProps) {
 
 // ─── Modal: Criar Usuário ───────────────────────────────────────
 
-function CreateUserModal({
+export function CreateUserModal({
   companyId,
   branches,
   onClose,
@@ -409,6 +410,7 @@ function CreateUserModal({
 }) {
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
+  const [recoveryEmail, setRecoveryEmail] = useState("");
   const [password, setPassword] = useState("");
   const [role, setRole] = useState("VENDEDOR");
   const [branchId, setBranchId] = useState(branches[0]?.id || "");
@@ -424,7 +426,7 @@ function CreateUserModal({
       const res = await fetch(`/api/admin/companies/${companyId}/users`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, password, role, branchId }),
+        body: JSON.stringify({ name, email, password, role, branchId, recoveryEmail }),
       });
 
       const data = await res.json();
@@ -477,14 +479,28 @@ function CreateUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-muted-foreground mb-1">Email (login) *</label>
+            <label className="block text-sm text-muted-foreground mb-1">Login (usuário) *</label>
             <input
-              type="email"
+              type="text"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               required
+              placeholder="ex: matheusr ou email@exemplo.com"
               className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             />
+            <p className="text-xs text-muted-foreground mt-1">Nome curto de acesso; não precisa ser e-mail.</p>
+          </div>
+
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">E-mail de recuperação</label>
+            <input
+              type="email"
+              value={recoveryEmail}
+              onChange={(e) => setRecoveryEmail(e.target.value)}
+              placeholder="email@exemplo.com"
+              className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
+            />
+            <p className="text-xs text-muted-foreground mt-1">Para onde enviamos o link se a senha for esquecida.</p>
           </div>
 
           <div>
@@ -703,7 +719,7 @@ function PasswordResultModal({
 
 // ─── Modal: Editar Usuário ──────────────────────────────────────
 
-function EditUserModal({
+export function EditUserModal({
   companyId,
   user,
   branches,
@@ -717,7 +733,7 @@ function EditUserModal({
   onSaved: () => void;
 }) {
   const [name, setName] = useState(user.name);
-  const [email, setEmail] = useState(user.email);
+  const [recoveryEmail, setRecoveryEmail] = useState(user.recoveryEmail ?? "");
   const [role, setRole] = useState(user.role);
   const [branchId, setBranchId] = useState(user.branches[0]?.id || branches[0]?.id || "");
   const [loading, setLoading] = useState(false);
@@ -732,7 +748,7 @@ function EditUserModal({
       const res = await fetch(`/api/admin/companies/${companyId}/users/${user.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ name, email, role, branchId }),
+        body: JSON.stringify({ name, role, branchId, recoveryEmail }),
       });
 
       const data = await res.json();
@@ -778,14 +794,29 @@ function EditUserModal({
           </div>
 
           <div>
-            <label className="block text-sm text-muted-foreground mb-1">Email</label>
+            <label className="block text-sm text-muted-foreground mb-1">Login (usuário)</label>
+            <input
+              type="text"
+              readOnly
+              aria-readonly
+              value={user.email.endsWith("@login") ? user.email.replace("@login", "") : user.email}
+              className="w-full px-4 py-2 bg-muted border border-input rounded-lg text-foreground focus:outline-none"
+            />
+            {(user.email.endsWith("@login") || user.email.endsWith("@funcionario.interno")) && (
+              <p className="text-xs text-muted-foreground mt-1">Não é um e-mail — é o usuário de acesso.</p>
+            )}
+          </div>
+
+          <div>
+            <label className="block text-sm text-muted-foreground mb-1">E-mail de recuperação</label>
             <input
               type="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
+              value={recoveryEmail}
+              onChange={(e) => setRecoveryEmail(e.target.value)}
+              placeholder="email@exemplo.com"
               className="w-full px-4 py-2 bg-background border border-input rounded-lg text-foreground focus:outline-none focus:border-primary"
             />
+            <p className="text-xs text-muted-foreground mt-1">Para onde enviamos o link se a senha for esquecida.</p>
           </div>
 
           <div>

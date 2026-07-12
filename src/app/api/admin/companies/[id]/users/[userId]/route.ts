@@ -3,6 +3,7 @@ import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
+import { normalizeRecoveryEmail } from "@/services/user.service";
 
 const log = logger.child({ route: "admin/companies/[id]/users/[userId]" });
 
@@ -29,6 +30,7 @@ export async function GET(request: NextRequest, context: Params) {
       id: true,
       name: true,
       email: true,
+      recoveryEmail: true,
       role: true,
       active: true,
       createdAt: true,
@@ -53,7 +55,13 @@ export async function GET(request: NextRequest, context: Params) {
 
 const updateUserSchema = z.object({
   name: z.string().min(2).optional(),
-  email: z.string().email().optional(),
+  recoveryEmail: z
+    .string()
+    .trim()
+    .email("Email de recuperação inválido")
+    .or(z.literal(""))
+    .nullable()
+    .optional(),
   role: z.enum(["ADMIN", "GERENTE", "VENDEDOR", "CAIXA", "ATENDENTE"]).optional(),
   active: z.boolean().optional(),
   branchId: z.string().optional(),
@@ -91,17 +99,7 @@ export async function PATCH(request: NextRequest, context: Params) {
     );
   }
 
-  const { name, email, role, active, branchId } = parsed.data;
-
-  // Verificar email duplicado se alterando
-  if (email && email !== user.email) {
-    const existing = await prisma.user.findFirst({
-      where: { email: email.toLowerCase().trim(), id: { not: userId } },
-    });
-    if (existing) {
-      return NextResponse.json({ error: "Email já em uso" }, { status: 400 });
-    }
-  }
+  const { name, role, active, branchId } = parsed.data;
 
   try {
     const updated = await prisma.$transaction(async (tx) => {
@@ -109,15 +107,27 @@ export async function PATCH(request: NextRequest, context: Params) {
         where: { id: userId },
         data: {
           ...(name && { name: name.trim() }),
-          ...(email && { email: email.toLowerCase().trim() }),
+          ...("recoveryEmail" in parsed.data && {
+            recoveryEmail: normalizeRecoveryEmail(parsed.data.recoveryEmail),
+          }),
           ...(role && { role: role as any }),
           ...(active !== undefined && { active }),
         },
       });
 
-      // Se alterando branch, atualizar UserBranch
+      // Se alterando branch, atualizar UserBranch. SEGURANÇA (multi-tenant): a
+      // filial DEVE pertencer a esta empresa — senão um branchId arbitrário de
+      // outro tenant vincularia o usuário a uma filial de outra empresa (mesmo
+      // padrão já validado no POST). Sem isso, o login (auth.ts) pega a 1ª filial
+      // vinculada sem checar a empresa dela.
       if (branchId) {
-        // Remover vínculos anteriores
+        const branch = await tx.branch.findFirst({
+          where: { id: branchId, companyId },
+          select: { id: true },
+        });
+        if (!branch) {
+          throw new Error("INVALID_BRANCH");
+        }
         await tx.userBranch.deleteMany({ where: { userId } });
         await tx.userBranch.create({
           data: { userId, branchId },
@@ -153,6 +163,12 @@ export async function PATCH(request: NextRequest, context: Params) {
       },
     });
   } catch (error: any) {
+    if (error instanceof Error && error.message === "INVALID_BRANCH") {
+      return NextResponse.json(
+        { error: "Filial inválida para esta empresa" },
+        { status: 400 }
+      );
+    }
     log.error("Erro ao atualizar usuário", { error: error instanceof Error ? error.message : String(error) });
     if (error.code === "P2002") {
       return NextResponse.json({ error: "Email já em uso" }, { status: 400 });

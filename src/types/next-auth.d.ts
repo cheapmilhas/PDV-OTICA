@@ -11,6 +11,8 @@ declare module "next-auth" {
     companyId: string;
     branchId: string;
     networkId: string | null;
+    /** Reset de senha: baseline para revogação de sessão (epoch ms | null). */
+    passwordChangedAt?: number | null;
   }
 
   /**
@@ -33,6 +35,13 @@ declare module "next-auth/jwt" {
     networkId: string | null;
     /** M12: timestamp da última revalidação de role/existência do usuário. */
     revalidatedAt?: number;
+    /**
+     * Reset de senha: baseline (epoch ms) da última troca conhecida NO LOGIN.
+     * Fixado no login e NUNCA reescrito a partir do `fresh` — a revalidação M12
+     * compara este baseline com `User.passwordChangedAt` do banco para revogar
+     * sessões anteriores à troca. null = login sem troca registrada.
+     */
+    passwordChangedAt?: number | null;
     /** Q8.3: claim presente só em token de impersonação (hand-encoded). */
     impersonation?: {
       sessionId: string;

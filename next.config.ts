@@ -52,6 +52,15 @@ const nextConfig: NextConfig = {
           { key: cspHeaderKey, value: cspDirectives },
         ],
       },
+      {
+        // Mitiga vazamento do token de reset na query string (?t=…):
+        // sem referrer e sem cache no cliente/proxies.
+        source: "/redefinir-senha",
+        headers: [
+          { key: "Referrer-Policy", value: "no-referrer" },
+          { key: "Cache-Control", value: "no-store, max-age=0" },
+        ],
+      },
     ];
   },
   async redirects() {

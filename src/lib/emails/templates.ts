@@ -318,6 +318,63 @@ function renderSystemAlert(data: unknown): RenderedEmail {
   return { html, text };
 }
 
+// ─── Reset de senha self-service (Task 6) ─────────────────────────────────────
+
+const passwordResetSchema = z.object({
+  // Um usuário pode ter conta em VÁRIAS lojas (mesmo e-mail) → N links, 1 botão por loja.
+  links: z
+    .array(z.object({ label: z.string().min(1), url: z.string().url() }))
+    .min(1),
+});
+function renderPasswordReset(data: unknown): RenderedEmail {
+  const p = passwordResetSchema.parse(data);
+  // bodyHtml é injetado CRU pelo layout → escapar label e url de cada link aqui.
+  const buttons = p.links
+    .map((l) => {
+      const label = escapeHtml(l.label);
+      const url = escapeHtml(l.url);
+      return `<p style="margin:0 0 12px;"><a href="${url}" style="display:inline-block;background:#2E6BFF;color:#fff;text-decoration:none;border-radius:6px;padding:12px 20px;font-weight:700;margin:0 0 12px;">${label}</a></p>`;
+    })
+    .join("");
+  const bodyHtml = `<p style="margin:0 0 16px;">Recebemos um pedido para redefinir a senha da sua conta no Vis.</p>
+${buttons}
+<p style="margin:0 0 12px;color:#6b7280;font-size:13px;">O link vale por 1 hora.</p>
+<p style="margin:0;color:#6b7280;font-size:13px;">Se você não pediu, ignore este e-mail — sua senha continua a mesma.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Recuperar acesso ao Vis",
+    heading: "Recuperar seu acesso",
+    bodyHtml,
+  });
+  const text = [
+    "Recebemos um pedido para redefinir a senha da sua conta no Vis.",
+    "",
+    ...p.links.map((l) => `${l.label}: ${l.url}`),
+    "",
+    "O link vale por 1 hora.",
+    "Se você não pediu, ignore este e-mail.",
+  ].join("\n");
+  return { html, text };
+}
+
+const passwordChangedSchema = z.object({ when: z.string().optional() });
+function renderPasswordChanged(data: unknown): RenderedEmail {
+  const p = passwordChangedSchema.parse(data);
+  const whenHtml = p.when ? ` em ${escapeHtml(p.when)}` : "";
+  const bodyHtml = `<p style="margin:0 0 16px;">A senha de acesso à sua conta no Vis foi alterada${whenHtml}.</p>
+<p style="margin:0;padding:12px 14px;background:#fef2f2;border-left:3px solid #ef4444;border-radius:6px;color:#991b1b;font-size:14px;">Se não foi você, entre em contato com o suporte imediatamente — sua conta pode estar comprometida.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Sua senha foi alterada",
+    heading: "Sua senha foi alterada",
+    bodyHtml,
+  });
+  const text = [
+    `A senha de acesso à sua conta no Vis foi alterada${p.when ? ` em ${p.when}` : ""}.`,
+    "",
+    "Se não foi você, entre em contato com o suporte imediatamente — sua conta pode estar comprometida.",
+  ].join("\n");
+  return { html, text };
+}
+
 // ─── router ───────────────────────────────────────────────────────────────────
 
 export function renderEmailTemplate(template: string, data: unknown): RenderedEmail {
@@ -344,6 +401,10 @@ export function renderEmailTemplate(template: string, data: unknown): RenderedEm
       return renderSaasInvoiceDueSoon(data);
     case "system-alert":
       return renderSystemAlert(data);
+    case "password-reset":
+      return renderPasswordReset(data);
+    case "password-changed":
+      return renderPasswordChanged(data);
     default:
       throw new Error(`Unsupported email template: ${template}`);
   }
