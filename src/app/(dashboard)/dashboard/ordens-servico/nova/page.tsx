@@ -17,6 +17,9 @@ import Link from "next/link";
 import { format } from "date-fns";
 import { ModalNovoClienteSimples } from "@/components/ordens-servico/modal-novo-cliente-simples";
 import { PrescriptionImageUpload, type OcrPrescriptionData } from "@/components/ordens-servico/prescription-image-upload";
+import { PrescriptionGradeForm } from "@/components/prescriptions/prescription-grade-form";
+import { mergePrescriptionGrade } from "@/lib/merge-prescription-grade";
+import { validateGrade } from "@/lib/prescription-grade-validation";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 
 interface ServiceItem {
@@ -337,56 +340,16 @@ function NovaOrdemServicoPageContent() {
         prescriptionData.adicao;
 
       if (hasAnyPrescriptionField) {
-        for (const eye of ["od", "oe"] as const) {
-          const label = eye === "od" ? "OD" : "OE";
-          // Validar esférico (-30 a +30)
-          const esf = prescriptionData[eye].esf;
-          if (esf) {
-            const esfNum = parseFloat(esf.replace(",", "."));
-            if (isNaN(esfNum) || esfNum < -30 || esfNum > 30) {
-              throw new Error(`Esférico do ${label} deve estar entre -30.00 e +30.00`);
-            }
-          }
-          // Validar cilíndrico (-10 a 0)
-          const cil = prescriptionData[eye].cil;
-          if (cil) {
-            const cilNum = parseFloat(cil.replace(",", "."));
-            if (isNaN(cilNum) || cilNum < -10 || cilNum > 0) {
-              throw new Error(`Cilíndrico do ${label} deve estar entre -10.00 e 0.00`);
-            }
-          }
-          // Validar eixo (0 a 180)
-          const eixo = prescriptionData[eye].eixo;
-          if (eixo) {
-            const eixoNum = parseInt(eixo);
-            if (isNaN(eixoNum) || eixoNum < 0 || eixoNum > 180) {
-              throw new Error(`Eixo do ${label} deve estar entre 0° e 180°`);
-            }
-          }
-          // Validar DNP (20 a 40)
-          const dnp = prescriptionData[eye].dnp;
-          if (dnp) {
-            const dnpNum = parseFloat(dnp.replace(",", "."));
-            if (isNaN(dnpNum) || dnpNum < 20 || dnpNum > 40) {
-              throw new Error(`DNP do ${label} deve estar entre 20 e 40 mm`);
-            }
-          }
-          // Validar Altura (10 a 45)
-          const altura = prescriptionData[eye].altura;
-          if (altura) {
-            const altNum = parseFloat(altura.replace(",", "."));
-            if (isNaN(altNum) || altNum < 10 || altNum > 45) {
-              throw new Error(`Altura do ${label} deve estar entre 10 e 45 mm`);
-            }
-          }
-          // Validar adição (+0.50 a +4.00)
-          const add = prescriptionData[eye].add;
-          if (add) {
-            const addNum = parseFloat(add.replace(",", "."));
-            if (isNaN(addNum) || addNum < 0.5 || addNum > 4) {
-              throw new Error(`Adição do ${label} deve estar entre +0.50 e +4.00`);
-            }
-          }
+        // Validação de faixa pela FONTE ÚNICA (mesma tabela do form e do servidor).
+        // Substitui o bloco inline antigo, que usava faixas ERRADAS (cil -10..0,
+        // dnp 20..40, altura 10..45). Bloqueia o submit se algo estiver fora.
+        const gradeCheck = validateGrade({
+          od: prescriptionData.od,
+          oe: prescriptionData.oe,
+          adicao: prescriptionData.adicao,
+        });
+        if (!gradeCheck.ok) {
+          throw new Error(gradeCheck.errors[0]);
         }
 
         // Compatibilidade: setar adicao a partir de addOd se não preenchido diretamente
@@ -661,107 +624,13 @@ function NovaOrdemServicoPageContent() {
                 />
               </div>
 
-              {/* BLOCO 1: VISÃO DE LONGE — Tabela compacta OD/OE */}
+              {/* BLOCO 1: VISÃO DE LONGE — grade unificada (PrescriptionGradeForm) */}
               <div>
                 <h3 className="text-sm font-bold text-gray-700 uppercase tracking-wide mb-2">Visão de Longe</h3>
-                <div className="md:overflow-x-auto">
-                  <table className="grade-responsive w-full text-sm border-collapse">
-                    <thead>
-                      <tr className="bg-gray-100">
-                        <th className="border p-1.5 text-left font-semibold w-14">Olho</th>
-                        <th className="border p-1.5 text-center font-semibold">Esférico</th>
-                        <th className="border p-1.5 text-center font-semibold">Cilíndrico</th>
-                        <th className="border p-1.5 text-center font-semibold">Eixo</th>
-                        <th className="border p-1.5 text-center font-semibold">DNP</th>
-                        <th className="border p-1.5 text-center font-semibold">Altura</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      {(["od", "oe"] as const).map((eye) => (
-                        <tr key={eye}>
-                          <td className="border p-1.5 font-bold bg-gray-50 text-center">
-                            <span className="md:hidden">{eye === "od" ? "OD — Olho Direito" : "OE — Olho Esquerdo"}</span><span className="hidden md:inline">{eye === "od" ? "OD" : "OE"}</span>
-                          </td>
-                          <td className="border p-0.5" data-label="Esférico">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Esférico`}
-                              value={prescriptionData[eye].esf}
-                              onChange={(e) =>
-                                setPrescriptionData({
-                                  ...prescriptionData,
-                                  [eye]: { ...prescriptionData[eye], esf: sanitizeNumericField(e.target.value) },
-                                })
-                              }
-                              placeholder="+0.00"
-                              inputMode="decimal"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="Cilíndrico">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Cilíndrico`}
-                              value={prescriptionData[eye].cil}
-                              onChange={(e) =>
-                                setPrescriptionData({
-                                  ...prescriptionData,
-                                  [eye]: { ...prescriptionData[eye], cil: sanitizeNumericField(e.target.value) },
-                                })
-                              }
-                              placeholder="-0.00"
-                              inputMode="decimal"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="Eixo">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Eixo`}
-                              value={prescriptionData[eye].eixo}
-                              onChange={(e) =>
-                                setPrescriptionData({
-                                  ...prescriptionData,
-                                  [eye]: { ...prescriptionData[eye], eixo: sanitizeIntegerField(e.target.value) },
-                                })
-                              }
-                              placeholder="0-180"
-                              inputMode="numeric"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="DNP">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — DNP`}
-                              value={prescriptionData[eye].dnp}
-                              onChange={(e) =>
-                                setPrescriptionData({
-                                  ...prescriptionData,
-                                  [eye]: { ...prescriptionData[eye], dnp: sanitizeNumericField(e.target.value) },
-                                })
-                              }
-                              placeholder="mm"
-                              inputMode="decimal"
-                            />
-                          </td>
-                          <td className="border p-0.5" data-label="Altura">
-                            <Input
-                              className="h-8 text-center text-sm border-0 focus-visible:ring-1"
-                              aria-label={`${eye === "od" ? "Olho direito" : "Olho esquerdo"} — Altura`}
-                              value={prescriptionData[eye].altura}
-                              onChange={(e) =>
-                                setPrescriptionData({
-                                  ...prescriptionData,
-                                  [eye]: { ...prescriptionData[eye], altura: sanitizeNumericField(e.target.value) },
-                                })
-                              }
-                              placeholder="mm"
-                              inputMode="decimal"
-                            />
-                          </td>
-                        </tr>
-                      ))}
-                    </tbody>
-                  </table>
-                </div>
+                <PrescriptionGradeForm
+                  value={{ od: prescriptionData.od, oe: prescriptionData.oe, adicao: prescriptionData.adicao }}
+                  onChange={(patch) => setPrescriptionData((prev) => mergePrescriptionGrade(prev, patch))}
+                />
               </div>
 
               {/* BLOCO 2: ADIÇÃO + VISÃO DE PERTO (auto-calculado) */}

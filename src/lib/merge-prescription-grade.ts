@@ -16,7 +16,10 @@
  */
 export function mergePrescriptionGrade<T extends { od: unknown; oe: unknown; adicao?: unknown }>(
   current: T,
-  patch: { od: unknown; oe: unknown; adicao?: unknown },
+  // O `PrescriptionGradeForm` emite `GradeInput`, cujo od/oe/adicao são
+  // tipados como opcionais/nulos. Aceitamos o tipo largo aqui; em runtime o
+  // form sempre emite od/oe preenchidos (passa `value.od`/`value.oe` no patch).
+  patch: { od?: unknown; oe?: unknown; adicao?: unknown },
 ): T {
   return {
     ...current,
