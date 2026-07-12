@@ -149,6 +149,12 @@ Todas as sub-fases são 100% UI + validação de request. **Zero migration de ba
 - Hydration error `/admin/clientes/novo` (bug separado, [[hydration-error-clientes-novo]]).
 - NF-e (adiado por decisão do dono).
 
+## Achados da revisão Codex A3 — resolução
+
+- **CRÍTICO (corrigido):** `modal-abertura-caixa.tsx` perdeu o guard ao migrar de `type=number` (que tinha `required`/`min="0"`) — vazio/inválido abria o caixa com R$ 0 sem aviso, negativo passava. Reposto guard manual: `parseMoneyPtBR(valor) === null || < 0` bloqueia; **R$ 0,00 permanece válido** (caixa sem troco inicial). Sangria/reforço/receber-conta já tinham guard `<= 0` correto.
+- **REJEITADO (falso-positivo de bug):** Codex apontou que o cashback do PDV usa `parseAmount` (não `parseMoneyPtBR`), violando o "pareamento". Verificado: `parseAmount` (`modal-finalizar-venda.tsx:60`) É pt-BR-aware — quando há vírgula faz `.replace(/\./g,"").replace(",",".")` (idêntico ao `parseMoneyPtBR`). O próprio Codex admitiu "não encontrei bug de 100x hoje". Trocar mudaria o contorno `NaN`→`null` exigindo mexer no guard `Number.isFinite` de um fluxo de venda em produção — risco > benefício de consistência cosmética. Mantido `parseAmount`.
+- **FOLLOW-UP (pré-existente):** prefill do `modal-fechamento-caixa.tsx` só reage a `[open]` (`eslint-disable exhaustive-deps` já existia antes da A3) — se movimentos chegarem após abrir o modal, não recalcula. A A3 só trocou `<Input>`→`<DecimalInput>`, não tocou o effect. Corrigir junto com o saneamento de deps numa fase futura.
+
 ## Follow-up conhecido (achado revisão A3, pré-existente — fora de escopo)
 
 - **`modal-finalizar-venda.tsx:464`**: o *preview* de parcelas do cartão calcula com `parseFloat(amount)` sobre um valor pt-BR (ex. "2.400,00" vira 2,4 → mostra "3x R$ 0,80" em vez de "3x R$ 800,00"). É **só display** — o valor persistido no submit usa o parser correto (`parseAmount`), então nenhum valor salvo/calculado é afetado. Pré-existente (commit `f446212b`, não introduzido pela A3). Corrigir junto quando migrar o resto dos ~140 campos.

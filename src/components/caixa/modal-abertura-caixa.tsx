@@ -52,6 +52,19 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
+
+    // Guard reposto ao migrar de type=number (que tinha required/min="0"): abrir
+    // com R$ 0,00 é válido (caixa sem troco), mas valor vazio/inválido/negativo não.
+    const openingAmount = parseMoneyPtBR(formData.valorAbertura);
+    if (openingAmount === null || openingAmount < 0) {
+      toast({
+        title: "Valor de abertura inválido",
+        description: "Informe um valor igual ou maior que zero",
+        variant: "destructive",
+      });
+      return;
+    }
+
     setLoading(true);
 
     try {
@@ -59,7 +72,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          openingFloatAmount: parseMoneyPtBR(formData.valorAbertura) ?? 0,
+          openingFloatAmount: openingAmount,
           notes: formData.observacoes || undefined,
         }),
       });
@@ -71,7 +84,7 @@ export function ModalAberturaCaixa({ open, onOpenChange }: ModalAberturaCaixaPro
 
       toast({
         title: "Caixa aberto com sucesso!",
-        description: `Valor de abertura: ${formatCurrency(parseMoneyPtBR(formData.valorAbertura) ?? 0)}`,
+        description: `Valor de abertura: ${formatCurrency(openingAmount)}`,
       });
 
       // Limpar formulário
