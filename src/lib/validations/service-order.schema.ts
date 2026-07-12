@@ -1,9 +1,66 @@
 import { z } from "zod";
 import { ServiceOrderStatus } from "@prisma/client";
+import { checkRange } from "@/lib/prescription-grade-ranges";
 
 /**
  * Schemas de validação para Ordens de Serviço
  */
+
+/**
+ * Campos por olho que têm faixa de dioptria (fonte única em
+ * `prescription-grade-ranges`). prisma/base não são restringidos aqui.
+ */
+const PRESCRIPTION_EYE_FIELDS = ["esf", "cil", "eixo", "dnp", "altura", "add"] as const;
+
+/**
+ * Valida o CONTEÚDO da prescrição sem trocar o tipo do campo: `prescription`
+ * continua sendo a string JSON crua (o service e o espelhamento recebem a
+ * string). JSON malformado vira issue Zod (→400), nunca uma exceção (→500).
+ */
+function refinePrescription(value: string | undefined, ctx: z.RefinementCtx): void {
+  if (value === undefined || value === "") return;
+
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(value);
+  } catch {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Prescrição inválida (JSON)",
+      path: ["prescription"],
+    });
+    return;
+  }
+
+  if (parsed === null || typeof parsed !== "object") return;
+  const p = parsed as Record<string, unknown>;
+
+  for (const eye of ["od", "oe"] as const) {
+    const eyeData = p[eye];
+    if (eyeData === null || typeof eyeData !== "object") continue;
+    const fields = eyeData as Record<string, unknown>;
+    for (const field of PRESCRIPTION_EYE_FIELDS) {
+      const raw = fields[field];
+      if (raw === undefined || raw === null || typeof raw !== "string") continue;
+      if (!checkRange(field, raw)) {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${eye.toUpperCase()} ${field} fora da faixa clínica`,
+          path: ["prescription", eye, field],
+        });
+      }
+    }
+  }
+
+  const adicao = p.adicao;
+  if (typeof adicao === "string" && !checkRange("add", adicao)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Adição fora da faixa clínica",
+      path: ["prescription", "adicao"],
+    });
+  }
+}
 
 /**
  * Schema para item/serviço da OS
@@ -34,7 +91,7 @@ export const createServiceOrderSchema = z.object({
   lensColoring: z.string().max(200, "Coloração muito longa").optional(),
   treatments: z.array(z.string().max(200)).max(50).optional(),
   notes: z.string().max(1000, "Observações muito longas").optional(),
-});
+}).superRefine((data, ctx) => refinePrescription(data.prescription, ctx));
 
 export type CreateServiceOrderDTO = z.infer<typeof createServiceOrderSchema>;
 
@@ -54,7 +111,7 @@ export const updateServiceOrderSchema = z.object({
   notes: z.string().max(1000).optional(),
   labNotes: z.string().max(500).optional(),
   labOrderNumber: z.string().max(100).optional(),
-});
+}).superRefine((data, ctx) => refinePrescription(data.prescription, ctx));
 
 export type UpdateServiceOrderDTO = z.infer<typeof updateServiceOrderSchema>;
 
