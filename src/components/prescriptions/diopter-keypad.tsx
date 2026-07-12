@@ -7,7 +7,6 @@
 // NÃO manter estado-espelho de magnitude/sinal — desincronizaria quando o pai
 // troca `value` (ex.: editar receita existente).
 
-import * as React from "react";
 
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { flipSign, formatDiopter, sanitizeSign } from "@/lib/diopter-input";
