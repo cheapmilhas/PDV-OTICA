@@ -2,6 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { useState } from "react";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
   Ticket, FileBarChart, UsersRound, Activity, Mail,
@@ -60,6 +61,17 @@ const menuItems = [
 
 export function AdminNav() {
   const pathname = usePathname();
+  const [product, setProduct] = useState<"VIS_APP" | "VIS_MEDICAL">("VIS_APP");
+
+  async function switchProduct(p: "VIS_APP" | "VIS_MEDICAL") {
+    setProduct(p);
+    await fetch("/api/admin/product-context", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ product: p }),
+    });
+    window.location.reload(); // recarrega para as queries do server pegarem o novo cookie
+  }
 
   function isActive(href: string, exact: boolean) {
     if (exact) return pathname === href;
@@ -69,6 +81,37 @@ export function AdminNav() {
 
   return (
     <nav className="flex-1 px-3 py-4 overflow-y-auto">
+      <div className="mb-6 px-3">
+        <p className="mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
+          Produto
+        </p>
+        <div className="flex gap-1 rounded-lg bg-muted p-1">
+          <button
+            type="button"
+            onClick={() => switchProduct("VIS_APP")}
+            aria-pressed={product === "VIS_APP"}
+            className={`flex-1 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              product === "VIS_APP"
+                ? "bg-background text-foreground font-medium shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Vis App
+          </button>
+          <button
+            type="button"
+            onClick={() => switchProduct("VIS_MEDICAL")}
+            aria-pressed={product === "VIS_MEDICAL"}
+            className={`flex-1 rounded-md px-2 py-1.5 text-sm transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring ${
+              product === "VIS_MEDICAL"
+                ? "bg-background text-foreground font-medium shadow-sm"
+                : "text-muted-foreground hover:text-foreground"
+            }`}
+          >
+            Vis Medical
+          </button>
+        </div>
+      </div>
       {menuItems.map((section) => (
         <div key={section.section} className="mb-6">
           <p className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">

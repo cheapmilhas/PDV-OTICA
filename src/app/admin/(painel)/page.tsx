@@ -13,9 +13,14 @@ import { computeTrend, formatTrend, computeMRR, computeMrrSeries, type Subscript
 import { MrrChart } from "@/components/admin/MrrChart";
 import { Card } from "@/components/ui/card";
 import { Table, TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "./dashboard-filters";
 
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
+
+  const product = await getProductContext();
+  const pf = buildDashboardFilters(product);
 
   const [
     totalCompanies,
@@ -32,14 +37,15 @@ export default async function AdminDashboardPage() {
     pendingInvoices,
     lastHealthCalc,
   ] = await Promise.all([
-    prisma.company.count(),
-    prisma.subscription.count({ where: { status: "ACTIVE" } }),
-    prisma.subscription.count({ where: { status: "TRIAL" } }),
-    prisma.subscription.count({ where: { status: "PAST_DUE" } }),
-    prisma.subscription.count({ where: { status: "SUSPENDED" } }),
-    prisma.invoice.aggregate({ where: { status: "PAID" }, _sum: { total: true } }),
+    prisma.company.count({ where: { ...pf.company } }),
+    prisma.subscription.count({ where: { status: "ACTIVE", ...pf.subscriptionCompany } }),
+    prisma.subscription.count({ where: { status: "TRIAL", ...pf.subscriptionCompany } }),
+    prisma.subscription.count({ where: { status: "PAST_DUE", ...pf.subscriptionCompany } }),
+    prisma.subscription.count({ where: { status: "SUSPENDED", ...pf.subscriptionCompany } }),
+    prisma.invoice.aggregate({ where: { status: "PAID", ...pf.invoiceCompany }, _sum: { total: true } }),
     prisma.company.findMany({
       take: 10,
+      where: { ...pf.company },
       // tiebreaker por id: createdAt não é único (seed/import) → sem isto a
       // lista truncada troca de itens entre refreshes.
       orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -52,16 +58,18 @@ export default async function AdminDashboardPage() {
       where: {
         status: "TRIAL",
         trialEndsAt: { lte: new Date(Date.now() + 3 * 86400000), gte: new Date() },
+        ...pf.subscriptionCompany,
       },
       include: { company: { select: { id: true, name: true } }, plan: { select: { name: true } } },
     }),
-    prisma.subscription.findMany({ where: { status: "ACTIVE" }, include: { plan: true } }),
-    prisma.company.count({ where: { healthCategory: "CRITICAL" } }),
-    prisma.company.count({ where: { healthCategory: "AT_RISK" } }),
+    prisma.subscription.findMany({ where: { status: "ACTIVE", ...pf.subscriptionCompany }, include: { plan: true } }),
+    prisma.company.count({ where: { healthCategory: "CRITICAL", ...pf.company } }),
+    prisma.company.count({ where: { healthCategory: "AT_RISK", ...pf.company } }),
     prisma.invoice.findMany({
       where: {
         status: "PENDING",
-        dueDate: { lte: new Date(Date.now() + 7 * 86400000) } // Vence em 7 dias
+        dueDate: { lte: new Date(Date.now() + 7 * 86400000) }, // Vence em 7 dias
+        ...pf.invoiceCompany,
       },
       include: {
         subscription: {
@@ -75,7 +83,7 @@ export default async function AdminDashboardPage() {
     }),
     // Fase A: data do health mais recente — mostra se os números de saúde estão frescos.
     prisma.company.findFirst({
-      where: { healthUpdatedAt: { not: null } },
+      where: { healthUpdatedAt: { not: null }, ...pf.company },
       orderBy: { healthUpdatedAt: "desc" },
       select: { healthUpdatedAt: true },
     }),
@@ -95,10 +103,10 @@ export default async function AdminDashboardPage() {
     revenueCur,
     revenuePrev,
   ] = await Promise.all([
-    prisma.company.count({ where: { createdAt: { gte: curStart, lte: curEnd } } }),
-    prisma.company.count({ where: { createdAt: { gte: prevStart, lte: prevEnd } } }),
-    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: curStart, lte: curEnd } }, _sum: { total: true } }),
-    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: prevStart, lte: prevEnd } }, _sum: { total: true } }),
+    prisma.company.count({ where: { createdAt: { gte: curStart, lte: curEnd }, ...pf.company } }),
+    prisma.company.count({ where: { createdAt: { gte: prevStart, lte: prevEnd }, ...pf.company } }),
+    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: curStart, lte: curEnd }, ...pf.invoiceCompany }, _sum: { total: true } }),
+    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: prevStart, lte: prevEnd }, ...pf.invoiceCompany }, _sum: { total: true } }),
   ]);
 
   const companiesTrend = computeTrend(newCompaniesCur, newCompaniesPrev);
