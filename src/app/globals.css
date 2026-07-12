@@ -224,8 +224,20 @@ body {
     display: block;
     width: 100%;
   }
+  /* thead visualmente oculto MAS presente na árvore de acessibilidade —
+   * o leitor de tela mantém a associação header→célula (scope), enquanto
+   * visualmente o rótulo aparece via data-label (::before). Não usar
+   * display:none, que removeria os headers do screen reader. */
   .card-table thead {
-    display: none; /* rótulos vêm do data-label no modo cartão */
+    position: absolute;
+    width: 1px;
+    height: 1px;
+    padding: 0;
+    margin: -1px;
+    overflow: hidden;
+    clip: rect(0, 0, 0, 0);
+    white-space: nowrap;
+    border: 0;
   }
   .card-table tbody,
   .card-table tr,
