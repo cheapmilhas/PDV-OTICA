@@ -317,8 +317,18 @@ function EditarOrdemServicoContent() {
       payload.laboratoryId = formData.laboratoryId || undefined;
       payload.notes = formData.notes || undefined;
 
-      // Montar receita se preenchida
-      if (showPrescription && (prescriptionData.od.esf || prescriptionData.oe.esf)) {
+      // Montar receita se QUALQUER campo de grade estiver preenchido — não só
+      // esf (achado Codex A2: uma receita só com cil/eixo/adição/prisma era
+      // silenciosamente omitida do PATCH e a alteração se perdia).
+      const hasAnyGradeField =
+        prescriptionData.od.esf || prescriptionData.od.cil || prescriptionData.od.eixo ||
+        prescriptionData.od.dnp || prescriptionData.od.altura || prescriptionData.od.add ||
+        prescriptionData.od.prisma || prescriptionData.od.base ||
+        prescriptionData.oe.esf || prescriptionData.oe.cil || prescriptionData.oe.eixo ||
+        prescriptionData.oe.dnp || prescriptionData.oe.altura || prescriptionData.oe.add ||
+        prescriptionData.oe.prisma || prescriptionData.oe.base ||
+        prescriptionData.adicao;
+      if (showPrescription && hasAnyGradeField) {
         // Bloqueia o submit se a grade estiver fora da faixa (fonte única) — a
         // tela de editar NÃO validava faixa antes; agora herda a mesma regra do
         // form e do servidor.

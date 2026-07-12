@@ -32,16 +32,42 @@ function refinePrescription(value: string | undefined, ctx: z.RefinementCtx): vo
     return;
   }
 
-  if (parsed === null || typeof parsed !== "object") return;
+  // Rejeita (não ignora) shape inesperado: a UI só manda objeto de strings, mas
+  // uma chamada DIRETA à API não pode gravar um JSON primitivo/array/null.
+  if (parsed === null || typeof parsed !== "object" || Array.isArray(parsed)) {
+    ctx.addIssue({
+      code: z.ZodIssueCode.custom,
+      message: "Prescrição inválida (formato inesperado)",
+      path: ["prescription"],
+    });
+    return;
+  }
   const p = parsed as Record<string, unknown>;
 
   for (const eye of ["od", "oe"] as const) {
     const eyeData = p[eye];
-    if (eyeData === null || typeof eyeData !== "object") continue;
+    if (eyeData === undefined || eyeData === null) continue;
+    if (typeof eyeData !== "object" || Array.isArray(eyeData)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: `${eye.toUpperCase()} com formato inválido`,
+        path: ["prescription", eye],
+      });
+      continue;
+    }
     const fields = eyeData as Record<string, unknown>;
     for (const field of PRESCRIPTION_EYE_FIELDS) {
       const raw = fields[field];
-      if (raw === undefined || raw === null || typeof raw !== "string") continue;
+      if (raw === undefined || raw === null) continue;
+      // Presente mas não-string = tipo inesperado → rejeita (não ignora).
+      if (typeof raw !== "string") {
+        ctx.addIssue({
+          code: z.ZodIssueCode.custom,
+          message: `${eye.toUpperCase()} ${field} com tipo inválido`,
+          path: ["prescription", eye, field],
+        });
+        continue;
+      }
       if (!checkRange(field, raw)) {
         ctx.addIssue({
           code: z.ZodIssueCode.custom,
@@ -53,12 +79,20 @@ function refinePrescription(value: string | undefined, ctx: z.RefinementCtx): vo
   }
 
   const adicao = p.adicao;
-  if (typeof adicao === "string" && !checkRange("add", adicao)) {
-    ctx.addIssue({
-      code: z.ZodIssueCode.custom,
-      message: "Adição fora da faixa clínica",
-      path: ["prescription", "adicao"],
-    });
+  if (adicao !== undefined && adicao !== null) {
+    if (typeof adicao !== "string") {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Adição com tipo inválido",
+        path: ["prescription", "adicao"],
+      });
+    } else if (!checkRange("add", adicao)) {
+      ctx.addIssue({
+        code: z.ZodIssueCode.custom,
+        message: "Adição fora da faixa clínica",
+        path: ["prescription", "adicao"],
+      });
+    }
   }
 }
 

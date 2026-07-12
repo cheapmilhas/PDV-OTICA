@@ -47,4 +47,31 @@ describe("createServiceOrderSchema — validação de faixa da prescrição", ()
     expect(r.success).toBe(true);
     if (r.success) expect(typeof r.data.prescription).toBe("string");
   });
+
+  // Bypasses achados na revisão Codex A2: a UI só manda strings sanitizadas,
+  // mas uma chamada DIRETA à API não pode gravar shape/tipo inesperado.
+  it("REJEITA campo de dioptria que não é string (ex: número cru)", () => {
+    const r = createServiceOrderSchema.safeParse(
+      withPrescription({ od: { esf: 999 }, oe: {} }),
+    );
+    expect(r.success).toBe(false);
+  });
+
+  it("REJEITA campo de dioptria que é objeto", () => {
+    const r = createServiceOrderSchema.safeParse(
+      withPrescription({ od: { esf: {} }, oe: {} }),
+    );
+    expect(r.success).toBe(false);
+  });
+
+  it("REJEITA prescription cujo JSON não é objeto (número, null, array)", () => {
+    expect(createServiceOrderSchema.safeParse({ ...baseValid, prescription: "42" }).success).toBe(false);
+    expect(createServiceOrderSchema.safeParse({ ...baseValid, prescription: "null" }).success).toBe(false);
+    expect(createServiceOrderSchema.safeParse({ ...baseValid, prescription: "[]" }).success).toBe(false);
+  });
+
+  it("REJEITA eixo fracionário e notação exponencial (eixo é inteiro)", () => {
+    expect(createServiceOrderSchema.safeParse(withPrescription({ od: { eixo: "90.5" }, oe: {} })).success).toBe(false);
+    expect(createServiceOrderSchema.safeParse(withPrescription({ od: { eixo: "3e1" }, oe: {} })).success).toBe(false);
+  });
 });

@@ -30,18 +30,30 @@ export const GRADE_RANGES = {
   altura: [10, 40],
 } as const satisfies Record<GradeRangeField, readonly [number, number]>;
 
+/** Campos que só aceitam valor INTEIRO (eixo do astigmatismo, 0–180). */
+const INTEGER_FIELDS = new Set(["eixo"]);
+
 /**
  * Valida um valor cru contra a faixa do campo.
  * - vazio / null / undefined → `true` (campo opcional)
- * - não-numérico ou múltiplos sinais ("--2,25", "abc") → `false`
+ * - não-numérico, múltiplos sinais ("--2,25", "abc") ou notação
+ *   exponencial ("3e1") → `false`
+ * - eixo fracionário ("90.5") → `false` (eixo é inteiro)
  * - campo desconhecido (sem faixa) → `true` (não restringido aqui)
  * - caso contrário → dentro de [min, max]
  */
 export function checkRange(field: string, raw: string | null | undefined): boolean {
   if (raw === null || raw === undefined || raw === "") return true;
 
-  const n = Number(String(raw).trim().replace(",", "."));
+  const s = String(raw).trim();
+  // Notação exponencial ("3e1" = 30) é sintaxe válida de Number mas nunca uma
+  // dioptria digitada — rejeita para não mascarar entrada absurda via API.
+  if (/[eE]/.test(s)) return false;
+
+  const n = Number(s.replace(",", "."));
   if (!Number.isFinite(n)) return false;
+
+  if (INTEGER_FIELDS.has(field) && !Number.isInteger(n)) return false;
 
   const range = (GRADE_RANGES as Record<string, readonly [number, number]>)[field];
   if (!range) return true;
