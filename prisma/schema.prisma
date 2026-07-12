@@ -132,6 +132,8 @@ model Company {
   contractStart           DateTime?
   contractEnd             DateTime?
   quickNote               String?
+  platformProduct         PlatformProduct          @default(VIS_APP)
+  ownerGroupId            String?
   accountsPayable         AccountPayable[]
   accountsReceivable      AccountReceivable[]
   agreements              Agreement[]
@@ -151,6 +153,7 @@ model Company {
   commissionRules         CommissionRule[]
   sellerCommissionTiers   SellerCommissionTier[]
   network                 Network?                 @relation("NetworkCompanies", fields: [networkId], references: [id])
+  ownerGroup              CompanyOwnerGroup?       @relation("OwnerGroupCompanies", fields: [ownerGroupId], references: [id])
   companySettings         CompanySettings?         @relation("CompanySettings")
   counters                Counter[]
   customers               Customer[]
@@ -225,6 +228,8 @@ model Company {
   @@index([healthCategory, healthScore])
   // Listas do admin ordenam por createdAt (com tiebreaker por id).
   @@index([createdAt])
+  @@index([platformProduct])
+  @@index([ownerGroupId])
 }
 
 model Branch {
@@ -2910,6 +2915,16 @@ model Network {
   @@map("networks")
 }
 
+model CompanyOwnerGroup {
+  id        String    @id @default(cuid())
+  name      String
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
+  companies Company[] @relation("OwnerGroupCompanies")
+
+  @@map("company_owner_groups")
+}
+
 model Invite {
   id              String       @id @default(cuid())
   companyId       String
@@ -3787,6 +3802,8 @@ enum UserRole {
   VENDEDOR
   CAIXA
   ATENDENTE
+  OFTALMOLOGISTA
+  OPTOMETRISTA
 }
 
 enum SaleStatus {
@@ -3834,6 +3851,11 @@ enum CashMovementType {
 enum CashDirection {
   IN
   OUT
+}
+
+enum PlatformProduct {
+  VIS_APP
+  VIS_MEDICAL
 }
 
 enum ProductType {

@@ -9,6 +9,7 @@ import { createOnboardingChecklist, completeOnboardingStep } from "@/services/on
 import { ActorType } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { containsHtml } from "@/lib/validations/safe-text";
+import { resolveProvisionProduct } from "../provision-product";
 
 const log = logger.child({ route: "admin/clientes/create" });
 
@@ -68,11 +69,25 @@ export async function POST(request: Request) {
     adminName,
     adminEmail,
     adminPassword,
+    // Vis Medical (F0) — produto e vínculo por titularidade
+    platformProduct: rawPlatformProduct,
+    ownerGroupId,
   } = body;
 
   // Validações
   if (!tradeName || !cnpj || !email || !city || !state || !ownerName || !ownerEmail || !planId) {
     return NextResponse.json({ error: "Campos obrigatórios não preenchidos" }, { status: 400 });
+  }
+
+  // Vis Medical (F0): normaliza o produto e decide se roda o finance setup de ótica.
+  // Ausente → VIS_APP (compat); presente e inválido → 400 (nunca classificar conta
+  // silenciosamente no produto errado).
+  const provision = resolveProvisionProduct(rawPlatformProduct);
+  if (!provision) {
+    return NextResponse.json(
+      { error: "platformProduct inválido (use VIS_APP ou VIS_MEDICAL)" },
+      { status: 400 },
+    );
   }
 
   // SEGURANÇA: rejeitar HTML em campos de texto livre que vão para o banco
@@ -121,6 +136,14 @@ export async function POST(request: Request) {
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
   if (!plan) {
     return NextResponse.json({ error: "Plano não encontrado" }, { status: 400 });
+  }
+
+  // Vis Medical (F0): se vier vínculo por titularidade, validar existência antes da transação.
+  if (ownerGroupId) {
+    const group = await prisma.companyOwnerGroup.findUnique({ where: { id: ownerGroupId } });
+    if (!group) {
+      return NextResponse.json({ error: "Grupo de titularidade inexistente" }, { status: 400 });
+    }
   }
 
   try {
@@ -176,6 +199,8 @@ export async function POST(request: Request) {
           maxBranches: plan.maxBranches || 1,
           healthScore: 50,
           healthCategory: "HEALTHY",
+          platformProduct: provision.platformProduct,
+          ownerGroupId: ownerGroupId ?? null,
         },
       });
 
@@ -269,11 +294,14 @@ export async function POST(request: Request) {
         },
       });
 
-      // 7.1. Configurar módulo financeiro.
+      // 7.1. Configurar módulo financeiro (só ótica / Vis App).
       // Q4.4: erro AQUI propaga para rollback da transação inteira — admin
       // refaz o cadastro em vez de ficar com company em estado inconsistente
       // (sem chartOfAccounts/FinanceAccount, quebra venda/orçamento depois).
-      await setupCompanyFinance(tx, company.id, branch?.id);
+      // Vis Medical (F0): pula o finance setup de ótica (não faz sentido no produto clínico).
+      if (provision.runOpticalFinanceSetup) {
+        await setupCompanyFinance(tx, company.id, branch?.id);
+      }
 
       // 8. Criar Invite (mantém para fluxo de ativação por email)
       const inviteToken = randomBytes(32).toString("hex");

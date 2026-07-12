@@ -96,6 +96,14 @@ export const PERMISSIONS = [
   // RECEITAS (Livro de Receitas — dado clínico sensível, LGPD)
   { code: Permission.PRESCRIPTIONS_VIEW, name: PERMISSION_LABELS[Permission.PRESCRIPTIONS_VIEW], description: "Permite visualizar receitas/grau dos clientes (dado de saúde)", module: "prescriptions", category: "Receitas", sortOrder: 1 },
   { code: Permission.PRESCRIPTIONS_EDIT, name: PERMISSION_LABELS[Permission.PRESCRIPTIONS_EDIT], description: "Permite digitar/editar o grau de receitas", module: "prescriptions", category: "Receitas", sortOrder: 2 },
+
+  // CLÍNICO (Vis Medical)
+  { code: Permission.CLINICAL_ENCOUNTER_VIEW, name: PERMISSION_LABELS[Permission.CLINICAL_ENCOUNTER_VIEW], description: "Ver atendimentos clínicos", module: "clinical", category: "Clínico", sortOrder: 900 },
+  { code: Permission.CLINICAL_ENCOUNTER_CREATE, name: PERMISSION_LABELS[Permission.CLINICAL_ENCOUNTER_CREATE], description: "Registrar atendimento clínico", module: "clinical", category: "Clínico", sortOrder: 901 },
+  { code: Permission.CLINICAL_EXAM_VIEW, name: PERMISSION_LABELS[Permission.CLINICAL_EXAM_VIEW], description: "Ver exames", module: "clinical", category: "Clínico", sortOrder: 902 },
+  { code: Permission.CLINICAL_EXAM_CREATE, name: PERMISSION_LABELS[Permission.CLINICAL_EXAM_CREATE], description: "Registrar exames", module: "clinical", category: "Clínico", sortOrder: 903 },
+  { code: Permission.CLINICAL_PRESCRIPTION_ISSUE, name: PERMISSION_LABELS[Permission.CLINICAL_PRESCRIPTION_ISSUE], description: "Emitir receita clínica", module: "clinical", category: "Clínico", sortOrder: 904 },
+  { code: Permission.CLINICAL_APPOINTMENT_MANAGE, name: PERMISSION_LABELS[Permission.CLINICAL_APPOINTMENT_MANAGE], description: "Gerenciar agenda clínica", module: "clinical", category: "Clínico", sortOrder: 905 },
 ];
 
 /**
@@ -220,6 +228,17 @@ export const ROLE_PERMISSIONS_MAP: Record<string, string[]> = {
     Permission.REMINDERS_VIEW,
     // Configurações básicas
     Permission.SETTINGS_VIEW,
+  ],
+
+  OFTALMOLOGISTA: [
+    Permission.CLINICAL_ENCOUNTER_VIEW, Permission.CLINICAL_ENCOUNTER_CREATE,
+    Permission.CLINICAL_EXAM_VIEW, Permission.CLINICAL_EXAM_CREATE,
+    Permission.CLINICAL_PRESCRIPTION_ISSUE, Permission.CLINICAL_APPOINTMENT_MANAGE,
+  ],
+  OPTOMETRISTA: [
+    Permission.CLINICAL_ENCOUNTER_VIEW, Permission.CLINICAL_ENCOUNTER_CREATE,
+    Permission.CLINICAL_EXAM_VIEW, Permission.CLINICAL_EXAM_CREATE,
+    Permission.CLINICAL_PRESCRIPTION_ISSUE, Permission.CLINICAL_APPOINTMENT_MANAGE,
   ],
 };
 

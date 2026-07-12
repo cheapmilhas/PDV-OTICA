@@ -102,9 +102,17 @@ export enum Permission {
   CAMPAIGNS_VIEW = "campaigns.view",
   CAMPAIGNS_MANAGE = "campaigns.manage",
   REMINDERS_VIEW = "reminders.view",
+
+  // Clínico (Vis Medical) — dado de saúde, sempre via requirePermission
+  CLINICAL_ENCOUNTER_VIEW = "clinical.encounter.view",
+  CLINICAL_ENCOUNTER_CREATE = "clinical.encounter.create",
+  CLINICAL_EXAM_VIEW = "clinical.exam.view",
+  CLINICAL_EXAM_CREATE = "clinical.exam.create",
+  CLINICAL_PRESCRIPTION_ISSUE = "clinical.prescription.issue",
+  CLINICAL_APPOINTMENT_MANAGE = "clinical.appointment.manage",
 }
 
-export type UserRole = "ADMIN" | "MANAGER" | "SELLER" | "CASHIER" | "STOCK_MANAGER";
+export type UserRole = "ADMIN" | "MANAGER" | "SELLER" | "CASHIER" | "STOCK_MANAGER" | "OPHTHALMOLOGIST" | "OPTOMETRIST";
 
 /**
  * Mapa de permissões por cargo
@@ -305,6 +313,23 @@ export const ROLE_PERMISSIONS: Record<UserRole, Permission[]> = {
     // Configurações básicas
     Permission.SETTINGS_VIEW,
   ],
+
+  OPHTHALMOLOGIST: [
+    Permission.CLINICAL_ENCOUNTER_VIEW,
+    Permission.CLINICAL_ENCOUNTER_CREATE,
+    Permission.CLINICAL_EXAM_VIEW,
+    Permission.CLINICAL_EXAM_CREATE,
+    Permission.CLINICAL_PRESCRIPTION_ISSUE,
+    Permission.CLINICAL_APPOINTMENT_MANAGE,
+  ],
+  OPTOMETRIST: [
+    Permission.CLINICAL_ENCOUNTER_VIEW,
+    Permission.CLINICAL_ENCOUNTER_CREATE,
+    Permission.CLINICAL_EXAM_VIEW,
+    Permission.CLINICAL_EXAM_CREATE,
+    Permission.CLINICAL_PRESCRIPTION_ISSUE,
+    Permission.CLINICAL_APPOINTMENT_MANAGE,
+  ],
 };
 
 /**
@@ -439,6 +464,14 @@ export const PERMISSION_LABELS: Record<Permission, string> = {
   [Permission.CAMPAIGNS_VIEW]: "Visualizar campanhas",
   [Permission.CAMPAIGNS_MANAGE]: "Gerenciar campanhas",
   [Permission.REMINDERS_VIEW]: "Visualizar lembretes",
+
+  // Clínico (Vis Medical)
+  [Permission.CLINICAL_ENCOUNTER_VIEW]: "Ver atendimentos clínicos",
+  [Permission.CLINICAL_ENCOUNTER_CREATE]: "Registrar atendimento clínico",
+  [Permission.CLINICAL_EXAM_VIEW]: "Ver exames",
+  [Permission.CLINICAL_EXAM_CREATE]: "Registrar exames",
+  [Permission.CLINICAL_PRESCRIPTION_ISSUE]: "Emitir receita clínica",
+  [Permission.CLINICAL_APPOINTMENT_MANAGE]: "Gerenciar agenda clínica",
 };
 
 /**
@@ -450,4 +483,6 @@ export const ROLE_LABELS: Record<UserRole, string> = {
   SELLER: "Vendedor",
   CASHIER: "Caixa",
   STOCK_MANAGER: "Gerente de Estoque",
+  OPHTHALMOLOGIST: "Oftalmologista",
+  OPTOMETRIST: "Optometrista",
 };
