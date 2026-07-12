@@ -29,7 +29,7 @@ Esta decisão passou por um painel adversarial (skill `forja`): 3 abordagens cri
 Entrega verificável: o super admin cria uma conta Vis Medical, ela aparece marcada como produto distinto, pode ser vinculada à ótica do mesmo dono, e o super admin alterna a visão entre os dois produtos — sem quebrar nada do Vis App em produção.
 
 ### Dentro da F0
-- Discriminador de produto (`ProductType`) na Company.
+- Discriminador de produto (`PlatformProduct`) na Company.
 - Vínculo por titularidade entre duas Companies (`CompanyOwnerGroup`), sem compartilhar dado.
 - Extensão do provisionador do super admin para criar conta Vis Medical.
 - Switcher de produto no super admin (reusando impersonation/escopo existentes).
@@ -53,13 +53,15 @@ Um super admin loga, provisiona uma conta "Vis Medical" para um dono que já tem
 **Gap que corrige:** hoje nada distingue de qual produto uma Company é. Todo o super admin (métricas, listagem, provisionamento) opera sobre um universo único de óticas.
 
 **Desenho:**
-- Novo `enum ProductType { VIS_APP, VIS_MEDICAL }`.
-- `Company.productType ProductType @default(VIS_APP)`, indexado.
+- Novo `enum PlatformProduct { VIS_APP, VIS_MEDICAL }`.
+- `Company.platformProduct PlatformProduct @default(VIS_APP)`, indexado.
 - Backfill implícito pelo default: todas as Companies existentes tornam-se `VIS_APP`.
+
+> **Nome:** o enum **não** pode se chamar `ProductType` — já existe `enum ProductType` no schema (`prisma/schema.prisma:3839`, classificação de item de estoque: FRAME/CONTACT_LENS/etc., usado em ~12 arquivos). O discriminador de produto-de-plataforma usa `PlatformProduct`/`Company.platformProduct` para evitar colisão de nome e de semântica.
 
 **Por que enum tipado e não feature de plano:** "que produto a conta **é**" é identidade estrutural, distinta de "que features a conta **compra**" (`PlanFeature`). Enum indexado mantém métricas por produto corretas/baratas e impede queries que misturem ótica com clínica.
 
-**Consequência assumida:** as queries do dashboard (`src/app/admin/(painel)/page.tsx`) e a matemática de métricas (`src/lib/admin-metrics.ts`), além da listagem de clientes, passam a filtrar/agrupar por `productType`. Sem isso, o switcher mostraria números misturados. É a parte "chata mas necessária" da F0.
+**Consequência assumida:** as **queries do dashboard** (`src/app/admin/(painel)/page.tsx` — ~15 queries: `company.count`, `subscription.count({where})`, `invoice.aggregate`, contagens de `healthCategory`) e a **listagem de clientes** passam a filtrar/agrupar por `platformProduct`. `src/lib/admin-metrics.ts` permanece **matemática pura** (recebe o conjunto já filtrado; não muda). Ponto de atenção de regressão: `Subscription`, `Invoice` e `healthCategory` **não carregam `platformProduct`** — o filtro atravessa a relação (`where: { company: { platformProduct: ... } }`), então são ~15 queries heterogêneas (algumas via `companyId` direto, outras via join-through-company). É o maior foco de regressão da F0 e o plano deve tratar cada query explicitamente.
 
 ---
 
@@ -90,16 +92,16 @@ Reusa quase tudo que já existe (o super admin já é um sistema separado e comp
 
 **Switcher de produto:**
 - Seletor Vis App ⇄ Vis Medical no shell do painel (header/topo da sidebar, `src/app/admin/(painel)/admin-nav.tsx`).
-- Não troca de sistema nem de auth. Define um **filtro de contexto** (estado/preferência do super admin, ex.: cookie) que injeta `productType` nas queries de dashboard, listagem e métricas.
+- Não troca de sistema nem de auth. Define um **filtro de contexto** (estado/preferência do super admin, ex.: cookie) que injeta `platformProduct` nas queries de dashboard, listagem e métricas.
 - Para **entrar** numa conta específica, usa a **impersonation existente** (`ImpersonationSession`) — não reinventada.
 
 **Provisionamento:**
-- Estende o handler atual `src/app/api/admin/clientes/create/route.ts` (transação que cria Company + Branch + User admin + Subscription + CompanySettings + finance setup) para aceitar `productType`.
+- Estende o handler atual `src/app/api/admin/clientes/create/route.ts` (transação que cria Company + Branch + User admin + Subscription + CompanySettings + finance setup) para aceitar `platformProduct`.
 - Quando `VIS_MEDICAL`: cria Company marcada como clínica, opcionalmente já com `ownerGroupId` (se amarrando a uma ótica existente), User admin com papel adequado, e **ramifica condicionalmente** as partes que não se aplicam à clínica (ex.: finance setup específico de ótica fica atrás do condicional de produto).
 - Formulário `src/app/admin/(painel)/clientes/novo/new-client-form.tsx` ganha escolha de produto e, se Vis Medical, campo de vínculo a grupo de titularidade.
 
 **Métricas por produto:**
-- `page.tsx` do dashboard e `admin-metrics.ts` segmentam por `productType`, respeitando o switcher (MRR, contagem de empresas, trials).
+- As queries do `page.tsx` do dashboard filtram por `platformProduct` (via join `company` onde a entidade não carrega o campo), respeitando o switcher (MRR, contagem de empresas, trials). `admin-metrics.ts` continua puro, recebendo o conjunto já filtrado.
 
 **Cuidado explícito:** o provisionador da ótica é uma transação grande em produção. Estendê-lo é "adicionar ramo condicional testado", **não** reescrever. O que da ótica não se aplica à clínica fica atrás do condicional de produto.
 
@@ -115,13 +117,19 @@ Reusa quase tudo que já existe (o super admin já é um sistema separado e comp
 
 **Autorização — regra inegociável:** todo acesso a dado clínico é sempre por **permissão granular** (`requirePermission`), **nunca** `requireRole`. Motivo: `requireRole` não distingue um GERENTE-vendedor de um GERENTE-médico e fura escopo.
 
-**Escopo da F0:** cria o **esqueleto** das permissões clínicas no catálogo (`src/lib/plan-feature-catalog.ts` / sistema de permissões) — chaves e estrutura, prontas para os sub-projetos clínicos consumirem. A F0 não implementa telas clínicas.
+**Escopo da F0:** cria o **esqueleto** das permissões clínicas no sistema de RBAC — o enum `Permission` em `src/lib/permissions.ts` (fonte de verdade) + o catálogo runtime `src/app/api/permissions/seed/catalog.ts` (o que o seed aplica; runtime lê o catalog, não o enum diretamente). Chaves e estrutura, prontas para os sub-projetos clínicos consumirem. A F0 não implementa telas clínicas.
+
+> **Não confundir com plan-gating:** `src/lib/plan-feature-catalog.ts` é o que o plano *compra* (`requirePlanFeature`), ortogonal ao que o papel *pode fazer* (`requirePermission`). As permissões clínicas granulares pertencem ao RBAC (`Permission` + seed catalog). Se o Vis Medical for um recurso comercializável por plano, isso *também* entra em plan-feature-catalog — mas é decisão separada, não autorização.
+
+> **Papéis órfãos até a fase clínica (risco assumido, como o vínculo da Seção 3):** a F0 cria os `UserRole` clínicos e o esqueleto de permissões sem nenhuma tela que os use ainda. Isso é intencional (fundação); os papéis ficam disponíveis para atribuição no super admin, mas só ganham telas nas fases clínicas.
 
 **LGPD (definido na F0, enforcement nas fases clínicas):**
 - `ConsentRecord.scope` ganha valor clínico próprio (ex.: `clinical_health_data`) distinto de marketing/comercial.
 - Fica cravado no spec que todo acesso a dado clínico gravará `CustomerAccessLog`, e que **nenhum endpoint genérico de cliente pode dar `include` em dado clínico**.
 
-**Nota:** `branchType=HYBRID` não separa acesso sozinho — authz clínica é sempre por permissão de papel, nunca por tipo de filial.
+**Nota:** não existe hoje (nem se planeja) separar acesso por tipo de filial — authz clínica é **sempre** por permissão de papel. (O schema não tem `branchType`; qualquer separação de acesso vem de permissão, não de atributo de `Branch`.)
+
+**Tensão de modelagem a reconciliar nas fases clínicas (decisão adiada):** já existe `model Doctor` (schema L567: `crm`, `uf`, `specialty`, `isPartner`, `prescriptions`) — um conceito clínico-adjacente. A F0 cria papéis clínicos como `UserRole` (oftalmologista/optometrista). A relação entre um `User role=oftalmologista` e a entidade `Doctor` referenciada por `Prescription.doctorId` (emite receita como qual entidade? são o mesmo?) **não é resolvida na F0** — é registrada aqui como decisão explícita para a fase de receita clínica.
 
 ---
 
@@ -130,16 +138,17 @@ Reusa quase tudo que já existe (o super admin já é um sistema separado e comp
 ### Mudanças de schema (todas aditivas)
 Aplicadas via `.sql` hand-written + `migrate deploy` (não há Neon dev isolado; `migrate dev` rodaria contra prod).
 
-- `enum ProductType { VIS_APP, VIS_MEDICAL }`.
-- `Company.productType ProductType @default(VIS_APP)` + índice (backfill implícito pelo default).
+- `enum PlatformProduct { VIS_APP, VIS_MEDICAL }` (**não** `ProductType` — nome já ocupado por classificação de estoque, `schema.prisma:3839`).
+- `Company.platformProduct PlatformProduct @default(VIS_APP)` + índice (backfill implícito pelo default).
 - `model CompanyOwnerGroup` (id, name, timestamps) + `Company.ownerGroupId String?` + relação + `@@index([ownerGroupId])`.
-- Dois valores novos em `enum UserRole` (oftalmologista, optometrista) — **migração própria, separada** da que os usa.
-- Esqueleto de permissões clínicas no catálogo + valor `clinical_health_data` em `ConsentRecord.scope`.
+- Dois valores novos em `enum UserRole` (oftalmologista, optometrista) — **migração própria, separada** da que os usa (regra do Postgres para `ALTER TYPE ... ADD VALUE`).
+- Esqueleto de permissões clínicas no RBAC (`Permission` enum + seed `catalog.ts`).
+- `ConsentRecord.scope` ganha a convenção de string `clinical_health_data` — **não é mudança de enum** (`scope` é `String` livre, schema L531); é só convenção de aplicação, sem migração de tipo.
 
 ### Requisitos cravados pelo painel (enforcement pode vir em fases seguintes, mas o spec registra)
 - **Cancelamento de venda deve zerar `saleId` na receita** — `onDelete: SetNull` só cobre delete físico da Sale, não cancelamento lógico. Bug pré-existente; correção pertence à fase da ponte receita→venda, registrada aqui para não se perder.
 - **`Appointment` clínico será tabela nova desacoplada do funil** (`ExamAppointment` exige `leadId` obrigatório + cascade — não serve para agenda clínica). Fase clínica, não F0.
-- Todo índice novo lidera por `companyId` (ou por `productType`/`ownerGroupId` quando é discriminador global do super admin).
+- Todo índice novo lidera por `companyId` (ou por `platformProduct`/`ownerGroupId` quando é discriminador global do super admin).
 - Decisão pendente para a fase de receita clínica: imutabilidade de `PrescriptionValues` após `saleId` setado (versionar via nova linha vs aceitar risco). Registrada, não resolvida na F0.
 
 ### Erros
@@ -149,7 +158,7 @@ Aplicadas via `.sql` hand-written + `migrate deploy` (não há Neon dev isolado;
 - Nenhuma query do super admin retorna contas de produto trocado (garantido por teste).
 
 ### Testes
-- Matemática das métricas por produto (segmentação de MRR/contagem por `productType`) — testável pura, sem banco (como `admin-metrics.ts` já é).
+- **Queries segmentadas por produto** (teste de integração, não puro): as ~15 queries do `page.tsx` filtradas por `platformProduct` (via join `company`) retornam só as contas do produto certo. `admin-metrics.ts` continua com seus testes puros existentes, alimentado pelo conjunto já filtrado.
 - Provisionador cria conta Vis Medical válida e vinculada.
 - **Não-regressão do Vis App:** contas existentes viram `VIS_APP`; métricas antigas batem; provisionador de ótica intacto.
 - Switcher filtra corretamente e nunca vaza produto cruzado.
@@ -160,10 +169,11 @@ A F0 não pode quebrar o Vis App em produção. Provisionador ganha ramo condici
 ---
 
 ## Arquivos-âncora (código real, para o plano)
-- Schema: `prisma/schema.prisma` — `Company` (L89–228), `CompanySegment` enum=porte (L4332), `Network` (L2896), `UserRole`, `Subscription`/`Plan`/`PlanFeature` (L2454+), `ConsentRecord`/`CustomerAccessLog`, `Prescription` (L882)/`PrescriptionValues` (L939), `ExamAppointment` (L1347).
-- Super admin: `src/app/admin/(painel)/` (layout, `admin-nav.tsx`, `configuracoes/sections.ts`), `src/app/api/admin/clientes/create/route.ts` (provisionador), `clientes/[id]/` (gestão), `page.tsx` + `src/lib/admin-metrics.ts` (métricas).
+- Schema: `prisma/schema.prisma` — `Company` (L89–228), `CompanySegment` enum=porte (L4332), `enum ProductType`=estoque **já existente** (L3839, NÃO reusar), `Network` (L2896), `UserRole`, `Subscription`/`Plan`/`PlanFeature` (L2454+), `ConsentRecord.scope` String (L531), `CustomerAccessLog`, `Doctor` (L567), `Prescription` (L882)/`PrescriptionValues` (L939), `ExamAppointment` (L1347).
+- Super admin: `src/app/admin/(painel)/` (layout, `admin-nav.tsx`, `configuracoes/sections.ts`), `src/app/api/admin/clientes/create/route.ts` (provisionador), `clientes/[id]/` (gestão), `page.tsx` (~15 queries de métrica a filtrar) + `src/lib/admin-metrics.ts` (matemática pura — não muda).
 - Auth admin: `src/auth-admin.ts`, `src/lib/admin-session.ts`, `src/lib/admin-scope.ts`, `src/proxy.ts`, `AdminUser`/`ImpersonationSession`.
-- Features/plano: `src/lib/plan-features.ts`, `src/lib/subscription.ts`, `src/lib/plan-feature-catalog.ts`.
+- RBAC (permissões clínicas): `src/lib/permissions.ts` (enum `Permission`) + `src/app/api/permissions/seed/catalog.ts` (runtime).
+- Plan-gating (ortogonal ao RBAC): `src/lib/plan-features.ts`, `src/lib/subscription.ts`, `src/lib/plan-feature-catalog.ts`.
 
 ## Sub-projetos seguintes (ordem sugerida, fora deste spec)
 1. **F0 (este spec)** — fundação.
