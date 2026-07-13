@@ -44,11 +44,13 @@ Três tabelas novas + um campo. Tudo aditivo (`.sql` hand-written + `migrate dep
 ### `ClinicalAppointment`
 `id, companyId, branchId?, customerId, doctorId?, scheduledStart, scheduledEnd?, status (enum ClinicalAppointmentStatus), appointmentType?, originalAppointmentId? (self-ref, onDelete SetNull), isFollowUp Boolean, notes?, canceledReason?, checkedInAt?, startedAt?, completedAt?, canceledAt?, createdByUserId, timestamps`.
 
+- **Fuso (importante):** `scheduledStart` e `scheduledEnd` DEVEM ser `DateTime @db.Timestamptz` (timezone-aware), espelhando `ExamAppointment.scheduledAt` — o único campo de agenda do schema real, e o único `@db.Timestamptz` existente. `DateTime` puro (`timestamp without time zone`) reintroduz os bugs de fuso que já morderam o projeto (ex. `computeMrrSeries` miskeyed em UTC). Idem `checkedInAt`/`startedAt`/`completedAt`/`canceledAt` conforme a política de fuso.
+
 - Enum `ClinicalAppointmentStatus`: `AGENDADO, CONFIRMADO, AGUARDANDO, EM_ATENDIMENTO, ATENDIDO, CANCELADO, FALTOU`.
 - `ALLOWED_TRANSITIONS` validado no service (padrão Domus): AGENDADO→{CONFIRMADO,AGUARDANDO,CANCELADO,FALTOU}; CONFIRMADO→{AGUARDANDO,CANCELADO,FALTOU}; AGUARDANDO→{EM_ATENDIMENTO,CANCELADO,FALTOU}; EM_ATENDIMENTO→{ATENDIDO,CANCELADO}; ATENDIDO=terminal; CANCELADO/FALTOU→AGENDADO (reabrir).
 - Timestamp por transição (checkedInAt em AGUARDANDO, startedAt em EM_ATENDIMENTO, completedAt em ATENDIDO, canceledAt em CANCELADO).
 - Índices: `@@index([companyId, scheduledStart])`, `@@index([companyId, customerId, scheduledStart])`, `@@index([companyId, doctorId, scheduledStart])`.
-- Anti-double-booking: índice único parcial `.sql` `(companyId, doctorId, scheduledStart) WHERE status NOT IN (CANCELADO, FALTOU)`.
+- Anti-double-booking: índice único parcial `.sql` `(companyId, doctorId, scheduledStart) WHERE status NOT IN (CANCELADO, FALTOU)`. **Semântica explícita:** colisão = mesmo `scheduledStart` EXATO (mesmo instante), NÃO overlap de intervalo (10:00–10:30 vs 10:15 não colidem). Suficiente para a fatia fina; sobreposição de intervalos é refinamento futuro. **Ordem de migração:** `CREATE TYPE` do enum → `CREATE TABLE` → índice parcial `.sql` (o predicado referencia labels do enum, então roda depois do tipo existir).
 - Comentário inline documentando: `ClinicalAppointment` = agenda clínica; distinto de `ExamAppointment` (funil de vendas, exige `leadId`).
 
 ### `Encounter`
@@ -63,7 +65,7 @@ Três tabelas novas + um campo. Tudo aditivo (`.sql` hand-written + `migrate dep
 `id, companyId, encounterId @unique, method? (AUTOREFRATOR/SUBJETIVA/RETINOSCOPIA), <campos de grau — MESMO vocabulário do PrescriptionValues>, timestamps`.
 
 - **CRÍTICO — nomes e tipos DEVEM espelhar `PrescriptionValues` do Vis** (verificado no schema real), NÃO os do Domus, para a cópia na promoção ser trivial. O `PrescriptionValues` real usa: `odSph Decimal? @db.Decimal(6,2)`, `odCyl Decimal?`, `odAxis Int?`, `odAdd Decimal?`, `odPrism Decimal?`, `odBase String?` + os `oe*` equivalentes; e `pdFar Decimal? @db.Decimal(5,2)`, `pdNear Decimal?` (o "DNP"/distância pupilar é compartilhado, NÃO `odDnp`/`oeDnp` separado). Adição é POR OLHO (`odAdd`/`oeAdd`), não um `addNear` único.
-- `RefractionExam` replica os campos de grau que fazem sentido para uma medição de refração: `odSph, odCyl, odAxis, odAdd, oeSph, oeCyl, oeAxis, oeAdd, pdFar, pdNear` (mesmos nomes/tipos). Prism/base e os parâmetros de montagem (fittingHeight, pantoscopicAngle, vertexDistance, frameCurvature) NÃO entram no exame — são refinamentos de dispensação óptica que o médico não mede; ficam só na `PrescriptionValues` (preenchidos na receita, se aplicável).
+- `RefractionExam` replica os campos de grau que fazem sentido para uma medição de refração: `odSph, odCyl, odAxis, odAdd, oeSph, oeCyl, oeAxis, oeAdd, pdFar, pdNear` (mesmos nomes/tipos). Prism/base e os parâmetros de montagem (`fittingHeightOd`/`fittingHeightOe` — dois campos, um por olho; `pantoscopicAngle`, `vertexDistance`, `frameCurvature`) NÃO entram no exame — são refinamentos de dispensação óptica que o médico não mede; ficam só na `PrescriptionValues` (preenchidos na receita, se aplicável).
 - Correção de suposição: o Domus vivo (`optical_prescriptions`) usa nomes em português (odEsf/addNear) e string; mas o VIS já tem o vocabulário próprio em `PrescriptionValues` (inglês, Decimal/Int) — seguimos o do Vis, que é mais rico (adição por olho, prism/base disponíveis).
 - É a medida bruta do prontuário — NUNCA lida pelo comercial.
 
@@ -86,7 +88,9 @@ Medida bruta (`RefractionExam`) ≠ grau emitido (`PrescriptionValues`). Receita
 
 ## Seção 4 — Agenda, recepção e aba de Usuários
 
-- **Recepção** (papel `ATENDENTE` + `clinical.appointment.manage`, SEM `clinical.encounter.*`): agenda, faz check-in (status→AGUARDANDO, grava checkedInAt). Fila = lista de AGUARDANDO ordenada por checkedInAt. NUNCA vê prontuário.
+- **Recepção** (papel `ATENDENTE`, SEM `clinical.encounter.*`): agenda, faz check-in (status→AGUARDANDO, grava checkedInAt). Fila = lista de AGUARDANDO ordenada por checkedInAt. NUNCA vê prontuário.
+  - **Como a recepção ganha `clinical.appointment.manage` (decisão que trava implementação):** via **`UserPermission` grant individual** (concedido na aba de Usuários pelo médico/admin da clínica), **NÃO** adicionando a permissão ao role `ATENDENTE` no `catalog.ts`. Motivo verificado: o `ATENDENTE` do catalog NÃO tem `clinical.*` (`src/app/api/permissions/seed/catalog.ts`), e o mesmo seed roda para os DOIS produtos — adicionar ao role vazaria a permissão clínica para todo atendente de toda ótica VIS_APP. O runtime já resolve `RolePermission` (catalog) + `UserPermission` override (`getUserEffectivePermissions`), então o grant individual é o caminho correto e já suportado.
+  - **⚠️ Fonte de verdade RBAC de runtime = `catalog.ts` (roles em PORTUGUÊS: ATENDENTE/OFTALMOLOGISTA/OPTOMETRISTA) + banco.** O `ROLE_PERMISSIONS` em inglês de `src/lib/permissions.ts` é estático/legado — não editar o arquivo errado.
 - **Médico** (`OFTALMOLOGISTA`/`OPTOMETRISTA`): tudo da recepção + permissões clínicas. Sozinho agenda, atende, emite. Reusa o padrão de gestão de usuários por empresa do Vis: **aba de Usuários** onde cria/desativa o login de recepção.
 - Espelha o Domus: `secretary` barrada por ROLE no action client (não só permissão) — comportamento que o RBAC do Vis já tem.
 - Admin da clínica = fase seguinte.
@@ -94,6 +98,8 @@ Medida bruta (`RefractionExam`) ≠ grau emitido (`PrescriptionValues`). Receita
 ---
 
 ## Seção 5 — Segurança / LGPD clínico (inegociáveis do painel)
+
+0. **Gate por `platformProduct` (INEGOCIÁVEL — débito registrado pela F0, vence nesta fatia).** Toda leitura E escrita de dado clínico (Encounter, RefractionExam, emissão de receita clínica) valida `Company.platformProduct === VIS_MEDICAL` — **não** confiar só em `requirePermission`. Motivo verificado no código: `src/lib/auth-permissions.ts:24` faz `if (session.user.role === "ADMIN") return` (passe livre), e o ADMIN herda todos os códigos `clinical.*` via `Object.values(Permission)` (F0). O `companyId` isola tenant-a-tenant, mas o gate de produto impede que um contexto ADMIN de conta VIS_APP alcance dado clínico. Implementar como helper compartilhado (ex. `requireClinicalContext()`) usado em toda rota clínica, com **teste que falha se um contexto VIS_APP alcançar dado clínico**. (A F0 já avisou textualmente disso em `permissions-clinical.test.ts:26-35`.)
 
 1. **Consentimento clínico** — `ConsentRecord.scope` ganha uma **string canônica CONSTANTE** (ex. `clinical_health_data`), definida em constante compartilhada e validada (não string livre aceita sem checagem). Checado (vigente, `revokedAt IS NULL`) ANTES de qualquer escrita clínica (Encounter, RefractionExam, emissão).
 2. **`CustomerAccessLog`** gravado em toda LEITURA e ESCRITA de dado clínico. O model real (schema L552) tem `resourceType String`, `resourceId String?`, `action String` — usar um `resourceType` específico (ex. "clinical_encounter", "clinical_refraction", "clinical_prescription") para distinguir prontuário de dado cadastral simples.
