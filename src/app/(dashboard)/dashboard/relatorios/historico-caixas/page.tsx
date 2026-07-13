@@ -16,6 +16,15 @@ import {
 import { Label } from "@/components/ui/label";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import {
   DollarSign,
   CalendarIcon,
@@ -463,49 +472,50 @@ function RelatorioHistoricoCaixasPageContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Filial</th>
-                      <th className="text-left p-2">Aberto Por</th>
-                      <th className="text-left p-2">Fechado Por</th>
-                      <th className="text-left p-2">Abertura</th>
-                      <th className="text-left p-2">Fechamento</th>
-                      <th className="text-right p-2">Declarado</th>
-                      <th className="text-right p-2">Esperado</th>
-                      <th className="text-right p-2">Diferença</th>
-                      <th className="text-center p-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={800}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Filial</TableHead>
+                      <TableHead className="text-left p-2">Aberto Por</TableHead>
+                      <TableHead className="text-left p-2">Fechado Por</TableHead>
+                      <TableHead className="text-left p-2">Abertura</TableHead>
+                      <TableHead className="text-left p-2">Fechamento</TableHead>
+                      <TableHead className="text-right p-2">Declarado</TableHead>
+                      <TableHead className="text-right p-2">Esperado</TableHead>
+                      <TableHead className="text-right p-2">Diferença</TableHead>
+                      <TableHead className="text-center p-2">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.shifts.map((shift) => (
-                      <tr
+                      <TableRow
                         key={shift.id}
                         className="border-b hover:bg-muted/50"
                       >
-                        <td className="p-2 font-medium">{shift.branchName}</td>
-                        <td className="p-2">{shift.openedBy}</td>
-                        <td className="p-2">{shift.closedBy || "—"}</td>
-                        <td className="p-2">
+                        <TableCell data-label="Filial" className="p-2 font-medium">{shift.branchName}</TableCell>
+                        <TableCell data-label="Aberto Por" className="p-2">{shift.openedBy}</TableCell>
+                        <TableCell data-label="Fechado Por" className="p-2">{shift.closedBy || "—"}</TableCell>
+                        <TableCell data-label="Abertura" className="p-2">
                           {format(new Date(shift.openedAt), "dd/MM/yyyy HH:mm")}
-                        </td>
-                        <td className="p-2">
+                        </TableCell>
+                        <TableCell data-label="Fechamento" className="p-2">
                           {shift.closedAt
                             ? format(new Date(shift.closedAt), "dd/MM/yyyy HH:mm")
                             : "—"}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="Declarado" className="p-2 text-right">
                           {shift.closingDeclared
                             ? formatCurrency(shift.closingDeclared)
                             : "—"}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="Esperado" className="p-2 text-right">
                           {shift.closingExpected
                             ? formatCurrency(shift.closingExpected)
                             : "—"}
-                        </td>
-                        <td
+                        </TableCell>
+                        <TableCell
+                          data-label="Diferença"
                           className={`p-2 text-right font-medium ${
                             shift.difference && shift.difference !== 0
                               ? shift.difference > 0
@@ -517,8 +527,8 @@ function RelatorioHistoricoCaixasPageContent() {
                           {shift.difference !== null
                             ? formatCurrency(shift.difference)
                             : "—"}
-                        </td>
-                        <td className="p-2 text-center">
+                        </TableCell>
+                        <TableCell data-label="Status" className="p-2 text-center">
                           <span
                             className={`px-2 py-1 rounded text-xs ${
                               STATUS_COLORS[shift.status]
@@ -526,12 +536,12 @@ function RelatorioHistoricoCaixasPageContent() {
                           >
                             {STATUS_LABELS[shift.status]}
                           </span>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
         </>

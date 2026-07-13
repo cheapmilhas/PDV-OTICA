@@ -11,6 +11,8 @@ import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import { formatCurrency } from "@/lib/utils";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 
 function CartoesPage() {
   const [data, setData] = useState<any>(null);
@@ -153,33 +155,35 @@ function CartoesPage() {
       {/* Table */}
       {data?.data?.length > 0 && (
         <Card>
-          <CardContent className="pt-0 overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b text-muted-foreground">
-                  <th className="text-left py-3 pr-4">Data Prevista</th>
-                  <th className="text-left py-3 pr-4">Venda</th>
-                  <th className="text-left py-3 pr-4">Parcela</th>
-                  <th className="text-left py-3 pr-4">Bandeira</th>
-                  <th className="text-left py-3 pr-4">NSU</th>
-                  <th className="text-right py-3 pr-4">Valor Bruto</th>
-                  <th className="text-left py-3">Status</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.data.map((r: any) => (
-                  <tr key={r.id} className="border-b hover:bg-muted/30">
-                    <td className="py-2 pr-4">{format(new Date(r.expectedDate), "dd/MM/yyyy", { locale: ptBR })}</td>
-                    <td className="py-2 pr-4 font-mono text-xs">{r.saleId.substring(0, 8)}</td>
-                    <td className="py-2 pr-4">{r.installmentNumber}/{r.totalInstallments}</td>
-                    <td className="py-2 pr-4">{r.cardBrand || "—"}</td>
-                    <td className="py-2 pr-4 font-mono text-xs">{r.nsu || "—"}</td>
-                    <td className="py-2 pr-4 text-right font-medium">{formatCurrency(r.grossAmount)}</td>
-                    <td className="py-2">{statusBadge(r.status)}</td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+          <CardContent className="pt-0">
+            <ResponsiveTable cards minWidth={720}>
+              <Table className="w-full text-sm">
+                <TableHeader>
+                  <TableRow className="border-b text-muted-foreground">
+                    <TableHead className="text-left py-3 pr-4">Data Prevista</TableHead>
+                    <TableHead className="text-left py-3 pr-4">Venda</TableHead>
+                    <TableHead className="text-left py-3 pr-4">Parcela</TableHead>
+                    <TableHead className="text-left py-3 pr-4">Bandeira</TableHead>
+                    <TableHead className="text-left py-3 pr-4">NSU</TableHead>
+                    <TableHead className="text-right py-3 pr-4">Valor Bruto</TableHead>
+                    <TableHead className="text-left py-3">Status</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {data.data.map((r: any) => (
+                    <TableRow key={r.id} className="border-b hover:bg-muted/30">
+                      <TableCell data-label="Data Prevista" className="py-2 pr-4">{format(new Date(r.expectedDate), "dd/MM/yyyy", { locale: ptBR })}</TableCell>
+                      <TableCell data-label="Venda" className="py-2 pr-4 font-mono text-xs">{r.saleId.substring(0, 8)}</TableCell>
+                      <TableCell data-label="Parcela" className="py-2 pr-4">{r.installmentNumber}/{r.totalInstallments}</TableCell>
+                      <TableCell data-label="Bandeira" className="py-2 pr-4">{r.cardBrand || "—"}</TableCell>
+                      <TableCell data-label="NSU" className="py-2 pr-4 font-mono text-xs">{r.nsu || "—"}</TableCell>
+                      <TableCell data-label="Valor Bruto" className="py-2 pr-4 text-right font-medium">{formatCurrency(r.grossAmount)}</TableCell>
+                      <TableCell data-label="Status" className="py-2">{statusBadge(r.status)}</TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ResponsiveTable>
           </CardContent>
         </Card>
       )}

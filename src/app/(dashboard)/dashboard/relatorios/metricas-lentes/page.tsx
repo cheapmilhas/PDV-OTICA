@@ -6,6 +6,15 @@ import { Button } from "@/components/ui/button";
 import { Label } from "@/components/ui/label";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -512,32 +521,32 @@ function MetricasLentesPageContent() {
                     </BarChart>
                   </ResponsiveContainer>
 
-                  <div className="overflow-x-auto">
-                    <table className="w-full text-sm">
-                      <thead>
-                        <tr className="border-b">
-                          <th className="text-left py-2 px-3 font-medium">#</th>
-                          <th className="text-left py-2 px-3 font-medium">Laboratório</th>
-                          <th className="text-right py-2 px-3 font-medium">Nº OS</th>
-                          <th className="text-right py-2 px-3 font-medium">Entregues</th>
-                          <th className="text-right py-2 px-3 font-medium">Prazo Médio</th>
-                        </tr>
-                      </thead>
-                      <tbody>
+                  <ResponsiveTable cards minWidth={640}>
+                    <Table className="w-full text-sm">
+                      <TableHeader>
+                        <TableRow className="border-b">
+                          <TableHead className="text-left py-2 px-3 font-medium">#</TableHead>
+                          <TableHead className="text-left py-2 px-3 font-medium">Laboratório</TableHead>
+                          <TableHead className="text-right py-2 px-3 font-medium">Nº OS</TableHead>
+                          <TableHead className="text-right py-2 px-3 font-medium">Entregues</TableHead>
+                          <TableHead className="text-right py-2 px-3 font-medium">Prazo Médio</TableHead>
+                        </TableRow>
+                      </TableHeader>
+                      <TableBody>
                         {labsData.topLabs.map((lab, idx) => (
-                          <tr key={lab.id} className="border-b hover:bg-muted/50">
-                            <td className="py-2 px-3 font-medium">{idx + 1}</td>
-                            <td className="py-2 px-3">{lab.name}</td>
-                            <td className="py-2 px-3 text-right">{lab.orderCount}</td>
-                            <td className="py-2 px-3 text-right">{lab.deliveredCount}</td>
-                            <td className="py-2 px-3 text-right">
+                          <TableRow key={lab.id} className="border-b hover:bg-muted/50">
+                            <TableCell data-label="#" className="py-2 px-3 font-medium">{idx + 1}</TableCell>
+                            <TableCell data-label="Laboratório" className="py-2 px-3">{lab.name}</TableCell>
+                            <TableCell data-label="Nº OS" className="py-2 px-3 text-right">{lab.orderCount}</TableCell>
+                            <TableCell data-label="Entregues" className="py-2 px-3 text-right">{lab.deliveredCount}</TableCell>
+                            <TableCell data-label="Prazo Médio" className="py-2 px-3 text-right">
                               {lab.avgLeadDays ? `${lab.avgLeadDays} dias` : "N/A"}
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
                         ))}
-                      </tbody>
-                    </table>
-                  </div>
+                      </TableBody>
+                    </Table>
+                  </ResponsiveTable>
                 </div>
               ) : (
                 <p className="text-center text-muted-foreground py-8">
@@ -627,28 +636,28 @@ function MetricasLentesPageContent() {
               <CardDescription>Receita, custo e margem por tipo de produto</CardDescription>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left py-2 px-3 font-medium">Segmento</th>
-                      <th className="text-right py-2 px-3 font-medium">Receita</th>
-                      <th className="text-right py-2 px-3 font-medium">Custo</th>
-                      <th className="text-right py-2 px-3 font-medium">Margem</th>
-                      <th className="text-right py-2 px-3 font-medium">Qtd</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={640}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left py-2 px-3 font-medium">Segmento</TableHead>
+                      <TableHead className="text-right py-2 px-3 font-medium">Receita</TableHead>
+                      <TableHead className="text-right py-2 px-3 font-medium">Custo</TableHead>
+                      <TableHead className="text-right py-2 px-3 font-medium">Margem</TableHead>
+                      <TableHead className="text-right py-2 px-3 font-medium">Qtd</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {labsData.segments.map((seg) => (
-                      <tr key={seg.type} className="border-b hover:bg-muted/50">
-                        <td className="py-2 px-3 font-medium">{seg.label}</td>
-                        <td className="py-2 px-3 text-right">
+                      <TableRow key={seg.type} className="border-b hover:bg-muted/50">
+                        <TableCell data-label="Segmento" className="py-2 px-3 font-medium">{seg.label}</TableCell>
+                        <TableCell data-label="Receita" className="py-2 px-3 text-right">
                           {formatCurrency(seg.revenue)}
-                        </td>
-                        <td className="py-2 px-3 text-right">
+                        </TableCell>
+                        <TableCell data-label="Custo" className="py-2 px-3 text-right">
                           {formatCurrency(seg.cost)}
-                        </td>
-                        <td className="py-2 px-3 text-right">
+                        </TableCell>
+                        <TableCell data-label="Margem" className="py-2 px-3 text-right">
                           <span
                             className={
                               seg.margin >= 30
@@ -660,13 +669,13 @@ function MetricasLentesPageContent() {
                           >
                             {seg.margin.toFixed(1)}%
                           </span>
-                        </td>
-                        <td className="py-2 px-3 text-right">{seg.qty}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell data-label="Qtd" className="py-2 px-3 text-right">{seg.qty}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
         </>

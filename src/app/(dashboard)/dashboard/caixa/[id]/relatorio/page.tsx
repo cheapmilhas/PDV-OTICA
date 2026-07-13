@@ -5,6 +5,16 @@ import { useParams } from "next/navigation";
 import { Loader2, Printer } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { formatCurrency } from "@/lib/utils";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
@@ -158,30 +168,32 @@ function RelatorioFechamentoCaixaContent() {
         {/* Resumo por Forma de Pagamento */}
         <div className="border rounded-lg p-6 mb-6">
           <h2 className="text-xl font-semibold mb-4">Resumo de Vendas por Forma de Pagamento</h2>
-          <table className="w-full">
-            <thead>
-              <tr className="border-b">
-                <th className="text-left py-2">Forma de Pagamento</th>
-                <th className="text-right py-2">Valor</th>
-              </tr>
-            </thead>
-            <tbody>
-              {Object.entries(paymentSummary).map(([method, value]) => (
-                <tr key={method} className="border-b">
-                  <td className="py-2">{getMethodLabel(method)}</td>
-                  <td className="text-right">{formatCurrency(value)}</td>
-                </tr>
-              ))}
-            </tbody>
-            <tfoot>
-              <tr className="font-bold">
-                <td className="pt-2">Total</td>
-                <td className="text-right pt-2">
-                  {formatCurrency(Object.values(paymentSummary).reduce((sum, val) => sum + val, 0))}
-                </td>
-              </tr>
-            </tfoot>
-          </table>
+          <ResponsiveTable minWidth={640}>
+            <Table className="w-full">
+              <TableHeader>
+                <TableRow className="border-b">
+                  <TableHead className="text-left py-2">Forma de Pagamento</TableHead>
+                  <TableHead className="text-right py-2">Valor</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {Object.entries(paymentSummary).map(([method, value]) => (
+                  <TableRow key={method} className="border-b">
+                    <TableCell className="py-2">{getMethodLabel(method)}</TableCell>
+                    <TableCell className="text-right">{formatCurrency(value)}</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+              <TableFooter>
+                <TableRow className="font-bold">
+                  <TableCell className="pt-2">Total</TableCell>
+                  <TableCell className="text-right pt-2">
+                    {formatCurrency(Object.values(paymentSummary).reduce((sum, val) => sum + val, 0))}
+                  </TableCell>
+                </TableRow>
+              </TableFooter>
+            </Table>
+          </ResponsiveTable>
         </div>
 
         {/* Resumo Financeiro */}
