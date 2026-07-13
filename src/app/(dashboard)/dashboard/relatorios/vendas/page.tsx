@@ -6,6 +6,15 @@ import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
 import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -361,45 +370,45 @@ function RelatorioVendasPageContent() {
               <CardTitle>Vendas Detalhadas ({data.sales.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Data</th>
-                      <th className="text-left p-2">Cliente</th>
-                      <th className="text-left p-2">Vendedor</th>
-                      <th className="text-right p-2">Total</th>
-                      <th className="text-center p-2">Status</th>
-                      <th className="text-left p-2">Pagamento</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={640}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Data</TableHead>
+                      <TableHead className="text-left p-2">Cliente</TableHead>
+                      <TableHead className="text-left p-2">Vendedor</TableHead>
+                      <TableHead className="text-right p-2">Total</TableHead>
+                      <TableHead className="text-center p-2">Status</TableHead>
+                      <TableHead className="text-left p-2">Pagamento</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.sales.slice(0, 50).map((sale) => (
-                      <tr key={sale.id} className="border-b hover:bg-muted/50">
-                        <td className="p-2">{format(new Date(sale.date), 'dd/MM/yyyy HH:mm')}</td>
-                        <td className="p-2">{sale.customerName || "—"}</td>
-                        <td className="p-2">{sale.sellerName}</td>
-                        <td className="p-2 text-right font-medium">{formatCurrency(sale.total)}</td>
-                        <td className="p-2 text-center">
+                      <TableRow key={sale.id} className="border-b hover:bg-muted/50">
+                        <TableCell data-label="Data" className="p-2">{format(new Date(sale.date), 'dd/MM/yyyy HH:mm')}</TableCell>
+                        <TableCell data-label="Cliente" className="p-2">{sale.customerName || "—"}</TableCell>
+                        <TableCell data-label="Vendedor" className="p-2">{sale.sellerName}</TableCell>
+                        <TableCell data-label="Total" className="p-2 text-right font-medium">{formatCurrency(sale.total)}</TableCell>
+                        <TableCell data-label="Status" className="p-2 text-center">
                           <span className={`px-2 py-1 rounded text-xs ${
                             sale.status === 'COMPLETED' ? 'bg-green-100 text-green-800' : 'bg-red-100 text-red-800'
                           }`}>
                             {sale.status === 'COMPLETED' ? 'Concluída' : 'Cancelada'}
                           </span>
-                        </td>
-                        <td className="p-2 text-xs">
+                        </TableCell>
+                        <TableCell data-label="Pagamento" className="p-2 text-xs">
                           {sale.paymentMethods.map(m => PAYMENT_METHOD_LABELS[m]).join(', ')}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-                {data.sales.length > 50 && (
-                  <p className="text-sm text-muted-foreground mt-4 text-center">
-                    Mostrando 50 de {data.sales.length} vendas. Use os filtros para refinar.
-                  </p>
-                )}
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
+              {data.sales.length > 50 && (
+                <p className="text-sm text-muted-foreground mt-4 text-center">
+                  Mostrando 50 de {data.sales.length} vendas. Use os filtros para refinar.
+                </p>
+              )}
             </CardContent>
           </Card>
         </>

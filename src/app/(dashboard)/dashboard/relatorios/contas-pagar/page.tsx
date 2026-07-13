@@ -502,32 +502,32 @@ function RelatorioContasPagarPageContent() {
               <CardTitle>Contas a Pagar</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Fornecedor</th>
-                      <th className="text-left p-2">Descrição</th>
-                      <th className="text-right p-2">Vencimento</th>
-                      <th className="text-right p-2">Valor</th>
-                      <th className="text-center p-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={640}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Fornecedor</TableHead>
+                      <TableHead className="text-left p-2">Descrição</TableHead>
+                      <TableHead className="text-right p-2">Vencimento</TableHead>
+                      <TableHead className="text-right p-2">Valor</TableHead>
+                      <TableHead className="text-center p-2">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.payables.slice(0, 50).map((payable) => (
-                      <tr key={payable.id} className="border-b">
-                        <td className="p-2">{payable.supplierName || "N/A"}</td>
-                        <td className="p-2">{payable.description || "-"}</td>
-                        <td className="text-right p-2">
+                      <TableRow key={payable.id} className="border-b">
+                        <TableCell data-label="Fornecedor" className="p-2">{payable.supplierName || "N/A"}</TableCell>
+                        <TableCell data-label="Descrição" className="p-2">{payable.description || "-"}</TableCell>
+                        <TableCell data-label="Vencimento" className="text-right p-2">
                           {new Date(payable.dueDate).toLocaleDateString("pt-BR")}
                           {payable.daysOverdue > 0 && (
                             <span className="text-red-600 text-xs ml-2">
                               ({payable.daysOverdue}d atraso)
                             </span>
                           )}
-                        </td>
-                        <td className="text-right p-2">{formatCurrency(payable.amount)}</td>
-                        <td className="text-center p-2">
+                        </TableCell>
+                        <TableCell data-label="Valor" className="text-right p-2">{formatCurrency(payable.amount)}</TableCell>
+                        <TableCell data-label="Status" className="text-center p-2">
                           <span
                             className={`px-2 py-1 rounded text-xs ${
                               payable.daysOverdue > 0
@@ -537,12 +537,12 @@ function RelatorioContasPagarPageContent() {
                           >
                             {payable.agingCategory}
                           </span>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
         </>
