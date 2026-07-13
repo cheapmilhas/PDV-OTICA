@@ -24,6 +24,8 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Textarea } from "@/components/ui/textarea";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 
 const CATEGORY_LABELS: Record<string, string> = {
   SUPPLIERS: "Fornecedores",
@@ -271,7 +273,7 @@ export default function DespesasRecorrentesPage() {
         </div>
 
         {/* Table */}
-        <div className="bg-white rounded-lg border overflow-hidden">
+        <div className="bg-white rounded-lg border">
           {loading ? (
             <div className="p-8 text-center text-gray-400">Carregando...</div>
           ) : items.length === 0 ? (
@@ -279,76 +281,78 @@ export default function DespesasRecorrentesPage() {
               Nenhuma despesa recorrente cadastrada
             </div>
           ) : (
-            <table className="w-full text-sm">
-              <thead className="bg-gray-50 border-b">
-                <tr>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Descrição</th>
-                  <th className="text-left px-4 py-3 font-medium text-gray-600">Categoria</th>
-                  <th className="text-right px-4 py-3 font-medium text-gray-600">Valor</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Dia</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Frequência</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Status</th>
-                  <th className="text-center px-4 py-3 font-medium text-gray-600">Ações</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-gray-100">
-                {items.map((item) => (
-                  <tr key={item.id} className={`hover:bg-gray-50 ${!item.active ? "opacity-50" : ""}`}>
-                    <td className="px-4 py-3 font-medium text-gray-900">{item.description}</td>
-                    <td className="px-4 py-3 text-gray-600">
-                      {CATEGORY_LABELS[item.category] ?? item.category}
-                    </td>
-                    <td className="px-4 py-3 text-right font-medium text-gray-900">
-                      {formatCurrency(item.amount)}
-                    </td>
-                    <td className="px-4 py-3 text-center text-gray-600">{item.dayOfMonth}</td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge variant="outline">
-                        {FREQUENCY_LABELS[item.frequency] ?? item.frequency}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <Badge variant={item.active ? "default" : "secondary"}>
-                        {item.active ? "Ativa" : "Inativa"}
-                      </Badge>
-                    </td>
-                    <td className="px-4 py-3 text-center">
-                      <div className="flex items-center justify-center gap-1">
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          onClick={() => openEdit(item)}
-                          title="Editar"
-                        >
-                          <Pencil className="h-4 w-4" />
-                        </Button>
-                        {item.active ? (
+            <ResponsiveTable cards minWidth={720}>
+              <Table className="w-full text-sm">
+                <TableHeader className="bg-gray-50 border-b">
+                  <TableRow>
+                    <TableHead className="text-left px-4 py-3 font-medium text-gray-600">Descrição</TableHead>
+                    <TableHead className="text-left px-4 py-3 font-medium text-gray-600">Categoria</TableHead>
+                    <TableHead className="text-right px-4 py-3 font-medium text-gray-600">Valor</TableHead>
+                    <TableHead className="text-center px-4 py-3 font-medium text-gray-600">Dia</TableHead>
+                    <TableHead className="text-center px-4 py-3 font-medium text-gray-600">Frequência</TableHead>
+                    <TableHead className="text-center px-4 py-3 font-medium text-gray-600">Status</TableHead>
+                    <TableHead className="text-center px-4 py-3 font-medium text-gray-600">Ações</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody className="divide-y divide-gray-100">
+                  {items.map((item) => (
+                    <TableRow key={item.id} className={`hover:bg-gray-50 ${!item.active ? "opacity-50" : ""}`}>
+                      <TableCell data-label="Descrição" className="px-4 py-3 font-medium text-gray-900">{item.description}</TableCell>
+                      <TableCell data-label="Categoria" className="px-4 py-3 text-gray-600">
+                        {CATEGORY_LABELS[item.category] ?? item.category}
+                      </TableCell>
+                      <TableCell data-label="Valor" className="px-4 py-3 text-right font-medium text-gray-900">
+                        {formatCurrency(item.amount)}
+                      </TableCell>
+                      <TableCell data-label="Dia" className="px-4 py-3 text-center text-gray-600">{item.dayOfMonth}</TableCell>
+                      <TableCell data-label="Frequência" className="px-4 py-3 text-center">
+                        <Badge variant="outline">
+                          {FREQUENCY_LABELS[item.frequency] ?? item.frequency}
+                        </Badge>
+                      </TableCell>
+                      <TableCell data-label="Status" className="px-4 py-3 text-center">
+                        <Badge variant={item.active ? "default" : "secondary"}>
+                          {item.active ? "Ativa" : "Inativa"}
+                        </Badge>
+                      </TableCell>
+                      <TableCell data-label="" className="px-4 py-3 text-center">
+                        <div className="flex items-center justify-center gap-1">
                           <Button
                             variant="ghost"
                             size="sm"
-                            onClick={() => handleDeactivate(item.id)}
-                            title="Desativar"
-                            className="text-red-500 hover:text-red-700"
+                            onClick={() => openEdit(item)}
+                            title="Editar"
                           >
-                            <Trash2 className="h-4 w-4" />
+                            <Pencil className="h-4 w-4" />
                           </Button>
-                        ) : (
-                          <Button
-                            variant="ghost"
-                            size="sm"
-                            onClick={() => handleReactivate(item.id)}
-                            title="Reativar"
-                            className="text-green-600 hover:text-green-800"
-                          >
-                            <RefreshCw className="h-4 w-4" />
-                          </Button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
-              </tbody>
-            </table>
+                          {item.active ? (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleDeactivate(item.id)}
+                              title="Desativar"
+                              className="text-red-500 hover:text-red-700"
+                            >
+                              <Trash2 className="h-4 w-4" />
+                            </Button>
+                          ) : (
+                            <Button
+                              variant="ghost"
+                              size="sm"
+                              onClick={() => handleReactivate(item.id)}
+                              title="Reativar"
+                              className="text-green-600 hover:text-green-800"
+                            >
+                              <RefreshCw className="h-4 w-4" />
+                            </Button>
+                          )}
+                        </div>
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </ResponsiveTable>
           )}
         </div>
       </div>

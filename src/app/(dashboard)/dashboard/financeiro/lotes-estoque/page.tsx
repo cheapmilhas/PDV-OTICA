@@ -23,6 +23,7 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import {
   Dialog,
   DialogContent,
@@ -495,7 +496,7 @@ function LotesEstoquePage() {
       {!loading && lots.length > 0 && (
         <>
           <Card>
-            <div className="overflow-x-auto">
+            <ResponsiveTable cards minWidth={800}>
               <Table>
                 <TableHeader>
                   <TableRow>
@@ -513,25 +514,25 @@ function LotesEstoquePage() {
                 <TableBody>
                   {lots.map((lot) => (
                     <TableRow key={lot.id}>
-                      <TableCell className="font-medium max-w-[200px] truncate">
+                      <TableCell data-label="Produto" className="font-medium max-w-[200px] truncate">
                         {lot.product?.name || "-"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="SKU" className="text-muted-foreground">
                         {lot.product?.sku || "-"}
                       </TableCell>
-                      <TableCell>
+                      <TableCell data-label="Fornecedor">
                         {lot.supplier?.name || "-"}
                       </TableCell>
-                      <TableCell className="text-muted-foreground">
+                      <TableCell data-label="NF" className="text-muted-foreground">
                         {lot.invoiceNumber || "-"}
                       </TableCell>
-                      <TableCell className="whitespace-nowrap">
+                      <TableCell data-label="Entrada" className="whitespace-nowrap">
                         {formatDate(lot.acquiredAt)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-label="Qtd Original" className="text-right">
                         {Number(lot.qtyIn)}
                       </TableCell>
-                      <TableCell className="text-right">
+                      <TableCell data-label="Qtd Restante" className="text-right">
                         <Badge
                           variant="secondary"
                           className={getQtyBadge(
@@ -542,17 +543,17 @@ function LotesEstoquePage() {
                           {Number(lot.qtyRemaining)}
                         </Badge>
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap">
+                      <TableCell data-label="Custo Unit" className="text-right whitespace-nowrap">
                         {formatCurrency(Number(lot.unitCost))}
                       </TableCell>
-                      <TableCell className="text-right whitespace-nowrap font-semibold">
+                      <TableCell data-label="Custo Total" className="text-right whitespace-nowrap font-semibold">
                         {formatCurrency(Number(lot.totalCost))}
                       </TableCell>
                     </TableRow>
                   ))}
                 </TableBody>
               </Table>
-            </div>
+            </ResponsiveTable>
           </Card>
 
           {/* Pagination */}

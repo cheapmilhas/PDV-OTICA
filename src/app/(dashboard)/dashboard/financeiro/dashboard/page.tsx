@@ -34,6 +34,8 @@ import {
 import { format, subDays } from "date-fns";
 import { ptBR } from "date-fns/locale";
 import { formatCurrency } from "@/lib/utils";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from "@/components/ui/table";
 import toast from "react-hot-toast";
 import {
   BarChart,
@@ -619,36 +621,36 @@ function DashboardFinanceiroContent() {
                 <CardTitle className="text-base">Ranking de Vendedores</CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="p-2 text-left">#</th>
-                        <th className="p-2 text-left">Vendedor</th>
-                        <th className="p-2 text-right">Qtd. Vendas</th>
-                        <th className="p-2 text-right">Total Vendido</th>
-                        <th className="p-2 text-right">Ticket Médio</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <ResponsiveTable cards minWidth={640}>
+                  <Table className="w-full text-sm">
+                    <TableHeader>
+                      <TableRow className="border-b">
+                        <TableHead className="p-2 text-left">#</TableHead>
+                        <TableHead className="p-2 text-left">Vendedor</TableHead>
+                        <TableHead className="p-2 text-right">Qtd. Vendas</TableHead>
+                        <TableHead className="p-2 text-right">Total Vendido</TableHead>
+                        <TableHead className="p-2 text-right">Ticket Médio</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {data.topSellers.map((seller, index) => (
-                        <tr key={seller.userId} className="border-b">
-                          <td className="p-2 font-medium">{index + 1}</td>
-                          <td className="p-2">{seller.name}</td>
-                          <td className="p-2 text-right">{seller.salesCount}</td>
-                          <td className="p-2 text-right font-semibold">
+                        <TableRow key={seller.userId} className="border-b">
+                          <TableCell data-label="#" className="p-2 font-medium">{index + 1}</TableCell>
+                          <TableCell data-label="Vendedor" className="p-2">{seller.name}</TableCell>
+                          <TableCell data-label="Qtd. Vendas" className="p-2 text-right">{seller.salesCount}</TableCell>
+                          <TableCell data-label="Total Vendido" className="p-2 text-right font-semibold">
                             {formatCurrency(seller.totalSales)}
-                          </td>
-                          <td className="p-2 text-right text-muted-foreground">
+                          </TableCell>
+                          <TableCell data-label="Ticket Médio" className="p-2 text-right text-muted-foreground">
                             {seller.salesCount > 0
                               ? formatCurrency(seller.totalSales / seller.salesCount)
                               : formatCurrency(0)}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
-                </div>
+                    </TableBody>
+                  </Table>
+                </ResponsiveTable>
               </CardContent>
             </Card>
           )}
