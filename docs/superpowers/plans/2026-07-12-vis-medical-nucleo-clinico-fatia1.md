@@ -14,7 +14,7 @@
 - Husky pre-commit roda `tsc` no projeto todo (lento) → rodar `tsc --noEmit` manual e commitar com `--no-verify`.
 - Trabalhar em worktree isolado (branch `feat/vis-medical-clinico-f1`).
 - **NÃO aplicar migração em prod nem deployar sem OK explícito do dono.**
-- Enum novo = `CREATE TYPE` direto (via `DO $$ IF NOT EXISTS` idempotente). `ADD VALUE` a enum existente = top-level, nunca em `DO $$`.
+- Enum novo = `CREATE TYPE` via `DO $$ IF NOT EXISTS` (defensivo; migrate deploy roda 1x, então idempotência não é garantida pelos ADD CONSTRAINT — não alegar idempotência total). `ADD VALUE` a enum existente = top-level, nunca em `DO $$`.
 - RBAC runtime = `catalog.ts` (roles PT) + banco. NÃO o `ROLE_PERMISSIONS` de `permissions.ts` (EN, legado/estático).
 
 ---
@@ -178,10 +178,15 @@ E em `model Prescription`, adicionar o campo de vínculo + relação:
   refractionExamId String? @unique
 ```
 
-E as back-relations correspondentes em `Company`, `Customer`, `Doctor` (arrays: `clinicalAppointments ClinicalAppointment[]`, `encounters Encounter[]`, `refractionExams RefractionExam[]`) — o `prisma validate` vai exigir; adicionar conforme o erro apontar.
+Back-relations EXATAS a adicionar (o Codex corrigiu: Customer/Doctor NÃO se relacionam com RefractionExam — só com Appointment/Encounter):
+- `Company`: `clinicalAppointments ClinicalAppointment[]`, `encounters Encounter[]`, `refractionExams RefractionExam[]`
+- `Customer`: `clinicalAppointments ClinicalAppointment[]`, `encounters Encounter[]` (NÃO refractionExams)
+- `Doctor`: `clinicalAppointments ClinicalAppointment[]`, `encounters Encounter[]` (NÃO refractionExams)
 
-> Nota: `RefractionExam` NÃO tem FK direta para `Prescription`. O vínculo mora em `Prescription.refractionExamId` (aponta pra trás, padrão saleId). Adicionar a relação inversa em `Prescription`:
-> `refractionExam RefractionExam? @relation(fields: [refractionExamId], references: [id], onDelete: SetNull)` — e `prescription Prescription?` em RefractionExam via `@relation`. Ajustar nomes de relação se `prisma validate` reclamar de ambiguidade.
+> Vínculo `Prescription ↔ RefractionExam` (1:1 opcional, sem ambiguidade — só uma relação entre os dois models, o Prisma infere sem nome):
+> - em `Prescription`: `refractionExam RefractionExam? @relation(fields: [refractionExamId], references: [id], onDelete: SetNull)` (o campo `refractionExamId String? @unique` já declarado).
+> - em `RefractionExam`: `prescription Prescription?` (lado inverso, sem `fields`).
+> Isso é suficiente; NÃO precisa de nome de relação explícito.
 
 - [ ] **Step 3: Escrever a migração .sql**
 
@@ -303,19 +308,60 @@ Expected: schema válido + client gerado. NÃO rodar migrate dev/deploy.
 - Create: `src/lib/clinical-guard.ts`
 - Test: `src/lib/__tests__/clinical-guard.test.ts`
 
-- [ ] **Step 1: Teste falho** — `clinical-guard.test.ts`:
+- [ ] **Step 1: Teste falho** — `clinical-guard.test.ts`. Além das funções puras, testar o GATE de verdade com Prisma/auth mockados (o Codex apontou que só testar a constante não sustenta a afirmação de segurança):
 
 ```ts
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
 import { CLINICAL_CONSENT_SCOPE, isVisMedicalCompany } from "@/lib/clinical-guard";
 
-describe("clinical guard", () => {
-  it("define o scope de consentimento clínico canônico", () => {
-    expect(CLINICAL_CONSENT_SCOPE).toBe("clinical_health_data");
-  });
-  it("isVisMedicalCompany true só para VIS_MEDICAL", () => {
+// mocks de auth-helpers e prisma (padrão do projeto — ver admin-session.test.ts)
+vi.mock("@/lib/auth-helpers", () => ({
+  requirePermission: vi.fn(),
+  getCompanyId: vi.fn(async () => "co-med"),
+}));
+vi.mock("@/lib/prisma", () => ({ prisma: { company: { findUnique: vi.fn() }, consentRecord: { findMany: vi.fn() } } }));
+
+describe("clinical guard — puros", () => {
+  it("scope canônico", () => { expect(CLINICAL_CONSENT_SCOPE).toBe("clinical_health_data"); });
+  it("isVisMedicalCompany", () => {
     expect(isVisMedicalCompany("VIS_MEDICAL")).toBe(true);
     expect(isVisMedicalCompany("VIS_APP")).toBe(false);
+  });
+});
+
+describe("requireClinicalContext — gate real", () => {
+  it("BLOQUEIA conta VIS_APP", async () => {
+    const { requireClinicalContext } = await import("@/lib/clinical-guard");
+    const { prisma } = await import("@/lib/prisma");
+    (prisma.company.findUnique as any).mockResolvedValue({ platformProduct: "VIS_APP" });
+    await expect(requireClinicalContext("clinical.encounter.create")).rejects.toThrow();
+  });
+  it("BLOQUEIA empresa inexistente", async () => {
+    const { requireClinicalContext } = await import("@/lib/clinical-guard");
+    const { prisma } = await import("@/lib/prisma");
+    (prisma.company.findUnique as any).mockResolvedValue(null);
+    await expect(requireClinicalContext("clinical.encounter.create")).rejects.toThrow();
+  });
+  it("PERMITE conta VIS_MEDICAL e retorna companyId", async () => {
+    const { requireClinicalContext } = await import("@/lib/clinical-guard");
+    const { prisma } = await import("@/lib/prisma");
+    (prisma.company.findUnique as any).mockResolvedValue({ platformProduct: "VIS_MEDICAL" });
+    await expect(requireClinicalContext("clinical.encounter.create")).resolves.toEqual({ companyId: "co-med" });
+  });
+});
+
+describe("assertClinicalConsent — token exato, não substring", () => {
+  it("REJEITA scope que só contém a substring (ex. 'not_clinical_health_data')", async () => {
+    const { assertClinicalConsent } = await import("@/lib/clinical-guard");
+    const { prisma } = await import("@/lib/prisma");
+    (prisma.consentRecord.findMany as any).mockResolvedValue([{ scope: "not_clinical_health_data" }]);
+    await expect(assertClinicalConsent("co", "cust")).rejects.toThrow();
+  });
+  it("ACEITA scope com o token exato entre outros (CSV)", async () => {
+    const { assertClinicalConsent } = await import("@/lib/clinical-guard");
+    const { prisma } = await import("@/lib/prisma");
+    (prisma.consentRecord.findMany as any).mockResolvedValue([{ scope: "marketing, clinical_health_data" }]);
+    await expect(assertClinicalConsent("co", "cust")).resolves.toBeUndefined();
   });
 });
 ```
@@ -358,18 +404,29 @@ export async function requireClinicalContext(permission: Permission | string): P
   return { companyId };
 }
 
-/** Consentimento clínico vigente (não revogado) para o paciente, antes de escrever dado clínico. */
+/** Consentimento clínico vigente (não revogado) para o paciente, antes de escrever dado clínico.
+ *  `scope` é CSV livre (schema L536) → NÃO usar `contains` (substring aceita "not_clinical_health_data").
+ *  Buscar candidatos não-revogados e comparar por TOKEN exato (split/trim). */
 export async function assertClinicalConsent(companyId: string, customerId: string): Promise<void> {
-  const consent = await prisma.consentRecord.findFirst({
-    where: { companyId, customerId, scope: { contains: CLINICAL_CONSENT_SCOPE }, revokedAt: null },
+  const consents = await prisma.consentRecord.findMany({
+    where: { companyId, customerId, revokedAt: null },
+    select: { scope: true },
   });
-  if (!consent) {
-    throw forbiddenError("Consentimento clínico do paciente não registrado ou revogado.");
-  }
+  const ok = consents.some((c) =>
+    c.scope.split(",").map((s) => s.trim()).includes(CLINICAL_CONSENT_SCOPE),
+  );
+  if (!ok) throw forbiddenError("Consentimento clínico do paciente não registrado ou revogado.");
+}
+
+// Variante que recebe o transaction client (usada na emissão atômica da Task 5):
+export async function assertClinicalConsentTx(tx: any, companyId: string, customerId: string): Promise<void> {
+  const consents = await tx.consentRecord.findMany({ where: { companyId, customerId, revokedAt: null }, select: { scope: true } });
+  const ok = consents.some((c: { scope: string }) => c.scope.split(",").map((s) => s.trim()).includes(CLINICAL_CONSENT_SCOPE));
+  if (!ok) throw forbiddenError("Consentimento clínico do paciente não registrado ou revogado.");
 }
 ```
 
-> Verificar ao implementar: nome real do model de consentimento no client Prisma (`consentRecord`) e os campos (`companyId`, `customerId`, `scope`, `revokedAt`) — confirmados no schema L524-543. Ajustar se o `scope` for igualdade exata em vez de CSV `contains`.
+> Confirmado no schema L524-543: model `ConsentRecord` (client: `consentRecord`), campos `companyId`, `customerId`, `scope String`, `revokedAt`. O `scope` é CSV — por isso a comparação por token exato acima (não substring).
 
 - [ ] **Step 4: Rodar, confirmar passa.** Vitest → PASS.
 - [ ] **Step 5: tsc + commit** (`--no-verify`).
@@ -476,7 +533,7 @@ describe("encounter guards", () => {
 
 - [ ] **Step 2: Rodar, confirmar falha.**
 
-- [ ] **Step 3: Implementar service:** `assertEncounterEditable(status)` (guard puro: `if status==="SIGNED" throw businessRuleError`), `toAppointmentDTO(row)` (whitelist explícita — só id/customerId/customerName/scheduledStart/status/doctorId, NUNCA campos SOAP), `createOrUpdateEncounter` (idempotente por appointmentId; chama `assertClinicalConsent` antes de escrever; grava `CustomerAccessLog` com resourceType "clinical_encounter"), `signEncounter` (status→SIGNED, signedAt). Leitura de Encounter não-SIGNED restrita a `performedByUserId`/`doctorId` (+ admin).
+- [ ] **Step 3: Implementar service:** `assertEncounterEditable(status)` (guard puro: `if status==="SIGNED" throw businessRuleError`), `toAppointmentDTO(row)` (whitelist explícita — só id/customerId/customerName/scheduledStart/status/doctorId, NUNCA campos SOAP), `createOrUpdateEncounter` (idempotente por appointmentId — usar `prisma.encounter.upsert({ where: { appointmentId }, ... })` OU tratar `P2002` do `@unique`; NÃO find-then-create que sofre race, como o Codex apontou; chama `assertClinicalConsent` antes de escrever; grava `CustomerAccessLog` com resourceType "clinical_encounter"), `signEncounter` (status→SIGNED, signedAt). Leitura de Encounter não-SIGNED restrita a `performedByUserId`/`doctorId` (+ admin). **Nota walk-in:** com `appointmentId=null`, o upsert por appointmentId não serve — nesse caso é create direto (múltiplos NULL não colidem no @unique).
 
 - [ ] **Step 4: Rodar, confirmar passa.**
 
@@ -486,36 +543,109 @@ describe("encounter guards", () => {
 
 ---
 
-## Task 5: Refração + gerar receita (reusa upsertPrescription)
+## Task 5: Refração + gerar receita (emissão atômica DEDICADA)
+
+> **Correções da revisão do Codex (confirmadas no código, todas incorporadas abaixo):**
+> - **BLOQUEANTE 1:** `upsertPrescription` (`livro-receitas.service.ts`) NÃO aceita `odSph/odCyl` flat — sua entrada é `od: {esf,cil,eixo,add,dnp,...}` / `oe: {...}` (`EyeValuesInput` L28). Mapeamento obrigatório: `odSph→od.esf`, `odCyl→od.cil`, `odAxis→od.eixo`, `odAdd→od.add`, `pdFar→od.dnp`, `pdNear→oe.dnp` (o serviço documenta pd↔dnp como best-effort). 
+> - **BLOQUEANTE 2:** `upsertPrescription` usa o `prisma` GLOBAL (L169/L179), NÃO aceita `TransactionClient` → chamá-lo dentro de `$transaction` NÃO o torna atômico. Solução: NÃO reusar `upsertPrescription` cru; escrever uma função de emissão DEDICADA que cria Prescription+Values dentro de `prisma.$transaction(async (tx) => ...)` usando `tx`, com `refractionExamId` setado no MESMO `create` (não em 2 passos), espelhando o padrão de tratamento de `P2002` que o serviço já usa para `saleId` (L200-215).
 
 **Files:**
 - Create: `src/lib/validations/refraction.schema.ts`, `src/services/refraction.service.ts`, `src/app/api/clinical/refractions/route.ts`, `src/app/api/clinical/refractions/[id]/issue/route.ts`
 - Test: `src/services/__tests__/refraction-issue.service.test.ts`
 
-- [ ] **Step 1: Teste falho — a decisão de emissão (guard de duplo-clique + doctorId obrigatório).** Função pura:
+- [ ] **Step 1: Teste falho — guard de emissão (doctorId obrigatório + já-emitida).** Nome corrigido (`alreadyIssued`, não `refractionExamId` — o exame de entrada SEMPRE existe; o que barra re-emissão é a receita já existir):
 
 ```ts
 import { describe, it, expect } from "vitest";
 import { assertIssuable } from "@/services/refraction.service";
 
-describe("issue prescription from refraction", () => {
+describe("assertIssuable", () => {
   it("exige doctorId no momento da emissão", () => {
-    expect(() => assertIssuable({ refractionExamId: null, doctorId: "d" })).not.toThrow();
-    expect(() => assertIssuable({ refractionExamId: null, doctorId: null })).toThrow(/doctorId/i);
+    expect(() => assertIssuable({ doctorId: "d", alreadyIssued: false })).not.toThrow();
+    expect(() => assertIssuable({ doctorId: null, alreadyIssued: false })).toThrow(/doctorId/i);
   });
-  it("rejeita re-emissão (refractionExamId já vinculado)", () => {
-    expect(() => assertIssuable({ refractionExamId: "px", doctorId: "d" })).toThrow(/já/i);
+  it("rejeita re-emissão quando já existe receita para o exame", () => {
+    expect(() => assertIssuable({ doctorId: "d", alreadyIssued: true })).toThrow(/já/i);
   });
 });
 ```
 
 - [ ] **Step 2: Rodar, confirmar falha.**
 
-- [ ] **Step 3: Implementar.** `assertIssuable({refractionExamId, doctorId})` (puro: doctorId null→throw; refractionExamId já setado→throw). `issuePrescriptionFromRefraction(refractionExamId, companyId, doctorId, userId)`:
-  - Transação: revalida guard (`SELECT refractionExamId FROM Prescription WHERE refractionExamId = $id` — se existe, throw); lê `RefractionExam`; chama `assertClinicalConsent`; chama **`upsertPrescription`** (reuso de `livro-receitas.service.ts`) passando os valores de grau mapeados (`odSph/odCyl/odAxis/odAdd/oeSph/oeCyl/oeAxis/oeAdd/pdFar/pdNear` — nomes idênticos, cópia 1:1), `doctorId`, `companyId`, `customerId` (do Encounter), `createdByUserId: userId`; seta `Prescription.refractionExamId = refractionExamId`; grava CustomerAccessLog "clinical_prescription".
-  - O guard de duplo-clique é o `refractionExamId @unique` + o SELECT prévio na transação.
+- [ ] **Step 3: Implementar.**
+
+`assertIssuable({ doctorId, alreadyIssued })` — puro: `if (!doctorId) throw businessRuleError("doctorId obrigatório na emissão")`; `if (alreadyIssued) throw businessRuleError("Receita já emitida para este exame")`.
+
+`buildEyeInput(refraction)` — mapeia o `RefractionExam` para a forma do serviço:
+```ts
+// od: { esf: odSph, cil: odCyl, eixo: odAxis, add: odAdd, dnp: pdFar }
+// oe: { esf: oeSph, cil: oeCyl, eixo: oeAxis, add: oeAdd, dnp: pdNear }
+```
+
+`issuePrescriptionFromRefraction(refractionExamId, ctx)` — atômica e cross-tenant-safe:
+```ts
+export async function issuePrescriptionFromRefraction(
+  refractionExamId: string,
+  ctx: { companyId: string; doctorId: string; userId: string },
+) {
+  return prisma.$transaction(async (tx) => {
+    // 1. Ler refração ESCOPADA por companyId (anti-IDOR cross-tenant) + o encounter
+    const refraction = await tx.refractionExam.findFirst({
+      where: { id: refractionExamId, companyId: ctx.companyId },
+      include: { encounter: { select: { customerId: true, companyId: true, doctorId: true } } },
+    });
+    if (!refraction) throw notFoundError("Refração não encontrada nesta clínica.");
+
+    // 2. Validar que o doctorId recebido pertence à MESMA company (não basta a FK existir)
+    const doctor = await tx.doctor.findFirst({
+      where: { id: ctx.doctorId, companyId: ctx.companyId }, select: { id: true },
+    });
+    if (!doctor) throw businessRuleError("Médico inválido para esta clínica.");
+
+    // 3. Consentimento clínico vigente (dentro da tx, mesma company)
+    await assertClinicalConsentTx(tx, ctx.companyId, refraction.encounter.customerId);
+
+    // 4. Guard de já-emitida
+    const existing = await tx.prescription.findUnique({
+      where: { refractionExamId }, select: { id: true },
+    });
+    assertIssuable({ doctorId: ctx.doctorId, alreadyIssued: !!existing });
+
+    // 5. Criar Prescription + Values + vínculo NO MESMO create (tx), tratando P2002 do @unique
+    try {
+      const created = await tx.prescription.create({
+        data: {
+          companyId: ctx.companyId,
+          customerId: refraction.encounter.customerId,
+          doctorId: ctx.doctorId,
+          createdByUserId: ctx.userId,
+          refractionExamId,
+          issuedAt: new Date(),
+          expiresAt: addMonths(new Date(), 12),
+          status: "COMPLETA",
+          values: { create: mapRefractionToValues(refraction) }, // odSph→odSph etc. (nomes idênticos no PrescriptionValues)
+        },
+        include: { values: true },
+      });
+      // 6. CustomerAccessLog "clinical_prescription" (dentro da tx)
+      await tx.customerAccessLog.create({ data: { companyId: ctx.companyId, customerId: refraction.encounter.customerId, resourceType: "clinical_prescription", resourceId: created.id, action: "issue" } });
+      return created;
+    } catch (e) {
+      // Race de duplo-clique: outro request setou refractionExamId primeiro → P2002 no @unique
+      if ((e as { code?: string })?.code === "P2002") {
+        const winner = await tx.prescription.findUnique({ where: { refractionExamId } });
+        if (winner) return winner; // idempotente: retorna a receita vencedora
+      }
+      throw e;
+    }
+  });
+}
+```
+Notas: `mapRefractionToValues` copia `odSph→odSph, odCyl→odCyl, ...` (nomes IDÊNTICOS entre RefractionExam e PrescriptionValues — cópia 1:1 direta no create nested, NÃO passa por `upsertPrescription`). `addMonths` de `date-fns` (já usado no serviço). `assertClinicalConsentTx` = variante que recebe `tx` (adicionar em clinical-guard.ts). A atomicidade é real porque tudo usa `tx`. A idempotência é o `@unique` + tratamento P2002 (padrão do saleId), NÃO o SELECT prévio.
 
 - [ ] **Step 4: Rodar, confirmar passa.**
+
+- [ ] **Step 4b: Bloquear edição de refração após SIGNED/emitida.** No service de refração (`createOrUpdateRefraction`): antes de gravar, se o `Encounter` estiver `SIGNED` OU já existir `Prescription.refractionExamId` apontando pra esta refração → `businessRuleError` (não altera medida que já virou receita/prontuário assinado). Teste dedicado.
 
 - [ ] **Step 5: Rotas** — `POST /api/clinical/refractions` (cria/atualiza refração, `requireClinicalContext("clinical.exam.create")`), `POST /api/clinical/refractions/[id]/issue` (`requireClinicalContext("clinical.prescription.issue")`).
 
@@ -536,7 +666,7 @@ describe("issue prescription from refraction", () => {
 
 ## Task 7-8: UI (agenda/fila + workspace de atendimento)
 
-> UI detalhada em subtarefas ao implementar, seguindo `2026-07-12-vis-medical-clinico-design-system.md`. Pontos fixos:
+> **Honestidade de escopo (achado do Codex, aceito):** esta seção é um ESBOÇO, não tarefas executáveis passo-a-passo como as de backend. A UI clínica (workspace de atendimento, grade de refração, fila) merece seu PRÓPRIO plano detalhado — com arquivos/rotas concretos, estados loading/error/empty, autorização de página, contrato de autosave (formato + expiração + reconciliação localStorage↔servidor), a11y/reduced-motion e testes de render. Recomendação: fechar o backend (Tasks 1-6) primeiro, validar o fluxo por API, e então escrever um plano de UI dedicado (com o design-system já pronto). O que segue são os PONTOS FIXOS que esse plano de UI deve respeitar — não a especificação completa:
 > - Reusar DS do Vis (PageContainer, StatusBadge por token, componentes mobile do overhaul).
 > - Grade de refração REUSA `DiopterKeypad` (`src/components/prescriptions/diopter-keypad.tsx`) + `DecimalInput` (`src/components/ui/decimal-input.tsx`) + inspecionar `prescription-grade-form.tsx` como base.
 > - Workspace 2 colunas (contexto paciente read-only + abas Prontuário|Refração); colapsa no mobile.
