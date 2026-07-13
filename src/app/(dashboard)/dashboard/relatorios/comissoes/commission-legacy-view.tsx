@@ -16,6 +16,16 @@ import {
 import { Label } from "@/components/ui/label";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import {
   DollarSign,
   Users,
@@ -478,48 +488,48 @@ function RelatorioComissoesPageContent() {
               <CardTitle>Vendedores ({data.sellers.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Vendedor</th>
-                      <th className="text-center p-2">Vendas</th>
-                      <th className="text-right p-2">Receita</th>
-                      <th className="text-right p-2">Comissão Total</th>
-                      <th className="text-right p-2">% Média</th>
-                      <th className="text-right p-2">Pendente</th>
-                      <th className="text-right p-2">Aprovada</th>
-                      <th className="text-right p-2">Paga</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={800}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Vendedor</TableHead>
+                      <TableHead className="text-center p-2">Vendas</TableHead>
+                      <TableHead className="text-right p-2">Receita</TableHead>
+                      <TableHead className="text-right p-2">Comissão Total</TableHead>
+                      <TableHead className="text-right p-2">% Média</TableHead>
+                      <TableHead className="text-right p-2">Pendente</TableHead>
+                      <TableHead className="text-right p-2">Aprovada</TableHead>
+                      <TableHead className="text-right p-2">Paga</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.sellers.map((seller) => (
-                      <tr key={seller.userId} className="border-b hover:bg-muted/50">
-                        <td className="p-2 font-medium">{seller.userName}</td>
-                        <td className="p-2 text-center">{seller.salesCount}</td>
-                        <td className="p-2 text-right">
+                      <TableRow key={seller.userId} className="border-b hover:bg-muted/50">
+                        <TableCell data-label="Vendedor" className="p-2 font-medium">{seller.userName}</TableCell>
+                        <TableCell data-label="Vendas" className="p-2 text-center">{seller.salesCount}</TableCell>
+                        <TableCell data-label="Receita" className="p-2 text-right">
                           {formatCurrency(seller.totalRevenue)}
-                        </td>
-                        <td className="p-2 text-right font-medium">
+                        </TableCell>
+                        <TableCell data-label="Comissão Total" className="p-2 text-right font-medium">
                           {formatCurrency(seller.totalCommission)}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="% Média" className="p-2 text-right">
                           {seller.averageCommissionPercent.toFixed(2)}%
-                        </td>
-                        <td className="p-2 text-right text-yellow-600">
+                        </TableCell>
+                        <TableCell data-label="Pendente" className="p-2 text-right text-yellow-600">
                           {formatCurrency(seller.pendingCommission)}
-                        </td>
-                        <td className="p-2 text-right text-blue-600">
+                        </TableCell>
+                        <TableCell data-label="Aprovada" className="p-2 text-right text-blue-600">
                           {formatCurrency(seller.approvedCommission)}
-                        </td>
-                        <td className="p-2 text-right text-green-600">
+                        </TableCell>
+                        <TableCell data-label="Paga" className="p-2 text-right text-green-600">
                           {formatCurrency(seller.paidCommission)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
 
@@ -531,40 +541,40 @@ function RelatorioComissoesPageContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Data</th>
-                      <th className="text-left p-2">Vendedor</th>
-                      <th className="text-left p-2">Cliente</th>
-                      <th className="text-right p-2">Valor Base</th>
-                      <th className="text-right p-2">%</th>
-                      <th className="text-right p-2">Comissão</th>
-                      <th className="text-center p-2">Status</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={720}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Data</TableHead>
+                      <TableHead className="text-left p-2">Vendedor</TableHead>
+                      <TableHead className="text-left p-2">Cliente</TableHead>
+                      <TableHead className="text-right p-2">Valor Base</TableHead>
+                      <TableHead className="text-right p-2">%</TableHead>
+                      <TableHead className="text-right p-2">Comissão</TableHead>
+                      <TableHead className="text-center p-2">Status</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.commissions.slice(0, 100).map((commission) => (
-                      <tr
+                      <TableRow
                         key={commission.id}
                         className="border-b hover:bg-muted/50"
                       >
-                        <td className="p-2">
+                        <TableCell data-label="Data" className="p-2">
                           {format(new Date(commission.saleDate), "dd/MM/yyyy HH:mm")}
-                        </td>
-                        <td className="p-2">{commission.userName}</td>
-                        <td className="p-2">{commission.customerName || "—"}</td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="Vendedor" className="p-2">{commission.userName}</TableCell>
+                        <TableCell data-label="Cliente" className="p-2">{commission.customerName || "—"}</TableCell>
+                        <TableCell data-label="Valor Base" className="p-2 text-right">
                           {formatCurrency(commission.baseAmount)}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="%" className="p-2 text-right">
                           {commission.percentage.toFixed(2)}%
-                        </td>
-                        <td className="p-2 text-right font-medium">
+                        </TableCell>
+                        <TableCell data-label="Comissão" className="p-2 text-right font-medium">
                           {formatCurrency(commission.commissionAmount)}
-                        </td>
-                        <td className="p-2 text-center">
+                        </TableCell>
+                        <TableCell data-label="Status" className="p-2 text-center">
                           <span
                             className={`px-2 py-1 rounded text-xs ${
                               STATUS_COLORS[commission.status]
@@ -572,18 +582,18 @@ function RelatorioComissoesPageContent() {
                           >
                             {STATUS_LABELS[commission.status]}
                           </span>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-                {data.commissions.length > 100 && (
-                  <p className="text-sm text-muted-foreground mt-4 text-center">
-                    Mostrando 100 de {data.commissions.length} comissões. Use os
-                    filtros para refinar.
-                  </p>
-                )}
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
+              {data.commissions.length > 100 && (
+                <p className="text-sm text-muted-foreground mt-4 text-center">
+                  Mostrando 100 de {data.commissions.length} comissões. Use os
+                  filtros para refinar.
+                </p>
+              )}
             </CardContent>
           </Card>
         </>

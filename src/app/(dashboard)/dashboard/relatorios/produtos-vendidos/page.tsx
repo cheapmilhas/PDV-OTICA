@@ -17,6 +17,16 @@ import {
 } from "@/components/ui/select";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import {
   Package,
   DollarSign,
@@ -551,26 +561,26 @@ function RelatorioProdutosVendidosPageContent() {
               <CardTitle>Produtos Detalhados ({data.products.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">ABC</th>
-                      <th className="text-left p-2">SKU</th>
-                      <th className="text-left p-2">Produto</th>
-                      <th className="text-left p-2">Categoria</th>
-                      <th className="text-left p-2">Marca</th>
-                      <th className="text-center p-2">Qtd</th>
-                      <th className="text-right p-2">Receita</th>
-                      <th className="text-right p-2">Custo</th>
-                      <th className="text-right p-2">Margem</th>
-                      <th className="text-right p-2">Margem %</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={800}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">ABC</TableHead>
+                      <TableHead className="text-left p-2">SKU</TableHead>
+                      <TableHead className="text-left p-2">Produto</TableHead>
+                      <TableHead className="text-left p-2">Categoria</TableHead>
+                      <TableHead className="text-left p-2">Marca</TableHead>
+                      <TableHead className="text-center p-2">Qtd</TableHead>
+                      <TableHead className="text-right p-2">Receita</TableHead>
+                      <TableHead className="text-right p-2">Custo</TableHead>
+                      <TableHead className="text-right p-2">Margem</TableHead>
+                      <TableHead className="text-right p-2">Margem %</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.products.map((product) => (
-                      <tr key={product.productId} className="border-b hover:bg-muted/50">
-                        <td className="p-2">
+                      <TableRow key={product.productId} className="border-b hover:bg-muted/50">
+                        <TableCell data-label="ABC" className="p-2">
                           <span
                             className="px-2 py-1 rounded text-xs font-bold text-white"
                             style={{
@@ -579,24 +589,24 @@ function RelatorioProdutosVendidosPageContent() {
                           >
                             {product.abcClass}
                           </span>
-                        </td>
-                        <td className="p-2 font-mono text-xs">{product.sku}</td>
-                        <td className="p-2">{product.productName}</td>
-                        <td className="p-2">{product.categoryName || "—"}</td>
-                        <td className="p-2">{product.brandName || "—"}</td>
-                        <td className="p-2 text-center font-medium">
+                        </TableCell>
+                        <TableCell data-label="SKU" className="p-2 font-mono text-xs">{product.sku}</TableCell>
+                        <TableCell data-label="Produto" className="p-2">{product.productName}</TableCell>
+                        <TableCell data-label="Categoria" className="p-2">{product.categoryName || "—"}</TableCell>
+                        <TableCell data-label="Marca" className="p-2">{product.brandName || "—"}</TableCell>
+                        <TableCell data-label="Qtd" className="p-2 text-center font-medium">
                           {product.qtySold}
-                        </td>
-                        <td className="p-2 text-right font-medium">
+                        </TableCell>
+                        <TableCell data-label="Receita" className="p-2 text-right font-medium">
                           {formatCurrency(product.revenue)}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="Custo" className="p-2 text-right">
                           {formatCurrency(product.totalCost)}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="Margem" className="p-2 text-right">
                           {formatCurrency(product.margin)}
-                        </td>
-                        <td className="p-2 text-right">
+                        </TableCell>
+                        <TableCell data-label="Margem %" className="p-2 text-right">
                           <span
                             className={
                               product.marginPercent >= 30
@@ -608,12 +618,12 @@ function RelatorioProdutosVendidosPageContent() {
                           >
                             {product.marginPercent.toFixed(2)}%
                           </span>
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
         </>

@@ -15,6 +15,16 @@ import {
 } from "@/components/ui/select";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import {
   Package,
   DollarSign,
@@ -464,35 +474,35 @@ function RelatorioProdutosSemGiroPageContent() {
               <CardTitle>Produtos Detalhados ({data.products.length})</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">SKU</th>
-                      <th className="text-left p-2">Produto</th>
-                      <th className="text-left p-2">Categoria</th>
-                      <th className="text-center p-2">Estoque</th>
-                      <th className="text-right p-2">Valor Estoque</th>
-                      <th className="text-center p-2">Dias Parado</th>
-                      <th className="text-center p-2">Última Venda</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={720}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">SKU</TableHead>
+                      <TableHead className="text-left p-2">Produto</TableHead>
+                      <TableHead className="text-left p-2">Categoria</TableHead>
+                      <TableHead className="text-center p-2">Estoque</TableHead>
+                      <TableHead className="text-right p-2">Valor Estoque</TableHead>
+                      <TableHead className="text-center p-2">Dias Parado</TableHead>
+                      <TableHead className="text-center p-2">Última Venda</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.products.slice(0, 100).map((product) => (
-                      <tr
+                      <TableRow
                         key={product.productId}
                         className="border-b hover:bg-muted/50"
                       >
-                        <td className="p-2 font-mono text-xs">{product.sku}</td>
-                        <td className="p-2">{product.productName}</td>
-                        <td className="p-2">{product.categoryName || "—"}</td>
-                        <td className="p-2 text-center font-medium">
+                        <TableCell data-label="SKU" className="p-2 font-mono text-xs">{product.sku}</TableCell>
+                        <TableCell data-label="Produto" className="p-2">{product.productName}</TableCell>
+                        <TableCell data-label="Categoria" className="p-2">{product.categoryName || "—"}</TableCell>
+                        <TableCell data-label="Estoque" className="p-2 text-center font-medium">
                           {product.currentStock}
-                        </td>
-                        <td className="p-2 text-right font-medium">
+                        </TableCell>
+                        <TableCell data-label="Valor Estoque" className="p-2 text-right font-medium">
                           {formatCurrency(product.stockValue)}
-                        </td>
-                        <td className="p-2 text-center">
+                        </TableCell>
+                        <TableCell data-label="Dias Parado" className="p-2 text-center">
                           <span
                             className={`px-2 py-1 rounded text-xs ${
                               product.daysWithoutMovement === 9999
@@ -506,23 +516,23 @@ function RelatorioProdutosSemGiroPageContent() {
                               ? "Nunca"
                               : `${product.daysWithoutMovement}d`}
                           </span>
-                        </td>
-                        <td className="p-2 text-center text-muted-foreground">
+                        </TableCell>
+                        <TableCell data-label="Última Venda" className="p-2 text-center text-muted-foreground">
                           {product.lastSaleDate
                             ? format(new Date(product.lastSaleDate), "dd/MM/yyyy")
                             : "—"}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-                {data.products.length > 100 && (
-                  <p className="text-sm text-muted-foreground mt-4 text-center">
-                    Mostrando 100 de {data.products.length} produtos. Use os
-                    filtros para refinar.
-                  </p>
-                )}
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
+              {data.products.length > 100 && (
+                <p className="text-sm text-muted-foreground mt-4 text-center">
+                  Mostrando 100 de {data.products.length} produtos. Use os
+                  filtros para refinar.
+                </p>
+              )}
             </CardContent>
           </Card>
         </>
