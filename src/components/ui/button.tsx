@@ -27,7 +27,9 @@ const buttonVariants = cva(
         sm: "h-8 rounded-md px-3 text-xs",
         lg: "h-10 rounded-lg px-6",
         xl: "h-11 rounded-lg px-8 text-base",
-        icon: "h-9 w-9",
+        // min-h-11 dá piso de 44px de altura no toque (WCAG 2.5.5); min-h (não h)
+        // sobrevive a override h-6/w-6 via tailwind-merge; sm:min-h-[auto] zera no desktop.
+        icon: "h-9 w-9 min-h-11 sm:min-h-[auto]",
         "icon-sm": "h-7 w-7",
         // Piso de toque Apple HIG (44px). Use em telas operadas pelo dedo
         // (checkout, receita) sem alterar a densidade do default no desktop.
