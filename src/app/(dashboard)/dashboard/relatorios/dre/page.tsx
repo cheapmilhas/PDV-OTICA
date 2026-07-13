@@ -9,6 +9,15 @@ import { Calendar } from "@/components/ui/calendar";
 import { Popover, PopoverContent, PopoverTrigger } from "@/components/ui/popover";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import {
   DollarSign,
   TrendingUp,
@@ -469,50 +478,50 @@ function RelatorioDREPageContent() {
               <CardTitle>Análise Mensal Detalhada</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Mês</th>
-                      <th className="text-right p-2">Rec. Líquida</th>
-                      <th className="text-right p-2">CMV</th>
-                      <th className="text-right p-2">Lucro Bruto</th>
-                      <th className="text-right p-2">Despesas</th>
-                      <th className="text-right p-2">EBITDA</th>
-                      <th className="text-right p-2">Lucro Líq.</th>
-                      <th className="text-right p-2">Mg. Bruta</th>
-                      <th className="text-right p-2">Mg. Líq.</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable minWidth={900}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Mês</TableHead>
+                      <TableHead className="text-right p-2">Rec. Líquida</TableHead>
+                      <TableHead className="text-right p-2">CMV</TableHead>
+                      <TableHead className="text-right p-2">Lucro Bruto</TableHead>
+                      <TableHead className="text-right p-2">Despesas</TableHead>
+                      <TableHead className="text-right p-2">EBITDA</TableHead>
+                      <TableHead className="text-right p-2">Lucro Líq.</TableHead>
+                      <TableHead className="text-right p-2">Mg. Bruta</TableHead>
+                      <TableHead className="text-right p-2">Mg. Líq.</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.monthly.map((month) => (
-                      <tr key={month.month} className="border-b">
-                        <td className="p-2">{month.month}</td>
-                        <td className="text-right p-2">{formatCurrency(month.netRevenue)}</td>
-                        <td className="text-right p-2 text-red-600">
+                      <TableRow key={month.month} className="border-b">
+                        <TableCell className="p-2">{month.month}</TableCell>
+                        <TableCell className="text-right p-2">{formatCurrency(month.netRevenue)}</TableCell>
+                        <TableCell className="text-right p-2 text-red-600">
                           {formatCurrency(month.cogs)}
-                        </td>
-                        <td className="text-right p-2 text-green-600">
+                        </TableCell>
+                        <TableCell className="text-right p-2 text-green-600">
                           {formatCurrency(month.grossProfit)}
-                        </td>
-                        <td className="text-right p-2 text-red-600">
+                        </TableCell>
+                        <TableCell className="text-right p-2 text-red-600">
                           {formatCurrency(month.operatingExpenses)}
-                        </td>
-                        <td className="text-right p-2">
+                        </TableCell>
+                        <TableCell className="text-right p-2">
                           {formatCurrency(month.ebitda)}
-                        </td>
-                        <td className={`text-right p-2 font-semibold ${month.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        </TableCell>
+                        <TableCell className={`text-right p-2 font-semibold ${month.netProfit >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {formatCurrency(month.netProfit)}
-                        </td>
-                        <td className="text-right p-2">{month.grossMargin.toFixed(1)}%</td>
-                        <td className={`text-right p-2 ${month.netMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                        </TableCell>
+                        <TableCell className="text-right p-2">{month.grossMargin.toFixed(1)}%</TableCell>
+                        <TableCell className={`text-right p-2 ${month.netMargin >= 0 ? 'text-green-600' : 'text-red-600'}`}>
                           {month.netMargin.toFixed(1)}%
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
         </>

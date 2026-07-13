@@ -20,6 +20,15 @@ import {
 } from "@/components/ui/popover";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import { ProtectedRoute } from "@/components/auth/ProtectedRoute";
 import {
   DollarSign,
@@ -496,18 +505,18 @@ function DREDinamicoPageContent() {
               <CardTitle>Demonstrativo de Resultado</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b bg-muted/50">
-                      <th className="text-left p-3 font-semibold">Conta</th>
-                      <th className="text-right p-3 font-semibold">Valor</th>
-                      <th className="text-right p-3 font-semibold">
+              <ResponsiveTable minWidth={640}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b bg-muted/50">
+                      <TableHead className="text-left p-3 font-semibold">Conta</TableHead>
+                      <TableHead className="text-right p-3 font-semibold">Valor</TableHead>
+                      <TableHead className="text-right p-3 font-semibold">
                         % Rec. Líquida
-                      </th>
-                    </tr>
-                  </thead>
-                  <tbody>
+                      </TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.lines.map((line) => {
                       const netRev = data.summary.netRevenue || 1;
                       const pctLine = ((line.amount / netRev) * 100).toFixed(1);
@@ -517,13 +526,13 @@ function DREDinamicoPageContent() {
                       return (
                         <Fragment key={line.code}>
                           {/* Main line */}
-                          <tr
+                          <TableRow
                             className={cn(
                               "border-b",
                               isSummary && "border-t-2 bg-muted/30"
                             )}
                           >
-                            <td
+                            <TableCell
                               className={cn(
                                 "p-3",
                                 colorClass,
@@ -533,8 +542,8 @@ function DREDinamicoPageContent() {
                               )}
                             >
                               {line.name}
-                            </td>
-                            <td
+                            </TableCell>
+                            <TableCell
                               className={cn(
                                 "text-right p-3",
                                 colorClass,
@@ -544,8 +553,8 @@ function DREDinamicoPageContent() {
                               )}
                             >
                               {formatCurrency(line.amount)}
-                            </td>
-                            <td
+                            </TableCell>
+                            <TableCell
                               className={cn(
                                 "text-right p-3",
                                 colorClass,
@@ -553,8 +562,8 @@ function DREDinamicoPageContent() {
                               )}
                             >
                               {pctLine}%
-                            </td>
-                          </tr>
+                            </TableCell>
+                          </TableRow>
 
                           {/* Children */}
                           {line.children?.map((child) => {
@@ -563,28 +572,28 @@ function DREDinamicoPageContent() {
                               100
                             ).toFixed(1);
                             return (
-                              <tr
+                              <TableRow
                                 key={child.code}
                                 className="border-b border-dashed"
                               >
-                                <td className="p-3 pl-8 text-muted-foreground">
+                                <TableCell className="p-3 pl-8 text-muted-foreground">
                                   {child.code} - {child.name}
-                                </td>
-                                <td className="text-right p-3 text-muted-foreground">
+                                </TableCell>
+                                <TableCell className="text-right p-3 text-muted-foreground">
                                   {formatCurrency(child.amount)}
-                                </td>
-                                <td className="text-right p-3 text-muted-foreground">
+                                </TableCell>
+                                <TableCell className="text-right p-3 text-muted-foreground">
                                   {pctChild}%
-                                </td>
-                              </tr>
+                                </TableCell>
+                              </TableRow>
                             );
                           })}
                         </Fragment>
                       );
                     })}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
 

@@ -20,6 +20,16 @@ import {
 } from "@/components/ui/popover";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableFooter,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import {
   ArrowUpCircle,
   ArrowDownCircle,
@@ -453,58 +463,58 @@ function FluxoCaixaPageContent() {
               <CardTitle>Detalhamento Diário</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Data</th>
-                      <th className="text-right p-2">Entradas</th>
-                      <th className="text-right p-2">Saídas</th>
-                      <th className="text-right p-2">Saldo Dia</th>
-                      <th className="text-right p-2">Acumulado</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable minWidth={720}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Data</TableHead>
+                      <TableHead className="text-right p-2">Entradas</TableHead>
+                      <TableHead className="text-right p-2">Saídas</TableHead>
+                      <TableHead className="text-right p-2">Saldo Dia</TableHead>
+                      <TableHead className="text-right p-2">Acumulado</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.map((entry, index) => (
-                      <tr key={entry.date} className="border-b hover:bg-muted/50">
-                        <td className="p-2">
+                      <TableRow key={entry.date} className="border-b hover:bg-muted/50">
+                        <TableCell className="p-2">
                           {format(new Date(entry.date + "T12:00:00"), "dd/MM/yyyy")}
-                        </td>
-                        <td className="text-right p-2 text-green-600">
+                        </TableCell>
+                        <TableCell className="text-right p-2 text-green-600">
                           {formatCurrency(entry.inflows)}
-                        </td>
-                        <td className="text-right p-2 text-red-600">
+                        </TableCell>
+                        <TableCell className="text-right p-2 text-red-600">
                           {formatCurrency(entry.outflows)}
-                        </td>
-                        <td
+                        </TableCell>
+                        <TableCell
                           className={cn(
                             "text-right p-2",
                             entry.net >= 0 ? "text-green-600" : "text-red-600"
                           )}
                         >
                           {formatCurrency(entry.net)}
-                        </td>
-                        <td
+                        </TableCell>
+                        <TableCell
                           className={cn(
                             "text-right p-2",
                             entry.balance >= 0 ? "text-blue-600" : "text-red-600"
                           )}
                         >
                           {formatCurrency(entry.balance)}
-                        </td>
-                      </tr>
+                        </TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                  <tfoot>
-                    <tr className="border-t-2 font-bold">
-                      <td className="p-2">TOTAL</td>
-                      <td className="text-right p-2 text-green-600">
+                  </TableBody>
+                  <TableFooter>
+                    <TableRow className="border-t-2 font-bold">
+                      <TableCell className="p-2">TOTAL</TableCell>
+                      <TableCell className="text-right p-2 text-green-600">
                         {formatCurrency(totals.totalInflows)}
-                      </td>
-                      <td className="text-right p-2 text-red-600">
+                      </TableCell>
+                      <TableCell className="text-right p-2 text-red-600">
                         {formatCurrency(totals.totalOutflows)}
-                      </td>
-                      <td
+                      </TableCell>
+                      <TableCell
                         className={cn(
                           "text-right p-2",
                           totals.totalNet >= 0
@@ -513,8 +523,8 @@ function FluxoCaixaPageContent() {
                         )}
                       >
                         {formatCurrency(totals.totalNet)}
-                      </td>
-                      <td
+                      </TableCell>
+                      <TableCell
                         className={cn(
                           "text-right p-2",
                           kpis.finalBalance >= 0
@@ -523,11 +533,11 @@ function FluxoCaixaPageContent() {
                         )}
                       >
                         {formatCurrency(kpis.finalBalance)}
-                      </td>
-                    </tr>
-                  </tfoot>
-                </table>
-              </div>
+                      </TableCell>
+                    </TableRow>
+                  </TableFooter>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
 

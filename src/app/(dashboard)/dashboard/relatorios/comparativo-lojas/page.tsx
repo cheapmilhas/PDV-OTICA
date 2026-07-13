@@ -7,6 +7,15 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Loader2, BarChart3, TrendingUp } from "lucide-react";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
 import { formatCurrency } from "@/lib/utils";
 import toast from "react-hot-toast";
 import { format } from "date-fns";
@@ -150,20 +159,20 @@ function ComparativoContent() {
           <CardTitle className="text-sm">Detalhamento por Filial</CardTitle>
         </CardHeader>
         <CardContent>
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-3 px-2 font-medium">Métrica</th>
+          <ResponsiveTable minWidth={720}>
+            <Table className="w-full text-sm">
+              <TableHeader>
+                <TableRow className="border-b">
+                  <TableHead className="text-left py-3 px-2 font-medium">Métrica</TableHead>
                   {data.branches.map((b) => (
-                    <th key={b.branchId} className="text-right py-3 px-2 font-medium">
+                    <TableHead key={b.branchId} className="text-right py-3 px-2 font-medium">
                       {b.branchName}
-                    </th>
+                    </TableHead>
                   ))}
-                  <th className="text-right py-3 px-2 font-bold bg-muted/50">Total</th>
-                </tr>
-              </thead>
-              <tbody>
+                  <TableHead className="text-right py-3 px-2 font-bold bg-muted/50">Total</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
                 <MetricRow label="Vendas" branches={data.branches} totals={data.totals} field="salesCount" />
                 <MetricRow label="Faturamento" branches={data.branches} totals={data.totals} field="salesTotal" isCurrency />
                 <MetricRow label="Ticket Médio" branches={data.branches} totals={data.totals} field="avgTicket" isCurrency />
@@ -171,9 +180,9 @@ function ComparativoContent() {
                 <MetricRow label="OS Entregues" branches={data.branches} totals={data.totals} field="osDelivered" />
                 <MetricRow label="Clientes Novos" branches={data.branches} totals={data.totals} field="newCustomers" />
                 <MetricRow label="Estoque (valor)" branches={data.branches} totals={data.totals} field="stockValue" isCurrency />
-              </tbody>
-            </table>
-          </div>
+              </TableBody>
+            </Table>
+          </ResponsiveTable>
         </CardContent>
       </Card>
     </div>
@@ -197,16 +206,16 @@ function MetricRow({
     isCurrency ? formatCurrency(Number(v)) : Number(v).toLocaleString("pt-BR");
 
   return (
-    <tr className="border-b hover:bg-muted/30 transition-colors">
-      <td className="py-2.5 px-2 font-medium">{label}</td>
+    <TableRow className="border-b hover:bg-muted/30 transition-colors">
+      <TableCell className="py-2.5 px-2 font-medium">{label}</TableCell>
       {branches.map((b) => (
-        <td key={b.branchId} className="py-2.5 px-2 text-right tabular-nums">
+        <TableCell key={b.branchId} className="py-2.5 px-2 text-right tabular-nums">
           {fmt(b[field])}
-        </td>
+        </TableCell>
       ))}
-      <td className="py-2.5 px-2 text-right font-bold bg-muted/50 tabular-nums">
+      <TableCell className="py-2.5 px-2 text-right font-bold bg-muted/50 tabular-nums">
         {fmt(totals[field])}
-      </td>
-    </tr>
+      </TableCell>
+    </TableRow>
   );
 }
