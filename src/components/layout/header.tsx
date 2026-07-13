@@ -315,7 +315,7 @@ export function Header() {
         {/* Notifications */}
         <Popover>
           <PopoverTrigger asChild>
-            <Button variant="ghost" size="icon" className="relative h-8 w-8">
+            <Button variant="ghost" size="icon" className="relative h-11 w-11 sm:h-8 sm:w-8">
               <Bell className="h-4 w-4" />
               {notifCount > 0 && (
                 <span className="absolute -top-0.5 -right-0.5 flex h-4 w-4 items-center justify-center rounded-full bg-destructive text-[9px] font-bold text-destructive-foreground ring-2 ring-background">
@@ -452,7 +452,7 @@ export function Header() {
         {/* User Menu */}
         <DropdownMenu>
           <DropdownMenuTrigger asChild>
-            <Button variant="ghost" size="sm" className="gap-2 h-8 px-2">
+            <Button variant="ghost" size="sm" className="gap-2 h-11 px-2 sm:h-8">
               <Avatar className="h-6 w-6">
                 <AvatarFallback className="bg-primary text-primary-foreground text-xs font-semibold">
                   {user.name.charAt(0)}
