@@ -131,7 +131,7 @@ export function MobileNav() {
             <span className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">Mais opções</span>
             <button
               onClick={() => setShowMore(false)}
-              className="flex h-7 w-7 items-center justify-center rounded-full bg-muted hover:bg-muted/70 transition-colors"
+              className="flex h-11 w-11 items-center justify-center rounded-full bg-muted hover:bg-muted/70 transition-colors"
             >
               <X className="h-3.5 w-3.5 text-muted-foreground" />
             </button>
