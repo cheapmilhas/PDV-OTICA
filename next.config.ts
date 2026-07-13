@@ -3,6 +3,11 @@ import { withSentryConfig } from "@sentry/nextjs";
 
 const nextConfig: NextConfig = {
   reactStrictMode: true,
+  // Dev-only: libera acesso ao dev server por IPs de rede local (ex.: validar
+  // no celular físico no mesmo Wi-Fi). Next 16 bloqueia cross-origin em dev por
+  // padrão. Faixas privadas comuns cobrem a maioria dos roteadores domésticos.
+  // Não afeta produção — lá o app roda no domínio próprio.
+  allowedDevOrigins: ["192.168.*.*", "10.*.*.*", "172.16.*.*"],
   images: {
     remotePatterns: [
       {
