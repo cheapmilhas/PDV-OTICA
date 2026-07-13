@@ -60,10 +60,11 @@ Três tabelas novas + um campo. Tudo aditivo (`.sql` hand-written + `migrate dep
 - Índice: `@@index([companyId, customerId, createdAt])`.
 
 ### `RefractionExam`
-`id, companyId, encounterId @unique, method? (AUTOREFRATOR/SUBJETIVA/RETINOSCOPIA), odEsf, odCil, odEixo, odDnp, oeEsf, oeCil, oeEixo, oeDnp, addNear, timestamps`.
+`id, companyId, encounterId @unique, method? (AUTOREFRATOR/SUBJETIVA/RETINOSCOPIA), <campos de grau — MESMO vocabulário do PrescriptionValues>, timestamps`.
 
-- Shape confirmado pelo inventário Domus (`optical_prescriptions` = a estrutura VIVA): 1 grau por olho + adição única. SEM longe/perto separado, SEM prisma (isso era a tabela ANTIGA `ophthalmology_rx`, possível código morto).
-- Tipos alinhados ao Domus/PrescriptionValues: eixo = int 0-180; esf/cil/dnp/addNear = string (preserva sinal/precisão "-2.00").
+- **CRÍTICO — nomes e tipos DEVEM espelhar `PrescriptionValues` do Vis** (verificado no schema real), NÃO os do Domus, para a cópia na promoção ser trivial. O `PrescriptionValues` real usa: `odSph Decimal? @db.Decimal(6,2)`, `odCyl Decimal?`, `odAxis Int?`, `odAdd Decimal?`, `odPrism Decimal?`, `odBase String?` + os `oe*` equivalentes; e `pdFar Decimal? @db.Decimal(5,2)`, `pdNear Decimal?` (o "DNP"/distância pupilar é compartilhado, NÃO `odDnp`/`oeDnp` separado). Adição é POR OLHO (`odAdd`/`oeAdd`), não um `addNear` único.
+- `RefractionExam` replica os campos de grau que fazem sentido para uma medição de refração: `odSph, odCyl, odAxis, odAdd, oeSph, oeCyl, oeAxis, oeAdd, pdFar, pdNear` (mesmos nomes/tipos). Prism/base e os parâmetros de montagem (fittingHeight, pantoscopicAngle, vertexDistance, frameCurvature) NÃO entram no exame — são refinamentos de dispensação óptica que o médico não mede; ficam só na `PrescriptionValues` (preenchidos na receita, se aplicável).
+- Correção de suposição: o Domus vivo (`optical_prescriptions`) usa nomes em português (odEsf/addNear) e string; mas o VIS já tem o vocabulário próprio em `PrescriptionValues` (inglês, Decimal/Int) — seguimos o do Vis, que é mais rico (adição por olho, prism/base disponíveis).
 - É a medida bruta do prontuário — NUNCA lida pelo comercial.
 
 ### Vínculo em `Prescription` (campo novo aditivo)
@@ -75,7 +76,7 @@ Três tabelas novas + um campo. Tudo aditivo (`.sql` hand-written + `migrate dep
 
 O médico mede a refração (`RefractionExam`), revisa/ajusta, e clica **"gerar receita"** (botão explícito — Prescription NÃO nasce automático). A transação:
 1. Valida `ConsentRecord` clínico vigente (scope canônico, ver Seção 5) — falha bloqueia.
-2. Cria `Prescription` (companyId, customerId, `doctorId` NOT NULL, status, expiresAt/validUntil, isEyeExam) + `PrescriptionValues` **copiando** os valores medidos (snapshot congelado).
+2. Cria `Prescription` (companyId, customerId, `doctorId` NOT NULL, status, `expiresAt` — nome real do campo; NÃO existe `validUntil` nem `isEyeExam` na Prescription do Vis) + `PrescriptionValues` **copiando** os valores medidos (snapshot congelado, nomes `odSph/odCyl/odAxis/odAdd/...` idênticos entre RefractionExam e PrescriptionValues → cópia 1:1 trivial).
 3. Seta `Prescription.refractionExamId`, com guard `WHERE refractionExamId IS NULL` (fecha duplo-clique).
 4. Grava `CustomerAccessLog`.
 
@@ -95,7 +96,7 @@ Medida bruta (`RefractionExam`) ≠ grau emitido (`PrescriptionValues`). Receita
 ## Seção 5 — Segurança / LGPD clínico (inegociáveis do painel)
 
 1. **Consentimento clínico** — `ConsentRecord.scope` ganha uma **string canônica CONSTANTE** (ex. `clinical_health_data`), definida em constante compartilhada e validada (não string livre aceita sem checagem). Checado (vigente, `revokedAt IS NULL`) ANTES de qualquer escrita clínica (Encounter, RefractionExam, emissão).
-2. **`CustomerAccessLog`** gravado em toda LEITURA e ESCRITA de dado clínico, com `resourceType` específico (distingue prontuário de dado cadastral).
+2. **`CustomerAccessLog`** gravado em toda LEITURA e ESCRITA de dado clínico. O model real (schema L552) tem `resourceType String`, `resourceId String?`, `action String` — usar um `resourceType` específico (ex. "clinical_encounter", "clinical_refraction", "clinical_prescription") para distinguir prontuário de dado cadastral simples.
 3. **Leitura de `Encounter` não-SIGNED** restrita a `performedByUserId`/`doctorId` (+ admin), não a qualquer portador da permissão RBAC.
 4. **DTO de agenda** (usado pela recepção) explícito, SEM os campos de prontuário — com teste de integração que FALHA se algum campo clínico aparecer no payload. Nunca um `include` genérico que traga Encounter.
 5. **`doctorId` NOT NULL** no momento da emissão (mesmo que a captação por técnico permita null antes).
