@@ -15,6 +15,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -396,32 +405,33 @@ function RelatorioContasReceberPageContent() {
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="overflow-x-auto">
-                  <table className="w-full text-sm">
-                    <thead>
-                      <tr className="border-b">
-                        <th className="text-left p-2">Cliente</th>
-                        <th className="text-center p-2">Qtd. Pagamentos</th>
-                        <th className="text-right p-2">Total a Receber</th>
-                        <th className="text-right p-2">Vencido</th>
-                      </tr>
-                    </thead>
-                    <tbody>
+                <ResponsiveTable cards minWidth={640}>
+                  <Table className="w-full text-sm">
+                    <TableHeader>
+                      <TableRow className="border-b">
+                        <TableHead className="text-left p-2">Cliente</TableHead>
+                        <TableHead className="text-center p-2">Qtd. Pagamentos</TableHead>
+                        <TableHead className="text-right p-2">Total a Receber</TableHead>
+                        <TableHead className="text-right p-2">Vencido</TableHead>
+                      </TableRow>
+                    </TableHeader>
+                    <TableBody>
                       {data.customerBreakdown.slice(0, 20).map((customer) => (
-                        <tr
+                        <TableRow
                           key={customer.customerId}
                           className="border-b hover:bg-muted/50"
                         >
-                          <td className="p-2 font-medium">
+                          <TableCell data-label="Cliente" className="p-2 font-medium">
                             {customer.customerName}
-                          </td>
-                          <td className="p-2 text-center">
+                          </TableCell>
+                          <TableCell data-label="Qtd. Pagamentos" className="p-2 text-center">
                             {customer.paymentCount}
-                          </td>
-                          <td className="p-2 text-right">
+                          </TableCell>
+                          <TableCell data-label="Total a Receber" className="p-2 text-right">
                             {formatCurrency(customer.totalAmount)}
-                          </td>
-                          <td
+                          </TableCell>
+                          <TableCell
+                            data-label="Vencido"
                             className={`p-2 text-right font-medium ${
                               customer.overdueAmount > 0
                                 ? "text-red-600"
@@ -429,17 +439,17 @@ function RelatorioContasReceberPageContent() {
                             }`}
                           >
                             {formatCurrency(customer.overdueAmount)}
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       ))}
-                    </tbody>
-                  </table>
-                  {data.customerBreakdown.length > 20 && (
-                    <p className="text-sm text-muted-foreground mt-4 text-center">
-                      Mostrando 20 de {data.customerBreakdown.length} clientes
-                    </p>
-                  )}
-                </div>
+                    </TableBody>
+                  </Table>
+                </ResponsiveTable>
+                {data.customerBreakdown.length > 20 && (
+                  <p className="text-sm text-muted-foreground mt-4 text-center">
+                    Mostrando 20 de {data.customerBreakdown.length} clientes
+                  </p>
+                )}
               </CardContent>
             </Card>
           )}
@@ -452,30 +462,30 @@ function RelatorioContasReceberPageContent() {
               </CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Descrição</th>
-                      <th className="text-left p-2">Cliente</th>
-                      <th className="text-center p-2">Parcela</th>
-                      <th className="text-left p-2">Vencimento</th>
-                      <th className="text-right p-2">Valor</th>
-                      <th className="text-center p-2">Dias Atraso</th>
-                      <th className="text-left p-2">Categoria</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={720}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Descrição</TableHead>
+                      <TableHead className="text-left p-2">Cliente</TableHead>
+                      <TableHead className="text-center p-2">Parcela</TableHead>
+                      <TableHead className="text-left p-2">Vencimento</TableHead>
+                      <TableHead className="text-right p-2">Valor</TableHead>
+                      <TableHead className="text-center p-2">Dias Atraso</TableHead>
+                      <TableHead className="text-left p-2">Categoria</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.receivables.slice(0, 100).map((receivable) => {
                       const isOverdue = receivable.daysOverdue > 0;
                       return (
-                        <tr
+                        <TableRow
                           key={receivable.id}
                           className={`border-b hover:bg-muted/50 ${
                             isOverdue ? "bg-red-50" : ""
                           }`}
                         >
-                          <td className="p-2">
+                          <TableCell data-label="Descrição" className="p-2">
                             <div className="font-medium">
                               {receivable.description}
                             </div>
@@ -487,11 +497,11 @@ function RelatorioContasReceberPageContent() {
                                 Ver Venda #{receivable.saleId.substring(0, 8)}
                               </Link>
                             )}
-                          </td>
-                          <td className="p-2 font-medium">
+                          </TableCell>
+                          <TableCell data-label="Cliente" className="p-2 font-medium">
                             {receivable.customerName || "N/A"}
-                          </td>
-                          <td className="p-2 text-center">
+                          </TableCell>
+                          <TableCell data-label="Parcela" className="p-2 text-center">
                             {receivable.installment !== "1/1" ? (
                               <Badge variant="outline">
                                 {receivable.installment}
@@ -499,21 +509,22 @@ function RelatorioContasReceberPageContent() {
                             ) : (
                               <span className="text-muted-foreground">—</span>
                             )}
-                          </td>
-                          <td className="p-2">
+                          </TableCell>
+                          <TableCell data-label="Vencimento" className="p-2">
                             {format(new Date(receivable.dueDate), "dd/MM/yyyy")}
-                          </td>
-                          <td className="p-2 text-right font-medium">
+                          </TableCell>
+                          <TableCell data-label="Valor" className="p-2 text-right font-medium">
                             {formatCurrency(receivable.amount)}
-                          </td>
-                          <td
+                          </TableCell>
+                          <TableCell
+                            data-label="Dias Atraso"
                             className={`p-2 text-center font-medium ${
                               isOverdue ? "text-red-600" : "text-green-600"
                             }`}
                           >
                             {isOverdue ? receivable.daysOverdue : "—"}
-                          </td>
-                          <td className="p-2">
+                          </TableCell>
+                          <TableCell data-label="Categoria" className="p-2">
                             <span
                               className={`px-2 py-1 rounded text-xs ${
                                 isOverdue
@@ -523,19 +534,19 @@ function RelatorioContasReceberPageContent() {
                             >
                               {receivable.agingCategory}
                             </span>
-                          </td>
-                        </tr>
+                          </TableCell>
+                        </TableRow>
                       );
                     })}
-                  </tbody>
-                </table>
-                {data.receivables.length > 100 && (
-                  <p className="text-sm text-muted-foreground mt-4 text-center">
-                    Mostrando 100 de {data.receivables.length} contas. Use os
-                    filtros para refinar.
-                  </p>
-                )}
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
+              {data.receivables.length > 100 && (
+                <p className="text-sm text-muted-foreground mt-4 text-center">
+                  Mostrando 100 de {data.receivables.length} contas. Use os
+                  filtros para refinar.
+                </p>
+              )}
             </CardContent>
           </Card>
         </>

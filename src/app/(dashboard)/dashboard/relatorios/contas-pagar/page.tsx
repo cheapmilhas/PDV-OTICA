@@ -13,6 +13,15 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { Checkbox } from "@/components/ui/checkbox";
+import {
+  Table,
+  TableHeader,
+  TableBody,
+  TableHead,
+  TableRow,
+  TableCell,
+} from "@/components/ui/table";
+import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { KPICard } from "@/components/reports/kpi-card";
 import { ExportButtons } from "@/components/reports/export-buttons";
 import {
@@ -460,30 +469,30 @@ function RelatorioContasPagarPageContent() {
               <CardTitle>Breakdown por Fornecedor</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="overflow-x-auto">
-                <table className="w-full text-sm">
-                  <thead>
-                    <tr className="border-b">
-                      <th className="text-left p-2">Fornecedor</th>
-                      <th className="text-right p-2">Total</th>
-                      <th className="text-right p-2">Vencido</th>
-                      <th className="text-right p-2">Contas</th>
-                    </tr>
-                  </thead>
-                  <tbody>
+              <ResponsiveTable cards minWidth={640}>
+                <Table className="w-full text-sm">
+                  <TableHeader>
+                    <TableRow className="border-b">
+                      <TableHead className="text-left p-2">Fornecedor</TableHead>
+                      <TableHead className="text-right p-2">Total</TableHead>
+                      <TableHead className="text-right p-2">Vencido</TableHead>
+                      <TableHead className="text-right p-2">Contas</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
                     {data.supplierBreakdown.map((supplier) => (
-                      <tr key={supplier.supplierId} className="border-b">
-                        <td className="p-2">{supplier.supplierName}</td>
-                        <td className="text-right p-2">{formatCurrency(supplier.totalAmount)}</td>
-                        <td className="text-right p-2 text-red-600">
+                      <TableRow key={supplier.supplierId} className="border-b">
+                        <TableCell data-label="Fornecedor" className="p-2">{supplier.supplierName}</TableCell>
+                        <TableCell data-label="Total" className="text-right p-2">{formatCurrency(supplier.totalAmount)}</TableCell>
+                        <TableCell data-label="Vencido" className="text-right p-2 text-red-600">
                           {formatCurrency(supplier.overdueAmount)}
-                        </td>
-                        <td className="text-right p-2">{supplier.paymentCount}</td>
-                      </tr>
+                        </TableCell>
+                        <TableCell data-label="Contas" className="text-right p-2">{supplier.paymentCount}</TableCell>
+                      </TableRow>
                     ))}
-                  </tbody>
-                </table>
-              </div>
+                  </TableBody>
+                </Table>
+              </ResponsiveTable>
             </CardContent>
           </Card>
 
