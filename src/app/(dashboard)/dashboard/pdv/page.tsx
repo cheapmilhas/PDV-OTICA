@@ -12,6 +12,16 @@ import { Button } from "@/components/ui/button";
 import { Separator } from "@/components/ui/separator";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { Label } from "@/components/ui/label";
 import {
   Search,
@@ -26,6 +36,7 @@ import {
   Package,
   Loader2,
   Tag,
+  ArrowLeft,
 } from "lucide-react";
 import { formatCurrency } from "@/lib/utils";
 import { calculateTotals } from "@/lib/sale-totals";
@@ -79,6 +90,7 @@ function PDVPage() {
   const [mobileTab, setMobileTab] = useState<"produtos" | "carrinho">("produtos");
   const isMobile = useIsMobile();
   const [modalVendaOpen, setModalVendaOpen] = useState(false);
+  const [confirmSairOpen, setConfirmSairOpen] = useState(false);
   const [modalClienteOpen, setModalClienteOpen] = useState(false);
   const [buscaProduto, setBuscaProduto] = useState("");
   const [buscaCliente, setBuscaCliente] = useState("");
@@ -230,9 +242,22 @@ function PDVPage() {
     toast.success("Venda limpa");
   }, [carrinho.length]);
 
+  // Sair do PDV. O carrinho vive só em memória (sem persistência), então sair
+  // com itens PERDE a venda em andamento — confirma antes. Vazio: sai direto.
+  const sairDoPdv = useCallback(() => {
+    if (carrinho.length > 0) {
+      setConfirmSairOpen(true);
+      return;
+    }
+    router.push("/dashboard");
+  }, [carrinho.length, router]);
+
   // Atalhos de teclado globais
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
+      // Com a confirmação de saída aberta, os atalhos ficam inertes (menos Esc,
+      // que fecha o diálogo) — senão F3/F4 navegariam por baixo do AlertDialog.
+      if (confirmSairOpen && e.key !== "Escape") return;
       if (e.key === "F2") {
         e.preventDefault();
         acaoF2Busca();
@@ -253,7 +278,7 @@ function PDVPage() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [acaoF2Busca, acaoF3Cliente, acaoF4Finalizar, acaoF8Limpar, modalVendaOpen, modalClienteOpen]);
+  }, [acaoF2Busca, acaoF3Cliente, acaoF4Finalizar, acaoF8Limpar, modalVendaOpen, modalClienteOpen, confirmSairOpen]);
 
   // Carregar cliente do orçamento se houver quoteId
   useEffect(() => {
@@ -1106,7 +1131,19 @@ function PDVPage() {
     <div className="flex flex-col h-full lg:h-[calc(100vh-3.5rem)] -m-4 -mb-20 md:-m-6">
       {/* Header compacto */}
       <div className="flex items-center justify-between px-4 py-2 border-b bg-background flex-shrink-0">
-        <div className="flex items-center gap-3">
+        <div className="flex items-center gap-2">
+          {/* Sair do PDV — no mobile a bottom-nav some (mobile-nav.tsx retorna
+              null nesta rota), então este é o único caminho de volta. No desktop
+              a sidebar lateral já resolve, então ocultamos (lg:hidden). */}
+          <Button
+            variant="ghost"
+            size="icon-touch"
+            className="lg:hidden -ml-2"
+            aria-label="Sair do PDV"
+            onClick={sairDoPdv}
+          >
+            <ArrowLeft className="h-5 w-5" />
+          </Button>
           <h1 className="text-lg font-bold">PDV</h1>
           <Badge variant="outline" className="text-xs">
             {products.length} produtos
@@ -1223,8 +1260,8 @@ function PDVPage() {
             </div>
           </div>
 
-          {/* Grid de produtos — scroll interno */}
-          <div className="flex-1 overflow-y-auto p-3">
+          {/* Grid de produtos — scroll interno (barra escondida + momentum: cara de app) */}
+          <div className="flex-1 overflow-y-auto scrollbar-hide p-3">
             {loadingProducts ? (
               <div className="flex items-center justify-center py-12">
                 <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -1629,6 +1666,25 @@ function PDVPage() {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+
+    {/* Confirmação ao sair do PDV com venda em andamento (carrinho só em memória) */}
+    <AlertDialog open={confirmSairOpen} onOpenChange={setConfirmSairOpen}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Sair do PDV?</AlertDialogTitle>
+          <AlertDialogDescription>
+            Você tem uma venda em andamento. Se sair agora, os itens do carrinho
+            serão descartados.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Continuar a venda</AlertDialogCancel>
+          <AlertDialogAction onClick={() => router.push("/dashboard")}>
+            Sair e descartar
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
     </>
   );
 }

@@ -202,6 +202,18 @@ body {
   overflow-x: clip;
 }
 
+/* Scroll com cara de app: barra escondida + momentum no toque. Use em listas
+ * que rolam dentro de uma tela cheia (ex.: grid de produtos do PDV) onde a
+ * barra nativa "solta" quebra a sensação de aplicativo. O conteúdo continua
+ * 100% rolável — só a barra some. */
+.scrollbar-hide {
+  -webkit-overflow-scrolling: touch;
+  scrollbar-width: none; /* Firefox */
+}
+.scrollbar-hide::-webkit-scrollbar {
+  display: none; /* Chrome/Safari/WebKit */
+}
+
 /* Cards compactos em mobile dentro de grids de métricas */
 @media (max-width: 767px) {
   .metrics-grid [class*="CardHeader"],
