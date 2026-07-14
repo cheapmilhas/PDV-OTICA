@@ -1,8 +1,8 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useState, useEffect, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { useDraftState, useClearDraft } from "./use-draft-state";
+import { useDraftState, useClearDraft, hasDraft } from "./use-draft-state";
 import Link from "next/link";
 import {
   Loader2, Building2, User, CreditCard, Users, BarChart3,
@@ -147,10 +147,15 @@ export function NewClientForm({ plans, networks }: Props) {
   ]);
 
   // Havia rascunho salvo ao abrir a tela? (campos-chave já preenchidos.)
-  // Detecção lazy na 1ª renderização — mostra o aviso "rascunho restaurado".
-  const [draftRestored, setDraftRestored] = useState(
-    () => Boolean(tradeName || companyName || email || ownerName),
-  );
+  // Detecção na MONTAGEM (não no render): ler o storage no primeiro render
+  // reintroduziria o hydration mismatch que o useDraftState evita. O aviso
+  // "rascunho restaurado" aparece após a hidratação, junto com os campos.
+  const [draftRestored, setDraftRestored] = useState(false);
+  useEffect(() => {
+    if (hasDraft(["tradeName", "companyName", "email", "ownerName"])) {
+      setDraftRestored(true);
+    }
+  }, []);
 
   function discardDraft() {
     clearDraft();
