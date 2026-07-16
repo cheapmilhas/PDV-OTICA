@@ -51,7 +51,12 @@ Com procedimentos cadastrados que **registram no caixa E no prontuário**, e his
 - Isso entrega os dois pedidos: **relatório** (tudo tem vínculo) e a **lista "atendi e não recebi"** — o pagamento não lançado não some.
 - **"Recebido" == "lançado".** Se o dinheiro entrou no bolso e não foi lançado, o sistema mostra em aberto. É isso que faz a lista funcionar.
 
-**Reuso (sem tabela nova):** `AccountReceivable` (ganha vínculo com atendimento, hoje só `saleId`), `CashMovement` (`originType: "clinical_encounter"`), `FinanceEntry` (`sourceType` próprio).
+**Como o vínculo é feito (a revisão pegou que isto estava vago — e é o que a Fatia 2 inteira depende):**
+`AccountReceivable` **não tem** `encounterId` (verificado no schema — só `saleId`). Duas opções, decisão do dono ANTES do plano:
+- **(A, recomendada)** coluna aditiva `encounterId String?` + índice `(companyId, encounterId)` + FK `SetNull`. Migration aditiva, escrita à mão, aplicada com OK explícito (dev aponta para prod). Vínculo forte, relatório trivial, espelha o `saleId` existente.
+- **(B)** sem coluna: reusar `customerId` + `description` textual. Zero migration, mas **relatório por atendimento vira parsing de texto** — contraria o pedido do dono ("vínculo sempre… para ter relatórios").
+
+**Reuso (sem tabela nova):** `AccountReceivable` (+ a coluna de A), `CashMovement` (`originType: "clinical_encounter"`, `originId` = id do encounter — campos já genéricos, `salePaymentId` é nullable), `FinanceEntry` (`sourceType` próprio; o unique `(companyId, sourceType, sourceId, type, side)` já garante idempotência do lançamento).
 
 **Cortado do Domus, conscientemente:** preço por convênio, preço por médico (`doctor_procedure_prices`), comissão, cobrança nascendo no agendamento com invoice pendente. Autônomo não tem convênio, não tem sócio, não fatura.
 
@@ -72,6 +77,10 @@ Com procedimentos cadastrados que **registram no caixa E no prontuário**, e his
 ## 4. Procedimentos
 
 - Catálogo simples: **nome + preço**. Cadastra uma vez ("Consulta R$ 250", "Campimetria R$ 120").
+- **Modelo (a revisão pegou que faltava — `procedure_catalog` é do Domus e NÃO existe no Vis):** 2 tabelas novas, aditivas.
+  - `ClinicalProcedure` — catálogo: `id, companyId, name, price Decimal(12,2), active, createdAt`. Índice `(companyId, active)`.
+  - `EncounterProcedure` — o que foi feito: `id, companyId, encounterId, procedureId?, name (cópia), unitPrice Decimal(12,2) (CONGELADO), quantity Int @default(1), createdAt`. `procedureId` nullable + `name`/`unitPrice` copiados **por valor** → reajustar ou desativar o catálogo não reescreve histórico (padrão Domus, correto).
+  - Escrita condicionada a `Encounter.signedAt IS NULL` (mesmo guard do SOAP) e serializada pelo lock do Encounter — procedimento É registro clínico.
 - No atendimento, escolhe da lista. Cada procedimento é **uma linha só, em dois lugares**: registro clínico no atendimento **e** item da cobrança. Não se lança duas vezes.
 - **Preço congelado no uso** (padrão Domus, correto): reajustar o catálogo não reescreve o histórico.
 - **Cortado:** preço por convênio/médico, comissão, bundles (entra quando o dono sentir falta), **auto-criação de laudo** — o Domus cria laudo para *todo* procedimento sem filtrar `requiresReport` (defeito documentado; não copiar).
@@ -105,7 +114,9 @@ Barra fixa listando `EM_ATENDIMENTO`; sai da tela, ela persiste; clica, volta de
 
 Dois defeitos **reais**, confirmados no código, que precedem qualquer feature nova:
 
-1. **`PATCH /api/prescriptions/[id]/grau`** (rota do varejo) chama `saveGradeToBook` direto pelo id, **sem filtrar receita clínica** → o grau de uma receita clínica assinada pode ser alterado **pulando** consentimento, lock e imutabilidade. Hoje só ADMIN alcança (`prescriptions.edit` não está em VENDEDOR/ATENDENTE/GERENTE) → furo **latente**, não porta aberta.
+1. **`PATCH /api/prescriptions/[id]/grau`** (rota do varejo) chama `saveGradeToBook` direto pelo id, **sem filtrar receita clínica** → o grau de uma receita clínica assinada pode ser alterado **pulando** consentimento, lock e imutabilidade. O service só guarda receita ligada a Ordem de Serviço (`save-grade-to-book.service.ts`: seleciona `serviceOrderId`/`_count.serviceOrders`); **não olha `refractionExamId`**.
+   ⚠️ **PORTA ABERTA, NÃO LATENTE** (correção de erro meu, pego na revisão): `PRESCRIPTIONS_EDIT` **está** em **GERENTE** (`catalog.ts:157`) e **VENDEDOR** (`:181`) — só ATENDENTE e CAIXA não têm. Num `companyId` de ótica com vendedores, **um vendedor altera hoje o grau de uma receita clínica assinada**. Eu havia afirmado o contrário a partir de um grep com janela curta demais (só os primeiros 400 chars de cada bloco de papel).
+   **Consequência no plano:** vira correção de **segurança prioritária**, não arrumação. O filtro vai **no service** (não só na rota — a rota não é a única porta), com teste por mutação usando role VENDEDOR/GERENTE contra receita clínica.
 2. **A receita não congela o emissor.** `refraction.service.ts` resolve o emissor e o devolve **só na resposta HTTP** — nunca persiste (`MedicalCertificate.issuerSnapshot` existe; `Prescription` não tem). Reimprimir hoje montaria a 2ª via com **dado vivo**: mudou CRM/endereço → a via sai **diferente do papel entregue**. É o defeito do Domus, que já sabemos evitar.
 
 Só depois: **reimprimir** (molde: `api/clinical/certificates/[id]` + `reimprimir-atestado-button.tsx`; `buildReceitaPdf` já existe) e **receita avulsa** (`upsertPrescription` já cria com `companyId`+`customerId`; busca de paciente já existe em `/api/clinical/customers/search`).
@@ -118,9 +129,9 @@ Só depois: **reimprimir** (molde: `api/clinical/certificates/[id]` + `reimprimi
 
 | Fatia | Conteúdo | Por que nesta ordem |
 |---|---|---|
-| **1** | Receita: fechar os 2 furos → reimprimir → avulsa | Tem **defeito real**; o dono já sentiu a falta; fundação toda paga |
-| **2** | Procedimentos + cobrança vinculada + recebimento no caixa | O elo genuinamente ausente do fluxo |
-| **3** | Finalizar (fachada) + barra flutuante + histórico + CRM visível + ponte do retorno | Depende de 1 e 2 existirem para ter o que mostrar |
+| **1** | **Segurança:** filtrar receita clínica no `saveGradeToBook` (porta aberta p/ VENDEDOR/GERENTE) → `issuerSnapshot` na Prescription → reimprimir → avulsa | Tem **furo explorável hoje**; o dono já sentiu falta da reimpressão; fundação paga (`buildReceitaPdf`, molde do atestado) |
+| **1.5** | Finalizar (fachada) + barra flutuante + histórico do paciente + CRM visível + ponte do retorno | **Não depende de cobrança** (correção da revisão). Entrega valor cedo: o histórico já tem o que mostrar (consultas, receitas, atestados); procedimentos/exames entram nele quando a Fatia 2 existir |
+| **2** | Procedimentos + cobrança vinculada + recebimento no caixa | O elo genuinamente ausente; exige a decisão A/B do §2 antes de virar plano |
 
 ---
 
