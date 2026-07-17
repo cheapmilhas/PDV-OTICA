@@ -100,6 +100,10 @@ Racional: sem transição forçada — o legado preserva o hábito dos atuais, o
 
 **Por que FORJA e não decidir agora:** mexe na PORTA DE ENTRADA de sistema de saúde em produção (trancar user real / vazar prontuário). Múltiplas sub-decisões acopladas (slug vs subdomínio p/ resolver a clínica; PIN errado; re-auth). O desenho do dono ENTRA como proposta principal; a forja endurece (verify-pin é o 1º achado). **NÃO tocar em auth antes da forja.** É trabalho no DOMUS, não no Vis. Sprint 1 não é afetado (clínica atual entra como hoje).
 
+**Sub-decisão acoplada p/ a forja — o que "bloquear" significa POR DOMÍNIO (dono levantou 17/07):**
+- **Princípio já fixado:** o bloqueio é por CLÍNICA, não por domínio. Uma clínica inadimplente é bloqueada onde quer que seja acessada (legado `app.domussaude.com.br` E `medical.vis.app.br/<clinica>`) — senão o legado vira porta dos fundos para o inadimplente.
+- **Aberto p/ a forja:** bloqueio é de **ESCRITA** (entra, lê prontuário, não cria atendimento/receita — default do plano, CFM 1.821) ou de **ACESSO** (não loga)? E o LEGADO tem tratamento especial (nunca trancar os 11 atuais)? Acoplado ao "como cada domínio autentica" — resolver junto.
+
 ---
 
 ## Sprint 3 — Vender em vis.app.br (Fase 1) (~5–8 dias — Codex derrubou a estimativa de 3–5)
