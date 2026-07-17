@@ -1,0 +1,14 @@
+-- Receita: snapshot do emissor CONGELADO na emissao. Aditiva, nullable.
+--
+-- Por que: hoje `refraction.service` resolve o emissor (medico + clinica) e o
+-- devolve SO na resposta HTTP -- nunca persiste. Reimprimir montaria a 2a via
+-- com DADO VIVO: mudou o CRM do medico ou o endereco da clinica, a via sai
+-- DIFERENTE do papel entregue ao paciente. E o defeito do Domus
+-- (optical-prescription-pdf remapeia registro generico para "CRM " e nem
+-- recebe o tipo do profissional), documentado no inventario como "afirmacao
+-- falsa em documento". O atestado ja resolve isso com o mesmo campo
+-- (MedicalCertificate.issuerSnapshot, migration 20260715120000).
+--
+-- null = receita legada (emitida antes desta coluna) -> o renderer cai no
+-- layout simples, sem assinatura nominal. Nunca inventa emissor.
+ALTER TABLE "Prescription" ADD COLUMN IF NOT EXISTS "issuerSnapshot" JSONB;
