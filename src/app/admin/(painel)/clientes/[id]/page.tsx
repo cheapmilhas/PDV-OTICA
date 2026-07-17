@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireAdmin, requireSupportScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -33,8 +33,14 @@ function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
 }
 
 export default async function EmpresaDetalhesPage({ params }: { params: Promise<{ id: string }> }) {
-  await requireAdmin();
+  const admin = await requireAdmin();
   const { id } = await params;
+
+  // A lista já filtra por escopo, mas a URL é adivinhável: sem esta checagem um
+  // admin restrito abre /admin/clientes/<id> de empresa fora do seu escopo.
+  // notFound() (e não 403) para não confirmar a existência do id.
+  const scoped = await requireSupportScope(admin.id, id);
+  if (!scoped) notFound();
 
   const company = await prisma.company.findUnique({
     where: { id },

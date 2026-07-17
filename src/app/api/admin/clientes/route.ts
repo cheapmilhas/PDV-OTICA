@@ -1,6 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
+import { getProductContext, productWhereFilter } from "@/lib/admin-product-context";
 
 /**
  * GET /api/admin/clientes
@@ -13,6 +14,9 @@ export async function GET(request: Request) {
 
   // Escopo de listagem: null = sem restrição (SUPER_ADMIN/scopeAll); senão filtra por id in ids.
   const accessibleIds = await getAccessibleCompanyIds(admin.id);
+  // Produto ativo do painel (cookie): segmenta a lista igual ao dashboard.
+  // É contexto de UX, não autorização — o escopo acima é a fronteira real.
+  const product = await getProductContext();
 
   const { searchParams } = new URL(request.url);
   const search   = searchParams.get("search") ?? "";
@@ -35,6 +39,7 @@ export async function GET(request: Request) {
         ? { subscriptions: { some: { status: status as any } } }
         : {},
       accessibleIds !== null ? { id: { in: accessibleIds } } : {},
+      productWhereFilter(product),
     ],
   };
 

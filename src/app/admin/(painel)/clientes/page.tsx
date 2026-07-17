@@ -1,4 +1,5 @@
 import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
+import { getProductContext, productWhereFilter } from "@/lib/admin-product-context";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { UserPlus } from "lucide-react";
@@ -38,6 +39,9 @@ export default async function EmpresasPage({
   // Escopo: admin restrito só enxerga empresas do seu escopo (null = irrestrito).
   // Alinha a página à API /api/admin/clientes, que já filtra por escopo.
   const accessible = await getAccessibleCompanyIds(admin.id);
+  // Produto ativo do painel (cookie): segmenta a lista igual ao dashboard.
+  // É contexto de UX, não autorização — o escopo acima é a fronteira real.
+  const product = await getProductContext();
   const params = await searchParams;
   const search = params.search ?? "";
   const statusFilter = params.status ?? "";
@@ -49,34 +53,38 @@ export default async function EmpresasPage({
   // Buscar todas as tags para o filtro
   const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
 
+  // where único: findMany e count NÃO podem divergir, senão o subtítulo mente.
+  const where = {
+    AND: [
+      accessible === null ? {} : { id: { in: accessible } },
+      productWhereFilter(product),
+      search
+        ? { OR: [
+            { name: { contains: search, mode: "insensitive" as const } },
+            { cnpj: { contains: search } },
+            { email: { contains: search, mode: "insensitive" as const } },
+          ]}
+        : {},
+      statusFilter
+        ? { subscriptions: { some: { status: statusFilter as any } } }
+        : {},
+      healthFilter
+        ? { healthCategory: healthFilter as any }
+        : {},
+      onboardingFilter
+        ? { onboardingStatus: onboardingFilter as any }
+        : {},
+      segmentFilter
+        ? { segment: segmentFilter as any }
+        : {},
+      tagFilter
+        ? { companyTags: { some: { tagId: tagFilter } } }
+        : {},
+    ],
+  };
+
   const companies = await prisma.company.findMany({
-    where: {
-      AND: [
-        accessible === null ? {} : { id: { in: accessible } },
-        search
-          ? { OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { cnpj: { contains: search } },
-              { email: { contains: search, mode: "insensitive" } },
-            ]}
-          : {},
-        statusFilter
-          ? { subscriptions: { some: { status: statusFilter as any } } }
-          : {},
-        healthFilter
-          ? { healthCategory: healthFilter as any }
-          : {},
-        onboardingFilter
-          ? { onboardingStatus: onboardingFilter as any }
-          : {},
-        segmentFilter
-          ? { segment: segmentFilter as any }
-          : {},
-        tagFilter
-          ? { companyTags: { some: { tagId: tagFilter } } }
-          : {},
-      ],
-    },
+    where,
     include: companyInclude,
     // tiebreaker por id: createdAt não é único → truncamento em 100 estável.
     orderBy: [{ createdAt: "desc" }, { id: "desc" }],
@@ -85,31 +93,19 @@ export default async function EmpresasPage({
 
   // Total real (respeitando os MESMOS filtros) — para o subtítulo não mentir
   // quando a lista é truncada em 100 ("mostrando 100 de N").
-  const totalCount = await prisma.company.count({
-    where: {
-      AND: [
-        accessible === null ? {} : { id: { in: accessible } },
-        search
-          ? { OR: [
-              { name: { contains: search, mode: "insensitive" } },
-              { cnpj: { contains: search } },
-              { email: { contains: search, mode: "insensitive" } },
-            ]}
-          : {},
-        statusFilter ? { subscriptions: { some: { status: statusFilter as any } } } : {},
-        healthFilter ? { healthCategory: healthFilter as any } : {},
-        onboardingFilter ? { onboardingStatus: onboardingFilter as any } : {},
-        segmentFilter ? { segment: segmentFilter as any } : {},
-        tagFilter ? { companyTags: { some: { tagId: tagFilter } } } : {},
-      ],
-    },
-  });
+  const totalCount = await prisma.company.count({ where });
 
-  // Contagens para filtros de status (respeitando o escopo do admin)
+  // Contagens para filtros de status (mesmo escopo e mesmo produto da lista —
+  // Subscription não tem platformProduct, filtra pela relação company).
   const statusCounts = await prisma.subscription.groupBy({
     by: ["status"],
     _count: true,
-    where: accessible === null ? undefined : { companyId: { in: accessible } },
+    where: {
+      AND: [
+        accessible === null ? {} : { companyId: { in: accessible } },
+        productWhereFilter(product, { via: "company" }),
+      ],
+    },
   });
   const counts = statusCounts.reduce(
     (acc, item) => ({ ...acc, [item.status]: item._count }),
