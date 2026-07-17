@@ -82,10 +82,31 @@
 
 ---
 
+## 🔐 DECISÃO — Autenticação multi-clínica do Domus (dono, 17/07) → FORJA no Sprint 3
+
+**Problema descoberto:** o login por PIN do Domus (`api/auth/verify-pin`) recebe **só 4 dígitos** e testa contra **todos os usuários de todas as clínicas** (`route.ts:131`, findMany sem escopo de clínica). Com 1 clínica/11 users funciona; em multi-clínica, **colisão de PIN vira certeza** (só 10.000 combinações) → um usuário loga na conta de outro, possivelmente de OUTRA clínica = vazamento de prontuário (LGPD Art. 11 + sigilo). PIN de 4 dígitos como identidade PRIMÁRIA não escala.
+**Descoberta boa:** o PIN já mora em `users_to_clinics.pin` (schema.ts:197) — **já é por-clínica**. A estrutura para separar existe; o login é que ignora.
+
+**Direção escolhida pelo dono (comportamento decidido POR DOMÍNIO):**
+| Entrada | Métodos | Escopo do PIN |
+|---|---|---|
+| `app.domussaude.com.br` (LEGADO — os 11 users atuais, hábito) | PIN + senha, como HOJE | global (inalterado) |
+| `medical.vis.app.br` (genérica, marca Vis Medical) | **só e-mail+senha** | — (PIN desabilitado) |
+| `medical.vis.app.br/<clinica>` (entrada da clínica) | PIN **ou** senha | **só aquela clínica** |
+
+Racional: sem transição forçada — o legado preserva o hábito dos atuais, o modelo seguro nasce no domínio novo. Risco de colisão fica **contido no legado e não cresce** (clínica nova entra pelo domínio novo). Aceito.
+
+**🚨 Furo bloqueante (não pode ser só cosmético):** esconder o PIN na tela genérica é VISUAL — `verify-pin` continua global e contornável por chamada direta à API. O escopo por clínica tem que viver na **API**: `verify-pin` passa a **exigir clinicId/slug** e recusar sem ele. Dado já está do lado certo → mudança de lógica, não de schema.
+
+**Por que FORJA e não decidir agora:** mexe na PORTA DE ENTRADA de sistema de saúde em produção (trancar user real / vazar prontuário). Múltiplas sub-decisões acopladas (slug vs subdomínio p/ resolver a clínica; PIN errado; re-auth). O desenho do dono ENTRA como proposta principal; a forja endurece (verify-pin é o 1º achado). **NÃO tocar em auth antes da forja.** É trabalho no DOMUS, não no Vis. Sprint 1 não é afetado (clínica atual entra como hoje).
+
+---
+
 ## Sprint 3 — Vender em vis.app.br (Fase 1) (~5–8 dias — Codex derrubou a estimativa de 3–5)
 
 **Meta:** optometrista/médico se cadastra no site, ganha trial, a clínica nasce no Domus provisionada pelo Vis, e ele entra em `medical.vis.app.br` — o mesmo fluxo do Vis Ótica hoje.
 
+- [ ] **T3.0 — FORJA: autenticação multi-clínica do Domus** (ANTES de T3.5). Rodar a skill `forja` sobre o desenho da seção "🔐 DECISÃO — Autenticação multi-clínica" acima (proposta principal = comportamento por domínio; achado nº1 = `verify-pin` global tem que exigir clinicId na API, não só esconder na tela). Saída: plano de implementação aprovado no Domus. **Bloqueia T3.5** (não dá para apontar `medical.vis.app.br` sem definir como a entrada resolve a clínica). É trabalho no repo do Domus.
 - [ ] **T3.1 — `Plan.platformProduct` + Plans comerciais.** Codex pegou: `Plan` NÃO tem produto e o register cai em silêncio no "primeiro plano ativo" → cadastro medical poderia receber plano de ótica. Migração aditiva `Plan.platformProduct` (default VIS_APP), `/api/public/plans` filtra por produto, e o register passa a **rejeitar** planId de produto errado (nunca fallback cruzado). Então criar `medical-solo` e `medical-clinica` (**DECISÃO D2**: preços) com gating data-driven via `PlanFeature`.
 - [ ] **T3.2 — `/api/public/register`:** aceitar `platformProduct` e pular `setupCompanyFinance` quando VIS_MEDICAL. Trial igual ao da ótica. (Branch "Matriz" e defaults ópticos de `CompanySettings` viram dado morto para medical — aceito, não quebra; anotar como dívida semântica.)
 - [ ] **T3.3 — Provisionamento Vis→Domus no signup.** Dois pontos que o Codex provou e mudam o desenho: **(a)** o Domus usa better-auth com **scrypt** — o padrão existente de criação direta (`create-clinic-user`, bcrypt) gera usuário que NÃO consegue logar; criar o user via API do better-auth e **testar login real**. **(b)** retry + senha são incompatíveis: se o Domus estiver fora do ar, não dá para re-enviar senha sem guardá-la em claro → o provisionamento cria o user **sem senha** e emite **token de primeiro acesso** (convite) que o e-mail entrega. Outbox: Company + Subscription + `provisioning_job` gravados na **MESMA transação** (crash entre cadastro e job não pode deixar cliente sem clínica). Idempotente + retry. O P2 fechou a porta pública — este webhook é a ÚNICA entrada de clínica nova.
