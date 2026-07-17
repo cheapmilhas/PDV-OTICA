@@ -25,7 +25,7 @@
 |---|---|
 | P1 segredo admin · P2 create-clinic · P3 commits 1–2 | ✅ feitos (P3 c1–c2 aplicados em prod 17/07) |
 | Sprint 0 — Consolidar | ✅ T0.1/0.2/0.2b deployados · T0.4 resíduo clínico purgado · **casca escondida via filtro soft-delete (`95e3acf5`, deployado)** — hard-delete descartado (62 FKs, frágil) · T0.5 ⬜ backup R2 aguarda dono (não bloqueia Sprint 1) |
-| Sprint 1 — Domus cliente nº1 | 🔄 T1.1 plano `interno-domus` R$0 criado ✅ · scripts promote+link prontos e smoke-testados ✅ · **falta: dono criar o cliente pela UI** |
+| Sprint 1 — Domus cliente nº1 | 🔄 **T1.1 ✅ + T1.2 ✅** — "Clinica Domus Saude" criada (VIS_APP), promovida a VIS_MEDICAL (`promote-company-to-medical.cjs`) e vinculada à clínica real `7110db1b` (`link-domus-clinic.cjs`). Verificado: 1 medical visível, vínculo único. ⚠️ sub=TRIAL (dono decide se vira ACTIVE — conta interna não deveria vencer). **PRÓXIMO: T1.3 projetor + T1.4/1.5 sync sombra.** |
 | Sprint 1 — Domus cliente nº 1 no portal | ⬜ |
 | Sprint 2 — O cadeado (bloqueio por inadimplência) | ⬜ |
 | Sprint 3 — Vender em vis.app.br | ⬜ |
