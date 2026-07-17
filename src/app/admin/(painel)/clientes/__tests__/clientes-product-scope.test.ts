@@ -23,6 +23,16 @@ describe("lista de clientes — filtro por produto", () => {
     expect(listPage).toContain("productWhereFilter(product)");
   });
 
+  it("esconde soft-deleted SEM sumir com blockedReason=null (senão lista vazia)", () => {
+    // Regressão crítica: { not: "DELETED" } sozinho remove as empresas com
+    // blockedReason=null (NULL != 'DELETED' é NULL em SQL) → lista vazia em
+    // produção. O OR com { blockedReason: null } preserva-as.
+    for (const src of [listPage, apiRoute]) {
+      expect(src).toContain('blockedReason: null');
+      expect(src).toContain('blockedReason: { not: "DELETED" }');
+    }
+  });
+
   it("findMany e count compartilham o MESMO where (senão o subtítulo mente)", () => {
     // Um único objeto `where` declarado e reusado nas duas queries.
     expect(listPage).toMatch(/const where = \{/);

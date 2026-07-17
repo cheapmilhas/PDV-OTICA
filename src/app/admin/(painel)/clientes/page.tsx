@@ -58,6 +58,13 @@ export default async function EmpresasPage({
     AND: [
       accessible === null ? {} : { id: { in: accessible } },
       productWhereFilter(product),
+      // Esconde empresas "excluídas" pelo super admin (soft-delete: a ação
+      // `delete` marca blockedReason='DELETED', não apaga a linha). Sem isto,
+      // empresas excluídas reaparecem na lista.
+      // ⚠️ NÃO usar { not: "DELETED" } sozinho: em SQL, NULL != 'DELETED' é NULL
+      // (não true), então as empresas com blockedReason=null (a maioria)
+      // sumiriam — a lista ficaria VAZIA. Incluir o null explicitamente.
+      { OR: [{ blockedReason: null }, { blockedReason: { not: "DELETED" } }] },
       search
         ? { OR: [
             { name: { contains: search, mode: "insensitive" as const } },

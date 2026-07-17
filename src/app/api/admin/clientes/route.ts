@@ -40,6 +40,10 @@ export async function GET(request: Request) {
         : {},
       accessibleIds !== null ? { id: { in: accessibleIds } } : {},
       productWhereFilter(product),
+      // Esconde empresas soft-deletadas (blockedReason='DELETED') — mesmo
+      // critério da página /admin/clientes. Inclui null explicitamente:
+      // NULL != 'DELETED' é NULL em SQL, senão a lista viria vazia.
+      { OR: [{ blockedReason: null }, { blockedReason: { not: "DELETED" } }] },
     ],
   };
 
