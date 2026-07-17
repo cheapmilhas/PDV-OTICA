@@ -59,9 +59,11 @@ const menuItems = [
   },
 ];
 
-export function AdminNav() {
+export function AdminNav({ activeProduct = "VIS_APP" }: { activeProduct?: "VIS_APP" | "VIS_MEDICAL" }) {
   const pathname = usePathname();
-  const [product, setProduct] = useState<"VIS_APP" | "VIS_MEDICAL">("VIS_APP");
+  // Nasce do cookie (via prop do Server Component), NÃO de um hardcode: senão o
+  // botão volta a "Vis App" no reload enquanto o servidor usa "Vis Medical".
+  const [product, setProduct] = useState<"VIS_APP" | "VIS_MEDICAL">(activeProduct);
 
   async function switchProduct(p: "VIS_APP" | "VIS_MEDICAL") {
     setProduct(p);

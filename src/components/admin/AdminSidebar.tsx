@@ -12,7 +12,9 @@ import { AdminLogoutButton } from "@/app/admin/(painel)/AdminLogoutButton";
  * Conteúdo interno da sidebar (logo + navegação + logout).
  * Renderizado de forma idêntica na sidebar fixa (desktop) e no drawer (mobile).
  */
-function SidebarContent() {
+type Product = "VIS_APP" | "VIS_MEDICAL";
+
+function SidebarContent({ activeProduct }: { activeProduct: Product }) {
   return (
     <>
       {/* Logo */}
@@ -29,7 +31,7 @@ function SidebarContent() {
       </div>
 
       {/* Menu */}
-      <AdminNav />
+      <AdminNav activeProduct={activeProduct} />
 
       {/* Footer */}
       <div className="px-3 py-3 border-t border-border">
@@ -43,10 +45,10 @@ function SidebarContent() {
  * Sidebar fixa do desktop (≥lg). Escondida no mobile.
  * Mantém exatamente os mesmos tokens/classes do <aside> original.
  */
-export function AdminSidebar() {
+export function AdminSidebar({ activeProduct }: { activeProduct: Product }) {
   return (
     <aside className="hidden lg:flex w-60 flex-shrink-0 border-r border-border bg-card flex-col">
-      <SidebarContent />
+      <SidebarContent activeProduct={activeProduct} />
     </aside>
   );
 }
@@ -56,7 +58,7 @@ export function AdminSidebar() {
  * Pensado para viver na top bar do layout. Escondido no desktop.
  * O drawer fecha automaticamente em qualquer troca de rota (usePathname).
  */
-export function AdminMobileMenu() {
+export function AdminMobileMenu({ activeProduct }: { activeProduct: Product }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -78,7 +80,7 @@ export function AdminMobileMenu() {
       </SheetTrigger>
       <SheetContent side="left" className="w-60 p-0 bg-card flex flex-col">
         <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
-        <SidebarContent />
+        <SidebarContent activeProduct={activeProduct} />
       </SheetContent>
     </Sheet>
   );
