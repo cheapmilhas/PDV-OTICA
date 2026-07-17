@@ -133,6 +133,10 @@ model Company {
   contractEnd             DateTime?
   quickNote               String?
   platformProduct         PlatformProduct          @default(VIS_APP)
+  /// Vínculo 1:1 com a clínica no Domus (banco SEPARADO — não há FK possível).
+  /// Só faz sentido quando platformProduct = VIS_MEDICAL; o Vis é a fonte de
+  /// verdade da assinatura e publica o entitlement para esta clínica.
+  domusClinicId           String?                  @unique @db.Uuid
   ownerGroupId            String?
   accountsPayable         AccountPayable[]
   accountsReceivable      AccountReceivable[]
@@ -442,6 +446,47 @@ model AuditLog {
   @@index([entityType, entityId])
   @@index([userId, createdAt])
   @@index([branchId, createdAt])
+}
+
+/// Auditoria de ações do super admin (excluir empresa, cancelar assinatura,
+/// estender trial). A tabela e a migração (20260605130000) foram para a main e
+/// aplicadas em produção; o model ficou na branch feature/cockpit-monitoramento
+/// (PAUSADA) e nunca voltou — deixando o schema sem descrever uma tabela COM
+/// DADOS. Reconciliado aqui: sem o model, `migrate dev` gera DROP TABLE e apaga
+/// log de auditoria de ações de alto risco.
+model AdminActionLog {
+  id        String   @id @default(cuid())
+  adminId   String
+  actionId  String
+  companyId String?
+  riskLevel String
+  input     Json
+  result    Json
+  reason    String?
+  requestId String?
+  createdAt DateTime @default(now())
+
+  @@index([companyId])
+  @@index([adminId, createdAt])
+}
+
+/// Amostras de métricas de rota (observabilidade). Mesma história do
+/// AdminActionLog: migração 20260605120000 aplicada em produção, model deixado
+/// para trás na branch pausada.
+model MetricSample {
+  id          String   @id @default(cuid())
+  capturedAt  DateTime @default(now())
+  windowMin   Int
+  route       String?
+  reqCount    Int      @default(0)
+  errorCount  Int      @default(0)
+  p50Ms       Int?
+  p95Ms       Int?
+  slowQueries Int      @default(0)
+  cacheHits   Int      @default(0)
+  cacheMisses Int      @default(0)
+
+  @@index([capturedAt])
 }
 
 model Customer {
