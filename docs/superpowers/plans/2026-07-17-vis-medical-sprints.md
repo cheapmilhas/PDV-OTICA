@@ -19,12 +19,13 @@
 
 ## Estado de execução (ATUALIZAR ao concluir cada tarefa)
 
-**PRÓXIMA TAREFA → Sprint 0, T0.5 (backup R2 — aguarda dono criar bucket+token) + você excluir "Clínica Vis (Dev)" pela UI /admin/clientes**
+**PRÓXIMA TAREFA → Sprint 1 T1.1: dono cria "Clínica Domus Saúde" em /admin/clientes/novo (plano "Interno — Domus"), me passa o id → eu rodo promote + link. // Pendências paralelas do dono: bucket R2 (T0.5).**
 
 | Etapa | Status |
 |---|---|
 | P1 segredo admin · P2 create-clinic · P3 commits 1–2 | ✅ feitos (P3 c1–c2 aplicados em prod 17/07) |
-| Sprint 0 — Consolidar | 🔄 T0.1 ✅ · T0.2 ✅ · T0.2b ✅ · **deployado em prod (site+admin 200, 0 erros)** · T0.4 script ✅ (resíduo clínico purgado; falta você excluir a casca pela UI) · T0.5 ⬜ aguarda R2 |
+| Sprint 0 — Consolidar | ✅ T0.1/0.2/0.2b deployados · T0.4 resíduo clínico purgado · **casca escondida via filtro soft-delete (`95e3acf5`, deployado)** — hard-delete descartado (62 FKs, frágil) · T0.5 ⬜ backup R2 aguarda dono (não bloqueia Sprint 1) |
+| Sprint 1 — Domus cliente nº1 | 🔄 T1.1 plano `interno-domus` R$0 criado ✅ · scripts promote+link prontos e smoke-testados ✅ · **falta: dono criar o cliente pela UI** |
 | Sprint 1 — Domus cliente nº 1 no portal | ⬜ |
 | Sprint 2 — O cadeado (bloqueio por inadimplência) | ⬜ |
 | Sprint 3 — Vender em vis.app.br | ⬜ |
