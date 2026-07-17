@@ -35,7 +35,10 @@ beforeEach(() => {
   cookieGet.mockReset();
   jwtVerify.mockReset();
   adminFindUnique.mockReset();
-  process.env.AUTH_SECRET = "test-secret";
+  // Segredo DEDICADO do admin (P1, 2026-07-16): o fallback para AUTH_SECRET foi
+  // removido — setar AUTH_SECRET aqui deixaria o segredo ausente e tudo viraria
+  // 401. Ver src/lib/__tests__/admin-jwt-secret.test.ts.
+  process.env.ADMIN_JWT_SECRET = "test-secret";
 });
 
 describe("requireAdminAndScope", () => {

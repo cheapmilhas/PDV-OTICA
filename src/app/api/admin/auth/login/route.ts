@@ -13,7 +13,8 @@ const log = logger.child({ route: "admin/auth/login" });
 // Lazy: lê o secret em runtime (não no import) p/ não quebrar `next build` em
 // ambientes sem o secret (ex.: Preview). Segurança idêntica — lança se faltar
 // quando a rota roda. Fonte única do segredo de admin em admin-session.ts
-// (ADMIN_JWT_SECRET dedicado, com fallback p/ AUTH_SECRET durante a rotação).
+// (ADMIN_JWT_SECRET dedicado — o fallback p/ AUTH_SECRET foi REMOVIDO em
+// 2026-07-16, quando a env dedicada entrou em produção; ver admin-session.ts).
 function getJwtSecret(): Uint8Array {
   return getAdminJwtSecret();
 }

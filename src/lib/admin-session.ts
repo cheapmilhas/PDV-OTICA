@@ -13,17 +13,31 @@ import { canAccessCompany } from "@/lib/admin-scope";
  * se o secret faltar quando a rota roda) e o build não precisa mais do secret.
  */
 /**
- * Segredo do cookie de admin. SEGURANÇA (pentest 2026-06-27): admin e tenant
- * assinavam JWT com o MESMO segredo (AUTH_SECRET), então quem o obtivesse podia
- * forjar um cookie de admin. Agora preferimos um ADMIN_JWT_SECRET dedicado; o
- * fallback para AUTH_SECRET mantém a compatibilidade até a env nova ser setada
- * em produção (rotação sem downtime). Defina ADMIN_JWT_SECRET ≠ AUTH_SECRET na
- * Vercel e invalide os cookies admin antigos.
+ * Segredo do cookie de admin — DEDICADO, sem fallback.
+ *
+ * SEGURANÇA (pentest 2026-06-27 → fechado em 2026-07-16): admin e tenant
+ * assinavam JWT com o MESMO segredo, então quem obtivesse o do tenant forjava
+ * um cookie de admin. O fallback `|| AUTH_SECRET || NEXTAUTH_SECRET` existia
+ * para permitir rotação sem downtime — mas a rotação nunca foi concluída e o
+ * fallback virou permanente: até 2026-07-16 a produção tinha SÓ
+ * `NEXTAUTH_SECRET`, ou seja, admin e clientes assinavam igual de verdade.
+ *
+ * `ADMIN_JWT_SECRET` foi criado em produção (dono, 2026-07-16, valor novo de
+ * `openssl rand -base64 48`) e o fallback removido. NÃO reintroduzir: ele
+ * anula a separação. Falhar fechado (throw) é o comportamento correto — um
+ * admin fora do ar é incidente; um admin forjável é catástrofe.
+ *
+ * Pré-condição da decisão "Vis é a operadora" (forja 2026-07-16, P1): sem
+ * segredos separados, um cookie com `domain: ".vis.app.br"` viraria escada do
+ * tenant até o super admin.
  */
 export function getAdminJwtSecret(): Uint8Array {
-  const secret =
-    process.env.ADMIN_JWT_SECRET || process.env.AUTH_SECRET || process.env.NEXTAUTH_SECRET;
-  if (!secret) throw new Error("ADMIN_JWT_SECRET (ou AUTH_SECRET) é obrigatório");
+  const secret = process.env.ADMIN_JWT_SECRET;
+  if (!secret) {
+    throw new Error(
+      "ADMIN_JWT_SECRET é obrigatório (dedicado; não usa AUTH_SECRET/NEXTAUTH_SECRET).",
+    );
+  }
   return new TextEncoder().encode(secret);
 }
 
