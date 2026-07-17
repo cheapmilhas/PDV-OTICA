@@ -1,5 +1,20 @@
 {
   "enabledPlugins": {
     "claude-code-setup@claude-plugins-official": true
+  },
+  "permissions": {
+    "deny": [
+      "Bash(prisma db push:*)",
+      "Bash(npx prisma db push:*)",
+      "Bash(./node_modules/.bin/prisma db push:*)",
+      "Bash(prisma migrate reset:*)",
+      "Bash(npx prisma migrate reset:*)",
+      "Bash(./node_modules/.bin/prisma migrate reset:*)",
+      "Bash(prisma migrate dev:*)",
+      "Bash(npx prisma migrate dev:*)",
+      "Bash(./node_modules/.bin/prisma migrate dev:*)",
+      "Bash(drizzle-kit push:*)",
+      "Bash(npx drizzle-kit push:*)"
+    ]
   }
 }
