@@ -732,4 +732,15 @@ git log --oneline main..HEAD
 
 ---
 ## ESTADO DE EXECUÇÃO (2026-07-18)
-Tasks 1-10 ✅ implementadas (branch `feature/cadeado-billing-guard` no worktree `~/SISTEMACLINICADOMUS-cadeado`, 13 commits, tsc 0). **Task 11 (verificação final) BLOQUEOU o merge:** revisão final do Codex achou enumeração incompleta — ver memória `vis-medical-cadeado-sprint2.md` para a lista de actions faltantes (exams/*, procedure-reports/*, upsert-financial-transaction, open-cash-register), o cross-tenant de create-delivered-report-attachment, e o plano de retomada. NÃO mergear até fechar.
+Tasks 1-10 ✅ implementadas (branch `feature/cadeado-billing-guard` no worktree `~/SISTEMACLINICADOMUS-cadeado`, tsc 0). Task 11 (verificação final) inicialmente BLOQUEOU o merge por enumeração incompleta.
+
+### ✅ RETOMADA CONCLUÍDA — MERGEADO em `main` (2026-07-18, merge `7d3d0cb`, `--no-ff`, 16 commits)
+A enumeração foi completada e **derivada do código** (não lista manual):
+- **9 criadores que estavam fora** entraram guardados INLINE (preservam role/permission próprios): `exams/create-exam-order`, `create-exam-orders-batch`, `upload-exam-result`; `procedure-reports/create-report-order`, `create-report` (só ramo `!existingReport`), `add-report-attachment`; `upsert-financial-transaction` (`!id`), `open-cash-register`, `upsert-commission-rule` (`!id`).
+- **Cross-tenant** de `create-delivered-report-attachment` fechado (valida posse da ordem pela clínica).
+- **Teste de arquitetura reescrito para DESCOBRIR o inventário** (`CLINICAL_BILLABLE_TABLES` + `EXCLUDED_CREATORS` em `guarded-actions.ts`): varre `src/actions/**`, exige guard OU exclusão explícita com motivo. Controle negativo executado (remover guard → falha; import sem chamada → falha; comentário mencionando o nome → não conta).
+- **Codex (2 rodadas de revisão final)** achou +2 reais nesta retomada, ambos fechados e confirmados: bypass de `upsert-commission-rule` por `id` forjado; teste que aceitava só o import.
+- **Decisões do dono:** commission-rule guard só na criação; `create-medical-reminder` fica FORA (EXCLUDE).
+- **Adiado de propósito** (ticket separado, não bloqueia): classe de IDOR cross-tenant pré-existente (`patientId`/`appointmentId` sem validação de posse em ~12 criadores) — ver memória `domus-idor-cross-tenant-patientid`.
+
+**tsc 0, 50 testes de entitlement/arquitetura verdes.** NÃO foi feito `git push` — deploy controlado pelo dono. **Enforce OFF** (observação): medir `WOULD_BLOCK` em prod, zero falso-positivo, ANTES de ligar (D5).

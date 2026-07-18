@@ -47,20 +47,33 @@ Derivada e classificada por client + tabela de escrita (não por nome). **Duas f
 11. `apply-bundle-to-appointment` → appointmentBundles
 12. `create-delivered-report-attachment` → procedureReportAttachments
 
-**(b) Guard inline condicional** (criação = `id`/`existing` ausente — D6):
+**(b) Guard inline** (`assertClinicWriteAllowed` antes do insert de criação — preserva client/role/permission próprios; bloqueia SÓ a criação):
 13. `upsert-medical-record` (discrimina por `!parsedInput.id`)
 14. `upsert-aesthetic-record` (discrimina por `!existing`)
 15. `upsert-specialty-record-data` (discrimina por `!existing`)
-16b. `upsert-patient` (discrimina por `!parsedInput.id`) — **adicionado após achado do Codex na revisão da Task 4**: cria paciente novo sem guard. Cadastro novo é criação de estado; edição de paciente existente sempre passa.
+16. `upsert-patient` (discrimina por `!parsedInput.id`) — **achado Codex na revisão da Task 4**: cria paciente novo sem guard.
+17. `exams/create-exam-order`, `exams/create-exam-orders-batch` (`doctorOnlyActionClient` — inline preserva role) — pedido de exame.
+18. `exams/upload-exam-result` — resultado de exame novo (guard após checar posse da ordem).
+19. `procedure-reports/create-report-order` — ordem de laudo FATURÁVEL (`priceInCents`/`paymentStatus`).
+20. `procedure-reports/create-report` (guard SÓ no ramo `!existingReport` — laudo novo; editar/finalizar passa).
+21. `procedure-reports/add-report-attachment` — anexo de laudo (guard após checar posse da ordem).
+22. `upsert-financial-transaction` (discrimina por `!parsedInput.id`) — lançamento financeiro novo.
+23. `open-cash-register` — abertura de caixa + movimento de abertura.
+24. `upsert-commission-rule` (discrimina por `!parsedInput.id`) — regra nova dispara backfill retroativo que insere `financialTransactions`+`commissionEntries`; edição passa. **Achado Codex na revisão final; decisão do dono: guard só na criação.**
+
+> Itens 17-24 = **enumeração completada após a revisão final do Codex** (a 1ª rodada filtrou só `src/actions/*/index.ts` e deixou subpastas `exams/`, `procedure-reports/` e os financeiros de fora). Todos guardados inline para preservar os `hasPermission`/role custom de cada um.
 
 **(c) Guard inline sem client** (recebe clinicId no input, resposta uniforme — anti-oráculo):
-16. `add-public-appointment` (é `export async function`, não usa client)
+16c. `add-public-appointment` (é `export async function`, não usa client)
 
-**Excluídas explicitamente** (verificadas, NÃO são criação de estado clínico faturável por ação humana):
-- `create-medical-reminder`, `create-patient-call`, `register-survey-response` — lembrete/fila/pesquisa.
+**Cross-tenant fechado (bug pré-existente, independente do cadeado):** `create-delivered-report-attachment` aceitava `reportOrderId` de outra clínica (FKs `clinicId` e `reportOrderId` independentes no schema:3971). Agora valida `procedureReportOrders.clinicId == ctx.user.clinic.id` (`findFirst` com `isNull(deletedAt)`) antes do insert — igual aos irmãos `add-report-attachment`/`create-report-order`.
+
+**Excluídas explicitamente** (verificadas — NÃO são criação de estado clínico faturável por ação humana; o teste de discovery trava esta decisão via `EXCLUDED_CREATORS`):
+- **Edições** (D1 — sempre passam): `update-appointment`, `update-appointment-status` (financial/commission são side-effects derivados), `adjust-appointment`, `update-medical-record`, `update-optical-prescription` (insere só versão-snapshot da receita existente antes de editar).
+- `create-medical-reminder` (**Codex insistiu 2×; decisão do dono: EXCLUDE**), `create-patient-call`, `register-survey-response` — lembrete/fila/pesquisa.
 - `generate-atestado-tecnico` — é ponto eletrônico (timeClockLegalExports), não atestado médico (nome enganoso).
-- `create-stripe-checkout`, `create-clinic`, `create-clinic-user` — cobrança/setup.
-- Todos os `upsert-*` administrativos (doctor, room, insurance-plan, procedure-catalog, commission-rule, etc.) — configuração, não estado clínico faturável.
+- `create-stripe-checkout`, `create-clinic`, `create-clinic-user` — cobrança/setup pré-cobrança.
+- `examCatalog`/`procedureCatalog`/templates/favoritos e demais `upsert-*` administrativos — configuração/dicionário, não estado clínico faturável.
 - Ponto eletrônico/RH (`register-time-clock-entry`, `generate-aej/afd`, `issue-rh-document`, etc.) — módulo separado.
 
 ---
@@ -109,9 +122,11 @@ Racional: receber um snapshot fresco do Vis **é** a verificação. Sem pull sí
 
 ### Teste de arquitetura (rede anti-regressão)
 
-`src/__tests__/architecture/entitlement-guard-wiring.test.ts` — verifica a **fonte real** (qual client cada action usa), não um registro paralelo:
-1. Cada action da lista explícita de criação faturável (~15-18) **usa** `billingGuardedClinicActionClient` → action de criação nova sem guard reprova o CI.
-2. As leituras de prontuário conhecidas (`getMedicalRecord`, `listPatientRecords`, timeline, `getAllowedPrescriptionTypes`) **NÃO** usam o client guardado → refactor não bloqueia leitura por engano (CFM).
+`tests/architecture/entitlement-guard-wiring.test.ts` — **DESCOBRE o inventário real**, não valida só a lista manual (foi essa lacuna que deixou exams/laudos/financeiro passarem na 1ª rodada):
+1. **Discovery:** varre `src/actions/**`, acha todo arquivo que insere uma `CLINICAL_BILLABLE_TABLE` e exige que esteja guardado (client OU `assertClinicWriteAllowed` inline) OU em `EXCLUDED_CREATORS` (com motivo). Criador novo sem guard e sem exclusão → reprova o CI. **Controle negativo executado:** remover o guard de um criador faz o teste falhar com a mensagem certa.
+2. `EXCLUDED_CREATORS` não tem entrada morta (toda exclusão é um inserter real) e toda exclusão faz `.update` (heurística anti-"criação mascarada de exclusão").
+3. Fiação declarada bate com o código: `GUARDED_VIA_CLIENT` usa client guardado; `GUARDED_INLINE` chama o guard; `GUARDED_INLINE_PUBLIC` idem.
+4. As leituras de prontuário conhecidas (`get-medical-record`, `list-patient-records`, timeline, `get-allowed-prescription-types`) **NÃO** usam o client guardado → refactor não bloqueia leitura por engano (CFM).
 
 > ⚠️ **A enumeração da lista de criação faturável é a TAREFA 1 do plano** — é o passo de maior julgamento e o mais perigoso: uma action de criação esquecida falha-aberto em silêncio (a clínica inadimplente continua criando por aquele caminho). A lista deve ser derivada do código, revisada explicitamente (não inferida no meio da implementação), e virar a fonte que o teste de arquitetura trava.
 
