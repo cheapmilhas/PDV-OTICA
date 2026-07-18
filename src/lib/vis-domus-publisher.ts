@@ -125,7 +125,11 @@ export async function publishEntitlementForCompany(companyId: string): Promise<v
         "x-vis-signature": signature,
       },
       body: rawBody,
-      signal: AbortSignal.timeout(5000),
+      // 10s (não 5s): o receptor do Domus é serverless e o PRIMEIRO webhook
+      // pega cold start — 5s estourava e caía no pull de reparação. O publisher
+      // é fire-and-forget (não segura a resposta do admin), então 10s não pesa
+      // na UX. A janela HMAC é ±5min, então a espera não invalida a assinatura.
+      signal: AbortSignal.timeout(10000),
     });
 
     if (!res.ok) {
