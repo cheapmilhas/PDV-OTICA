@@ -7,6 +7,7 @@ import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
 import { logger } from "@/lib/logger";
 import { asaas } from "@/lib/asaas";
 import { planValueForCycle } from "@/lib/plan-pricing";
+import { schedulePublishEntitlement } from "@/lib/vis-domus-publisher";
 
 const log = logger.child({ route: "admin/clientes/[id]/actions" });
 
@@ -37,6 +38,9 @@ export async function POST(
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "COMPANY_BLOCKED", metadata: { adminEmail: admin.email } },
         });
         await logActivity({ companyId, type: "COMPANY_BLOCKED", title: "Empresa bloqueada", actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
+        // Espelha no Domus se for clínica vinculada (fire-and-forget; não segura
+        // a resposta do admin; pull diário cobre falha).
+        schedulePublishEntitlement(companyId);
         return NextResponse.json({ success: true, message: "Empresa bloqueada" });
       }
 
@@ -49,8 +53,14 @@ export async function POST(
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "COMPANY_UNBLOCKED", metadata: { adminEmail: admin.email } },
         });
         await logActivity({ companyId, type: "COMPANY_UNBLOCKED", title: "Empresa desbloqueada", actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
+        // Espelha no Domus se for clínica vinculada (fire-and-forget; não segura
+        // a resposta do admin; pull diário cobre falha).
+        schedulePublishEntitlement(companyId);
         return NextResponse.json({ success: true, message: "Empresa desbloqueada" });
       }
+      // TODO(sprint3): publicar entitlement em reactivate/change_plan/cancel/
+      // change_billing_cycle quando houver medical pagante. Hoje sem medical
+      // pago, o cron de pull diário cobre o atraso desses caminhos.
 
       case "reactivate": {
         const subscription = await prisma.subscription.findFirst({ where: { companyId, status: "SUSPENDED" } });
