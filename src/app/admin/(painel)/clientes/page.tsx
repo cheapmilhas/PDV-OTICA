@@ -1,5 +1,5 @@
 import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
-import { getProductContext, productWhereFilter } from "@/lib/admin-product-context";
+import { getProductContext, productWhereFilter, notDeletedFilter } from "@/lib/admin-product-context";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { UserPlus } from "lucide-react";
@@ -59,12 +59,10 @@ export default async function EmpresasPage({
       accessible === null ? {} : { id: { in: accessible } },
       productWhereFilter(product),
       // Esconde empresas "excluídas" pelo super admin (soft-delete: a ação
-      // `delete` marca blockedReason='DELETED', não apaga a linha). Sem isto,
-      // empresas excluídas reaparecem na lista.
-      // ⚠️ NÃO usar { not: "DELETED" } sozinho: em SQL, NULL != 'DELETED' é NULL
-      // (não true), então as empresas com blockedReason=null (a maioria)
-      // sumiriam — a lista ficaria VAZIA. Incluir o null explicitamente.
-      { OR: [{ blockedReason: null }, { blockedReason: { not: "DELETED" } }] },
+      // `delete` marca blockedReason='DELETED', não apaga a linha). Helper
+      // compartilhado com o dashboard — mesmo critério nos dois (senão a lista
+      // e as contagens divergem, como divergiam antes).
+      notDeletedFilter(),
       search
         ? { OR: [
             { name: { contains: search, mode: "insensitive" as const } },
@@ -111,6 +109,9 @@ export default async function EmpresasPage({
       AND: [
         accessible === null ? {} : { companyId: { in: accessible } },
         productWhereFilter(product, { via: "company" }),
+        // Mesmo escopo da lista: assinatura de empresa excluída não conta nos
+        // filtros de status (a `delete` marca a Company, não cancela a sub).
+        notDeletedFilter({ via: "company" }),
       ],
     },
   });

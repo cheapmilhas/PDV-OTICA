@@ -16,6 +16,14 @@ const apiRoute = readFileSync(
   join(process.cwd(), "src/app/api/admin/clientes/route.ts"),
   "utf8",
 );
+const productContext = readFileSync(
+  join(process.cwd(), "src/lib/admin-product-context.ts"),
+  "utf8",
+);
+const dashboardFilters = readFileSync(
+  join(process.cwd(), "src/app/admin/(painel)/dashboard-filters.ts"),
+  "utf8",
+);
 
 describe("lista de clientes — filtro por produto", () => {
   it("a página lê o produto do cookie e aplica o filtro", () => {
@@ -23,14 +31,30 @@ describe("lista de clientes — filtro por produto", () => {
     expect(listPage).toContain("productWhereFilter(product)");
   });
 
-  it("esconde soft-deleted SEM sumir com blockedReason=null (senão lista vazia)", () => {
-    // Regressão crítica: { not: "DELETED" } sozinho remove as empresas com
-    // blockedReason=null (NULL != 'DELETED' é NULL em SQL) → lista vazia em
-    // produção. O OR com { blockedReason: null } preserva-as.
+  it("lista e API escondem soft-deleted pelo helper compartilhado", () => {
+    // O filtro virou helper único (notDeletedFilter) para lista, API e dashboard
+    // usarem o MESMO critério — antes o dashboard divergia e contava a casca.
     for (const src of [listPage, apiRoute]) {
-      expect(src).toContain('blockedReason: null');
-      expect(src).toContain('blockedReason: { not: "DELETED" }');
+      expect(src).toContain("notDeletedFilter()");
     }
+  });
+
+  it("o helper notDeletedFilter preserva blockedReason=null (senão lista vazia)", () => {
+    // Regressão crítica MORA no helper agora: { not: "DELETED" } sozinho remove
+    // empresas com blockedReason=null (NULL != 'DELETED' é NULL em SQL) → lista
+    // vazia em produção. O OR com { blockedReason: null } preserva-as.
+    expect(productContext).toContain("blockedReason: null");
+    expect(productContext).toContain('blockedReason: { not: "DELETED" }');
+  });
+
+  it("o dashboard combina produto + soft-delete (não conta a casca DELETED)", () => {
+    // O bug original: buildDashboardFilters só aplicava produto → a empresa
+    // soft-deletada entrava na contagem do dashboard enquanto sumia da lista.
+    expect(dashboardFilters).toContain("notDeletedFilter()");
+    expect(dashboardFilters).toContain('notDeletedFilter({ via: "company" })');
+    expect(dashboardFilters).toContain(
+      'notDeletedFilter({ via: "subscription.company" })',
+    );
   });
 
   it("findMany e count compartilham o MESMO where (senão o subtítulo mente)", () => {

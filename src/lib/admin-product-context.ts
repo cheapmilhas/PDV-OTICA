@@ -36,3 +36,32 @@ export function productWhereFilter(
   }
   return { platformProduct: product };
 }
+
+/**
+ * Filtro Prisma que ESCONDE empresas soft-deletadas (`blockedReason='DELETED'`,
+ * a `delete` do admin marca a coluna, não apaga a linha). Espelha as 3 vias de
+ * aninhamento do `productWhereFilter` para compor com ele.
+ *
+ * ⚠️ Inclui `blockedReason: null` explicitamente: em SQL `NULL != 'DELETED'` é
+ * NULL (não true), então sem o ramo `null` a lista viria vazia (a maioria das
+ * empresas tem `blockedReason` nulo).
+ *
+ * NÃO embutido no `productWhereFilter`: aquele promete só segmentação por
+ * produto; um consumidor de auditoria/histórico pode precisar VER as excluídas.
+ * Combine explicitamente por `AND` (não spread — a chave `company` colidiria):
+ *   `{ AND: [productWhereFilter(p, o), notDeletedFilter(o)] }`
+ */
+export function notDeletedFilter(opts?: {
+  via: "company" | "subscription.company";
+}): Record<string, unknown> {
+  const notDeleted = {
+    OR: [{ blockedReason: null }, { blockedReason: { not: "DELETED" } }],
+  };
+  if (opts?.via === "company") {
+    return { company: notDeleted };
+  }
+  if (opts?.via === "subscription.company") {
+    return { subscription: { company: notDeleted } };
+  }
+  return notDeleted;
+}

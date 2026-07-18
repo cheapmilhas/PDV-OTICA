@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
-import { getProductContext, productWhereFilter } from "@/lib/admin-product-context";
+import { getProductContext, productWhereFilter, notDeletedFilter } from "@/lib/admin-product-context";
 
 /**
  * GET /api/admin/clientes
@@ -41,9 +41,8 @@ export async function GET(request: Request) {
       accessibleIds !== null ? { id: { in: accessibleIds } } : {},
       productWhereFilter(product),
       // Esconde empresas soft-deletadas (blockedReason='DELETED') — mesmo
-      // critério da página /admin/clientes. Inclui null explicitamente:
-      // NULL != 'DELETED' é NULL em SQL, senão a lista viria vazia.
-      { OR: [{ blockedReason: null }, { blockedReason: { not: "DELETED" } }] },
+      // helper compartilhado da página /admin/clientes e do dashboard.
+      notDeletedFilter(),
     ],
   };
 
