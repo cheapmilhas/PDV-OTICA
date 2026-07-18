@@ -47,10 +47,11 @@ Derivada e classificada por client + tabela de escrita (não por nome). **Duas f
 11. `apply-bundle-to-appointment` → appointmentBundles
 12. `create-delivered-report-attachment` → procedureReportAttachments
 
-**(b) Guard inline condicional** (`input.id` ausente = criação — D6):
-13. `upsert-medical-record`
-14. `upsert-aesthetic-record`
-15. `upsert-specialty-record-data`
+**(b) Guard inline condicional** (criação = `id`/`existing` ausente — D6):
+13. `upsert-medical-record` (discrimina por `!parsedInput.id`)
+14. `upsert-aesthetic-record` (discrimina por `!existing`)
+15. `upsert-specialty-record-data` (discrimina por `!existing`)
+16b. `upsert-patient` (discrimina por `!parsedInput.id`) — **adicionado após achado do Codex na revisão da Task 4**: cria paciente novo sem guard. Cadastro novo é criação de estado; edição de paciente existente sempre passa.
 
 **(c) Guard inline sem client** (recebe clinicId no input, resposta uniforme — anti-oráculo):
 16. `add-public-appointment` (é `export async function`, não usa client)
