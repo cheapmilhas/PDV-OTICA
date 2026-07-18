@@ -19,13 +19,13 @@
 
 ## Estado de execução (ATUALIZAR ao concluir cada tarefa)
 
-**PRÓXIMA TAREFA → Sprint 1 T1.1: dono cria "Clínica Domus Saúde" em /admin/clientes/novo (plano "Interno — Domus"), me passa o id → eu rodo promote + link. // Pendências paralelas do dono: bucket R2 (T0.5).**
+**PRÓXIMA TAREFA → Sprint 1 T1.6 (DONO + eu): dono seta os segredos nos 2 painéis Vercel e eu deployo + rodo o E2E sombra. Passo a passo abaixo na tabela. // Pendências paralelas do dono: bucket R2 (T0.5).**
 
 | Etapa | Status |
 |---|---|
 | P1 segredo admin · P2 create-clinic · P3 commits 1–2 | ✅ feitos (P3 c1–c2 aplicados em prod 17/07) |
 | Sprint 0 — Consolidar | ✅ T0.1/0.2/0.2b deployados · T0.4 resíduo clínico purgado · **casca escondida via filtro soft-delete (`95e3acf5`, deployado)** — hard-delete descartado (62 FKs, frágil) · T0.5 ⬜ backup R2 aguarda dono (não bloqueia Sprint 1) |
-| Sprint 1 — Domus cliente nº1 | 🔄 **T1.1✅ T1.2✅ T1.3✅ T1.4✅ (Vis) · T1.5 parcial** — cliente criado/promovido/vinculado, sub=ACTIVE. Projetor (`entitlement-projection.ts`), HMAC (`vis-domus-hmac.ts`), publisher (`vis-domus-publisher.ts` + `schedulePublishEntitlement` em block/unblock), endpoints pull+listagem (Vis, commit `f249539a`). Receptor no Domus (`api/internal/vis/entitlements`, commit `c5fbd4a`). **FALTA T1.5: testes do receptor + cron de pull `/api/cron/sync-vis-entitlements` no Domus + `vercel.json`. Depois T1.6: setar `VIS_DOMUS_WEBHOOK_SECRET`(2 painéis)+`DOMUS_WEBHOOK_URL`+deploy+E2E sombra (block→espelho reflete write_allowed=false).** |
+| Sprint 1 — Domus cliente nº1 | 🔄 **T1.1✅ T1.2✅ T1.3✅ T1.4✅ (Vis) · T1.5✅ (Domus)** — cliente criado/promovido/vinculado, sub=ACTIVE. Projetor/HMAC/publisher/endpoints pull+listagem (Vis, `f249539a`). Receptor (`c5fbd4a`) + **T1.5 fechado (`3fbcc74`, Domus): núcleo compartilhado `vis-entitlement-sync.ts` (webhook+pull), upsert condicional atômico à prova de corrida, cron de pull `/api/cron/sync-vis-entitlements` (bootstrap por lista canônica + cross-check + Promise.allSettled + alerta 24h), 24 testes, 2 rodadas Codex.** **FALTA T1.6 (dono+eu): setar `VIS_DOMUS_WEBHOOK_SECRET`(2 painéis)+`DOMUS_WEBHOOK_URL`(Vis)+`VIS_PULL_URL`(Domus)+deploy dos 2+E2E sombra (block→espelho reflete write_allowed=false).** |
 | Sprint 1 — Domus cliente nº 1 no portal | ⬜ |
 | Sprint 2 — O cadeado (bloqueio por inadimplência) | ⬜ |
 | Sprint 3 — Vender em vis.app.br | ⬜ |
