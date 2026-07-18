@@ -127,7 +127,14 @@ export async function proxy(request: NextRequest) {
     // (Bearer no header). Sem este bypass o middleware barra com 401 ANTES
     // do handler e os webhooks (Asaas/Focus) + crons nunca executam.
     pathname.startsWith("/api/webhooks/") ||
-    pathname.startsWith("/api/cron/")
+    pathname.startsWith("/api/cron/") ||
+    // Canal interno Vis↔Domus (entitlements): o Domus chama com Bearer
+    // (VIS_DOMUS_WEBHOOK_SECRET, timing-safe, fail-closed), não com cookie de
+    // sessão do PDV. Sem este bypass o middleware barra com 401 "Não
+    // autenticado" ANTES do handler e o pull/listagem nunca executam.
+    // Escopo ESTREITO ao subtree exato do canal (não `/api/internal/*` amplo):
+    // uma rota interna futura sem auth própria não deve herdar o bypass.
+    pathname.startsWith("/api/internal/domus/entitlements")
   ) {
     return nextWithCurrentPath(request);
   }
