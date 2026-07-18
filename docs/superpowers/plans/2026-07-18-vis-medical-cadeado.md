@@ -339,7 +339,9 @@ Import a adicionar em cada arquivo:
 import { billingGuardedClinicActionClient } from "@/lib/next-safe-action";
 ```
 
-⚠️ **create-attachment, create-payment-transaction, create-cash-movement, add-appointment** hoje usam `protectedWithClinicActionClient` (não um doctor client) — trocar mesmo assim para `billingGuardedClinicActionClient` (que deriva dele, então não perde nada; só adiciona o guard). **create-appointment-procedure, create-medical-record, create-prescription, create-optical-prescription, create-certificate, create-aesthetic-consent, apply-bundle-to-appointment** usam `doctorActionClient` — o guard NÃO substitui a checagem de role; ver Step 2.
+⚠️ **Buckets exatos (verificados no código) — 5 + 7 = 12:**
+- Usam `protectedWithClinicActionClient` hoje (→ trocar para `billingGuardedClinicActionClient`): **add-appointment, create-payment-transaction, create-cash-movement, create-attachment, create-delivered-report-attachment** (5). Deriva dele, então não perde nada; só adiciona o guard.
+- Usam `doctorActionClient` hoje (→ trocar para `doctorBillingGuardedActionClient`, ver Step 2, para PRESERVAR o role): **create-appointment-procedure, create-medical-record, create-prescription, create-optical-prescription, create-certificate, create-aesthetic-consent, apply-bundle-to-appointment** (7).
 
 - [ ] **Step 2: Preservar a checagem de ROLE das actions que eram doctor/admin.** `billingGuardedClinicActionClient` deriva da base de clínica, NÃO do `doctorActionClient` — então não tem a checagem "role === doctor/admin". Para as actions que usavam `doctorActionClient`, criar um client guardado que ALSO exige o role, para não afrouxar autorização:
 
@@ -385,21 +387,31 @@ git commit -m "feat(cadeado): guard nas 12 actions criadoras puras (preserva rol
 - `src/actions/upsert-aesthetic-record/index.ts`
 - `src/actions/upsert-specialty-record-data/index.ts`
 
-- [ ] **Step 1: Em cada upsert, adicionar o guard DENTRO do handler, no caminho de CRIAÇÃO (quando `input.id` é ausente), antes do insert.**
+- [ ] **Step 1: Adicionar o guard DENTRO do handler, no caminho de CRIAÇÃO, antes do insert. O discriminador create-vs-update DIFERE por arquivo (verificado):**
 
-Padrão (o nome do campo de id varia — em `upsert-medical-record` é `parsedInput.id`, ver linha 39):
+Import comum:
 ```typescript
 import { assertClinicWriteAllowed } from "@/lib/entitlement/assert-write-allowed";
+```
 
-// dentro do .action(async ({ parsedInput, ctx }) => {
-//   ... após validar, ANTES de decidir insert vs update:
+**`upsert-medical-record`** — discrimina por `parsedInput.id` (linha 39: `if (parsedInput.id)` = edição). Guardar quando ausente:
+```typescript
 if (!parsedInput.id) {
-  // Criação de registro NOVO — cadeado. Edição (id presente) sempre passa (D1/CFM).
-  await assertClinicWriteAllowed(ctx.user.clinic.id);
+  await assertClinicWriteAllowed(ctx.user.clinic.id); // criação de prontuário NOVO
 }
 ```
 
-Confirmar em cada arquivo qual campo distingue create de update (grep `parsedInput.id`/`input.id`/`recordId`) e usar o correto.
+**`upsert-aesthetic-record`** — NÃO tem `parsedInput.id`. Discrimina por lookup de `existing` (busca por appointmentId+clinicId, ~linha 66); criação é o ramo `!existing` (insert ~linha 111). Guardar imediatamente antes do `db.insert` do ramo de criação:
+```typescript
+if (!existing) {
+  await assertClinicWriteAllowed(ctx.user.clinic.id); // antes do db.insert do ramo de criação
+  // ... db.insert existente ...
+}
+```
+
+**`upsert-specialty-record-data`** — também sem `parsedInput.id`. Discrimina por `existing` lookup (~linha 58); criação é `!existing` (insert ~linha 65). Mesmo padrão: guard antes do `db.insert` do ramo `!existing`.
+
+⚠️ Ler cada arquivo e confirmar a linha exata do ramo de criação antes de inserir o guard — o ponto é: guard SÓ no caminho que cria linha nova, edição (existing/id presente) NUNCA guardada (D1/CFM).
 
 - [ ] **Step 2: Verificar tsc + testes**
 
@@ -543,7 +555,7 @@ Expected: PASS.
 - [ ] **Step 5: Rodar os testes do sync existentes — não podem quebrar** (o upsert mudou).
 
 Run: `cd ~/SISTEMACLINICADOMUS-cadeado && ./node_modules/.bin/vitest run tests/vis-entitlements/ 2>&1 | tail -4`
-Expected: todos passam (24).
+Expected: todos passam (15 testes: 9 em apply-entitlement-snapshot + 6 em sync-cron).
 
 - [ ] **Step 6: Commit**
 
