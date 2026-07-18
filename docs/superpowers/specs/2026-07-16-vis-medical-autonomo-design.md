@@ -123,6 +123,13 @@ Só depois: **reimprimir** (molde: `api/clinical/certificates/[id]` + `reimprimi
 
 **Avulsa não é transcrição:** o dono prescreve ele mesmo → é ato clínico dele, assinado como qualquer outro. Sem marcação de "grau não examinado". A diferença é só não ter refração vinculada.
 
+> ⚠️ **BOMBA-RELÓGIO — resolver ANTES de implementar a avulsa** (achado do Codex, aceito):
+> o guard de fronteira varejo×clínica infere "é clínica" de `refractionExamId != null`. Isso é frágil por dois motivos:
+> 1. A FK é `onDelete: SetNull` (`schema.prisma:947`) — apagada a refração, a receita clínica **vira varejo** aos olhos do guard. Hoje **não há caminho que apague `RefractionExam`** (verificado: nenhum `refractionExam.delete` no código) → não explorável agora, mas é sorte, não desenho.
+> 2. **A avulsa nasce com `refractionExamId = null`** → nasceria **desprotegida**, editável/apagável pelo varejo. O guard atual não a cobre.
+>
+> **Correção necessária junto com a avulsa:** marca de origem **persistente e não-inferida** na Prescription (ex.: `origin` enum `RETAIL | CLINICAL`, gravado na emissão e imutável), com o guard passando a ler a marca em vez da FK. Migration aditiva, com OK do dono.
+
 ---
 
 ## 9. Fatiamento (a spec é grande demais para uma entrega)

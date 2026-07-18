@@ -82,8 +82,11 @@ describe("flipSign", () => {
   it("campo vazio permanece vazio (não vira '-' órfão)", () => {
     expect(flipSign("")).toBe("");
   });
-  it("normaliza antes de alternar", () => {
-    expect(flipSign("--2,25")).toBe("-2,25");
+  it("normaliza sinal sujo antes de alternar", () => {
+    // "2,25-" normaliza para "-2,25" (negativo) → flip vira "2,25"
+    expect(flipSign("2,25-")).toBe("2,25");
+    // "--2,25" normaliza para "-2,25" (negativo) → flip vira "2,25"
+    expect(flipSign("--2,25")).toBe("2,25");
   });
 });
 
