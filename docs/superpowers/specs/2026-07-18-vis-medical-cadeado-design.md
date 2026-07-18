@@ -27,6 +27,40 @@ Os 3 críticos, independentes, e a verificação no código convergiram: **`deny
 | D3 | TTL | **48h**. O cron é **diário** (renova a cada ~24h); 48h de TTL dá ~24h de folga contra **uma** falha isolada de cron (o run seguinte ainda renova antes de vencer). Sync travado > 48h → bloqueio vence → fail-open. ⚠️ Não reler "48h" como 48h de folga: a folga é a diferença TTL − período do cron ≈ 24h. |
 | D4 | Tela de bloqueio | Erro estruturado → toast/diálogo: "Pagamento pendente. Leitura e impressão seguem normais; novos registros pausados. Regularizar →" + link ao portal de cobrança do Vis. **Sem** banner de aviso prévio na v1 (exigiria sinal de grace que o espelho não tem). |
 | D5 | Rollout | **Observação → medir → enforce.** Fase 1 `ENFORCE_VIS_ENTITLEMENTS=false` (loga `WOULD_BLOCK`, sempre libera) ≥ alguns dias; critério = zero falso-positivo. Fase 2 liga enforce com kill-switch + bypass prontos ANTES. |
+| D6 | Upserts clínicos (create+edit na mesma action) | `upsert-medical-record`, `upsert-aesthetic-record`, `upsert-specialty-record-data` gravam prontuário e distinguem create/edit por `input.id` (ausente = criação). Guard **inline, condicional**: bloqueia SÓ quando `input.id` é ausente (prontuário novo). Edição (id presente) SEMPRE passa — fiel a D1/CFM. |
+
+## Lista pinada de actions guardadas (v1) — a fonte que o teste de arquitetura trava
+
+Derivada e classificada por client + tabela de escrita (não por nome). **Duas formas de guard:**
+
+**(a) Guard via client** (`billingGuardedClinicActionClient`) — actions puramente criadoras:
+1. `add-appointment` → appointments
+2. `create-appointment-procedure` → appointmentProcedures
+3. `create-medical-record` → medicalRecords
+4. `create-prescription` → prescriptions
+5. `create-optical-prescription` → opticalPrescriptions
+6. `create-certificate` → medicalCertificates
+7. `create-aesthetic-consent` → aestheticConsents
+8. `create-payment-transaction` → cashRegisters
+9. `create-cash-movement` → cashMovements
+10. `create-attachment` → attachments
+11. `apply-bundle-to-appointment` → appointmentBundles
+12. `create-delivered-report-attachment` → procedureReportAttachments
+
+**(b) Guard inline condicional** (`input.id` ausente = criação — D6):
+13. `upsert-medical-record`
+14. `upsert-aesthetic-record`
+15. `upsert-specialty-record-data`
+
+**(c) Guard inline sem client** (recebe clinicId no input, resposta uniforme — anti-oráculo):
+16. `add-public-appointment` (é `export async function`, não usa client)
+
+**Excluídas explicitamente** (verificadas, NÃO são criação de estado clínico faturável por ação humana):
+- `create-medical-reminder`, `create-patient-call`, `register-survey-response` — lembrete/fila/pesquisa.
+- `generate-atestado-tecnico` — é ponto eletrônico (timeClockLegalExports), não atestado médico (nome enganoso).
+- `create-stripe-checkout`, `create-clinic`, `create-clinic-user` — cobrança/setup.
+- Todos os `upsert-*` administrativos (doctor, room, insurance-plan, procedure-catalog, commission-rule, etc.) — configuração, não estado clínico faturável.
+- Ponto eletrônico/RH (`register-time-clock-entry`, `generate-aej/afd`, `issue-rh-document`, etc.) — módulo separado.
 
 ---
 
