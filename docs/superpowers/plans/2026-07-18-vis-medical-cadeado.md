@@ -729,3 +729,7 @@ git log --oneline main..HEAD
 ```
 
 **Gate do Sprint 2 (v1 observação):** guard entregue em modo observação · leitura de prontuário jamais guardada (teste de arquitetura verde) · receptor arma denyVerifiedUntil · bypasses cobertos · zero falha de lógica na suíte · Codex revisou. **Ligar o enforce é decisão separada** (fase de medição, D5).
+
+---
+## ESTADO DE EXECUÇÃO (2026-07-18)
+Tasks 1-10 ✅ implementadas (branch `feature/cadeado-billing-guard` no worktree `~/SISTEMACLINICADOMUS-cadeado`, 13 commits, tsc 0). **Task 11 (verificação final) BLOQUEOU o merge:** revisão final do Codex achou enumeração incompleta — ver memória `vis-medical-cadeado-sprint2.md` para a lista de actions faltantes (exams/*, procedure-reports/*, upsert-financial-transaction, open-cash-register), o cross-tenant de create-delivered-report-attachment, e o plano de retomada. NÃO mergear até fechar.
