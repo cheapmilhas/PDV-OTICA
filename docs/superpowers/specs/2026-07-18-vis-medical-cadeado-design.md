@@ -24,7 +24,7 @@ Os 3 críticos, independentes, e a verificação no código convergiram: **`deny
 |---|---------|-------|
 | D1 | Escopo do bloqueio v1 | **Só CRIAÇÃO de estado novo** (~15-18 actions). NÃO bloqueia editar/finalizar registro que a clínica já tem — médico nunca fica preso no meio de um atendimento em curso. |
 | D2 | Quem arma `denyVerifiedUntil` | O **receptor do Domus** (`upsertMirror`), ao aplicar snapshot `writeAllowed=false`: `denyVerifiedUntil = syncedAt + TTL`. `writeAllowed=true` → limpa (null). |
-| D3 | TTL | **48h** (margem de 1 cron diário de folga). Sync travado > 48h → bloqueio vence → fail-open. |
+| D3 | TTL | **48h**. O cron é **diário** (renova a cada ~24h); 48h de TTL dá ~24h de folga contra **uma** falha isolada de cron (o run seguinte ainda renova antes de vencer). Sync travado > 48h → bloqueio vence → fail-open. ⚠️ Não reler "48h" como 48h de folga: a folga é a diferença TTL − período do cron ≈ 24h. |
 | D4 | Tela de bloqueio | Erro estruturado → toast/diálogo: "Pagamento pendente. Leitura e impressão seguem normais; novos registros pausados. Regularizar →" + link ao portal de cobrança do Vis. **Sem** banner de aviso prévio na v1 (exigiria sinal de grace que o espelho não tem). |
 | D5 | Rollout | **Observação → medir → enforce.** Fase 1 `ENFORCE_VIS_ENTITLEMENTS=false` (loga `WOULD_BLOCK`, sempre libera) ≥ alguns dias; critério = zero falso-positivo. Fase 2 liga enforce com kill-switch + bypass prontos ANTES. |
 
@@ -77,6 +77,8 @@ Racional: receber um snapshot fresco do Vis **é** a verificação. Sem pull sí
 `src/__tests__/architecture/entitlement-guard-wiring.test.ts` — verifica a **fonte real** (qual client cada action usa), não um registro paralelo:
 1. Cada action da lista explícita de criação faturável (~15-18) **usa** `billingGuardedClinicActionClient` → action de criação nova sem guard reprova o CI.
 2. As leituras de prontuário conhecidas (`getMedicalRecord`, `listPatientRecords`, timeline, `getAllowedPrescriptionTypes`) **NÃO** usam o client guardado → refactor não bloqueia leitura por engano (CFM).
+
+> ⚠️ **A enumeração da lista de criação faturável é a TAREFA 1 do plano** — é o passo de maior julgamento e o mais perigoso: uma action de criação esquecida falha-aberto em silêncio (a clínica inadimplente continua criando por aquele caminho). A lista deve ser derivada do código, revisada explicitamente (não inferida no meio da implementação), e virar a fonte que o teste de arquitetura trava.
 
 ---
 
