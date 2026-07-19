@@ -18,6 +18,7 @@ export interface ResolvedPlan {
   id: string;
   slug: string;
   tier: PlanTier;
+  priceMonthly: number;
 }
 
 export async function resolvePlanForTier(tier: PlanTier): Promise<ResolvedPlan> {
@@ -32,7 +33,7 @@ export async function resolvePlanForTier(tier: PlanTier): Promise<ResolvedPlan> 
       selfServiceSelectable: true,
       isActive: true,
     },
-    select: { id: true, slug: true, tier: true },
+    select: { id: true, slug: true, tier: true, priceMonthly: true },
   });
 
   if (plans.length === 0) {
@@ -47,5 +48,5 @@ export async function resolvePlanForTier(tier: PlanTier): Promise<ResolvedPlan> 
   }
 
   const plan = plans[0];
-  return { id: plan.id, slug: plan.slug, tier: plan.tier as PlanTier };
+  return { id: plan.id, slug: plan.slug, tier: plan.tier as PlanTier, priceMonthly: plan.priceMonthly };
 }

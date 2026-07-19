@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     company: { findFirst: vi.fn() },
+    subscription: { findFirst: vi.fn() },
     domusPlanChangeOp: { findUnique: vi.fn(), create: vi.fn() },
   },
 }));
@@ -11,7 +12,7 @@ vi.mock("@/lib/resolve-plan-for-tier", async () => {
   const actual = await vi.importActual<typeof import("@/lib/resolve-plan-for-tier")>(
     "@/lib/resolve-plan-for-tier",
   );
-  return { ...actual, resolvePlanForTier: vi.fn().mockResolvedValue({ id: "plan_x", slug: "medical-clinica", tier: "clinic_full" }) };
+  return { ...actual, resolvePlanForTier: vi.fn().mockResolvedValue({ id: "plan_x", slug: "medical-clinica", tier: "clinic_full", priceMonthly: 18990 }) };
 });
 // deps reais fazem I/O (Asaas/prisma) — mock. runSaga é testado à parte (executor.test).
 vi.mock("@/lib/domus-plan-change/deps", () => ({ buildSagaDeps: vi.fn(() => ({})) }));
@@ -28,6 +29,7 @@ import { signVisDomus } from "@/lib/vis-domus-hmac";
 import { runSaga } from "@/lib/domus-plan-change/executor";
 
 const companyFindFirst = prisma.company.findFirst as unknown as ReturnType<typeof vi.fn>;
+const subFindFirst = prisma.subscription.findFirst as unknown as ReturnType<typeof vi.fn>;
 const opFindUnique = prisma.domusPlanChangeOp.findUnique as unknown as ReturnType<typeof vi.fn>;
 const opCreate = prisma.domusPlanChangeOp.create as unknown as ReturnType<typeof vi.fn>;
 const runSagaMock = runSaga as unknown as ReturnType<typeof vi.fn>;
@@ -57,6 +59,8 @@ beforeEach(() => {
   process.env.DOMUS_VIS_API_SECRET = SECRET;
   delete process.env.VIS_TIER_SELF_SERVICE_ENABLED;
   companyFindFirst.mockResolvedValue({ id: "co1" });
+  // subscription atual = plano barato (8990) → alvo clínica (18990) é UPGRADE.
+  subFindFirst.mockResolvedValue({ plan: { priceMonthly: 8990 } });
   opFindUnique.mockResolvedValue(null);
   opCreate.mockResolvedValue({});
 });
@@ -118,6 +122,17 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     expect(res.status).toBe(200);
     expect(opCreate).toHaveBeenCalledOnce();
     expect(runSagaMock).toHaveBeenCalledOnce();
+  });
+
+  it("DOWNGRADE (plano atual mais caro que o alvo) → 501, NÃO cria op nem roda saga", async () => {
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValueOnce(null);
+    // subscription atual = clínica (18990) > alvo (18990 no mock)? não. Forço maior:
+    subFindFirst.mockResolvedValueOnce({ plan: { priceMonthly: 99999 } });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(501);
+    expect(opCreate).not.toHaveBeenCalled();
+    expect(runSagaMock).not.toHaveBeenCalled();
   });
 
   it("saga falha (checkpoint) → 502 not_completed, retomável", async () => {

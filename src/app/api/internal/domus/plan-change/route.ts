@@ -122,6 +122,22 @@ export async function POST(req: Request) {
   // resume, a op já existe (com o targetPlanId persistido na 1ª vez).
   if (decision.kind === "fresh") {
     const targetPlan = await resolvePlanForTier(requestedTier);
+
+    // DOWNGRADE só pode ser AGENDADO pra currentPeriodEnd (spec: o cliente pagou
+    // o mês, não perde acesso no meio). O executor de downgrade agendado é a
+    // Fase 4 (cron + pendingPlanId). Até lá, REJEITA downgrade (fail-closed) em
+    // vez de aplicá-lo imediato — achado Codex. Upgrade segue (Asaas-first imediato).
+    const current = await prisma.subscription.findFirst({
+      where: { companyId: visCompanyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
+      select: { plan: { select: { priceMonthly: true } } },
+    });
+    if (current && current.plan.priceMonthly > targetPlan.priceMonthly) {
+      return NextResponse.json(
+        { error: "downgrade_not_supported", message: "Downgrade ainda não disponível no autoatendimento." },
+        { status: 501 },
+      );
+    }
+
     try {
       await prisma.domusPlanChangeOp.create({
         data: {
