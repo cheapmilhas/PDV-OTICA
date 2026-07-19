@@ -1544,6 +1544,38 @@ model SaleIdempotency {
   @@index([expiresAt])
 }
 
+/// Saga da troca de plano vinda do Domus (endpoint /api/internal/domus/plan-change).
+/// Idempotência por eventId (NÃO por visCompanyId:tier — essa colide em A→B→A).
+/// Estados: a ordem é Asaas-first no UPGRADE (cobra antes de liberar) — por isso
+/// BILLING_CONFIRMED vem ANTES de LOCAL_APPLIED. Replay de op incompleta RETOMA
+/// pelo estado, não retorna sucesso. Ver spec Fase 2.
+model DomusPlanChangeOp {
+  id            String                  @id @default(cuid())
+  visCompanyId  String
+  eventId       String                  @unique
+  requestedTier String
+  targetPlanId  String?
+  state         DomusPlanChangeOpState   @default(RECEIVED)
+  payloadHash   String
+  asaasRef      String?                 // referência da operação no Asaas (auditoria/retomada)
+  lastError     String?
+  createdAt     DateTime                @default(now())
+  updatedAt     DateTime                @updatedAt
+  expiresAt     DateTime
+
+  @@index([visCompanyId])
+  @@index([expiresAt])
+}
+
+enum DomusPlanChangeOpState {
+  RECEIVED
+  BILLING_REQUESTED
+  BILLING_CONFIRMED
+  LOCAL_APPLIED
+  COMPLETED
+  FAILED
+}
+
 model SaleItem {
   id                   String               @id @default(cuid())
   saleId               String

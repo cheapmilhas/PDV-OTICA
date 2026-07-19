@@ -1,0 +1,142 @@
+import { NextResponse } from "next/server";
+import { createHash } from "crypto";
+
+import { prisma } from "@/lib/prisma";
+import { logger } from "@/lib/logger";
+import { verifyVisDomus } from "@/lib/vis-domus-hmac";
+import { resolvePlanForTier, isPlanTier } from "@/lib/resolve-plan-for-tier";
+import { decideSagaAction } from "@/lib/domus-plan-change/saga";
+
+/**
+ * POST /api/internal/domus/plan-change
+ *
+ * O Domus chama quando o CLIENTE troca de plano na tela dele. O Vis é a fonte
+ * de verdade: recebe o pedido, troca o plano/cobrança e ecoa o entitlement de
+ * volta (o Domus só reflete quando o webhook ecoa).
+ *
+ * SEGURANÇA (achados Codex):
+ * - HMAC `${ts}.${rawBody}` com segredo GLOBAL DOMUS_VIS_API_SECRET (≠ webhook).
+ *   Autentica o Domus como serviço, fail-closed se ausente. NÃO é auth por-tenant.
+ * - `visCompanyId` do corpo é AUTORIZADO por validação de produto+vínculo
+ *   (VIS_MEDICAL + domusClinicId), 404 genérico se não bater (furo do networks).
+ * - Idempotência por `eventId` (NÃO visCompanyId:tier — colide em A→B→A).
+ *
+ * KILL-SWITCH: VIS_TIER_SELF_SERVICE_ENABLED !== "true" → responde indisponível
+ * SEM tocar cobrança. Fica OFF até o Domus mandar eventId estável (outbox) e a
+ * cobrança auto-aplicada ser validada em observação.
+ */
+
+const WINDOW_LOG = "domus-plan-change";
+const OP_TTL_MS = 7 * 24 * 60 * 60 * 1000; // 7 dias
+
+function selfServiceEnabled(): boolean {
+  return process.env.VIS_TIER_SELF_SERVICE_ENABLED === "true";
+}
+
+function hashPayload(raw: string): string {
+  return createHash("sha256").update(raw).digest("hex");
+}
+
+export async function POST(req: Request) {
+  const secret = process.env.DOMUS_VIS_API_SECRET;
+  if (!secret) {
+    // Fail-closed: sem segredo, não autentica ninguém.
+    logger.error("plan-change sem DOMUS_VIS_API_SECRET (fail-closed)", { window: WINDOW_LOG });
+    return NextResponse.json({ error: "unavailable" }, { status: 503 });
+  }
+
+  const rawBody = await req.text();
+  const ts = Number(req.headers.get("x-domus-timestamp"));
+  const signature = req.headers.get("x-domus-signature");
+  const verify = verifyVisDomus(secret, ts, rawBody, signature, Date.now());
+  if (!verify.ok) {
+    return NextResponse.json({ error: "unauthorized" }, { status: 401 });
+  }
+
+  // Parse depois de autenticar (não vaza forma antes do HMAC).
+  let body: { visCompanyId?: string; requestedTier?: string; eventId?: string; idempotencyKey?: string; requestedBy?: string };
+  try {
+    body = JSON.parse(rawBody);
+  } catch {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+
+  const { visCompanyId, requestedTier } = body;
+  // eventId é o ideal (idempotência correta); enquanto o Domus não migrar do
+  // idempotencyKey velho (visCompanyId:tier, bug A→B→A), cai no fallback — mas
+  // o endpoint fica atrás do kill-switch justamente por isso.
+  const eventId = body.eventId ?? body.idempotencyKey;
+  if (!visCompanyId || !requestedTier || !eventId) {
+    return NextResponse.json({ error: "invalid_body" }, { status: 400 });
+  }
+  if (!isPlanTier(requestedTier)) {
+    return NextResponse.json({ error: "invalid_tier" }, { status: 400 });
+  }
+
+  // Autorização de escopo: o visCompanyId do corpo TEM que ser uma company
+  // VIS_MEDICAL vinculada. 404 genérico (anti-oráculo) para inexistente/outro
+  // produto/não-vinculada — não confia no corpo (furo histórico de networks).
+  const company = await prisma.company.findFirst({
+    where: { id: visCompanyId, platformProduct: "VIS_MEDICAL", domusClinicId: { not: null } },
+    select: { id: true },
+  });
+  if (!company) {
+    return NextResponse.json({ error: "not_found" }, { status: 404 });
+  }
+
+  const payloadHash = hashPayload(rawBody);
+
+  // Idempotência + retomada por estado (saga). Busca por eventId.
+  const existing = await prisma.domusPlanChangeOp.findUnique({
+    where: { eventId },
+    select: { state: true, payloadHash: true },
+  });
+  const decision = decideSagaAction(existing, payloadHash);
+
+  if (decision.kind === "conflict") {
+    // Mesmo eventId, corpo diferente = replay ambíguo.
+    return NextResponse.json({ error: "conflict" }, { status: 409 });
+  }
+  if (decision.kind === "duplicate") {
+    // Operação já concluída — idempotente, não reaplica.
+    return NextResponse.json({ status: "already_applied" }, { status: 200 });
+  }
+
+  // KILL-SWITCH: só a partir daqui há efeito colateral (cobrança/aplicação).
+  // OFF → registra a intenção mas NÃO cobra nem aplica; responde indisponível.
+  if (!selfServiceEnabled()) {
+    logger.warn("plan-change recebido com self-service OFF (não aplicado)", {
+      window: WINDOW_LOG,
+      visCompanyId,
+      requestedTier,
+    });
+    return NextResponse.json(
+      { error: "self_service_disabled", message: "Troca de plano indisponível. Contate o suporte." },
+      { status: 503 },
+    );
+  }
+
+  // ⚠️ Fase 2 — cobrança + aplicação (Asaas-first no upgrade) ainda NÃO ligada.
+  // Esqueleto seguro: cria/retoma a op RECEIVED. A execução da saga (resolver
+  // plano, cobrar no Asaas, aplicar local, publicar) exige o service
+  // applyPlanChange com billingPolicy — próximo passo desta fase. Enquanto isso,
+  // com o kill-switch OFF (acima), este bloco nem é alcançado em prod.
+  const targetPlan = await resolvePlanForTier(requestedTier);
+  if (decision.kind === "fresh") {
+    await prisma.domusPlanChangeOp.create({
+      data: {
+        visCompanyId,
+        eventId,
+        requestedTier,
+        targetPlanId: targetPlan.id,
+        payloadHash,
+        state: "RECEIVED",
+        expiresAt: new Date(Date.now() + OP_TTL_MS),
+      },
+    });
+  }
+  // decision.kind === "resume": retomar a saga a partir de decision.from
+  // (implementação do executor: próximo passo da Fase 2).
+
+  return NextResponse.json({ status: "accepted", state: "RECEIVED" }, { status: 202 });
+}
