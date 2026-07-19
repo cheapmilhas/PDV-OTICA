@@ -114,4 +114,22 @@ describe("plan-change — idempotência (com kill-switch ON)", () => {
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(409);
   });
+
+  it("corrida no create (P2002) → relê vencedor, NÃO 500", async () => {
+    const raw = JSON.stringify(validBody);
+    const { createHash } = await import("crypto");
+    const hash = createHash("sha256").update(raw).digest("hex");
+    // findUnique inicial null (fresh) → create falha P2002 → relê o vencedor.
+    opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ state: "RECEIVED", payloadHash: hash });
+    opCreate.mockRejectedValue({ code: "P2002" });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(202); // reconhece, não duplica, não 500
+  });
+
+  it("corrida no create (P2002) com hash diferente → 409", async () => {
+    opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ state: "RECEIVED", payloadHash: "outro-hash" });
+    opCreate.mockRejectedValue({ code: "P2002" });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+  });
 });

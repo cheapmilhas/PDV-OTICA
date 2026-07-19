@@ -40,7 +40,7 @@ describe("runSaga — ordem Asaas-first (upgrade nunca libera sem cobrar)", () =
     expect(final.state).toBe("COMPLETED");
   });
 
-  it("cobrança FALHA → NÃO aplica local nem publica; estado FAILED", async () => {
+  it("cobrança FALHA → NÃO aplica local nem publica; failed=true, checkpoint preservado", async () => {
     const deps = makeDeps({
       confirmBilling: vi.fn().mockRejectedValue(new Error("asaas down")),
     });
@@ -48,8 +48,23 @@ describe("runSaga — ordem Asaas-first (upgrade nunca libera sem cobrar)", () =
 
     expect(deps.applyLocal).not.toHaveBeenCalled(); // não libera tier sem pagar
     expect(deps.publish).not.toHaveBeenCalled();
-    expect(final.state).toBe("FAILED");
+    expect(final.failed).toBe(true);
+    // checkpoint preservado: parou tentando cobrar (BILLING_REQUESTED), NÃO some pra FAILED
+    expect(final.state).toBe("BILLING_REQUESTED");
     expect(final.lastError).toContain("asaas");
+  });
+
+  it("retomar após falha de cobrança → continua de BILLING_REQUESTED (recobra idempotente)", async () => {
+    // 1ª tentativa falha
+    const deps1 = makeDeps({ confirmBilling: vi.fn().mockRejectedValue(new Error("timeout")) });
+    const r1 = await runSaga(makeOp("RECEIVED"), deps1);
+    expect(r1.state).toBe("BILLING_REQUESTED");
+    // 2ª tentativa (retomada) do checkpoint → cobra e completa
+    const deps2 = makeDeps();
+    const r2 = await runSaga(makeOp("BILLING_REQUESTED"), deps2);
+    expect(deps2.confirmBilling).toHaveBeenCalledOnce();
+    expect(r2.state).toBe("COMPLETED");
+    expect(r2.failed).toBeFalsy();
   });
 
   it("persiste estado APÓS cada passo (retomada)", async () => {

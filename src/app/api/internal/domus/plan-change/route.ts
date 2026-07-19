@@ -123,20 +123,44 @@ export async function POST(req: Request) {
   // com o kill-switch OFF (acima), este bloco nem é alcançado em prod.
   const targetPlan = await resolvePlanForTier(requestedTier);
   if (decision.kind === "fresh") {
-    await prisma.domusPlanChangeOp.create({
-      data: {
-        visCompanyId,
-        eventId,
-        requestedTier,
-        targetPlanId: targetPlan.id,
-        payloadHash,
-        state: "RECEIVED",
-        expiresAt: new Date(Date.now() + OP_TTL_MS),
-      },
-    });
+    try {
+      await prisma.domusPlanChangeOp.create({
+        data: {
+          visCompanyId,
+          eventId,
+          requestedTier,
+          targetPlanId: targetPlan.id,
+          payloadHash,
+          state: "RECEIVED",
+          expiresAt: new Date(Date.now() + OP_TTL_MS),
+        },
+      });
+    } catch (err) {
+      // Corrida (double-click): 2 requests com o mesmo eventId viram ambos
+      // "fresh" e disputam o create; o @unique(eventId) faz o perdedor pegar
+      // P2002. Relê a op vencedora e refaz a decisão (não vira 500).
+      if ((err as { code?: string })?.code === "P2002") {
+        const winner = await prisma.domusPlanChangeOp.findUnique({
+          where: { eventId },
+          select: { state: true, payloadHash: true },
+        });
+        const redo = decideSagaAction(winner, payloadHash);
+        if (redo.kind === "conflict") {
+          return NextResponse.json({ error: "conflict" }, { status: 409 });
+        }
+        if (redo.kind === "duplicate") {
+          return NextResponse.json({ status: "already_applied" }, { status: 200 });
+        }
+        // vencedor está em progresso → o próprio dono da op a executa; aqui só
+        // reconhecemos o recebimento (não duplica o processamento).
+        return NextResponse.json({ status: "accepted", state: "RECEIVED" }, { status: 202 });
+      }
+      throw err;
+    }
   }
-  // decision.kind === "resume": retomar a saga a partir de decision.from
-  // (implementação do executor: próximo passo da Fase 2).
+  // decision.kind === "resume": o executor da saga (próximo passo) carrega a op
+  // COMPLETA do banco (targetPlanId/asaasRef persistidos) e retoma pelo estado —
+  // NÃO usar o targetPlan recalculado aqui pra não trocar o plano da op em voo.
 
   return NextResponse.json({ status: "accepted", state: "RECEIVED" }, { status: 202 });
 }

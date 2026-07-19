@@ -30,26 +30,36 @@ export interface SagaDeps {
 }
 
 export interface SagaResult {
+  /** O CHECKPOINT onde parou (não some pra "FAILED" — retomar continua daqui). */
   state: SagaState;
   asaasRef: string | null;
+  /** true se um passo lançou. O checkpoint (`state`) diz onde retomar. */
+  failed?: boolean;
   lastError?: string | null;
 }
 
+const TERMINAL: SagaState[] = ["COMPLETED"];
+
 /**
  * Executa (ou retoma) a saga a partir do estado atual da op até COMPLETED.
- * Cada passo avança um estado e persiste. Falha em qualquer passo → FAILED
- * (retomável: rodar de novo continua de onde parou, sem repetir passos feitos).
+ * Cada passo avança um estado e persiste ANTES de agir (checkpoint). Falha em
+ * qualquer passo NÃO some pra "FAILED": preserva o checkpoint (onde parou) e
+ * marca `failed` + grava `lastError` — retomar (rodar de novo do checkpoint)
+ * continua de onde parou, sem repetir passos já concluídos.
+ *
+ * `confirmBilling` DEVE ser idempotente no Asaas (idempotencyKey derivada de
+ * eventId/op.id): a retomada de BILLING_REQUESTED o chama de novo, e sem chave
+ * idempotente isso dobraria a cobrança. O wiring é responsável por essa chave.
  */
 export async function runSaga(op: SagaOp, deps: SagaDeps): Promise<SagaResult> {
   let current: SagaOp = { ...op };
 
-  // Loop pelos passos que faltam. Cada estado dispara a AÇÃO que leva ao próximo.
-  while (current.state !== "COMPLETED" && current.state !== "FAILED") {
+  while (!TERMINAL.includes(current.state)) {
     try {
       switch (current.state) {
         case "RECEIVED": {
-          // Marca que vai cobrar (BILLING_REQUESTED) antes de chamar o Asaas —
-          // se crashar durante a cobrança, a retomada sabe que estava cobrando.
+          // Persiste BILLING_REQUESTED ANTES de cobrar: se crashar durante a
+          // cobrança, a retomada sabe que estava no passo de cobrança.
           current = { ...current, state: "BILLING_REQUESTED" };
           await deps.saveState(current);
           break;
@@ -72,15 +82,19 @@ export async function runSaga(op: SagaOp, deps: SagaDeps): Promise<SagaResult> {
           await deps.saveState(current);
           break;
         }
+        default: {
+          // Estado inválido/corrompido (fora do enum) — falha explícita em vez
+          // de girar o loop sem avançar (achado Codex: sem isto, loop infinito).
+          throw new Error(`Estado de saga inválido: "${current.state}"`);
+        }
       }
     } catch (err) {
       const lastError = err instanceof Error ? err.message : String(err);
-      // NÃO avança: para no estado atual como FAILED (retomável). Se a cobrança
-      // (BILLING_REQUESTED) falhou, o estado fica FAILED sem nunca ter aplicado
-      // local — o tier caro não é liberado.
-      current = { ...current, state: "FAILED" };
+      // Preserva o CHECKPOINT (current.state) — não sobrescreve pra FAILED, pra
+      // não perder onde retomar. Grava só o erro. Se a cobrança falhou, o estado
+      // fica em BILLING_REQUESTED (nunca aplicou local → tier não liberado).
       await deps.saveState({ ...current, lastError });
-      return { state: "FAILED", asaasRef: current.asaasRef, lastError };
+      return { state: current.state, asaasRef: current.asaasRef, failed: true, lastError };
     }
   }
 
