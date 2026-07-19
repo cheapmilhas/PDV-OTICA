@@ -2522,6 +2522,15 @@ model Plan {
   stripePriceMonthlyId String?
   stripePriceYearlyId  String?
   asaasPaymentLinkId   String?
+  /// Produto do plano. Planos de ótica = VIS_APP; planos clínicos = VIS_MEDICAL.
+  /// Sem isto, resolvePlanForTier poderia pegar plano de ótica por engano.
+  platformProduct      PlatformProduct @default(VIS_APP)
+  /// Tier emitido pro Domus. NULLABLE de propósito: plano de ótica não tem tier;
+  /// plano Medical SEM tier = fail-closed em resolvePlanForTier.
+  tier                 PlanTier?
+  /// Se o cliente pode auto-selecionar este plano no self-service. Planos
+  /// internos (interno-domus R$0) ficam false.
+  selfServiceSelectable Boolean       @default(false)
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
   features             PlanFeature[]
@@ -3901,6 +3910,15 @@ enum CashDirection {
 enum PlatformProduct {
   VIS_APP
   VIS_MEDICAL
+}
+
+/// Tier de plano Medical emitido pro Domus (payload v2). O EFEITO de cada tier
+/// (quais módulos corta) é definido no Domus (plan-features.ts), não aqui.
+/// specialist == ophthalmology em efeito; rótulos distintos no Domus.
+enum PlanTier {
+  clinic_full
+  ophthalmology
+  specialist
 }
 
 enum ProductType {

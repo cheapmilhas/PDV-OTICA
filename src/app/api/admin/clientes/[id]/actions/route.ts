@@ -58,9 +58,10 @@ export async function POST(
         schedulePublishEntitlement(companyId);
         return NextResponse.json({ success: true, message: "Empresa desbloqueada" });
       }
-      // TODO(sprint3): publicar entitlement em reactivate/change_plan/cancel/
-      // change_billing_cycle quando houver medical pagante. Hoje sem medical
-      // pago, o cron de pull diário cobre o atraso desses caminhos.
+      // reactivate/change_plan/cancel_subscription agora publicam entitlement
+      // (Fase 1 tiers: fecham o gap do TODO(sprint3)). change_billing_cycle NÃO
+      // muda writeAllowed nem tier (só o valor recorrente) → fora do escopo; o
+      // pull diário cobre qualquer reflexo indireto.
 
       case "reactivate": {
         const subscription = await prisma.subscription.findFirst({ where: { companyId, status: "SUSPENDED" } });
@@ -73,6 +74,8 @@ export async function POST(
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "SUBSCRIPTION_REACTIVATED", metadata: { subscriptionId: subscription.id } },
         });
         await logActivity({ companyId, type: "SUBSCRIPTION_REACTIVATED", title: "Assinatura reativada", actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
+        // Espelha no Domus: reativar volta writeAllowed=true. Fire-and-forget.
+        schedulePublishEntitlement(companyId);
         return NextResponse.json({ success: true, message: "Assinatura reativada" });
       }
 
@@ -203,6 +206,10 @@ export async function POST(
         }
 
         await logActivity({ companyId, type: "PLAN_CHANGED", title: `Plano alterado: ${oldPlan.name} → ${newPlan.name}`, detail: { fromPlan: oldPlan.name, toPlan: newPlan.name }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
+        // Espelha no Domus: troca de plano muda o tier-efeito (payload v2 emitirá
+        // plan.tier na fase do relógio; hoje publica v1 que o Domus aceita e que
+        // preserva o plan_tier já gravado). Fire-and-forget; pull diário cobre falha.
+        schedulePublishEntitlement(companyId);
         return NextResponse.json({ success: true, message: `Plano alterado: ${oldPlan.name} → ${newPlan.name}` });
       }
 
@@ -285,6 +292,11 @@ export async function POST(
         }
 
         await logActivity({ companyId, type: "SUBSCRIPTION_CANCELED", title: "Assinatura cancelada", detail: { reason }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
+        // Espelha no Domus a decisão ATUAL de checkSubscription após o cancel.
+        // Nota: não força writeAllowed=false — se Company.accessEnabled=true (ou
+        // kill-switch/bypass), checkSubscription ainda libera; o publish reflete
+        // a decisão real, que é o correto (Vis é fonte de verdade). Fire-and-forget.
+        schedulePublishEntitlement(companyId);
         return NextResponse.json({ success: true, message: "Assinatura cancelada" });
       }
 
