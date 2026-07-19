@@ -6,6 +6,8 @@ import { logger } from "@/lib/logger";
 import { verifyVisDomus } from "@/lib/vis-domus-hmac";
 import { resolvePlanForTier, isPlanTier } from "@/lib/resolve-plan-for-tier";
 import { decideSagaAction } from "@/lib/domus-plan-change/saga";
+import { runSaga } from "@/lib/domus-plan-change/executor";
+import { buildSagaDeps } from "@/lib/domus-plan-change/deps";
 
 /**
  * POST /api/internal/domus/plan-change
@@ -116,13 +118,10 @@ export async function POST(req: Request) {
     );
   }
 
-  // ⚠️ Fase 2 — cobrança + aplicação (Asaas-first no upgrade) ainda NÃO ligada.
-  // Esqueleto seguro: cria/retoma a op RECEIVED. A execução da saga (resolver
-  // plano, cobrar no Asaas, aplicar local, publicar) exige o service
-  // applyPlanChange com billingPolicy — próximo passo desta fase. Enquanto isso,
-  // com o kill-switch OFF (acima), este bloco nem é alcançado em prod.
-  const targetPlan = await resolvePlanForTier(requestedTier);
+  // Garante a op existir. No fresh, cria com o plano-alvo resolvido AGORA; no
+  // resume, a op já existe (com o targetPlanId persistido na 1ª vez).
   if (decision.kind === "fresh") {
+    const targetPlan = await resolvePlanForTier(requestedTier);
     try {
       await prisma.domusPlanChangeOp.create({
         data: {
@@ -151,16 +150,33 @@ export async function POST(req: Request) {
         if (redo.kind === "duplicate") {
           return NextResponse.json({ status: "already_applied" }, { status: 200 });
         }
-        // vencedor está em progresso → o próprio dono da op a executa; aqui só
-        // reconhecemos o recebimento (não duplica o processamento).
-        return NextResponse.json({ status: "accepted", state: "RECEIVED" }, { status: 202 });
+        // Perdedor da corrida: o vencedor já está processando; só reconhece.
+        return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
       }
       throw err;
     }
   }
-  // decision.kind === "resume": o executor da saga (próximo passo) carrega a op
-  // COMPLETA do banco (targetPlanId/asaasRef persistidos) e retoma pelo estado —
-  // NÃO usar o targetPlan recalculado aqui pra não trocar o plano da op em voo.
 
-  return NextResponse.json({ status: "accepted", state: "RECEIVED" }, { status: 202 });
+  // Carrega a op COMPLETA (fresh recém-criada OU resume) e executa/retoma a saga.
+  // Usa o targetPlanId PERSISTIDO na op — nunca o recalculado — pra não trocar o
+  // plano de uma op em voo (achado Codex).
+  const op = await prisma.domusPlanChangeOp.findUnique({
+    where: { eventId },
+    select: { id: true, eventId: true, visCompanyId: true, requestedTier: true, targetPlanId: true, state: true, asaasRef: true },
+  });
+  if (!op) {
+    // Não deveria acontecer (acabamos de garantir), mas fail-safe.
+    return NextResponse.json({ error: "op_not_found" }, { status: 500 });
+  }
+
+  const result = await runSaga(op, buildSagaDeps());
+  if (result.failed) {
+    // Saga parou num checkpoint (cobrança/aplicação falhou). Retomável: o Domus
+    // pode reenviar o mesmo eventId. 502: o Vis tentou mas não concluiu.
+    return NextResponse.json(
+      { error: "not_completed", state: result.state },
+      { status: 502 },
+    );
+  }
+  return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
 }

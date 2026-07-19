@@ -13,14 +13,24 @@ vi.mock("@/lib/resolve-plan-for-tier", async () => {
   );
   return { ...actual, resolvePlanForTier: vi.fn().mockResolvedValue({ id: "plan_x", slug: "medical-clinica", tier: "clinic_full" }) };
 });
+// deps reais fazem I/O (Asaas/prisma) — mock. runSaga é testado à parte (executor.test).
+vi.mock("@/lib/domus-plan-change/deps", () => ({ buildSagaDeps: vi.fn(() => ({})) }));
+vi.mock("@/lib/domus-plan-change/executor", async () => {
+  const actual = await vi.importActual<typeof import("@/lib/domus-plan-change/executor")>(
+    "@/lib/domus-plan-change/executor",
+  );
+  return { ...actual, runSaga: vi.fn().mockResolvedValue({ state: "COMPLETED", asaasRef: "a1" }) };
+});
 
 import { POST } from "./route";
 import { prisma } from "@/lib/prisma";
 import { signVisDomus } from "@/lib/vis-domus-hmac";
+import { runSaga } from "@/lib/domus-plan-change/executor";
 
 const companyFindFirst = prisma.company.findFirst as unknown as ReturnType<typeof vi.fn>;
 const opFindUnique = prisma.domusPlanChangeOp.findUnique as unknown as ReturnType<typeof vi.fn>;
 const opCreate = prisma.domusPlanChangeOp.create as unknown as ReturnType<typeof vi.fn>;
+const runSagaMock = runSaga as unknown as ReturnType<typeof vi.fn>;
 
 const SECRET = "test-secret";
 
@@ -88,28 +98,53 @@ describe("plan-change — gates de segurança", () => {
   });
 });
 
-describe("plan-change — idempotência (com kill-switch ON)", () => {
+describe("plan-change — idempotência + execução (com kill-switch ON)", () => {
   beforeEach(() => {
     process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    // após o create, o endpoint carrega a op completa pra rodar a saga.
+    opFindUnique.mockResolvedValue({
+      id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full",
+      targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null,
+    });
   });
 
-  it("op nova (fresh) → cria RECEIVED, 202", async () => {
+  it("op nova (fresh) → cria, roda a saga → 200 completed", async () => {
+    // 1ª leitura (decisão) = null (nova); 2ª (carregar op p/ saga) = op completa.
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full", targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null });
     const res = await POST(makeReq(validBody));
-    expect(res.status).toBe(202);
+    expect(res.status).toBe(200);
+    expect(opCreate).toHaveBeenCalledOnce();
+    expect(runSagaMock).toHaveBeenCalledOnce();
+  });
+
+  it("saga falha (checkpoint) → 502 not_completed, retomável", async () => {
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full", targetPlanId: "plan_x", state: "BILLING_REQUESTED", asaasRef: null });
+    runSagaMock.mockResolvedValueOnce({ state: "BILLING_REQUESTED", asaasRef: null, failed: true, lastError: "asaas down" });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(502);
     expect(opCreate).toHaveBeenCalledOnce();
   });
 
-  it("op COMPLETED mesmo hash → 200 already_applied, NÃO recria", async () => {
+  it("op COMPLETED mesmo hash → 200 already_applied, NÃO recria nem roda saga", async () => {
     const raw = JSON.stringify(validBody);
     const { createHash } = await import("crypto");
     const hash = createHash("sha256").update(raw).digest("hex");
+    opFindUnique.mockReset();
     opFindUnique.mockResolvedValue({ state: "COMPLETED", payloadHash: hash });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(200);
     expect(opCreate).not.toHaveBeenCalled();
+    expect(runSagaMock).not.toHaveBeenCalled();
   });
 
   it("mesmo eventId com corpo diferente → 409 conflict", async () => {
+    opFindUnique.mockReset();
     opFindUnique.mockResolvedValue({ state: "COMPLETED", payloadHash: "hash-diferente" });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(409);
