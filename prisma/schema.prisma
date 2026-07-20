@@ -1600,9 +1600,16 @@ model DomusPlanChangeOp {
 
   @@index([visCompanyId])
   @@index([expiresAt])
-  // O índice do polling do worker é PARCIAL (WHERE state IN retomáveis) e vive só
-  // na migração hand-written — o Prisma não modela índice parcial no schema.
-  // Declará-lo aqui geraria um índice não-parcial divergente (drift).
+  // Dois índices PARCIAIS vivem só nas migrações hand-written (o Prisma não modela
+  // índice parcial no schema; declará-los aqui geraria índices não-parciais
+  // divergentes = drift):
+  //  - DomusPlanChangeOp_retry_idx (Fase A): polling do worker por estados retomáveis.
+  //  - DomusPlanChangeOp_active_company_uq (Fase B): ÚNICO por visCompanyId nos 4
+  //    estados retomáveis + 2 incidentes humanos (CHARGED_NOT_APPLIED/MANUAL_REVIEW)
+  //    → máx 1 troca bloqueante por company (mata A→B→A cross-op e impede nova op
+  //    enquanto um incidente financeiro não foi resolvido). FAILED_BEFORE_BILLING
+  //    fica de fora (falha segura, nada cobrado). Resolução (Fase D) move a op p/
+  //    FAILED/COMPLETED, reabrindo a company.
 }
 
 enum DomusPlanChangeOpState {
@@ -2838,6 +2845,12 @@ model GlobalAudit {
   adminUser AdminUser? @relation(fields: [actorId], references: [id])
   company   Company?   @relation(fields: [companyId], references: [id])
 
+  // Trava anti-duplicata da saga de troca de plano (Fase B): a 2ª linha de
+  // audit da mesma op pega P2002. O índice ÚNICO é PARCIAL (WHERE NOT NULL) e
+  // vive só na migração hand-written — declarar @unique aqui geraria um índice
+  // não-parcial divergente (drift), como já se faz em DomusPlanChangeOp.
+  planChangeOpId String?
+
   @@index([companyId, createdAt])
   @@index([action, createdAt])
   @@index([actorId, createdAt])
@@ -2923,6 +2936,11 @@ model SubscriptionHistory {
   metadata       Json?
   createdAt      DateTime     @default(now())
   subscription   Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  // Trava anti-duplicata da saga de troca de plano (Fase B): a 2ª linha de
+  // history da mesma op pega P2002. Índice ÚNICO PARCIAL (WHERE NOT NULL) vive
+  // só na migração hand-written — @unique aqui geraria índice não-parcial (drift).
+  planChangeOpId String?
 
   @@index([subscriptionId, createdAt])
   @@index([action])

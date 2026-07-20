@@ -136,18 +136,80 @@ export async function POST(req: Request) {
   if (decision.kind === "fresh") {
     const targetPlan = await resolvePlanForTier(requestedTier);
 
+    // Assinatura CORRENTE da company: fonte da identidade a congelar na op
+    // (subscriptionId/asaasSubscriptionId/ciclo/preço). confirmBilling e
+    // applyLocal agem SOBRE ESSE snapshot — nunca cobrar X e aplicar Y.
+    // FAIL-CLOSED (achado Codex #2): busca ATÉ 2 elegíveis. 0 → não há o que
+    // cobrar; >1 → ambíguo (Subscription não tem unique por company) e escolher
+    // "a primeira" faturaria arbitrariamente. Nos dois casos, NÃO cria op.
+    const eligible = await prisma.subscription.findMany({
+      where: { companyId: visCompanyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
+      select: {
+        id: true,
+        asaasSubscriptionId: true,
+        billingCycle: true,
+        plan: { select: { priceMonthly: true } },
+      },
+      take: 2,
+    });
+    if (eligible.length === 0) {
+      logger.error("plan-change sem assinatura elegível (não cria op)", { window: WINDOW_LOG, visCompanyId });
+      return NextResponse.json(
+        { error: "no_active_subscription", message: "Sem assinatura ativa para trocar de plano." },
+        { status: 409 },
+      );
+    }
+    if (eligible.length > 1) {
+      logger.error("plan-change com MÚLTIPLAS assinaturas elegíveis (ambíguo, não cria op)", {
+        window: WINDOW_LOG,
+        visCompanyId,
+      });
+      return NextResponse.json(
+        { error: "ambiguous_subscription", message: "Múltiplas assinaturas ativas — troca requer suporte." },
+        { status: 409 },
+      );
+    }
+    const current = eligible[0];
+
+    // Self-service exige assinatura recorrente no Asaas — sem ela não há o que
+    // cobrar e o applyLocal liberaria tier sem cobrança. Fail-closed ANTES de
+    // criar a op (senão a op de identidade nula falharia em loop ocupando o
+    // índice de op ativa e envenenando a company — achado Codex #2).
+    if (!current.asaasSubscriptionId) {
+      logger.error("plan-change sem asaasSubscriptionId (não auto-aplicável)", { window: WINDOW_LOG, visCompanyId });
+      return NextResponse.json(
+        { error: "no_recurring_billing", message: "Assinatura sem cobrança recorrente — troca requer suporte." },
+        { status: 409 },
+      );
+    }
+
     // DOWNGRADE só pode ser AGENDADO pra currentPeriodEnd (spec: o cliente pagou
     // o mês, não perde acesso no meio). O executor de downgrade agendado é a
     // Fase 4 (cron + pendingPlanId). Até lá, REJEITA downgrade (fail-closed) em
     // vez de aplicá-lo imediato — achado Codex. Upgrade segue (Asaas-first imediato).
-    const current = await prisma.subscription.findFirst({
-      where: { companyId: visCompanyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
-      select: { plan: { select: { priceMonthly: true } } },
-    });
-    if (current && current.plan.priceMonthly > targetPlan.priceMonthly) {
+    if (current.plan.priceMonthly > targetPlan.priceMonthly) {
       return NextResponse.json(
         { error: "downgrade_not_supported", message: "Downgrade ainda não disponível no autoatendimento." },
         { status: 501 },
+      );
+    }
+
+    // Preço a cobrar (centavos) congelado AGORA para o ciclo da assinatura — não
+    // recalculado na cobrança. VALIDADO > 0 (achado Codex #1): sem isso, um plano
+    // com priceYearly=0 tentaria cobrar R$0 e liberar tier caro. A validade do
+    // congelamento é conferida no executor via expiresAt (achado Codex #3).
+    const cycle = current.billingCycle ?? "MONTHLY";
+    const priceApplied = cycle === "YEARLY" ? targetPlan.priceYearly : targetPlan.priceMonthly;
+    if (!Number.isInteger(priceApplied) || priceApplied <= 0) {
+      logger.error("plan-change com preço-alvo inválido (não cria op)", {
+        window: WINDOW_LOG,
+        visCompanyId,
+        priceApplied,
+        cycle,
+      });
+      return NextResponse.json(
+        { error: "invalid_plan_price", message: "Plano-alvo com preço inválido — troca indisponível." },
+        { status: 409 },
       );
     }
 
@@ -161,17 +223,39 @@ export async function POST(req: Request) {
           payloadHash,
           state: "RECEIVED",
           expiresAt: new Date(Date.now() + OP_TTL_MS),
+          // Identidade da assinatura PERSISTIDA (Fase B): fixada antes de cobrar.
+          subscriptionId: current.id,
+          asaasSubscriptionId: current.asaasSubscriptionId,
+          billingCycle: cycle,
+          priceApplied,
         },
       });
     } catch (err) {
-      // Corrida (double-click): 2 requests com o mesmo eventId viram ambos
-      // "fresh" e disputam o create; o @unique(eventId) faz o perdedor pegar
-      // P2002. Relê a op vencedora e refaz a decisão (não vira 500).
       if ((err as { code?: string })?.code === "P2002") {
+        // DOIS índices únicos podem colidir: o de eventId e o de op ativa por
+        // company. NÃO decidir pelo nome do índice (meta.target é frágil e nem
+        // modela índice parcial — achado Codex #4). Em vez disso, RESOLVE POR
+        // ESTADO: relê a op por eventId; se existe, é replay/corrida do evento;
+        // se NÃO existe, o conflito foi no índice de op ATIVA (outra op da mesma
+        // company em voo) → 409. Os ÚNICOS índices únicos que um create pode violar
+        // são eventId e o de op-ativa-por-company; sem winner por eventId, só resta
+        // o de op ativa (colisão de PK cuid é praticamente impossível).
         const winner = await prisma.domusPlanChangeOp.findUnique({
           where: { eventId },
           select: { state: true, payloadHash: true },
         });
+        if (!winner) {
+          // eventId livre → a colisão foi no índice de op ativa por company.
+          logger.warn("plan-change com troca já em andamento na company (409)", {
+            window: WINDOW_LOG,
+            visCompanyId,
+          });
+          return NextResponse.json(
+            { error: "change_in_progress", message: "Já há uma troca de plano em andamento." },
+            { status: 409 },
+          );
+        }
+        // eventId já existe → double-click do MESMO evento: refaz a decisão.
         const redo = decideSagaAction(winner, payloadHash);
         if (redo.kind === "conflict") {
           return NextResponse.json({ error: "conflict" }, { status: 409 });
@@ -187,7 +271,7 @@ export async function POST(req: Request) {
             { status: 409 },
           );
         }
-        // Perdedor da corrida: o vencedor já está processando; só reconhece.
+        // Perdedor da corrida do MESMO evento: o vencedor já está processando.
         return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
       }
       throw err;
@@ -199,7 +283,7 @@ export async function POST(req: Request) {
   // plano de uma op em voo (achado Codex).
   const op = await prisma.domusPlanChangeOp.findUnique({
     where: { eventId },
-    select: { id: true, eventId: true, visCompanyId: true, requestedTier: true, targetPlanId: true, state: true, asaasRef: true },
+    select: { id: true, eventId: true, visCompanyId: true, requestedTier: true, targetPlanId: true, state: true, asaasRef: true, expiresAt: true },
   });
   if (!op) {
     // Não deveria acontecer (acabamos de garantir), mas fail-safe.

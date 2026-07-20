@@ -52,6 +52,20 @@ export function nextState(state: SagaState): SagaState | null {
   return ORDER[i + 1];
 }
 
+/**
+ * Posição do estado no caminho feliz (RECEIVED=0 … COMPLETED=4). Estados fora do
+ * ORDER (terminais humanos) → -1. Usado para só ADOTAR avanço estrito num
+ * resync de CAS perdido (nunca regredir — achado Codex #6).
+ */
+export function progressRank(state: SagaState): number {
+  return ORDER.indexOf(state);
+}
+
+/** true se `state` é um terminal humano (parou de propósito, espera intervenção). */
+export function isHumanTerminal(state: SagaState): boolean {
+  return HUMAN_TERMINAL.includes(state);
+}
+
 export interface ExistingOp {
   state: SagaState | string;
   payloadHash: string;

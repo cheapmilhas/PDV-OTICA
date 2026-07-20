@@ -3,7 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 vi.mock("@/lib/prisma", () => ({
   prisma: {
     company: { findFirst: vi.fn() },
-    subscription: { findFirst: vi.fn() },
+    subscription: { findMany: vi.fn() },
     domusPlanChangeOp: { findUnique: vi.fn(), create: vi.fn() },
   },
 }));
@@ -12,7 +12,7 @@ vi.mock("@/lib/resolve-plan-for-tier", async () => {
   const actual = await vi.importActual<typeof import("@/lib/resolve-plan-for-tier")>(
     "@/lib/resolve-plan-for-tier",
   );
-  return { ...actual, resolvePlanForTier: vi.fn().mockResolvedValue({ id: "plan_x", slug: "medical-clinica", tier: "clinic_full", priceMonthly: 18990 }) };
+  return { ...actual, resolvePlanForTier: vi.fn().mockResolvedValue({ id: "plan_x", slug: "medical-clinica", tier: "clinic_full", priceMonthly: 18990, priceYearly: 189900 }) };
 });
 // deps reais fazem I/O (Asaas/prisma) — mock. runSaga é testado à parte (executor.test).
 vi.mock("@/lib/domus-plan-change/deps", () => ({ buildSagaDeps: vi.fn(() => ({})) }));
@@ -29,7 +29,7 @@ import { signVisDomus } from "@/lib/vis-domus-hmac";
 import { runSaga } from "@/lib/domus-plan-change/executor";
 
 const companyFindFirst = prisma.company.findFirst as unknown as ReturnType<typeof vi.fn>;
-const subFindFirst = prisma.subscription.findFirst as unknown as ReturnType<typeof vi.fn>;
+const subFindMany = prisma.subscription.findMany as unknown as ReturnType<typeof vi.fn>;
 const opFindUnique = prisma.domusPlanChangeOp.findUnique as unknown as ReturnType<typeof vi.fn>;
 const opCreate = prisma.domusPlanChangeOp.create as unknown as ReturnType<typeof vi.fn>;
 const runSagaMock = runSaga as unknown as ReturnType<typeof vi.fn>;
@@ -60,7 +60,15 @@ beforeEach(() => {
   delete process.env.VIS_TIER_SELF_SERVICE_ENABLED;
   companyFindFirst.mockResolvedValue({ id: "co1" });
   // subscription atual = plano barato (8990) → alvo clínica (18990) é UPGRADE.
-  subFindFirst.mockResolvedValue({ plan: { priceMonthly: 8990 } });
+  // Fase B: o endpoint busca ATÉ 2 elegíveis (fail-closed) e congela id/asaas/ciclo.
+  subFindMany.mockResolvedValue([
+    {
+      id: "sub1",
+      asaasSubscriptionId: "asaas_sub_1",
+      billingCycle: "MONTHLY",
+      plan: { priceMonthly: 8990 },
+    },
+  ]);
   opFindUnique.mockResolvedValue(null);
   opCreate.mockResolvedValue({});
 });
@@ -127,8 +135,8 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
   it("DOWNGRADE (plano atual mais caro que o alvo) → 501, NÃO cria op nem roda saga", async () => {
     opFindUnique.mockReset();
     opFindUnique.mockResolvedValueOnce(null);
-    // subscription atual = clínica (18990) > alvo (18990 no mock)? não. Forço maior:
-    subFindFirst.mockResolvedValueOnce({ plan: { priceMonthly: 99999 } });
+    // subscription atual mais cara que o alvo → downgrade.
+    subFindMany.mockResolvedValueOnce([{ id: "sub1", asaasSubscriptionId: "asaas_sub_1", billingCycle: "MONTHLY", plan: { priceMonthly: 99999 } }]);
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(501);
     expect(opCreate).not.toHaveBeenCalled();
@@ -224,5 +232,77 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     runSagaMock.mockResolvedValue({ state: "CHARGED_NOT_APPLIED", asaasRef: null }); // sem failed
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(409);
+  });
+
+  // Fase B — trava "1 op ativa por company". P2002 RESOLVIDO POR ESTADO, não por
+  // meta.target (achado Codex #4): eventId LIVRE após P2002 → foi o índice de op
+  // ativa → 409 change_in_progress. NÃO depende do nome do índice.
+  it("P2002 com eventId livre (op ativa por company) → 409 change_in_progress", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null) // decisão: fresh
+      .mockResolvedValueOnce(null); // relê por eventId após P2002 → LIVRE
+    opCreate.mockRejectedValue({ code: "P2002" }); // sem meta.target
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+    const json = await res.json();
+    expect(json.error).toBe("change_in_progress");
+    expect(runSagaMock).not.toHaveBeenCalled();
+  });
+
+  // Fail-closed (achado Codex #2): sem assinatura elegível NÃO cria op.
+  it("nenhuma assinatura elegível → 409 no_active_subscription, NÃO cria op", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValueOnce(null);
+    subFindMany.mockResolvedValueOnce([]);
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("no_active_subscription");
+    expect(opCreate).not.toHaveBeenCalled();
+  });
+
+  it("MÚLTIPLAS assinaturas elegíveis (ambíguo) → 409 ambiguous_subscription, NÃO cria op", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValueOnce(null);
+    subFindMany.mockResolvedValueOnce([
+      { id: "sub1", asaasSubscriptionId: "a1", billingCycle: "MONTHLY", plan: { priceMonthly: 8990 } },
+      { id: "sub2", asaasSubscriptionId: "a2", billingCycle: "MONTHLY", plan: { priceMonthly: 8990 } },
+    ]);
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("ambiguous_subscription");
+    expect(opCreate).not.toHaveBeenCalled();
+  });
+
+  it("assinatura sem asaasSubscriptionId → 409 no_recurring_billing, NÃO cria op", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValueOnce(null);
+    subFindMany.mockResolvedValueOnce([{ id: "sub1", asaasSubscriptionId: null, billingCycle: "MONTHLY", plan: { priceMonthly: 8990 } }]);
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("no_recurring_billing");
+    expect(opCreate).not.toHaveBeenCalled();
+  });
+
+  // Fase B — o fresh CONGELA a identidade da assinatura na op (subscriptionId/
+  // asaasSubscriptionId/billingCycle/priceApplied) antes de qualquer cobrança.
+  it("fresh congela a identidade da assinatura no create", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full", targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null });
+    await POST(makeReq(validBody));
+    expect(opCreate).toHaveBeenCalledOnce();
+    const data = opCreate.mock.calls[0][0].data;
+    expect(data.subscriptionId).toBe("sub1");
+    expect(data.asaasSubscriptionId).toBe("asaas_sub_1");
+    expect(data.billingCycle).toBe("MONTHLY");
+    // ciclo MONTHLY → priceApplied = priceMonthly do alvo (18990 centavos).
+    expect(data.priceApplied).toBe(18990);
   });
 });

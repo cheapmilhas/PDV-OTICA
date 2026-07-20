@@ -50,3 +50,17 @@ Validar em SANDBOX Asaas que `PUT /subscriptions/{id}` honra `asaas-idempotency-
 
 ## Fora de escopo
 Downgrade agendado (Fase 4, já 501). Estorno automático (CHARGED_NOT_APPLIED alerta humano, não estorna sozinho — dinheiro).
+
+## ✅ FASE A + B FEITAS (2026-07-20)
+- **FASE A EM PROD** (commit `94195b68`): migração `20260720120000_plan_change_op_hardening` aplicada via `prisma migrate deploy` (dono rodou com `!`). Verificado: 11 colunas, 3 estados de enum, índice parcial de retry, tabela 0 linhas.
+- **FASE B IMPLEMENTADA** (NÃO em prod): applyLocal atômico (CAS `BILLING_CONFIRMED→LOCAL_APPLIED` 1ª escrita da tx + efeitos no mesmo commit), `saveState` incondicional MORREU (virou `transition`/`recordError`/`markTerminal` com CAS + `reloadOp`), identidade persistida + preflight, `planChangeOpId` único em history/audit. Migração `20260720140000_plan_change_op_atomicity` (2 colunas + índices únicos parciais). Codex quebrou o diff (7 achados, todos reais, todos corrigidos):
+  1. preço>0 (endpoint fresh + confirmBilling) — priceYearly=0 cobraria R$0 e liberaria tier.
+  2. fail-closed 0/>1 subscription elegível + exige asaasSubscriptionId ANTES de criar op (senão op de identidade nula falha em loop e envenena a company via índice ativo).
+  3. `expiresAt` LIDO no executor (RECEIVED expirada → FAILED_BEFORE_BILLING; depois de billing não expira cegamente).
+  4. P2002 resolvido POR ESTADO (relê eventId→livre=índice ativo→409; existe=replay), NÃO por `meta.target` (frágil; caía em 202 sem criar op).
+  5. applyLocal REVALIDA identidade completa (companyId+asaasSubscriptionId) DENTRO da tx via FOR UPDATE — assinatura pode ter sido substituída entre CAS e efeitos.
+  6. `resyncOnLostCas` só adota avanço ESTRITO/terminal (progressRank) — regressão reexecutaria confirmBilling = dupla cobrança.
+  7. índice de op ativa inclui CHARGED_NOT_APPLIED+MANUAL_REVIEW — incidente financeiro bloqueia nova op até resolução humana.
+
+## 🚨 NOTA DE DEPLOY (achado Codex) — índice não-CONCURRENTLY
+Os `CREATE UNIQUE INDEX` da migração B em `GlobalAudit` e `subscription_history` (tabelas GRANDES, produção) NÃO são `CONCURRENTLY` — e não podem ser, porque `migrate deploy` roda cada migração em 1 tx e `CREATE INDEX CONCURRENTLY` proíbe tx. Enquanto o índice varre a tabela, ele pega lock que BLOQUEIA writes normais de audit/history. ANTES de aplicar em prod: MEDIR tamanho de `GlobalAudit`/`subscription_history`. Se grandes, criar os 2 índices únicos parciais MANUALMENTE com `CREATE UNIQUE INDEX CONCURRENTLY` fora do migrate (e marcar a migração como aplicada) OU aceitar a janela de lock num horário de baixo tráfego. O índice de op ativa em `DomusPlanChangeOp` (0 linhas) é instantâneo, sem risco.
