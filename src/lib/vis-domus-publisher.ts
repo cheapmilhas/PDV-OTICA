@@ -18,20 +18,17 @@ import { randomUUID } from "crypto";
 
 const WINDOW_LOG = "vis-domus-publisher";
 
-export interface EntitlementPayload {
-  version: 1;
+/** Campos comuns a v1 e v2. */
+interface EntitlementPayloadBase {
   eventId: string;
   sourceUpdatedAt: string; // max(Subscription.updatedAt, Company.updatedAt)
   /**
-   * Relógio monotônico (V3a/V3b), capturado no snapshot coerente, como STRING
-   * decimal — NUNCA bigint cru: o payload passa por JSON.stringify em
-   * publishEntitlementForCompany e BigInt não serializa (quebraria toda a
-   * publicação). null quando a company não tem linha de revisão (improvável após
-   * backfill). V3c passa a EMITIR este campo no payload v2; até lá é interno.
+   * Relógio monotônico (V3a), STRING decimal — NUNCA bigint cru (o payload passa
+   * por JSON.stringify e BigInt não serializa). Emitido quando presente; o Domus
+   * (D1.2) valida `^[0-9]+$` e ordena por ele quando presente, senão por
+   * sourceUpdatedAt (que continua sempre emitido — o Domus ainda o exige).
    */
-  sourceRevision: string | null;
-  /** Tier do plano ativo (V3b captura; V3c emite em `plan.tier`). */
-  planTier: string | null;
+  sourceRevision?: string;
   generatedAt: string;
   visCompanyId: string;
   domusClinicId: string;
@@ -39,6 +36,16 @@ export interface EntitlementPayload {
   planName: string | null;
   entitlement: { writeAllowed: boolean; reason: string };
 }
+
+/**
+ * Payload de entitlement Vis → Domus. União DISCRIMINADA por `version`: v2 SEMPRE
+ * tem `plan.tier` (o parser do Domus exige e rejeita v2 sem tier); v1 NUNCA tem
+ * `plan` (ramos sem plano ativo — o Domus preserva o tier gravado). O tipo impede
+ * a combinação inválida em compile-time (achado Codex P2).
+ */
+export type EntitlementPayload =
+  | (EntitlementPayloadBase & { version: 1 })
+  | (EntitlementPayloadBase & { version: 2; plan: { tier: string } });
 
 /**
  * Monta o payload de entitlement de uma Company VIS_MEDICAL.
@@ -53,7 +60,39 @@ export async function buildEntitlementPayload(
   // → torn read (publisher A lia tier velho, calculava relógio novo, sobrescrevia
   // o snapshot certo do publisher B). Agora as 3 leituras + a revisão veem o mesmo
   // snapshot. O fetch fica FORA da tx (não segura conexão durante a rede).
-  const snapshot = await prisma.$transaction(
+  //
+  // Retry curto (V3c, achado Codex): checkSubscription pode EXPIRAR trial
+  // (updateMany) dentro da tx; sob REPEATABLE READ, dois publishers concorrentes
+  // no mesmo trial dão serialization error (P2034/40001). Sem retry, o webhook
+  // daquela execução se perderia (o pull repara, mas o caminho rápido falha à toa).
+  const snapshot = await runSnapshotWithRetry(companyId);
+
+  if (!snapshot) return null;
+  return assemblePayload(snapshot, now);
+}
+
+/** Erros de serialização do Prisma que valem retry (conflito de escrita concorrente). */
+function isSerializationError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === "P2034"; // "Transaction failed due to a write conflict or a deadlock"
+}
+
+async function runSnapshotWithRetry(companyId: string) {
+  const MAX_TRIES = 3;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await readSnapshot(companyId);
+    } catch (err) {
+      if (isSerializationError(err) && attempt < MAX_TRIES) continue;
+      throw err;
+    }
+  }
+}
+
+type EntitlementSnapshot = NonNullable<Awaited<ReturnType<typeof readSnapshot>>>;
+
+async function readSnapshot(companyId: string) {
+  return prisma.$transaction(
     async (tx) => {
       const company = await tx.company.findUnique({
         where: { id: companyId },
@@ -85,8 +124,13 @@ export async function buildEntitlementPayload(
     },
     { isolationLevel: "RepeatableRead" },
   );
+}
 
-  if (!snapshot) return null;
+/** Monta o DTO/payload a partir do snapshot coerente. Sem acesso a banco/rede. */
+function assemblePayload(
+  snapshot: EntitlementSnapshot,
+  now: Date,
+): EntitlementPayload {
   const { company, sub, decision, revision } = snapshot;
   // O early return DENTRO da tx já garantiu domusClinicId != null; o narrowing se
   // perde ao sair da tx, então reafirmamos (nunca null aqui).
@@ -105,14 +149,14 @@ export async function buildEntitlementPayload(
   const compUpdated = company.updatedAt.getTime();
   const sourceUpdatedAt = new Date(Math.max(subUpdated, compUpdated)).toISOString();
 
-  return {
-    version: 1,
+  // V3c: emite v2 SÓ quando há tier derivável (plano ativo). Ramos sem plano
+  // continuam v1 — o Domus exige plan.tier não-vazio em v2 e preserva o tier
+  // gravado quando recebe v1 (não regride). Nunca emitir v2 sem tier.
+  const tier = sub?.plan?.tier ?? null;
+
+  const base = {
     eventId: randomUUID(),
     sourceUpdatedAt,
-    // V3b captura a revisão + tier no snapshot coerente; V3c os emite no payload
-    // v2. STRING decimal (não bigint cru — JSON.stringify quebraria a publicação).
-    sourceRevision: revision !== null ? revision.toString() : null,
-    planTier: sub?.plan?.tier ?? null,
     generatedAt: now.toISOString(),
     visCompanyId: company.id,
     domusClinicId,
@@ -120,6 +164,15 @@ export async function buildEntitlementPayload(
     planName: dto.planName,
     entitlement: { writeAllowed: dto.writeAllowed, reason: dto.reason },
   };
+
+  // sourceRevision (STRING decimal) acompanha ambos v1 e v2 quando presente — o
+  // Domus ordena por ele quando vem, senão por sourceUpdatedAt.
+  const revisionField = revision !== null ? { sourceRevision: revision.toString() } : {};
+
+  if (tier !== null) {
+    return { version: 2, ...base, ...revisionField, plan: { tier } };
+  }
+  return { version: 1, ...base, ...revisionField };
 }
 
 /**

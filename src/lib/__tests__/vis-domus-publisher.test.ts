@@ -71,12 +71,15 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
 
     const r = await buildEntitlementPayload("c1", NOW);
     expect(r).not.toBeNull();
+    const p = r!;
+    // Com tier → v2 com plan.tier.
+    expect(p.version).toBe(2);
+    if (p.version === 2) expect(p.plan.tier).toBe("clinic_full");
     // STRING decimal, NÃO bigint (JSON.stringify quebraria com bigint).
-    expect(r!.sourceRevision).toBe("42");
-    expect(typeof r!.sourceRevision).toBe("string");
-    expect(r!.planTier).toBe("clinic_full");
-    expect(r!.entitlement.writeAllowed).toBe(true);
-    expect(r!.domusClinicId).toBe("d1");
+    expect(p.sourceRevision).toBe("42");
+    expect(typeof p.sourceRevision).toBe("string");
+    expect(p.entitlement.writeAllowed).toBe(true);
+    expect(p.domusClinicId).toBe("d1");
     // checkSubscription roda DENTRO da tx (recebe o tx mock como 2º arg).
     expect(checkSub).toHaveBeenCalledWith("c1", txMock);
   });
@@ -95,10 +98,12 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     txMock.entitlementRevision.findUnique.mockResolvedValue(null);
     checkSub.mockResolvedValue({ allowed: false, status: "SUSPENDED", planName: "Pro" });
 
-    const r = await buildEntitlementPayload("c1", NOW);
-    expect(r!.sourceRevision).toBeNull();
-    expect(r!.planTier).toBe("specialist");
-    expect(r!.entitlement.writeAllowed).toBe(false);
+    const p = (await buildEntitlementPayload("c1", NOW))!;
+    // sem revisão → sourceRevision ausente (não emitido). Mas tem tier → v2.
+    expect(p.sourceRevision).toBeUndefined();
+    expect(p.version).toBe(2);
+    if (p.version === 2) expect(p.plan.tier).toBe("specialist");
+    expect(p.entitlement.writeAllowed).toBe(false);
   });
 
   it("o payload SEMPRE serializa em JSON (P0 Codex: bigint quebraria a publicação)", async () => {
@@ -124,7 +129,7 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     expect(JSON.parse(JSON.stringify(r)).sourceRevision).toBe("9007199254740993");
   });
 
-  it("ramo sem subscription → planTier null, ainda publica writeAllowed", async () => {
+  it("ramo sem subscription → v1 (sem plan.tier), ainda publica writeAllowed", async () => {
     txMock.company.findUnique.mockResolvedValue({
       id: "c1",
       platformProduct: "VIS_MEDICAL",
@@ -136,7 +141,10 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     checkSub.mockResolvedValue({ allowed: false, status: "NO_SUBSCRIPTION" });
 
     const r = await buildEntitlementPayload("c1", NOW);
-    expect(r!.planTier).toBeNull();
+    // Sem tier → continua v1 (o Domus preserva o tier gravado). Nunca v2 sem tier.
+    expect(r!.version).toBe(1);
+    expect(r).not.toHaveProperty("plan");
     expect(r!.sourceRevision).toBe("7");
+    expect(r!.entitlement.writeAllowed).toBe(false);
   });
 });
