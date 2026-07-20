@@ -63,21 +63,24 @@ export async function claimOp(opId: string, ttlMs: number = LEASE_TTL_MS): Promi
     Array<{
       id: string; eventId: string; visCompanyId: string; requestedTier: string;
       targetPlanId: string | null; state: string; asaasRef: string | null;
-      expiresAt: Date; leaseToken: string; claimedAt: Date;
+      expiresAt: Date; leaseToken: string; claimedAt: Date; attemptCount: number;
     }>
   >`
     UPDATE "DomusPlanChangeOp"
     SET "leaseToken" = ${token},
         "leaseUntil" = now() + ${ttlInterval}::interval,
-        "attemptCount" = "attemptCount" + 1,
         "lastAttemptAt" = now()
     WHERE "id" = ${opId}
       AND "state" IN ('RECEIVED', 'BILLING_REQUESTED', 'BILLING_CONFIRMED', 'LOCAL_APPLIED')
       AND ("leaseUntil" IS NULL OR "leaseUntil" <= now())
       AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= now())
     RETURNING "id", "eventId", "visCompanyId", "requestedTier", "targetPlanId",
-              "state", "asaasRef", "expiresAt", "leaseToken", now() AS "claimedAt"
+              "state", "asaasRef", "expiresAt", "leaseToken", now() AS "claimedAt",
+              "attemptCount"
   `;
+  // Fase D: o claim NÃO incrementa attemptCount (o beginAttempt faz, por estado).
+  // O claim só toma a posse; o contador reflete tentativas DO ESTADO, resetadas no
+  // avanço — não aquisições de lease (achado Codex: claim conta posse, não tentativa).
   const row = rows[0];
   if (!row) return null;
   return {
@@ -91,6 +94,7 @@ export async function claimOp(opId: string, ttlMs: number = LEASE_TTL_MS): Promi
     expiresAt: row.expiresAt,
     leaseToken: row.leaseToken,
     claimedAt: row.claimedAt,
+    attemptCount: row.attemptCount,
   };
 }
 
@@ -233,7 +237,8 @@ export function buildSagaDeps(): SagaDeps {
         //     efeito (retorna false).
         const cas = await tx.domusPlanChangeOp.updateMany({
           where: { id: op.id, state: "BILLING_CONFIRMED", leaseToken: op.leaseToken },
-          data: { state: "LOCAL_APPLIED" },
+          // Avanço reseta attemptCount=0 (Fase D): o contador é POR ESTADO.
+          data: { state: "LOCAL_APPLIED", attemptCount: 0 },
         });
         if (cas.count !== 1) return false;
 
@@ -318,11 +323,27 @@ export function buildSagaDeps(): SagaDeps {
       schedulePublishEntitlement(op.visCompanyId);
     },
 
+    async beginAttempt(op: ClaimedSagaOp, state: SagaState): Promise<{ attemptCount: number }> {
+      // CONTADOR POR ESTADO (Fase D): incrementa attemptCount SÓ se a op ainda está
+      // em `state` E com o token vigente, e RETORNA o novo valor. Chamado antes de
+      // cada passo falível. count 0 (estado mudou / lease perdido) → retorna 0, o
+      // executor faz resync. UPDATE...RETURNING atômico (sem read-then-write).
+      const rows = await prisma.$queryRaw<Array<{ attemptCount: number }>>`
+        UPDATE "DomusPlanChangeOp"
+        SET "attemptCount" = "attemptCount" + 1, "lastAttemptAt" = now()
+        WHERE "id" = ${op.id} AND "state" = ${state}::"DomusPlanChangeOpState"
+          AND "leaseToken" = ${op.leaseToken}
+        RETURNING "attemptCount"
+      `;
+      return { attemptCount: rows[0]?.attemptCount ?? 0 };
+    },
+
     async transition(op: ClaimedSagaOp, from: SagaState, to: SagaState): Promise<CasResult> {
       // CAS de estado com FENCING por leaseToken. Só grava se ainda em `from` E
-      // com o token vigente. Carrega timestamps/refs da transição (auditoria).
+      // com o token vigente. O AVANÇO reseta attemptCount=0 (Fase D: contador por
+      // estado). Carrega timestamps/refs da transição (auditoria).
       const now = new Date();
-      const extra: Record<string, unknown> = {};
+      const extra: Record<string, unknown> = { attemptCount: 0 };
       if (to === "BILLING_REQUESTED") extra.billingRequestedAt = now;
       if (to === "BILLING_CONFIRMED") {
         extra.billingConfirmedAt = now;
@@ -347,13 +368,49 @@ export function buildSagaDeps(): SagaDeps {
     },
 
     async markTerminal(op: ClaimedSagaOp, from: SagaState, terminal: SagaState, lastError: string): Promise<CasResult> {
-      // CAS com FENCING para um estado terminal. Usado na expiração antes de
-      // cobrar (RECEIVED → FAILED_BEFORE_BILLING).
+      // CAS com FENCING para um estado terminal SEGURO (sem alerta). Usado na
+      // expiração antes de cobrar (RECEIVED → FAILED_BEFORE_BILLING).
       const res = await prisma.domusPlanChangeOp.updateMany({
         where: { id: op.id, state: from, leaseToken: op.leaseToken },
         data: { state: terminal, lastError, lastAttemptAt: new Date() },
       });
       return { applied: res.count === 1 };
+    },
+
+    async markFinancialTerminalAndAlert(
+      op: ClaimedSagaOp,
+      from: SagaState,
+      terminal: "CHARGED_NOT_APPLIED" | "MANUAL_REVIEW",
+      lastError: string,
+    ): Promise<CasResult> {
+      // ATÔMICO (achado Codex Fase D): CAS terminal + SystemEvent no MESMO commit.
+      // Se o processo morrer entre promover e alertar, a op fica terminal e ninguém
+      // repete (claimOp não reclama terminal) → o alerta se perderia. Aqui: terminal
+      // implica evento; falha ao criar evento reverte a promoção (op segue retomável).
+      const dedupeKey = `plan-change:${op.id}:${terminal === "CHARGED_NOT_APPLIED" ? "charged-unapplied" : "manual-review"}`;
+      const title = terminal === "CHARGED_NOT_APPLIED"
+        ? "Troca de plano: cliente cobrado sem receber o plano"
+        : "Troca de plano: resultado de cobrança ambíguo (revisar no Asaas)";
+      const detail = `Op ${op.id} (company ${op.visCompanyId}, tier ${op.requestedTier}) parou em ${from}. ${lastError}`;
+
+      const applied = await prisma.$transaction(async (tx) => {
+        // (1) CAS terminal com FENCING. count 0 → não é nosso / já mudou: aborta.
+        const cas = await tx.domusPlanChangeOp.updateMany({
+          where: { id: op.id, state: from, leaseToken: op.leaseToken },
+          data: { state: terminal, lastError, lastAttemptAt: new Date() },
+        });
+        if (cas.count !== 1) return false;
+        // (2) SystemEvent no MESMO commit. dedupeKey `billing:*` (NÃO `*:auto`) →
+        //     o health cron não o auto-resolve (fix D2). severity critical.
+        //     upsert idempotente: retry do mesmo terminal não duplica.
+        await tx.systemEvent.upsert({
+          where: { dedupeKey },
+          create: { source: "billing", severity: "critical", title, detail, dedupeKey },
+          update: {}, // já existe → não sobrescreve (idempotente)
+        });
+        return true;
+      });
+      return { applied };
     },
 
     async reloadOp(op: SagaOp): Promise<{ state: SagaState; asaasRef: string | null; leaseToken: string | null } | null> {

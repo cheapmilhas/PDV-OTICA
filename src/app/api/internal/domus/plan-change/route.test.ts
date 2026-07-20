@@ -24,7 +24,7 @@ vi.mock("@/lib/domus-plan-change/executor", async () => {
   const actual = await vi.importActual<typeof import("@/lib/domus-plan-change/executor")>(
     "@/lib/domus-plan-change/executor",
   );
-  return { ...actual, runSaga: vi.fn().mockResolvedValue({ state: "COMPLETED", asaasRef: "a1" }) };
+  return { ...actual, runSaga: vi.fn().mockResolvedValue({ kind: "completed", state: "COMPLETED", asaasRef: "a1" }) };
 });
 
 import { POST } from "./route";
@@ -201,7 +201,7 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     opFindUnique.mockReset();
     opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "op1" });
     claimOpMock.mockResolvedValueOnce({ ...CLAIMED, state: "BILLING_REQUESTED" });
-    runSagaMock.mockResolvedValueOnce({ state: "BILLING_REQUESTED", asaasRef: null, failed: true, lastError: "asaas down" });
+    runSagaMock.mockResolvedValueOnce({ kind: "retryable_failure", state: "BILLING_REQUESTED", asaasRef: null, lastError: "asaas down" });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(502);
     expect(opCreate).toHaveBeenCalledOnce();
@@ -268,20 +268,26 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     expect(res.status).toBe(409);
   });
 
-  it("TOCTOU: runSaga retorna terminal humano (não failed) → 409, NÃO 200", async () => {
+  it("runSaga retorna kind=terminal (esgotou/já terminal) → 409, NÃO 200", async () => {
     process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
     const raw = JSON.stringify(validBody);
     const { createHash } = await import("crypto");
     const hash = createHash("sha256").update(raw).digest("hex");
-    // 1ª leitura (decisão): RECEIVED → resume (passa). 2ª leitura: {id} p/ claim.
-    // O runSaga (mock) encontra a op já terminal e retorna sem `failed`. A rota
-    // NÃO pode responder 200 completed nesse caso.
     opFindUnique
       .mockResolvedValueOnce({ state: "RECEIVED", payloadHash: hash })
       .mockResolvedValueOnce({ id: "op1" });
-    runSagaMock.mockResolvedValue({ state: "CHARGED_NOT_APPLIED", asaasRef: null }); // sem failed
+    runSagaMock.mockResolvedValue({ kind: "terminal", state: "CHARGED_NOT_APPLIED", asaasRef: null });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(409);
+  });
+
+  it("runSaga retorna kind=lost_lease → 202 (outro executor conduz)", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "op1" });
+    runSagaMock.mockResolvedValue({ kind: "lost_lease", state: "BILLING_CONFIRMED", asaasRef: null });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(202);
   });
 
   // Fase B — trava "1 op ativa por company". P2002 RESOLVIDO POR ESTADO, não por

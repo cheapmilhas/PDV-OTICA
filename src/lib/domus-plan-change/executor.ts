@@ -49,6 +49,11 @@ export interface ClaimedSagaOp extends SagaOp {
    * backoff, sem clock-skew entre processo e banco (achado Codex Fase C).
    */
   claimedAt: Date;
+  /**
+   * Tentativas DO ESTADO ATUAL (Fase D), lido no claim. beginAttempt incrementa
+   * ANTES de cada passo; o avanço reseta a 0. NÃO é o nº de aquisições de lease.
+   */
+  attemptCount: number;
 }
 
 /** Resultado de um CAS de transição. */
@@ -102,20 +107,57 @@ export interface SagaDeps {
    */
   reloadOp: (op: SagaOp) => Promise<{ state: SagaState; asaasRef: string | null; leaseToken: string | null } | null>;
   /**
-   * CAS para um estado TERMINAL (WHERE state=from AND leaseToken vigente). Usado
-   * para expiração antes de cobrar (RECEIVED expirada → FAILED_BEFORE_BILLING).
+   * CAS para um estado TERMINAL SEGURO (sem alerta): WHERE state=from AND
+   * leaseToken vigente. Usado para FAILED_BEFORE_BILLING (RECEIVED expirado/
+   * esgotado — nada foi cobrado). NÃO usar para terminais financeiros.
    */
   markTerminal: (op: ClaimedSagaOp, from: SagaState, terminal: SagaState, lastError: string) => Promise<CasResult>;
+  /**
+   * FASE D — promove a um terminal FINANCEIRO (CHARGED_NOT_APPLIED / MANUAL_REVIEW)
+   * E cria o SystemEvent de alerta na MESMA transação (achado Codex): terminal
+   * implica evento; se o evento falhar, a promoção reverte e a op segue retomável;
+   * o dedupeKey único barra duplicata concorrente. CAS por state+leaseToken.
+   */
+  markFinancialTerminalAndAlert: (
+    op: ClaimedSagaOp,
+    from: SagaState,
+    terminal: "CHARGED_NOT_APPLIED" | "MANUAL_REVIEW",
+    lastError: string,
+  ) => Promise<CasResult>;
+  /**
+   * FASE D — CONTADOR POR ESTADO (não por claim): incrementa attemptCount SÓ se a
+   * op ainda está em `state` E com o leaseToken vigente. Chamado ANTES de cada
+   * passo falível. O avanço de estado reseta attemptCount=0 (na transition/apply),
+   * então o contador reflete tentativas DO ESTADO ATUAL — não aquisições de lease
+   * (achado Codex: claim conta posse, não tentativa financeira). Retorna o novo
+   * valor (0 se perdemos o lease/estado mudou).
+   */
+  beginAttempt: (op: ClaimedSagaOp, state: SagaState) => Promise<{ attemptCount: number }>;
 }
 
-export interface SagaResult {
-  /** O CHECKPOINT onde parou. Terminal humano/COMPLETED = fim; senão retomável. */
-  state: SagaState;
-  asaasRef: string | null;
-  /** true se um passo lançou. O checkpoint (`state`) diz onde retomar. */
-  failed?: boolean;
-  lastError?: string | null;
-}
+// Estados retomáveis onde a saga ainda progride (não-terminais).
+export type RetryableState = "RECEIVED" | "BILLING_REQUESTED" | "BILLING_CONFIRMED" | "LOCAL_APPLIED";
+export type HumanTerminalState = "FAILED" | "FAILED_BEFORE_BILLING" | "CHARGED_NOT_APPLIED" | "MANUAL_REVIEW";
+
+/**
+ * Resultado do runSaga como UNIÃO DISCRIMINADA (achado Codex Fase D): a rota
+ * decide o HTTP pelo `kind`, sem combinar flags frágeis (o `failed` antigo virava
+ * 502 mesmo quando o estado era um terminal financeiro que devia ser 409).
+ *  - completed: sucesso (COMPLETED). → 200
+ *  - terminal: parou num terminal humano/financeiro (esgotou/expirou). → 409
+ *  - retryable_failure: falhou mas retomável (checkpoint preservado). → 502
+ *  - lost_lease: perdemos a posse (outro executor conduz). → 202
+ */
+export type SagaResult =
+  | { kind: "completed"; state: "COMPLETED"; asaasRef: string | null }
+  | { kind: "terminal"; state: HumanTerminalState; asaasRef: string | null; lastError?: string | null }
+  | { kind: "retryable_failure"; state: RetryableState; asaasRef: string | null; lastError: string }
+  | { kind: "lost_lease"; state: SagaState; asaasRef: string | null };
+
+// Nº máximo de tentativas POR ESTADO antes de promover a terminal. Conservador:
+// falhas determinísticas (preflight, validação) esgotam rápido; transitórias
+// (rede) têm algumas chances. O worker (Fase E) aplica o backoff entre elas.
+const MAX_ATTEMPTS_PER_STATE = 5;
 
 // Estados em que a saga NÃO avança: o sucesso (COMPLETED) e os terminais humanos
 // (pararam de propósito, esperam intervenção). runSaga não deve processá-los.
@@ -147,150 +189,233 @@ function isTerminal(state: SagaState): boolean {
 export async function runSaga(op: ClaimedSagaOp, deps: SagaDeps, now: Date = new Date()): Promise<SagaResult> {
   let current: ClaimedSagaOp = { ...op };
 
+  // Op que JÁ ENTRA terminal (COMPLETED ou humano): não processa, classifica já.
+  // Na Fase C o claimOp nem reclama terminais, mas o executor é reusado (e testado)
+  // com ops terminais — não pode retornar "completed" para um MANUAL_REVIEW.
+  if (isTerminal(current.state)) {
+    return current.state === "COMPLETED"
+      ? { kind: "completed", state: "COMPLETED", asaasRef: current.asaasRef }
+      : { kind: "terminal", state: current.state as HumanTerminalState, asaasRef: current.asaasRef };
+  }
+
   while (!isTerminal(current.state)) {
-    const from = current.state;
+    const from = current.state as RetryableState;
+
+    // TUDO num try (achado Codex Fase D): beginAttempt/classifyAndPromote/upsert do
+    // alerta podem lançar (erro de banco). Sem esta fronteira, a exceção escaparia
+    // do runSaga e viraria 500 genérico em vez de retryable estruturado. (Se o
+    // banco estiver TOTALMENTE fora, o recordError do catch também lança e o 500 é
+    // inevitável — mas aí não há estado a preservar mesmo.)
     try {
+      // EXHAUSTÃO por estado: registra a tentativa. Se este estado já esgotou o
+      // limite, NÃO tenta de novo — promove pela MATRIZ. EXCEÇÃO: LOCAL_APPLIED
+      // NÃO é cortado (achado Codex): o plano JÁ foi aplicado, só falta publish/
+      // →COMPLETED (idempotente); cortá-lo prenderia a op no índice de ativa pra
+      // sempre e estouraria o Int. Ele sempre segue tentando concluir.
+      const attempt = await deps.beginAttempt(current, from);
+      if (attempt.attemptCount === 0) {
+        // beginAttempt não pegou (estado mudou / perdemos o lease) → resync.
+        const decided = await resyncOnLostCas(current, deps);
+        if (decided.kind === "adopt") { current = decided.op; continue; }
+        return decided.result;
+      }
+      if (from !== "LOCAL_APPLIED" && attempt.attemptCount > MAX_ATTEMPTS_PER_STATE) {
+        return await classifyAndPromote(current, from, deps,
+          `Esgotou ${MAX_ATTEMPTS_PER_STATE} tentativas em ${from}.`);
+      }
+
       switch (from) {
         case "RECEIVED": {
-          // EXPIRAÇÃO antes de cobrar (achado Codex #3): o preço/identidade
-          // foram congelados no fresh; se a op ficou parada além de expiresAt,
-          // o preço pode estar velho. Expira em FAILED_BEFORE_BILLING (SEGURO:
-          // nada foi cobrado). Só expira ANTES de BILLING_REQUESTED — depois de
-          // tocar o Asaas, expirar às cegas seria ambíguo (dinheiro em jogo).
+          // EXPIRAÇÃO antes de cobrar: preço/identidade congelados no fresh; se a
+          // op passou de expiresAt, expira em FAILED_BEFORE_BILLING (SEGURO: nada
+          // cobrado). Só ANTES de BILLING_REQUESTED — depois é ambíguo (dinheiro).
           if (current.expiresAt.getTime() <= now.getTime()) {
             const cas = await deps.markTerminal(
-              current,
-              "RECEIVED",
-              "FAILED_BEFORE_BILLING",
+              current, "RECEIVED", "FAILED_BEFORE_BILLING",
               "Op expirada antes da cobrança (congelamento de preço vencido).",
             );
-            if (cas.applied) return { state: "FAILED_BEFORE_BILLING", asaasRef: current.asaasRef };
+            if (cas.applied) {
+              return { kind: "terminal", state: "FAILED_BEFORE_BILLING", asaasRef: current.asaasRef };
+            }
             const decided = await resyncOnLostCas(current, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere(current);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
           const cas = await deps.transition(current, "RECEIVED", "BILLING_REQUESTED");
           if (!cas.applied) {
             const decided = await resyncOnLostCas(current, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere(current);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
           current = { ...current, state: "BILLING_REQUESTED" };
           break;
         }
         case "BILLING_REQUESTED": {
-          // FENCE antes do Asaas (achado Codex Fase C): valida/renova a posse. Se
-          // perdemos o lease (outro re-claimou), NÃO cobra — para. Reduz a janela
-          // em que um executor sem posse dispara um PUT no Asaas.
+          // FENCE antes do Asaas: valida/renova a posse. Sem posse → não cobra.
           const owns = await deps.renewLease(current);
           if (!owns.applied) {
             const decided = await resyncOnLostCas(current, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere(current);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
-          // confirmBilling cobra (com timeout < TTL). Depois o CAS
-          // BILLING_REQUESTED→BILLING_CONFIRMED (fencing por token).
+          // confirmBilling cobra (timeout < TTL). Depois o CAS →BILLING_CONFIRMED.
           const { asaasRef } = await deps.confirmBilling(current);
-          const cas = await deps.transition(
-            { ...current, asaasRef },
-            "BILLING_REQUESTED",
-            "BILLING_CONFIRMED",
-          );
+          const cas = await deps.transition({ ...current, asaasRef }, "BILLING_REQUESTED", "BILLING_CONFIRMED");
           if (!cas.applied) {
             const decided = await resyncOnLostCas({ ...current, asaasRef }, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere({ ...current, asaasRef });
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
           current = { ...current, state: "BILLING_CONFIRMED", asaasRef };
           break;
         }
         case "BILLING_CONFIRMED": {
-          // ATÔMICO: CAS (com token) + efeitos no mesmo commit. applied=false → op
-          // já avançou/mudou OU perdemos o lease; relê e decide, sem reaplicar.
+          // ATÔMICO: CAS (com token) + efeitos no mesmo commit.
           const cas = await deps.applyLocal(current);
           if (!cas.applied) {
             const decided = await resyncOnLostCas(current, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere(current);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
           current = { ...current, state: "LOCAL_APPLIED" };
           break;
         }
         case "LOCAL_APPLIED": {
-          // FENCE antes do publish: se perdemos o lease, não republica (o dono do
-          // lease o fará). publish é fire-and-forget (efeitos já commitados).
+          // FENCE antes do publish; sem posse → não republica (o dono o fará).
           const owns = await deps.renewLease(current);
           if (!owns.applied) {
             const decided = await resyncOnLostCas(current, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere(current);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
           await deps.publish(current);
           const cas = await deps.transition(current, "LOCAL_APPLIED", "COMPLETED");
           if (!cas.applied) {
             const decided = await resyncOnLostCas(current, deps);
-            if (decided) { current = decided; continue; }
-            return stopHere(current);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
           }
           current = { ...current, state: "COMPLETED" };
           break;
         }
         default: {
-          // Estado inválido/corrompido (fora do enum) — falha explícita em vez
-          // de girar o loop sem avançar (achado Codex: sem isto, loop infinito).
-          throw new Error(`Estado de saga inválido: "${from}"`);
+          // Defensivo (achado Codex Fase D): `from` é RetryableState por tipo, mas
+          // `as RetryableState` mente em runtime. Estado corrompido / futuro estado
+          // do enum → falha explícita em vez de girar o loop sem avançar (laço).
+          const _never: never = from;
+          throw new Error(`Estado de saga não-retomável no loop: "${_never}"`);
         }
       }
     } catch (err) {
       const lastError = err instanceof Error ? err.message : String(err);
-      // Preserva o CHECKPOINT: grava só o erro, com CAS no estado atual (não
-      // sobrescreve um estado mais avançado que outro executor tenha gravado).
-      await deps.recordError(current, from, lastError);
-      return { state: from, asaasRef: current.asaasRef, failed: true, lastError };
+      // Preserva o CHECKPOINT: grava o erro com CAS no estado atual (não
+      // sobrescreve um estado mais avançado gravado por outro executor). O
+      // resultado é RETRYABLE — a promoção a terminal só ocorre ao ESGOTAR as
+      // tentativas (topo do loop), nunca no 1º erro. O worker (Fase E) retoma.
+      const rec = await deps.recordError(current, from, lastError);
+      if (!rec.applied) {
+        // recordError não pegou → perdemos o lease/estado mudou. Não é nossa
+        // falha a reportar; relê e decide.
+        const decided = await resyncOnLostCas(current, deps);
+        if (decided.kind === "adopt") { current = decided.op; continue; }
+        return decided.result;
+      }
+      return { kind: "retryable_failure", state: from, asaasRef: current.asaasRef, lastError };
     }
   }
 
-  return { state: current.state, asaasRef: current.asaasRef };
+  // Saiu do loop = COMPLETED (único não-terminal-humano que encerra o while).
+  return { kind: "completed", state: "COMPLETED", asaasRef: current.asaasRef };
 }
 
 /**
- * Um CAS não pegou → outro executor avançou a op, mudou por baixo, OU nós perdemos
- * o lease (outro re-claimou, novo token). Relê a op e decide, com regra ESTRITA:
- *  - PERDEMOS A POSSE (token real ≠ o nosso): PARA imediatamente (achado Codex
- *    Fase C) — não adota estado nem deixa o loop executar outro efeito. "Perdi a
- *    autoridade" ≠ "alguém avançou".
- *  - avançou no caminho feliz (rank estritamente maior) COM o nosso token → adota.
- *  - virou terminal humano → adota; o loop encerra.
- *  - MESMO estado, regressão, ou desconhecido → PARA (anti-laço e anti-regressão).
- * Nunca adota regressão (reexecutaria confirmBilling = dupla cobrança). Nunca
- * reexecuta o efeito perdido.
+ * MATRIZ de classificação ao ESGOTAR as tentativas de um estado (achado Codex
+ * Fase D). `from` = o checkpoint onde travou. NUNCA declara seguro o que pode ter
+ * cobrado, nem "cobrado sem plano" o que já aplicou:
+ *  - RECEIVED           → FAILED_BEFORE_BILLING (nada tocou o Asaas). Sem alerta.
+ *  - BILLING_REQUESTED  → MANUAL_REVIEW + alerta. AMBÍGUO: pode ter cobrado e a
+ *                         confirmação se perdido — humano checa o Asaas. NUNCA
+ *                         FAILED_BEFORE_BILLING (esconderia cobrança).
+ *  - BILLING_CONFIRMED  → CHARGED_NOT_APPLIED + alerta. Cobrado, plano não aplicado.
+ *  - LOCAL_APPLIED      → NÃO promove: o plano JÁ foi aplicado (subscription+company
+ *                         +history no commit). Falta só publish (idempotente, o pull
+ *                         do Domus cobre). Fica RETRYABLE — não é dívida ao cliente.
  */
-async function resyncOnLostCas(op: ClaimedSagaOp, deps: SagaDeps): Promise<ClaimedSagaOp | null> {
-  const real = await deps.reloadOp(op);
-  if (!real) return null;
+async function classifyAndPromote(
+  op: ClaimedSagaOp, from: RetryableState, deps: SagaDeps, reason: string,
+): Promise<SagaResult> {
+  if (from === "LOCAL_APPLIED") {
+    // Não é terminal: o plano está aplicado; só o eco pendente. Retryable — o
+    // worker/pull conclui. Não alerta (não há dívida).
+    return { kind: "retryable_failure", state: "LOCAL_APPLIED", asaasRef: op.asaasRef, lastError: reason };
+  }
+  if (from === "RECEIVED") {
+    const cas = await deps.markTerminal(op, "RECEIVED", "FAILED_BEFORE_BILLING", reason);
+    if (cas.applied) return { kind: "terminal", state: "FAILED_BEFORE_BILLING", asaasRef: op.asaasRef, lastError: reason };
+    // CAS não pegou → perdemos o lease / estado mudou. O resync classifica pelo
+    // estado REAL (lost_lease / terminal / retryable). Não inventamos um resultado
+    // com o estado antigo (achado Codex): um `adopt` aqui é quase inalcançável
+    // (avanço por outro executor = token diferente = lost_lease), então tratamos
+    // `adopt` como retryable no estado REAL adotado, não no `from` velho.
+    return promoteResync(op, deps);
+  }
+  // BILLING_REQUESTED (ambíguo) e BILLING_CONFIRMED (cobrado) → terminal FINANCEIRO
+  // com alerta atômico (D2). MANUAL_REVIEW p/ o ambíguo, CHARGED_NOT_APPLIED p/ o cobrado.
+  const terminal = from === "BILLING_REQUESTED" ? "MANUAL_REVIEW" : "CHARGED_NOT_APPLIED";
+  const cas = await deps.markFinancialTerminalAndAlert(op, from, terminal, reason);
+  if (cas.applied) return { kind: "terminal", state: terminal, asaasRef: op.asaasRef, lastError: reason };
+  return promoteResync(op, deps);
+}
 
-  // Perdemos a posse: um novo claim substituiu nosso token. Paramos AQUI — quem
-  // tem o lease conduz. Não adotamos estado nem seguimos pro próximo efeito.
-  if (real.leaseToken !== op.leaseToken) return null;
+/** Resync após um CAS de promoção que não pegou: classifica pelo estado REAL. */
+async function promoteResync(op: ClaimedSagaOp, deps: SagaDeps): Promise<SagaResult> {
+  const decided = await resyncOnLostCas(op, deps);
+  if (decided.kind === "adopt") {
+    // Estado real avançou com o nosso token (raro): reporta retryable no estado
+    // REAL adotado — não no checkpoint velho. O worker retoma dali.
+    return { kind: "retryable_failure", state: decided.op.state as RetryableState, asaasRef: decided.op.asaasRef, lastError: "Estado avançou durante a promoção." };
+  }
+  return decided.result;
+}
+
+type ResyncDecision =
+  | { kind: "adopt"; op: ClaimedSagaOp }
+  | { kind: "stop"; result: SagaResult };
+
+/**
+ * Um CAS não pegou → outro executor avançou, a op mudou, OU perdemos o lease.
+ * Relê e decide (regra ESTRITA):
+ *  - PERDEMOS A POSSE (token real ≠ nosso) → stop lost_lease (quem tem o lease
+ *    conduz; não adotamos estado nem executamos outro efeito).
+ *  - avançou (rank estritamente maior) com o nosso token → adota e continua.
+ *  - virou terminal → stop terminal (o loop encerraria de qualquer forma).
+ *  - mesmo estado / regressão / desconhecido → stop retryable (anti-laço).
+ * Nunca adota regressão (reexecutaria confirmBilling = dupla cobrança).
+ */
+async function resyncOnLostCas(op: ClaimedSagaOp, deps: SagaDeps): Promise<ResyncDecision> {
+  const real = await deps.reloadOp(op);
+  if (!real) {
+    return { kind: "stop", result: { kind: "retryable_failure", state: op.state as RetryableState, asaasRef: op.asaasRef, lastError: "Op sumiu durante resync." } };
+  }
+
+  // Perdemos a posse: um novo claim substituiu nosso token.
+  if (real.leaseToken !== op.leaseToken) {
+    return { kind: "stop", result: { kind: "lost_lease", state: real.state, asaasRef: real.asaasRef } };
+  }
 
   const currentRank = progressRank(op.state);
   const realRank = progressRank(real.state);
 
-  // Avanço estrito no caminho feliz, ainda com o nosso token → adota.
+  // Avanço estrito com o nosso token → adota (state + asaasRef reais).
   if (realRank > currentRank && realRank !== -1) {
-    return { ...op, state: real.state, asaasRef: real.asaasRef };
+    return { kind: "adopt", op: { ...op, state: real.state, asaasRef: real.asaasRef } };
   }
-  // Virou terminal humano (não está no ORDER) → adota; o loop encerra em isTerminal.
+  // Virou terminal humano → stop terminal.
   if (isHumanTerminal(real.state)) {
-    return { ...op, state: real.state, asaasRef: real.asaasRef };
+    return { kind: "stop", result: { kind: "terminal", state: real.state as HumanTerminalState, asaasRef: real.asaasRef } };
   }
-  // Mesmo estado / regressão / desconhecido → PARA (anti-laço e anti-regressão).
-  return null;
-}
-
-/** Encerra retornando o checkpoint atual sem marcar failed (parada limpa). */
-function stopHere(op: ClaimedSagaOp): SagaResult {
-  return { state: op.state, asaasRef: op.asaasRef };
+  // Mesmo estado / regressão / desconhecido → stop retryable (anti-laço).
+  return { kind: "stop", result: { kind: "retryable_failure", state: real.state as RetryableState, asaasRef: real.asaasRef, lastError: "Estado inesperado no resync." } };
 }
 
 /** Reexportado por conveniência (executor + saga são o mesmo domínio). */

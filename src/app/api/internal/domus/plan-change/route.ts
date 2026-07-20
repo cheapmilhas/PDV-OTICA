@@ -331,28 +331,26 @@ export async function POST(req: Request) {
   }
 
   // `now` do runSaga = relógio do BANCO no claim (coerência com lease/backoff).
+  // O resultado é uma UNIÃO DISCRIMINADA (Fase D): a rota mapeia o `kind` → HTTP,
+  // sem combinar flags frágeis (o `failed` antigo transformava um terminal
+  // financeiro em 502 em vez de 409 — achado Codex).
   const result = await runSaga(claimed, buildSagaDeps(), claimed.claimedAt);
-  if (result.failed) {
-    // Saga parou num checkpoint (cobrança/aplicação falhou). Retomável: o Domus
-    // pode reenviar o mesmo eventId. 502: o Vis tentou mas não concluiu.
-    return NextResponse.json(
-      { error: "not_completed", state: result.state },
-      { status: 502 },
-    );
-  }
-  // TOCTOU (achado Codex): entre a decisão e o runSaga, a op pode já estar num
-  // terminal humano — runSaga não a processa e retorna sem `failed`. NÃO responder
-  // 200 nesse caso (mascararia uma op cobrada-sem-plano como sucesso). Só COMPLETED
-  // é sucesso; terminal humano → 409; qualquer outro não-completo → 502.
-  if (result.state !== "COMPLETED") {
-    const human = ["FAILED", "FAILED_BEFORE_BILLING", "CHARGED_NOT_APPLIED", "MANUAL_REVIEW"];
-    if (human.includes(result.state)) {
+  switch (result.kind) {
+    case "completed":
+      return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
+    case "terminal":
+      // Parou num terminal humano/financeiro (esgotou/expirou/já-terminal). NÃO é
+      // sucesso — 409. Um CHARGED_NOT_APPLIED/MANUAL_REVIEW já disparou o alerta.
       return NextResponse.json(
         { error: "manual_review_required", state: result.state },
         { status: 409 },
       );
-    }
-    return NextResponse.json({ error: "not_completed", state: result.state }, { status: 502 });
+    case "lost_lease":
+      // Outro executor tomou a posse e conduz — reconhece sem reprocessar.
+      return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
+    case "retryable_failure":
+      // Falhou mas retomável (checkpoint preservado). O Domus pode reenviar o
+      // mesmo eventId; o worker (Fase E) também retoma. 502.
+      return NextResponse.json({ error: "not_completed", state: result.state }, { status: 502 });
   }
-  return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
 }

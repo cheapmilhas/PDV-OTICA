@@ -9,6 +9,7 @@ const txMock = {
   company: { update: vi.fn() },
   subscriptionHistory: { create: vi.fn() },
   globalAudit: { create: vi.fn() },
+  systemEvent: { upsert: vi.fn() }, // markFinancialTerminalAndAlert (Fase D)
 };
 
 vi.mock("@/lib/prisma", () => ({
@@ -54,6 +55,7 @@ function makeOp(over: Partial<ClaimedSagaOp> = {}): ClaimedSagaOp {
     expiresAt: new Date(4102444800000), // 2100
     leaseToken: TOKEN,
     claimedAt: new Date(1_700_000_000_000),
+    attemptCount: 0,
     ...over,
   };
 }
@@ -193,10 +195,11 @@ describe("applyLocal — atômico com CAS (Fase B)", () => {
     const res = await deps.applyLocal(makeOp());
 
     expect(res.applied).toBe(true);
-    // CAS foi a PRIMEIRA escrita, com FENCING por leaseToken (Fase C).
+    // CAS foi a PRIMEIRA escrita, com FENCING por leaseToken (Fase C) e reset do
+    // contador por estado (Fase D).
     expect(txMock.domusPlanChangeOp.updateMany).toHaveBeenCalledWith({
       where: { id: "op1", state: "BILLING_CONFIRMED", leaseToken: TOKEN },
-      data: { state: "LOCAL_APPLIED" },
+      data: { state: "LOCAL_APPLIED", attemptCount: 0 },
     });
     expect(txMock.subscription.update).toHaveBeenCalledOnce();
     expect(txMock.company.update).toHaveBeenCalledOnce();
@@ -298,13 +301,14 @@ describe("claimOp — aquisição de lease (Fase C)", () => {
     queryRaw.mockResolvedValue([{
       id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full",
       targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null,
-      expiresAt: new Date(4102444800000), leaseToken: "db-generated-token", claimedAt,
+      expiresAt: new Date(4102444800000), leaseToken: "db-generated-token", claimedAt, attemptCount: 2,
     }]);
     const claimed = await claimOp("op1");
     expect(claimed).not.toBeNull();
     expect(claimed!.leaseToken).toBe("db-generated-token");
     expect(claimed!.state).toBe("RECEIVED");
     expect(claimed!.claimedAt).toEqual(claimedAt);
+    expect(claimed!.attemptCount).toBe(2);
     expect(queryRaw).toHaveBeenCalledOnce();
   });
 
@@ -319,6 +323,60 @@ describe("claimOp — aquisição de lease (Fase C)", () => {
     await expect(claimOp("op1", 0)).rejects.toThrow(/ttlMs inválido/);
     await expect(claimOp("op1", -5)).rejects.toThrow(/ttlMs inválido/);
     expect(queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe("beginAttempt — contador por estado (Fase D)", () => {
+  it("incrementa e retorna o novo attemptCount (CAS por state+token)", async () => {
+    queryRaw.mockResolvedValue([{ attemptCount: 3 }]);
+    const deps = buildSagaDeps();
+    const res = await deps.beginAttempt(makeOp({ state: "BILLING_REQUESTED" }), "BILLING_REQUESTED");
+    expect(res.attemptCount).toBe(3);
+  });
+
+  it("estado mudou / lease perdido (0 linhas) → attemptCount 0", async () => {
+    queryRaw.mockResolvedValue([]);
+    const deps = buildSagaDeps();
+    const res = await deps.beginAttempt(makeOp(), "BILLING_CONFIRMED");
+    expect(res.attemptCount).toBe(0);
+  });
+});
+
+describe("markFinancialTerminalAndAlert — terminal + alerta atômico (Fase D)", () => {
+  beforeEach(() => {
+    txMock.domusPlanChangeOp.updateMany.mockResolvedValue({ count: 1 });
+    txMock.systemEvent.upsert.mockResolvedValue({});
+  });
+
+  it("CAS pega → promove ao terminal E cria o SystemEvent no MESMO commit", async () => {
+    const deps = buildSagaDeps();
+    const res = await deps.markFinancialTerminalAndAlert(makeOp(), "BILLING_CONFIRMED", "CHARGED_NOT_APPLIED", "erro X");
+    expect(res.applied).toBe(true);
+    // CAS terminal com fencing
+    expect(txMock.domusPlanChangeOp.updateMany).toHaveBeenCalledWith({
+      where: { id: "op1", state: "BILLING_CONFIRMED", leaseToken: TOKEN },
+      data: expect.objectContaining({ state: "CHARGED_NOT_APPLIED" }),
+    });
+    // SystemEvent com dedupeKey billing:* (NÃO *:auto → cron não auto-resolve) e critical
+    const up = txMock.systemEvent.upsert.mock.calls[0][0];
+    expect(up.where.dedupeKey).toBe("plan-change:op1:charged-unapplied");
+    expect(up.create.source).toBe("billing");
+    expect(up.create.severity).toBe("critical");
+  });
+
+  it("CAS NÃO pega (count 0: perdeu lease/já mudou) → NÃO cria evento, applied=false", async () => {
+    txMock.domusPlanChangeOp.updateMany.mockResolvedValue({ count: 0 });
+    const deps = buildSagaDeps();
+    const res = await deps.markFinancialTerminalAndAlert(makeOp(), "BILLING_CONFIRMED", "CHARGED_NOT_APPLIED", "erro X");
+    expect(res.applied).toBe(false);
+    expect(txMock.systemEvent.upsert).not.toHaveBeenCalled();
+  });
+
+  it("MANUAL_REVIEW usa dedupeKey manual-review", async () => {
+    const deps = buildSagaDeps();
+    await deps.markFinancialTerminalAndAlert(makeOp(), "BILLING_REQUESTED", "MANUAL_REVIEW", "ambíguo");
+    const up = txMock.systemEvent.upsert.mock.calls[0][0];
+    expect(up.where.dedupeKey).toBe("plan-change:op1:manual-review");
   });
 });
 

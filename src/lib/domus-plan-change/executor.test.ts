@@ -19,6 +19,7 @@ function makeOp(state: ClaimedSagaOp["state"] = "RECEIVED", over: Partial<Claime
     expiresAt: FAR_FUTURE,
     leaseToken: TOKEN,
     claimedAt: new Date(1_700_000_000_000),
+    attemptCount: 0,
     ...over,
   };
 }
@@ -26,24 +27,33 @@ function makeOp(state: ClaimedSagaOp["state"] = "RECEIVED", over: Partial<Claime
 const OK: CasResult = { applied: true };
 
 /**
- * Deps de teste que simulam o "banco": estado + leaseToken vigente. Os CAS só
- * avançam se o estado esperado bate E o token da op == o token vigente no db
- * (fencing). `dbToken` permite simular perda de lease (outro executor re-claimou).
+ * Deps de teste que simulam o "banco": estado + leaseToken + contador por estado.
+ * Os CAS só avançam se o estado esperado bate E o token bate (fencing). O avanço
+ * reseta o contador. `dbToken` simula perda de lease; `attemptStart` simula uma op
+ * que já acumulou tentativas no estado atual (p/ testar exaustão).
  */
 function makeDeps(
   over: Partial<SagaDeps> = {},
   dbStateInit: SagaState = "RECEIVED",
   dbTokenInit: string = TOKEN,
+  attemptStart: number = 0,
 ) {
   const state = { value: dbStateInit as SagaState };
-  const db = { token: dbTokenInit as string | null };
-  const calls = { confirmBilling: 0, applyLocal: 0, publish: 0, renewLease: 0 };
+  const db = { token: dbTokenInit as string | null, attempts: attemptStart };
+  const calls = { confirmBilling: 0, applyLocal: 0, publish: 0, renewLease: 0, beginAttempt: 0 };
   const order: string[] = []; // ordem real dos efeitos (cobra→aplica→publica)
 
-  // true se a op ainda é dona do lease (token bate com o vigente no db).
   const owns = (op: ClaimedSagaOp) => op.leaseToken === db.token;
+  // avança o estado e reseta o contador por estado (Fase D).
+  const advance = (to: SagaState) => { state.value = to; db.attempts = 0; };
 
   const base: SagaDeps = {
+    beginAttempt: vi.fn(async (op, s): Promise<{ attemptCount: number }> => {
+      calls.beginAttempt++;
+      if (state.value !== s || !owns(op)) return { attemptCount: 0 };
+      db.attempts += 1;
+      return { attemptCount: db.attempts };
+    }),
     renewLease: vi.fn(async (op): Promise<CasResult> => {
       calls.renewLease++;
       return { applied: owns(op) };
@@ -55,10 +65,9 @@ function makeDeps(
     }),
     applyLocal: vi.fn(async (op): Promise<CasResult> => {
       calls.applyLocal++;
-      // CAS atômico com fencing: aplica só em BILLING_CONFIRMED E com o token vigente.
       if (state.value !== "BILLING_CONFIRMED" || !owns(op)) return { applied: false };
       order.push("local");
-      state.value = "LOCAL_APPLIED";
+      advance("LOCAL_APPLIED");
       return OK;
     }),
     publish: vi.fn(async () => {
@@ -67,11 +76,16 @@ function makeDeps(
     }),
     transition: vi.fn(async (op, from, to): Promise<CasResult> => {
       if (state.value !== from || !owns(op)) return { applied: false };
-      state.value = to;
+      advance(to);
       return OK;
     }),
     recordError: vi.fn(async (op): Promise<CasResult> => ({ applied: owns(op) })),
     markTerminal: vi.fn(async (op, from, terminal): Promise<CasResult> => {
+      if (state.value !== from || !owns(op)) return { applied: false };
+      state.value = terminal;
+      return OK;
+    }),
+    markFinancialTerminalAndAlert: vi.fn(async (op, from, terminal): Promise<CasResult> => {
       if (state.value !== from || !owns(op)) return { applied: false };
       state.value = terminal;
       return OK;
@@ -90,10 +104,11 @@ describe("runSaga — ordem Asaas-first (upgrade nunca libera sem cobrar)", () =
     const final = await runSaga(makeOp("RECEIVED"), deps);
 
     expect(order).toEqual(["billing", "local", "publish"]);
+    expect(final.kind).toBe("completed");
     expect(final.state).toBe("COMPLETED");
   });
 
-  it("cobrança FALHA → NÃO aplica local nem publica; failed=true, checkpoint em BILLING_REQUESTED", async () => {
+  it("cobrança FALHA (1º erro) → NÃO aplica local nem publica; retryable, checkpoint em BILLING_REQUESTED", async () => {
     const { deps, calls } = makeDeps({
       confirmBilling: vi.fn().mockRejectedValue(new Error("asaas down")),
     });
@@ -101,11 +116,10 @@ describe("runSaga — ordem Asaas-first (upgrade nunca libera sem cobrar)", () =
 
     expect(calls.applyLocal).toBe(0); // não libera tier sem pagar
     expect(calls.publish).toBe(0);
-    expect(final.failed).toBe(true);
-    // checkpoint preservado: parou tentando cobrar, NÃO some pra FAILED
+    // 1º erro NÃO promove a terminal — é retomável (checkpoint preservado).
+    expect(final.kind).toBe("retryable_failure");
     expect(final.state).toBe("BILLING_REQUESTED");
-    expect(final.lastError).toContain("asaas");
-    // recordError foi chamado com o estado atual (CAS)
+    if (final.kind === "retryable_failure") expect(final.lastError).toContain("asaas");
     expect(deps.recordError).toHaveBeenCalledWith(
       expect.anything(),
       "BILLING_REQUESTED",
@@ -121,8 +135,8 @@ describe("runSaga — ordem Asaas-first (upgrade nunca libera sem cobrar)", () =
     const deps2 = makeDeps({}, "BILLING_REQUESTED");
     const r2 = await runSaga(makeOp("BILLING_REQUESTED"), deps2.deps);
     expect(deps2.calls.confirmBilling).toBe(1);
+    expect(r2.kind).toBe("completed");
     expect(r2.state).toBe("COMPLETED");
-    expect(r2.failed).toBeFalsy();
   });
 });
 
@@ -134,7 +148,7 @@ describe("runSaga — retomada por estado (crash recovery)", () => {
     expect(calls.confirmBilling).toBe(0); // já cobrou antes do crash
     expect(calls.applyLocal).toBe(1);
     expect(calls.publish).toBe(1);
-    expect(final.state).toBe("COMPLETED");
+    expect(final.kind).toBe("completed");
   });
 
   it("retoma de LOCAL_APPLIED → só publica", async () => {
@@ -144,7 +158,7 @@ describe("runSaga — retomada por estado (crash recovery)", () => {
     expect(calls.confirmBilling).toBe(0);
     expect(calls.applyLocal).toBe(0);
     expect(calls.publish).toBe(1);
-    expect(final.state).toBe("COMPLETED");
+    expect(final.kind).toBe("completed");
   });
 
   it("op já COMPLETED → no-op (não repete nada)", async () => {
@@ -153,22 +167,25 @@ describe("runSaga — retomada por estado (crash recovery)", () => {
     expect(calls.confirmBilling).toBe(0);
     expect(calls.applyLocal).toBe(0);
     expect(calls.publish).toBe(0);
-    expect(final.state).toBe("COMPLETED");
+    expect(final.kind).toBe("completed");
   });
 });
 
 describe("runSaga — monotonia (CAS): executor atrasado não regride nem duplica", () => {
-  it("CAS de applyLocal perde (op já avançou por outro executor) → NÃO aplica, relê e encerra", async () => {
+  it("op já avançou por outro executor (db=COMPLETED) → beginAttempt detecta, NÃO aplica, terminal", async () => {
     // db já está em COMPLETED (outro executor terminou); este chega atrasado em
-    // BILLING_CONFIRMED. O applyLocal CAS não pega; reloadState devolve COMPLETED.
+    // BILLING_CONFIRMED. beginAttempt(op,BILLING_CONFIRMED) vê o estado mudado →
+    // retorna 0 → resync vê COMPLETED (terminal). applyLocal nem é tentado (Fase D:
+    // beginAttempt roda antes do passo — não gasta o efeito se o estado mudou).
     const { deps, calls } = makeDeps({}, "COMPLETED");
     const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
 
-    // applyLocal foi TENTADO uma vez mas o CAS não pegou → nenhum efeito duplicado
-    expect(calls.applyLocal).toBe(1);
-    expect(calls.publish).toBe(0); // já estava COMPLETED, não republica
+    expect(calls.applyLocal).toBe(0); // nem tentou — beginAttempt já detectou
+    expect(calls.publish).toBe(0);
+    // resync adota COMPLETED (avanço estrito no ORDER); o loop encerra → completed
+    // (COMPLETED é sucesso, não terminal humano). Idempotente com o vencedor.
+    expect(final.kind).toBe("completed");
     expect(final.state).toBe("COMPLETED");
-    expect(final.failed).toBeFalsy();
   });
 
   it("CAS perde e reloadOp devolve o MESMO estado → para sem laço infinito", async () => {
@@ -179,9 +196,9 @@ describe("runSaga — monotonia (CAS): executor atrasado não regride nem duplic
     (deps.reloadOp as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "RECEIVED", asaasRef: null, leaseToken: TOKEN });
 
     const final = await runSaga(makeOp("RECEIVED"), deps);
-    // resync vê real===atual → retorna null → o executor para (stopHere), sem girar.
+    // resync vê real===atual → stop retryable → o executor para, sem girar.
+    expect(final.kind).toBe("retryable_failure");
     expect(final.state).toBe("RECEIVED");
-    expect(final.failed).toBeFalsy();
   });
 
   it("CAS perde e reloadOp devolve estado ANTERIOR (regressão) → NÃO adota, para", async () => {
@@ -193,35 +210,103 @@ describe("runSaga — monotonia (CAS): executor atrasado não regride nem duplic
 
     const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
     expect(calls.confirmBilling).toBe(0); // NÃO recobra
-    expect(final.state).toBe("BILLING_CONFIRMED"); // para no checkpoint, não regride
-    expect(final.failed).toBeFalsy();
+    expect(final.kind).toBe("retryable_failure"); // para no checkpoint, não regride
   });
 
-  it("applyLocal retorna applied=false 2×: efeito nunca roda duas vezes", async () => {
-    // Simula reexecução após crash pós-commit: o db já está LOCAL_APPLIED.
+  it("crash pós-applyLocal (db=LOCAL_APPLIED): efeito nunca roda 2×, segue pro publish", async () => {
+    // db já está LOCAL_APPLIED (applyLocal commitou antes do crash). Retoma de
+    // BILLING_CONFIRMED (checkpoint antigo em memória): beginAttempt vê o estado
+    // avançado → 0 → resync ADOTA LOCAL_APPLIED (avanço estrito, mesmo token) →
+    // segue pro publish → COMPLETED. applyLocal NÃO roda de novo (sem 2º efeito).
     const { deps, calls } = makeDeps({}, "LOCAL_APPLIED");
-    // retoma de BILLING_CONFIRMED (checkpoint antigo em memória)
     const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
-    // applyLocal tentou, CAS não pegou (db em LOCAL_APPLIED) → sem 2º efeito;
-    // resync adota LOCAL_APPLIED e segue pro publish → COMPLETED.
-    expect(calls.applyLocal).toBe(1);
+    expect(calls.applyLocal).toBe(0); // nem tentou — beginAttempt detectou o avanço
     expect(calls.publish).toBe(1);
-    expect(final.state).toBe("COMPLETED");
+    expect(final.kind).toBe("completed");
   });
 });
 
 describe("runSaga — terminais humanos não são processados", () => {
   it.each(["FAILED", "FAILED_BEFORE_BILLING", "CHARGED_NOT_APPLIED", "MANUAL_REVIEW"] as const)(
-    "estado terminal %s → no-op imediato",
+    "estado terminal %s → no-op imediato, kind=terminal",
     async (terminal) => {
       const { deps, calls } = makeDeps({}, terminal);
       const final = await runSaga(makeOp(terminal), deps);
       expect(calls.confirmBilling).toBe(0);
       expect(calls.applyLocal).toBe(0);
       expect(calls.publish).toBe(0);
+      expect(final.kind).toBe("terminal");
       expect(final.state).toBe(terminal);
     },
   );
+});
+
+describe("runSaga — matriz de classificação ao ESGOTAR tentativas (Fase D)", () => {
+  // attemptStart=5: beginAttempt levará a 6 (> MAX_ATTEMPTS_PER_STATE=5) → promove.
+  const EXHAUSTED = 5;
+
+  it("RECEIVED esgotado → FAILED_BEFORE_BILLING (seguro, sem alerta)", async () => {
+    const { deps, calls } = makeDeps({}, "RECEIVED", TOKEN, EXHAUSTED);
+    const final = await runSaga(makeOp("RECEIVED"), deps);
+    expect(final.kind).toBe("terminal");
+    expect(final.state).toBe("FAILED_BEFORE_BILLING");
+    expect(deps.markTerminal).toHaveBeenCalled();
+    expect(deps.markFinancialTerminalAndAlert).not.toHaveBeenCalled(); // sem alerta
+    expect(calls.confirmBilling).toBe(0);
+  });
+
+  it("BILLING_REQUESTED esgotado → MANUAL_REVIEW + alerta (AMBÍGUO, nunca FAILED_BEFORE_BILLING)", async () => {
+    const { deps } = makeDeps({}, "BILLING_REQUESTED", TOKEN, EXHAUSTED);
+    const final = await runSaga(makeOp("BILLING_REQUESTED"), deps);
+    expect(final.kind).toBe("terminal");
+    expect(final.state).toBe("MANUAL_REVIEW"); // NUNCA FAILED_BEFORE_BILLING (esconderia cobrança)
+    expect(deps.markFinancialTerminalAndAlert).toHaveBeenCalledWith(
+      expect.anything(), "BILLING_REQUESTED", "MANUAL_REVIEW", expect.any(String),
+    );
+  });
+
+  it("BILLING_CONFIRMED esgotado → CHARGED_NOT_APPLIED + alerta (cobrado, plano não aplicado)", async () => {
+    const { deps } = makeDeps({}, "BILLING_CONFIRMED", TOKEN, EXHAUSTED);
+    const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
+    expect(final.kind).toBe("terminal");
+    expect(final.state).toBe("CHARGED_NOT_APPLIED");
+    expect(deps.markFinancialTerminalAndAlert).toHaveBeenCalledWith(
+      expect.anything(), "BILLING_CONFIRMED", "CHARGED_NOT_APPLIED", expect.any(String),
+    );
+  });
+
+  it("LOCAL_APPLIED esgotado NÃO é cortado: continua e CONCLUI (publish→COMPLETED)", async () => {
+    // Achado Codex: LOCAL_APPLIED fora do corte de exaustão — o plano já foi
+    // aplicado, cortá-lo prenderia a op pra sempre. Mesmo com attemptCount>MAX,
+    // segue tentando concluir (publish é idempotente/fire-and-forget).
+    const { deps, calls } = makeDeps({}, "LOCAL_APPLIED", TOKEN, EXHAUSTED);
+    const final = await runSaga(makeOp("LOCAL_APPLIED"), deps);
+    expect(final.kind).toBe("completed"); // conclui, não fica preso
+    expect(calls.publish).toBe(1);
+    expect(deps.markFinancialTerminalAndAlert).not.toHaveBeenCalled();
+    expect(deps.markTerminal).not.toHaveBeenCalled();
+  });
+
+  it("contador reseta no avanço: 4 falhas em BILLING_REQUESTED + sucesso NÃO herda contador", async () => {
+    // db começa com 4 tentativas em BILLING_REQUESTED; a 5ª (beginAttempt→5) está
+    // no limite (não >5), então tenta e sucede → avança e reseta. Não promove.
+    const { deps } = makeDeps({}, "BILLING_REQUESTED", TOKEN, 4);
+    const final = await runSaga(makeOp("BILLING_REQUESTED"), deps);
+    expect(final.kind).toBe("completed");
+    expect(deps.markFinancialTerminalAndAlert).not.toHaveBeenCalled();
+  });
+
+  it("markFinancialTerminalAndAlert LANÇA (erro de banco no alerta) → catch → retryable, NÃO propaga (Codex #2)", async () => {
+    // Se o upsert do SystemEvent falha, a tx reverte (terminal+evento) e a
+    // exceção é CAPTURADA pela fronteira de erro do runSaga → retryable_failure
+    // (não escapa como 500 genérico). recordError registra; o worker retoma.
+    const { deps } = makeDeps({
+      markFinancialTerminalAndAlert: vi.fn().mockRejectedValue(new Error("db down no alerta")),
+    }, "BILLING_CONFIRMED", TOKEN, EXHAUSTED);
+    const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
+    expect(final.kind).toBe("retryable_failure");
+    expect(deps.recordError).toHaveBeenCalled();
+  });
 });
 
 describe("runSaga — fencing por lease (Fase C)", () => {
@@ -231,11 +316,10 @@ describe("runSaga — fencing por lease (Fase C)", () => {
     db.token = "outro-token";
 
     const final = await runSaga(makeOp("BILLING_REQUESTED"), deps);
-    expect(calls.renewLease).toBe(1);
+    // beginAttempt roda 1º e já vê o token trocado (owns=false) → 0 → resync
+    // detecta lost_lease ANTES de renewLease/confirmBilling (Fase D).
     expect(calls.confirmBilling).toBe(0); // NÃO cobra sem posse
-    // reloadOp devolve token diferente → resync retorna null → para no checkpoint.
-    expect(final.state).toBe("BILLING_REQUESTED");
-    expect(final.failed).toBeFalsy();
+    expect(final.kind).toBe("lost_lease");
   });
 
   it("perdi o lease no meio (renewLease ok, mas token mudou antes do publish) → não republica", async () => {
@@ -244,25 +328,27 @@ describe("runSaga — fencing por lease (Fase C)", () => {
 
     const final = await runSaga(makeOp("LOCAL_APPLIED"), deps);
     expect(calls.publish).toBe(0); // não publica sem posse
-    expect(final.state).toBe("LOCAL_APPLIED");
+    expect(final.kind).toBe("lost_lease");
   });
 
   it("CAS perde por PERDA DE LEASE (token real ≠ o meu) → NÃO adota estado avançado, para", async () => {
     // db avançou pra LOCAL_APPLIED mas sob OUTRO token (outro executor). Nós, em
     // BILLING_CONFIRMED com o token velho, perdemos o applyLocal; o resync vê token
-    // diferente → PARA (não segue pro publish com autoridade perdida).
+    // diferente → lost_lease (não segue pro publish com autoridade perdida).
     const { deps, calls } = makeDeps({}, "LOCAL_APPLIED", "outro-token");
     const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
 
-    expect(calls.applyLocal).toBe(1); // tentou, CAS não pegou (token errado)
-    expect(calls.publish).toBe(0); // NÃO publica — perdeu a autoridade
-    expect(final.state).toBe("BILLING_CONFIRMED"); // para no checkpoint local
+    // beginAttempt já vê o token trocado → 0 → resync lost_lease. applyLocal nem
+    // é tentado; publish não roda (autoridade perdida).
+    expect(calls.applyLocal).toBe(0);
+    expect(calls.publish).toBe(0);
+    expect(final.kind).toBe("lost_lease");
   });
 
   it("caminho feliz mantém a posse o tempo todo (renewLease sempre ok)", async () => {
     const { deps, calls } = makeDeps({}, "RECEIVED");
     const final = await runSaga(makeOp("RECEIVED"), deps);
-    expect(final.state).toBe("COMPLETED");
+    expect(final.kind).toBe("completed");
     expect(calls.renewLease).toBe(2); // antes do Asaas e antes do publish
   });
 });
@@ -276,8 +362,8 @@ describe("runSaga — expiração antes de cobrar (achado Codex #3)", () => {
 
     expect(calls.confirmBilling).toBe(0); // nunca tocou o Asaas
     expect(calls.applyLocal).toBe(0);
+    expect(final.kind).toBe("terminal"); // expiração é terminal limpo
     expect(final.state).toBe("FAILED_BEFORE_BILLING");
-    expect(final.failed).toBeFalsy(); // expiração é terminal limpo, não "failed"
   });
 
   it("RECEIVED ainda válida → segue o fluxo normal (cobra)", async () => {

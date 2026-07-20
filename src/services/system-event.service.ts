@@ -10,6 +10,7 @@ export type SystemEventSource =
   | "integration"
   | "sentry"
   | "ai"
+  | "billing" // eventos persistentes da saga de cobrança (Fase D) — NÃO auto-resolvidos
   | "manual";
 export type SystemEventSeverity = "warning" | "critical" | "info";
 
@@ -24,6 +25,10 @@ export interface SystemEventView {
   resolvedBy: string | null;
   resolveNote: string | null;
   createdAt: string;
+  // Exposto para o health cron distinguir eventos AUTO (`*:auto`, que ele
+  // reconcilia) de eventos persistentes de outras fontes (ex.: billing) que NÃO
+  // deve auto-resolver (achado Codex Fase D).
+  dedupeKey: string | null;
 }
 
 function toView(e: {
@@ -37,6 +42,7 @@ function toView(e: {
   resolvedBy: string | null;
   resolveNote: string | null;
   createdAt: Date;
+  dedupeKey: string | null;
 }): SystemEventView {
   return {
     id: e.id,
@@ -49,6 +55,7 @@ function toView(e: {
     resolvedBy: e.resolvedBy,
     resolveNote: e.resolveNote,
     createdAt: e.createdAt.toISOString(),
+    dedupeKey: e.dedupeKey,
   };
 }
 

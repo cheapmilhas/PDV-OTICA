@@ -41,8 +41,19 @@ Gate: teste de concorrência (2 executores, 1 aplica), Codex.
 - Alerta via `SystemEvent` (já existe, dedupe+alertedAt) + fila de e-mail (`system-alert.service`), dedupe por `plan-change:${op.id}:charged-unapplied`. Sentry é no-op sem DSN.
 Gate: teste de classificação de erro, alerta dispara, Codex.
 
+### ✅ FASE D FEITA (D1+D2, 2026-07-20) — estados terminais + alerta atômico
+Implementada (NÃO em prod). Dono decidiu: BILLING_REQUESTED esgotado → MANUAL_REVIEW+alerta (SEM reconciliação GET Asaas — fail-safe, nunca esconde cobrança). Codex quebrou o plano ingênuo (from+attemptCount global escondia cobrança). Entregue:
+- **SagaResult UNIÃO DISCRIMINADA** (completed|terminal|retryable_failure|lost_lease). Rota mapeia kind→HTTP (200/409/502/202); não combina flags frágeis (o `failed` antigo virava 502 num terminal financeiro). Op que já entra terminal humano → terminal (não "completed").
+- **Contador POR ESTADO** (não por claim): claimOp não incrementa mais; `beginAttempt(op,state)` CAS incrementa por estado; transition/applyLocal resetam attemptCount=0 no avanço. Codex: claim conta posse, não tentativa financeira.
+- **MATRIZ ao esgotar MAX=5** (classifyAndPromote): RECEIVED→FAILED_BEFORE_BILLING (seguro, sem alerta); BILLING_REQUESTED→MANUAL_REVIEW+alerta (AMBÍGUO); BILLING_CONFIRMED→CHARGED_NOT_APPLIED+alerta (cobrado); **LOCAL_APPLIED FORA do corte** (plano já aplicado; segue tentando publish→COMPLETED — cortá-lo prenderia a op pra sempre, achado Codex).
+- **markFinancialTerminalAndAlert ATÔMICO**: $transaction — CAS terminal + `systemEvent.upsert(dedupeKey)` no MESMO commit → terminal implica evento; falha no evento reverte a promoção (op segue retomável). source "billing", severity critical.
+- **Fronteira de erro** (achado Codex): beginAttempt/classifyAndPromote/upsert dentro do try do loop → exceção vira retryable estruturado (recordError), não 500 genérico.
+- **Fix health cron**: auto-resolve só toca `dedupeKey.endsWith(":auto")` (era `${source}:auto` reconstruído → auto-resolveria o alerta billing). SystemEventView expõe dedupeKey; source "billing" adicionado ao union.
+- Codex 2 rodadas, achados fechados (LOCAL_APPLIED starvation; fronteira de erro do alerta). tsc 0, 96 testes domínio.
+- **🚨 NOTA DEPLOY:** auditar em prod se há SystemEvent auto com `dedupeKey=null` legado ANTES do deploy — o novo filtro `endsWith(":auto")` os excluiria da auto-resolução (ensureAutoEvent sempre cria chave hoje, então só afeta dados malformados).
+
 ### FASE E — Worker (cron) — SÓ AGORA
-`GET /api/cron/plan-change-retry` (Bearer CRON_SECRET). Seleciona não-terminais com nextAttemptAt<now, claim por lease, runSaga. NÃO tem gate global do kill-switch (ops em voo já cobradas TÊM que completar mesmo com switch OFF — resolve P0 #7). Batch pequeno, backoff.
+`GET /api/cron/plan-change-retry` (Bearer CRON_SECRET). Seleciona não-terminais com nextAttemptAt<now, claim por lease, runSaga. NÃO tem gate global do kill-switch (ops em voo já cobradas TÊM que completar mesmo com switch OFF — resolve P0 #7). Batch pequeno, backoff. **Fase E ainda deve: setar nextAttemptAt no retryable (o executor NÃO faz backoff hoje — o lease preso 90s é o único throttle); separar release do lease de backoff; interpretar attemptCount por estado.**
 Gate: retoma BILLING_CONFIRMED sem recobrar; concorrência serializa; esgota→CHARGED_NOT_APPLIED+alerta; expirada classifica; Codex + challenge adversarial (cobrança).
 
 ## Pré-condição externa (paralela, não bloqueia A-D)

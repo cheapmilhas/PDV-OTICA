@@ -108,7 +108,7 @@ describe("GET /api/cron/health-alert", () => {
 
   it("sinal que voltou ao verde resolve o incidente auto aberto", async () => {
     list.mockResolvedValue({
-      open: [{ id: "old1", source: "cron", severity: "critical", title: "Cron morto", detail: null, status: "open", resolvedAt: null, resolvedBy: null, resolveNote: null, createdAt: "2026-07-07T00:00:00Z" }],
+      open: [{ id: "old1", source: "cron", severity: "critical", title: "Cron morto", detail: null, status: "open", resolvedAt: null, resolvedBy: null, resolveNote: null, createdAt: "2026-07-07T00:00:00Z", dedupeKey: "cron:auto" }],
       resolved: [],
       openCount: 1,
     });
@@ -144,5 +144,27 @@ describe("GET /api/cron/health-alert", () => {
     );
     await GET(req("Bearer s3cr3t"));
     expect(resolve).not.toHaveBeenCalled();
+  });
+
+  it("evento billing (plan-change) NÃO é auto-resolvido pelo health cron (fix Fase D)", async () => {
+    // Achado Codex: o cron reconstruía `${source}:auto` e auto-resolveria o alerta
+    // de "cobrado sem plano" quando os sinais voltassem ao verde. Agora só toca
+    // eventos com dedupeKey terminado em ":auto" → o billing sobrevive até o e-mail.
+    list.mockResolvedValue({
+      open: [{ id: "b1", source: "billing", severity: "critical", title: "Cobrado sem plano", detail: null, status: "open", resolvedAt: null, resolvedBy: null, resolveNote: null, createdAt: "2026-07-07T00:00:00Z", dedupeKey: "plan-change:op1:charged-unapplied" }],
+      resolved: [],
+      openCount: 1,
+    });
+    snapshot.mockResolvedValue(
+      snap("healthy", {
+        database: sig("database", "Banco", "healthy"),
+        vercel: sig("vercel", "Vercel", "unknown"),
+        sentry: sig("sentry", "Sentry", "unknown"),
+        crons: sig("crons", "Crons", "healthy"),
+        integrations: sig("integrations", "Integrações", "healthy"),
+      })
+    );
+    await GET(req("Bearer s3cr3t"));
+    expect(resolve).not.toHaveBeenCalled(); // billing sobrevive
   });
 });
