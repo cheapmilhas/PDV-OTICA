@@ -15,7 +15,11 @@ vi.mock("@/lib/resolve-plan-for-tier", async () => {
   return { ...actual, resolvePlanForTier: vi.fn().mockResolvedValue({ id: "plan_x", slug: "medical-clinica", tier: "clinic_full", priceMonthly: 18990, priceYearly: 189900 }) };
 });
 // deps reais fazem I/O (Asaas/prisma) — mock. runSaga é testado à parte (executor.test).
-vi.mock("@/lib/domus-plan-change/deps", () => ({ buildSagaDeps: vi.fn(() => ({})) }));
+// claimOp (Fase C) também é do módulo deps — mock retornando a op reclamada.
+vi.mock("@/lib/domus-plan-change/deps", () => ({
+  buildSagaDeps: vi.fn(() => ({})),
+  claimOp: vi.fn(),
+}));
 vi.mock("@/lib/domus-plan-change/executor", async () => {
   const actual = await vi.importActual<typeof import("@/lib/domus-plan-change/executor")>(
     "@/lib/domus-plan-change/executor",
@@ -27,12 +31,21 @@ import { POST } from "./route";
 import { prisma } from "@/lib/prisma";
 import { signVisDomus } from "@/lib/vis-domus-hmac";
 import { runSaga } from "@/lib/domus-plan-change/executor";
+import { claimOp } from "@/lib/domus-plan-change/deps";
 
 const companyFindFirst = prisma.company.findFirst as unknown as ReturnType<typeof vi.fn>;
 const subFindMany = prisma.subscription.findMany as unknown as ReturnType<typeof vi.fn>;
 const opFindUnique = prisma.domusPlanChangeOp.findUnique as unknown as ReturnType<typeof vi.fn>;
 const opCreate = prisma.domusPlanChangeOp.create as unknown as ReturnType<typeof vi.fn>;
 const runSagaMock = runSaga as unknown as ReturnType<typeof vi.fn>;
+const claimOpMock = claimOp as unknown as ReturnType<typeof vi.fn>;
+
+// Op reclamada padrão que o claimOp devolve nos testes de execução.
+const CLAIMED = {
+  id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full",
+  targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null,
+  expiresAt: new Date(4102444800000), leaseToken: "tok1", claimedAt: new Date(1_700_000_000_000),
+};
 
 const SECRET = "test-secret";
 
@@ -71,6 +84,7 @@ beforeEach(() => {
   ]);
   opFindUnique.mockResolvedValue(null);
   opCreate.mockResolvedValue({});
+  claimOpMock.mockResolvedValue(CLAIMED); // por padrão, o claim vence
 });
 
 describe("plan-change — gates de segurança", () => {
@@ -113,23 +127,63 @@ describe("plan-change — gates de segurança", () => {
 describe("plan-change — idempotência + execução (com kill-switch ON)", () => {
   beforeEach(() => {
     process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
-    // após o create, o endpoint carrega a op completa pra rodar a saga.
-    opFindUnique.mockResolvedValue({
-      id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full",
-      targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null,
-    });
+    // 1ª leitura = decisão (null=fresh); 2ª leitura = só {id} p/ claimOp.
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValue({ id: "op1" });
   });
 
-  it("op nova (fresh) → cria, roda a saga → 200 completed", async () => {
-    // 1ª leitura (decisão) = null (nova); 2ª (carregar op p/ saga) = op completa.
+  it("op nova (fresh) → cria, claima, roda a saga → 200 completed", async () => {
+    // 1ª leitura (decisão) = null (nova); 2ª (id p/ claim) = {id}.
     opFindUnique.mockReset();
     opFindUnique
       .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full", targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null });
+      .mockResolvedValueOnce({ id: "op1" });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(200);
     expect(opCreate).toHaveBeenCalledOnce();
+    expect(claimOpMock).toHaveBeenCalledWith("op1");
     expect(runSagaMock).toHaveBeenCalledOnce();
+    // runSaga recebeu a op RECLAMADA (com leaseToken).
+    expect(runSagaMock.mock.calls[0][0]).toMatchObject({ id: "op1", leaseToken: "tok1" });
+  });
+
+  it("claimOp null + op ainda retomável (ocupada por outro executor) → 202, NÃO roda saga", async () => {
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null)          // decisão: fresh
+      .mockResolvedValueOnce({ id: "op1" }) // {id} p/ claim
+      .mockResolvedValueOnce({ state: "BILLING_REQUESTED" }); // releitura pós-claim-null
+    claimOpMock.mockResolvedValueOnce(null);
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(202);
+    expect(runSagaMock).not.toHaveBeenCalled();
+  });
+
+  // Achado Codex Fase C: claimOp null NÃO pode virar 202 pra tudo. Se a op foi
+  // movida a um terminal HUMANO entre a decisão e o claim → 409 (não mascarar).
+  it("claimOp null + op em terminal humano → 409 manual_review, NÃO 202", async () => {
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "op1" })
+      .mockResolvedValueOnce({ state: "MANUAL_REVIEW" }); // releitura pós-claim-null
+    claimOpMock.mockResolvedValueOnce(null);
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+    expect((await res.json()).error).toBe("manual_review_required");
+    expect(runSagaMock).not.toHaveBeenCalled();
+  });
+
+  it("claimOp null + op já COMPLETED → 200 already_applied", async () => {
+    opFindUnique.mockReset();
+    opFindUnique
+      .mockResolvedValueOnce(null)
+      .mockResolvedValueOnce({ id: "op1" })
+      .mockResolvedValueOnce({ state: "COMPLETED" });
+    claimOpMock.mockResolvedValueOnce(null);
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(200);
+    expect(runSagaMock).not.toHaveBeenCalled();
   });
 
   it("DOWNGRADE (plano atual mais caro que o alvo) → 501, NÃO cria op nem roda saga", async () => {
@@ -145,9 +199,8 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
 
   it("saga falha (checkpoint) → 502 not_completed, retomável", async () => {
     opFindUnique.mockReset();
-    opFindUnique
-      .mockResolvedValueOnce(null)
-      .mockResolvedValueOnce({ id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full", targetPlanId: "plan_x", state: "BILLING_REQUESTED", asaasRef: null });
+    opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "op1" });
+    claimOpMock.mockResolvedValueOnce({ ...CLAIMED, state: "BILLING_REQUESTED" });
     runSagaMock.mockResolvedValueOnce({ state: "BILLING_REQUESTED", asaasRef: null, failed: true, lastError: "asaas down" });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(502);
@@ -220,15 +273,12 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     const raw = JSON.stringify(validBody);
     const { createHash } = await import("crypto");
     const hash = createHash("sha256").update(raw).digest("hex");
-    // 1ª leitura (decisão): RECEIVED → resume (passa). 2ª leitura (carga da op):
-    // a op completa. Mas o runSaga (mock) encontra a op já terminal e retorna sem
-    // `failed`. A rota NÃO pode responder 200 completed nesse caso.
+    // 1ª leitura (decisão): RECEIVED → resume (passa). 2ª leitura: {id} p/ claim.
+    // O runSaga (mock) encontra a op já terminal e retorna sem `failed`. A rota
+    // NÃO pode responder 200 completed nesse caso.
     opFindUnique
       .mockResolvedValueOnce({ state: "RECEIVED", payloadHash: hash })
-      .mockResolvedValueOnce({
-        id: "op1", eventId: "e1", visCompanyId: "co1", requestedTier: "clinic_full",
-        targetPlanId: "plan-x", state: "RECEIVED", asaasRef: null,
-      });
+      .mockResolvedValueOnce({ id: "op1" });
     runSagaMock.mockResolvedValue({ state: "CHARGED_NOT_APPLIED", asaasRef: null }); // sem failed
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(409);

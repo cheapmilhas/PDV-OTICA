@@ -1,12 +1,13 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { runSaga } from "./executor";
-import type { SagaDeps, SagaOp, CasResult } from "./executor";
+import type { SagaDeps, ClaimedSagaOp, CasResult } from "./executor";
 import type { SagaState } from "./saga";
 
 // Longe no futuro: op NÃO expirada por padrão (a expiração é testada à parte).
 const FAR_FUTURE = new Date(4102444800000); // 2100-01-01
+const TOKEN = "lease-token-1"; // posse padrão da op nos testes
 
-function makeOp(state: SagaOp["state"] = "RECEIVED", over: Partial<SagaOp> = {}): SagaOp {
+function makeOp(state: ClaimedSagaOp["state"] = "RECEIVED", over: Partial<ClaimedSagaOp> = {}): ClaimedSagaOp {
   return {
     id: "op1",
     eventId: "ev1",
@@ -16,6 +17,8 @@ function makeOp(state: SagaOp["state"] = "RECEIVED", over: Partial<SagaOp> = {})
     state,
     asaasRef: null,
     expiresAt: FAR_FUTURE,
+    leaseToken: TOKEN,
+    claimedAt: new Date(1_700_000_000_000),
     ...over,
   };
 }
@@ -23,25 +26,37 @@ function makeOp(state: SagaOp["state"] = "RECEIVED", over: Partial<SagaOp> = {})
 const OK: CasResult = { applied: true };
 
 /**
- * Deps de teste que simulam o estado da op no "banco". `transition`/`applyLocal`
- * fazem CAS de verdade contra `dbState`: só avançam se o estado esperado bate.
- * Isso permite testar monotonia (executor atrasado NÃO regride) e atomicidade.
+ * Deps de teste que simulam o "banco": estado + leaseToken vigente. Os CAS só
+ * avançam se o estado esperado bate E o token da op == o token vigente no db
+ * (fencing). `dbToken` permite simular perda de lease (outro executor re-claimou).
  */
-function makeDeps(over: Partial<SagaDeps> = {}, dbStateInit: SagaState = "RECEIVED") {
+function makeDeps(
+  over: Partial<SagaDeps> = {},
+  dbStateInit: SagaState = "RECEIVED",
+  dbTokenInit: string = TOKEN,
+) {
   const state = { value: dbStateInit as SagaState };
-  const calls = { confirmBilling: 0, applyLocal: 0, publish: 0 };
+  const db = { token: dbTokenInit as string | null };
+  const calls = { confirmBilling: 0, applyLocal: 0, publish: 0, renewLease: 0 };
   const order: string[] = []; // ordem real dos efeitos (cobra→aplica→publica)
 
+  // true se a op ainda é dona do lease (token bate com o vigente no db).
+  const owns = (op: ClaimedSagaOp) => op.leaseToken === db.token;
+
   const base: SagaDeps = {
+    renewLease: vi.fn(async (op): Promise<CasResult> => {
+      calls.renewLease++;
+      return { applied: owns(op) };
+    }),
     confirmBilling: vi.fn(async () => {
       calls.confirmBilling++;
       order.push("billing");
       return { asaasRef: "asaas-real-id" };
     }),
-    applyLocal: vi.fn(async (): Promise<CasResult> => {
+    applyLocal: vi.fn(async (op): Promise<CasResult> => {
       calls.applyLocal++;
-      // CAS atômico: só aplica se o db ainda está em BILLING_CONFIRMED.
-      if (state.value !== "BILLING_CONFIRMED") return { applied: false };
+      // CAS atômico com fencing: aplica só em BILLING_CONFIRMED E com o token vigente.
+      if (state.value !== "BILLING_CONFIRMED" || !owns(op)) return { applied: false };
       order.push("local");
       state.value = "LOCAL_APPLIED";
       return OK;
@@ -50,21 +65,21 @@ function makeDeps(over: Partial<SagaDeps> = {}, dbStateInit: SagaState = "RECEIV
       calls.publish++;
       order.push("publish");
     }),
-    transition: vi.fn(async (_op, from, to): Promise<CasResult> => {
-      if (state.value !== from) return { applied: false };
+    transition: vi.fn(async (op, from, to): Promise<CasResult> => {
+      if (state.value !== from || !owns(op)) return { applied: false };
       state.value = to;
       return OK;
     }),
-    recordError: vi.fn(async () => {}),
-    markTerminal: vi.fn(async (_op, from, terminal): Promise<CasResult> => {
-      if (state.value !== from) return { applied: false };
+    recordError: vi.fn(async (op): Promise<CasResult> => ({ applied: owns(op) })),
+    markTerminal: vi.fn(async (op, from, terminal): Promise<CasResult> => {
+      if (state.value !== from || !owns(op)) return { applied: false };
       state.value = terminal;
       return OK;
     }),
-    reloadOp: vi.fn(async () => ({ state: state.value, asaasRef: null as string | null })),
+    reloadOp: vi.fn(async () => ({ state: state.value, asaasRef: null as string | null, leaseToken: db.token })),
     ...over,
   };
-  return { deps: base, state, calls, order };
+  return { deps: base, state, db, calls, order };
 }
 
 beforeEach(() => vi.clearAllMocks());
@@ -158,9 +173,10 @@ describe("runSaga — monotonia (CAS): executor atrasado não regride nem duplic
 
   it("CAS perde e reloadOp devolve o MESMO estado → para sem laço infinito", async () => {
     const { deps } = makeDeps({}, "RECEIVED");
-    // força transition a nunca pegar (simula perda contínua do CAS)
+    // força transition a nunca pegar (simula perda contínua do CAS), mas o token
+    // AINDA é o nosso (não é perda de lease — é o caso "mesmo estado").
     (deps.transition as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: false });
-    (deps.reloadOp as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "RECEIVED", asaasRef: null });
+    (deps.reloadOp as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "RECEIVED", asaasRef: null, leaseToken: TOKEN });
 
     const final = await runSaga(makeOp("RECEIVED"), deps);
     // resync vê real===atual → retorna null → o executor para (stopHere), sem girar.
@@ -173,7 +189,7 @@ describe("runSaga — monotonia (CAS): executor atrasado não regride nem duplic
     // adotar a regressão (reexecutaria confirmBilling = dupla cobrança).
     const { deps, calls } = makeDeps({}, "BILLING_CONFIRMED");
     (deps.applyLocal as ReturnType<typeof vi.fn>).mockResolvedValue({ applied: false });
-    (deps.reloadOp as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "RECEIVED", asaasRef: null });
+    (deps.reloadOp as ReturnType<typeof vi.fn>).mockResolvedValue({ state: "RECEIVED", asaasRef: null, leaseToken: TOKEN });
 
     const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
     expect(calls.confirmBilling).toBe(0); // NÃO recobra
@@ -206,6 +222,49 @@ describe("runSaga — terminais humanos não são processados", () => {
       expect(final.state).toBe(terminal);
     },
   );
+});
+
+describe("runSaga — fencing por lease (Fase C)", () => {
+  it("renewLease antes do Asaas: perdi o lease → NÃO cobra, para", async () => {
+    const { deps, calls, db } = makeDeps({}, "BILLING_REQUESTED");
+    // simula: outro executor re-claimou (db.token mudou) antes de cobrarmos.
+    db.token = "outro-token";
+
+    const final = await runSaga(makeOp("BILLING_REQUESTED"), deps);
+    expect(calls.renewLease).toBe(1);
+    expect(calls.confirmBilling).toBe(0); // NÃO cobra sem posse
+    // reloadOp devolve token diferente → resync retorna null → para no checkpoint.
+    expect(final.state).toBe("BILLING_REQUESTED");
+    expect(final.failed).toBeFalsy();
+  });
+
+  it("perdi o lease no meio (renewLease ok, mas token mudou antes do publish) → não republica", async () => {
+    const { deps, calls, db } = makeDeps({}, "LOCAL_APPLIED");
+    db.token = "outro-token"; // perdemos a posse antes do publish
+
+    const final = await runSaga(makeOp("LOCAL_APPLIED"), deps);
+    expect(calls.publish).toBe(0); // não publica sem posse
+    expect(final.state).toBe("LOCAL_APPLIED");
+  });
+
+  it("CAS perde por PERDA DE LEASE (token real ≠ o meu) → NÃO adota estado avançado, para", async () => {
+    // db avançou pra LOCAL_APPLIED mas sob OUTRO token (outro executor). Nós, em
+    // BILLING_CONFIRMED com o token velho, perdemos o applyLocal; o resync vê token
+    // diferente → PARA (não segue pro publish com autoridade perdida).
+    const { deps, calls } = makeDeps({}, "LOCAL_APPLIED", "outro-token");
+    const final = await runSaga(makeOp("BILLING_CONFIRMED"), deps);
+
+    expect(calls.applyLocal).toBe(1); // tentou, CAS não pegou (token errado)
+    expect(calls.publish).toBe(0); // NÃO publica — perdeu a autoridade
+    expect(final.state).toBe("BILLING_CONFIRMED"); // para no checkpoint local
+  });
+
+  it("caminho feliz mantém a posse o tempo todo (renewLease sempre ok)", async () => {
+    const { deps, calls } = makeDeps({}, "RECEIVED");
+    const final = await runSaga(makeOp("RECEIVED"), deps);
+    expect(final.state).toBe("COMPLETED");
+    expect(calls.renewLease).toBe(2); // antes do Asaas e antes do publish
+  });
 });
 
 describe("runSaga — expiração antes de cobrar (achado Codex #3)", () => {

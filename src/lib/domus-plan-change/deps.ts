@@ -1,9 +1,9 @@
+import { randomUUID } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
-import { planValueForCycle } from "@/lib/plan-pricing";
 import { schedulePublishEntitlement } from "@/lib/vis-domus-publisher";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
-import type { SagaDeps, SagaOp, CasResult } from "./executor";
+import type { SagaDeps, SagaOp, ClaimedSagaOp, CasResult } from "./executor";
 import type { SagaState } from "./saga";
 
 /**
@@ -20,14 +20,96 @@ import type { SagaState } from "./saga";
  *    commit → crash não duplica history/audit numa retomada (achado Codex #1).
  *  - transition/recordError são CAS: só gravam se a op ainda está no estado
  *    esperado → um executor atrasado NÃO regride COMPLETED (achado Codex #2).
+ *
+ * FASE C — lease/fencing:
+ *  - claimOp adquire posse (leaseToken novo) via CAS pelo RELÓGIO DO BANCO; só uma
+ *    invocação vence. Todo CAS de escrita carrega `AND leaseToken=?` — quem perdeu
+ *    o lease não avança nem escreve. O predicado NÃO usa leaseUntil>now: o fencing
+ *    é a SUBSTITUIÇÃO do token (novo claim), não o prazo — um token não substituído
+ *    ainda conclui (não desperdiça resposta do Asaas levemente atrasada).
  */
 
 // Status de assinatura elegíveis para troca de plano (mesmos do fluxo admin).
 const ELIGIBLE_STATUS = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
 
+// TTL do lease. Maior que o timeout do Asaas (ASAAS_TIMEOUT_MS) + folga de rede/
+// scheduler, para o lease não expirar no meio de uma cobrança. Codex: TTL não é
+// escolhido isolado — depende do timeout do efeito externo.
+const LEASE_TTL_MS = 90_000; // 90s
+// Timeout do fetch ao Asaas. < LEASE_TTL_MS (senão o lease expira durante a rede).
+const ASAAS_TIMEOUT_MS = 30_000; // 30s
+
+/**
+ * Reclama a op para este executor: CAS pelo relógio do BANCO (evita clock-skew
+ * endpoint×worker×Neon). Vence se: estado retomável, lease livre (nulo ou
+ * expirado) e nextAttemptAt passado (backoff respeitado — contrato com a Fase E).
+ * Grava token novo + leaseUntil + incrementa attemptCount. Retorna a op reclamada
+ * (com o token) ou null se não conseguiu (ocupado/não-elegível).
+ */
+export async function claimOp(opId: string, ttlMs: number = LEASE_TTL_MS): Promise<ClaimedSagaOp | null> {
+  // Guarda: claimOp é exportado; um ttlMs NaN/negativo/infinito geraria SQL
+  // inválido ou lease imediatamente expirado. Fail-fast (achado Codex Fase C).
+  // Valida o valor ARREDONDADO (0.4 passaria em >0 mas round→0 = lease vencido).
+  const ttlRounded = Math.round(ttlMs);
+  if (!Number.isFinite(ttlMs) || ttlRounded <= 0) {
+    throw new Error(`ttlMs inválido para claimOp: ${ttlMs}.`);
+  }
+  const token = randomUUID();
+  const ttlInterval = `${ttlRounded} milliseconds`;
+  // UPDATE ... RETURNING num único statement: atômico, sem read-then-write.
+  // Relógio do banco (now()) em TODAS as comparações, no leaseUntil E no
+  // claimedAt (usado como `now` da expiração no runSaga — mesmo relógio).
+  const rows = await prisma.$queryRaw<
+    Array<{
+      id: string; eventId: string; visCompanyId: string; requestedTier: string;
+      targetPlanId: string | null; state: string; asaasRef: string | null;
+      expiresAt: Date; leaseToken: string; claimedAt: Date;
+    }>
+  >`
+    UPDATE "DomusPlanChangeOp"
+    SET "leaseToken" = ${token},
+        "leaseUntil" = now() + ${ttlInterval}::interval,
+        "attemptCount" = "attemptCount" + 1,
+        "lastAttemptAt" = now()
+    WHERE "id" = ${opId}
+      AND "state" IN ('RECEIVED', 'BILLING_REQUESTED', 'BILLING_CONFIRMED', 'LOCAL_APPLIED')
+      AND ("leaseUntil" IS NULL OR "leaseUntil" <= now())
+      AND ("nextAttemptAt" IS NULL OR "nextAttemptAt" <= now())
+    RETURNING "id", "eventId", "visCompanyId", "requestedTier", "targetPlanId",
+              "state", "asaasRef", "expiresAt", "leaseToken", now() AS "claimedAt"
+  `;
+  const row = rows[0];
+  if (!row) return null;
+  return {
+    id: row.id,
+    eventId: row.eventId,
+    visCompanyId: row.visCompanyId,
+    requestedTier: row.requestedTier,
+    targetPlanId: row.targetPlanId,
+    state: row.state as SagaState,
+    asaasRef: row.asaasRef,
+    expiresAt: row.expiresAt,
+    leaseToken: row.leaseToken,
+    claimedAt: row.claimedAt,
+  };
+}
+
 export function buildSagaDeps(): SagaDeps {
   return {
-    async confirmBilling(op: SagaOp): Promise<{ asaasRef: string }> {
+    async renewLease(op: ClaimedSagaOp): Promise<CasResult> {
+      // Estende leaseUntil SÓ se ainda somos o dono (leaseToken) e o estado é
+      // retomável. Relógio do banco. Fecha a janela entre claim e I/O externo.
+      const res = await prisma.$executeRaw`
+        UPDATE "DomusPlanChangeOp"
+        SET "leaseUntil" = now() + ${`${LEASE_TTL_MS} milliseconds`}::interval
+        WHERE "id" = ${op.id}
+          AND "leaseToken" = ${op.leaseToken}
+          AND "state" IN ('RECEIVED', 'BILLING_REQUESTED', 'BILLING_CONFIRMED', 'LOCAL_APPLIED')
+      `;
+      return { applied: res === 1 };
+    },
+
+    async confirmBilling(op: ClaimedSagaOp): Promise<{ asaasRef: string }> {
       // Carrega a op COM a identidade persistida (fixada no fresh). Fonte única
       // do que cobrar — não busca subscription por companyId (evita cobrar Y).
       const persisted = await prisma.domusPlanChangeOp.findUnique({
@@ -81,17 +163,50 @@ export function buildSagaDeps(): SagaDeps {
 
       // priceApplied em centavos (schema); Asaas espera reais.
       const value = priceApplied / 100;
-      // Idempotencykey ESTÁVEL por operação (eventId): retomar NÃO recobra.
-      const updated = await asaas.subscriptions.update(
-        asaasSubscriptionId,
-        { value },
-        `plan-change:${op.eventId}`,
-      );
-      // asaasRef guarda a resposta REAL do Asaas (id da assinatura), não a chave.
-      return { asaasRef: updated?.id ?? `plan-change:${op.eventId}` };
+      // TIMEOUT no fetch (< TTL do lease): sem isto, o PUT pode passar do TTL e um
+      // 2º executor re-claimar durante a rede (Codex Fase C). AbortController
+      // cancela o request; a idempotencyKey estável garante que a retomada não
+      // dobra a cobrança.
+      const ctrl = new AbortController();
+      const timer = setTimeout(() => ctrl.abort(), ASAAS_TIMEOUT_MS);
+      let updated;
+      try {
+        // Idempotencykey ESTÁVEL por operação (eventId): retomar NÃO recobra.
+        updated = await asaas.subscriptions.update(
+          asaasSubscriptionId,
+          { value },
+          `plan-change:${op.eventId}`,
+          ctrl.signal,
+        );
+      } finally {
+        clearTimeout(timer);
+      }
+
+      // VALIDA A RESPOSTA (achado Codex Fase C): um 2xx não prova que o recurso
+      // CERTO recebeu o valor CERTO. Sem isto, uma resposta vazia/malformada
+      // avançaria pra BILLING_CONFIRMED sem cobrança comprovada. O fallback pro
+      // idempotencyKey MORREU — ausência de id real é falha, não confirmação.
+      if (!updated || updated.id !== asaasSubscriptionId) {
+        throw new Error("Resposta do Asaas sem id ou de assinatura divergente — cobrança não confirmada.");
+      }
+      if (Math.round(updated.value * 100) !== priceApplied) {
+        throw new Error(`Valor confirmado pelo Asaas (${updated.value}) ≠ priceApplied (${priceApplied}).`);
+      }
+      if (updated.cycle !== billingCycle) {
+        throw new Error(`Ciclo confirmado pelo Asaas (${updated.cycle}) ≠ billingCycle (${billingCycle}).`);
+      }
+      // Status ATIVO (achado Codex 2ª rodada): id/valor/ciclo certos NÃO provam
+      // recorrência viva. Se o vínculo Asaas aponta pra uma assinatura EXPIRED/
+      // INACTIVE, o PUT pode passar mas não haverá próxima cobrança → aplicaríamos
+      // o tier sem recorrência. Exige ACTIVE (invariante Asaas-first).
+      if (updated.status !== "ACTIVE") {
+        throw new Error(`Assinatura Asaas não está ACTIVE (${updated.status}) — recorrência não garantida.`);
+      }
+      // asaasRef guarda a resposta REAL do Asaas (id da assinatura), validada.
+      return { asaasRef: updated.id };
     },
 
-    async applyLocal(op: SagaOp): Promise<CasResult> {
+    async applyLocal(op: ClaimedSagaOp): Promise<CasResult> {
       // Carrega a identidade persistida COMPLETA + o plano-alvo (fixados no fresh).
       const persisted = await prisma.domusPlanChangeOp.findUnique({
         where: { id: op.id },
@@ -113,10 +228,11 @@ export function buildSagaDeps(): SagaDeps {
 
       // Transação interativa: CAS PRIMEIRO, efeitos depois, tudo no mesmo commit.
       const applied = await prisma.$transaction(async (tx) => {
-        // (1) CAS da op como PRIMEIRA escrita. count 0 → op já avançou/mudou:
-        //     aborta a tx SEM nenhum efeito (retorna false).
+        // (1) CAS da op como PRIMEIRA escrita, com FENCING por leaseToken. count 0
+        //     → op já avançou/mudou OU perdemos o lease: aborta a tx SEM nenhum
+        //     efeito (retorna false).
         const cas = await tx.domusPlanChangeOp.updateMany({
-          where: { id: op.id, state: "BILLING_CONFIRMED" },
+          where: { id: op.id, state: "BILLING_CONFIRMED", leaseToken: op.leaseToken },
           data: { state: "LOCAL_APPLIED" },
         });
         if (cas.count !== 1) return false;
@@ -195,16 +311,16 @@ export function buildSagaDeps(): SagaDeps {
       return { applied };
     },
 
-    async publish(op: SagaOp): Promise<void> {
+    async publish(op: ClaimedSagaOp): Promise<void> {
       // Ecoa o entitlement de volta pro Domus (fire-and-forget; o pull cobre).
       // FORA de qualquer transação — não é durável e o processo serverless pode
       // congelar após a resposta; o pull diário do Domus é a rede de segurança.
       schedulePublishEntitlement(op.visCompanyId);
     },
 
-    async transition(op: SagaOp, from: SagaState, to: SagaState): Promise<CasResult> {
-      // CAS puro de estado (sem efeito de negócio). Só grava se ainda em `from`.
-      // Carrega timestamps/refs conforme a transição (auditoria financeira).
+    async transition(op: ClaimedSagaOp, from: SagaState, to: SagaState): Promise<CasResult> {
+      // CAS de estado com FENCING por leaseToken. Só grava se ainda em `from` E
+      // com o token vigente. Carrega timestamps/refs da transição (auditoria).
       const now = new Date();
       const extra: Record<string, unknown> = {};
       if (to === "BILLING_REQUESTED") extra.billingRequestedAt = now;
@@ -213,38 +329,40 @@ export function buildSagaDeps(): SagaDeps {
         if (op.asaasRef !== undefined) extra.asaasRef = op.asaasRef;
       }
       const res = await prisma.domusPlanChangeOp.updateMany({
-        where: { id: op.id, state: from },
+        where: { id: op.id, state: from, leaseToken: op.leaseToken },
         data: { state: to, ...extra },
       });
       return { applied: res.count === 1 };
     },
 
-    async recordError(op: SagaOp, from: SagaState, lastError: string): Promise<void> {
-      // CAS: grava o erro SÓ se a op ainda está em `from`. Nunca altera state —
-      // não regride um estado mais avançado gravado por outro executor.
-      await prisma.domusPlanChangeOp.updateMany({
-        where: { id: op.id, state: from },
+    async recordError(op: ClaimedSagaOp, from: SagaState, lastError: string): Promise<CasResult> {
+      // CAS com FENCING: grava o erro SÓ se ainda em `from` E dono do lease. Nunca
+      // altera state. Retorna applied: se perdemos o lease, o erro NÃO sobrescreve
+      // o diagnóstico de quem tem a posse (Codex Fase C).
+      const res = await prisma.domusPlanChangeOp.updateMany({
+        where: { id: op.id, state: from, leaseToken: op.leaseToken },
         data: { lastError, lastAttemptAt: new Date() },
       });
+      return { applied: res.count === 1 };
     },
 
-    async markTerminal(op: SagaOp, from: SagaState, terminal: SagaState, lastError: string): Promise<CasResult> {
-      // CAS para um estado terminal (WHERE state=from). Grava o motivo. Usado na
-      // expiração antes de cobrar (RECEIVED → FAILED_BEFORE_BILLING).
+    async markTerminal(op: ClaimedSagaOp, from: SagaState, terminal: SagaState, lastError: string): Promise<CasResult> {
+      // CAS com FENCING para um estado terminal. Usado na expiração antes de
+      // cobrar (RECEIVED → FAILED_BEFORE_BILLING).
       const res = await prisma.domusPlanChangeOp.updateMany({
-        where: { id: op.id, state: from },
+        where: { id: op.id, state: from, leaseToken: op.leaseToken },
         data: { state: terminal, lastError, lastAttemptAt: new Date() },
       });
       return { applied: res.count === 1 };
     },
 
-    async reloadOp(op: SagaOp): Promise<{ state: SagaState; asaasRef: string | null } | null> {
+    async reloadOp(op: SagaOp): Promise<{ state: SagaState; asaasRef: string | null; leaseToken: string | null } | null> {
       const row = await prisma.domusPlanChangeOp.findUnique({
         where: { id: op.id },
-        select: { state: true, asaasRef: true },
+        select: { state: true, asaasRef: true, leaseToken: true },
       });
       if (!row) return null;
-      return { state: row.state as SagaState, asaasRef: row.asaasRef };
+      return { state: row.state as SagaState, asaasRef: row.asaasRef, leaseToken: row.leaseToken };
     },
   };
 }

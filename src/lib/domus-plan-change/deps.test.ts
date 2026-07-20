@@ -17,6 +17,8 @@ vi.mock("@/lib/prisma", () => ({
     subscription: { findUnique: vi.fn() },
     plan: { findUnique: vi.fn() },
     $transaction: vi.fn(async (cb: (tx: typeof txMock) => Promise<unknown>) => cb(txMock)),
+    $queryRaw: vi.fn(),   // claimOp (UPDATE ... RETURNING)
+    $executeRaw: vi.fn(), // renewLease (UPDATE ...)
   },
 }));
 vi.mock("@/lib/asaas", () => ({
@@ -25,8 +27,8 @@ vi.mock("@/lib/asaas", () => ({
 vi.mock("@/lib/vis-domus-publisher", () => ({ schedulePublishEntitlement: vi.fn() }));
 vi.mock("@/lib/plan-features-cache", () => ({ invalidatePlanFeaturesCache: vi.fn() }));
 
-import { buildSagaDeps } from "./deps";
-import type { SagaOp } from "./executor";
+import { buildSagaDeps, claimOp } from "./deps";
+import type { ClaimedSagaOp } from "./executor";
 import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
@@ -35,8 +37,12 @@ const opFindUnique = prisma.domusPlanChangeOp.findUnique as unknown as ReturnTyp
 const subFindUnique = prisma.subscription.findUnique as unknown as ReturnType<typeof vi.fn>;
 const planFindUnique = prisma.plan.findUnique as unknown as ReturnType<typeof vi.fn>;
 const asaasUpdate = asaas.subscriptions.update as unknown as ReturnType<typeof vi.fn>;
+const queryRaw = prisma.$queryRaw as unknown as ReturnType<typeof vi.fn>;
+const executeRaw = prisma.$executeRaw as unknown as ReturnType<typeof vi.fn>;
 
-function makeOp(over: Partial<SagaOp> = {}): SagaOp {
+const TOKEN = "lease-token-1";
+
+function makeOp(over: Partial<ClaimedSagaOp> = {}): ClaimedSagaOp {
   return {
     id: "op1",
     eventId: "ev1",
@@ -46,6 +52,8 @@ function makeOp(over: Partial<SagaOp> = {}): SagaOp {
     state: "BILLING_CONFIRMED",
     asaasRef: null,
     expiresAt: new Date(4102444800000), // 2100
+    leaseToken: TOKEN,
+    claimedAt: new Date(1_700_000_000_000),
     ...over,
   };
 }
@@ -66,14 +74,62 @@ describe("confirmBilling — identidade persistida + preflight (Fase B)", () => 
   it("cobra na assinatura PERSISTIDA (não busca por companyId) e retorna asaasRef real", async () => {
     opFindUnique.mockResolvedValue(PERSISTED);
     subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
-    asaasUpdate.mockResolvedValue({ id: "asaas_1" });
+    asaasUpdate.mockResolvedValue({ id: "asaas_1", value: 189.9, cycle: "MONTHLY", status: "ACTIVE" });
 
     const deps = buildSagaDeps();
     const res = await deps.confirmBilling(makeOp());
 
-    // cobrou o ID persistido, valor = priceApplied/100 (reais), idempotencyKey por eventId
-    expect(asaasUpdate).toHaveBeenCalledWith("asaas_1", { value: 189.9 }, "plan-change:ev1");
+    // cobrou o ID persistido, valor = priceApplied/100 (reais), idempotencyKey por
+    // eventId, + AbortSignal do timeout (Fase C).
+    expect(asaasUpdate).toHaveBeenCalledWith("asaas_1", { value: 189.9 }, "plan-change:ev1", expect.any(AbortSignal));
     expect(res.asaasRef).toBe("asaas_1"); // resposta real do Asaas, não a chave
+  });
+
+  it("passa um AbortSignal (timeout) ao Asaas (Fase C)", async () => {
+    opFindUnique.mockResolvedValue(PERSISTED);
+    subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
+    asaasUpdate.mockResolvedValue({ id: "asaas_1", value: 189.9, cycle: "MONTHLY", status: "ACTIVE" });
+    const deps = buildSagaDeps();
+    await deps.confirmBilling(makeOp());
+    const signal = asaasUpdate.mock.calls[0][3];
+    expect(signal).toBeInstanceOf(AbortSignal);
+    expect(signal.aborted).toBe(false); // não abortado no caminho feliz
+  });
+
+  // Achado Codex Fase C: um 2xx não prova que o recurso certo recebeu o valor
+  // certo. confirmBilling VALIDA a resposta; o fallback pro idempotencyKey morreu.
+  it("resposta sem id / id divergente → LANÇA (não confirma)", async () => {
+    opFindUnique.mockResolvedValue(PERSISTED);
+    subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
+    const deps = buildSagaDeps();
+    asaasUpdate.mockResolvedValueOnce({ value: 189.9, cycle: "MONTHLY" }); // sem id
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/sem id ou de assinatura divergente/);
+    asaasUpdate.mockResolvedValueOnce({ id: "outro", value: 189.9, cycle: "MONTHLY" });
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/sem id ou de assinatura divergente/);
+  });
+
+  it("valor confirmado ≠ priceApplied → LANÇA", async () => {
+    opFindUnique.mockResolvedValue(PERSISTED);
+    subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
+    asaasUpdate.mockResolvedValue({ id: "asaas_1", value: 99.9, cycle: "MONTHLY" }); // R$99,90 ≠ 18990
+    const deps = buildSagaDeps();
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/Valor confirmado/);
+  });
+
+  it("ciclo confirmado ≠ billingCycle → LANÇA", async () => {
+    opFindUnique.mockResolvedValue(PERSISTED);
+    subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
+    asaasUpdate.mockResolvedValue({ id: "asaas_1", value: 189.9, cycle: "YEARLY", status: "ACTIVE" });
+    const deps = buildSagaDeps();
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/Ciclo confirmado/);
+  });
+
+  it("assinatura Asaas não-ACTIVE (EXPIRED/INACTIVE) → LANÇA (recorrência não garantida)", async () => {
+    opFindUnique.mockResolvedValue(PERSISTED);
+    subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
+    asaasUpdate.mockResolvedValue({ id: "asaas_1", value: 189.9, cycle: "MONTHLY", status: "INACTIVE" });
+    const deps = buildSagaDeps();
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/não está ACTIVE/);
   });
 
   it("PREFLIGHT: asaasSubscriptionId mudou desde o congelamento → LANÇA, NÃO cobra", async () => {
@@ -137,9 +193,9 @@ describe("applyLocal — atômico com CAS (Fase B)", () => {
     const res = await deps.applyLocal(makeOp());
 
     expect(res.applied).toBe(true);
-    // CAS foi a PRIMEIRA escrita (WHERE state=BILLING_CONFIRMED → LOCAL_APPLIED)
+    // CAS foi a PRIMEIRA escrita, com FENCING por leaseToken (Fase C).
     expect(txMock.domusPlanChangeOp.updateMany).toHaveBeenCalledWith({
-      where: { id: "op1", state: "BILLING_CONFIRMED" },
+      where: { id: "op1", state: "BILLING_CONFIRMED", leaseToken: TOKEN },
       data: { state: "LOCAL_APPLIED" },
     });
     expect(txMock.subscription.update).toHaveBeenCalledOnce();
@@ -205,7 +261,8 @@ describe("transition / recordError — CAS monotônico (Fase B)", () => {
     const res = await deps.transition(makeOp({ state: "RECEIVED" }), "RECEIVED", "BILLING_REQUESTED");
     expect(res.applied).toBe(true);
     const call = (prisma.domusPlanChangeOp.updateMany as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.where).toMatchObject({ id: "op1", state: "RECEIVED" });
+    // FENCING: o WHERE inclui o leaseToken (Fase C).
+    expect(call.where).toMatchObject({ id: "op1", state: "RECEIVED", leaseToken: TOKEN });
     expect(call.data.state).toBe("BILLING_REQUESTED");
   });
 
@@ -216,13 +273,67 @@ describe("transition / recordError — CAS monotônico (Fase B)", () => {
     expect(res.applied).toBe(false);
   });
 
-  it("recordError nunca altera state (só lastError, com CAS no estado atual)", async () => {
+  it("recordError nunca altera state (só lastError, com CAS state+token); retorna applied", async () => {
     (prisma.domusPlanChangeOp.updateMany as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 1 });
     const deps = buildSagaDeps();
-    await deps.recordError(makeOp({ state: "BILLING_REQUESTED" }), "BILLING_REQUESTED", "asaas down");
+    const res = await deps.recordError(makeOp({ state: "BILLING_REQUESTED" }), "BILLING_REQUESTED", "asaas down");
+    expect(res.applied).toBe(true);
     const call = (prisma.domusPlanChangeOp.updateMany as unknown as ReturnType<typeof vi.fn>).mock.calls[0][0];
-    expect(call.where).toMatchObject({ id: "op1", state: "BILLING_REQUESTED" });
+    expect(call.where).toMatchObject({ id: "op1", state: "BILLING_REQUESTED", leaseToken: TOKEN });
     expect(call.data).not.toHaveProperty("state"); // NUNCA muda state
     expect(call.data.lastError).toBe("asaas down");
+  });
+
+  it("recordError perdeu o lease (count 0) → applied=false (erro NÃO sobrescreve dono)", async () => {
+    (prisma.domusPlanChangeOp.updateMany as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ count: 0 });
+    const deps = buildSagaDeps();
+    const res = await deps.recordError(makeOp({ state: "BILLING_REQUESTED" }), "BILLING_REQUESTED", "asaas down");
+    expect(res.applied).toBe(false);
+  });
+});
+
+describe("claimOp — aquisição de lease (Fase C)", () => {
+  it("vence o claim → retorna a op reclamada com o token + claimedAt do banco", async () => {
+    const claimedAt = new Date(1_700_000_000_000);
+    queryRaw.mockResolvedValue([{
+      id: "op1", eventId: "ev1", visCompanyId: "co1", requestedTier: "clinic_full",
+      targetPlanId: "plan_x", state: "RECEIVED", asaasRef: null,
+      expiresAt: new Date(4102444800000), leaseToken: "db-generated-token", claimedAt,
+    }]);
+    const claimed = await claimOp("op1");
+    expect(claimed).not.toBeNull();
+    expect(claimed!.leaseToken).toBe("db-generated-token");
+    expect(claimed!.state).toBe("RECEIVED");
+    expect(claimed!.claimedAt).toEqual(claimedAt);
+    expect(queryRaw).toHaveBeenCalledOnce();
+  });
+
+  it("op ocupada/terminal/em backoff (0 linhas) → null", async () => {
+    queryRaw.mockResolvedValue([]);
+    const claimed = await claimOp("op1");
+    expect(claimed).toBeNull();
+  });
+
+  it("ttlMs inválido (NaN/0/negativo) → LANÇA antes de tocar o banco", async () => {
+    await expect(claimOp("op1", NaN)).rejects.toThrow(/ttlMs inválido/);
+    await expect(claimOp("op1", 0)).rejects.toThrow(/ttlMs inválido/);
+    await expect(claimOp("op1", -5)).rejects.toThrow(/ttlMs inválido/);
+    expect(queryRaw).not.toHaveBeenCalled();
+  });
+});
+
+describe("renewLease — renovação/validação de posse (Fase C)", () => {
+  it("ainda somos o dono (1 linha) → applied=true", async () => {
+    executeRaw.mockResolvedValue(1);
+    const deps = buildSagaDeps();
+    const res = await deps.renewLease(makeOp({ state: "BILLING_REQUESTED" }));
+    expect(res.applied).toBe(true);
+  });
+
+  it("perdemos o lease (0 linhas) → applied=false", async () => {
+    executeRaw.mockResolvedValue(0);
+    const deps = buildSagaDeps();
+    const res = await deps.renewLease(makeOp({ state: "BILLING_REQUESTED" }));
+    expect(res.applied).toBe(false);
   });
 });

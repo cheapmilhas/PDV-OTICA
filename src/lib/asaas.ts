@@ -244,11 +244,13 @@ export const asaas = {
       id: string,
       input: AsaasSubscriptionUpdateInput,
       idempotencyKey?: string,
+      signal?: AbortSignal,
     ): Promise<AsaasSubscription> {
       return asaasFetch<AsaasSubscription>(`/subscriptions/${id}`, {
         method: "PUT",
         body: JSON.stringify(input),
         idempotencyKey,
+        signal,
       });
     },
     async cancel(id: string): Promise<{ deleted: boolean; id: string }> {

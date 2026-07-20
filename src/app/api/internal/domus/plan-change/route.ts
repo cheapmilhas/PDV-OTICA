@@ -7,7 +7,7 @@ import { verifyVisDomus } from "@/lib/vis-domus-hmac";
 import { resolvePlanForTier, isPlanTier } from "@/lib/resolve-plan-for-tier";
 import { decideSagaAction } from "@/lib/domus-plan-change/saga";
 import { runSaga } from "@/lib/domus-plan-change/executor";
-import { buildSagaDeps } from "@/lib/domus-plan-change/deps";
+import { buildSagaDeps, claimOp } from "@/lib/domus-plan-change/deps";
 
 /**
  * POST /api/internal/domus/plan-change
@@ -278,19 +278,60 @@ export async function POST(req: Request) {
     }
   }
 
-  // Carrega a op COMPLETA (fresh recém-criada OU resume) e executa/retoma a saga.
-  // Usa o targetPlanId PERSISTIDO na op — nunca o recalculado — pra não trocar o
-  // plano de uma op em voo (achado Codex).
-  const op = await prisma.domusPlanChangeOp.findUnique({
+  // Localiza a op (fresh recém-criada OU resume) só para obter o id.
+  const found = await prisma.domusPlanChangeOp.findUnique({
     where: { eventId },
-    select: { id: true, eventId: true, visCompanyId: true, requestedTier: true, targetPlanId: true, state: true, asaasRef: true, expiresAt: true },
+    select: { id: true },
   });
-  if (!op) {
+  if (!found) {
     // Não deveria acontecer (acabamos de garantir), mas fail-safe.
     return NextResponse.json({ error: "op_not_found" }, { status: 500 });
   }
 
-  const result = await runSaga(op, buildSagaDeps());
+  // FASE C — CLAIM por lease antes de processar. claimOp faz o CAS de posse pelo
+  // relógio do banco: só vence se a op é retomável, o lease está livre e o backoff
+  // (nextAttemptAt) passou. Retorna a op RECLAMADA (com token) — a saga usa o
+  // targetPlanId/identidade PERSISTIDOS, nunca recalculados.
+  const claimed = await claimOp(found.id);
+  if (!claimed) {
+    // claimOp null tem 4 causas (ocupado/backoff/terminal/inexistente). NÃO
+    // responder 202 pra todas (achado Codex Fase C): um terminal HUMANO
+    // (MANUAL_REVIEW/CHARGED_NOT_APPLIED) mascarado como 202 esconderia o
+    // incidente que a decisão inicial não viu (moveu depois da leitura). Relê o
+    // estado real e classifica.
+    const cur = await prisma.domusPlanChangeOp.findUnique({
+      where: { id: found.id },
+      select: { state: true },
+    });
+    if (!cur) {
+      return NextResponse.json({ error: "op_not_found" }, { status: 500 });
+    }
+    if (cur.state === "COMPLETED") {
+      return NextResponse.json({ status: "already_applied" }, { status: 200 });
+    }
+    const human = ["FAILED", "FAILED_BEFORE_BILLING", "CHARGED_NOT_APPLIED", "MANUAL_REVIEW"];
+    if (human.includes(cur.state)) {
+      logger.error("plan-change: claim falhou, op em terminal humano (409)", {
+        window: WINDOW_LOG,
+        visCompanyId,
+        state: cur.state,
+      });
+      return NextResponse.json(
+        { error: "manual_review_required", state: cur.state },
+        { status: 409 },
+      );
+    }
+    // Retomável mas ocupada (outro executor tem o lease) ou em backoff → 202.
+    logger.warn("plan-change sem claim (op ocupada/em backoff)", {
+      window: WINDOW_LOG,
+      visCompanyId,
+      state: cur.state,
+    });
+    return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
+  }
+
+  // `now` do runSaga = relógio do BANCO no claim (coerência com lease/backoff).
+  const result = await runSaga(claimed, buildSagaDeps(), claimed.claimedAt);
   if (result.failed) {
     // Saga parou num checkpoint (cobrança/aplicação falhou). Retomável: o Domus
     // pode reenviar o mesmo eventId. 502: o Vis tentou mas não concluiu.
