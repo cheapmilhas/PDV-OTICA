@@ -18,10 +18,17 @@ import { randomUUID } from "crypto";
 
 const WINDOW_LOG = "vis-domus-publisher";
 
-export interface EntitlementPayload {
-  version: 1;
+/** Campos comuns a v1 e v2. */
+interface EntitlementPayloadBase {
   eventId: string;
   sourceUpdatedAt: string; // max(Subscription.updatedAt, Company.updatedAt)
+  /**
+   * Relógio monotônico (V3a), STRING decimal — NUNCA bigint cru (o payload passa
+   * por JSON.stringify e BigInt não serializa). Emitido quando presente; o Domus
+   * (D1.2) valida `^[0-9]+$` e ordena por ele quando presente, senão por
+   * sourceUpdatedAt (que continua sempre emitido — o Domus ainda o exige).
+   */
+  sourceRevision?: string;
   generatedAt: string;
   visCompanyId: string;
   domusClinicId: string;
@@ -31,6 +38,16 @@ export interface EntitlementPayload {
 }
 
 /**
+ * Payload de entitlement Vis → Domus. União DISCRIMINADA por `version`: v2 SEMPRE
+ * tem `plan.tier` (o parser do Domus exige e rejeita v2 sem tier); v1 NUNCA tem
+ * `plan` (ramos sem plano ativo — o Domus preserva o tier gravado). O tipo impede
+ * a combinação inválida em compile-time (achado Codex P2).
+ */
+export type EntitlementPayload =
+  | (EntitlementPayloadBase & { version: 1 })
+  | (EntitlementPayloadBase & { version: 2; plan: { tier: string } });
+
+/**
  * Monta o payload de entitlement de uma Company VIS_MEDICAL.
  * Retorna null se a company não é medical ou não tem vínculo (nada a publicar).
  */
@@ -38,45 +55,124 @@ export async function buildEntitlementPayload(
   companyId: string,
   now: Date,
 ): Promise<EntitlementPayload | null> {
-  const company = await prisma.company.findUnique({
-    where: { id: companyId },
-    select: { id: true, platformProduct: true, domusClinicId: true, updatedAt: true },
-  });
-  if (!company || company.platformProduct !== "VIS_MEDICAL" || !company.domusClinicId) {
-    return null;
+  // V3b: leitura COERENTE numa transação REPEATABLE READ. Antes, Company,
+  // Subscription e checkSubscription (global) davam 3 visões diferentes do banco
+  // → torn read (publisher A lia tier velho, calculava relógio novo, sobrescrevia
+  // o snapshot certo do publisher B). Agora as 3 leituras + a revisão veem o mesmo
+  // snapshot. O fetch fica FORA da tx (não segura conexão durante a rede).
+  //
+  // Retry curto (V3c, achado Codex): checkSubscription pode EXPIRAR trial
+  // (updateMany) dentro da tx; sob REPEATABLE READ, dois publishers concorrentes
+  // no mesmo trial dão serialization error (P2034/40001). Sem retry, o webhook
+  // daquela execução se perderia (o pull repara, mas o caminho rápido falha à toa).
+  const snapshot = await runSnapshotWithRetry(companyId);
+
+  if (!snapshot) return null;
+  return assemblePayload(snapshot, now);
+}
+
+/** Erros de serialização do Prisma que valem retry (conflito de escrita concorrente). */
+function isSerializationError(err: unknown): boolean {
+  const code = (err as { code?: string })?.code;
+  return code === "P2034"; // "Transaction failed due to a write conflict or a deadlock"
+}
+
+async function runSnapshotWithRetry(companyId: string) {
+  const MAX_TRIES = 3;
+  for (let attempt = 1; ; attempt++) {
+    try {
+      return await readSnapshot(companyId);
+    } catch (err) {
+      if (isSerializationError(err) && attempt < MAX_TRIES) continue;
+      throw err;
+    }
   }
+}
 
-  const sub = await prisma.subscription.findFirst({
-    where: { companyId },
-    orderBy: { createdAt: "desc" },
-    select: { updatedAt: true, plan: { select: { name: true } } },
-  });
+type EntitlementSnapshot = NonNullable<Awaited<ReturnType<typeof readSnapshot>>>;
 
-  const decision = await checkSubscription(companyId);
+async function readSnapshot(companyId: string) {
+  return prisma.$transaction(
+    async (tx) => {
+      const company = await tx.company.findUnique({
+        where: { id: companyId },
+        select: { id: true, platformProduct: true, domusClinicId: true, updatedAt: true },
+      });
+      if (!company || company.platformProduct !== "VIS_MEDICAL" || !company.domusClinicId) {
+        return null;
+      }
+
+      const sub = await tx.subscription.findFirst({
+        where: { companyId },
+        // Tiebreaker por id: coerente com checkSubscription (evita empate).
+        orderBy: [{ createdAt: "desc" }, { id: "desc" }],
+        select: { updatedAt: true, plan: { select: { name: true, tier: true } } },
+      });
+
+      // checkSubscription roda DENTRO da mesma tx (snapshot coerente + a mutação
+      // de trial expira no mesmo snapshot).
+      const decision = await checkSubscription(companyId, tx);
+
+      // Relógio monotônico (V3a). Ausência de linha (company nova sem bump ainda,
+      // improvável após backfill) → revision null (V3c não emite sourceRevision).
+      const rev = await tx.entitlementRevision.findUnique({
+        where: { companyId },
+        select: { revision: true },
+      });
+
+      return { company, sub, decision, revision: rev?.revision ?? null };
+    },
+    { isolationLevel: "RepeatableRead" },
+  );
+}
+
+/** Monta o DTO/payload a partir do snapshot coerente. Sem acesso a banco/rede. */
+function assemblePayload(
+  snapshot: EntitlementSnapshot,
+  now: Date,
+): EntitlementPayload {
+  const { company, sub, decision, revision } = snapshot;
+  // O early return DENTRO da tx já garantiu domusClinicId != null; o narrowing se
+  // perde ao sair da tx, então reafirmamos (nunca null aqui).
+  const domusClinicId = company.domusClinicId as string;
+
   const dto = projectEntitlement({
     allowed: decision.allowed,
     status: decision.status,
     planName: decision.planName ?? sub?.plan?.name,
   });
 
-  // sourceUpdatedAt = relógio do estado. MAX das duas datas: block/unblock muda
-  // Company.updatedAt sem tocar a Subscription — usar só a Subscription faria o
-  // Domus descartar o snapshot novo como fora de ordem.
+  // sourceUpdatedAt = relógio LEGADO (mantido no payload — o Domus ainda o exige).
+  // MAX das duas datas: block/unblock muda Company.updatedAt sem tocar a
+  // Subscription — usar só a Subscription faria o Domus descartar como fora de ordem.
   const subUpdated = sub?.updatedAt?.getTime() ?? 0;
   const compUpdated = company.updatedAt.getTime();
   const sourceUpdatedAt = new Date(Math.max(subUpdated, compUpdated)).toISOString();
 
-  return {
-    version: 1,
+  // V3c: emite v2 SÓ quando há tier derivável (plano ativo). Ramos sem plano
+  // continuam v1 — o Domus exige plan.tier não-vazio em v2 e preserva o tier
+  // gravado quando recebe v1 (não regride). Nunca emitir v2 sem tier.
+  const tier = sub?.plan?.tier ?? null;
+
+  const base = {
     eventId: randomUUID(),
     sourceUpdatedAt,
     generatedAt: now.toISOString(),
     visCompanyId: company.id,
-    domusClinicId: company.domusClinicId,
+    domusClinicId,
     subscriptionStatus: dto.subscriptionStatus,
     planName: dto.planName,
     entitlement: { writeAllowed: dto.writeAllowed, reason: dto.reason },
   };
+
+  // sourceRevision (STRING decimal) acompanha ambos v1 e v2 quando presente — o
+  // Domus ordena por ele quando vem, senão por sourceUpdatedAt.
+  const revisionField = revision !== null ? { sourceRevision: revision.toString() } : {};
+
+  if (tier !== null) {
+    return { version: 2, ...base, ...revisionField, plan: { tier } };
+  }
+  return { version: 1, ...base, ...revisionField };
 }
 
 /**

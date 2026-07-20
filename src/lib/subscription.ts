@@ -6,6 +6,19 @@ import { AppError, ERROR_CODES } from "@/lib/error-handler";
 const log = logger.child({ module: "subscription" });
 
 /**
+ * Cliente de banco aceito pelas peças de leitura/mutação — o `prisma` global OU
+ * um `TransactionClient` de uma transação interativa (V3b: snapshot coerente no
+ * publisher). Só os métodos usados aqui; qualquer um dos dois satisfaz.
+ */
+export type SubscriptionDbClient = {
+  company: { findUnique: typeof prisma.company.findUnique };
+  subscription: {
+    findFirst: typeof prisma.subscription.findFirst;
+    updateMany: typeof prisma.subscription.updateMany;
+  };
+};
+
+/**
  * Status de assinatura que mantêm as features do plano "vivas" (liberadas).
  * Fora destes (SUSPENDED, CANCELED, TRIAL_EXPIRED) as features são zeradas.
  * Exportado para caracterização em testes — não alterar sem revisar o gating.
@@ -28,7 +41,10 @@ export interface SubscriptionCheckResult {
  * Verifica o status da assinatura de uma empresa.
  * Retorna se o acesso é permitido e em qual modo.
  */
-export async function checkSubscription(companyId: string): Promise<SubscriptionCheckResult> {
+export async function checkSubscription(
+  companyId: string,
+  db: SubscriptionDbClient = prisma,
+): Promise<SubscriptionCheckResult> {
   log.debug("Verificando companyId", { companyId });
 
   // Q8.1.1 — Kill-switch de emergência: destrava TODOS os tenants de uma vez
@@ -53,7 +69,7 @@ export async function checkSubscription(companyId: string): Promise<Subscription
   }
 
   // Verificar se empresa tem acesso habilitado (bypass para dev/teste)
-  const company = await prisma.company.findUnique({
+  const company = await db.company.findUnique({
     where: { id: companyId },
     select: { accessEnabled: true, name: true, isBlocked: true },
   });
@@ -97,14 +113,16 @@ export async function checkSubscription(companyId: string): Promise<Subscription
 
   log.debug("accessEnabled=false, verificando assinatura");
 
-  const subscription = await prisma.subscription.findFirst({
+  const subscription = await db.subscription.findFirst({
     where: {
       companyId,
       status: {
         in: ["TRIAL", "ACTIVE", "PAST_DUE", "SUSPENDED", "CANCELED", "TRIAL_EXPIRED"],
       },
     },
-    orderBy: { createdAt: "desc" },
+    // Tiebreaker por id: 2 subscriptions com o mesmo createdAt não podem
+    // divergir entre leituras (torn read / snapshot do publisher V3b).
+    orderBy: [{ createdAt: "desc" }, { id: "desc" }],
     include: { plan: true },
   });
 
@@ -139,7 +157,7 @@ export async function checkSubscription(companyId: string): Promise<Subscription
     if (daysLeft <= 0) {
       // updateMany c/ status no where: idempotente sob concorrência (2 requests
       // no mesmo instante não dão P2025; o 2º atualiza 0 linhas).
-      await prisma.subscription.updateMany({
+      await db.subscription.updateMany({
         where: { id: subscription.id, status: "TRIAL" },
         data: { status: "TRIAL_EXPIRED" },
       });
