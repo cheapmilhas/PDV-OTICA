@@ -103,6 +103,19 @@ export async function POST(req: Request) {
     // Operação já concluída — idempotente, não reaplica.
     return NextResponse.json({ status: "already_applied" }, { status: 200 });
   }
+  if (decision.kind === "manual_review") {
+    // Op parou num terminal humano (ex: cobrada mas não aplicada). Um replay do
+    // Domus NÃO deve reanimá-la — espera intervenção. 409 conflito de estado.
+    logger.error("plan-change replay de op em terminal humano (intervenção)", {
+      window: WINDOW_LOG,
+      visCompanyId,
+      state: decision.state,
+    });
+    return NextResponse.json(
+      { error: "manual_review_required", state: decision.state },
+      { status: 409 },
+    );
+  }
 
   // KILL-SWITCH: só a partir daqui há efeito colateral (cobrança/aplicação).
   // OFF → registra a intenção mas NÃO cobra nem aplica; responde indisponível.
@@ -166,6 +179,14 @@ export async function POST(req: Request) {
         if (redo.kind === "duplicate") {
           return NextResponse.json({ status: "already_applied" }, { status: 200 });
         }
+        if (redo.kind === "manual_review") {
+          // O vencedor já está num terminal humano — não reanimar (achado Codex:
+          // sem isto, caía no 202 accepted mascarando a intervenção pendente).
+          return NextResponse.json(
+            { error: "manual_review_required", state: redo.state },
+            { status: 409 },
+          );
+        }
         // Perdedor da corrida: o vencedor já está processando; só reconhece.
         return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
       }
@@ -193,6 +214,20 @@ export async function POST(req: Request) {
       { error: "not_completed", state: result.state },
       { status: 502 },
     );
+  }
+  // TOCTOU (achado Codex): entre a decisão e o runSaga, a op pode já estar num
+  // terminal humano — runSaga não a processa e retorna sem `failed`. NÃO responder
+  // 200 nesse caso (mascararia uma op cobrada-sem-plano como sucesso). Só COMPLETED
+  // é sucesso; terminal humano → 409; qualquer outro não-completo → 502.
+  if (result.state !== "COMPLETED") {
+    const human = ["FAILED", "FAILED_BEFORE_BILLING", "CHARGED_NOT_APPLIED", "MANUAL_REVIEW"];
+    if (human.includes(result.state)) {
+      return NextResponse.json(
+        { error: "manual_review_required", state: result.state },
+        { status: 409 },
+      );
+    }
+    return NextResponse.json({ error: "not_completed", state: result.state }, { status: 502 });
   }
   return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
 }

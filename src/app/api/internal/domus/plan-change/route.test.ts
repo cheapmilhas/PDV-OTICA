@@ -182,4 +182,47 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(409);
   });
+
+  // Fase A — terminais humanos (achados Codex): op parada de propósito NÃO pode
+  // virar sucesso nem accepted num replay.
+  it("replay de op em terminal humano (CHARGED_NOT_APPLIED) → 409 manual_review", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    const raw = JSON.stringify(validBody);
+    const { createHash } = await import("crypto");
+    const hash = createHash("sha256").update(raw).digest("hex");
+    opFindUnique.mockResolvedValue({ state: "CHARGED_NOT_APPLIED", payloadHash: hash });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+    expect(runSagaMock).not.toHaveBeenCalled(); // não reanima
+  });
+
+  it("P2002 com vencedor em terminal humano → 409 (não 202 accepted)", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    const raw = JSON.stringify(validBody);
+    const { createHash } = await import("crypto");
+    const hash = createHash("sha256").update(raw).digest("hex");
+    opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ state: "MANUAL_REVIEW", payloadHash: hash });
+    opCreate.mockRejectedValue({ code: "P2002" });
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+  });
+
+  it("TOCTOU: runSaga retorna terminal humano (não failed) → 409, NÃO 200", async () => {
+    process.env.VIS_TIER_SELF_SERVICE_ENABLED = "true";
+    const raw = JSON.stringify(validBody);
+    const { createHash } = await import("crypto");
+    const hash = createHash("sha256").update(raw).digest("hex");
+    // 1ª leitura (decisão): RECEIVED → resume (passa). 2ª leitura (carga da op):
+    // a op completa. Mas o runSaga (mock) encontra a op já terminal e retorna sem
+    // `failed`. A rota NÃO pode responder 200 completed nesse caso.
+    opFindUnique
+      .mockResolvedValueOnce({ state: "RECEIVED", payloadHash: hash })
+      .mockResolvedValueOnce({
+        id: "op1", eventId: "e1", visCompanyId: "co1", requestedTier: "clinic_full",
+        targetPlanId: "plan-x", state: "RECEIVED", asaasRef: null,
+      });
+    runSagaMock.mockResolvedValue({ state: "CHARGED_NOT_APPLIED", asaasRef: null }); // sem failed
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(409);
+  });
 });

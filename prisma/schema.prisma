@@ -1571,14 +1571,38 @@ model DomusPlanChangeOp {
   targetPlanId  String?
   state         DomusPlanChangeOpState   @default(RECEIVED)
   payloadHash   String
-  asaasRef      String?                 // referência da operação no Asaas (auditoria/retomada)
+  asaasRef      String?                 // resposta real do Asaas (fase B); auditoria/retomada
   lastError     String?
   createdAt     DateTime                @default(now())
   updatedAt     DateTime                @updatedAt
   expiresAt     DateTime
 
+  // Identidade da assinatura persistida (fixada antes de cobrar): confirmBilling
+  // e applyLocal agem na MESMA sub. Nunca cobrar X e aplicar Y.
+  subscriptionId      String?
+  asaasSubscriptionId String?
+  priceApplied        Int?
+  billingCycle        BillingCycle?
+
+  // Tentativas + backoff (evita retry eterno de falha determinística).
+  attemptCount  Int       @default(0)
+  lastAttemptAt DateTime?
+  nextAttemptAt DateTime?
+
+  // Lease/claim compartilhado endpoint×worker (fencing): transição só vale com
+  // o leaseToken vigente → dois executores não regridem estado.
+  leaseToken String?
+  leaseUntil DateTime?
+
+  // Timestamps financeiros (auditoria/reconciliação).
+  billingRequestedAt DateTime?
+  billingConfirmedAt DateTime?
+
   @@index([visCompanyId])
   @@index([expiresAt])
+  // O índice do polling do worker é PARCIAL (WHERE state IN retomáveis) e vive só
+  // na migração hand-written — o Prisma não modela índice parcial no schema.
+  // Declará-lo aqui geraria um índice não-parcial divergente (drift).
 }
 
 enum DomusPlanChangeOpState {
@@ -1588,6 +1612,10 @@ enum DomusPlanChangeOpState {
   LOCAL_APPLIED
   COMPLETED
   FAILED
+  // Terminais que separam falha-segura de cliente-cobrado-sem-plano (fase A).
+  FAILED_BEFORE_BILLING
+  CHARGED_NOT_APPLIED
+  MANUAL_REVIEW
 }
 
 model SaleItem {

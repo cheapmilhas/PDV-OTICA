@@ -13,7 +13,29 @@ export type SagaState =
   | "BILLING_CONFIRMED"
   | "LOCAL_APPLIED"
   | "COMPLETED"
-  | "FAILED";
+  | "FAILED"
+  // Terminais que exigem intervenção humana (fase A). NÃO entram no caminho feliz
+  // (ORDER) nem são "resume": uma op nestes estados parou de propósito.
+  //  - FAILED_BEFORE_BILLING: falhou ANTES de cobrar → seguro, nada a estornar.
+  //  - CHARGED_NOT_APPLIED: COBRADO mas não aplicou → dívida ao cliente, alerta.
+  //  - MANUAL_REVIEW: ambíguo (ex: billing incerto) → humano decide.
+  | "FAILED_BEFORE_BILLING"
+  | "CHARGED_NOT_APPLIED"
+  | "MANUAL_REVIEW";
+
+/**
+ * Estados terminais que NÃO são o sucesso COMPLETED: pararam e exigem humano.
+ * `FAILED` (legado) entra aqui: um `FAILED` genérico não guarda ONDE falhou, então
+ * retomá-lo às cegas é financeiramente inseguro (achado Codex) — e ele nem está
+ * no ORDER (nextState=null). Tratado como terminal humano; as falhas retomáveis
+ * de verdade preservam o checkpoint no próprio estado (BILLING_REQUESTED etc.).
+ */
+export const HUMAN_TERMINAL: SagaState[] = [
+  "FAILED",
+  "FAILED_BEFORE_BILLING",
+  "CHARGED_NOT_APPLIED",
+  "MANUAL_REVIEW",
+];
 
 const ORDER: SagaState[] = [
   "RECEIVED",
@@ -39,6 +61,7 @@ export type SagaDecision =
   | { kind: "fresh" }
   | { kind: "duplicate" }
   | { kind: "conflict" }
+  | { kind: "manual_review"; state: SagaState }
   | { kind: "resume"; from: SagaState };
 
 /**
@@ -58,7 +81,15 @@ export function decideSagaAction(
   // Concluída → idempotente (200 sem reaplicar).
   if (existing.state === "COMPLETED") return { kind: "duplicate" };
 
-  // Qualquer estado não-terminal (inclusive FAILED) → RETOMA. Nunca "duplicate"
-  // de op incompleta: isso mascararia uma operação que não terminou.
+  // Terminais humanos (FAILED legado, cobrado-sem-plano, revisão manual): NÃO
+  // retomar por um replay do endpoint — a op parou de propósito e espera
+  // intervenção. Um replay não deve reanimar uma dívida ao cliente sem humano.
+  if (HUMAN_TERMINAL.includes(existing.state as SagaState)) {
+    return { kind: "manual_review", state: existing.state as SagaState };
+  }
+
+  // Estados retomáveis (RECEIVED/BILLING_REQUESTED/BILLING_CONFIRMED/LOCAL_APPLIED):
+  // RETOMA do checkpoint. Nunca "duplicate" de op incompleta (mascararia algo
+  // que não terminou).
   return { kind: "resume", from: existing.state as SagaState };
 }

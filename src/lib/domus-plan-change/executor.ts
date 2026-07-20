@@ -38,7 +38,16 @@ export interface SagaResult {
   lastError?: string | null;
 }
 
-const TERMINAL: SagaState[] = ["COMPLETED"];
+// Estados em que a saga NÃO avança: o sucesso (COMPLETED) e os terminais humanos
+// (pararam de propósito, esperam intervenção). runSaga não deve processá-los.
+// FAILED (legado) incluído: sem checkpoint recuperável, retomar às cegas é inseguro.
+const TERMINAL: SagaState[] = [
+  "COMPLETED",
+  "FAILED",
+  "FAILED_BEFORE_BILLING",
+  "CHARGED_NOT_APPLIED",
+  "MANUAL_REVIEW",
+];
 
 /**
  * Executa (ou retoma) a saga a partir do estado atual da op até COMPLETED.
