@@ -224,6 +224,7 @@ model Company {
   leadStages              LeadStage[]
   aiTokenUsages           AiTokenUsage[]
   examAppointments        ExamAppointment[]
+  entitlementRevision     EntitlementRevision?
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -234,6 +235,19 @@ model Company {
   @@index([createdAt])
   @@index([platformProduct])
   @@index([ownerGroupId])
+}
+
+/// Relógio monotônico por company (V3a). A `revision` (bigint) reflete a última
+/// mudança publicável de Company/Subscription, incrementada por TRIGGER de banco
+/// (não por código) a partir da sequence `entitlement_revision_seq`. O publisher
+/// emite essa revisão como `sourceRevision` no payload v2 (relógio estritamente
+/// ordenável, resolve o torn read do MAX(updatedAt)). Ver migração
+/// 20260719140000_entitlement_revision. NÃO escrever esta tabela pela app — é
+/// mantida pelos triggers; escrita manual quebraria a monotonicidade.
+model EntitlementRevision {
+  companyId String @id
+  revision  BigInt
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
 model Branch {
