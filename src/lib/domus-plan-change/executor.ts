@@ -133,6 +133,31 @@ export interface SagaDeps {
    * valor (0 se perdemos o lease/estado mudou).
    */
   beginAttempt: (op: ClaimedSagaOp, state: SagaState) => Promise<{ attemptCount: number }>;
+  /**
+   * FASE E — BACKOFF + RELEASE do lease, ATÔMICOS (achados Codex #4/#5). Chamado
+   * pelos CHAMADORES de runSaga (worker E endpoint) após um `retryable_failure`,
+   * NÃO pelo runSaga (que é reusado e deve permanecer sem política de agendamento).
+   * Num único CAS `WHERE id AND state=from AND leaseToken=meu`: grava
+   * `nextAttemptAt = now()+delay` (relógio do BANCO — claimedAt pode estar velho
+   * após um runSaga longo) E LIBERA o lease (leaseToken/leaseUntil = NULL). Separa
+   * os dois conceitos que hoje se confundem: o backoff é `nextAttemptAt`; o release
+   * é zerar o token. Sem release, o lease preso (~90s) seria o único throttle.
+   * Retorna {applied:false} se o CAS não pegou (perdemos a posse / estado mudou) —
+   * nesse caso NÃO agendamos nada (quem tem o lease conduz).
+   */
+  scheduleRetry: (op: ClaimedSagaOp, from: RetryableState) => Promise<CasResult>;
+  /**
+   * FASE E — RELEASE de EMERGÊNCIA do lease (achado Codex #catch, 2ª rodada). Usado
+   * pelo worker no `catch` quando o runSaga LANÇOU: o estado real pode ter avançado
+   * no banco (ex.: RECEIVED→BILLING_REQUESTED gravado antes da exceção), então um
+   * scheduleRetry por `state=from` (o estado do CLAIM, agora velho) não pega e o
+   * lease ficaria preso ~90s reaparecendo como "poison NULL" no topo do batch.
+   * Diferente do scheduleRetry, o CAS aqui é fenced SÓ pelo leaseToken e aceita
+   * QUALQUER estado retomável — libera o lease e agenda o backoff pelo attemptCount
+   * do estado REAL. Retorna {applied:false} se perdemos a posse (token trocado) ou o
+   * estado virou terminal (não-retomável): aí não há lease nosso a soltar.
+   */
+  releaseLease: (op: ClaimedSagaOp) => Promise<CasResult>;
 }
 
 // Estados retomáveis onde a saga ainda progride (não-terminais).
@@ -251,6 +276,25 @@ export async function runSaga(op: ClaimedSagaOp, deps: SagaDeps, now: Date = new
           break;
         }
         case "BILLING_REQUESTED": {
+          // EXPIRAÇÃO depois de pedir a cobrança (achado Codex Fase E #3): o executor
+          // só expirava RECEIVED. Uma op parada em BILLING_REQUESTED além do TTL (7d)
+          // cobraria com preço/identidade congelados semanas atrás. Mas BILLING_REQUESTED
+          // é AMBÍGUO: o PUT ao Asaas pode ter chegado e a resposta se perdido. Então
+          // NÃO é FAILED_BEFORE_BILLING (esconderia cobrança) — é MANUAL_REVIEW + alerta
+          // (fail-safe, humano confere no Asaas). Antes de qualquer efeito (renewLease/
+          // confirmBilling): nunca cobrar uma op vencida.
+          if (current.expiresAt.getTime() <= now.getTime()) {
+            const cas = await deps.markFinancialTerminalAndAlert(
+              current, "BILLING_REQUESTED", "MANUAL_REVIEW",
+              "Op expirada em BILLING_REQUESTED (pode ter cobrado; revisar no Asaas antes de reprocessar).",
+            );
+            if (cas.applied) {
+              return { kind: "terminal", state: "MANUAL_REVIEW", asaasRef: current.asaasRef };
+            }
+            const decided = await resyncOnLostCas(current, deps);
+            if (decided.kind === "adopt") { current = decided.op; continue; }
+            return decided.result;
+          }
           // FENCE antes do Asaas: valida/renova a posse. Sem posse → não cobra.
           const owns = await deps.renewLease(current);
           if (!owns.applied) {

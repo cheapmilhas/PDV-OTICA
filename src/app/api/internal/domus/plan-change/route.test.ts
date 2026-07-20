@@ -16,8 +16,13 @@ vi.mock("@/lib/resolve-plan-for-tier", async () => {
 });
 // deps reais fazem I/O (Asaas/prisma) — mock. runSaga é testado à parte (executor.test).
 // claimOp (Fase C) também é do módulo deps — mock retornando a op reclamada.
+// scheduleRetry (Fase E): o endpoint o chama no retryable_failure (backoff +
+// release do lease). Spy COMPARTILHADO (hoistado) para asserção nos testes.
+const { scheduleRetrySpy } = vi.hoisted(() => ({
+  scheduleRetrySpy: vi.fn(async () => ({ applied: true })),
+}));
 vi.mock("@/lib/domus-plan-change/deps", () => ({
-  buildSagaDeps: vi.fn(() => ({})),
+  buildSagaDeps: vi.fn(() => ({ scheduleRetry: scheduleRetrySpy })),
   claimOp: vi.fn(),
 }));
 vi.mock("@/lib/domus-plan-change/executor", async () => {
@@ -197,14 +202,27 @@ describe("plan-change — idempotência + execução (com kill-switch ON)", () =
     expect(runSagaMock).not.toHaveBeenCalled();
   });
 
-  it("saga falha (checkpoint) → 502 not_completed, retomável", async () => {
+  it("saga falha (checkpoint) → 502 not_completed, agenda backoff+libera lease (Fase E)", async () => {
     opFindUnique.mockReset();
     opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "op1" });
-    claimOpMock.mockResolvedValueOnce({ ...CLAIMED, state: "BILLING_REQUESTED" });
+    const claimedOp = { ...CLAIMED, state: "BILLING_REQUESTED" };
+    claimOpMock.mockResolvedValueOnce(claimedOp);
     runSagaMock.mockResolvedValueOnce({ kind: "retryable_failure", state: "BILLING_REQUESTED", asaasRef: null, lastError: "asaas down" });
     const res = await POST(makeReq(validBody));
     expect(res.status).toBe(502);
     expect(opCreate).toHaveBeenCalledOnce();
+    // Fase E (Codex #4): o endpoint DEVE agendar o retry com o estado do checkpoint.
+    expect(scheduleRetrySpy).toHaveBeenCalledWith(claimedOp, "BILLING_REQUESTED");
+  });
+
+  it("saga falha e scheduleRetry LANÇA → resposta segue 502 (best-effort, não vira 500)", async () => {
+    opFindUnique.mockReset();
+    opFindUnique.mockResolvedValueOnce(null).mockResolvedValueOnce({ id: "op1" });
+    claimOpMock.mockResolvedValueOnce({ ...CLAIMED, state: "BILLING_CONFIRMED" });
+    runSagaMock.mockResolvedValueOnce({ kind: "retryable_failure", state: "BILLING_CONFIRMED", asaasRef: null, lastError: "x" });
+    scheduleRetrySpy.mockRejectedValueOnce(new Error("banco fora"));
+    const res = await POST(makeReq(validBody));
+    expect(res.status).toBe(502); // achado Codex P2: agendamento falho não vira 500
   });
 
   it("op COMPLETED mesmo hash → 200 already_applied, NÃO recria nem roda saga", async () => {

@@ -39,6 +39,30 @@ const LEASE_TTL_MS = 90_000; // 90s
 // Timeout do fetch ao Asaas. < LEASE_TTL_MS (senão o lease expira durante a rede).
 const ASAAS_TIMEOUT_MS = 30_000; // 30s
 
+// FASE E — backoff exponencial do retry. delay = min(BASE * 2^(attempt-1), TETO),
+// com jitter (±25%) para não sincronizar retries de múltiplas ops no mesmo tick.
+// attempt é o attemptCount DO ESTADO (reseta no avanço) → cada etapa recomeça o
+// backoff, o que é desejável (uma etapa nova não herda a espera da anterior).
+const RETRY_BASE_MS = 60_000; // 1min na 1ª falha do estado
+const RETRY_CAP_MS = 60 * 60_000; // teto de 1h
+const RETRY_JITTER = 0.25; // ±25%
+
+/**
+ * Delay (ms) do próximo retry para uma tentativa (1-indexada) do estado atual.
+ * Exponencial com teto e jitter simétrico. Exportado para o worker/testes. O
+ * jitter usa Math.random (runtime normal) — irrelevante para correção, só
+ * dessincroniza. `attempt<=0` cai no BASE (defensivo).
+ */
+export function retryDelayMs(attempt: number): number {
+  const n = Number.isFinite(attempt) && attempt > 0 ? Math.floor(attempt) : 1;
+  // 2^(n-1) pode estourar para n grande; Math.min corta antes de virar Infinity.
+  const raw = Math.min(RETRY_BASE_MS * 2 ** (n - 1), RETRY_CAP_MS);
+  const jitter = raw * RETRY_JITTER * (Math.random() * 2 - 1);
+  // Cap ABSOLUTO aplicado DEPOIS do jitter (achado Codex): "teto de 1h" é o máximo
+  // real, não "1h ± jitter" (que chegaria a 75min). Piso de 1ms (nunca <= 0).
+  return Math.min(RETRY_CAP_MS, Math.max(1, Math.round(raw + jitter)));
+}
+
 /**
  * Reclama a op para este executor: CAS pelo relógio do BANCO (evita clock-skew
  * endpoint×worker×Neon). Vence se: estado retomável, lease livre (nulo ou
@@ -114,6 +138,33 @@ export function buildSagaDeps(): SagaDeps {
     },
 
     async confirmBilling(op: ClaimedSagaOp): Promise<{ asaasRef: string }> {
+      // REVALIDA EXPIRAÇÃO + POSSE PELO RELÓGIO DO BANCO antes de tocar o Asaas
+      // (achado Codex P1, 2 rodadas). A checagem no executor usa claimedAt (relógio
+      // do CLAIM), que pode estar VELHO se o runSaga demorou entre o claim e aqui
+      // (banco lento/preempção). Reconferimos com `now()` do banco:
+      //  - expired: op vencida NESSE intervalo → NÃO cobrar preço congelado de dias
+      //    atrás. Fail ANTES do Asaas → o executor promove a terminal (MANUAL_REVIEW).
+      //  - lostLease: se o lease expirou durante os preflights e OUTRO executor
+      //    re-claimou (token trocado), paramos aqui em vez de cobrar duplicado. O CAS
+      //    de transição pós-confirmBilling já barraria o avanço, mas cortar ANTES do
+      //    PUT evita a cobrança redundante.
+      // JANELA RESIDUAL (dívida aceitável, documentada — Codex): entre este SELECT e
+      // o PUT abaixo ainda há leituras de identidade/assinatura; uma expiração ou
+      // troca de lease nesse vão de ms não é capturada. É inevitável (banco e Asaas
+      // não são atômicos) e pequena; o fencing do transition seguinte é a rede final.
+      const guardRows = await prisma.$queryRaw<Array<{ expired: boolean; mine: boolean }>>`
+        SELECT ("expiresAt" <= now()) AS "expired",
+               ("leaseToken" = ${op.leaseToken}) AS "mine"
+        FROM "DomusPlanChangeOp" WHERE "id" = ${op.id}
+      `;
+      if (!guardRows[0]) throw new Error("Op não encontrada para cobrança.");
+      if (guardRows[0].expired) {
+        throw new Error("Op expirada antes da cobrança (revalidada pelo relógio do banco).");
+      }
+      if (!guardRows[0].mine) {
+        throw new Error("Lease perdido antes da cobrança — outro executor reclamou a op.");
+      }
+
       // Carrega a op COM a identidade persistida (fixada no fresh). Fonte única
       // do que cobrar — não busca subscription por companyId (evita cobrar Y).
       const persisted = await prisma.domusPlanChangeOp.findUnique({
@@ -336,6 +387,66 @@ export function buildSagaDeps(): SagaDeps {
         RETURNING "attemptCount"
       `;
       return { attemptCount: rows[0]?.attemptCount ?? 0 };
+    },
+
+    async scheduleRetry(op: ClaimedSagaOp, from: SagaState): Promise<CasResult> {
+      // FASE E — BACKOFF + RELEASE atômicos (achados Codex #4/#5). Um único CAS
+      // com FENCING por leaseToken:
+      //  - nextAttemptAt = now() + delay  → BASE do banco (não claimedAt, que pode
+      //    estar velho após um runSaga longo; achado Codex #5).
+      //  - leaseToken/leaseUntil = NULL   → RELEASE (separa release de backoff: sem
+      //    isto o lease preso ~90s seria o único throttle; achado Codex Fase C/E).
+      // WHERE state=from AND leaseToken=meu → count 0 = perdi a posse/estado mudou:
+      // NÃO agendo (quem tem o lease conduz).
+      //
+      // O `delay` (com jitter) é calculado no PROCESSO, a partir do attemptCount
+      // ATUAL do estado. NÃO uso `op.attemptCount` (o valor do CLAIM, defasado: o
+      // beginAttempt incrementou o contador DEPOIS do claim e não voltou pro objeto
+      // do worker). Leio o valor fresco SOB O LEASE — como seguramos o token, nenhum
+      // outro executor altera o contador entre a leitura e o UPDATE (fencing), então
+      // não há corrida real. Se a op mudou por baixo, o UPDATE final não pega (CAS).
+      const cur = await prisma.domusPlanChangeOp.findUnique({
+        where: { id: op.id },
+        select: { attemptCount: true },
+      });
+      const attempt = cur?.attemptCount ?? op.attemptCount;
+      const delayMs = Math.round(retryDelayMs(attempt));
+      const interval = `${delayMs} milliseconds`;
+      const res = await prisma.$executeRaw`
+        UPDATE "DomusPlanChangeOp"
+        SET "nextAttemptAt" = now() + ${interval}::interval,
+            "leaseToken" = NULL,
+            "leaseUntil" = NULL
+        WHERE "id" = ${op.id}
+          AND "state" = ${from}::"DomusPlanChangeOpState"
+          AND "leaseToken" = ${op.leaseToken}
+      `;
+      return { applied: res === 1 };
+    },
+
+    async releaseLease(op: ClaimedSagaOp): Promise<CasResult> {
+      // RELEASE de EMERGÊNCIA (achado Codex #catch): libera o lease + agenda backoff
+      // sem saber o estado exato (o runSaga pode ter avançado antes de lançar). CAS
+      // fenced SÓ pelo leaseToken, aceitando QUALQUER estado retomável. Lê o
+      // attemptCount fresco sob o lease para o delay refletir o estado REAL. Se o
+      // estado virou terminal ou o token trocou, o UPDATE não pega (applied:false) —
+      // não há lease nosso a soltar.
+      const cur = await prisma.domusPlanChangeOp.findUnique({
+        where: { id: op.id },
+        select: { attemptCount: true },
+      });
+      const delayMs = Math.round(retryDelayMs(cur?.attemptCount ?? op.attemptCount));
+      const interval = `${delayMs} milliseconds`;
+      const res = await prisma.$executeRaw`
+        UPDATE "DomusPlanChangeOp"
+        SET "nextAttemptAt" = now() + ${interval}::interval,
+            "leaseToken" = NULL,
+            "leaseUntil" = NULL
+        WHERE "id" = ${op.id}
+          AND "leaseToken" = ${op.leaseToken}
+          AND "state" IN ('RECEIVED', 'BILLING_REQUESTED', 'BILLING_CONFIRMED', 'LOCAL_APPLIED')
+      `;
+      return { applied: res === 1 };
     },
 
     async transition(op: ClaimedSagaOp, from: SagaState, to: SagaState): Promise<CasResult> {

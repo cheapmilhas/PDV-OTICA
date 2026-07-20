@@ -73,6 +73,11 @@ beforeEach(() => {
 });
 
 describe("confirmBilling — identidade persistida + preflight (Fase B)", () => {
+  // Fase E: confirmBilling revalida expiração + posse pelo relógio do banco (1º
+  // $queryRaw) ANTES de ler a identidade. Por padrão: NÃO vencida e AINDA nossa.
+  // Testes de expiração/lease sobrescrevem.
+  beforeEach(() => queryRaw.mockResolvedValue([{ expired: false, mine: true }]));
+
   it("cobra na assinatura PERSISTIDA (não busca por companyId) e retorna asaasRef real", async () => {
     opFindUnique.mockResolvedValue(PERSISTED);
     subFindUnique.mockResolvedValue({ companyId: "co1", status: "ACTIVE", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY" });
@@ -85,6 +90,24 @@ describe("confirmBilling — identidade persistida + preflight (Fase B)", () => 
     // eventId, + AbortSignal do timeout (Fase C).
     expect(asaasUpdate).toHaveBeenCalledWith("asaas_1", { value: 189.9 }, "plan-change:ev1", expect.any(AbortSignal));
     expect(res.asaasRef).toBe("asaas_1"); // resposta real do Asaas, não a chave
+  });
+
+  it("op VENCIDA pelo relógio do banco → LANÇA antes de tocar o Asaas (Fase E, Codex P1)", async () => {
+    // A op passou de expiresAt entre o claim e a cobrança (runSaga lento). O now()
+    // do banco a marca vencida → não cobra preço congelado de dias atrás.
+    queryRaw.mockResolvedValue([{ expired: true, mine: true }]);
+    const deps = buildSagaDeps();
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/expirada antes da cobrança/);
+    expect(asaasUpdate).not.toHaveBeenCalled(); // NUNCA tocou o Asaas
+  });
+
+  it("LEASE PERDIDO antes da cobrança (token trocado) → LANÇA, não cobra (Fase E, Codex P1)", async () => {
+    // O lease expirou durante os preflights e outro executor re-claimou. Cortamos
+    // ANTES do PUT em vez de cobrar duplicado.
+    queryRaw.mockResolvedValue([{ expired: false, mine: false }]);
+    const deps = buildSagaDeps();
+    await expect(deps.confirmBilling(makeOp())).rejects.toThrow(/Lease perdido/);
+    expect(asaasUpdate).not.toHaveBeenCalled();
   });
 
   it("passa um AbortSignal (timeout) ao Asaas (Fase C)", async () => {
@@ -393,5 +416,89 @@ describe("renewLease — renovação/validação de posse (Fase C)", () => {
     const deps = buildSagaDeps();
     const res = await deps.renewLease(makeOp({ state: "BILLING_REQUESTED" }));
     expect(res.applied).toBe(false);
+  });
+});
+
+describe("scheduleRetry — backoff + release atômicos (Fase E)", () => {
+  it("CAS pega (1 linha) → applied=true; lê attemptCount fresco e libera lease no UPDATE", async () => {
+    // Lê o attemptCount atual (pós-beginAttempt) sob o lease.
+    opFindUnique.mockResolvedValue({ attemptCount: 2 });
+    executeRaw.mockResolvedValue(1);
+    const deps = buildSagaDeps();
+    const res = await deps.scheduleRetry(makeOp({ state: "BILLING_REQUESTED" }), "BILLING_REQUESTED");
+    expect(res.applied).toBe(true);
+    // Leu o contador fresco, não confiou no op.attemptCount defasado do claim.
+    expect(opFindUnique).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: "op1" }, select: { attemptCount: true } }),
+    );
+    // O UPDATE (CAS + release) foi disparado.
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("CAS não pega (0 linhas: perdemos a posse / estado mudou) → applied=false, não agenda", async () => {
+    opFindUnique.mockResolvedValue({ attemptCount: 1 });
+    executeRaw.mockResolvedValue(0);
+    const deps = buildSagaDeps();
+    const res = await deps.scheduleRetry(makeOp({ state: "RECEIVED" }), "RECEIVED");
+    expect(res.applied).toBe(false);
+  });
+
+  it("op sumiu na leitura do contador → cai no attemptCount do claim (defensivo)", async () => {
+    opFindUnique.mockResolvedValue(null);
+    executeRaw.mockResolvedValue(1);
+    const deps = buildSagaDeps();
+    const res = await deps.scheduleRetry(makeOp({ state: "RECEIVED", attemptCount: 3 }), "RECEIVED");
+    expect(res.applied).toBe(true); // usa o fallback sem quebrar
+  });
+});
+
+describe("releaseLease — release de emergência do catch (Fase E)", () => {
+  it("CAS pega (1 linha) → applied=true; lê attemptCount e libera por token (qualquer estado retomável)", async () => {
+    opFindUnique.mockResolvedValue({ attemptCount: 3 });
+    executeRaw.mockResolvedValue(1);
+    const deps = buildSagaDeps();
+    const res = await deps.releaseLease(makeOp({ state: "BILLING_REQUESTED" }));
+    expect(res.applied).toBe(true);
+    expect(executeRaw).toHaveBeenCalledTimes(1);
+  });
+
+  it("estado virou terminal / token trocado (0 linhas) → applied=false", async () => {
+    opFindUnique.mockResolvedValue({ attemptCount: 1 });
+    executeRaw.mockResolvedValue(0);
+    const deps = buildSagaDeps();
+    const res = await deps.releaseLease(makeOp());
+    expect(res.applied).toBe(false);
+  });
+});
+
+describe("retryDelayMs — backoff exponencial com teto e jitter", () => {
+  it("cresce com a tentativa e nunca passa do teto (1h) nem fica <= 0", async () => {
+    const { retryDelayMs } = await import("./deps");
+    // Roda várias vezes por causa do jitter; o teto+jitter nunca deve estourar 1h+25%.
+    for (let attempt = 1; attempt <= 20; attempt++) {
+      for (let k = 0; k < 20; k++) {
+        const d = retryDelayMs(attempt);
+        expect(d).toBeGreaterThan(0);
+        // Cap ABSOLUTO de 1h aplicado após o jitter (não 1h+25%).
+        expect(d).toBeLessThanOrEqual(60 * 60_000);
+      }
+    }
+  });
+
+  it("attempt<=0 ou inválido → cai no BASE (defensivo, sem NaN/Infinity)", async () => {
+    const { retryDelayMs } = await import("./deps");
+    for (const bad of [0, -5, NaN, Infinity]) {
+      const d = retryDelayMs(bad);
+      expect(Number.isFinite(d)).toBe(true);
+      expect(d).toBeGreaterThan(0);
+    }
+  });
+
+  it("a tentativa 1 é menor que a tentativa 5 na média (monotonia do backoff)", async () => {
+    const { retryDelayMs } = await import("./deps");
+    const avg = (n: number) => {
+      let s = 0; for (let k = 0; k < 200; k++) s += retryDelayMs(n); return s / 200;
+    };
+    expect(avg(1)).toBeLessThan(avg(5));
   });
 });

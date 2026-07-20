@@ -56,6 +56,25 @@ Implementada (NÃO em prod). Dono decidiu: BILLING_REQUESTED esgotado → MANUAL
 `GET /api/cron/plan-change-retry` (Bearer CRON_SECRET). Seleciona não-terminais com nextAttemptAt<now, claim por lease, runSaga. NÃO tem gate global do kill-switch (ops em voo já cobradas TÊM que completar mesmo com switch OFF — resolve P0 #7). Batch pequeno, backoff. **Fase E ainda deve: setar nextAttemptAt no retryable (o executor NÃO faz backoff hoje — o lease preso 90s é o único throttle); separar release do lease de backoff; interpretar attemptCount por estado.**
 Gate: retoma BILLING_CONFIRMED sem recobrar; concorrência serializa; esgota→CHARGED_NOT_APPLIED+alerta; expirada classifica; Codex + challenge adversarial (cobrança).
 
+### 📐 DESIGN E SINTETIZADO (meu plano + plano independente do Codex, 2026-07-20)
+Alto risco → plano meu + Codex quebrou em paralelo (7 achados reais). Sem migração (colunas da Fase A já existem). Incorporado:
+
+**1. `scheduleRetry(op, from)` nos deps (backoff + release atômicos) — resolve (a)+(b).** Um CAS `WHERE id AND state=from AND leaseToken=meu`: num único UPDATE seta `nextAttemptAt = now()+delay` (relógio do BANCO, não claimedAt — achado Codex #5: claimedAt pode estar velho após runSaga longo) E libera `leaseToken=NULL, leaseUntil=NULL`. Retorna `{applied}`; zero linhas = perdi a posse (não agenda). Backoff exponencial por attemptCount do ESTADO (que já reseta no avanço — cada etapa tem seu orçamento) com teto + jitter no processo. `delay = min(BASE * 2^(attempt-1), TETO)` ± jitter.
+
+**2. `scheduleRetry` é chamado por AMBOS os chamadores de runSaga — achado Codex #4 (P1).** Se só o worker chamasse, uma falha originada no ENDPOINT deixaria o lease preso 90s + nextAttemptAt NULL + 202 aos replays. A obrigação (b) vale para todo `retryable_failure`. Endpoint e worker aplicam a MESMA política pós-resultado. `lost_lease`/`terminal`/`completed` NÃO liberam (respectivamente: outro conduz; filtro de claim já barra).
+
+**3. Expiração de BILLING_REQUESTED — achado Codex #3 (P0), DECISÃO DO DONO.** O executor só checava expiresAt em RECEIVED → uma op parada em BILLING_REQUESTED cobraria com preço congelado meses depois. Dono decidiu: **BILLING_REQUESTED vencida → MANUAL_REVIEW + alerta** (NÃO FAILED_BEFORE_BILLING — esconderia cobrança se o PUT chegou e a resposta se perdeu). Adiciona a checagem de expiresAt no ramo BILLING_REQUESTED (antes do renewLease/confirmBilling) via `markFinancialTerminalAndAlert`. Mudança no executor, mas é a matriz de terminal da Fase D.
+
+**4. Worker: findMany pré-filtro (só ids) → claimOp por id → runSaga → scheduleRetry se retryable.** O findMany é barato e NÃO é a trava — o claimOp (CAS atômico) é. Codex confirmou: findMany→claimOp é seguro (só um vence o UPDATE...RETURNING). Batch pequeno (10). Erros por-op isolados (try/catch por op; um erro não derruba o batch). Ordenação JUSTA — achado Codex #7: `ORDER BY nextAttemptAt ASC NULLS FIRST, createdAt ASC` (senão ops com nextAttemptAt NULL — as mais antigas/nunca-agendadas — ficariam por último e uma fila de LOCAL_APPLIED, que nunca é cortado, as afamaria).
+
+**5. Sem gate do kill-switch no worker — resolve P0 #7 + política state-aware (achado Codex #6).** Op só é criada com switch ON; pós-cobrança (BILLING_CONFIRMED/LOCAL_APPLIED) TEM que completar mesmo OFF. Pré-cobrança vencida vira terminal (item 3). Documentado.
+
+**6. vercel.json: registra o path.** Frequência real via cron-job.org (Vercel Hobby=1×/dia). Registro a 15min como referência.
+
+**🚨 NOTA DE DEPLOY (achado Codex #2, P0) — DECISÃO DO DONO: auditoria antes de ligar.** Ops existentes têm nextAttemptAt=NULL → o worker as pegaria no 1º tick e re-executaria (re-cobrança). Tabela HOJE em 0 linhas + self-service OFF → na prática não há órfãs, mas o cron pode entrar antes de ligar o switch. GATE de deploy: ANTES de ativar o cron, rodar auditoria das ops retomáveis (especialmente BILLING_REQUESTED antiga); se houver, resolver manualmente. Não há backfill (tabela vazia).
+
+**Dívidas NÃO-bloqueantes registradas (Codex):** #1 "billing confirmed"==preço-futuro-atualizado, não pagamento-recebido (natureza do produto: assinatura recorrente sem proration; `status===ACTIVE` garante recorrência viva; pré-condição de LIGAR, não do worker). #8 expiresAt origem mista processo×banco (skew Neon ms; mudaria o create do endpoint; adiado). IdempotencyKey do PUT Asaas na retomada = validar em SANDBOX (pré-condição de LIGAR).
+
 ## Pré-condição externa (paralela, não bloqueia A-D)
 Validar em SANDBOX Asaas que `PUT /subscriptions/{id}` honra `asaas-idempotency-key` (não dobra fatura; janela de retenção; mesma key+payload≠ recusa). + adicionar timeout no asaas fetch. Sem isso, o Asaas-first não é seguro mesmo com lease.
 
@@ -83,6 +102,28 @@ Implementada (NÃO em prod). `ClaimedSagaOp` (leaseToken não-nullable) = único
 - **expiresAt origem mista** — gravado com relógio do PROCESSO no create, comparado com claimedAt do banco. Endurecimento (TTL 7 dias): calcular expiresAt no banco OU usar createdAt do banco.
 - **Payload incompleto do PUT Asaas → loop determinístico** — se o PUT não devolver o objeto completo (cycle/status ausente), a op trava em BILLING_REQUESTED revalidando. Fail-closed (seguro), mas: CONFIRMAR EM SANDBOX que o PUT devolve o objeto completo; se não, fazer GET após PUT OU tratar 2xx incompleto como ambíguo→manual review.
 - **Limpar leaseToken ao chegar terminal** — cosmético (filtro de estado já barra claim de terminal).
+
+## ✅ FASE E FEITA (2026-07-20) — worker de retry + backoff, SEM migração
+Implementada (NÃO em prod). Alto risco → plano meu + plano independente do Codex em paralelo; Codex revisou o DIFF em 2 rodadas (protocolo anti-loop), 12 achados reais no total, todos fechados. tsc 0, **127 testes** do domínio (1282 no sweep lib+cron+internal, 0 regressão).
+
+**Entregue:**
+- **`scheduleRetry(op, from)` (deps):** backoff + release do lease ATÔMICOS num CAS fenced por state+leaseToken — `nextAttemptAt=now()+delay` (relógio do BANCO, não claimedAt defasado) E `leaseToken/leaseUntil=NULL`. Lê attemptCount fresco sob o lease. `retryDelayMs`: exponencial BASE 1min, TETO 1h ABSOLUTO (Math.min DEPOIS do jitter ±25%). Chamado por AMBOS worker E endpoint no `retryable_failure` (sem isto, falha do endpoint deixava lease preso 90s + nextAttemptAt NULL).
+- **Expiração de BILLING_REQUESTED (executor):** vencida → MANUAL_REVIEW+alerta (SEM cobrar; DECISÃO DO DONO). BILLING_CONFIRMED/LOCAL_APPLIED NÃO expiram (pós-cobrança sempre completa).
+- **`confirmBilling` revalida expiração + POSSE pelo relógio do BANCO** logo antes do Asaas (achado Codex P1): claimedAt do claim pode estar velho; op vencida ou lease perdido entre claim e PUT → não cobra.
+- **Worker `runRetryBatch` (retry-worker.ts) + cron `GET /api/cron/plan-change-retry`:** pré-filtro (só ids) → claimOp (trava real) → runSaga → scheduleRetry. Batch 5 (10×30s Asaas encostaria em 300s), `maxDuration=300`. Erro por-op isolado; catch com `releaseLease` (CAS fenced SÓ por token, aceita qualquer estado retomável — o runSaga pode ter avançado o estado antes de lançar; scheduleRetry por state-velho não pegaria = poison NULL). Bearer CRON_SECRET fail-closed, withHeartbeat.
+- **KILL-SWITCH STATE-AWARE (achado Codex P0, as 2 rodadas):** ON → 4 estados. OFF → pós-cobrança SEMPRE (cliente cobrado TEM que receber) + pré-cobrança **SÓ se vencida** (`expiresAt<=now`, lane de classificação-sem-Asaas: uma BILLING_REQUESTED cobrada cuja resposta se perdeu vira MANUAL_REVIEW+alerta mesmo com OFF, senão ficaria INVISÍVEL durante o incidente). Pré-cobrança NÃO-vencida fica parada (não cobra durante possível incidente Asaas). Cláusulas SQL ESTÁTICAS por switch (índice-friendly).
+- **Métrica honesta:** `retried` só se scheduleRetry.applied; senão lostLease. Endpoint scheduleRetry em try/catch best-effort (não vira 500).
+- **vercel.json:** cron `0 * * * *` (frequência real via cron-job.org).
+
+**Dívida ACEITÁVEL registrada (Codex, não-bloqueante — tolerável com monitoramento):**
+- **Janela residual** entre o guard pré-PUT e o PUT do Asaas (leituras de identidade/assinatura no meio): inevitável (banco+Asaas não-atômicos), pequena; o fencing do `transition` pós-confirmBilling é a rede final.
+- **`expiresAt` origem mista** (Date.now do processo no create vs now() do banco na comparação): skew Neon ~ms; mudaria o create do endpoint; adiado.
+- **Índice/ordenação:** `nextAttemptAt ASC NULLS FIRST, createdAt ASC` exige sort (createdAt fora do `retry_idx`); performance, não correção — `EXPLAIN` no deploy.
+
+**🔒 PRÉ-CONDIÇÕES de LIGAR `VIS_TIER_SELF_SERVICE_ENABLED` (worker pode deployar antes; não liga o switch):**
+1. Validar em SANDBOX Asaas que `PUT /subscriptions/{id}` honra `asaas-idempotency-key` (retomada não dobra fatura) E devolve o objeto completo (id/value/cycle/status) — senão a op trava em BILLING_REQUESTED (fail-closed) até o TTL→MANUAL_REVIEW.
+2. **🚨 AUDITORIA pré-deploy do cron (achado Codex P0, decisão do dono):** ops retomáveis existentes têm nextAttemptAt=NULL → o worker as pegaria no 1º tick. Tabela HOJE em 0 linhas + self-service OFF → sem órfãs na prática, MAS rodar a query de auditoria (especialmente BILLING_REQUESTED antiga) ANTES de ativar o cron; se houver, resolver manualmente. Sem backfill (tabela vazia).
+3. "Billing confirmed" == preço-futuro-atualizado + `status===ACTIVE`, NÃO pagamento-recebido (natureza da assinatura recorrente sem proration). Confirmar que essa semântica é aceita como confirmação financeira antes de ligar.
 
 ## 🚨 NOTA DE DEPLOY (achado Codex) — índice não-CONCURRENTLY
 Os `CREATE UNIQUE INDEX` da migração B em `GlobalAudit` e `subscription_history` (tabelas GRANDES, produção) NÃO são `CONCURRENTLY` — e não podem ser, porque `migrate deploy` roda cada migração em 1 tx e `CREATE INDEX CONCURRENTLY` proíbe tx. Enquanto o índice varre a tabela, ele pega lock que BLOQUEIA writes normais de audit/history. ANTES de aplicar em prod: MEDIR tamanho de `GlobalAudit`/`subscription_history`. Se grandes, criar os 2 índices únicos parciais MANUALMENTE com `CREATE UNIQUE INDEX CONCURRENTLY` fora do migrate (e marcar a migração como aplicada) OU aceitar a janela de lock num horário de baixo tráfego. O índice de op ativa em `DomusPlanChangeOp` (0 linhas) é instantâneo, sem risco.

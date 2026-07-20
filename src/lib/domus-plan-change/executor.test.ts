@@ -40,7 +40,7 @@ function makeDeps(
 ) {
   const state = { value: dbStateInit as SagaState };
   const db = { token: dbTokenInit as string | null, attempts: attemptStart };
-  const calls = { confirmBilling: 0, applyLocal: 0, publish: 0, renewLease: 0, beginAttempt: 0 };
+  const calls = { confirmBilling: 0, applyLocal: 0, publish: 0, renewLease: 0, beginAttempt: 0, markFinancialTerminalAndAlert: 0, scheduleRetry: 0 };
   const order: string[] = []; // ordem real dos efeitos (cobra→aplica→publica)
 
   const owns = (op: ClaimedSagaOp) => op.leaseToken === db.token;
@@ -86,11 +86,19 @@ function makeDeps(
       return OK;
     }),
     markFinancialTerminalAndAlert: vi.fn(async (op, from, terminal): Promise<CasResult> => {
+      calls.markFinancialTerminalAndAlert++;
       if (state.value !== from || !owns(op)) return { applied: false };
       state.value = terminal;
       return OK;
     }),
     reloadOp: vi.fn(async () => ({ state: state.value, asaasRef: null as string | null, leaseToken: db.token })),
+    // FASE E: scheduleRetry é chamado pelos CHAMADORES (worker/endpoint), NÃO pelo
+    // runSaga. No harness ele só conta invocações — o runSaga jamais deve chamá-lo.
+    scheduleRetry: vi.fn(async (op): Promise<CasResult> => {
+      calls.scheduleRetry++;
+      return { applied: owns(op) };
+    }),
+    releaseLease: vi.fn(async (op): Promise<CasResult> => ({ applied: owns(op) })),
     ...over,
   };
   return { deps: base, state, db, calls, order };
@@ -376,14 +384,55 @@ describe("runSaga — expiração antes de cobrar (achado Codex #3)", () => {
     expect(final.state).toBe("COMPLETED");
   });
 
-  it("op JÁ em BILLING_REQUESTED e expirada → NÃO expira cegamente (ambíguo, dinheiro em jogo)", async () => {
-    // Só o case RECEIVED checa expiração. Depois de tocar o Asaas, expirar seria
-    // inseguro. A op segue o fluxo (retoma a cobrança idempotente).
+  it("BILLING_REQUESTED expirada → MANUAL_REVIEW + alerta, NÃO cobra (Fase E, achado Codex #3)", async () => {
+    // DECISÃO DO DONO (Fase E): uma op parada em BILLING_REQUESTED além do TTL é
+    // AMBÍGUA (o PUT ao Asaas pode ter chegado e a resposta se perdido). NÃO cobra
+    // com preço congelado semanas atrás nem a declara segura (FAILED_BEFORE_BILLING
+    // esconderia cobrança) — vira MANUAL_REVIEW + alerta (humano confere no Asaas).
     const { deps, calls } = makeDeps({}, "BILLING_REQUESTED");
     const now = new Date(9_000_000_000_000);
     const final = await runSaga(makeOp("BILLING_REQUESTED", { expiresAt: new Date(1000) }), deps, now);
 
-    expect(calls.confirmBilling).toBe(1); // retomou a cobrança, não expirou
+    expect(calls.confirmBilling).toBe(0); // NÃO cobra uma op vencida
+    expect(calls.markFinancialTerminalAndAlert).toBe(1); // terminal financeiro + alerta atômico
+    expect(final.kind).toBe("terminal");
+    expect(final.state).toBe("MANUAL_REVIEW");
+  });
+
+  it("BILLING_REQUESTED ainda válida → segue cobrando normal (não expira)", async () => {
+    // Guarda de regressão: a expiração NÃO pode disparar antes do TTL.
+    const { deps, calls } = makeDeps({}, "BILLING_REQUESTED");
+    const now = new Date(2000);
+    const final = await runSaga(makeOp("BILLING_REQUESTED", { expiresAt: new Date(999999999999) }), deps, now);
+
+    expect(calls.confirmBilling).toBe(1); // retomou a cobrança
+    expect(calls.markFinancialTerminalAndAlert).toBe(0);
     expect(final.state).toBe("COMPLETED");
+  });
+
+  it("BILLING_CONFIRMED expirada → NÃO expira (pós-cobrança SEMPRE completa)", async () => {
+    // Política state-aware (achado Codex #6): depois de cobrada, a op TEM que
+    // aplicar o plano mesmo vencida — expirá-la abandonaria o cliente cobrado. Só
+    // o pré-cobrança (RECEIVED/BILLING_REQUESTED) expira.
+    const { deps, calls } = makeDeps({}, "BILLING_CONFIRMED");
+    const now = new Date(9_000_000_000_000);
+    const final = await runSaga(makeOp("BILLING_CONFIRMED", { expiresAt: new Date(1000) }), deps, now);
+
+    expect(calls.applyLocal).toBe(1); // aplicou o plano cobrado
+    expect(calls.markFinancialTerminalAndAlert).toBe(0);
+    expect(final.state).toBe("COMPLETED");
+  });
+});
+
+describe("runSaga — scheduleRetry é caller-driven (Fase E)", () => {
+  it("runSaga NUNCA chama scheduleRetry (a política de backoff é do worker/endpoint)", async () => {
+    // O backoff+release é responsabilidade do CHAMADOR, não do runSaga (que é
+    // reusado). Um retryable_failure não deve agendar nada por dentro.
+    const { deps, calls } = makeDeps({
+      confirmBilling: vi.fn().mockRejectedValue(new Error("asaas down")),
+    });
+    const final = await runSaga(makeOp("RECEIVED"), deps);
+    expect(final.kind).toBe("retryable_failure");
+    expect(calls.scheduleRetry).toBe(0); // o chamador é quem agenda
   });
 });

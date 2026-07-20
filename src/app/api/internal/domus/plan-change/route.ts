@@ -334,7 +334,8 @@ export async function POST(req: Request) {
   // O resultado é uma UNIÃO DISCRIMINADA (Fase D): a rota mapeia o `kind` → HTTP,
   // sem combinar flags frágeis (o `failed` antigo transformava um terminal
   // financeiro em 502 em vez de 409 — achado Codex).
-  const result = await runSaga(claimed, buildSagaDeps(), claimed.claimedAt);
+  const deps = buildSagaDeps();
+  const result = await runSaga(claimed, deps, claimed.claimedAt);
   switch (result.kind) {
     case "completed":
       return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
@@ -349,6 +350,26 @@ export async function POST(req: Request) {
       // Outro executor tomou a posse e conduz — reconhece sem reprocessar.
       return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
     case "retryable_failure":
+      // FASE E (achado Codex #4): agenda o backoff E LIBERA o lease. Sem isto, uma
+      // falha originada AQUI (endpoint) deixaria o lease preso ~90s + nextAttemptAt
+      // NULL → replays do Domus recebendo 202 sem ninguém processando, e nenhum
+      // backoff real até o worker rodar. scheduleRetry é a MESMA política pós-
+      // resultado que o worker aplica (não pode ser exclusiva do worker). CAS por
+      // state+leaseToken: se perdemos a posse, não agenda (idempotente/inofensivo).
+      // `claimed` carrega o leaseToken vigente; `result.state` é o checkpoint (from).
+      // BEST-EFFORT (achado Codex P2 2ª rodada): se o agendamento falhar (banco fora),
+      // NÃO deixamos virar 500 — o resultado da saga é 502 documentado, e o lease
+      // expira sozinho + o worker retoma. O erro do agendamento é só logado.
+      try {
+        await deps.scheduleRetry(claimed, result.state);
+      } catch (err) {
+        logger.error("plan-change: scheduleRetry falhou no endpoint (best-effort)", {
+          window: WINDOW_LOG,
+          visCompanyId,
+          state: result.state,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
       // Falhou mas retomável (checkpoint preservado). O Domus pode reenviar o
       // mesmo eventId; o worker (Fase E) também retoma. 502.
       return NextResponse.json({ error: "not_completed", state: result.state }, { status: 502 });
