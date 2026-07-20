@@ -22,9 +22,10 @@ describe("decideSagaAction — idempotência + retomada por estado", () => {
     expect(d.kind).toBe("conflict");
   });
 
-  it("op FAILED com mesmo hash → resume (retenta, não retorna sucesso)", () => {
+  it("op FAILED (legado) com mesmo hash → manual_review (não retoma às cegas)", () => {
+    // FAILED genérico não guarda ONDE falhou → retomar é inseguro (achado Codex).
     const d = decideSagaAction(op("FAILED", "hash-A"), "hash-A");
-    expect(d).toEqual({ kind: "resume", from: "FAILED" });
+    expect(d).toEqual({ kind: "manual_review", state: "FAILED" });
   });
 
   it.each(["RECEIVED", "BILLING_REQUESTED", "BILLING_CONFIRMED", "LOCAL_APPLIED"])(
@@ -39,6 +40,22 @@ describe("decideSagaAction — idempotência + retomada por estado", () => {
     const d = decideSagaAction(op("BILLING_REQUESTED", "hash-A"), "hash-B");
     expect(d.kind).toBe("conflict");
   });
+
+  // Terminais humanos (fase A): um replay NÃO deve reanimar uma op que parou de
+  // propósito (ex: cobrada-sem-plano). Espera intervenção, não retomada.
+  it.each(["CHARGED_NOT_APPLIED", "MANUAL_REVIEW", "FAILED_BEFORE_BILLING", "FAILED"] as const)(
+    "op em %s com mesmo hash → manual_review (NÃO resume — precisa humano)",
+    (state) => {
+      const d = decideSagaAction(op(state, "hash-A"), "hash-A");
+      expect(d).toEqual({ kind: "manual_review", state });
+    },
+  );
+
+  it("terminal humano com hash DIFERENTE → conflict (hash vence antes do estado)", () => {
+    const d = decideSagaAction(op("CHARGED_NOT_APPLIED", "hash-A"), "hash-B");
+    expect(d.kind).toBe("conflict");
+  });
+
 });
 
 describe("nextState — a ordem é Asaas-first no upgrade", () => {

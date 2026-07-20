@@ -63,8 +63,14 @@ export async function GET(request: Request) {
         resolved: [],
         openCount: 0,
       }));
+      // Só entram na reconciliação AUTO os eventos cujo dedupeKey é literalmente
+      // `<source>:auto` (achado Codex Fase D): eventos persistentes de outras
+      // fontes (ex.: billing `plan-change:*`) NÃO podem ser auto-resolvidos pelo
+      // health cron — senão o alerta de "cobrado sem plano" some antes do e-mail.
       const openByDedupe = new Map(
-        openBefore.open.filter((e) => e.source !== "manual").map((e) => [dedupeFor(e.source), e])
+        openBefore.open
+          .filter((e) => e.source !== "manual" && e.dedupeKey?.endsWith(":auto"))
+          .map((e) => [e.dedupeKey as string, e])
       );
 
       let created = 0;
@@ -118,9 +124,4 @@ export async function GET(request: Request) {
     });
     return NextResponse.json({ error: "Erro no health-alert" }, { status: 500 });
   }
-}
-
-/** Reconstrói o dedupeKey auto a partir do source de um evento existente. */
-function dedupeFor(source: string): string {
-  return `${source}:auto`;
 }

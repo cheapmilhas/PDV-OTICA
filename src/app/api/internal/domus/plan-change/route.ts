@@ -7,7 +7,7 @@ import { verifyVisDomus } from "@/lib/vis-domus-hmac";
 import { resolvePlanForTier, isPlanTier } from "@/lib/resolve-plan-for-tier";
 import { decideSagaAction } from "@/lib/domus-plan-change/saga";
 import { runSaga } from "@/lib/domus-plan-change/executor";
-import { buildSagaDeps } from "@/lib/domus-plan-change/deps";
+import { buildSagaDeps, claimOp } from "@/lib/domus-plan-change/deps";
 
 /**
  * POST /api/internal/domus/plan-change
@@ -103,6 +103,19 @@ export async function POST(req: Request) {
     // Operação já concluída — idempotente, não reaplica.
     return NextResponse.json({ status: "already_applied" }, { status: 200 });
   }
+  if (decision.kind === "manual_review") {
+    // Op parou num terminal humano (ex: cobrada mas não aplicada). Um replay do
+    // Domus NÃO deve reanimá-la — espera intervenção. 409 conflito de estado.
+    logger.error("plan-change replay de op em terminal humano (intervenção)", {
+      window: WINDOW_LOG,
+      visCompanyId,
+      state: decision.state,
+    });
+    return NextResponse.json(
+      { error: "manual_review_required", state: decision.state },
+      { status: 409 },
+    );
+  }
 
   // KILL-SWITCH: só a partir daqui há efeito colateral (cobrança/aplicação).
   // OFF → registra a intenção mas NÃO cobra nem aplica; responde indisponível.
@@ -123,18 +136,80 @@ export async function POST(req: Request) {
   if (decision.kind === "fresh") {
     const targetPlan = await resolvePlanForTier(requestedTier);
 
+    // Assinatura CORRENTE da company: fonte da identidade a congelar na op
+    // (subscriptionId/asaasSubscriptionId/ciclo/preço). confirmBilling e
+    // applyLocal agem SOBRE ESSE snapshot — nunca cobrar X e aplicar Y.
+    // FAIL-CLOSED (achado Codex #2): busca ATÉ 2 elegíveis. 0 → não há o que
+    // cobrar; >1 → ambíguo (Subscription não tem unique por company) e escolher
+    // "a primeira" faturaria arbitrariamente. Nos dois casos, NÃO cria op.
+    const eligible = await prisma.subscription.findMany({
+      where: { companyId: visCompanyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
+      select: {
+        id: true,
+        asaasSubscriptionId: true,
+        billingCycle: true,
+        plan: { select: { priceMonthly: true } },
+      },
+      take: 2,
+    });
+    if (eligible.length === 0) {
+      logger.error("plan-change sem assinatura elegível (não cria op)", { window: WINDOW_LOG, visCompanyId });
+      return NextResponse.json(
+        { error: "no_active_subscription", message: "Sem assinatura ativa para trocar de plano." },
+        { status: 409 },
+      );
+    }
+    if (eligible.length > 1) {
+      logger.error("plan-change com MÚLTIPLAS assinaturas elegíveis (ambíguo, não cria op)", {
+        window: WINDOW_LOG,
+        visCompanyId,
+      });
+      return NextResponse.json(
+        { error: "ambiguous_subscription", message: "Múltiplas assinaturas ativas — troca requer suporte." },
+        { status: 409 },
+      );
+    }
+    const current = eligible[0];
+
+    // Self-service exige assinatura recorrente no Asaas — sem ela não há o que
+    // cobrar e o applyLocal liberaria tier sem cobrança. Fail-closed ANTES de
+    // criar a op (senão a op de identidade nula falharia em loop ocupando o
+    // índice de op ativa e envenenando a company — achado Codex #2).
+    if (!current.asaasSubscriptionId) {
+      logger.error("plan-change sem asaasSubscriptionId (não auto-aplicável)", { window: WINDOW_LOG, visCompanyId });
+      return NextResponse.json(
+        { error: "no_recurring_billing", message: "Assinatura sem cobrança recorrente — troca requer suporte." },
+        { status: 409 },
+      );
+    }
+
     // DOWNGRADE só pode ser AGENDADO pra currentPeriodEnd (spec: o cliente pagou
     // o mês, não perde acesso no meio). O executor de downgrade agendado é a
     // Fase 4 (cron + pendingPlanId). Até lá, REJEITA downgrade (fail-closed) em
     // vez de aplicá-lo imediato — achado Codex. Upgrade segue (Asaas-first imediato).
-    const current = await prisma.subscription.findFirst({
-      where: { companyId: visCompanyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
-      select: { plan: { select: { priceMonthly: true } } },
-    });
-    if (current && current.plan.priceMonthly > targetPlan.priceMonthly) {
+    if (current.plan.priceMonthly > targetPlan.priceMonthly) {
       return NextResponse.json(
         { error: "downgrade_not_supported", message: "Downgrade ainda não disponível no autoatendimento." },
         { status: 501 },
+      );
+    }
+
+    // Preço a cobrar (centavos) congelado AGORA para o ciclo da assinatura — não
+    // recalculado na cobrança. VALIDADO > 0 (achado Codex #1): sem isso, um plano
+    // com priceYearly=0 tentaria cobrar R$0 e liberar tier caro. A validade do
+    // congelamento é conferida no executor via expiresAt (achado Codex #3).
+    const cycle = current.billingCycle ?? "MONTHLY";
+    const priceApplied = cycle === "YEARLY" ? targetPlan.priceYearly : targetPlan.priceMonthly;
+    if (!Number.isInteger(priceApplied) || priceApplied <= 0) {
+      logger.error("plan-change com preço-alvo inválido (não cria op)", {
+        window: WINDOW_LOG,
+        visCompanyId,
+        priceApplied,
+        cycle,
+      });
+      return NextResponse.json(
+        { error: "invalid_plan_price", message: "Plano-alvo com preço inválido — troca indisponível." },
+        { status: 409 },
       );
     }
 
@@ -148,17 +223,39 @@ export async function POST(req: Request) {
           payloadHash,
           state: "RECEIVED",
           expiresAt: new Date(Date.now() + OP_TTL_MS),
+          // Identidade da assinatura PERSISTIDA (Fase B): fixada antes de cobrar.
+          subscriptionId: current.id,
+          asaasSubscriptionId: current.asaasSubscriptionId,
+          billingCycle: cycle,
+          priceApplied,
         },
       });
     } catch (err) {
-      // Corrida (double-click): 2 requests com o mesmo eventId viram ambos
-      // "fresh" e disputam o create; o @unique(eventId) faz o perdedor pegar
-      // P2002. Relê a op vencedora e refaz a decisão (não vira 500).
       if ((err as { code?: string })?.code === "P2002") {
+        // DOIS índices únicos podem colidir: o de eventId e o de op ativa por
+        // company. NÃO decidir pelo nome do índice (meta.target é frágil e nem
+        // modela índice parcial — achado Codex #4). Em vez disso, RESOLVE POR
+        // ESTADO: relê a op por eventId; se existe, é replay/corrida do evento;
+        // se NÃO existe, o conflito foi no índice de op ATIVA (outra op da mesma
+        // company em voo) → 409. Os ÚNICOS índices únicos que um create pode violar
+        // são eventId e o de op-ativa-por-company; sem winner por eventId, só resta
+        // o de op ativa (colisão de PK cuid é praticamente impossível).
         const winner = await prisma.domusPlanChangeOp.findUnique({
           where: { eventId },
           select: { state: true, payloadHash: true },
         });
+        if (!winner) {
+          // eventId livre → a colisão foi no índice de op ativa por company.
+          logger.warn("plan-change com troca já em andamento na company (409)", {
+            window: WINDOW_LOG,
+            visCompanyId,
+          });
+          return NextResponse.json(
+            { error: "change_in_progress", message: "Já há uma troca de plano em andamento." },
+            { status: 409 },
+          );
+        }
+        // eventId já existe → double-click do MESMO evento: refaz a decisão.
         const redo = decideSagaAction(winner, payloadHash);
         if (redo.kind === "conflict") {
           return NextResponse.json({ error: "conflict" }, { status: 409 });
@@ -166,33 +263,115 @@ export async function POST(req: Request) {
         if (redo.kind === "duplicate") {
           return NextResponse.json({ status: "already_applied" }, { status: 200 });
         }
-        // Perdedor da corrida: o vencedor já está processando; só reconhece.
+        if (redo.kind === "manual_review") {
+          // O vencedor já está num terminal humano — não reanimar (achado Codex:
+          // sem isto, caía no 202 accepted mascarando a intervenção pendente).
+          return NextResponse.json(
+            { error: "manual_review_required", state: redo.state },
+            { status: 409 },
+          );
+        }
+        // Perdedor da corrida do MESMO evento: o vencedor já está processando.
         return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
       }
       throw err;
     }
   }
 
-  // Carrega a op COMPLETA (fresh recém-criada OU resume) e executa/retoma a saga.
-  // Usa o targetPlanId PERSISTIDO na op — nunca o recalculado — pra não trocar o
-  // plano de uma op em voo (achado Codex).
-  const op = await prisma.domusPlanChangeOp.findUnique({
+  // Localiza a op (fresh recém-criada OU resume) só para obter o id.
+  const found = await prisma.domusPlanChangeOp.findUnique({
     where: { eventId },
-    select: { id: true, eventId: true, visCompanyId: true, requestedTier: true, targetPlanId: true, state: true, asaasRef: true },
+    select: { id: true },
   });
-  if (!op) {
+  if (!found) {
     // Não deveria acontecer (acabamos de garantir), mas fail-safe.
     return NextResponse.json({ error: "op_not_found" }, { status: 500 });
   }
 
-  const result = await runSaga(op, buildSagaDeps());
-  if (result.failed) {
-    // Saga parou num checkpoint (cobrança/aplicação falhou). Retomável: o Domus
-    // pode reenviar o mesmo eventId. 502: o Vis tentou mas não concluiu.
-    return NextResponse.json(
-      { error: "not_completed", state: result.state },
-      { status: 502 },
-    );
+  // FASE C — CLAIM por lease antes de processar. claimOp faz o CAS de posse pelo
+  // relógio do banco: só vence se a op é retomável, o lease está livre e o backoff
+  // (nextAttemptAt) passou. Retorna a op RECLAMADA (com token) — a saga usa o
+  // targetPlanId/identidade PERSISTIDOS, nunca recalculados.
+  const claimed = await claimOp(found.id);
+  if (!claimed) {
+    // claimOp null tem 4 causas (ocupado/backoff/terminal/inexistente). NÃO
+    // responder 202 pra todas (achado Codex Fase C): um terminal HUMANO
+    // (MANUAL_REVIEW/CHARGED_NOT_APPLIED) mascarado como 202 esconderia o
+    // incidente que a decisão inicial não viu (moveu depois da leitura). Relê o
+    // estado real e classifica.
+    const cur = await prisma.domusPlanChangeOp.findUnique({
+      where: { id: found.id },
+      select: { state: true },
+    });
+    if (!cur) {
+      return NextResponse.json({ error: "op_not_found" }, { status: 500 });
+    }
+    if (cur.state === "COMPLETED") {
+      return NextResponse.json({ status: "already_applied" }, { status: 200 });
+    }
+    const human = ["FAILED", "FAILED_BEFORE_BILLING", "CHARGED_NOT_APPLIED", "MANUAL_REVIEW"];
+    if (human.includes(cur.state)) {
+      logger.error("plan-change: claim falhou, op em terminal humano (409)", {
+        window: WINDOW_LOG,
+        visCompanyId,
+        state: cur.state,
+      });
+      return NextResponse.json(
+        { error: "manual_review_required", state: cur.state },
+        { status: 409 },
+      );
+    }
+    // Retomável mas ocupada (outro executor tem o lease) ou em backoff → 202.
+    logger.warn("plan-change sem claim (op ocupada/em backoff)", {
+      window: WINDOW_LOG,
+      visCompanyId,
+      state: cur.state,
+    });
+    return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
   }
-  return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
+
+  // `now` do runSaga = relógio do BANCO no claim (coerência com lease/backoff).
+  // O resultado é uma UNIÃO DISCRIMINADA (Fase D): a rota mapeia o `kind` → HTTP,
+  // sem combinar flags frágeis (o `failed` antigo transformava um terminal
+  // financeiro em 502 em vez de 409 — achado Codex).
+  const deps = buildSagaDeps();
+  const result = await runSaga(claimed, deps, claimed.claimedAt);
+  switch (result.kind) {
+    case "completed":
+      return NextResponse.json({ status: "completed", state: result.state }, { status: 200 });
+    case "terminal":
+      // Parou num terminal humano/financeiro (esgotou/expirou/já-terminal). NÃO é
+      // sucesso — 409. Um CHARGED_NOT_APPLIED/MANUAL_REVIEW já disparou o alerta.
+      return NextResponse.json(
+        { error: "manual_review_required", state: result.state },
+        { status: 409 },
+      );
+    case "lost_lease":
+      // Outro executor tomou a posse e conduz — reconhece sem reprocessar.
+      return NextResponse.json({ status: "accepted", state: "in_progress" }, { status: 202 });
+    case "retryable_failure":
+      // FASE E (achado Codex #4): agenda o backoff E LIBERA o lease. Sem isto, uma
+      // falha originada AQUI (endpoint) deixaria o lease preso ~90s + nextAttemptAt
+      // NULL → replays do Domus recebendo 202 sem ninguém processando, e nenhum
+      // backoff real até o worker rodar. scheduleRetry é a MESMA política pós-
+      // resultado que o worker aplica (não pode ser exclusiva do worker). CAS por
+      // state+leaseToken: se perdemos a posse, não agenda (idempotente/inofensivo).
+      // `claimed` carrega o leaseToken vigente; `result.state` é o checkpoint (from).
+      // BEST-EFFORT (achado Codex P2 2ª rodada): se o agendamento falhar (banco fora),
+      // NÃO deixamos virar 500 — o resultado da saga é 502 documentado, e o lease
+      // expira sozinho + o worker retoma. O erro do agendamento é só logado.
+      try {
+        await deps.scheduleRetry(claimed, result.state);
+      } catch (err) {
+        logger.error("plan-change: scheduleRetry falhou no endpoint (best-effort)", {
+          window: WINDOW_LOG,
+          visCompanyId,
+          state: result.state,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+      // Falhou mas retomável (checkpoint preservado). O Domus pode reenviar o
+      // mesmo eventId; o worker (Fase E) também retoma. 502.
+      return NextResponse.json({ error: "not_completed", state: result.state }, { status: 502 });
+  }
 }
