@@ -67,7 +67,7 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
       plan: { name: "Clínica", tier: "clinic_full" },
     });
     txMock.entitlementRevision.findUnique.mockResolvedValue({ revision: BigInt("42") });
-    checkSub.mockResolvedValue({ allowed: true, status: "ACTIVE", planName: "Clínica" });
+    checkSub.mockResolvedValue({ allowed: true, readOnly: false, status: "ACTIVE", planName: "Clínica" });
 
     const r = await buildEntitlementPayload("c1", NOW);
     expect(r).not.toBeNull();
@@ -96,7 +96,7 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
       plan: { name: "Pro", tier: "specialist" },
     });
     txMock.entitlementRevision.findUnique.mockResolvedValue(null);
-    checkSub.mockResolvedValue({ allowed: false, status: "SUSPENDED", planName: "Pro" });
+    checkSub.mockResolvedValue({ allowed: false, readOnly: false, status: "SUSPENDED", planName: "Pro" });
 
     const p = (await buildEntitlementPayload("c1", NOW))!;
     // sem revisão → sourceRevision ausente (não emitido). Mas tem tier → v2.
@@ -121,7 +121,7 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     txMock.entitlementRevision.findUnique.mockResolvedValue({
       revision: BigInt("9007199254740993"),
     });
-    checkSub.mockResolvedValue({ allowed: true, status: "ACTIVE", planName: "Clínica" });
+    checkSub.mockResolvedValue({ allowed: true, readOnly: false, status: "ACTIVE", planName: "Clínica" });
 
     const r = await buildEntitlementPayload("c1", NOW);
     // Não deve lançar — é o que publishEntitlementForCompany faz antes do fetch.
@@ -138,7 +138,7 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     });
     txMock.subscription.findFirst.mockResolvedValue(null);
     txMock.entitlementRevision.findUnique.mockResolvedValue({ revision: BigInt("7") });
-    checkSub.mockResolvedValue({ allowed: false, status: "NO_SUBSCRIPTION" });
+    checkSub.mockResolvedValue({ allowed: false, readOnly: false, status: "NO_SUBSCRIPTION" });
 
     const r = await buildEntitlementPayload("c1", NOW);
     // Sem tier → continua v1 (o Domus preserva o tier gravado). Nunca v2 sem tier.
@@ -146,5 +146,30 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     expect(r).not.toHaveProperty("plan");
     expect(r!.sourceRevision).toBe("7");
     expect(r!.entitlement.writeAllowed).toBe(false);
+  });
+
+  it("PAST_DUE (readOnly:true) → payload emitido tem entitlement.writeAllowed=false (integração projetor→payload)", async () => {
+    // checkSubscription dá allowed:true + readOnly:true no grace period (PAST_DUE).
+    // O guard local do Vis bloqueia escrita; o payload pro Domus TEM de espelhar
+    // (writeAllowed:false) ou a clínica inadimplente escreveria no Domus enquanto
+    // está bloqueada no Vis. Prova o caminho readOnly de ponta a ponta.
+    txMock.company.findUnique.mockResolvedValue({
+      id: "c1",
+      platformProduct: "VIS_MEDICAL",
+      domusClinicId: "d1",
+      updatedAt: NOW,
+    });
+    txMock.subscription.findFirst.mockResolvedValue({
+      updatedAt: NOW,
+      plan: { name: "Clínica", tier: "clinic_full" },
+    });
+    txMock.entitlementRevision.findUnique.mockResolvedValue({ revision: BigInt("99") });
+    checkSub.mockResolvedValue({ allowed: true, readOnly: true, status: "PAST_DUE", planName: "Clínica" });
+
+    const p = (await buildEntitlementPayload("c1", NOW))!;
+    expect(p.entitlement.writeAllowed).toBe(false);
+    expect(p.subscriptionStatus).toBe("PAST_DUE");
+    // readOnly corta a escrita mesmo com allowed:true.
+    expect(p.entitlement.reason).toBe("PAST_DUE");
   });
 });

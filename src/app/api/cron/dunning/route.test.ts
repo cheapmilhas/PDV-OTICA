@@ -55,6 +55,12 @@ vi.mock("@/services/saas-notification.service", () => ({
   notifyCompany: (...a: unknown[]) => notifyCompany(...a),
 }));
 
+// vis-domus-publisher — no-op stub (evita I/O real do publisher no cron)
+const publishEntitlementForCompany = vi.fn();
+vi.mock("@/lib/vis-domus-publisher", () => ({
+  publishEntitlementForCompany: (...a: unknown[]) => publishEntitlementForCompany(...a),
+}));
+
 // ── Import AFTER mocks ─────────────────────────────────────────────────────────
 import { GET } from "./route";
 
@@ -87,6 +93,7 @@ beforeEach(() => {
   createAdminNotification.mockReset().mockResolvedValue(true);
   logActivity.mockReset().mockResolvedValue(undefined);
   notifyCompany.mockReset().mockResolvedValue({ status: "SENT" });
+  publishEntitlementForCompany.mockReset().mockResolvedValue(undefined);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -204,6 +211,9 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
     });
     const opts = suspendedCall![3] as { channels: string[] };
     expect(opts.channels).not.toContain("inapp");
+
+    // Cadeado: a suspensão deve propagar writeAllowed=false ao Domus na hora.
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-4");
   });
 
   it("já SUSPENDED → não dispara SUBSCRIPTION_SUSPENDED novamente", async () => {
@@ -252,6 +262,14 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
     });
     const opts = canceledCall![3] as { channels: string[] };
     expect(opts.channels).not.toContain("inapp");
+
+    // Cadeado: o cancelamento deve propagar writeAllowed=false ao Domus na hora.
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-6");
+
+    // Telemetria honesta: reporta attempted (não published) — publish é best-effort/void.
+    const body = await res.json();
+    expect(body.entitlementsAttempted).toBe(1);
+    expect(body).not.toHaveProperty("entitlementsPublished");
   });
 
   it(">=30d mas lastStage=7 (canCancel=false) e createCompanyNotification falha → cancelamento ADIADO, NÃO dispara SUBSCRIPTION_CANCELED", async () => {

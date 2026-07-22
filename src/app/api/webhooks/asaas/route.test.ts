@@ -18,6 +18,12 @@ vi.mock("@/services/saas-notification.service", () => ({
   notifyCompany: (...a: unknown[]) => notifyCompany(...a),
 }));
 
+// vis-domus-publisher — no-op stub (evita I/O real do publisher no webhook)
+const publishEntitlementForCompany = vi.fn();
+vi.mock("@/lib/vis-domus-publisher", () => ({
+  publishEntitlementForCompany: (...a: unknown[]) => publishEntitlementForCompany(...a),
+}));
+
 // prisma
 const billingEventFindUnique = vi.fn();
 const billingEventUpsert = vi.fn();
@@ -186,6 +192,9 @@ describe("POST /api/webhooks/asaas — Task 8: notifyCompany on PAYMENT_CONFIRME
         channels: expect.arrayContaining(["email", "inapp"]),
       }),
     );
+
+    // Cadeado: pagamento confirmado propaga writeAllowed=true ao Domus na hora.
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
   });
 
   it("PAYMENT_RECEIVED também dispara notifyCompany", async () => {
@@ -207,6 +216,53 @@ describe("POST /api/webhooks/asaas — Task 8: notifyCompany on PAYMENT_CONFIRME
 
     expect(res.status).toBe(200);
     expect(notifyCompany).not.toHaveBeenCalled();
+  });
+
+  it("PAYMENT_OVERDUE → propaga writeAllowed=false ao Domus na hora (Cadeado, entrada no read-only)", async () => {
+    // subscriptionFindFirst resolve para COMPANY_ID (setup do beforeEach) → a
+    // transição para PAST_DUE deve publicar o entitlement na hora, não só no pull.
+    const res = await POST(makeRequest(overdueEvent));
+
+    expect(res.status).toBe(200);
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
+  });
+
+  it("PAYMENT_OVERDUE → NÃO regride estado terminal: todo updateMany carrega guard status notIn [SUSPENDED, CANCELED]", async () => {
+    // Uma assinatura CANCELED com pastDueSince:null NÃO pode voltar a PAST_DUE.
+    // O mock não simula o banco, então provamos que o where-clause EXCLUI os
+    // estados terminais — o banco real não tocaria uma linha CANCELED.
+    const res = await POST(makeRequest(overdueEvent));
+    expect(res.status).toBe(200);
+
+    // ambos os updateMany de subscription no ramo OVERDUE devem excluir terminais
+    const subCalls = subscriptionUpdateMany.mock.calls.filter(
+      (c) => (c[0] as { data?: { status?: string } })?.data?.status === "PAST_DUE",
+    );
+    expect(subCalls.length).toBeGreaterThan(0);
+    for (const [arg] of subCalls) {
+      const where = (arg as { where: { status?: { notIn?: string[] } } }).where;
+      expect(where.status?.notIn).toEqual(["SUSPENDED", "CANCELED"]);
+    }
+  });
+
+  it("PAYMENT_CHARGEBACK_REQUESTED → updateMany com guard status notIn [SUSPENDED, CANCELED] (não regride terminal)", async () => {
+    const chargebackEvent = {
+      id: "evt-chargeback-1",
+      event: "PAYMENT_CHARGEBACK_REQUESTED",
+      payment: { id: "pay_cb_1", customer: "cust-1", subscription: "asaas-sub-1", value: 149.9, status: "CHARGEBACK_REQUESTED" },
+    };
+    const res = await POST(makeRequest(chargebackEvent));
+    expect(res.status).toBe(200);
+
+    // o ramo de chargeback deve usar updateMany (não update) com guard de status
+    const cbCall = subscriptionUpdateMany.mock.calls.find(
+      (c) => (c[0] as { data?: { status?: string } })?.data?.status === "PAST_DUE",
+    );
+    expect(cbCall).toBeDefined();
+    const where = (cbCall![0] as { where: { status?: { notIn?: string[] } } }).where;
+    expect(where.status?.notIn).toEqual(["SUSPENDED", "CANCELED"]);
+    // update() unconditional NÃO deve ter sido usado para o chargeback
+    expect(subscriptionUpdate).not.toHaveBeenCalled();
   });
 
   it("amountLabel formata o valor em BRL corretamente", async () => {
