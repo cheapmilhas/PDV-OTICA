@@ -60,6 +60,10 @@
     {
       "path": "/api/cron/plan-change-retry",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/reconcile-entitlements",
+      "schedule": "0 * * * *"
     }
   ]
 }
