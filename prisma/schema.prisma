@@ -225,6 +225,7 @@ model Company {
   aiTokenUsages           AiTokenUsage[]
   examAppointments        ExamAppointment[]
   entitlementRevision     EntitlementRevision?
+  entitlementOutbox       EntitlementOutbox?
 
   @@index([networkId])
   @@index([onboardingStatus])
@@ -247,6 +248,12 @@ model Company {
 model EntitlementRevision {
   companyId String @id
   revision  BigInt
+  company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
+}
+
+model EntitlementOutbox {
+  companyId String  @id
+  seq       BigInt
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 

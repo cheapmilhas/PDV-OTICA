@@ -22,7 +22,10 @@ vi.mock("@/lib/subscription", () => ({
   checkSubscription: vi.fn(),
 }));
 
-import { buildEntitlementPayload } from "../vis-domus-publisher";
+import {
+  buildEntitlementPayload,
+  tryPublishEntitlementForCompany,
+} from "../vis-domus-publisher";
 import { checkSubscription } from "@/lib/subscription";
 
 const checkSub = checkSubscription as unknown as ReturnType<typeof vi.fn>;
@@ -171,5 +174,91 @@ describe("buildEntitlementPayload (V3b — snapshot atômico)", () => {
     expect(p.subscriptionStatus).toBe("PAST_DUE");
     // readOnly corta a escrita mesmo com allowed:true.
     expect(p.entitlement.reason).toBe("PAST_DUE");
+  });
+});
+
+describe("tryPublishEntitlementForCompany (resultado tipado p/ o worker do outbox)", () => {
+  const OLD_ENV = { ...process.env };
+
+  beforeEach(() => {
+    // Restaura env a cada caso (cada teste liga/desliga secret+url explicitamente).
+    process.env = { ...OLD_ENV };
+    // fetch é global; mocka por teste (o publisher usa fetch(...)).
+    vi.stubGlobal("fetch", vi.fn());
+  });
+
+  // Arruma o prisma mock p/ uma company VIS_MEDICAL vinculada com payload válido
+  // (mesmo estilo dos testes de buildEntitlementPayload — não mocka a função).
+  function arrangePublishablePayload() {
+    txMock.company.findUnique.mockResolvedValue({
+      id: "c1",
+      platformProduct: "VIS_MEDICAL",
+      domusClinicId: "d1",
+      updatedAt: NOW,
+    });
+    txMock.subscription.findFirst.mockResolvedValue({
+      updatedAt: NOW,
+      plan: { name: "Clínica", tier: "clinic_full" },
+    });
+    txMock.entitlementRevision.findUnique.mockResolvedValue({ revision: BigInt("42") });
+    checkSub.mockResolvedValue({
+      allowed: true,
+      readOnly: false,
+      status: "ACTIVE",
+      planName: "Clínica",
+    });
+  }
+
+  it("config ausente (sem secret/url) → failed", async () => {
+    delete process.env.VIS_DOMUS_WEBHOOK_SECRET;
+    delete process.env.DOMUS_WEBHOOK_URL;
+    const r = await tryPublishEntitlementForCompany("c1");
+    expect(r.kind).toBe("failed");
+  });
+
+  it("company não-medical / sem vínculo (payload null) → noop", async () => {
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "sekret";
+    process.env.DOMUS_WEBHOOK_URL = "https://domus.example";
+    // company não-VIS_MEDICAL → buildEntitlementPayload retorna null.
+    txMock.company.findUnique.mockResolvedValue({
+      id: "c1",
+      platformProduct: "VIS_APP",
+      domusClinicId: null,
+      updatedAt: NOW,
+    });
+    const r = await tryPublishEntitlementForCompany("c1");
+    expect(r.kind).toBe("noop");
+    // noop não deve nem tentar a rede.
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it("fetch { ok: true } → published", async () => {
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "sekret";
+    process.env.DOMUS_WEBHOOK_URL = "https://domus.example";
+    arrangePublishablePayload();
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: true, status: 200 });
+    const r = await tryPublishEntitlementForCompany("c1");
+    expect(r.kind).toBe("published");
+    expect(fetch).toHaveBeenCalledOnce();
+  });
+
+  it("fetch { ok: false, status: 500 } → failed", async () => {
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "sekret";
+    process.env.DOMUS_WEBHOOK_URL = "https://domus.example";
+    arrangePublishablePayload();
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({ ok: false, status: 500 });
+    const r = await tryPublishEntitlementForCompany("c1");
+    expect(r.kind).toBe("failed");
+    if (r.kind === "failed") expect(r.reason).toContain("500");
+  });
+
+  it("fetch lança (rede) → failed", async () => {
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "sekret";
+    process.env.DOMUS_WEBHOOK_URL = "https://domus.example";
+    arrangePublishablePayload();
+    (fetch as unknown as ReturnType<typeof vi.fn>).mockRejectedValue(new Error("ECONNRESET"));
+    const r = await tryPublishEntitlementForCompany("c1");
+    expect(r.kind).toBe("failed");
+    if (r.kind === "failed") expect(r.reason).toBe("ECONNRESET");
   });
 });
