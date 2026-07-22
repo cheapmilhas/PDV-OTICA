@@ -25,7 +25,11 @@ CREATE TABLE IF NOT EXISTS "EntitlementRevocationOutbox" (
   "visCompanyId"  TEXT NOT NULL,
   "reason"        TEXT NOT NULL,
   "seq"           BIGINT NOT NULL,
-  CONSTRAINT "EntitlementRevocationOutbox_pkey" PRIMARY KEY ("domusClinicId")
+  CONSTRAINT "EntitlementRevocationOutbox_pkey" PRIMARY KEY ("domusClinicId"),
+  -- Endurecimento (Codex): so os 2 reasons validos; um reason inesperado viraria
+  -- TTL no Domus (fail-open) — o CHECK rejeita no banco (fail-closed).
+  CONSTRAINT "EntitlementRevocationOutbox_reason_check"
+    CHECK ("reason" IN ('COMPANY_DELETED', 'UNLINKED'))
 );
 
 -- Grants defensivos (idempotentes; redundantes com single-owner neondb_owner).
@@ -66,10 +70,18 @@ BEGIN
   IF OLD."domusClinicId" IS NULL THEN
     RETURN NEW;
   END IF;
+  -- domusClinicId e UUID no banco; a funcao recebe TEXT → cast explicito ::text
+  -- (P0 achado Codex: sem o cast, o Postgres nao resolve a funcao e o trigger
+  -- AFTER falha, REVERTENDO a escrita da Company).
   IF OLD."platformProduct" = 'VIS_MEDICAL' AND NEW."platformProduct" IS DISTINCT FROM 'VIS_MEDICAL' THEN
-    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId", OLD."id", 'COMPANY_DELETED');
-  ELSIF NEW."domusClinicId" IS DISTINCT FROM OLD."domusClinicId" THEN
-    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId", OLD."id", 'UNLINKED');
+    -- deixou de ser medical: terminal
+    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId"::text, OLD."id", 'COMPANY_DELETED');
+  ELSIF NEW."platformProduct" = 'VIS_MEDICAL'
+        AND NEW."domusClinicId" IS DISTINCT FROM OLD."domusClinicId" THEN
+    -- trocou/perdeu o vinculo E SEGUE medical: reversivel (P1 achado Codex — o guard
+    -- NEW=VIS_MEDICAL impede que uma limpeza VIS_APP/A→VIS_APP/NULL rebaixe um
+    -- COMPANY_DELETED terminal ja emitido para UNLINKED/TTL).
+    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId"::text, OLD."id", 'UNLINKED');
   END IF;
   RETURN NEW;
 END;
@@ -90,7 +102,8 @@ CREATE OR REPLACE FUNCTION "trg_company_revocation_del"()
 RETURNS trigger AS $$
 BEGIN
   IF OLD."platformProduct" = 'VIS_MEDICAL' AND OLD."domusClinicId" IS NOT NULL THEN
-    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId", OLD."id", 'COMPANY_DELETED');
+    -- ::text: domusClinicId e UUID, a funcao recebe TEXT (P0 achado Codex)
+    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId"::text, OLD."id", 'COMPANY_DELETED');
   END IF;
   RETURN OLD;
 END;
