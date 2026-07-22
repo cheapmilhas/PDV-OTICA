@@ -257,6 +257,16 @@ model EntitlementOutbox {
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
 
+/// Outbox de REVOGACAO (Fase 3): chaveada por domusClinicId, SEM FK pra Company
+/// (sobrevive ao delete da company). Guarda visCompanyId (OLD.id) + reason
+/// (COMPANY_DELETED terminal | UNLINKED TTL). Mantida por triggers de Company.
+model EntitlementRevocationOutbox {
+  domusClinicId String @id
+  visCompanyId  String
+  reason        String
+  seq           BigInt
+}
+
 model Branch {
   id                    String                   @id @default(cuid())
   companyId             String

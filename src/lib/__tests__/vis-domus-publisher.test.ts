@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock do prisma: $transaction executa o callback com um "tx" que é o próprio
 // objeto de mocks (as leituras do publisher rodam nele). vi.hoisted: o txMock
@@ -25,6 +25,7 @@ vi.mock("@/lib/subscription", () => ({
 import {
   buildEntitlementPayload,
   tryPublishEntitlementForCompany,
+  tryRevokeEntitlementForClinic,
 } from "../vis-domus-publisher";
 import { checkSubscription } from "@/lib/subscription";
 
@@ -260,5 +261,50 @@ describe("tryPublishEntitlementForCompany (resultado tipado p/ o worker do outbo
     const r = await tryPublishEntitlementForCompany("c1");
     expect(r.kind).toBe("failed");
     if (r.kind === "failed") expect(r.reason).toBe("ECONNRESET");
+  });
+});
+
+describe("tryRevokeEntitlementForClinic — revoga clinicId orfao", () => {
+  const CLINIC = "00000000-0000-4000-8000-000000000abc"; // UUID valido (Domus exige)
+  const OLD_ENV = { ...process.env };
+
+  beforeEach(() => {
+    process.env = { ...OLD_ENV };
+  });
+
+  afterEach(() => {
+    // Não vaza o stub de fetch para outras suites (o arquivo não tem afterEach global).
+    vi.unstubAllGlobals();
+    process.env = { ...OLD_ENV };
+  });
+
+  it("config ausente → failed", async () => {
+    delete process.env.VIS_DOMUS_WEBHOOK_SECRET;
+    delete process.env.DOMUS_WEBHOOK_URL;
+    const r = await tryRevokeEntitlementForClinic("visco-1", CLINIC, "42", "UNLINKED");
+    expect(r.kind).toBe("failed");
+  });
+
+  it("fetch 2xx → published; body casa com validateSnapshot", async () => {
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "s"; process.env.DOMUS_WEBHOOK_URL = "https://d";
+    let sentBody: any;
+    vi.stubGlobal("fetch", vi.fn(async (_u, init: any) => { sentBody = JSON.parse(init.body); return { ok: true } as Response; }));
+    const r = await tryRevokeEntitlementForClinic("visco-1", CLINIC, "42", "COMPANY_DELETED");
+    expect(r.kind).toBe("published");
+    expect(sentBody.version).toBe(1);
+    expect(sentBody.visCompanyId).toBe("visco-1");
+    expect(sentBody.domusClinicId).toBe(CLINIC);
+    expect(sentBody.sourceRevision).toBe("42");
+    expect(sentBody.planName).toBeNull();
+    expect(sentBody.entitlement).toEqual({ writeAllowed: false, reason: "COMPANY_DELETED" });
+    expect(typeof sentBody.eventId).toBe("string");
+    expect(typeof sentBody.sourceUpdatedAt).toBe("string");
+  });
+
+  it("fetch !ok → failed", async () => {
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "s"; process.env.DOMUS_WEBHOOK_URL = "https://d";
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409 } as Response)));
+    const r = await tryRevokeEntitlementForClinic("visco-1", CLINIC, "42", "UNLINKED");
+    expect(r.kind).toBe("failed");
   });
 });
