@@ -11,7 +11,7 @@ vi.mock("@/lib/cron-instrument", () => ({
   withHeartbeat: (_name: string, fn: () => any) => fn(),
 }));
 
-import { GET } from "../route";
+import { GET } from "./route";
 import { prisma } from "@/lib/prisma";
 import { publishEntitlementForCompany } from "@/lib/vis-domus-publisher";
 
