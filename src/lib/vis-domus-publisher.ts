@@ -138,6 +138,7 @@ function assemblePayload(
 
   const dto = projectEntitlement({
     allowed: decision.allowed,
+    readOnly: decision.readOnly,
     status: decision.status,
     planName: decision.planName ?? sub?.plan?.name,
   });
