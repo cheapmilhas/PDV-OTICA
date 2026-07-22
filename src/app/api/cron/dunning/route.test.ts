@@ -211,6 +211,9 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
     });
     const opts = suspendedCall![3] as { channels: string[] };
     expect(opts.channels).not.toContain("inapp");
+
+    // Cadeado: a suspensão deve propagar writeAllowed=false ao Domus na hora.
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-4");
   });
 
   it("já SUSPENDED → não dispara SUBSCRIPTION_SUSPENDED novamente", async () => {
@@ -259,6 +262,9 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
     });
     const opts = canceledCall![3] as { channels: string[] };
     expect(opts.channels).not.toContain("inapp");
+
+    // Cadeado: o cancelamento deve propagar writeAllowed=false ao Domus na hora.
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-6");
   });
 
   it(">=30d mas lastStage=7 (canCancel=false) e createCompanyNotification falha → cancelamento ADIADO, NÃO dispara SUBSCRIPTION_CANCELED", async () => {

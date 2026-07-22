@@ -11,8 +11,12 @@ import type { SubscriptionStatus } from "@prisma/client";
 export interface EntitlementInput {
   /** Decisão canônica — vem de SubscriptionCheckResult.allowed. */
   allowed: boolean;
-  /** readOnly de SubscriptionCheckResult — PAST_DUE dá allowed:true+readOnly:true. */
-  readOnly?: boolean;
+  /**
+   * readOnly de SubscriptionCheckResult — PAST_DUE dá allowed:true+readOnly:true.
+   * OBRIGATÓRIO (fail-closed): omitir faria writeAllowed = allowed (falha ABERTA,
+   * direção errada para um campo de segurança). Ver projectEntitlement.
+   */
+  readOnly: boolean;
   /** Status vindo de checkSubscription (inclui NO_SUBSCRIPTION). */
   status: SubscriptionStatus | "NO_SUBSCRIPTION";
   /** Nome do plano — ausente nos ramos kill-switch/bypass/sem-empresa. */

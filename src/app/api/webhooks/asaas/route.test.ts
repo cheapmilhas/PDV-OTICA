@@ -192,6 +192,9 @@ describe("POST /api/webhooks/asaas — Task 8: notifyCompany on PAYMENT_CONFIRME
         channels: expect.arrayContaining(["email", "inapp"]),
       }),
     );
+
+    // Cadeado: pagamento confirmado propaga writeAllowed=true ao Domus na hora.
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
   });
 
   it("PAYMENT_RECEIVED também dispara notifyCompany", async () => {
@@ -213,6 +216,15 @@ describe("POST /api/webhooks/asaas — Task 8: notifyCompany on PAYMENT_CONFIRME
 
     expect(res.status).toBe(200);
     expect(notifyCompany).not.toHaveBeenCalled();
+  });
+
+  it("PAYMENT_OVERDUE → propaga writeAllowed=false ao Domus na hora (Cadeado, entrada no read-only)", async () => {
+    // subscriptionFindFirst resolve para COMPANY_ID (setup do beforeEach) → a
+    // transição para PAST_DUE deve publicar o entitlement na hora, não só no pull.
+    const res = await POST(makeRequest(overdueEvent));
+
+    expect(res.status).toBe(200);
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
   });
 
   it("amountLabel formata o valor em BRL corretamente", async () => {

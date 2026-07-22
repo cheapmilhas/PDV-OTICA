@@ -281,6 +281,11 @@ export async function POST(request: Request) {
             data: { status: "OVERDUE" },
           });
         }
+        // Propaga writeAllowed=false ao Domus na hora (Cadeado, entrada no
+        // read-only): PAST_DUE agora bloqueia escrita no Domus. Sem isto, a
+        // clínica só ficaria bloqueada no pull diário (~24h). AWAIT best-effort
+        // (publishEntitlementForCompany nunca lança); ver ramos CONFIRMED/DELETED.
+        if (companyId) await publishEntitlementForCompany(companyId);
         break;
       }
 
@@ -309,6 +314,7 @@ export async function POST(request: Request) {
             data: { status: "PAST_DUE" },
           });
         }
+        if (companyId) await publishEntitlementForCompany(companyId);
         break;
       }
 

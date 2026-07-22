@@ -30,17 +30,17 @@ describe("projectEntitlement — os 6 estados do enum", () => {
   });
 
   it("TRIAL_EXPIRED → NÃO escreve", () => {
-    const r = projectEntitlement({ ...base, allowed: false, status: "TRIAL_EXPIRED" });
+    const r = projectEntitlement({ ...base, allowed: false, readOnly: false, status: "TRIAL_EXPIRED" });
     expect(r.writeAllowed).toBe(false);
     expect(r.reason).toBe("TRIAL_EXPIRED");
   });
 
   it("SUSPENDED → NÃO escreve", () => {
-    expect(projectEntitlement({ ...base, allowed: false, status: "SUSPENDED" }).writeAllowed).toBe(false);
+    expect(projectEntitlement({ ...base, allowed: false, readOnly: false, status: "SUSPENDED" }).writeAllowed).toBe(false);
   });
 
   it("CANCELED → NÃO escreve", () => {
-    expect(projectEntitlement({ ...base, allowed: false, status: "CANCELED" }).writeAllowed).toBe(false);
+    expect(projectEntitlement({ ...base, allowed: false, readOnly: false, status: "CANCELED" }).writeAllowed).toBe(false);
   });
 });
 
@@ -52,7 +52,7 @@ describe("projectEntitlement — robustez", () => {
   });
 
   it("NO_SUBSCRIPTION → NÃO escreve", () => {
-    expect(projectEntitlement({ allowed: false, status: "NO_SUBSCRIPTION" }).writeAllowed).toBe(false);
+    expect(projectEntitlement({ allowed: false, readOnly: false, status: "NO_SUBSCRIPTION" }).writeAllowed).toBe(false);
   });
 
   it("writeAllowed = allowed && !readOnly (readOnly corta a escrita mesmo com allowed)", () => {
