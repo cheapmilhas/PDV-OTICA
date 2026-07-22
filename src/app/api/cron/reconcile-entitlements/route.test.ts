@@ -48,6 +48,11 @@ describe("reconcile-entitlements cron", () => {
         where: { platformProduct: "VIS_MEDICAL", domusClinicId: { not: null } },
       }),
     );
+    // Telemetria honesta: reporta attempted (não published) — publish é best-effort/void.
+    const body = await res.json();
+    expect(body.attempted).toBe(2);
+    expect(body.reconciled).toBe(2);
+    expect(body).not.toHaveProperty("published");
   });
   it("falha de publish não derruba o handler (best-effort)", async () => {
     (prisma.company.findMany as any).mockResolvedValue([{ id: "c1" }]);

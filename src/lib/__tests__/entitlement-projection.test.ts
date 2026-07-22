@@ -61,3 +61,28 @@ describe("projectEntitlement — robustez", () => {
     expect(projectEntitlement({ allowed: false, readOnly: false, status: "SUSPENDED" }).writeAllowed).toBe(false);
   });
 });
+
+describe("projectEntitlement — kill-switch de emergência (gatingDisabled)", () => {
+  it("gatingDisabled:true força writeAllowed:true mesmo com allowed:false (espelha o guard local do Vis)", () => {
+    // DISABLE_PLAN_FEATURE_GATING libera toda escrita no Vis (requireWriteAccess);
+    // o Domus tem de espelhar ou ficaria bloqueando enquanto o Vis já liberou.
+    const r = projectEntitlement({ allowed: false, readOnly: false, gatingDisabled: true, status: "SUSPENDED" });
+    expect(r.writeAllowed).toBe(true);
+  });
+
+  it("gatingDisabled:true força writeAllowed:true mesmo em readOnly (PAST_DUE)", () => {
+    const r = projectEntitlement({ allowed: true, readOnly: true, gatingDisabled: true, status: "PAST_DUE" });
+    expect(r.writeAllowed).toBe(true);
+  });
+
+  it("gatingDisabled:false → comportamento normal (allowed && !readOnly)", () => {
+    expect(projectEntitlement({ allowed: false, readOnly: false, gatingDisabled: false, status: "SUSPENDED" }).writeAllowed).toBe(false);
+    expect(projectEntitlement({ allowed: true, readOnly: false, gatingDisabled: false, status: "ACTIVE" }).writeAllowed).toBe(true);
+    expect(projectEntitlement({ allowed: true, readOnly: true, gatingDisabled: false, status: "PAST_DUE" }).writeAllowed).toBe(false);
+  });
+
+  it("gatingDisabled omitido → comportamento normal (não altera a decisão)", () => {
+    expect(projectEntitlement({ allowed: false, readOnly: false, status: "SUSPENDED" }).writeAllowed).toBe(false);
+    expect(projectEntitlement({ allowed: true, readOnly: false, status: "ACTIVE" }).writeAllowed).toBe(true);
+  });
+});

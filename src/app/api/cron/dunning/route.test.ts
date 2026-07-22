@@ -265,6 +265,11 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
 
     // Cadeado: o cancelamento deve propagar writeAllowed=false ao Domus na hora.
     expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-6");
+
+    // Telemetria honesta: reporta attempted (não published) — publish é best-effort/void.
+    const body = await res.json();
+    expect(body.entitlementsAttempted).toBe(1);
+    expect(body).not.toHaveProperty("entitlementsPublished");
   });
 
   it(">=30d mas lastStage=7 (canCancel=false) e createCompanyNotification falha → cancelamento ADIADO, NÃO dispara SUBSCRIPTION_CANCELED", async () => {

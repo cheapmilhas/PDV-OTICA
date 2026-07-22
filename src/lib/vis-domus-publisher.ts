@@ -141,6 +141,10 @@ function assemblePayload(
     readOnly: decision.readOnly,
     status: decision.status,
     planName: decision.planName ?? sub?.plan?.name,
+    // Kill-switch de emergência: quando ligado, o guard local do Vis libera toda
+    // escrita — o Domus tem de espelhar (writeAllowed:true) ou ficaria bloqueando
+    // enquanto o Vis já liberou. Passado explícito (projectEntitlement é puro).
+    gatingDisabled: process.env.DISABLE_PLAN_FEATURE_GATING === "true",
   });
 
   // sourceUpdatedAt = relógio LEGADO (mantido no payload — o Domus ainda o exige).

@@ -21,6 +21,13 @@ export interface EntitlementInput {
   status: SubscriptionStatus | "NO_SUBSCRIPTION";
   /** Nome do plano — ausente nos ramos kill-switch/bypass/sem-empresa. */
   planName?: string;
+  /**
+   * Kill-switch de emergência DISABLE_PLAN_FEATURE_GATING — quando true, força
+   * writeAllowed:true para espelhar o guard local do Vis (requireWriteAccess
+   * também libera toda escrita nesse modo). Sem isto, o Domus continuaria
+   * bloqueando (writeAllowed:false) enquanto o Vis já liberou localmente.
+   */
+  gatingDisabled?: boolean;
 }
 
 export interface EntitlementDTO {
@@ -40,7 +47,9 @@ export function projectEntitlement(input: EntitlementInput): EntitlementDTO {
     // writeAllowed espelha o guard local do Vis: bloqueia se !allowed OU readOnly
     // (PAST_DUE no grace period). Sem isto, a clínica inadimplente escreveria no
     // Domus enquanto está bloqueada de escrever no Vis (P0-A da spec cadeado).
-    writeAllowed: input.allowed && !input.readOnly,
+    // O kill-switch de emergência (gatingDisabled) força true — espelha o
+    // requireWriteAccess local, que também libera toda escrita nesse modo.
+    writeAllowed: input.gatingDisabled ? true : input.allowed && !input.readOnly,
     reason: input.status,
     subscriptionStatus: input.status,
     planName: input.planName ?? null,

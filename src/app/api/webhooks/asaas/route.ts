@@ -262,8 +262,12 @@ export async function POST(request: Request) {
           // mesmo OVERDUE — isso resetaria o relógio de dunning (suspensão/
           // cancelamento contam dias desde pastDueSince). Só marca a primeira
           // vez (updateMany com guard pastDueSince: null).
+          // Guard de status: um OVERDUE (mesmo primeira vez, pastDueSince:null)
+          // NÃO pode ressuscitar uma assinatura terminal (SUSPENDED/CANCELED) de
+          // volta a PAST_DUE — o segundo updateMany abaixo já protege, mas este
+          // rodava ANTES sem o guard e regredia o estado terminal.
           await prisma.subscription.updateMany({
-            where: { id: subscriptionDbId, pastDueSince: null },
+            where: { id: subscriptionDbId, pastDueSince: null, status: { notIn: ["SUSPENDED", "CANCELED"] } },
             data: { status: "PAST_DUE", pastDueSince: new Date() },
           });
           // Garante status PAST_DUE mesmo se pastDueSince já existia — MAS sem
@@ -307,10 +311,12 @@ export async function POST(request: Request) {
             data: { status: "OVERDUE", adminNotes: "Chargeback solicitado" },
           });
         }
-        // Suspende assinatura preventivamente
+        // Suspende assinatura preventivamente — updateMany com guard de status
+        // (não `update`): um chargeback não pode regredir uma assinatura terminal
+        // (SUSPENDED/CANCELED) de volta a PAST_DUE.
         if (subscriptionDbId) {
-          await prisma.subscription.update({
-            where: { id: subscriptionDbId },
+          await prisma.subscription.updateMany({
+            where: { id: subscriptionDbId, status: { notIn: ["SUSPENDED", "CANCELED"] } },
             data: { status: "PAST_DUE" },
           });
         }

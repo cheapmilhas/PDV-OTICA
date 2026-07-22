@@ -50,24 +50,27 @@ export async function GET(request: Request) {
         select: { id: true },
       });
       const ids = companies.map((c) => c.id);
-      let published = 0;
       for (let i = 0; i < ids.length; i += CONCURRENCY) {
         await Promise.all(
           ids.slice(i, i + CONCURRENCY).map(async (id) => {
             try {
               await publishEntitlementForCompany(id);
-              published++;
             } catch {
               // publishEntitlementForCompany não lança; guard extra por segurança.
             }
           }),
         );
       }
+      // attempted (não confirmado): publishEntitlementForCompany é best-effort/void
+      // (falha de config/rede/non-2xx não propaga), então só sabemos quantas
+      // publicações TENTAMOS, não quantas o Domus aceitou. A confirmação real virá
+      // com o outbox durável da Fase 2. Reportar "published" mascararia um run 100%
+      // falho como 100% publicado.
       log.info("reconcile de entitlement medical concluído", {
         reconciled: companies.length,
-        published,
+        attempted: companies.length,
       });
-      return NextResponse.json({ ok: true, reconciled: companies.length, published });
+      return NextResponse.json({ ok: true, reconciled: companies.length, attempted: companies.length });
     });
   } catch (err) {
     log.error("falha geral no reconcile de entitlement medical", {

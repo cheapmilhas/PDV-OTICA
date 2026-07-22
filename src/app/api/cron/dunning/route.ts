@@ -264,10 +264,14 @@ export async function GET(request: Request) {
         );
       }
 
+      // attempted (não confirmado): publishEntitlementForCompany é best-effort/void
+      // (falha de config/rede/non-2xx não propaga), então companies.length é o
+      // número de companies que TENTAMOS publicar, não entregas confirmadas. A
+      // confirmação real virá com o outbox durável da Fase 2.
       return NextResponse.json({
         ok: true,
         ...summary,
-        entitlementsPublished: companies.length,
+        entitlementsAttempted: companies.length,
         runAt: now.toISOString(),
       });
     });
