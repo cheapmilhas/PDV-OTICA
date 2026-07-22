@@ -18,6 +18,12 @@ vi.mock("@/services/saas-notification.service", () => ({
   notifyCompany: (...a: unknown[]) => notifyCompany(...a),
 }));
 
+// vis-domus-publisher — no-op stub (evita I/O real do publisher no webhook)
+const publishEntitlementForCompany = vi.fn();
+vi.mock("@/lib/vis-domus-publisher", () => ({
+  publishEntitlementForCompany: (...a: unknown[]) => publishEntitlementForCompany(...a),
+}));
+
 // prisma
 const billingEventFindUnique = vi.fn();
 const billingEventUpsert = vi.fn();

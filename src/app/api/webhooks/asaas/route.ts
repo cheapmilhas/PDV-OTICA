@@ -7,6 +7,7 @@ import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { captureMessage } from "@/lib/sentry";
 import { notifyCompany } from "@/services/saas-notification.service";
+import { publishEntitlementForCompany } from "@/lib/vis-domus-publisher";
 
 const log = logger.child({ webhook: "asaas" });
 
@@ -208,6 +209,10 @@ export async function POST(request: Request) {
             where: { id: subscriptionDbId, activatedAt: null },
             data: { activatedAt: new Date() },
           });
+          // Propaga writeAllowed=true ao Domus na hora (Cadeado, simetria do bloqueio):
+          // cliente pagou → DESbloqueia escrita clínica sem esperar o pull diário
+          // (senão ficaria bloqueado ~24h APÓS pagar). AWAIT best-effort (ver ramo CANCELED).
+          if (companyId) await publishEntitlementForCompany(companyId);
         }
         // Atualiza Invoice se existir
         if (event.payment?.id) {
@@ -318,6 +323,13 @@ export async function POST(request: Request) {
             },
           });
           if (companyId) {
+            // Propaga writeAllowed=false ao Domus na hora (Cadeado): cancelamento via
+            // Asaas bloqueia escrita clínica sem esperar o pull diário. AWAIT (não
+            // fire-and-forget) — em serverless o void-promise pode ser cortado no
+            // freeze pós-resposta e a janela não fecharia. `publishEntitlementForCompany`
+            // é best-effort (nunca lança); falha cai no pull. Antes do trackServer
+            // (telemetria) pra não depender do PostHog.
+            await publishEntitlementForCompany(companyId);
             await trackServer(companyId, "subscription_canceled", {
               asaasSubscriptionId: subRef,
             });

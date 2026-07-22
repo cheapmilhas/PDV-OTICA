@@ -55,6 +55,12 @@ vi.mock("@/services/saas-notification.service", () => ({
   notifyCompany: (...a: unknown[]) => notifyCompany(...a),
 }));
 
+// vis-domus-publisher — no-op stub (evita I/O real do publisher no cron)
+const publishEntitlementForCompany = vi.fn();
+vi.mock("@/lib/vis-domus-publisher", () => ({
+  publishEntitlementForCompany: (...a: unknown[]) => publishEntitlementForCompany(...a),
+}));
+
 // ── Import AFTER mocks ─────────────────────────────────────────────────────────
 import { GET } from "./route";
 
@@ -87,6 +93,7 @@ beforeEach(() => {
   createAdminNotification.mockReset().mockResolvedValue(true);
   logActivity.mockReset().mockResolvedValue(undefined);
   notifyCompany.mockReset().mockResolvedValue({ status: "SENT" });
+  publishEntitlementForCompany.mockReset().mockResolvedValue(undefined);
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────

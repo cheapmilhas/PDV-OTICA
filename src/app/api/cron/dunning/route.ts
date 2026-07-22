@@ -19,6 +19,7 @@ import { createAdminNotification } from "@/services/admin-notification.service";
 import { logActivity } from "@/services/activity-log.service";
 import { notifyCompany } from "@/services/saas-notification.service";
 import { withHeartbeat } from "@/lib/cron-instrument";
+import { publishEntitlementForCompany } from "@/lib/vis-domus-publisher";
 
 const log = logger.child({ route: "cron/dunning" });
 
@@ -73,6 +74,12 @@ export async function GET(request: Request) {
         cancelDeferred: 0,
         errors: 0,
       };
+
+      // Companies cujo entitlement precisa ser republicado ao Domus (Cadeado):
+      // Set dedup (uma sub pode ser suspensa E cancelada no mesmo run → 1 publish).
+      // Publicamos ao FINAL, com await + concorrência limitada — fire-and-forget num
+      // cron serverless pode ser cortado no freeze pós-resposta (achado Codex).
+      const toPublish = new Set<string>();
 
       for (const sub of overdue) {
         try {
@@ -144,6 +151,10 @@ export async function GET(request: Request) {
               where: { id: sub.id },
               data: { status: "SUSPENDED" },
             });
+            // Propaga writeAllowed=false ao Domus (Cadeado): sem isto, a suspensão só
+            // chegava no pull diário (~24h de janela de escrita indevida). Acumula p/
+            // publicar ao final do batch.
+            toPublish.add(sub.companyId);
             summary.suspended++;
             await createAdminNotification({
               type: AdminNotificationType.INVOICE_OVERDUE,
@@ -177,6 +188,8 @@ export async function GET(request: Request) {
                   cancelReason: "Inadimplência > 30 dias",
                 },
               });
+              // Propaga writeAllowed=false ao Domus (Cadeado). Ver nota no ramo SUSPENDED.
+              toPublish.add(sub.companyId);
               summary.canceled++;
               await createAdminNotification({
                 type: AdminNotificationType.SUBSCRIPTION_CANCELED,
@@ -238,7 +251,25 @@ export async function GET(request: Request) {
         }
       }
 
-      return NextResponse.json({ ok: true, ...summary, runAt: now.toISOString() });
+      // Flush do Cadeado: publica writeAllowed=false ao Domus pras companies que
+      // mudaram de estado neste batch. await (não fire-and-forget) — o cron serverless
+      // pode congelar após a resposta e cortar promises pendentes. Concorrência
+      // limitada (5) pra não abrir N snapshots simultâneos. Best-effort: cada publish
+      // nunca lança; falha residual cai no pull de reparação.
+      const companies = [...toPublish];
+      const PUBLISH_CONCURRENCY = 5;
+      for (let i = 0; i < companies.length; i += PUBLISH_CONCURRENCY) {
+        await Promise.all(
+          companies.slice(i, i + PUBLISH_CONCURRENCY).map((cid) => publishEntitlementForCompany(cid)),
+        );
+      }
+
+      return NextResponse.json({
+        ok: true,
+        ...summary,
+        entitlementsPublished: companies.length,
+        runAt: now.toISOString(),
+      });
     });
   } catch (err) {
     log.error("Erro geral no cron dunning", {
