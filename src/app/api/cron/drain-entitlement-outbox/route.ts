@@ -1,7 +1,7 @@
 import { NextResponse } from "next/server";
 import { logger } from "@/lib/logger";
 import { withHeartbeat } from "@/lib/cron-instrument";
-import { runOutboxDrainBatch } from "@/lib/entitlement-outbox-worker";
+import { runOutboxDrainBatch, runRevocationDrainBatch } from "@/lib/entitlement-outbox-worker";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -34,9 +34,10 @@ export async function GET(request: Request) {
 
   try {
     return await withHeartbeat("drain-entitlement-outbox", async () => {
-      const batch = await runOutboxDrainBatch();
-      log.info("batch de drain processado", { ...batch });
-      return NextResponse.json({ ok: true, ...batch });
+      const publish = await runOutboxDrainBatch();
+      const revocation = await runRevocationDrainBatch();
+      log.info("batch de drain processado", { publish, revocation });
+      return NextResponse.json({ ok: true, publish, revocation });
     });
   } catch (err) {
     log.error("falha geral no worker de drain do outbox", {

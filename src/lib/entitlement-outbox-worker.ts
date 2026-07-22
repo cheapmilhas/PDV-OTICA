@@ -1,6 +1,9 @@
 import { Prisma } from "@prisma/client";
 import { prisma } from "@/lib/prisma";
-import { tryPublishEntitlementForCompany } from "@/lib/vis-domus-publisher";
+import {
+  tryPublishEntitlementForCompany,
+  tryRevokeEntitlementForClinic,
+} from "@/lib/vis-domus-publisher";
 
 const BATCH_SIZE = 50;
 const CONCURRENCY = 5;
@@ -48,4 +51,54 @@ export async function runOutboxDrainBatch(): Promise<OutboxDrainResult> {
   }
 
   return { read: rows.length, drained, failed };
+}
+
+export interface RevocationDrainResult {
+  read: number;
+  revoked: number;
+  failed: number;
+}
+
+/**
+ * Drena o EntitlementRevocationOutbox: revoga cada clinicId orfao no Domus.
+ * Delete condicional por (domusClinicId, seq) — igual ao drain de publish.
+ * Nao ha "noop" (revogacao sempre tem clinicId + reason); so published deleta.
+ * Passa visCompanyId + reason (COMPANY_DELETED terminal | UNLINKED TTL) ao publisher.
+ */
+export async function runRevocationDrainBatch(): Promise<RevocationDrainResult> {
+  const rows = await prisma.$queryRaw<
+    Array<{ domusClinicId: string; visCompanyId: string; reason: string; seq: bigint }>
+  >(Prisma.sql`
+    SELECT "domusClinicId", "visCompanyId", "reason", "seq" FROM "EntitlementRevocationOutbox"
+    ORDER BY "seq" ASC
+    LIMIT ${BATCH_SIZE}
+  `);
+
+  let revoked = 0;
+  let failed = 0;
+
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      batch.map(async ({ domusClinicId, visCompanyId, reason, seq }) => {
+        const r = await tryRevokeEntitlementForClinic(
+          visCompanyId,
+          domusClinicId,
+          seq.toString(),
+          reason as "COMPANY_DELETED" | "UNLINKED",
+        );
+        if (r.kind !== "published") {
+          failed++;
+          return; // NAO deleta — reprocessa
+        }
+        await prisma.$executeRaw(Prisma.sql`
+          DELETE FROM "EntitlementRevocationOutbox"
+          WHERE "domusClinicId" = ${domusClinicId} AND "seq" = ${seq}
+        `);
+        revoked++;
+      }),
+    );
+  }
+
+  return { read: rows.length, revoked, failed };
 }
