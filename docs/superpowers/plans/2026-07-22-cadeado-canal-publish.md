@@ -794,29 +794,41 @@ Expected: 0 errors, PASS.
 
 ---
 
-## FASE 3 — Revogação do vínculo órfão (cross-repo, receiver-first)
+## FASE 3 — Revogação do vínculo órfão (SÓ lado Vis — gate cross-repo JÁ satisfeito)
 
-### Task 3.0 (GATE cross-repo): O Domus tem de aceitar revogação por-clinicId PRIMEIRO
+### Task 3.0 (GATE cross-repo) — ✅ RESOLVIDO 2026-07-22: o Domus JÁ aceita revogação
 
-**Files:** nenhum neste repo. É um GATE — a Fase 3 do Vis (emitir revogação) NÃO liga até o Domus aceitar.
+**Files:** nenhum. Verificação cross-repo concluída.
 
-Contexto (P0-B): o outbox por-company (§4) não revoga o entitlement órfão quando `domusClinicId A→B`, `A→NULL`, `platformProduct→VIS_APP`, ou a Company é deletada. A revogação precisa publicar `writeAllowed:false` para um `clinicId` SEM company viva — formato que o receptor atual do Domus não aceita. Receiver-first (igual ao D1).
+Contexto (P0-B): o outbox por-company não revoga o entitlement órfão quando `domusClinicId A→B`, `platformProduct VIS_MEDICAL→VIS_APP`, ou a Company é deletada. A revogação publica `writeAllowed:false` para o clinicId órfão.
 
-- [ ] **Step 1: Especificar o contrato de revogação (payload)**
+**DESCOBERTA (verificado em `~/SISTEMACLINICADOMUS/src/lib/vis-entitlement-sync.ts`):** o receptor do Domus **JÁ aceita o formato de revogação sem trabalho novo.** O `validateSnapshot` (`:143-198`) aceita qualquer snapshot com `entitlement:{writeAllowed:boolean, reason:string}`, exigindo `visCompanyId` não-vazio (`:166`) e `domusClinicId` UUID (`:167`) e `sourceRevision` string decimal opcional (`:157-165`). O `computeDenyVerifiedUntil` (`:82-84`) já implementa as DUAS semânticas decididas pelo dono:
+- `reason === "COMPANY_DELETED"` (`TERMINAL_DELETED_REASON`, `:61`) → `TERMINAL_DENY_UNTIL` = bloqueio **terminal não-expirável**.
+- qualquer outro reason com `writeAllowed:false` → `syncedAt + DENY_TTL_MS` = bloqueio **por TTL** (reversível).
 
-Definir aqui o payload de revogação que o Vis emitirá e o Domus receberá:
+**Contrato que o Vis DEVE honrar (memória D1.4):** o Domus rejeita tombstone terminal **SEM `sourceRevision`** numa clínica migrada (`terminal_rejected`, HTTP 409). Então a revogação do Vis **precisa carregar `sourceRevision`** (string decimal, da mesma sequence). O snapshot também precisa de `visCompanyId` — usar o `OLD.id` da company que desvinculou/foi deletada (o trigger tem acesso).
+
+**DECISÃO DO DONO (2026-07-22) — semântica dos dois cenários:**
+- DELETE de company OU `platformProduct VIS_MEDICAL→VIS_APP` → reason **`COMPANY_DELETED`** (terminal, nunca volta).
+- Troca de vínculo `domusClinicId A→B` (A perde o vínculo, pode ser revinculada depois) → reason **`UNLINKED`** (TTL, reversível).
+
+**Formato do payload de revogação (o que o Vis emite; casa com `validateSnapshot`):**
 ```
-{ domusClinicId: string, entitlement: { writeAllowed: false, reason: "UNLINKED" }, sourceRevision: string, generatedAt: ISO }
+{
+  version: 1,
+  eventId: <uuid novo>,
+  sourceUpdatedAt: <ISO>,
+  sourceRevision: <string decimal, seq>,
+  visCompanyId: <OLD.id da company órfã>,
+  domusClinicId: <clinicId órfão UUID>,
+  subscriptionStatus: "UNLINKED",   // string qualquer; não decide nada no Domus
+  planName: null,
+  entitlement: { writeAllowed: false, reason: "COMPANY_DELETED" | "UNLINKED" }
+}
 ```
-Sem `visCompanyId`, sem `plan` (não há company). O Domus grava `writeAllowed:false` para aquele clinicId, respeitando `sourceRevision` monotônico.
+(É v1 — sem `plan.tier`. O Domus v1 preserva/não exige tier. `subscriptionStatus` é só display.)
 
-- [ ] **Step 2: Sub-plano do lado Domus (outro repo)**
-
-O trabalho no Domus (`~/SISTEMACLINICADOMUS`) é uma sub-fase própria: rota/branch que aceita o payload de revogação, valida HMAC (mesmo segredo do canal de entitlement), grava `writeAllowed:false` por clinicId ordenando por `sourceRevision`. Planejar e quebrar com o Codex DO LADO DOMUS (não misturar árvores). Só depois de esse contrato estar EM PROD no Domus, prosseguir para a Task 3.1 do Vis.
-
-- [ ] **Step 3: Registrar o estado do gate**
-
-Anotar aqui se o Domus já aceita revogação. Se NÃO: parar a Fase 3 do Vis; o buraco fica coberto por runbook manual (admin revoga no Domus na mão nas raras desvinculações). Hoje ~2 companies, vínculo estável → risco teórico. Se SIM: prosseguir.
+**Conclusão do gate:** ✅ **satisfeito** — nenhuma mudança no Domus. A Fase 3 é INTEIRAMENTE no lado Vis. Prosseguir para 3.1.
 
 ### Task 3.1: Publisher de revogação por-clinicId
 
@@ -829,21 +841,39 @@ Contexto: função que publica um payload de revogação para um `domusClinicId`
 - [ ] **Step 1: Escrever o teste**
 
 Adicionar ao arquivo de teste do publisher:
+O payload de revogação DEVE casar com o `validateSnapshot` do Domus (Task 3.0): `version:1`, `eventId` uuid, `sourceUpdatedAt` ISO, `sourceRevision` string decimal, `visCompanyId` não-vazio, `domusClinicId` UUID, `subscriptionStatus` string, `planName:null`, `entitlement:{writeAllowed:false, reason}`. `reason` = `"COMPANY_DELETED"` (terminal) ou `"UNLINKED"` (TTL). Reusa `randomUUID` e `signVisDomus` (já no arquivo).
+
 ```typescript
+export type RevocationReason = "COMPANY_DELETED" | "UNLINKED";
+
 describe("tryRevokeEntitlementForClinic — revoga clinicId orfao", () => {
+  const CLINIC = "00000000-0000-4000-8000-000000000abc"; // UUID valido (Domus exige)
   it("config ausente → failed", async () => {
     delete process.env.VIS_DOMUS_WEBHOOK_SECRET;
     delete process.env.DOMUS_WEBHOOK_URL;
-    const r = await tryRevokeEntitlementForClinic("clinic-a", "42");
+    const r = await tryRevokeEntitlementForClinic("visco-1", CLINIC, "42", "UNLINKED");
     expect(r.kind).toBe("failed");
   });
-  it("fetch 2xx → published (writeAllowed:false, reason UNLINKED)", async () => {
-    // envs setadas; capturar o body enviado e assertar writeAllowed:false + reason UNLINKED + domusClinicId
-    const r = await tryRevokeEntitlementForClinic("clinic-a", "42");
+  it("fetch 2xx → published; body casa com validateSnapshot (writeAllowed:false, reason, visCompanyId, domusClinicId, sourceRevision)", async () => {
+    // envs setadas; capturar o body do fetch e assertar os campos abaixo
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "s"; process.env.DOMUS_WEBHOOK_URL = "https://d";
+    let sentBody: any;
+    vi.stubGlobal("fetch", vi.fn(async (_u, init: any) => { sentBody = JSON.parse(init.body); return { ok: true } as Response; }));
+    const r = await tryRevokeEntitlementForClinic("visco-1", CLINIC, "42", "COMPANY_DELETED");
     expect(r.kind).toBe("published");
+    expect(sentBody.version).toBe(1);
+    expect(sentBody.visCompanyId).toBe("visco-1");
+    expect(sentBody.domusClinicId).toBe(CLINIC);
+    expect(sentBody.sourceRevision).toBe("42");
+    expect(sentBody.planName).toBeNull();
+    expect(sentBody.entitlement).toEqual({ writeAllowed: false, reason: "COMPANY_DELETED" });
+    expect(typeof sentBody.eventId).toBe("string");
+    expect(typeof sentBody.sourceUpdatedAt).toBe("string");
   });
   it("fetch !ok → failed", async () => {
-    const r = await tryRevokeEntitlementForClinic("clinic-a", "42");
+    process.env.VIS_DOMUS_WEBHOOK_SECRET = "s"; process.env.DOMUS_WEBHOOK_URL = "https://d";
+    vi.stubGlobal("fetch", vi.fn(async () => ({ ok: false, status: 409 } as Response)));
+    const r = await tryRevokeEntitlementForClinic("visco-1", CLINIC, "42", "UNLINKED");
     expect(r.kind).toBe("failed");
   });
 });
@@ -856,17 +886,24 @@ Expected: FAIL — `tryRevokeEntitlementForClinic` não existe.
 
 - [ ] **Step 3: Implementar**
 
-Em `src/lib/vis-domus-publisher.ts`:
+Em `src/lib/vis-domus-publisher.ts` (reusa `randomUUID`, `signVisDomus`, `PublishResult` já no arquivo):
 ```typescript
+export type RevocationReason = "COMPANY_DELETED" | "UNLINKED";
+
 /**
  * Revoga o entitlement de um clinicId que perdeu o vinculo com sua company
  * (desvinculo/reassociacao/delete). Publica writeAllowed:false SEM company viva.
- * Contrato cross-repo: o Domus precisa aceitar este payload (Fase 3, receiver-first).
- * seq = token da mesma sequence (ordena no Domus por sourceRevision).
+ * O Domus JA aceita (gate 3.0): computeDenyVerifiedUntil trata COMPANY_DELETED
+ * como bloqueio TERMINAL e qualquer outro reason como TTL. O payload casa com
+ * validateSnapshot: precisa de visCompanyId + domusClinicId UUID + sourceRevision.
+ * @param visCompanyId OLD.id da company orfa (o Domus exige visCompanyId nao-vazio)
+ * @param seq string decimal da mesma sequence (sourceRevision monotonico)
  */
 export async function tryRevokeEntitlementForClinic(
+  visCompanyId: string,
   domusClinicId: string,
   seq: string,
+  reason: RevocationReason,
 ): Promise<PublishResult> {
   const secret = process.env.VIS_DOMUS_WEBHOOK_SECRET;
   const url = process.env.DOMUS_WEBHOOK_URL;
@@ -874,10 +911,15 @@ export async function tryRevokeEntitlementForClinic(
   try {
     const now = new Date();
     const payload = {
-      domusClinicId,
-      entitlement: { writeAllowed: false, reason: "UNLINKED" },
+      version: 1 as const,
+      eventId: randomUUID(),
+      sourceUpdatedAt: now.toISOString(),
       sourceRevision: seq,
-      generatedAt: now.toISOString(),
+      visCompanyId,
+      domusClinicId,
+      subscriptionStatus: reason, // display no Domus; nao decide nada
+      planName: null,
+      entitlement: { writeAllowed: false, reason },
     };
     const rawBody = JSON.stringify(payload);
     const ts = now.getTime();
@@ -899,7 +941,6 @@ export async function tryRevokeEntitlementForClinic(
   }
 }
 ```
-(Confirmar com o contrato Domus da Task 3.0 se a rota/campo batem — ajustar `reason`/rota conforme o que o Domus implementou. Se o Domus expõe uma rota dedicada de revogação, usar essa em vez de `/api/internal/vis/entitlements`.)
 
 - [ ] **Step 4: Rodar e ver passar + typecheck + commit**
 
@@ -924,54 +965,79 @@ Adicionar em `prisma/schema.prisma`:
 ```prisma
 model EntitlementRevocationOutbox {
   domusClinicId String @id
+  visCompanyId  String
+  reason        String
   seq           BigInt
 }
 ```
-(SEM relação com Company — é chaveada por clinicId de propósito, para sobreviver ao delete da company.)
+(SEM relação com Company — chaveada por clinicId de propósito, para sobreviver ao delete da company. Guarda `visCompanyId` (OLD.id, o Domus exige) e `reason` (`COMPANY_DELETED` terminal | `UNLINKED` TTL).)
 
 Run: `./node_modules/.bin/prisma validate && ./node_modules/.bin/prisma generate`
 Expected: válido; client gerado.
 
 - [ ] **Step 2: Escrever o migration.sql**
 
-Criar `prisma/migrations/20260722130000_entitlement_revocation/migration.sql`:
+Criar `prisma/migrations/20260722130000_entitlement_revocation/migration.sql`. **⚠️ Aplica o MESMO padrão de monotonicidade da Fase 2 (P0 do Codex): `nextval` DENTRO do `DO UPDATE ... RETURNING INTO`, nunca antes.** `<ROLE_RUNTIME>` = `neondb_owner` (gate 2.0). `SET lock_timeout` no topo.
 ```sql
 -- Cadeado Fase 3 — Revogacao de entitlement orfao (P0-B).
--- Quando o vinculo clinica<->company some/muda, o clinicId antigo tem de ser
--- revogado no Domus (writeAllowed:false). O outbox por-company nao faz isso (so
--- republica o estado da company atual). Tabela chaveada por domusClinicId, SEM FK
--- pra Company (sobrevive ao delete da company).
+-- Quando o vinculo clinica<->company some/muda, o clinicId ANTIGO tem de ser
+-- revogado no Domus (writeAllowed:false). O outbox por-company (F2) nao faz isso
+-- (so republica o estado da company ATUAL). Tabela chaveada por domusClinicId, SEM
+-- FK pra Company (sobrevive ao delete da company). Guarda visCompanyId (OLD.id, o
+-- Domus exige) + reason (COMPANY_DELETED terminal | UNLINKED TTL).
+--
+-- MONOTONICIDADE (mesma licao P0 da F2): nextval SO no DO UPDATE, apos o lock de
+-- linha; RETURNING captura o valor gravado. Reusa entitlement_revision_seq (mesmo
+-- relogio — o Domus ordena revogacao e publish pela MESMA sequence).
+--
+-- Aplicar SO com `prisma migrate deploy` (NUNCA migrate dev/db push — .env=prod).
+
+SET lock_timeout = '5s';
 
 CREATE TABLE IF NOT EXISTS "EntitlementRevocationOutbox" (
   "domusClinicId" TEXT NOT NULL,
+  "visCompanyId"  TEXT NOT NULL,
+  "reason"        TEXT NOT NULL,
   "seq"           BIGINT NOT NULL,
   CONSTRAINT "EntitlementRevocationOutbox_pkey" PRIMARY KEY ("domusClinicId")
 );
 
-GRANT SELECT, INSERT, UPDATE, DELETE ON "EntitlementRevocationOutbox" TO "<ROLE_RUNTIME>";
+GRANT SELECT, INSERT, UPDATE, DELETE ON "EntitlementRevocationOutbox" TO "neondb_owner";
+GRANT USAGE ON SEQUENCE "entitlement_revision_seq" TO "neondb_owner";
 
--- enqueue de revogacao (coalescente por clinicId).
-CREATE OR REPLACE FUNCTION "enqueue_entitlement_revocation"(target_clinic_id TEXT)
+-- enqueue de revogacao (coalescente por clinicId). nextval DENTRO do upsert.
+CREATE OR REPLACE FUNCTION "enqueue_entitlement_revocation"(
+  target_clinic_id TEXT, source_company_id TEXT, revoke_reason TEXT
+)
 RETURNS void AS $$
 BEGIN
   IF target_clinic_id IS NULL THEN RETURN; END IF;
-  INSERT INTO "EntitlementRevocationOutbox" ("domusClinicId", "seq")
-  VALUES (target_clinic_id, nextval('entitlement_revision_seq'))
+  INSERT INTO "EntitlementRevocationOutbox" ("domusClinicId", "visCompanyId", "reason", "seq")
+  VALUES (target_clinic_id, source_company_id, revoke_reason, nextval('entitlement_revision_seq'))
   ON CONFLICT ("domusClinicId")
-  DO UPDATE SET "seq" = nextval('entitlement_revision_seq');
+  DO UPDATE SET
+    "visCompanyId" = EXCLUDED."visCompanyId",
+    "reason"       = EXCLUDED."reason",
+    "seq"          = nextval('entitlement_revision_seq');
 END;
 $$ LANGUAGE plpgsql;
 
--- UPDATE de Company: se domusClinicId mudou (A->B, A->NULL) e OLD nao-nulo, OU
--- deixou de ser VIS_MEDICAL com clinicId, enfileira revogacao do clinicId ANTIGO.
+-- UPDATE de Company: escolhe o reason por cenario.
+--  - domusClinicId A->B (troca) ou A->NULL: UNLINKED (TTL, reversivel), do clinicId ANTIGO.
+--  - VIS_MEDICAL -> outro produto (com clinicId): COMPANY_DELETED (terminal).
+-- Se AMBOS mudam no mesmo update, o terminal (deixar de ser medical) vence.
 CREATE OR REPLACE FUNCTION "trg_company_revocation"()
 RETURNS trigger AS $$
 BEGIN
-  IF (OLD."domusClinicId" IS NOT NULL) AND (
-       NEW."domusClinicId" IS DISTINCT FROM OLD."domusClinicId"
-       OR (OLD."platformProduct" = 'VIS_MEDICAL' AND NEW."platformProduct" IS DISTINCT FROM 'VIS_MEDICAL')
-     ) THEN
-    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId");
+  IF OLD."domusClinicId" IS NULL THEN
+    RETURN NEW;
+  END IF;
+  IF OLD."platformProduct" = 'VIS_MEDICAL' AND NEW."platformProduct" IS DISTINCT FROM 'VIS_MEDICAL' THEN
+    -- deixou de ser medical: terminal
+    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId", OLD."id", 'COMPANY_DELETED');
+  ELSIF NEW."domusClinicId" IS DISTINCT FROM OLD."domusClinicId" THEN
+    -- trocou/perdeu o vinculo (segue medical): reversivel
+    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId", OLD."id", 'UNLINKED');
   END IF;
   RETURN NEW;
 END;
@@ -987,12 +1053,12 @@ CREATE TRIGGER "company_revocation_upd"
   )
   EXECUTE FUNCTION "trg_company_revocation"();
 
--- DELETE de Company: enfileira revogacao se era medical vinculada.
+-- DELETE de Company: terminal se era medical vinculada.
 CREATE OR REPLACE FUNCTION "trg_company_revocation_del"()
 RETURNS trigger AS $$
 BEGIN
   IF OLD."platformProduct" = 'VIS_MEDICAL' AND OLD."domusClinicId" IS NOT NULL THEN
-    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId");
+    PERFORM "enqueue_entitlement_revocation"(OLD."domusClinicId", OLD."id", 'COMPANY_DELETED');
   END IF;
   RETURN OLD;
 END;
@@ -1003,6 +1069,8 @@ CREATE TRIGGER "company_revocation_del"
   AFTER DELETE ON "Company"
   FOR EACH ROW EXECUTE FUNCTION "trg_company_revocation_del"();
 ```
+
+**⚠️ Interação com o outbox de PUBLISH (F2):** um UPDATE que troca `domusClinicId` dispara TANTO o trigger de revisão (F2, enfileira a company no publish outbox com o estado NOVO de B) QUANTO o de revogação (F3, enfileira o clinicId ANTIGO de A). Correto: B recebe o estado novo, A é revogado. Ordem de drenagem por `seq` (mesma sequence) mantém coerência. Um DELETE de company: o publish outbox tem FK CASCADE → a linha some (nada a publicar da company morta); o revocation outbox NÃO tem FK → sobrevive e revoga A. Correto.
 
 - [ ] **Step 3: Conferir o SQL (não aplicar) + commit**
 
@@ -1029,18 +1097,20 @@ import { runRevocationDrainBatch } from "@/lib/entitlement-outbox-worker";
 import { tryRevokeEntitlementForClinic } from "@/lib/vis-domus-publisher";
 
 describe("runRevocationDrainBatch", () => {
-  it("published → deleta por (domusClinicId, seq)", async () => {
-    (prisma.$queryRaw as any).mockResolvedValue([{ domusClinicId: "clinic-a", seq: 20n }]);
+  const CLINIC = "00000000-0000-4000-8000-000000000abc";
+  const row = { domusClinicId: CLINIC, visCompanyId: "visco-1", reason: "UNLINKED", seq: BigInt(20) };
+  it("published → deleta por (domusClinicId, seq) e passa os 4 args", async () => {
+    (prisma.$queryRaw as any).mockResolvedValue([row]);
     (tryRevokeEntitlementForClinic as any).mockResolvedValue({ kind: "published" });
     (prisma.$executeRaw as any).mockResolvedValue(1);
     const r = await runRevocationDrainBatch();
-    expect(tryRevokeEntitlementForClinic).toHaveBeenCalledWith("clinic-a", "20");
+    expect(tryRevokeEntitlementForClinic).toHaveBeenCalledWith("visco-1", CLINIC, "20", "UNLINKED");
     expect(prisma.$executeRaw).toHaveBeenCalledOnce();
     expect(r.revoked).toBe(1);
   });
 
   it("failed → NAO deleta", async () => {
-    (prisma.$queryRaw as any).mockResolvedValue([{ domusClinicId: "clinic-a", seq: 20n }]);
+    (prisma.$queryRaw as any).mockResolvedValue([row]);
     (tryRevokeEntitlementForClinic as any).mockResolvedValue({ kind: "failed", reason: "http 500" });
     const r = await runRevocationDrainBatch();
     expect(prisma.$executeRaw).not.toHaveBeenCalled();
@@ -1048,7 +1118,7 @@ describe("runRevocationDrainBatch", () => {
   });
 
   it("re-enqueue (seq mudou) → delete condicional nao casa, linha fica", async () => {
-    (prisma.$queryRaw as any).mockResolvedValue([{ domusClinicId: "clinic-a", seq: 20n }]);
+    (prisma.$queryRaw as any).mockResolvedValue([row]);
     (tryRevokeEntitlementForClinic as any).mockResolvedValue({ kind: "published" });
     (prisma.$executeRaw as any).mockResolvedValue(0); // 0 linhas: seq avancou
     const r = await runRevocationDrainBatch();
@@ -1074,11 +1144,14 @@ export interface RevocationDrainResult {
 /**
  * Drena o EntitlementRevocationOutbox: revoga cada clinicId orfao no Domus.
  * Delete condicional por (domusClinicId, seq) — igual ao drain de publish.
- * Nao ha "noop" (revogacao sempre tem clinicId); so published deleta.
+ * Nao ha "noop" (revogacao sempre tem clinicId + reason); so published deleta.
+ * Passa visCompanyId + reason (COMPANY_DELETED terminal | UNLINKED TTL) ao publisher.
  */
 export async function runRevocationDrainBatch(): Promise<RevocationDrainResult> {
-  const rows = await prisma.$queryRaw<Array<{ domusClinicId: string; seq: bigint }>>(Prisma.sql`
-    SELECT "domusClinicId", "seq" FROM "EntitlementRevocationOutbox"
+  const rows = await prisma.$queryRaw<
+    Array<{ domusClinicId: string; visCompanyId: string; reason: string; seq: bigint }>
+  >(Prisma.sql`
+    SELECT "domusClinicId", "visCompanyId", "reason", "seq" FROM "EntitlementRevocationOutbox"
     ORDER BY "seq" ASC
     LIMIT ${BATCH_SIZE}
   `);
@@ -1089,8 +1162,13 @@ export async function runRevocationDrainBatch(): Promise<RevocationDrainResult> 
   for (let i = 0; i < rows.length; i += CONCURRENCY) {
     const batch = rows.slice(i, i + CONCURRENCY);
     await Promise.all(
-      batch.map(async ({ domusClinicId, seq }) => {
-        const r = await tryRevokeEntitlementForClinic(domusClinicId, seq.toString());
+      batch.map(async ({ domusClinicId, visCompanyId, reason, seq }) => {
+        const r = await tryRevokeEntitlementForClinic(
+          visCompanyId,
+          domusClinicId,
+          seq.toString(),
+          reason as "COMPANY_DELETED" | "UNLINKED",
+        );
         if (r.kind !== "published") {
           failed++;
           return; // NAO deleta — reprocessa
