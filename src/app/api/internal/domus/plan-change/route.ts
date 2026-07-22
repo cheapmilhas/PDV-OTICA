@@ -50,8 +50,19 @@ export async function POST(req: Request) {
   const rawBody = await req.text();
   const ts = Number(req.headers.get("x-domus-timestamp"));
   const signature = req.headers.get("x-domus-signature");
-  const verify = verifyVisDomus(secret, ts, rawBody, signature, Date.now());
+  const nowMs = Date.now();
+  const verify = verifyVisDomus(secret, ts, rawBody, signature, nowMs);
   if (!verify.ok) {
+    // DIAGNÓSTICO TEMPORÁRIO (sombra E2E): loga o motivo do 401 sem PII/segredo.
+    // Remover após depurar o handshake Domus→Vis.
+    logger.warn("plan-change 401 (diag)", {
+      window: WINDOW_LOG,
+      reason: verify.reason,
+      tsRecebido: ts,
+      skewMs: Number.isFinite(ts) ? nowMs - ts : null,
+      temSignature: !!signature,
+      secretLen: secret.length,
+    });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
