@@ -333,9 +333,11 @@ WHERE table_name = 'EntitlementRevision';
 ```
 Expected: se `current_user` == `tableowner` == a role do `DATABASE_URL` (padrão Neon single-owner), nenhum grant extra é estritamente necessário — mas concedemos explicitamente mesmo assim (defesa). Se divergir, anotar a role runtime EXATA para os `GRANT` da migração.
 
-- [ ] **Step 2: Registrar a decisão no plano**
+- [x] **Step 2: Registrar a decisão no plano — RESOLVIDO 2026-07-22**
 
-Escrever aqui a role resolvida (ex.: `neondb_owner`) e se grants extras são necessários. Este valor entra no SQL da Task 2.2. **Não prosseguir sem isto.**
+**Role runtime = `neondb_owner`** (via MCP postgres-neon-dev, `SELECT current_user` no banco de PROD do Vis). **É a MESMA role que é owner de Company, Subscription e EntitlementRevision** (`pg_tables.tableowner` = `neondb_owner` nas três). Grants existentes em `EntitlementRevision`: todos para `neondb_owner`, nenhuma outra role (padrão Neon single-owner confirmado).
+
+**Consequência:** como o runtime É o owner, ele já pode INSERT/UPDATE/DELETE/SELECT em qualquer tabela que criar (incl. `EntitlementOutbox`) + já tem `USAGE` na `entitlement_revision_seq` (criou na V3a). **Grants extras NÃO são estritamente necessários** → mas a migração os inclui como DEFESA idempotente (`GRANT ... TO "neondb_owner"`). **O maior risco da spec (toda escrita de Company/Subscription falhar por falta de grant no trigger) NÃO se materializa** — o owner sempre pode inserir na própria tabela. Isso reduz muito o risco da migração F2. `<ROLE_RUNTIME>` = `neondb_owner` no SQL das Tasks 2.2 e 3.2.
 
 ### Task 2.1: Espelhar EntitlementOutbox no schema.prisma
 
