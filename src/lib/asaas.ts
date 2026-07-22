@@ -286,6 +286,17 @@ export const asaas = {
     async get(id: string): Promise<AsaasPayment> {
       return asaasFetch<AsaasPayment>(`/payments/${id}`);
     },
+    /**
+     * Remove uma cobrança. `DELETE /payments/{id}` só remove cobranças que ainda
+     * NÃO foram recebidas (PENDING/OVERDUE/AWAITING). Cobrança já paga (RECEIVED/
+     * CONFIRMED) NÃO é removida por aqui — exige estorno (refund), não coberto.
+     * Usado na reversão de recursos de teste descartáveis.
+     */
+    async delete(id: string): Promise<{ deleted: boolean; id: string }> {
+      return asaasFetch<{ deleted: boolean; id: string }>(`/payments/${id}`, {
+        method: "DELETE",
+      });
+    },
     async pixQrCode(
       id: string,
     ): Promise<{ encodedImage: string; payload: string; expirationDate: string }> {
