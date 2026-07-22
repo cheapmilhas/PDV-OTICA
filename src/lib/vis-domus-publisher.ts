@@ -246,6 +246,59 @@ export async function tryPublishEntitlementForCompany(
   }
 }
 
+export type RevocationReason = "COMPANY_DELETED" | "UNLINKED";
+
+/**
+ * Revoga o entitlement de um clinicId que perdeu o vinculo com sua company
+ * (desvinculo/reassociacao/delete). Publica writeAllowed:false SEM company viva.
+ * O Domus JA aceita (gate 3.0): computeDenyVerifiedUntil trata COMPANY_DELETED
+ * como bloqueio TERMINAL e qualquer outro reason como TTL. O payload casa com
+ * validateSnapshot: precisa de visCompanyId + domusClinicId UUID + sourceRevision.
+ * @param visCompanyId OLD.id da company orfa (o Domus exige visCompanyId nao-vazio)
+ * @param seq string decimal da mesma sequence (sourceRevision monotonico)
+ */
+export async function tryRevokeEntitlementForClinic(
+  visCompanyId: string,
+  domusClinicId: string,
+  seq: string,
+  reason: RevocationReason,
+): Promise<PublishResult> {
+  const secret = process.env.VIS_DOMUS_WEBHOOK_SECRET;
+  const url = process.env.DOMUS_WEBHOOK_URL;
+  if (!secret || !url) return { kind: "failed", reason: "config ausente (sem secret/url)" };
+  try {
+    const now = new Date();
+    const payload = {
+      version: 1 as const,
+      eventId: randomUUID(),
+      sourceUpdatedAt: now.toISOString(),
+      sourceRevision: seq,
+      visCompanyId,
+      domusClinicId,
+      subscriptionStatus: reason, // display no Domus; nao decide nada
+      planName: null,
+      entitlement: { writeAllowed: false, reason },
+    };
+    const rawBody = JSON.stringify(payload);
+    const ts = now.getTime();
+    const signature = signVisDomus(secret, ts, rawBody);
+    const res = await fetch(`${url}/api/internal/vis/entitlements`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "x-vis-timestamp": String(ts),
+        "x-vis-signature": signature,
+      },
+      body: rawBody,
+      signal: AbortSignal.timeout(10000),
+    });
+    if (!res.ok) return { kind: "failed", reason: `http ${res.status}` };
+    return { kind: "published" };
+  } catch (err) {
+    return { kind: "failed", reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
 /**
  * Publica o entitlement de uma Company no Domus (webhook assinado).
  * Best-effort: nunca lança. Falha de rede fica para o pull de reparação.
