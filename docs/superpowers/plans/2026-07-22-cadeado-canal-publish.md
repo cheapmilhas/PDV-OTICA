@@ -1021,13 +1021,90 @@ Contexto: o mesmo cron drena os dois outboxes (decisão de planejamento: um hand
 
 - [ ] **Step 1: Escrever o teste da drenagem de revogação**
 
-Adicionar a `entitlement-outbox-worker.test.ts` casos para `runRevocationDrainBatch`: `published`→deleta por `(domusClinicId, seq)`; `failed`→não deleta; re-enqueue (seq mudou)→delete não casa. Mockar `tryRevokeEntitlementForClinic`.
+Adicionar ao mock de `@/lib/vis-domus-publisher` no topo do arquivo o método `tryRevokeEntitlementForClinic: vi.fn()`, importá-lo, e adicionar o bloco:
+```typescript
+import { runRevocationDrainBatch } from "@/lib/entitlement-outbox-worker";
+import { tryRevokeEntitlementForClinic } from "@/lib/vis-domus-publisher";
+
+describe("runRevocationDrainBatch", () => {
+  it("published → deleta por (domusClinicId, seq)", async () => {
+    (prisma.$queryRaw as any).mockResolvedValue([{ domusClinicId: "clinic-a", seq: 20n }]);
+    (tryRevokeEntitlementForClinic as any).mockResolvedValue({ kind: "published" });
+    (prisma.$executeRaw as any).mockResolvedValue(1);
+    const r = await runRevocationDrainBatch();
+    expect(tryRevokeEntitlementForClinic).toHaveBeenCalledWith("clinic-a", "20");
+    expect(prisma.$executeRaw).toHaveBeenCalledOnce();
+    expect(r.revoked).toBe(1);
+  });
+
+  it("failed → NAO deleta", async () => {
+    (prisma.$queryRaw as any).mockResolvedValue([{ domusClinicId: "clinic-a", seq: 20n }]);
+    (tryRevokeEntitlementForClinic as any).mockResolvedValue({ kind: "failed", reason: "http 500" });
+    const r = await runRevocationDrainBatch();
+    expect(prisma.$executeRaw).not.toHaveBeenCalled();
+    expect(r.failed).toBe(1);
+  });
+
+  it("re-enqueue (seq mudou) → delete condicional nao casa, linha fica", async () => {
+    (prisma.$queryRaw as any).mockResolvedValue([{ domusClinicId: "clinic-a", seq: 20n }]);
+    (tryRevokeEntitlementForClinic as any).mockResolvedValue({ kind: "published" });
+    (prisma.$executeRaw as any).mockResolvedValue(0); // 0 linhas: seq avancou
+    const r = await runRevocationDrainBatch();
+    expect(r.revoked).toBe(1); // revogou o que leu; novo seq drena no proximo tick
+  });
+});
+```
 
 - [ ] **Step 2: Rodar e ver falhar** — `runRevocationDrainBatch` não existe.
 
 - [ ] **Step 3: Implementar `runRevocationDrainBatch`**
 
-Em `src/lib/entitlement-outbox-worker.ts`, análogo ao `runOutboxDrainBatch` mas lendo `EntitlementRevocationOutbox`, chamando `tryRevokeEntitlementForClinic(domusClinicId, seq.toString())`, e deletando por `(domusClinicId, seq)`. `noop` não se aplica (revogação sempre tem clinicId) — só `published` deleta, `failed` fica.
+Em `src/lib/entitlement-outbox-worker.ts`, adicionar (import de `tryRevokeEntitlementForClinic`):
+```typescript
+import { tryRevokeEntitlementForClinic } from "@/lib/vis-domus-publisher";
+
+export interface RevocationDrainResult {
+  read: number;
+  revoked: number;
+  failed: number;
+}
+
+/**
+ * Drena o EntitlementRevocationOutbox: revoga cada clinicId orfao no Domus.
+ * Delete condicional por (domusClinicId, seq) — igual ao drain de publish.
+ * Nao ha "noop" (revogacao sempre tem clinicId); so published deleta.
+ */
+export async function runRevocationDrainBatch(): Promise<RevocationDrainResult> {
+  const rows = await prisma.$queryRaw<Array<{ domusClinicId: string; seq: bigint }>>(Prisma.sql`
+    SELECT "domusClinicId", "seq" FROM "EntitlementRevocationOutbox"
+    ORDER BY "seq" ASC
+    LIMIT ${BATCH_SIZE}
+  `);
+
+  let revoked = 0;
+  let failed = 0;
+
+  for (let i = 0; i < rows.length; i += CONCURRENCY) {
+    const batch = rows.slice(i, i + CONCURRENCY);
+    await Promise.all(
+      batch.map(async ({ domusClinicId, seq }) => {
+        const r = await tryRevokeEntitlementForClinic(domusClinicId, seq.toString());
+        if (r.kind !== "published") {
+          failed++;
+          return; // NAO deleta — reprocessa
+        }
+        await prisma.$executeRaw(Prisma.sql`
+          DELETE FROM "EntitlementRevocationOutbox"
+          WHERE "domusClinicId" = ${domusClinicId} AND "seq" = ${seq}
+        `);
+        revoked++;
+      }),
+    );
+  }
+
+  return { read: rows.length, revoked, failed };
+}
+```
 
 - [ ] **Step 4: O handler drena os dois**
 
