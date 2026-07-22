@@ -134,7 +134,12 @@ export async function proxy(request: NextRequest) {
     // autenticado" ANTES do handler e o pull/listagem nunca executam.
     // Escopo ESTREITO ao subtree exato do canal (não `/api/internal/*` amplo):
     // uma rota interna futura sem auth própria não deve herdar o bypass.
-    pathname.startsWith("/api/internal/domus/entitlements")
+    pathname.startsWith("/api/internal/domus/entitlements") ||
+    // Canal interno Domus→Vis (troca de plano): o Domus chama com HMAC
+    // (DOMUS_VIS_API_SECRET, `verifyVisDomus`, fail-closed), não com cookie de
+    // sessão. Mesmo motivo do entitlements: sem este bypass o middleware barra
+    // com 401 ANTES do handler e a saga de troca de plano nunca executa.
+    pathname.startsWith("/api/internal/domus/plan-change")
   ) {
     return nextWithCurrentPath(request);
   }
