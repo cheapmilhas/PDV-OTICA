@@ -193,26 +193,31 @@ export function schedulePublishEntitlement(companyId: string): void {
   });
 }
 
+/** Resultado tipado de uma tentativa de publicação. O worker do outbox decide
+ * pela linha (apaga em `published`/`noop`; mantém e reenfileira em `failed`). */
+export type PublishResult =
+  | { kind: "published" }
+  | { kind: "noop" }
+  | { kind: "failed"; reason: string };
+
 /**
- * Publica o entitlement de uma Company no Domus (webhook assinado).
- * Best-effort: nunca lança. Falha de rede fica para o pull de reparação.
+ * Como publishEntitlementForCompany, mas RETORNA o resultado (o worker do outbox
+ * precisa distinguir sucesso de falha para decidir se apaga a linha). A versão
+ * void continua existindo para os call-sites inline (que não olham o resultado).
  */
-export async function publishEntitlementForCompany(companyId: string): Promise<void> {
+export async function tryPublishEntitlementForCompany(
+  companyId: string,
+): Promise<PublishResult> {
   const secret = process.env.VIS_DOMUS_WEBHOOK_SECRET;
   const url = process.env.DOMUS_WEBHOOK_URL;
   if (!secret || !url) {
-    logger.warn("publisher desabilitado (sem secret/url) — pull de reparação cobre", {
-      window: WINDOW_LOG,
-      hasSecret: !!secret,
-      hasUrl: !!url,
-    });
-    return;
+    return { kind: "failed", reason: "config ausente (sem secret/url)" };
   }
 
   try {
     const now = new Date();
     const payload = await buildEntitlementPayload(companyId, now);
-    if (!payload) return; // não é medical vinculada — nada a publicar
+    if (!payload) return { kind: "noop" }; // não é medical vinculada — nada a publicar
 
     const rawBody = JSON.stringify(payload);
     const ts = now.getTime();
@@ -233,19 +238,28 @@ export async function publishEntitlementForCompany(companyId: string): Promise<v
       signal: AbortSignal.timeout(10000),
     });
 
-    if (!res.ok) {
-      logger.warn("publish falhou (pull de reparação cobre)", {
-        window: WINDOW_LOG,
-        companyId,
-        status: res.status,
-      });
-    }
+    if (!res.ok) return { kind: "failed", reason: `http ${res.status}` };
+    return { kind: "published" };
   } catch (err) {
     // Timeout/rede: não propaga. O cron de pull do Domus reconcilia.
-    logger.warn("publish erro de rede (pull de reparação cobre)", {
+    return { kind: "failed", reason: err instanceof Error ? err.message : String(err) };
+  }
+}
+
+/**
+ * Publica o entitlement de uma Company no Domus (webhook assinado).
+ * Best-effort: nunca lança. Falha de rede fica para o pull de reparação.
+ *
+ * Delega em tryPublishEntitlementForCompany e preserva o contrato void: só loga
+ * o warn em falha real (config ausente/http/rede). `noop` (não-medical) é silêncio.
+ */
+export async function publishEntitlementForCompany(companyId: string): Promise<void> {
+  const r = await tryPublishEntitlementForCompany(companyId);
+  if (r.kind === "failed") {
+    logger.warn("publish falhou (pull de reparação cobre)", {
       window: WINDOW_LOG,
       companyId,
-      error: err instanceof Error ? err.message : String(err),
+      reason: r.reason,
     });
   }
 }
