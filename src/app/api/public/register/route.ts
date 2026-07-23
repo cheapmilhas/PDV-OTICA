@@ -93,16 +93,21 @@ export async function POST(request: Request) {
       }
     }
 
-    // Buscar plano (se informado) ou usar o primeiro ativo
+    // Buscar plano (se informado) ou usar o primeiro ativo.
+    // SÓ planos da ÓTICA (VIS_APP): este registro cria Company VIS_APP com
+    // finance setup ótico — aceitar um planId medical criaria uma ótica com
+    // plano de clínica (P0 da unificação, Fase 0). NÃO filtrar por
+    // selfServiceSelectable: os planos de ótica estão todos `false` em prod
+    // (o flag só foi setado nos medical) — filtrá-lo quebraria o signup.
     let plan = null;
     if (planId) {
       plan = await prisma.plan.findFirst({
-        where: { id: planId, isActive: true, status: "ACTIVE" },
+        where: { id: planId, isActive: true, status: "ACTIVE", platformProduct: "VIS_APP" },
       });
     }
     if (!plan) {
       plan = await prisma.plan.findFirst({
-        where: { isActive: true, status: "ACTIVE" },
+        where: { isActive: true, status: "ACTIVE", platformProduct: "VIS_APP" },
         orderBy: { sortOrder: "asc" },
       });
     }
