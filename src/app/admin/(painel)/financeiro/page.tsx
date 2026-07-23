@@ -6,9 +6,18 @@ import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
 import { getReceivableThisWeek } from "@/services/invoice-receivable.service";
 import { startOfLocalMonth, endOfLocalMonth } from "@/lib/date-utils";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../dashboard-filters";
 
 export default async function FinanceiroPage() {
   await requireAdmin();
+
+  // Lente de produto: Invoice chega a Company por subscription.company (2 níveis).
+  // `pf.invoiceCompany` já vem como { AND: [produto, soft-delete] }; compõe por
+  // AND com as condições de status/data de cada agregado.
+  const product = await getProductContext();
+  const pf = buildDashboardFilters(product);
+  const pInv = pf.invoiceCompany;
 
   // F10: fronteiras do mês no fuso de São Paulo (não no fuso do servidor, que é UTC
   // na Vercel). Sem isso, `paidAt` das 21h–23h59 BRT caía no mês errado.
@@ -31,32 +40,33 @@ export default async function FinanceiroPage() {
     // Recebido no mês atual
     prisma.invoice.aggregate({
       where: {
-        status: "PAID",
-        paidAt: { gte: startOfMonth, lte: endOfMonth },
+        AND: [pInv, { status: "PAID", paidAt: { gte: startOfMonth, lte: endOfMonth } }],
       },
       _sum: { total: true },
     }),
     // Pendente (PENDING)
     prisma.invoice.aggregate({
-      where: { status: "PENDING" },
+      where: { AND: [pInv, { status: "PENDING" }] },
       _sum: { total: true },
     }),
     // Vencido (OVERDUE)
     prisma.invoice.aggregate({
-      where: { status: "OVERDUE" },
+      where: { AND: [pInv, { status: "OVERDUE" }] },
       _sum: { total: true },
     }),
     // Previsão próximo mês (faturas que vencem no próximo mês)
     prisma.invoice.aggregate({
       where: {
-        status: { in: ["PENDING", "DRAFT"] },
-        dueDate: { gte: startOfNextMonth, lte: endOfNextMonth },
+        AND: [
+          pInv,
+          { status: { in: ["PENDING", "DRAFT"] }, dueDate: { gte: startOfNextMonth, lte: endOfNextMonth } },
+        ],
       },
       _sum: { total: true },
     }),
     // Top 5 faturas vencidas
     prisma.invoice.findMany({
-      where: { status: "OVERDUE" },
+      where: { AND: [pInv, { status: "OVERDUE" }] },
       include: {
         subscription: {
           include: {
@@ -67,8 +77,8 @@ export default async function FinanceiroPage() {
       orderBy: { dueDate: "asc" },
       take: 5,
     }),
-    // A receber esta semana
-    getReceivableThisWeek(now),
+    // A receber esta semana (produto propagado ao service)
+    getReceivableThisWeek(now, prisma, pInv),
   ]);
 
   const recebidoValue = ((recebidoMes._sum?.total ?? 0) / 100);

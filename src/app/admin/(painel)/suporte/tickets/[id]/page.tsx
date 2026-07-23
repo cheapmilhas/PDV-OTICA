@@ -8,6 +8,7 @@ import { TicketMessages } from "./ticket-messages";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { format } from "date-fns";
 import { ptBR } from "date-fns/locale";
+import { getProductContext } from "@/lib/admin-product-context";
 
 const priorityColors: Record<string, string> = {
   LOW:    "bg-muted text-muted-foreground border border-border",
@@ -34,6 +35,10 @@ export default async function TicketPage({ params }: { params: Promise<{ id: str
   });
 
   if (!ticket) notFound();
+
+  // Consistência com o toggle (SupportTicket.company é obrigatório no schema).
+  const product = await getProductContext();
+  if (ticket.company.platformProduct !== product) notFound();
 
   return (
     <div className="p-6 max-w-4xl">

@@ -1,5 +1,6 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
+import { Info } from "lucide-react";
 import { InteressadosClient } from "./interessados-client";
 
 export interface InteressadoItem {
@@ -46,5 +47,17 @@ export default async function InteressadosPage({
     items = [];
   }
 
-  return <InteressadosClient items={items} planSlug={planSlug} />;
+  // Interessados (PlanInterest) não tem coluna de produto — filtrar por produto
+  // exigiria migração (proibida na F1). O aviso deixa claro que esta tela NÃO é
+  // segmentada pelo seletor de produto, para o operador não achar que o toggle a
+  // filtrou. (A segmentação por produto entra numa fase futura, com migração.)
+  return (
+    <div>
+      <div className="mx-6 mt-6 flex items-center gap-2 rounded-lg border border-border bg-muted/40 px-4 py-2.5 text-xs text-muted-foreground">
+        <Info className="h-4 w-4 flex-shrink-0" />
+        Esta lista não é segmentada por produto — mostra interessados de todos os produtos.
+      </div>
+      <InteressadosClient items={items} planSlug={planSlug} />
+    </div>
+  );
 }

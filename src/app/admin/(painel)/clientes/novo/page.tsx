@@ -4,11 +4,17 @@ import { NewClientForm } from "./new-client-form";
 import { PageHeader } from "@/components/admin/PageHeader";
 import Link from "next/link";
 import { ArrowLeft } from "lucide-react";
+import { getProductContext } from "@/lib/admin-product-context";
 
 export default async function NewClientPage() {
   await requireAdmin();
 
-  // Buscar planos ativos
+  // Produto ativo do painel = default do seletor do form (UX: quem está na visão
+  // Medical já abre o cadastro em Medical). O form filtra os planos por produto.
+  const activeProduct = await getProductContext();
+
+  // Buscar planos ativos dos DOIS produtos — o form filtra a lista exibida pela
+  // seleção. `platformProduct` vem no findMany (sem select = todas as colunas).
   const plans = await prisma.plan.findMany({
     where: { isActive: true },
     orderBy: { priceMonthly: "asc" },
@@ -39,7 +45,7 @@ export default async function NewClientPage() {
         subtitle="Preencha os dados da ótica para criar a conta"
       />
 
-      <NewClientForm plans={plans} networks={networks} />
+      <NewClientForm plans={plans} networks={networks} defaultProduct={activeProduct} />
     </div>
   );
 }

@@ -31,9 +31,13 @@ type CompanyRow = Prisma.CompanyGetPayload<{ include: typeof companyInclude }>;
 
 interface ClientesTableProps {
   companies: CompanyRow[];
+  // Produto ativo do painel. Para VIS_MEDICAL o health score é ruído (derivado de
+  // sinais óticos) — a coluna Health mostra "indisponível" em vez do badge fake.
+  product?: "VIS_APP" | "VIS_MEDICAL";
 }
 
-export function ClientesTable({ companies }: ClientesTableProps) {
+export function ClientesTable({ companies, product = "VIS_APP" }: ClientesTableProps) {
+  const healthAvailable = product !== "VIS_MEDICAL";
   if (companies.length === 0) {
     return (
       <div className="rounded-xl border border-border bg-card">
@@ -111,9 +115,11 @@ export function ClientesTable({ companies }: ClientesTableProps) {
                   <AdminStatusBadge kind="subscription" status={status} />
                 </TableCell>
 
-                {/* Health */}
+                {/* Health — oculto para medical (score derivado de sinais óticos) */}
                 <TableCell>
-                  {c.healthScore && c.healthCategory ? (
+                  {!healthAvailable ? (
+                    <span className="text-xs text-muted-foreground" title="Health score não se aplica a clientes Medical nesta fase">n/d</span>
+                  ) : c.healthScore && c.healthCategory ? (
                     <HealthBadge score={c.healthScore} category={c.healthCategory} size="sm" showLabel={false} />
                   ) : (
                     <span className="text-xs text-muted-foreground">—</span>

@@ -3,6 +3,7 @@ import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv-safe";
 import { adminRateLimit } from "@/lib/rate-limit";
+import { getProductContext, productWhereFilter, notDeletedFilter } from "@/lib/admin-product-context";
 
 export async function GET(request: Request) {
   const admin = await getAdminSession();
@@ -18,9 +19,18 @@ export async function GET(request: Request) {
 
   // Escopo: admin restrito só exporta empresas do seu escopo (null = irrestrito).
   const accessible = await getAccessibleCompanyIds(admin.id);
+  // Produto ativo do painel (cookie path "/", agora enviado a /api/admin/*): o CSV
+  // segue o MESMO produto das telas — senão o export contradiz os KPIs exibidos.
+  const product = await getProductContext();
 
   const companies = await prisma.company.findMany({
-    where: accessible === null ? undefined : { id: { in: accessible } },
+    where: {
+      AND: [
+        accessible === null ? {} : { id: { in: accessible } },
+        productWhereFilter(product),
+        notDeletedFilter(),
+      ],
+    },
     include: {
       subscriptions: {
         include: { plan: true },
@@ -56,7 +66,9 @@ export async function GET(request: Request) {
     c.city || "",
     c.state || "",
     c.subscriptions[0]?.plan?.name || "",
-    c.healthScore || "",
+    // Health só para ótica (VIS_APP): score de Medical seria ruído derivado de
+    // sinais óticos — coluna vazia, coerente com a ocultação nas telas.
+    product === "VIS_APP" ? (c.healthScore ?? "") : "",
     new Date(c.createdAt).toLocaleDateString("pt-BR"),
   ]);
 

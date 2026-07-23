@@ -19,6 +19,8 @@ interface ClientesFiltersProps {
   tagFilter: string;
   counts: Record<string, number>;
   allTags: Tag[];
+  /** Health só se aplica a ótica — na visão Medical o filtro/quick-filter some. */
+  showHealth?: boolean;
 }
 
 export function ClientesFilters({
@@ -30,12 +32,17 @@ export function ClientesFilters({
   tagFilter,
   counts,
   allTags,
+  showHealth = true,
 }: ClientesFiltersProps) {
+  // Sem health (Medical): remove o quick-filter "Health Crítico" da barra.
+  const quickFilters = showHealth
+    ? QUICK_FILTERS
+    : QUICK_FILTERS.filter((qf) => !qf.health);
   return (
     <>
       {/* Filtros rápidos */}
       <div className="flex flex-wrap gap-2 mb-4">
-        {QUICK_FILTERS.map((qf) => {
+        {quickFilters.map((qf) => {
           const isActive =
             statusFilter === qf.status &&
             healthFilter === qf.health &&
@@ -80,17 +87,19 @@ export function ClientesFilters({
           <option value="SUSPENDED">Suspensos ({counts.SUSPENDED ?? 0})</option>
           <option value="CANCELED">Cancelados ({counts.CANCELED ?? 0})</option>
         </select>
-        <select
-          name="health"
-          defaultValue={healthFilter}
-          className="px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-        >
-          <option value="">Todos os health</option>
-          <option value="CRITICAL">Crítico</option>
-          <option value="AT_RISK">Em Risco</option>
-          <option value="HEALTHY">Saudável</option>
-          <option value="THRIVING">Excelente</option>
-        </select>
+        {showHealth && (
+          <select
+            name="health"
+            defaultValue={healthFilter}
+            className="px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Todos os health</option>
+            <option value="CRITICAL">Crítico</option>
+            <option value="AT_RISK">Em Risco</option>
+            <option value="HEALTHY">Saudável</option>
+            <option value="THRIVING">Excelente</option>
+          </select>
+        )}
         <select
           name="onboarding"
           defaultValue={onboardingFilter}

@@ -5,6 +5,7 @@ import { logger } from "@/lib/logger";
 import { csvRow } from "@/lib/csv-safe";
 
 import { adminRateLimit } from "@/lib/rate-limit";
+import { getProductContext, productWhereFilter, notDeletedFilter } from "@/lib/admin-product-context";
 
 const log = logger.child({ route: "admin/export/faturas" });
 
@@ -23,10 +24,17 @@ export async function GET(request: Request) {
   // Escopo: admin restrito só exporta faturas de empresas do seu escopo
   // (Invoice não tem companyId direto → filtra via subscription.companyId).
   const accessible = await getAccessibleCompanyIds(admin.id);
+  const product = await getProductContext();
 
   try {
     const invoices = await prisma.invoice.findMany({
-      where: accessible === null ? undefined : { subscription: { companyId: { in: accessible } } },
+      where: {
+        AND: [
+          accessible === null ? {} : { subscription: { companyId: { in: accessible } } },
+          productWhereFilter(product, { via: "subscription.company" }),
+          notDeletedFilter({ via: "subscription.company" }),
+        ],
+      },
       include: {
         subscription: {
           select: {

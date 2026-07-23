@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import Link from "next/link";
 import { ArrowLeft, Building2, CheckCircle, Send, CreditCard, Receipt, FileText } from "lucide-react";
 import { InvoiceActions } from "./invoice-actions";
+import { getProductContext } from "@/lib/admin-product-context";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 
@@ -38,6 +39,10 @@ export default async function InvoiceDetailPage({
   if (!invoice) {
     notFound();
   }
+
+  // Consistência com o toggle de produto (o access-scope não se aplica a faturas).
+  const product = await getProductContext();
+  if (invoice.subscription.company.platformProduct !== product) notFound();
 
   const company = invoice.subscription.company;
   const plan = invoice.subscription.plan;

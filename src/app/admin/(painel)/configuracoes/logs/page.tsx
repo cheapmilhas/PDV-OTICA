@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ScrollText, User, Building2, Calendar } from "lucide-react";
 import { LogsFilters } from "./logs-filters";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../../dashboard-filters";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
@@ -49,6 +51,11 @@ export default async function LogsPage({
 }) {
   await requireAdmin();
 
+  // Auditoria é cross-cutting (sistema); os LOGS ficam globais. Só o picker de
+  // empresa segue o produto ativo, para o dropdown não misturar produtos.
+  const product = await getProductContext();
+  const pf = buildDashboardFilters(product);
+
   const params = await searchParams;
   const actionFilter = params.action;
   const companyFilter = params.companyId;
@@ -87,7 +94,7 @@ export default async function LogsPage({
       _count: true,
     }),
     prisma.company.findMany({
-      where: { globalAudits: { some: {} } },
+      where: { AND: [pf.company, { globalAudits: { some: {} } }] },
       select: { id: true, name: true },
       orderBy: { name: "asc" },
       take: 50,

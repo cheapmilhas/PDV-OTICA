@@ -141,14 +141,20 @@ export default async function AdminDashboardPage() {
         title="Dashboard"
         subtitle={`Bem-vindo, ${admin.name} · ${admin.role}`}
         actions={
-          <div className="flex flex-col items-end gap-1">
-            <RecalcHealthButton />
-            <p className="text-xs text-muted-foreground">
-              {lastHealthCalc?.healthUpdatedAt
-                ? `Saúde atualizada em ${new Date(lastHealthCalc.healthUpdatedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}`
-                : "Saúde ainda não calculada — clique para recalcular"}
-            </p>
-          </div>
+          // Health é derivado de sinais óticos e o recálculo escreve SÓ em VIS_APP
+          // (recalcAllActiveHealthScores filtra platformProduct). Na visão Medical o
+          // botão operaria silenciosamente no outro produto e contradiz "indisponível" —
+          // então some junto com o card de saúde.
+          product !== "VIS_MEDICAL" ? (
+            <div className="flex flex-col items-end gap-1">
+              <RecalcHealthButton />
+              <p className="text-xs text-muted-foreground">
+                {lastHealthCalc?.healthUpdatedAt
+                  ? `Saúde atualizada em ${new Date(lastHealthCalc.healthUpdatedAt).toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", dateStyle: "short", timeStyle: "short" })}`
+                  : "Saúde ainda não calculada — clique para recalcular"}
+              </p>
+            </div>
+          ) : undefined
         }
       />
 
@@ -194,8 +200,9 @@ export default async function AdminDashboardPage() {
         </div>
       </Card>
 
-      {/* Health Score Resumo */}
-      {(criticalHealthCount > 0 || atRiskHealthCount > 0) && (
+      {/* Health Score Resumo — oculto para medical: o score é derivado de sinais
+          óticos (não há feed clínico até a F6), então os números seriam falsos. */}
+      {product !== "VIS_MEDICAL" && (criticalHealthCount > 0 || atRiskHealthCount > 0) && (
         <div className="grid grid-cols-1 md:grid-cols-2 gap-3 mb-6">
           {criticalHealthCount > 0 && (
             <AlertCard

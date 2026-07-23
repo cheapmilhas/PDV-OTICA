@@ -45,7 +45,10 @@ export default async function EmpresasPage({
   const params = await searchParams;
   const search = params.search ?? "";
   const statusFilter = params.status ?? "";
-  const healthFilter = params.health ?? "";
+  // Health só se aplica a ótica. Em Medical, IGNORA o param de health (mesmo que
+  // venha na URL ao trocar de produto com ?health=... ativo) — senão a lista fica
+  // filtrada por uma categoria legada sem controle visível para limpar.
+  const healthFilter = product === "VIS_APP" ? (params.health ?? "") : "";
   const onboardingFilter = params.onboarding ?? "";
   const segmentFilter = params.segment ?? "";
   const tagFilter = params.tag ?? "";
@@ -148,9 +151,10 @@ export default async function EmpresasPage({
         tagFilter={tagFilter}
         counts={counts}
         allTags={allTags}
+        showHealth={product === "VIS_APP"}
       />
 
-      <ClientesTable companies={companies} />
+      <ClientesTable companies={companies} product={product} />
     </div>
   );
 }

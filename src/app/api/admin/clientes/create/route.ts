@@ -119,8 +119,15 @@ export async function POST(request: Request) {
     }
   }
 
-  // Verificar CNPJ duplicado
+  // CNPJ obrigatório (DEC-2): a checagem de truthiness acima roda no valor CRU, mas
+  // entradas como "." ou "   " passam e viram string vazia após remover não-dígitos.
+  // Sem esta validação, criaríamos uma Company com cnpj="" (estado inválido).
   const cleanCnpj = cnpj.replace(/\D/g, "");
+  if (cleanCnpj.length !== 14) {
+    return NextResponse.json({ error: "CNPJ inválido (14 dígitos)" }, { status: 400 });
+  }
+
+  // Verificar CNPJ duplicado
   const existingCnpj = await prisma.company.findFirst({ where: { cnpj: cleanCnpj } });
   if (existingCnpj) {
     return NextResponse.json({ error: "CNPJ já cadastrado no sistema" }, { status: 400 });
@@ -136,6 +143,18 @@ export async function POST(request: Request) {
   const plan = await prisma.plan.findUnique({ where: { id: planId } });
   if (!plan) {
     return NextResponse.json({ error: "Plano não encontrado" }, { status: 400 });
+  }
+
+  // Integridade produto×plano: o plano tem que ser do MESMO produto da empresa.
+  // Defesa de servidor — o form persiste planId no draft e apenas esconder planos
+  // incompatíveis não impede um planId antigo de chegar aqui (achado do Codex).
+  // Sem isto, uma empresa VIS_MEDICAL poderia nascer com plano ótico (ou vice-versa),
+  // quebrando MRR/segmentação e o funil de cobrança.
+  if (plan.platformProduct !== provision.platformProduct) {
+    return NextResponse.json(
+      { error: "O plano selecionado não pertence ao produto escolhido" },
+      { status: 400 },
+    );
   }
 
   // Vis Medical (F0): se vier vínculo por titularidade, validar existência antes da transação.
@@ -197,8 +216,11 @@ export async function POST(request: Request) {
           maxUsers: plan.maxUsers || 3,
           maxProducts: plan.maxProducts || 500,
           maxBranches: plan.maxBranches || 1,
-          healthScore: 50,
-          healthCategory: "HEALTHY",
+          // Health score só faz sentido para ótica (derivado de sinais do PDV).
+          // Medical nasce SEM score (null) em vez de um "50/HEALTHY" fictício que
+          // vazaria na lista/dashboard como falso churn-risk.
+          healthScore: provision.platformProduct === "VIS_APP" ? 50 : null,
+          healthCategory: provision.platformProduct === "VIS_APP" ? "HEALTHY" : null,
           platformProduct: provision.platformProduct,
           ownerGroupId: ownerGroupId ?? null,
         },

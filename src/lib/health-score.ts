@@ -261,9 +261,26 @@ export async function calculateHealthScore(companyId: string): Promise<HealthSco
 }
 
 /**
- * Salva o Health Score calculado no banco
+ * Salva o Health Score calculado no banco.
+ *
+ * NO-OP para produtos != VIS_APP (e para company inexistente): o score é derivado
+ * de sinais ÓTICOS (uso do PDV, vendas, billing ótico) e não faz sentido para clínica
+ * (VIS_MEDICAL). Este guard de DOMÍNIO fecha o vazamento em TODOS os callers (cron em
+ * lote, botão de recálculo individual, detalhe do cliente) — não só no cron. Sem ele,
+ * `RecalcOneButton` numa company medical gravaria um score falso.
+ *
+ * Retorna `true` se recalculou, `false` se foi no-op — o caller usa isso para dar
+ * uma resposta honesta (não fingir "recalculado" nem gravar auditoria à toa).
  */
-export async function saveHealthScore(companyId: string): Promise<void> {
+export async function saveHealthScore(companyId: string): Promise<boolean> {
+  const company = await prisma.company.findUnique({
+    where: { id: companyId },
+    select: { platformProduct: true },
+  });
+  if (!company || company.platformProduct !== "VIS_APP") {
+    return false;
+  }
+
   const result = await calculateHealthScore(companyId);
 
   // Criar registro de Health Score
@@ -290,6 +307,8 @@ export async function saveHealthScore(companyId: string): Promise<void> {
       healthUpdatedAt: new Date(),
     },
   });
+
+  return true;
 }
 
 export interface RecalcAllResult {
@@ -314,6 +333,10 @@ export async function recalcAllActiveHealthScores(
     where: {
       isBlocked: false,
       subscriptions: { some: { status: { in: ["ACTIVE", "TRIAL", "PAST_DUE"] } } },
+      // Health score é derivado de sinais ÓTICOS (uso do PDV, vendas, billing
+      // ótico). Para clínicas (VIS_MEDICAL) o cálculo produz um número sem sentido
+      // (falso churn-risk). Não recalcular medical — o feed próprio vem na F6.
+      platformProduct: "VIS_APP",
     },
     select: { id: true },
   });

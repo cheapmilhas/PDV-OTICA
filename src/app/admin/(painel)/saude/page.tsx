@@ -10,6 +10,8 @@ import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../dashboard-filters";
 
 const CATEGORY_ORDER: HealthCategory[] = ["CRITICAL", "AT_RISK", "HEALTHY", "THRIVING"];
 const CATEGORY_LABEL: Record<HealthCategory, string> = {
@@ -22,9 +24,49 @@ export default async function AdminSaudePage({
   searchParams: Promise<{ category?: string }>;
 }) {
   const admin = await requireAdmin();
+
+  // Health score de medical é DERIVADO de sinais óticos (uso do PDV, vendas,
+  // billing ótico) — não faz sentido para clínica. Mostrar score aqui seria falso
+  // churn-risk. Para VIS_MEDICAL, não rodamos NENHUMA query de score e renderizamos
+  // um estado explícito "indisponível". O feed real vem na F6 (plano-mãe §5.5/§9.2).
+  const product = await getProductContext();
+  if (product === "VIS_MEDICAL") {
+    return (
+      <div className="p-6 text-foreground">
+        <div className="mb-6">
+          <h1 className="text-2xl font-bold flex items-center gap-2">
+            <Activity className="h-6 w-6 text-primary" /> Saúde dos Clientes
+          </h1>
+        </div>
+        <div className="rounded-xl border border-border bg-card">
+          <EmptyState
+            icon={Activity}
+            message="Health score de clientes Medical ainda não disponível"
+            action={
+              <p className="text-sm text-muted-foreground max-w-md">
+                O score de saúde é derivado de sinais do PDV ótico (uso, vendas,
+                cobrança), que não se aplicam a clínicas. Um feed próprio para o
+                Medical está previsto para uma fase futura.
+              </p>
+            }
+          />
+        </div>
+      </div>
+    );
+  }
+
   // Escopo: admin restrito só vê saúde das empresas do seu escopo (null = irrestrito).
   const accessible = await getAccessibleCompanyIds(admin.id);
-  const scopeWhere = accessible === null ? {} : { id: { in: accessible } };
+  // Compõe o access-scope com o filtro de produto + soft-delete (VIS_APP aqui).
+  // Usa buildDashboardFilters().company (produto AND notDeleted), não só o produto:
+  // sem o soft-delete, empresas com blockedReason='DELETED' reapareceriam aqui e nos
+  // CSVs enquanto somem de /clientes e do dashboard (fronteira inconsistente).
+  const scopeWhere = {
+    AND: [
+      accessible === null ? {} : { id: { in: accessible } },
+      buildDashboardFilters(product).company,
+    ],
+  };
   const params = await searchParams;
   const filterCategory =
     params.category && CATEGORY_ORDER.includes(params.category as HealthCategory)

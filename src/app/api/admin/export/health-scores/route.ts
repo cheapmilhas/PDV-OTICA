@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { csvRow } from "@/lib/csv-safe";
 import { adminRateLimit } from "@/lib/rate-limit";
+import { getProductContext, productWhereFilter } from "@/lib/admin-product-context";
 
 export async function GET(request: Request) {
   const admin = await getAdminSession();
@@ -16,14 +17,27 @@ export async function GET(request: Request) {
 
   // Escopo: admin restrito só exporta health-scores do seu escopo (null = irrestrito).
   const accessible = await getAccessibleCompanyIds(admin.id);
+  // Produto ativo: health só existe para ótica. Para VIS_MEDICAL o export sai vazio
+  // (só header) — curto-circuito explícito, à prova de históricos legados (Companies
+  // Medical criadas antes do patch podem ter score fake gravado pelo cron antigo).
+  const product = await getProductContext();
 
-  const scores = await prisma.healthScore.findMany({
-    where: accessible === null ? undefined : { companyId: { in: accessible } },
-    orderBy: { calculatedAt: "desc" },
-    include: { company: { select: { name: true, email: true } } },
-    distinct: ["companyId"],
-    take: 5000,
-  });
+  const scores = product === "VIS_MEDICAL"
+    ? []
+    : await prisma.healthScore.findMany({
+        where: {
+          AND: [
+            accessible === null ? {} : { companyId: { in: accessible } },
+            productWhereFilter(product, { via: "company" }),
+            // Soft-delete: não exportar score de empresa "excluída" pelo super admin.
+            { company: { OR: [{ blockedReason: null }, { blockedReason: { not: "DELETED" } }] } },
+          ],
+        },
+        orderBy: { calculatedAt: "desc" },
+        include: { company: { select: { name: true, email: true } } },
+        distinct: ["companyId"],
+        take: 5000,
+      });
 
   const rows = [
     csvRow(["empresa", "email", "score", "categoria", "calculado_em"]),

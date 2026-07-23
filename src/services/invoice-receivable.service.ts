@@ -14,15 +14,25 @@ export interface ReceivableSummary {
 
 export async function getReceivableThisWeek(
   now: Date,
-  prismaClient = defaultPrisma
+  prismaClient = defaultPrisma,
+  // Filtro Prisma extra (segmentação por produto do SuperAdmin, via
+  // subscription.company). Já vem no formato { AND: [...] } de buildDashboardFilters
+  // — composto por AND com as condições de status/data para não colidir com o
+  // ramo `subscription` deste where. Default {} = sem segmentação (compat).
+  productWhere: Record<string, unknown> = {}
 ): Promise<ReceivableSummary> {
   const in7d = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
 
   const rows = await prismaClient.invoice.findMany({
     where: {
-      status: "PENDING",
-      subscription: { status: "ACTIVE" },
-      dueDate: { gte: now, lte: in7d },
+      AND: [
+        productWhere,
+        {
+          status: "PENDING",
+          subscription: { status: "ACTIVE" },
+          dueDate: { gte: now, lte: in7d },
+        },
+      ],
     },
     include: {
       subscription: {

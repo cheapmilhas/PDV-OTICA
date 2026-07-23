@@ -4,6 +4,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { csvRow } from "@/lib/csv-safe";
 import { adminRateLimit } from "@/lib/rate-limit";
+import { getProductContext, productWhereFilter, notDeletedFilter } from "@/lib/admin-product-context";
 
 const log = logger.child({ route: "admin/export/assinaturas" });
 
@@ -21,10 +22,18 @@ export async function GET(request: Request) {
 
   // Escopo: admin restrito só exporta assinaturas do seu escopo (null = irrestrito).
   const accessible = await getAccessibleCompanyIds(admin.id);
+  // Produto ativo (cookie): o CSV segue o mesmo produto das telas.
+  const product = await getProductContext();
 
   try {
     const subscriptions = await prisma.subscription.findMany({
-      where: accessible === null ? undefined : { companyId: { in: accessible } },
+      where: {
+        AND: [
+          accessible === null ? {} : { companyId: { in: accessible } },
+          productWhereFilter(product, { via: "company" }),
+          notDeletedFilter({ via: "company" }),
+        ],
+      },
       include: {
         company: {
           select: {

@@ -6,11 +6,18 @@ import { useState } from "react";
 import {
   LayoutDashboard, Users, Wallet, FileText, AlertTriangle,
   Ticket, FileBarChart, UsersRound, Activity, Mail,
-  CreditCard, Settings,
+  CreditCard, Settings, Layers,
 } from "lucide-react";
 import { CONFIG_SECTIONS } from "./configuracoes/sections";
 
 const menuItems = [
+  {
+    // Cross-produto: consolida os dois produtos, NÃO é afetado pelo toggle abaixo.
+    section: "Grupo",
+    items: [
+      { href: "/admin/grupo", icon: Layers, label: "Consolidado", exact: true },
+    ],
+  },
   {
     section: "Principal",
     items: [

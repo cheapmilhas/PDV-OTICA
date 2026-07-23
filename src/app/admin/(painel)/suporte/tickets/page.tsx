@@ -9,6 +9,8 @@ import { EmptyState } from "@/components/admin/EmptyState";
 import { Button } from "@/components/ui/button";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../../dashboard-filters";
 
 // Prioridade → cor do "dot" via token semântico (sem emoji, theme-aware).
 const PRIORITY_DOT: Record<string, string> = {
@@ -28,8 +30,15 @@ const PRIORITY_LABELS: Record<string, string> = {
 export default async function TicketsPage() {
   await requireAdmin();
 
+  // Lente de produto. SupportTicket → relação `company` (via "company"). O groupBy
+  // dos KPIs leva o MESMO filtro — senão os cards contam os dois produtos enquanto
+  // a lista mostra um só.
+  const product = await getProductContext();
+  const pSub = buildDashboardFilters(product).subscriptionCompany;
+
   const [tickets, counts] = await Promise.all([
     prisma.supportTicket.findMany({
+      where: pSub,
       include: {
         company: { select: { tradeName: true } },
       },
@@ -38,6 +47,7 @@ export default async function TicketsPage() {
     }),
     prisma.supportTicket.groupBy({
       by: ["status"],
+      where: pSub,
       _count: { id: true },
     }),
   ]);

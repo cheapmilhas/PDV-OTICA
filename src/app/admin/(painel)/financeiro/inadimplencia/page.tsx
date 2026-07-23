@@ -6,6 +6,8 @@ import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { ResponsiveTable } from "@/components/ui/responsive-table";
 import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/components/ui/table";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../../dashboard-filters";
 
 export default async function InadimplenciaPage({
   searchParams,
@@ -13,6 +15,10 @@ export default async function InadimplenciaPage({
   searchParams: Promise<{ dias?: string }>;
 }) {
   await requireAdmin();
+
+  // Lente de produto (Invoice → subscription.company).
+  const product = await getProductContext();
+  const pInv = buildDashboardFilters(product).invoiceCompany;
 
   const params = await searchParams;
   const diasFilter = params.dias;
@@ -30,8 +36,7 @@ export default async function InadimplenciaPage({
   // Buscar faturas vencidas
   const invoices = await prisma.invoice.findMany({
     where: {
-      status: "OVERDUE",
-      ...(dateCutoff ? { dueDate: { lte: dateCutoff } } : {}),
+      AND: [pInv, { status: "OVERDUE", ...(dateCutoff ? { dueDate: { lte: dateCutoff } } : {}) }],
     },
     include: {
       subscription: {
@@ -48,32 +53,23 @@ export default async function InadimplenciaPage({
     take: 500,
   });
 
-  // Contadores
+  // Contadores — produto por AND em cada faixa (senão os chips contam os 2 produtos).
   const [total7, total15, total30, totalGeral] = await Promise.all([
     prisma.invoice.count({
-      where: {
-        status: "OVERDUE",
-        dueDate: { lte: new Date(Date.now() - 7 * 86400000) },
-      },
+      where: { AND: [pInv, { status: "OVERDUE", dueDate: { lte: new Date(Date.now() - 7 * 86400000) } }] },
     }),
     prisma.invoice.count({
-      where: {
-        status: "OVERDUE",
-        dueDate: { lte: new Date(Date.now() - 15 * 86400000) },
-      },
+      where: { AND: [pInv, { status: "OVERDUE", dueDate: { lte: new Date(Date.now() - 15 * 86400000) } }] },
     }),
     prisma.invoice.count({
-      where: {
-        status: "OVERDUE",
-        dueDate: { lte: new Date(Date.now() - 30 * 86400000) },
-      },
+      where: { AND: [pInv, { status: "OVERDUE", dueDate: { lte: new Date(Date.now() - 30 * 86400000) } }] },
     }),
-    prisma.invoice.count({ where: { status: "OVERDUE" } }),
+    prisma.invoice.count({ where: { AND: [pInv, { status: "OVERDUE" }] } }),
   ]);
 
   // Total vencido
   const totalVencido = await prisma.invoice.aggregate({
-    where: { status: "OVERDUE" },
+    where: { AND: [pInv, { status: "OVERDUE" }] },
     _sum: { total: true },
   });
 

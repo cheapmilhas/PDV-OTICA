@@ -4,6 +4,8 @@ import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity } from "lucide-react";
 import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
 import { startOfLocalMonth } from "@/lib/date-utils";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../dashboard-filters";
 import { ReconcileBillingButton } from "./ReconcileBillingButton";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { KPICard } from "@/components/admin/KPICard";
@@ -11,6 +13,13 @@ import { DollarSign } from "lucide-react";
 
 export default async function RelatoriosPage() {
   await requireAdmin();
+
+  // Lente de produto. Subscription e SupportTicket chegam a Company pela relação
+  // `company` → mesma via do dashboard (pf.subscriptionCompany). Os helpers de
+  // métrica (computeMRR/computeChurnRate) continuam puros: só recebem subscriptions
+  // JÁ filtradas por produto — a parametrização é na query, não no helper.
+  const product = await getProductContext();
+  const pSub = buildDashboardFilters(product).subscriptionCompany;
 
   const now = new Date();
   // Início do mês no fuso local (BRT), não no fuso do servidor (UTC na Vercel).
@@ -26,23 +35,28 @@ export default async function RelatoriosPage() {
     activeAtMonthStart,
     mrrData,
   ] = await Promise.all([
-    prisma.subscription.count({ where: { status: "ACTIVE" } }),
-    prisma.subscription.count({ where: { status: "TRIAL" } }),
+    prisma.subscription.count({ where: { AND: [pSub, { status: "ACTIVE" }] } }),
+    prisma.subscription.count({ where: { AND: [pSub, { status: "TRIAL" }] } }),
     prisma.subscription.count({
-      where: { status: "CANCELED", canceledAt: { gte: startOfMonth } },
+      where: { AND: [pSub, { status: "CANCELED", canceledAt: { gte: startOfMonth } }] },
     }),
-    prisma.supportTicket.count({ where: { createdAt: { gte: startOfMonth } } }),
+    prisma.supportTicket.count({ where: { AND: [pSub, { createdAt: { gte: startOfMonth } }] } }),
     // Base inicial do mês (ESTIMATIVA — status atual ≠ status passado): assinaturas
     // ativadas antes do início do mês e ainda não canceladas naquele momento.
     prisma.subscription.count({
       where: {
-        activatedAt: { lt: startOfMonth },
-        OR: [{ canceledAt: null }, { canceledAt: { gte: startOfMonth } }],
+        AND: [
+          pSub,
+          {
+            activatedAt: { lt: startOfMonth },
+            OR: [{ canceledAt: null }, { canceledAt: { gte: startOfMonth } }],
+          },
+        ],
       },
     }),
     // MRR: precisa do plano (preços) + ciclo/desconto da subscription.
     prisma.subscription.findMany({
-      where: { status: "ACTIVE" },
+      where: { AND: [pSub, { status: "ACTIVE" }] },
       include: { plan: { select: { priceMonthly: true, priceYearly: true } } },
     }),
   ]);
@@ -132,12 +146,15 @@ export default async function RelatoriosPage() {
           icon={Ticket}
           href="/api/admin/export/tickets"
         />
-        <ExportCard
-          title="Health Scores"
-          description="Saúde dos clientes"
-          icon={Heart}
-          href="/api/admin/export/health-scores"
-        />
+        {/* Health só para ótica — na visão Medical o export sairia vazio. */}
+        {product !== "VIS_MEDICAL" && (
+          <ExportCard
+            title="Health Scores"
+            description="Saúde dos clientes"
+            icon={Heart}
+            href="/api/admin/export/health-scores"
+          />
+        )}
         <ExportCard
           title="Auditoria"
           description="Log de ações administrativas"

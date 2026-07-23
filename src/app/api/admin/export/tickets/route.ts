@@ -3,6 +3,7 @@ import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { csvRow } from "@/lib/csv-safe";
 import { adminRateLimit } from "@/lib/rate-limit";
+import { getProductContext, productWhereFilter, notDeletedFilter } from "@/lib/admin-product-context";
 
 export async function GET(request: Request) {
   const admin = await getAdminSession();
@@ -19,9 +20,17 @@ export async function GET(request: Request) {
   // M5: admin restrito só exporta tickets das empresas no seu escopo.
   // null = sem restrição (SUPER_ADMIN ou scopeAllCompanies); [] = nenhuma.
   const accessible = await getAccessibleCompanyIds(admin.id);
+  // Produto ativo — mesmo critério da tela de tickets (via relação company).
+  const product = await getProductContext();
 
   const tickets = await prisma.supportTicket.findMany({
-    where: accessible === null ? undefined : { companyId: { in: accessible } },
+    where: {
+      AND: [
+        accessible === null ? {} : { companyId: { in: accessible } },
+        productWhereFilter(product, { via: "company" }),
+        notDeletedFilter({ via: "company" }),
+      ],
+    },
     include: {
       company: { select: { tradeName: true } },
     },

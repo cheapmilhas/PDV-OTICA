@@ -7,14 +7,17 @@ import Link from "next/link";
 import {
   Loader2, Building2, User, CreditCard, Users, BarChart3,
   KeyRound, RefreshCw, CheckCircle, ChevronRight, ChevronLeft,
-  MapPin, Settings,
+  MapPin, Settings, AlertTriangle,
 } from "lucide-react";
+
+type PlatformProduct = "VIS_APP" | "VIS_MEDICAL";
 
 interface Plan {
   id: string;
   name: string;
   priceMonthly: number;
   priceYearly: number;
+  platformProduct: PlatformProduct;
 }
 
 interface Network {
@@ -26,6 +29,7 @@ interface Network {
 interface Props {
   plans: Plan[];
   networks: Network[];
+  defaultProduct?: PlatformProduct;
 }
 
 // ── Etapas ────────────────────────────────────────────────────────────────────
@@ -85,12 +89,17 @@ function SummaryRow({ label, value }: { label: string; value: string }) {
 
 // ── Componente principal ──────────────────────────────────────────────────────
 
-export function NewClientForm({ plans, networks }: Props) {
+export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: Props) {
   const router = useRouter();
   const [currentStep, setCurrentStep] = useState(1);
   const [isPending, startTransition] = useTransition();
   const [error, setError] = useState("");
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+
+  // Produto do cliente. Persistido no draft para não resetar ao recarregar.
+  // Os planos exibidos e o plano selecionado seguem este valor (ver setProduct).
+  const [platformProduct, setPlatformProductRaw] = useDraftState<PlatformProduct>("platformProduct", defaultProduct);
+  const plansForProduct = plans.filter((p) => p.platformProduct === platformProduct);
 
   // Campos do wizard — persistidos em sessionStorage (useDraftState) para não
   // perder o preenchimento ao sair/recarregar. EXCEÇÃO: adminPassword (credencial)
@@ -112,8 +121,19 @@ export function NewClientForm({ plans, networks }: Props) {
   const [city, setCity] = useDraftState("city", "");
   const [stateUF, setStateUF] = useDraftState("stateUF", "");
 
-  // Step 2 — Assinatura
-  const [planId, setPlanId] = useDraftState("planId", plans[0]?.id || "");
+  // Step 2 — Assinatura. Default = 1º plano do produto ativo (não plans[0] global,
+  // que poderia ser de outro produto).
+  const [planId, setPlanId] = useDraftState("planId", plansForProduct[0]?.id || "");
+
+  // Trocar de produto RESETA o plano para o 1º do novo produto — senão o draft
+  // manteria um planId do produto anterior e o servidor rejeitaria (validação
+  // plan.platformProduct === platformProduct). Correção do achado do Codex.
+  function setProduct(p: PlatformProduct) {
+    setPlatformProductRaw(p);
+    const firstOfProduct = plans.find((pl) => pl.platformProduct === p);
+    setPlanId(firstOfProduct?.id || "");
+    setFieldErrors((prev) => ({ ...prev, planId: "" }));
+  }
   const [billingCycle, setBillingCycle] = useDraftState<"MONTHLY" | "YEARLY">("billingCycle", "MONTHLY");
   const [trialDays, setTrialDays] = useDraftState("trialDays", 14);
   const [discountPercent, setDiscountPercent] = useDraftState("discountPercent", 0);
@@ -138,6 +158,7 @@ export function NewClientForm({ plans, networks }: Props) {
 
   // Todas as chaves de rascunho — para limpar o sessionStorage após cadastrar.
   const clearDraft = useClearDraft([
+    "platformProduct",
     "tradeName", "companyName", "cnpj", "stateRegistration", "email", "phone",
     "whatsapp", "zipCode", "address", "addressNumber", "complement",
     "neighborhood", "city", "stateUF", "planId", "billingCycle", "trialDays",
@@ -164,7 +185,9 @@ export function NewClientForm({ plans, networks }: Props) {
     setTradeName(""); setCompanyName(""); setCnpj(""); setStateRegistration("");
     setEmail(""); setPhone(""); setWhatsapp(""); setZipCode(""); setAddress("");
     setAddressNumber(""); setComplement(""); setNeighborhood(""); setCity("");
-    setStateUF(""); setPlanId(plans[0]?.id || ""); setBillingCycle("MONTHLY");
+    setStateUF(""); setPlatformProductRaw(defaultProduct);
+    setPlanId(plans.find((p) => p.platformProduct === defaultProduct)?.id || "");
+    setBillingCycle("MONTHLY");
     setTrialDays(14); setDiscountPercent(0); setOwnerName(""); setOwnerCpf("");
     setOwnerEmail(""); setOwnerPhone(""); setAdminName(""); setAdminEmail("");
     setAdminPassword(""); setIsNetwork(false); setNetworkMode("new");
@@ -258,6 +281,7 @@ export function NewClientForm({ plans, networks }: Props) {
           method: "POST",
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({
+            platformProduct,
             tradeName, companyName, cnpj, stateRegistration,
             email, phone, whatsapp,
             zipCode, address, addressNumber, complement, neighborhood,
@@ -275,7 +299,26 @@ export function NewClientForm({ plans, networks }: Props) {
         const data = await res.json();
         if (!res.ok) throw new Error(data.error || "Erro ao cadastrar cliente");
         clearDraft(); // cadastro concluído — descarta o rascunho.
-        router.push(`/admin/clientes/${data.company.id}?created=true`);
+        // Alinha o toggle de produto ao produto criado ANTES de ir pro detalhe:
+        // o detalhe tem guard de produto (notFound se divergente), então criar um
+        // medical com o toggle em App cairia em 404. Só vou pro detalhe se a
+        // sincronização do cookie CONFIRMAR (senão o guard 404aria); caso contrário
+        // volto pra lista de clientes (sem guard de produto na URL) — o cadastro já
+        // foi persistido, então nunca sugiro repetir.
+        let productSynced = platformProduct === defaultProduct;
+        if (!productSynced) {
+          const syncRes = await fetch("/api/admin/product-context", {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify({ product: platformProduct }),
+          }).catch(() => null);
+          productSynced = !!syncRes?.ok;
+        }
+        router.push(
+          productSynced
+            ? `/admin/clientes/${data.company.id}?created=true`
+            : `/admin/clientes?created=true`,
+        );
       } catch (err: unknown) {
         setError(err instanceof Error ? err.message : "Erro inesperado");
       }
@@ -524,10 +567,50 @@ export function NewClientForm({ plans, networks }: Props) {
           </div>
 
           <div className="bg-card rounded-xl border border-border p-5 space-y-5">
-            {/* Cards de plano */}
+            {/* Seletor de produto — define quais planos aparecem e como a conta é
+                provisionada. Trocar reseta o plano (setProduct). */}
+            <Field label="Produto *" hint="Define o tipo de cliente e os planos disponíveis">
+              <div className="flex gap-3 mt-1">
+                {(["VIS_APP", "VIS_MEDICAL"] as const).map((p) => (
+                  <button
+                    key={p}
+                    type="button"
+                    onClick={() => setProduct(p)}
+                    aria-pressed={platformProduct === p}
+                    className={`flex-1 py-2.5 rounded-lg border text-sm font-medium transition-all ${
+                      platformProduct === p
+                        ? "border-primary bg-primary/10 text-primary"
+                        : "border-border bg-background text-muted-foreground hover:border-muted-foreground/30 hover:text-foreground"
+                    }`}
+                  >
+                    {p === "VIS_APP" ? "Vis App (Ótica)" : "Vis Medical (Clínica)"}
+                  </button>
+                ))}
+              </div>
+            </Field>
+
+            {/* Aviso: nesta fase o provisionamento da clínica no Domus NÃO é
+                automático — o operador precisa rodar o script de vínculo. */}
+            {platformProduct === "VIS_MEDICAL" && (
+              <div className="flex items-start gap-3 bg-warning/10 border border-warning/25 text-foreground px-4 py-3 rounded-lg text-sm">
+                <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+                <div className="space-y-1">
+                  <p className="font-medium">A clínica no sistema Medical (Domus) não é criada automaticamente nesta fase.</p>
+                  <p className="text-muted-foreground text-xs">
+                    Este cadastro cria a empresa e a assinatura no Vis (operadora). Após concluir,
+                    rode o script de vínculo com o Domus. O provisionamento automático chega na próxima fase.
+                  </p>
+                </div>
+              </div>
+            )}
+
+            {/* Cards de plano — só os do produto selecionado */}
             <Field label="Selecionar Plano *" error={fieldErrors.planId}>
               <div className="grid gap-3 mt-1">
-                {plans.map((plan) => (
+                {plansForProduct.length === 0 && (
+                  <p className="text-sm text-muted-foreground">Nenhum plano ativo para este produto.</p>
+                )}
+                {plansForProduct.map((plan) => (
                   <button
                     key={plan.id}
                     type="button"

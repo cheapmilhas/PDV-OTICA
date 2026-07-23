@@ -2,6 +2,8 @@ import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { CreditCard, ExternalLink } from "lucide-react";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../dashboard-filters";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { FilterBar, FilterChip } from "@/components/admin/FilterBar";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
@@ -23,7 +25,18 @@ export default async function AssinaturasPage({
   const params = await searchParams;
   const statusFilter = params.status;
 
-  const filterWhere = statusFilter ? { status: statusFilter as any } : {};
+  // Lente de produto (cookie admin.product): segmenta a tela igual ao dashboard.
+  // Subscription chega a Company pela relação `company` → via "company".
+  const product = await getProductContext();
+  const pf = buildDashboardFilters(product);
+
+  // Compõe status (opcional) + produto por AND. O groupBy dos chips e o count do
+  // subtítulo TAMBÉM levam o produto — senão os KPIs contariam os dois produtos
+  // enquanto a lista mostra um só (número não bateria com o visível).
+  const productWhere = pf.subscriptionCompany;
+  const filterWhere = statusFilter
+    ? { AND: [productWhere, { status: statusFilter as any }] }
+    : productWhere;
   const [subscriptions, statusCounts, filteredTotal] = await Promise.all([
     prisma.subscription.findMany({
       where: filterWhere,
@@ -34,7 +47,7 @@ export default async function AssinaturasPage({
       },
       take: 100,
     }),
-    prisma.subscription.groupBy({ by: ["status"], _count: true }),
+    prisma.subscription.groupBy({ by: ["status"], where: productWhere, _count: true }),
     // Total real respeitando o filtro atual — para o subtítulo não mentir
     // quando a lista é truncada em 100.
     prisma.subscription.count({ where: filterWhere }),

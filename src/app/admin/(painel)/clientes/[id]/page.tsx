@@ -1,6 +1,7 @@
 import { requireAdmin, requireSupportScope } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
+import { getProductContext } from "@/lib/admin-product-context";
 import Link from "next/link";
 import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign } from "lucide-react";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
@@ -54,6 +55,12 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
   if (!company) notFound();
 
+  // Consistência com o toggle: se o registro for de outro produto que não o ativo,
+  // notFound() (mesma semântica do guard de escopo — não confirma existência). O
+  // access-scope acima continua sendo a fronteira de segurança real; isto é UX.
+  const product = await getProductContext();
+  if (company.platformProduct !== product) notFound();
+
   const currentSubscription = company.subscriptions[0] ?? null;
   const invoices = currentSubscription
     ? await prisma.invoice.findMany({
@@ -81,11 +88,16 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
     orderBy: { date: "desc" },
   });
 
-  // Buscar último health score
-  const latestHealthScore = await prisma.healthScore.findFirst({
-    where: { companyId: id },
-    orderBy: { calculatedAt: "desc" },
-  });
+  // Health só se aplica a ótica (derivado de sinais do PDV). Companies Medical não
+  // têm feed clínico até a F6 — não buscar nem exibir score (as criadas antes deste
+  // ciclo nasceram com 50/HEALTHY fake; não vamos ressuscitar esse número aqui).
+  const showHealth = company.platformProduct === "VIS_APP";
+  const latestHealthScore = showHealth
+    ? await prisma.healthScore.findFirst({
+        where: { companyId: id },
+        orderBy: { calculatedAt: "desc" },
+      })
+    : null;
 
   // Sprint 2.2 — ActivityLog, Onboarding, Tags
   const activityLogs = await prisma.activityLog.findMany({
@@ -123,7 +135,7 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                   Bloqueado
                 </span>
               )}
-              {company.healthScore && company.healthCategory && (
+              {showHealth && company.healthScore && company.healthCategory && (
                 <HealthBadge score={company.healthScore} category={company.healthCategory} size="md" />
               )}
             </div>

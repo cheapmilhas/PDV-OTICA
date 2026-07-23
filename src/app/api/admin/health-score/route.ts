@@ -32,8 +32,19 @@ export async function POST(request: Request) {
         return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
       }
 
-      // Recalcular para uma empresa específica
-      await saveHealthScore(companyId);
+      // Recalcular para uma empresa específica. No-op (retorna false) quando a
+      // empresa não é VIS_APP (health não se aplica a medical) ou não existe.
+      const recalculated = await saveHealthScore(companyId);
+
+      if (!recalculated) {
+        // Resposta HONESTA: não fingir "recalculado" nem gravar auditoria de uma
+        // ação que não aconteceu (a auditoria também falharia na FK se o id não
+        // existisse). 200 com success:false — a UI mostra a mensagem, não um erro.
+        return NextResponse.json({
+          success: false,
+          message: "Health score não se aplica a este cliente (apenas Vis App / ótica).",
+        });
+      }
 
       await prisma.globalAudit.create({
         data: {

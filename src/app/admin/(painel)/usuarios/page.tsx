@@ -2,6 +2,8 @@ import { requireAdmin, getAccessibleCompanyIds } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ExternalLink, CheckCircle, XCircle, Users } from "lucide-react";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../dashboard-filters";
 import { PageHeader } from "@/components/admin/PageHeader";
 import { EmptyState } from "@/components/admin/EmptyState";
 import { Button } from "@/components/ui/button";
@@ -44,6 +46,10 @@ export default async function UsuariosPage({
   // Escopo: admin restrito só lista usuários de empresas do seu escopo
   // (null = irrestrito). Alinha à API /api/admin/company-users.
   const accessible = await getAccessibleCompanyIds(admin.id);
+  // Lente de produto: compõe COM o access-scope (ambos limitam a mesma consulta).
+  // User → relação `company` (via "company", igual à Subscription).
+  const product = await getProductContext();
+  const pf = buildDashboardFilters(product);
   const params = await searchParams;
 
   const search    = params.search    ?? "";
@@ -57,6 +63,7 @@ export default async function UsuariosPage({
   const where = {
     AND: [
       accessible === null ? {} : { companyId: { in: accessible } },
+      pf.subscriptionCompany, // produto via relação `company` (+ soft-delete)
       search
         ? {
             OR: [
@@ -96,7 +103,12 @@ export default async function UsuariosPage({
     prisma.user.count({ where: { AND: [where, { active: true }] } }),
     prisma.user.count({ where: { AND: [where, { active: false }] } }),
     prisma.company.findMany({
-      where: accessible === null ? undefined : { id: { in: accessible } },
+      where: {
+        AND: [
+          accessible === null ? {} : { id: { in: accessible } },
+          pf.company, // dropdown só com empresas do produto ativo
+        ],
+      },
       select: { id: true, tradeName: true, name: true },
       orderBy: { name: "asc" },
     }),

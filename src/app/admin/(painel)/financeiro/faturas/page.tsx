@@ -14,6 +14,8 @@ import { TableHeader, TableBody, TableRow, TableHead, TableCell } from "@/compon
 import { SyncInvoicesButton } from "@/components/admin/sync-invoices-button";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
+import { getProductContext } from "@/lib/admin-product-context";
+import { buildDashboardFilters } from "../../dashboard-filters";
 
 function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
   if (!a) return false;
@@ -38,6 +40,12 @@ export default async function FaturasPage({
 }) {
   await requireAdmin();
 
+  // Lente de produto. Invoice → subscription.company; a lista de empresas do
+  // picker (Company) → filtro direto por platformProduct.
+  const product = await getProductContext();
+  const pf = buildDashboardFilters(product);
+  const pInv = pf.invoiceCompany;
+
   const params = await searchParams;
   const statusFilter = params.status;
   const etapaFilter = params.etapa;
@@ -54,9 +62,16 @@ export default async function FaturasPage({
     etapaWhere = { nfGenerated: true, nfSent: false };
   }
 
+  // Produto compõe por AND (não spread): pInv aninha em subscription.company e
+  // não pode colidir com os campos escalares de status/etapa.
   const listWhere = {
-    ...(statusFilter ? { status: statusFilter as any } : {}),
-    ...etapaWhere,
+    AND: [
+      pInv,
+      {
+        ...(statusFilter ? { status: statusFilter as any } : {}),
+        ...etapaWhere,
+      },
+    ],
   };
   const [invoices, filteredTotal] = await Promise.all([
     prisma.invoice.findMany({
@@ -76,30 +91,35 @@ export default async function FaturasPage({
     prisma.invoice.count({ where: listWhere }),
   ]);
 
-  // Contadores
+  // Contadores — cada um leva o produto por AND, senão os chips de workflow
+  // contariam os dois produtos enquanto a lista mostra um só.
   const [totalPending, totalPaid, totalOverdue, aguardandoEnvio, aguardandoPagamento, aguardandoNf] = await Promise.all([
-    prisma.invoice.count({ where: { status: "PENDING" } }),
-    prisma.invoice.count({ where: { status: "PAID" } }),
-    prisma.invoice.count({ where: { status: "OVERDUE" } }),
-    prisma.invoice.count({ where: { invoiceGenerated: true, invoiceSent: false, status: "PENDING" } }),
-    prisma.invoice.count({ where: { invoiceSent: true, paymentConfirmed: false, status: "PENDING" } }),
-    prisma.invoice.count({ where: { paymentConfirmed: true, nfGenerated: false } }),
+    prisma.invoice.count({ where: { AND: [pInv, { status: "PENDING" }] } }),
+    prisma.invoice.count({ where: { AND: [pInv, { status: "PAID" }] } }),
+    prisma.invoice.count({ where: { AND: [pInv, { status: "OVERDUE" }] } }),
+    prisma.invoice.count({ where: { AND: [pInv, { invoiceGenerated: true, invoiceSent: false, status: "PENDING" }] } }),
+    prisma.invoice.count({ where: { AND: [pInv, { invoiceSent: true, paymentConfirmed: false, status: "PENDING" }] } }),
+    prisma.invoice.count({ where: { AND: [pInv, { paymentConfirmed: true, nfGenerated: false }] } }),
   ]);
 
+  // Picker de empresa (Company) — filtro direto por produto (soft-delete incluso
+  // via pf.company) para o operador não cobrar de uma empresa do outro produto.
   const companies = await prisma.company.findMany({
-    where: { subscriptions: { some: { status: { not: "CANCELED" } } } },
+    where: {
+      AND: [pf.company, { subscriptions: { some: { status: { not: "CANCELED" } } } }],
+    },
     select: { id: true, name: true },
     orderBy: { name: "asc" },
   });
 
   // Totais financeiros
   const totalRecebido = await prisma.invoice.aggregate({
-    where: { status: "PAID" },
+    where: { AND: [pInv, { status: "PAID" }] },
     _sum: { total: true },
   });
 
   const totalPendente = await prisma.invoice.aggregate({
-    where: { status: { in: ["PENDING", "OVERDUE"] } },
+    where: { AND: [pInv, { status: { in: ["PENDING", "OVERDUE"] } }] },
     _sum: { total: true },
   });
 
