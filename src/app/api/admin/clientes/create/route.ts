@@ -1,9 +1,11 @@
 import { NextResponse } from "next/server";
 import { prisma } from "@/lib/prisma";
 import { getAdminSession } from "@/lib/admin-session";
-import { randomBytes } from "crypto";
+import { randomBytes, randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { setupCompanyFinance } from "@/services/finance-setup.service";
+import { enqueueProvisioning, runProvisioningOnce } from "@/services/provisioning-outbox.service";
+import type { ProvisionRequest } from "@/lib/vis-provision-client";
 import { logActivity } from "@/services/activity-log.service";
 import { createOnboardingChecklist, completeOnboardingStep } from "@/services/onboarding-checklist.service";
 import { ActorType } from "@prisma/client";
@@ -166,7 +168,11 @@ export async function POST(request: Request) {
   }
 
   try {
-    const result = await prisma.$transaction(async (tx) => {
+    // F2: capturados dentro da tx (medical), usados no fast-path pós-commit.
+  let provisioningPayload: ProvisionRequest | null = null;
+  let provisioningAttemptId: string | null = null;
+
+  const result = await prisma.$transaction(async (tx) => {
       // 1. Criar Network se necessário
       let networkId: string | null = null;
       let isHeadquarters = false;
@@ -196,11 +202,17 @@ export async function POST(request: Request) {
       }
 
       // 3. Criar Company
+      // F2: para VIS_MEDICAL, o Vis ALOCA o clinicId (uuid) já na criação —
+      // é a chave natural de idempotência do provisionamento no Domus e o
+      // vínculo 1:1. Ótica não tem clínica → null.
+      const allocatedClinicId =
+        provision.platformProduct === "VIS_MEDICAL" ? randomUUID() : null;
       const company = await tx.company.create({
         data: {
           name: companyName || tradeName,
           tradeName,
           cnpj: cleanCnpj,
+          domusClinicId: allocatedClinicId,
           email,
           phone,
           website: null,
@@ -300,6 +312,33 @@ export async function POST(request: Request) {
           discountPercent: discountPercent || null,
         },
       });
+
+      // 7.0.1. F2: enfileirar o provisionamento da clínica no Domus (só medical).
+      // Na MESMA tx da criação → nunca há Company medical PROVISIONING sem outbox.
+      // O e-mail do convite é suprimido nesta fase (flag) — o link só resolve
+      // quando medical.vis.app.br existir (Marco 2). O attemptId é a guarda de corrida.
+      if (allocatedClinicId) {
+        provisioningAttemptId = randomUUID();
+        provisioningPayload = {
+          eventId: `provision:${allocatedClinicId}`,
+          requestId: randomUUID(),
+          requestedByAdminId: admin.id,
+          clinicId: allocatedClinicId,
+          visCompanyId: company.id,
+          clinicName: tradeName,
+          admin: {
+            email: (adminEmail ?? ownerEmail ?? email).toLowerCase().trim(),
+            name: adminName ?? ownerName,
+            role: "admin",
+          },
+          entitlement: {
+            writeAllowed: true,
+            planTier: plan.tier ?? "",
+            sourceRevision: "0", // placeholder: os triggers do Vis produzem a revision real
+          },
+        };
+        await enqueueProvisioning(tx, company.id, provisioningPayload, provisioningAttemptId);
+      }
 
       // 7.0. Criar CompanySettings com dados cadastrais
       await tx.companySettings.create({
@@ -425,12 +464,28 @@ export async function POST(request: Request) {
       actorName: admin.name,
     });
 
+    // F2: fast-path síncrono — tenta provisionar a clínica no Domus JÁ (o admin
+    // vê "provisionado" na hora no caminho feliz). Se falhar (Domus fora, timeout),
+    // a Company fica PROVISIONING e o worker do outbox reconcilia. NÃO quebra a
+    // criação (best-effort): o cliente já foi persistido.
+    let provisioningState: string | null = null;
+    if (provisioningPayload) {
+      provisioningState = await runProvisioningOnce(result.company.id).catch((err) => {
+        log.error("fast-path de provisionamento falhou (worker reconcilia)", {
+          companyId: result.company.id,
+          error: err instanceof Error ? err.message : String(err),
+        });
+        return "PROVISIONING";
+      });
+    }
+
     return NextResponse.json({
       success: true,
       company: result.company,
       inviteId: result.invite.id,
       adminUserCreated: !!result.user,
       adminEmail: result.user?.email || null,
+      provisioningState,
     });
   } catch (error: any) {
     log.error("Erro ao criar cliente", { error: error instanceof Error ? error.message : String(error) });
