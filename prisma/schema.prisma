@@ -137,6 +137,14 @@ model Company {
   /// Só faz sentido quando platformProduct = VIS_MEDICAL; o Vis é a fonte de
   /// verdade da assinatura e publica o entitlement para esta clínica.
   domusClinicId           String?                  @unique @db.Uuid
+  /// Estado do provisionamento da clínica no Domus (F2). Só relevante para
+  /// VIS_MEDICAL; VIS_APP fica sempre NOT_REQUIRED.
+  provisioningState       ProvisioningState        @default(NOT_REQUIRED)
+  /// Guarda de corrida: a transição para PROVISIONED só vale se o attemptId
+  /// bater com o da tentativa corrente (uma tentativa lenta não sobrescreve
+  /// o resultado de uma rápida).
+  provisioningAttemptId   String?
+  provisioningOutbox      ProvisioningOutbox?
   ownerGroupId            String?
   accountsPayable         AccountPayable[]
   accountsReceivable      AccountReceivable[]
@@ -245,8 +253,32 @@ model Company {
 /// ordenável, resolve o torn read do MAX(updatedAt)). Ver migração
 /// 20260719140000_entitlement_revision. NÃO escrever esta tabela pela app — é
 /// mantida pelos triggers; escrita manual quebraria a monotonicidade.
+/// Estado do provisionamento de clínica Medical no Domus (F2).
+enum ProvisioningState {
+  NOT_REQUIRED // ótica (VIS_APP) ou medical ainda sem provisionamento
+  PROVISIONING // enfileirado/em tentativa (fast-path ou worker)
+  PROVISIONED // clínica criada no Domus, confirmada
+  PROVISION_FAILED // falha TERMINAL (identity_conflict, órfã, esgotou tentativas)
+}
+
+/// Outbox durável do provisionamento Vis → Domus (F2). PRÓPRIO (não reusa o
+/// outbox de entitlement, que é trigger-based). Uma linha por Company medical
+/// em provisionamento; o worker drena e retenta com backoff.
+model ProvisioningOutbox {
+  companyId     String   @id
+  payload       Json // ProvisionInput serializado (clinicId, admin, entitlement…)
+  attempts      Int      @default(0)
+  nextAttemptAt DateTime @default(now())
+  failureReason String? // motivo da falha terminal, exibido ao super admin
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+  company       Company  @relation(fields: [companyId], references: [id], onDelete: Cascade)
+
+  @@index([nextAttemptAt])
+}
+
 model EntitlementRevision {
-  companyId String @id
+  companyId String  @id
   revision  BigInt
   company   Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 }
@@ -282,16 +314,16 @@ model Branch {
   lastNfeNumber         Int?
   // Configuração fiscal NFC-e (Focus NFe)
   fiscalEnabled         Boolean                  @default(false)
-  fiscalRegime          String?                  // "SIMPLES_NACIONAL" | "LUCRO_PRESUMIDO" | "LUCRO_REAL"
-  fiscalCsosn           String?                  // ex: "102" (Simples sem permissão de crédito)
-  fiscalCst             String?                  // para regime não-Simples
-  fiscalCfopPadrao      String?                  // ex: "5102" (venda mesma UF)
-  fiscalNcmPadrao       String?                  // ex: "9001.40" (lentes de contato/óculos)
-  fiscalAmbiente        String?                  // "HOMOLOGACAO" | "PRODUCAO"
+  fiscalRegime          String? // "SIMPLES_NACIONAL" | "LUCRO_PRESUMIDO" | "LUCRO_REAL"
+  fiscalCsosn           String? // ex: "102" (Simples sem permissão de crédito)
+  fiscalCst             String? // para regime não-Simples
+  fiscalCfopPadrao      String? // ex: "5102" (venda mesma UF)
+  fiscalNcmPadrao       String? // ex: "9001.40" (lentes de contato/óculos)
+  fiscalAmbiente        String? // "HOMOLOGACAO" | "PRODUCAO"
   fiscalSerieNfce       Int?                     @default(1)
   fiscalProximoNumero   Int?                     @default(1)
-  fiscalCscId           String?                  // Código de Segurança do Contribuinte ID
-  fiscalCscToken        String?                  // CSC Token
+  fiscalCscId           String? // Código de Segurança do Contribuinte ID
+  fiscalCscToken        String? // CSC Token
   active                Boolean                  @default(true)
   createdAt             DateTime                 @default(now())
   updatedAt             DateTime                 @updatedAt
@@ -368,7 +400,7 @@ model User {
   passwordChangedAt          DateTime?
   role                       UserRole
   active                     Boolean                  @default(true)
-  isSystem                   Boolean                  @default(false)  // usuário-robô (IA). Excluído da tela de equipe.
+  isSystem                   Boolean                  @default(false) // usuário-robô (IA). Excluído da tela de equipe.
   defaultCommissionPercent   Decimal?                 @db.Decimal(5, 2)
   createdAt                  DateTime                 @default(now())
   updatedAt                  DateTime                 @updatedAt
@@ -521,70 +553,70 @@ model MetricSample {
 }
 
 model Customer {
-  id                 String                 @id @default(cuid())
-  companyId          String
-  name               String
-  cpf                String?
-  rg                 String?
-  phone              String?
-  phone2             String?
+  id                    String                 @id @default(cuid())
+  companyId             String
+  name                  String
+  cpf                   String?
+  rg                    String?
+  phone                 String?
+  phone2                String?
   // Chave canônica do telefone (DDD+8díg) p/ casar contato do WhatsApp↔cliente.
   // Derivada de phone (e phone2) via phoneMatchKey no write + backfill. Índice
   // COMPOSTO com companyId — nunca buscar por phoneNormalized sem companyId.
-  phoneNormalized    String?
-  phone2Normalized   String?
-  email              String?
-  birthDate          DateTime?
-  gender             String?
-  address            String?
-  number             String?
-  complement         String?
-  neighborhood       String?
-  city               String?
-  state              String?
-  zipCode            String?
-  acceptsMarketing   Boolean                @default(true)
-  referralSource     String?
-  notes              String?
-  active             Boolean                @default(true)
-  deletedAt          DateTime?
+  phoneNormalized       String?
+  phone2Normalized      String?
+  email                 String?
+  birthDate             DateTime?
+  gender                String?
+  address               String?
+  number                String?
+  complement            String?
+  neighborhood          String?
+  city                  String?
+  state                 String?
+  zipCode               String?
+  acceptsMarketing      Boolean                @default(true)
+  referralSource        String?
+  notes                 String?
+  active                Boolean                @default(true)
+  deletedAt             DateTime?
   // LGPD compliance
-  anonymizedAt       DateTime?              // dados pessoais anonimizados (mantém integridade FK)
-  lgpdConsentAt      DateTime?              // último consentimento registrado
-  lgpdConsentVersion String?                // versão do termo aceito
-  createdAt          DateTime               @default(now())
-  updatedAt          DateTime               @updatedAt
-  cnpj               String?
-  companyName        String?
-  personType         String                 @default("PF")
-  tradeName          String?
-  externalId         String?
-  originBranchId     String?                @map("origin_branch_id")
+  anonymizedAt          DateTime? // dados pessoais anonimizados (mantém integridade FK)
+  lgpdConsentAt         DateTime? // último consentimento registrado
+  lgpdConsentVersion    String? // versão do termo aceito
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
+  cnpj                  String?
+  companyName           String?
+  personType            String                 @default("PF")
+  tradeName             String?
+  externalId            String?
+  originBranchId        String?                @map("origin_branch_id")
   // Limite de crédito individual (sobrepõe SystemRule customers.default_credit_limit)
   // null = usa o default da empresa. Adicionado no Bug #3 fix.
-  creditLimit            Decimal?  @db.Decimal(12, 2)
-  creditLimitOverridden  Boolean   @default(false)
-  accountsReceivable AccountReceivable[]
-  agreementBenefits  AgreementBeneficiary[]
-  company            Company                @relation(fields: [companyId], references: [id])
-  originBranch       Branch?                @relation("BranchOriginCustomers", fields: [originBranchId], references: [id])
-  cashback           CustomerCashback[]
-  contacts           CustomerContact[]
-  loyaltyPoints      LoyaltyPoints[]
-  prescriptions      Prescription[]
-  quotes             Quote[]
-  refunds            Refund[]
-  reminders          Reminder[]
-  sales              Sale[]
-  serviceOrders      ServiceOrder[]
-  crmContacts        CrmContact[]           @relation("CrmContacts")
-  crmReminders       CustomerReminder[]     @relation("CustomerReminders")
-  whatsappMessages   WhatsappMessageLog[]
-  consentRecords     ConsentRecord[]
-  accessLogs         CustomerAccessLog[]
-  leads              Lead[]                 @relation("LeadCustomer")
-  leadsSuggested     Lead[]                 @relation("LeadSuggestedCustomer")
-  examAppointments   ExamAppointment[]      @relation("CustomerExamAppointments")
+  creditLimit           Decimal?               @db.Decimal(12, 2)
+  creditLimitOverridden Boolean                @default(false)
+  accountsReceivable    AccountReceivable[]
+  agreementBenefits     AgreementBeneficiary[]
+  company               Company                @relation(fields: [companyId], references: [id])
+  originBranch          Branch?                @relation("BranchOriginCustomers", fields: [originBranchId], references: [id])
+  cashback              CustomerCashback[]
+  contacts              CustomerContact[]
+  loyaltyPoints         LoyaltyPoints[]
+  prescriptions         Prescription[]
+  quotes                Quote[]
+  refunds               Refund[]
+  reminders             Reminder[]
+  sales                 Sale[]
+  serviceOrders         ServiceOrder[]
+  crmContacts           CrmContact[]           @relation("CrmContacts")
+  crmReminders          CustomerReminder[]     @relation("CustomerReminders")
+  whatsappMessages      WhatsappMessageLog[]
+  consentRecords        ConsentRecord[]
+  accessLogs            CustomerAccessLog[]
+  leads                 Lead[]                 @relation("LeadCustomer")
+  leadsSuggested        Lead[]                 @relation("LeadSuggestedCustomer")
+  examAppointments      ExamAppointment[]      @relation("CustomerExamAppointments")
 
   @@unique([companyId, cpf])
   // cnpj: único POR EMPRESA via índice PARCIAL (WHERE cnpj IS NOT NULL) criado na
@@ -603,21 +635,21 @@ model Customer {
 
 /// Registro de consentimento LGPD (Art. 8º). Auditável e imutável após criação.
 model ConsentRecord {
-  id           String   @id @default(cuid())
-  customerId   String
-  companyId    String
+  id          String    @id @default(cuid())
+  customerId  String
+  companyId   String
   /// Versão do termo aceito (ex: "v1.0", "2026-05-25")
-  termVersion  String
+  termVersion String
   /// Escopo do consentimento: ex "marketing,health_data,personal_data"
-  scope        String
+  scope       String
   /// IP do navegador no momento do aceite
-  ipAddress    String?
+  ipAddress   String?
   /// User-Agent
-  userAgent    String?
-  acceptedAt   DateTime @default(now())
+  userAgent   String?
+  acceptedAt  DateTime  @default(now())
   /// Se revogado, quando
-  revokedAt    DateTime?
-  customer     Customer @relation(fields: [customerId], references: [id])
+  revokedAt   DateTime?
+  customer    Customer  @relation(fields: [customerId], references: [id])
 
   @@index([customerId, acceptedAt])
   @@index([companyId, acceptedAt])
@@ -740,30 +772,30 @@ model LabPriceRange {
 }
 
 model Supplier {
-  id              String                @id @default(cuid())
-  companyId       String
-  name            String
-  tradeName       String?
-  cnpj            String?
-  phone           String?
-  email           String?
-  website         String?
-  contactPerson   String?
-  address         String?
-  city            String?
-  state           String?
-  zipCode         String?
-  notes           String?
-  active          Boolean               @default(true)
-  createdAt       DateTime              @default(now())
-  updatedAt       DateTime              @updatedAt
-  accountsPayable    AccountPayable[]
-  inventoryLots      InventoryLot[]        @relation("LotSupplier")
-  products           Product[]
-  campaignItems      ProductCampaignItem[]
-  stockMovements     StockMovement[]
-  recurringExpenses  RecurringExpense[]
-  company            Company               @relation(fields: [companyId], references: [id])
+  id                String                @id @default(cuid())
+  companyId         String
+  name              String
+  tradeName         String?
+  cnpj              String?
+  phone             String?
+  email             String?
+  website           String?
+  contactPerson     String?
+  address           String?
+  city              String?
+  state             String?
+  zipCode           String?
+  notes             String?
+  active            Boolean               @default(true)
+  createdAt         DateTime              @default(now())
+  updatedAt         DateTime              @updatedAt
+  accountsPayable   AccountPayable[]
+  inventoryLots     InventoryLot[]        @relation("LotSupplier")
+  products          Product[]
+  campaignItems     ProductCampaignItem[]
+  stockMovements    StockMovement[]
+  recurringExpenses RecurringExpense[]
+  company           Company               @relation(fields: [companyId], references: [id])
 
   @@unique([companyId, cnpj])
   @@index([companyId, name])
@@ -961,7 +993,7 @@ model LensServiceDetail {
 }
 
 model Prescription {
-  id               String              @id @default(cuid())
+  id               String   @id @default(cuid())
   companyId        String
   customerId       String
   doctorId         String?
@@ -971,44 +1003,44 @@ model Prescription {
   notes            String?
   imageUrl         String?
   createdByUserId  String?
-  createdAt        DateTime            @default(now())
-  updatedAt        DateTime            @updatedAt
-  branchId         String?             @map("branch_id")
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  branchId         String?  @map("branch_id")
 
   // ── Livro de Receitas (Fase 1) ───────────────────────────────────────────
   // Estado de preenchimento do grau. Default seguro: receita nova sem grau.
-  status                PrescriptionStatus @default(AGUARDANDO_GRAU)
+  status               PrescriptionStatus @default(AGUARDANDO_GRAU)
   // Foto arquivada da receita (1 por enquanto). Guarda o CAMINHO/URL da imagem.
   // Storage NÃO é implementado nesta fase — só o campo. Ver imageUrl (legado do
   // model dormente) que segue existindo; este é o campo oficial do Livro.
-  prescriptionImageUrl  String?
+  prescriptionImageUrl String?
   // Paciente/dependente: quem USA a receita pode não ser quem paga (titular).
-  isDependente          Boolean         @default(false)
-  patientName           String?
-  patientBirthDate      DateTime?
+  isDependente         Boolean            @default(false)
+  patientName          String?
+  patientBirthDate     DateTime?
   // Vínculos de ORIGEM (nullable). A origem da receita é inferida por qual
   // vínculo está preenchido: veio de uma OS (serviceOrderId), de uma venda
   // direta (saleId), ou foi avulsa (ambos null). onDelete: SetNull — a receita
   // PERSISTE no Livro mesmo que a OS/venda de origem seja apagada.
-  serviceOrderId   String?
+  serviceOrderId       String?
   // saleId é a CHAVE DE UNICIDADE do Livro: 1 venda → no máximo 1 receita.
   // @unique impede duplicidade em corrida (NULL não colide no Postgres, então
   // receitas avulsas sem venda convivem). Habilita upsert por saleId.
-  saleId           String?             @unique
+  saleId               String?            @unique
 
-  branch           Branch?             @relation(fields: [branchId], references: [id])
-  company          Company             @relation(fields: [companyId], references: [id])
-  createdByUser    User?               @relation("PrescriptionCreator", fields: [createdByUserId], references: [id])
-  customer         Customer            @relation(fields: [customerId], references: [id])
-  doctor           Doctor?             @relation(fields: [doctorId], references: [id])
-  values           PrescriptionValues?
+  branch             Branch?             @relation(fields: [branchId], references: [id])
+  company            Company             @relation(fields: [companyId], references: [id])
+  createdByUser      User?               @relation("PrescriptionCreator", fields: [createdByUserId], references: [id])
+  customer           Customer            @relation(fields: [customerId], references: [id])
+  doctor             Doctor?             @relation(fields: [doctorId], references: [id])
+  values             PrescriptionValues?
   // Vínculo histórico já existente (1 receita → N OS que a referenciam por
   // prescriptionId). Mantido intacto. NÃO confundir com serviceOrderId acima,
   // que é o vínculo de ORIGEM (a OS que gerou esta receita no Livro).
-  serviceOrders    ServiceOrder[]      @relation("SOPrescription")
+  serviceOrders      ServiceOrder[]      @relation("SOPrescription")
   // Vínculo de origem (SetNull on delete) — back-relations dedicadas.
-  originServiceOrder ServiceOrder?     @relation("PrescriptionOriginSO", fields: [serviceOrderId], references: [id], onDelete: SetNull)
-  originSale         Sale?             @relation("PrescriptionOriginSale", fields: [saleId], references: [id], onDelete: SetNull)
+  originServiceOrder ServiceOrder?       @relation("PrescriptionOriginSO", fields: [serviceOrderId], references: [id], onDelete: SetNull)
+  originSale         Sale?               @relation("PrescriptionOriginSale", fields: [saleId], references: [id], onDelete: SetNull)
 
   @@index([companyId, customerId])
   @@index([customerId, expiresAt])
@@ -1043,46 +1075,46 @@ model PrescriptionValues {
 }
 
 model ServiceOrder {
-  id                String                @id @default(cuid())
-  number            Int                   @default(0)
-  companyId         String
-  branchId          String
-  customerId        String
-  prescriptionId    String?
-  createdByUserId   String
-  status            ServiceOrderStatus    @default(DRAFT)
-  priority          ServiceOrderPriority  @default(NORMAL)
-  promisedDate      DateTime?
-  labExpectedDate   DateTime?
-  sentToLabAt       DateTime?
-  readyAt           DateTime?
-  deliveredAt       DateTime?
-  canceledAt        DateTime?
+  id                   String                @id @default(cuid())
+  number               Int                   @default(0)
+  companyId            String
+  branchId             String
+  customerId           String
+  prescriptionId       String?
+  createdByUserId      String
+  status               ServiceOrderStatus    @default(DRAFT)
+  priority             ServiceOrderPriority  @default(NORMAL)
+  promisedDate         DateTime?
+  labExpectedDate      DateTime?
+  sentToLabAt          DateTime?
+  readyAt              DateTime?
+  deliveredAt          DateTime?
+  canceledAt           DateTime?
   // "Ocultar por hoje" da fila "Prontos pra avisar": a OS some da fila até esta
   // data (amanhã 06h BRT) e reaparece se ainda estiver READY. NÃO é status —
   // é um adiamento leve, não confunde com "avisado" (que deriva do
   // WhatsappMessageLog type=OS_READY, fonte canônica) nem com DELIVERED.
-  notifySnoozedUntil DateTime?
-  laboratoryId      String?
-  labOrderNumber    String?
-  labNotes          String?
-  isDelayed         Boolean               @default(false)
-  delayDays         Int?
-  delayReason       String?
-  isWarranty        Boolean               @default(false)
-  isRework          Boolean               @default(false)
-  isMedicalError    Boolean               @default(false)
-  warrantyReason    String?
-  reworkReason      String?
-  medicalErrorReason String?
+  notifySnoozedUntil   DateTime?
+  laboratoryId         String?
+  labOrderNumber       String?
+  labNotes             String?
+  isDelayed            Boolean               @default(false)
+  delayDays            Int?
+  delayReason          String?
+  isWarranty           Boolean               @default(false)
+  isRework             Boolean               @default(false)
+  isMedicalError       Boolean               @default(false)
+  warrantyReason       String?
+  reworkReason         String?
+  medicalErrorReason   String?
   // Sequência de exibição por (OS original + tipo): G1, G2, RT1, M1...
   // O number interno continua único/sequencial; isto é só p/ exibição #1234-G1.
-  warrantySeq       Int?
-  originalOrderId   String?
-  deliveredByUserId String?
-  deliveryNotes     String?
-  qualityRating     Int?
-  qualityNotes      String?
+  warrantySeq          Int?
+  originalOrderId      String?
+  deliveredByUserId    String?
+  deliveryNotes        String?
+  qualityRating        Int?
+  qualityNotes         String?
   prescriptionData     Json?
   prescriptionImageUrl String?
   lensType             String?
@@ -1091,27 +1123,27 @@ model ServiceOrder {
   treatments           String[]
   notes                String?
   deletedAt            DateTime?
-  createdAt         DateTime              @default(now())
-  updatedAt         DateTime              @updatedAt
-  frameMeasurements FrameMeasurement[]
-  qualityChecklist  QualityChecklist?
-  sale              Sale?
-  branch            Branch                @relation(fields: [branchId], references: [id])
-  company           Company               @relation(fields: [companyId], references: [id])
-  createdByUser     User                  @relation("SOCreator", fields: [createdByUserId], references: [id])
-  customer          Customer              @relation(fields: [customerId], references: [id])
-  deliveredByUser   User?                 @relation("SODeliverer", fields: [deliveredByUserId], references: [id])
-  laboratory        Lab?                  @relation(fields: [laboratoryId], references: [id])
-  originalOrder     ServiceOrder?         @relation("OrderRework", fields: [originalOrderId], references: [id])
-  reworkOrders      ServiceOrder[]        @relation("OrderRework")
-  prescriptionRel   Prescription?         @relation("SOPrescription", fields: [prescriptionId], references: [id])
+  createdAt            DateTime              @default(now())
+  updatedAt            DateTime              @updatedAt
+  frameMeasurements    FrameMeasurement[]
+  qualityChecklist     QualityChecklist?
+  sale                 Sale?
+  branch               Branch                @relation(fields: [branchId], references: [id])
+  company              Company               @relation(fields: [companyId], references: [id])
+  createdByUser        User                  @relation("SOCreator", fields: [createdByUserId], references: [id])
+  customer             Customer              @relation(fields: [customerId], references: [id])
+  deliveredByUser      User?                 @relation("SODeliverer", fields: [deliveredByUserId], references: [id])
+  laboratory           Lab?                  @relation(fields: [laboratoryId], references: [id])
+  originalOrder        ServiceOrder?         @relation("OrderRework", fields: [originalOrderId], references: [id])
+  reworkOrders         ServiceOrder[]        @relation("OrderRework")
+  prescriptionRel      Prescription?         @relation("SOPrescription", fields: [prescriptionId], references: [id])
   // Livro de Receitas: receitas cuja ORIGEM foi esta OS (SetNull on delete).
-  originPrescriptions Prescription[]      @relation("PrescriptionOriginSO")
-  history           ServiceOrderHistory[]
-  items             ServiceOrderItem[]
-  reservations      StockReservation[]
-  warranties        Warranty[]
-  warrantyClaims    WarrantyClaim[]       @relation("WarrantyClaimOrder")
+  originPrescriptions  Prescription[]        @relation("PrescriptionOriginSO")
+  history              ServiceOrderHistory[]
+  items                ServiceOrderItem[]
+  reservations         StockReservation[]
+  warranties           Warranty[]
+  warrantyClaims       WarrantyClaim[]       @relation("WarrantyClaimOrder")
 
   @@unique([companyId, number])
   @@index([companyId, status])
@@ -1344,32 +1376,32 @@ model LeadStage {
 }
 
 model Lead {
-  id             String      @id @default(cuid())
-  companyId      String
-  branchId       String?
-  name           String
-  phone          String?
-  email          String?
-  interest       String?
-  source         LeadFunnelSource?
-  stageId        String
-  sellerUserId   String?
-  estimatedValue Decimal?    @db.Decimal(12, 2)
-  customerId     String?
-  quoteId        String?
-  lostReason     String?
+  id                         String              @id @default(cuid())
+  companyId                  String
+  branchId                   String?
+  name                       String
+  phone                      String?
+  email                      String?
+  interest                   String?
+  source                     LeadFunnelSource?
+  stageId                    String
+  sellerUserId               String?
+  estimatedValue             Decimal?            @db.Decimal(12, 2)
+  customerId                 String?
+  quoteId                    String?
+  lostReason                 String?
   // Motivo ESTRUTURADO da perda (Sprint 3, #8). Nullable: leads perdidos ANTES
   // da migração ficam null (não adivinhamos categoria do texto livre antigo).
   // A partir de agora é obrigatório ao marcar como perdido (validado no service).
-  lostReasonCategory LostReasonCategory?
-  notes          String?
+  lostReasonCategory         LostReasonCategory?
+  notes                      String?
   // IA contexto cliente (Fase 1/2): intenção classificada + estado do match de
   // cliente. intent/contactNotPatient/urgent são SUGESTÃO da IA; o vínculo só
   // vira customerId após confirmação humana (customerMatchConfirmedBy/At).
   intent                     ContactIntent?
-  contactNotPatient          Boolean           @default(false)
-  urgent                     Boolean           @default(false)
-  customerMatchKind          CustomerMatchKind @default(NONE)
+  contactNotPatient          Boolean             @default(false)
+  urgent                     Boolean             @default(false)
+  customerMatchKind          CustomerMatchKind   @default(NONE)
   // Cliente SUGERIDO pela IA (match único, ainda não confirmado). O vendedor
   // confirma ("É o João ✓") promovendo-o a customerId, ou recusa. SetNull p/
   // não prender exclusão de cliente. NUNCA é o vínculo efetivo — esse é customerId.
@@ -1391,26 +1423,26 @@ model Lead {
   // momento da correção — a IA só volta a mover esse card se chegar mensagem MAIS
   // NOVA que isso (conversa evoluiu), evitando desfazer a correção relendo o mesmo
   // texto. NULL = nunca tocado por humano (IA livre).
-  lastMovedBy          LeadMover?
-  lastHumanMoveAt      DateTime?
-  aiLockUntilMessageAt DateTime?
-  lastActivityAt DateTime    @default(now())
-  deletedAt      DateTime?
-  createdAt      DateTime    @default(now())
-  updatedAt      DateTime    @updatedAt
+  lastMovedBy                LeadMover?
+  lastHumanMoveAt            DateTime?
+  aiLockUntilMessageAt       DateTime?
+  lastActivityAt             DateTime            @default(now())
+  deletedAt                  DateTime?
+  createdAt                  DateTime            @default(now())
+  updatedAt                  DateTime            @updatedAt
 
-  company  Company   @relation(fields: [companyId], references: [id])
-  branch   Branch?   @relation(fields: [branchId], references: [id])
-  stage    LeadStage @relation(fields: [stageId], references: [id])
-  seller   User?     @relation("LeadSeller", fields: [sellerUserId], references: [id])
-  customer Customer? @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
-  suggestedCustomer Customer? @relation("LeadSuggestedCustomer", fields: [suggestedCustomerId], references: [id], onDelete: SetNull)
-  quote    Quote?    @relation("LeadQuote", fields: [quoteId], references: [id], onDelete: SetNull)
+  company           Company           @relation(fields: [companyId], references: [id])
+  branch            Branch?           @relation(fields: [branchId], references: [id])
+  stage             LeadStage         @relation(fields: [stageId], references: [id])
+  seller            User?             @relation("LeadSeller", fields: [sellerUserId], references: [id])
+  customer          Customer?         @relation("LeadCustomer", fields: [customerId], references: [id], onDelete: SetNull)
+  suggestedCustomer Customer?         @relation("LeadSuggestedCustomer", fields: [suggestedCustomerId], references: [id], onDelete: SetNull)
+  quote             Quote?            @relation("LeadQuote", fields: [quoteId], references: [id], onDelete: SetNull)
   // Funil Inteligente — Fatia 1: vendas vinculadas a este lead (elo Lead↔Sale).
   // Gravado fail-safe na tx da venda quando há customerId. Sem @unique: um lead
   // pode, em tese, gerar mais de uma venda (re-compra do mesmo cliente).
-  sales    Sale[]    @relation("LeadSale")
-  examAppointments ExamAppointment[] @relation("LeadExamAppointments")
+  sales             Sale[]            @relation("LeadSale")
+  examAppointments  ExamAppointment[] @relation("LeadExamAppointments")
 
   @@index([companyId, stageId])
   @@index([companyId, sellerUserId])
@@ -1498,16 +1530,16 @@ model Sale {
   agreementDiscount    Decimal?             @db.Decimal(12, 2)
   authorizationCode    String?
   fiscalStatus         FiscalStatus         @default(NOT_REQUESTED)
-  fiscalModel          String?              // "65" = NFC-e, "55" = NF-e
-  fiscalKey            String?              // chave de acesso 44 dígitos
+  fiscalModel          String? // "65" = NFC-e, "55" = NF-e
+  fiscalKey            String? // chave de acesso 44 dígitos
   fiscalXmlUrl         String?
   fiscalPdfUrl         String?
-  fiscalNumber         String?              // número sequencial da nota
-  fiscalSerie          String?              // série da nota
+  fiscalNumber         String? // número sequencial da nota
+  fiscalSerie          String? // série da nota
   fiscalRef            String?              @unique // referência única no provedor (Focus NFe)
-  fiscalError          String?              // mensagem amigável de erro
-  fiscalSefazCode      Int?                 // código de erro da SEFAZ
-  fiscalEmittedAt      DateTime?            // momento da autorização
+  fiscalError          String? // mensagem amigável de erro
+  fiscalSefazCode      Int? // código de erro da SEFAZ
+  fiscalEmittedAt      DateTime? // momento da autorização
   fiscalCanceledAt     DateTime?
   fiscalCancelReason   String?
   completedAt          DateTime?
@@ -1581,17 +1613,17 @@ model SaleIdempotency {
 /// BILLING_CONFIRMED vem ANTES de LOCAL_APPLIED. Replay de op incompleta RETOMA
 /// pelo estado, não retorna sucesso. Ver spec Fase 2.
 model DomusPlanChangeOp {
-  id            String                  @id @default(cuid())
+  id            String                 @id @default(cuid())
   visCompanyId  String
-  eventId       String                  @unique
+  eventId       String                 @unique
   requestedTier String
   targetPlanId  String?
-  state         DomusPlanChangeOpState   @default(RECEIVED)
+  state         DomusPlanChangeOpState @default(RECEIVED)
   payloadHash   String
-  asaasRef      String?                 // resposta real do Asaas (fase B); auditoria/retomada
+  asaasRef      String? // resposta real do Asaas (fase B); auditoria/retomada
   lastError     String?
-  createdAt     DateTime                @default(now())
-  updatedAt     DateTime                @updatedAt
+  createdAt     DateTime               @default(now())
+  updatedAt     DateTime               @updatedAt
   expiresAt     DateTime
 
   // Identidade da assinatura persistida (fixada antes de cobrar): confirmBilling
@@ -1614,9 +1646,6 @@ model DomusPlanChangeOp {
   // Timestamps financeiros (auditoria/reconciliação).
   billingRequestedAt DateTime?
   billingConfirmedAt DateTime?
-
-  @@index([visCompanyId])
-  @@index([expiresAt])
   // Dois índices PARCIAIS vivem só nas migrações hand-written (o Prisma não modela
   // índice parcial no schema; declará-los aqui geraria índices não-parciais
   // divergentes = drift):
@@ -1627,6 +1656,9 @@ model DomusPlanChangeOp {
   //    enquanto um incidente financeiro não foi resolvido). FAILED_BEFORE_BILLING
   //    fica de fora (falha segura, nada cobrado). Resolução (Fase D) move a op p/
   //    FAILED/COMPLETED, reabrindo a company.
+
+  @@index([visCompanyId])
+  @@index([expiresAt])
 }
 
 enum DomusPlanChangeOpState {
@@ -1703,33 +1735,33 @@ model SalePayment {
 }
 
 model CardReceivable {
-  id              String    @id @default(cuid())
-  companyId       String
-  branchId        String?
-  saleId          String
-  salePaymentId   String
+  id            String  @id @default(cuid())
+  companyId     String
+  branchId      String?
+  saleId        String
+  salePaymentId String
 
-  installmentNumber  Int
-  totalInstallments  Int
-  grossAmount        Decimal   @db.Decimal(12, 2)
-  netAmount          Decimal?  @db.Decimal(12, 2)
-  feePercent         Decimal?  @db.Decimal(5, 4)
+  installmentNumber Int
+  totalInstallments Int
+  grossAmount       Decimal  @db.Decimal(12, 2)
+  netAmount         Decimal? @db.Decimal(12, 2)
+  feePercent        Decimal? @db.Decimal(5, 4)
 
-  expectedDate    DateTime
-  settledDate     DateTime?
-  status          String    @default("PENDING")
+  expectedDate DateTime
+  settledDate  DateTime?
+  status       String    @default("PENDING")
 
-  cardBrand       String?
-  acquirer        String?
-  nsu             String?
+  cardBrand String?
+  acquirer  String?
+  nsu       String?
 
-  company         Company       @relation(fields: [companyId], references: [id])
-  branch          Branch?       @relation(fields: [branchId], references: [id])
-  sale            Sale          @relation(fields: [saleId], references: [id])
-  salePayment     SalePayment   @relation(fields: [salePaymentId], references: [id])
+  company     Company     @relation(fields: [companyId], references: [id])
+  branch      Branch?     @relation(fields: [branchId], references: [id])
+  sale        Sale        @relation(fields: [saleId], references: [id])
+  salePayment SalePayment @relation(fields: [salePaymentId], references: [id])
 
-  createdAt       DateTime  @default(now())
-  updatedAt       DateTime  @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyId])
   @@index([branchId])
@@ -2085,30 +2117,30 @@ model DREReport {
 }
 
 model AccountPayable {
-  id              String               @id @default(cuid())
-  companyId       String
-  branchId        String?
-  supplierId      String?
-  description     String
-  category        AccountCategory
-  amount          Decimal              @db.Decimal(12, 2)
-  dueDate         DateTime
-  paidDate        DateTime?
-  paidAmount      Decimal?             @db.Decimal(12, 2)
-  status          AccountPayableStatus @default(PENDING)
-  invoiceNumber        String?
-  notes                String?
-  recurringExpenseId   String?
-  createdByUserId      String?
-  paidByUserId         String?
-  createdAt            DateTime             @default(now())
-  updatedAt            DateTime             @updatedAt
-  branch               Branch?              @relation(fields: [branchId], references: [id])
-  company              Company              @relation(fields: [companyId], references: [id])
-  createdBy            User?                @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
-  paidBy               User?                @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
-  supplier             Supplier?            @relation(fields: [supplierId], references: [id])
-  recurringExpense     RecurringExpense?    @relation(fields: [recurringExpenseId], references: [id])
+  id                 String               @id @default(cuid())
+  companyId          String
+  branchId           String?
+  supplierId         String?
+  description        String
+  category           AccountCategory
+  amount             Decimal              @db.Decimal(12, 2)
+  dueDate            DateTime
+  paidDate           DateTime?
+  paidAmount         Decimal?             @db.Decimal(12, 2)
+  status             AccountPayableStatus @default(PENDING)
+  invoiceNumber      String?
+  notes              String?
+  recurringExpenseId String?
+  createdByUserId    String?
+  paidByUserId       String?
+  createdAt          DateTime             @default(now())
+  updatedAt          DateTime             @updatedAt
+  branch             Branch?              @relation(fields: [branchId], references: [id])
+  company            Company              @relation(fields: [companyId], references: [id])
+  createdBy          User?                @relation("AccountPayableCreator", fields: [createdByUserId], references: [id])
+  paidBy             User?                @relation("AccountPayablePayer", fields: [paidByUserId], references: [id])
+  supplier           Supplier?            @relation(fields: [supplierId], references: [id])
+  recurringExpense   RecurringExpense?    @relation(fields: [recurringExpenseId], references: [id])
 
   @@index([companyId, status, dueDate])
   @@index([supplierId, status])
@@ -2117,32 +2149,32 @@ model AccountPayable {
 }
 
 model RecurringExpense {
-  id              String          @id @default(cuid())
-  companyId       String
-  branchId        String?
+  id        String  @id @default(cuid())
+  companyId String
+  branchId  String?
 
-  description     String
-  category        AccountCategory
-  amount          Decimal         @db.Decimal(12, 2)
+  description String
+  category    AccountCategory
+  amount      Decimal         @db.Decimal(12, 2)
 
-  frequency       String          @default("MONTHLY")
-  dayOfMonth      Int             @default(10)
+  frequency  String @default("MONTHLY")
+  dayOfMonth Int    @default(10)
 
-  supplierId      String?
-  notes           String?
+  supplierId String?
+  notes      String?
 
-  active          Boolean         @default(true)
+  active Boolean @default(true)
 
   lastGeneratedAt DateTime?
   nextDueDate     DateTime?
 
-  company            Company          @relation(fields: [companyId], references: [id])
-  branch             Branch?          @relation(fields: [branchId], references: [id])
-  supplier           Supplier?        @relation(fields: [supplierId], references: [id])
-  generatedPayables  AccountPayable[]
+  company           Company          @relation(fields: [companyId], references: [id])
+  branch            Branch?          @relation(fields: [branchId], references: [id])
+  supplier          Supplier?        @relation(fields: [supplierId], references: [id])
+  generatedPayables AccountPayable[]
 
-  createdAt       DateTime        @default(now())
-  updatedAt       DateTime        @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   @@index([companyId])
   @@index([companyId, active])
@@ -2308,55 +2340,55 @@ model UserPermission {
 }
 
 model CompanySettings {
-  id                    String   @id @default(cuid())
-  companyId             String   @unique
-  displayName           String?
-  cnpj                  String?
-  phone                 String?
-  whatsapp              String?
-  email                 String?
-  address               String?
-  city                  String?
-  state                 String?
-  zipCode               String?
-  logoUrl               String?
-  messageThankYou       String?
-  messageQuote          String?
-  messageReminder       String?
-  messageBirthday       String?
-  pdfHeaderText         String?
-  pdfFooterText         String?
-  defaultQuoteValidDays Int      @default(15)
-  defaultPaymentTerms   String?
-  defaultFinePercent     Decimal? @default(2) @db.Decimal(5, 2)
-  defaultInterestPercent Decimal? @default(1) @db.Decimal(5, 2)
-  defaultGraceDays       Int?     @default(0)
-  createdAt             DateTime @default(now())
-  updatedAt             DateTime @updatedAt
-  primaryColor          String?
+  id                       String    @id @default(cuid())
+  companyId                String    @unique
+  displayName              String?
+  cnpj                     String?
+  phone                    String?
+  whatsapp                 String?
+  email                    String?
+  address                  String?
+  city                     String?
+  state                    String?
+  zipCode                  String?
+  logoUrl                  String?
+  messageThankYou          String?
+  messageQuote             String?
+  messageReminder          String?
+  messageBirthday          String?
+  pdfHeaderText            String?
+  pdfFooterText            String?
+  defaultQuoteValidDays    Int       @default(15)
+  defaultPaymentTerms      String?
+  defaultFinePercent       Decimal?  @default(2) @db.Decimal(5, 2)
+  defaultInterestPercent   Decimal?  @default(1) @db.Decimal(5, 2)
+  defaultGraceDays         Int?      @default(0)
+  createdAt                DateTime  @default(now())
+  updatedAt                DateTime  @updatedAt
+  primaryColor             String?
   // Automações de WhatsApp (Fase B2) — liga/desliga por tipo, por ótica.
   // Default OFF: o cron só envia o tipo cuja flag está ligada (e a ótica
   // habilitada+conectada). Os campos *Template guardam a copy customizada
   // (placeholders {chave}); null = usa o texto padrão do sistema.
-  waOsReadyEnabled       Boolean @default(false)
-  waPostSaleEnabled      Boolean @default(false)
-  waBirthdayEnabled      Boolean @default(false)
-  waInstallmentDueEnabled Boolean @default(false)
-  waOsReadyTemplate       String?
-  waPostSaleTemplate      String?
-  waBirthdayTemplate      String?
+  waOsReadyEnabled         Boolean   @default(false)
+  waPostSaleEnabled        Boolean   @default(false)
+  waBirthdayEnabled        Boolean   @default(false)
+  waInstallmentDueEnabled  Boolean   @default(false)
+  waOsReadyTemplate        String?
+  waPostSaleTemplate       String?
+  waBirthdayTemplate       String?
   waInstallmentDueTemplate String?
   // Dias após a entrega da OS para disparar o pós-venda (default 7).
-  waPostSaleDays          Int     @default(7)
+  waPostSaleDays           Int       @default(7)
   // Medição/gestão de IA (Bloco C1). iaAvailable só super admin libera;
   // iaEnabled ambos ligam/desligam; iaMonthlyTokenLimit null = ilimitado.
-  iaAvailable           Boolean  @default(false)
-  iaEnabled             Boolean  @default(false)
-  iaMonthlyTokenLimit   Int?
+  iaAvailable              Boolean   @default(false)
+  iaEnabled                Boolean   @default(false)
+  iaMonthlyTokenLimit      Int?
   // Markup de IA por ótica (Bloco D). null = usa o markup global.
-  markupPercentOverride Decimal? @db.Decimal(6, 2)
+  markupPercentOverride    Decimal?  @db.Decimal(6, 2)
   // Aceite das boas-práticas anti-bloqueio do WhatsApp (Fase 1). null = não aceito.
-  waPracticesAcceptedAt DateTime?
+  waPracticesAcceptedAt    DateTime?
   // Overrides das travas anti-bloqueio por ótica (Fase 2). null = usa o global
   // (WhatsappGlobalConfig); se o global também faltar, cai no default hardcoded.
   waOpenHourOverride       Int?
@@ -2366,8 +2398,8 @@ model CompanySettings {
   // Frases-isca do anúncio (Sprint 3, #9 — detecção APROXIMADA de tráfego pago).
   // Se a 1ª mensagem do cliente casa alguma destas, o lead nasce PAID_TRAFFIC em
   // vez de WHATSAPP. Vazio = detecção desligada (a ótica opta por usar). Não é ROI.
-  waAdBaitPhrases          String[] @default([])
-  company               Company  @relation("CompanySettings", fields: [companyId], references: [id])
+  waAdBaitPhrases          String[]  @default([])
+  company                  Company   @relation("CompanySettings", fields: [companyId], references: [id])
 
   @@index([companyId])
 }
@@ -2570,69 +2602,69 @@ model SellerCommission {
 // no ledger (FinanceEntry COMMISSION_EXPENSE). @unique evita pagar 2× o mesmo
 // vendedor/mês.
 model CommissionPayment {
-  id              String   @id @default(cuid())
-  companyId       String
-  userId          String
-  year            Int
-  month           Int
+  id               String    @id @default(cuid())
+  companyId        String
+  userId           String
+  year             Int
+  month            Int
   // Snapshot do que o motor calculou no instante do pagamento.
-  netSales        Decimal  @db.Decimal(12, 2)
-  metaCommission  Decimal  @db.Decimal(10, 2)
-  campaignBonus   Decimal  @default(0) @db.Decimal(10, 2)
-  totalCommission Decimal  @db.Decimal(10, 2)
-  paidAt          DateTime @default(now())
-  paidByUserId    String?
+  netSales         Decimal   @db.Decimal(12, 2)
+  metaCommission   Decimal   @db.Decimal(10, 2)
+  campaignBonus    Decimal   @default(0) @db.Decimal(10, 2)
+  totalCommission  Decimal   @db.Decimal(10, 2)
+  paidAt           DateTime  @default(now())
+  paidByUserId     String?
   // Glosa REGISTRADA (não descontada automaticamente): quando uma venda do mês
   // é devolvida DEPOIS do pagamento, o pago excede o devido. O dono REGISTRA
   // aqui quanto reconhece a glosar — o sistema só sinaliza "a descontar no
   // próximo fechamento". NÃO abate folha sozinho (decisão trabalhista do dono).
-  clawbackAmount  Decimal  @default(0) @db.Decimal(10, 2)
-  clawbackAt      DateTime?
+  clawbackAmount   Decimal   @default(0) @db.Decimal(10, 2)
+  clawbackAt       DateTime?
   clawbackByUserId String?
-  createdAt       DateTime @default(now())
+  createdAt        DateTime  @default(now())
 
-  company  Company @relation(fields: [companyId], references: [id])
-  user     User    @relation("CommissionPayments", fields: [userId], references: [id])
-  paidBy   User?   @relation("CommissionPaymentsPaidBy", fields: [paidByUserId], references: [id])
+  company Company @relation(fields: [companyId], references: [id])
+  user    User    @relation("CommissionPayments", fields: [userId], references: [id])
+  paidBy  User?   @relation("CommissionPaymentsPaidBy", fields: [paidByUserId], references: [id])
 
   @@unique([companyId, userId, year, month])
   @@index([companyId, year, month])
 }
 
 model Plan {
-  id                   String         @id @default(cuid())
-  name                 String
-  slug                 String         @unique
-  description          String?
-  priceMonthly         Int
-  priceYearly          Int
-  maxUsers             Int            @default(3)
-  maxBranches          Int            @default(1)
-  maxProducts          Int            @default(500)
-  maxStorageMB         Int            @default(1000)
-  isActive             Boolean        @default(true)
-  isFeatured           Boolean        @default(false)
-  status               String         @default("ACTIVE") // ACTIVE | COMING_SOON
-  highlightFeatures    Json?          // string[] de bullets de copy
-  trialDays            Int            @default(14)
-  sortOrder            Int            @default(0)
-  stripeProductId      String?
-  stripePriceMonthlyId String?
-  stripePriceYearlyId  String?
-  asaasPaymentLinkId   String?
+  id                    String          @id @default(cuid())
+  name                  String
+  slug                  String          @unique
+  description           String?
+  priceMonthly          Int
+  priceYearly           Int
+  maxUsers              Int             @default(3)
+  maxBranches           Int             @default(1)
+  maxProducts           Int             @default(500)
+  maxStorageMB          Int             @default(1000)
+  isActive              Boolean         @default(true)
+  isFeatured            Boolean         @default(false)
+  status                String          @default("ACTIVE") // ACTIVE | COMING_SOON
+  highlightFeatures     Json? // string[] de bullets de copy
+  trialDays             Int             @default(14)
+  sortOrder             Int             @default(0)
+  stripeProductId       String?
+  stripePriceMonthlyId  String?
+  stripePriceYearlyId   String?
+  asaasPaymentLinkId    String?
   /// Produto do plano. Planos de ótica = VIS_APP; planos clínicos = VIS_MEDICAL.
   /// Sem isto, resolvePlanForTier poderia pegar plano de ótica por engano.
-  platformProduct      PlatformProduct @default(VIS_APP)
+  platformProduct       PlatformProduct @default(VIS_APP)
   /// Tier emitido pro Domus. NULLABLE de propósito: plano de ótica não tem tier;
   /// plano Medical SEM tier = fail-closed em resolvePlanForTier.
-  tier                 PlanTier?
+  tier                  PlanTier?
   /// Se o cliente pode auto-selecionar este plano no self-service. Planos
   /// internos (interno-domus R$0) ficam false.
-  selfServiceSelectable Boolean       @default(false)
-  createdAt            DateTime       @default(now())
-  updatedAt            DateTime       @updatedAt
-  features             PlanFeature[]
-  subscriptions        Subscription[]
+  selfServiceSelectable Boolean         @default(false)
+  createdAt             DateTime        @default(now())
+  updatedAt             DateTime        @updatedAt
+  features              PlanFeature[]
+  subscriptions         Subscription[]
 
   @@index([isActive, sortOrder])
 }
@@ -2808,25 +2840,25 @@ model UsageMetric {
 }
 
 model AdminUser {
-  id              String                 @id @default(cuid())
-  email           String                 @unique
-  name            String
-  password        String
-  role            AdminRole              @default(SUPPORT)
-  active              Boolean                @default(true)
-  scopeAllCompanies   Boolean                @default(true)
-  scopedCompanyIds    String[]               @default([])
-  lastLoginAt     DateTime?
-  mfaSecret         String?              // Q8.3.1: segredo TOTP (null = MFA não cadastrado)
-  mfaEnabled        Boolean              @default(false) // só true após confirmar o 1º código
-  mfaRecoveryCodes  String[]             @default([]) // hashes dos códigos de recuperação (uso único)
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
-  auditLogs       GlobalAudit[]
-  impersonations  ImpersonationSession[]
-  assignedTickets SupportTicket[]
-  notifications   AdminNotification[]
-  savedFilters    SavedFilter[]
+  id                String                 @id @default(cuid())
+  email             String                 @unique
+  name              String
+  password          String
+  role              AdminRole              @default(SUPPORT)
+  active            Boolean                @default(true)
+  scopeAllCompanies Boolean                @default(true)
+  scopedCompanyIds  String[]               @default([])
+  lastLoginAt       DateTime?
+  mfaSecret         String? // Q8.3.1: segredo TOTP (null = MFA não cadastrado)
+  mfaEnabled        Boolean                @default(false) // só true após confirmar o 1º código
+  mfaRecoveryCodes  String[]               @default([]) // hashes dos códigos de recuperação (uso único)
+  createdAt         DateTime               @default(now())
+  updatedAt         DateTime               @updatedAt
+  auditLogs         GlobalAudit[]
+  impersonations    ImpersonationSession[]
+  assignedTickets   SupportTicket[]
+  notifications     AdminNotification[]
+  savedFilters      SavedFilter[]
 
   @@index([email])
   @@index([role, active])
@@ -3488,18 +3520,18 @@ model FinanceEntry {
 // de só logar. Cron /api/cron/retry-finance-entries processa pendentes
 // com backoff exponencial (max 5 attempts).
 model FinanceEntryRetry {
-  id           String                  @id @default(cuid())
-  companyId    String
-  saleId       String
-  attempt      Int                     @default(0)
-  status       FinanceEntryRetryStatus @default(PENDING)
-  lastError    String?
-  nextRetryAt  DateTime                @default(now())
-  succeededAt  DateTime?
-  failedAt     DateTime?
-  createdAt    DateTime                @default(now())
-  updatedAt    DateTime                @updatedAt
-  company      Company                 @relation(fields: [companyId], references: [id])
+  id          String                  @id @default(cuid())
+  companyId   String
+  saleId      String
+  attempt     Int                     @default(0)
+  status      FinanceEntryRetryStatus @default(PENDING)
+  lastError   String?
+  nextRetryAt DateTime                @default(now())
+  succeededAt DateTime?
+  failedAt    DateTime?
+  createdAt   DateTime                @default(now())
+  updatedAt   DateTime                @updatedAt
+  company     Company                 @relation(fields: [companyId], references: [id])
 
   @@unique([saleId])
   @@index([status, nextRetryAt])
@@ -4559,12 +4591,12 @@ enum LeadFunnelSource {
 /// como fonte principal p/ análise e reoferta segmentada ("todos que perderam por
 /// preço"). O texto livre continua em Lead.lostReason como DETALHE opcional.
 enum LostReasonCategory {
-  PRICE          // achou caro / fora do orçamento
-  COMPETITOR     // comprou no concorrente
-  GAVE_UP        // desistiu / só estava pesquisando
-  NO_RESPONSE    // sumiu / parou de responder
-  WRONG_PRODUCT  // não era o que queria / produto errado
-  OTHER          // outro (detalhe no texto livre)
+  PRICE // achou caro / fora do orçamento
+  COMPETITOR // comprou no concorrente
+  GAVE_UP // desistiu / só estava pesquisando
+  NO_RESPONSE // sumiu / parou de responder
+  WRONG_PRODUCT // não era o que queria / produto errado
+  OTHER // outro (detalhe no texto livre)
 }
 
 /// Intenção do contato classificada pela IA (Fase 1/2 — IA contexto cliente).
@@ -4819,16 +4851,16 @@ model SaasCounter {
 /// Esta fase guarda apenas a CONEXÃO e o status (sem motor de mensagens/fila —
 /// isso é a Fase B2).
 model WhatsappConnection {
-  id              String                 @id @default(cuid())
-  companyId       String                 @unique
+  id              String             @id @default(cuid())
+  companyId       String             @unique
   /// Reservado para o futuro (conexão por filial). Não usado nesta fase.
   branchId        String?
   /// Nome da instância na Evolution, derivado do companyId. Único globalmente.
-  instanceName    String                 @unique
+  instanceName    String             @unique
   /// API key escopada à instância (hash retornado no create). Nullable e NÃO
   /// usada nas chamadas nesta fase — usamos sempre a chave global. Não criptografada.
   instanceApiKey  String?
-  status          WhatsappConnStatus     @default(DISCONNECTED)
+  status          WhatsappConnStatus @default(DISCONNECTED)
   /// Número conectado (somente dígitos, ex: 5511999999999).
   connectedNumber String?
   /// Momento em que o número MUDOU de fato (troca de chip), distinto de
@@ -4848,60 +4880,60 @@ model WhatsappConnection {
   /// Último webhook recebido da Evolution (para dedupe/diagnóstico).
   lastEventAt     DateTime?
   lastError       String?
-  createdAt       DateTime               @default(now())
-  updatedAt       DateTime               @updatedAt
+  createdAt       DateTime           @default(now())
+  updatedAt       DateTime           @updatedAt
 
-  company         Company                @relation(fields: [companyId], references: [id], onDelete: Cascade)
+  company Company @relation(fields: [companyId], references: [id], onDelete: Cascade)
 
   @@index([status])
 }
 
 model WhatsappConversation {
-  id            String    @id @default(cuid())
-  companyId     String
-  contactNumber String
-  contactName      String?
-  isGroup          Boolean   @default(false)  // remoteJid terminava em @g.us; grupos NÃO viram lead
-  needsAnalysis    Boolean   @default(false)  // msg nova chegou após analyzedAt → re-qualificar (R1)
+  id                    String         @id @default(cuid())
+  companyId             String
+  contactNumber         String
+  contactName           String?
+  isGroup               Boolean        @default(false) // remoteJid terminava em @g.us; grupos NÃO viram lead
+  needsAnalysis         Boolean        @default(false) // msg nova chegou após analyzedAt → re-qualificar (R1)
   // Re-avaliação do ESTÁGIO do funil (barata, sem IA), separada de needsAnalysis
   // (que re-classifica a intenção via Claude — caro). Armado quando a ÓTICA RESPONDE
   // (outbound) numa conversa que já é lead: o sinal shopReplied só vira true no
   // outbound, mas o outbound NÃO re-arma needsAnalysis (a intenção não muda porque
   // respondemos). Sem este flag, o card fica preso em "Novo" apesar de atendido —
   // a régua nunca era re-avaliada. O cron roda SÓ a régua objetiva e limpa o flag.
-  needsFunnelEval  Boolean   @default(false)
-  analysisAttempts Int       @default(0)      // anti-loop: cron só pega < 3 (R2)
-  lastMessageAt DateTime  @default(now())
-  analyzedAt    DateTime?
-  leadId        String?
+  needsFunnelEval       Boolean        @default(false)
+  analysisAttempts      Int            @default(0) // anti-loop: cron só pega < 3 (R2)
+  lastMessageAt         DateTime       @default(now())
+  analyzedAt            DateTime?
+  leadId                String?
   // Resultado da última análise da IA — preenchido SEMPRE (vire lead ou não),
   // p/ o dono ver no inbox POR QUE a conversa foi classificada assim. Antes o
   // motivo era descartado no caminho não-lead. analysisIntent/CustomerKind são
   // strings (rótulos) p/ exibição — não acoplam ao enum.
-  analysisIsLead       Boolean?
-  analysisIntent       String?
+  analysisIsLead        Boolean?
+  analysisIntent        String?
   // Intenção CRUA (enum) da última análise — o sinal MÁQUINA-legível. analysisIntent
   // guarda só o RÓTULO ("Reclamação"), que é artefato de exibição e deriva ao renomear;
   // um guardrail (~100% recall) precisa do valor recuperável no disco. Sempre sobrescrito.
-  analysisIntentCode   ContactIntent?
-  analysisCustomerKind String?
-  analysisReason       String?
+  analysisIntentCode    ContactIntent?
+  analysisCustomerKind  String?
+  analysisReason        String?
   // Guardrail SAGRADO da reclamação (Item 1). true = a conversa precisa de um
   // humano AGORA (reclamação/cobrança OU tom irritado). É MONOTÔNICO-PRA-CIMA:
   // a re-qualificação NUNCA volta p/ false (senão o cliente desarma o alarme só
   // mandando "ok obrigado"). Baixa = ação HUMANA explícita e auditada (abaixo).
   // Ver src/lib/conversation-attention.ts (fonte única, pura, usada por prod+eval).
-  needsHumanAttention  Boolean   @default(false)
+  needsHumanAttention   Boolean        @default(false)
   attentionResolvedAt   DateTime? // quando um humano deu baixa no alarme
-  attentionResolvedById String?   // quem deu baixa (trilha de auditoria do R$50k)
+  attentionResolvedById String? // quem deu baixa (trilha de auditoria do R$50k)
   // Arquivamento (troca de número da loja): conversa arquivada = fora do funil
   // ativo (inbox/Recuperar/filas de automação), mas PRESERVADA no banco p/
   // histórico/LGPD. Setado em lote quando a loja troca o número de WhatsApp — as
   // conversas do número antigo não podem mais ser respondidas por ali, então
   // saem do dia a dia. null = ativa. Reversível (desarquivar = voltar a null).
-  archivedAt    DateTime?
-  createdAt     DateTime  @default(now())
-  updatedAt     DateTime  @updatedAt
+  archivedAt            DateTime?
+  createdAt             DateTime       @default(now())
+  updatedAt             DateTime       @updatedAt
 
   company  Company           @relation(fields: [companyId], references: [id], onDelete: Cascade)
   messages WhatsappMessage[]
@@ -4926,8 +4958,8 @@ model WhatsappMessage {
   id             String   @id @default(cuid())
   conversationId String
   companyId      String
-  direction      String   // "inbound" | "outbound"
-  type           String   // "text" | "audio" | "image" | "other"
+  direction      String // "inbound" | "outbound"
+  type           String // "text" | "audio" | "image" | "other"
   text           String?
   mediaUrl       String?
   evolutionId    String?  @unique
@@ -4993,11 +5025,11 @@ model WhatsappMessageLog {
 }
 
 model AiTokenUsage {
-  id           String   @id @default(cuid())
-  companyId    String?
-  feature      String   // "ocr_prescription" | "lead_qualification" | "audio_transcription"
-  provider     String   // "anthropic" | "openai"
-  model        String
+  id               String   @id @default(cuid())
+  companyId        String?
+  feature          String // "ocr_prescription" | "lead_qualification" | "audio_transcription"
+  provider         String // "anthropic" | "openai"
+  model            String
   inputTokens      Int      @default(0)
   outputTokens     Int      @default(0)
   cacheTokens      Int      @default(0) // cache_read_input_tokens (leitura de cache)
@@ -5031,28 +5063,28 @@ model LensKnowledgeDoc {
 /// Config global de IA do SaaS (singleton: 1 linha, id fixo "global").
 /// Só o super admin edita. anthropicKeyEnc é cifrada (secret-cipher).
 model AiGlobalConfig {
-  id              String   @id @default("global")
-  anthropicKeyEnc String?
-  openaiKeyEnc    String?
-  qualifierModel  String   @default("claude-haiku-4-5")
-  lensAdvisorModel String  @default("claude-haiku-4-5")
-  ocrModel        String   @default("claude-sonnet-4-6")
+  id                 String   @id @default("global")
+  anthropicKeyEnc    String?
+  openaiKeyEnc       String?
+  qualifierModel     String   @default("claude-haiku-4-5")
+  lensAdvisorModel   String   @default("claude-haiku-4-5")
+  ocrModel           String   @default("claude-sonnet-4-6")
   // Modelo do Copiloto de conversas (rascunho/resumo p/ o atendente). Antes era
   // hardcoded em conversation-copilot.ts; agora ajustável pela Config (Fase 3).
-  copilotModel    String   @default("claude-sonnet-4-6")
+  copilotModel       String   @default("claude-sonnet-4-6")
   // Modelo de transcrição de áudio (Whisper/OpenAI). Antes hardcoded em
   // audio-transcription.service.ts. Provedor diferente dos Claude — allowlist própria.
-  transcriptionModel String @default("whisper-1")
-  usdBrlRate      Decimal  @default(5.5) @db.Decimal(10, 4)
-  markupPercent   Decimal  @default(0)   @db.Decimal(6, 2)
-  creditTokenFactor Int    @default(1000)
+  transcriptionModel String   @default("whisper-1")
+  usdBrlRate         Decimal  @default(5.5) @db.Decimal(10, 4)
+  markupPercent      Decimal  @default(0) @db.Decimal(6, 2)
+  creditTokenFactor  Int      @default(1000)
   // Overrides de preço por modelo (Fase 4b). JSON { "<model>": { inputPerMillion,
   // outputPerMillion, cacheReadPerMillion, cacheWritePerMillion } | { perSecond } }.
   // null/ausente = usa a tabela hardcoded de ai-pricing.ts. Só afeta linhas de uso
   // FUTURAS (o custo de cada AiTokenUsage é congelado no write) — não altera histórico.
-  modelPricingJson Json?
-  updatedAt       DateTime @updatedAt
-  createdAt       DateTime @default(now())
+  modelPricingJson   Json?
+  updatedAt          DateTime @updatedAt
+  createdAt          DateTime @default(now())
 }
 
 /// Config global (singleton id="global") das travas anti-bloqueio do WhatsApp
