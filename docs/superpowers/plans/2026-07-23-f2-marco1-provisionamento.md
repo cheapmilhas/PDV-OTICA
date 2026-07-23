@@ -22,7 +22,8 @@
 ### Parte A — Domus (`/Users/matheusreboucas/SISTEMACLINICADOMUS-f2-marco1`)
 - Create: `drizzle/NNNN_f2_provision.sql` — migração: `clinic_invites` + `unique(lower(email))` em users + unique credential por user.
 - Create: `src/lib/vis-provision-sync.ts` — núcleo do provisionamento (tx atômica das 5 tabelas + evento + idempotência + colisão de email). Espelha `vis-entitlement-sync.ts`.
-- Create: `src/lib/vis-provision-hmac.ts` — verificação HMAC do canal de provision (assinatura cobre versão/método/path/nonce/ts/body; secret `VIS_DOMUS_PROVISION_SECRET`). Ou estender `vis-domus-hmac.ts` com uma variante — decidir na Task A2.
+- Create: `src/lib/vis-provision-hmac.ts` — verificação HMAC do canal de provision (assinatura cobre versão/método/path/nonce/ts/body; secret `VIS_DOMUS_PROVISION_SECRET`).
+- **CONVENÇÃO DE TESTE (Domus):** `vitest.config.ts` só coleta `tests/**/*.test.ts` — TODO teste novo vai em `tests/vis-provision/`, NUNCA em `src/**/__tests__/` (o CI não coletaria; seria teste morto).
 - Create: `src/app/api/internal/vis/provision/route.ts` — endpoint POST (verifica HMAC + guard-rail de host + delega em vis-provision-sync).
 - Create: `tests/vis-provision/provision.test.ts` — suíte de integração (banco isolado), espelha `tests/vis-entitlements`.
 - Modify: `src/db/schema.ts` — adicionar `clinicInvitesTable` + refletir os unique constraints.
