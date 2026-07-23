@@ -45,10 +45,24 @@
 
 > Todas as tasks da Parte A rodam em `/Users/matheusreboucas/SISTEMACLINICADOMUS-f2-marco1`.
 
+### Task A0: Confirmar o banco de teste isolado (PRÉ-REQUISITO — sem isso nada roda)
+
+**Files:** nenhum (verificação de ambiente).
+
+- [ ] **Step 1: Confirmar que `.env.test` existe no worktree e aponta para o banco ISOLADO**
+
+Run: `grep -oiE 'ep-[a-z0-9-]+' .env.test 2>&1`
+Expected: `ep-dawn-haze-aivk62zt` (o banco isolado). Se o arquivo NÃO existir (ele é gitignored, não vem no worktree por padrão), copie do repo principal: `cp /Users/matheusreboucas/SISTEMACLINICADOMUS/.env.test .env.test`. **Se o host for `ep-odd-credit` (PROD), PARE — é o banco com 116 pacientes reais; nunca rode testes contra ele.**
+
+- [ ] **Step 2: Confirmar que a suíte de integração existente roda contra o isolado**
+
+Run: `NODE_ENV=test ./node_modules/.bin/vitest run tests/vis-entitlements`
+Expected: 44 testes passam (baseline). Isso prova que `NODE_ENV=test` carrega `.env.test` e conecta no isolado. Se pedir `TEST_DATABASE_URL` ausente, resolva ANTES de qualquer outra task.
+
 ### Task A1: Migração do Domus (SQL entregue; dono aplica)
 
 **Files:**
-- Create: `drizzle/0001_f2_provision.sql` (o número real = próximo na pasta `drizzle/`; conferir com `ls drizzle/*.sql | tail -1`)
+- Create: `drizzle/0044_f2_provision.sql` (o último atual é `0043_plan_change_outbox.sql`; CONFIRME com `ls drizzle/*.sql | tail -1` e use o próximo número — não assuma 0044 cego)
 - Modify: `src/db/schema.ts` (adicionar `clinicInvitesTable`)
 
 - [ ] **Step 1: Conferir o próximo número de migração**
@@ -289,6 +303,16 @@ describe("applyProvision (integração, banco isolado)", () => {
     expect(r.terminal).toBe(true);
     expect(r.error).toBe("identity_conflict");
   });
+
+  it("REQ-4: evento com applied=false NÃO envenena — retry posterior APLICA", async () => {
+    // Simula o caso provision-vs-entitlement: um evento do mesmo clinicId foi gravado
+    // com applied=false (ex.: entitlement chegou antes e deu clinic_not_found).
+    // O dedupe do provision NÃO pode tratar "evento existe" como idempotente-aplicado;
+    // só um evento applied=true bloqueia re-execução.
+    // (setup: inserir manualmente uma linha em vis_entitlement_events com o mesmo
+    //  eventId e applied=false, depois chamar applyProvision e exigir applied=true.)
+    // assert: applyProvision RE-EXECUTA e cria a clínica (não devolve no-op).
+  });
 });
 ```
 
@@ -301,7 +325,8 @@ Expected: FAIL (`@/lib/vis-provision-sync` não existe). Se falhar com "TEST_DAT
 
 Create `src/lib/vis-provision-sync.ts`. Requisitos (spec §4/§5):
 - Assinatura: `applyProvision(input): Promise<{ applied: boolean; appliedRevision?: string; terminal?: boolean; error?: string }>`.
-- Dedupe por `eventId` em `visEntitlementEvents` (`onConflictDoNothing`) — replay = no-op idempotente retornando `{applied:true}`.
+- **Dedupe correto (REQ-4):** o replay só é no-op se existir evento com `applied=true` para o `eventId`. Um evento existente com `applied=false` (ex.: entitlement chegou antes → clinic_not_found gravou applied=false) NÃO bloqueia — o provision re-executa e grava applied=true. NÃO usar "evento existe ⇒ idempotente"; checar a coluna `applied`. (Confirmar no `vis-entitlement-sync.ts` como `applied` é gravado.)
+- **Id do user:** `users.id` é `text` SEM default no schema (o script sombra usa string própria). Gerar com `crypto.randomUUID()` (string) — NÃO usar `defaultRandom()` do Drizzle (a coluna não tem default). `accounts` NÃO nasce aqui.
 - **Uma tx Drizzle** (`db.transaction`): registra o evento + insere `clinics` (onConflictDoNothing por id) + `users` (admin, SEM account) + `users_to_clinics` (role=admin) + `clinic_entitlements` (writeAllowed/planTier do input, na MESMA tx). O evento e as 5 escritas no mesmo `db.transaction` (REQ-4/REQ-5).
 - **Colisão de email:** antes de inserir user, checar se `lower(email)` já existe. Se existe e o vínculo NÃO é exatamente `(clinicId ↔ visCompanyId)` deste request → retornar `{applied:false, terminal:true, error:"identity_conflict"}` SEM escrever (REQ-2). Capturar violação de `users_lower_email_key` como terminal também (corrida REQ-2b).
 - **Reprovision:** clinicId já existe COM o mesmo vínculo → no-op idempotente `{applied:true}` (nunca re-executa, nunca toca PHT).
