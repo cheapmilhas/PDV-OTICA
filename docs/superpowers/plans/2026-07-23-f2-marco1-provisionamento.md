@@ -241,26 +241,29 @@ git add src/lib/vis-provision-hmac.ts src/lib/__tests__/vis-provision-hmac.test.
 git commit -m "feat(f2): HMAC do canal de provision (assina versão/método/path/nonce/ts/body)"
 ```
 
-### Task A3: Núcleo `vis-provision-sync` (tx atômica das 5 tabelas + idempotência + colisão de email)
+### Task A3: Núcleo `vis-provision-sync` (lógica idempotente + colisão email + fail-open) — TESTADO COM FAKES
+
+> **DECISÃO DE AMBIENTE (2026-07-23):** o banco isolado `ep-dawn-haze` está com credencial inválida (senha rotacionada; `password authentication failed`) e NENHUM teste de integração jamais rodou contra ele (os 44 testes de `vis-entitlements` usam FAKES — ver header de `apply-entitlement-snapshot.test.ts`). Seguimos o MESMO padrão: `applyProvision` recebe dependências de I/O INJETÁVEIS (`ProvisionDeps`, espelhando `SyncDeps`) e é testado com fakes que rastreiam chamadas e explodem no inesperado. A implementação real de I/O (`pgProvisionDeps`) é escrita mas NÃO testada contra banco aqui. **DÍVIDA REGISTRADA:** validação de integração contra Postgres real fica para quando houver banco isolado com credencial válida, ANTES do deploy (ver Final Task). NUNCA testar contra prod (`ep-odd-credit`, 116 pacientes/PHI).
 
 **Files:**
-- Create: `src/lib/vis-provision-sync.ts`
-- Test: `tests/vis-provision/provision-sync.test.ts` (integração, banco isolado)
+- Create: `src/lib/vis-provision-sync.ts` (lógica pura `applyProvision(deps, input)` + `pgProvisionDeps` real)
+- Test: `tests/vis-provision/provision-sync.test.ts` (unit com fakes — NÃO integração)
 
-- [ ] **Step 1: Ler `vis-entitlement-sync.ts` para espelhar idempotência e o registro de evento**
+- [ ] **Step 1: Ler `vis-entitlement-sync.ts` para espelhar o padrão de injeção `SyncDeps`**
 
-Run: `sed -n '200,260p;369,400p' src/lib/vis-entitlement-sync.ts`
-Expected: ver `applyEntitlementSnapshot` (dedupe por eventId `onConflictDoNothing`, `findClinic`, upsert condicional) e `findEvent`. O provision reusa `visEntitlementEvents` com `eventId = provision:{clinicId}`.
+Run: `sed -n '96,135p;204,260p;385,410p' src/lib/vis-entitlement-sync.ts` ; `sed -n '40,110p' tests/vis-entitlements/apply-entitlement-snapshot.test.ts`
+Expected: ver `SyncDeps` (interface de deps injetáveis: findEvent, findClinic, commit*, recordUnresolvedEvent), `applyEntitlementSnapshot(deps, snapshot)`, `pgSyncDeps` (impl real), e como o teste monta `TrackedDeps`/`makeDeps` (fakes que contam chamadas e explodem no não-configurado). `applyProvision` DEVE seguir esta forma.
 
-- [ ] **Step 2: Escrever o teste de integração que falha** (banco isolado — exige `TEST_DATABASE_URL`)
+- [ ] **Step 2: Escrever o teste com FAKES que falha**
 
-Create `tests/vis-provision/provision-sync.test.ts`. Cobre: (1) provisionamento feliz cria clinics+users+users_to_clinics+clinic_entitlements+evento; (2) `accounts` NÃO é criado (só no aceite); (3) idempotência: 2º call mesmo clinicId/eventId = no-op, sem duplicar; (4) fail-open fechado: clinic_entitlements sempre presente na mesma tx; (5) colisão de email já-existente → 409 identity_conflict; (6) corrida: 2 provisions com mesmo email → 2º viola unique → resultado terminal (não retryable).
+Create `tests/vis-provision/provision-sync.test.ts`, espelhando `makeDeps`/`TrackedDeps` de `apply-entitlement-snapshot.test.ts`. Define `ProvisionDeps` fake (findEvent → {eventId, applied}|null; findClinic; findUserByLowerEmail → {id, clinicId}|null; commitProvision → executa a "tx" fake registrando o que seria escrito; etc). Cobre: (1) feliz: chama commitProvision UMA vez com clinic+user(admin)+vínculo+entitlement, e NÃO cria accounts; (2) idempotência: evento com `applied=true` → no-op (não chama commit); (3) **REQ-4:** evento com `applied=false` → RE-EXECUTA (chama commit); (4) fail-open: o payload de commit SEMPRE inclui clinic_entitlements (asserta que o objeto passado a commitProvision tem entitlement); (5) colisão: findUserByLowerEmail retorna user vinculado a OUTRA clínica → retorna `{applied:false, terminal:true, error:"identity_conflict"}` SEM chamar commit; (6) reprovision: findClinic existe com mesmo vínculo → no-op idempotente.
 
 ```typescript
-import { describe, it, expect, beforeEach } from "vitest";
-import { db } from "@/db"; // confirmar o export real do client Drizzle
-import { applyProvision } from "@/lib/vis-provision-sync";
-// helpers de limpeza do banco de teste — seguir o padrão de tests/vis-entitlements/*
+import { describe, it, expect } from "vitest";
+import { applyProvision, type ProvisionDeps } from "@/lib/vis-provision-sync";
+// Fakes injetados (padrão de makeDeps em apply-entitlement-snapshot.test.ts):
+// cada método não configurado EXPLODE; os configurados registram chamadas.
+// NÃO conecta a banco — testa a lógica de applyProvision.
 
 const base = (over: Partial<any> = {}) => ({
   eventId: `provision:${over.clinicId ?? "clinic-A"}`,
@@ -275,69 +278,76 @@ const base = (over: Partial<any> = {}) => ({
 });
 
 describe("applyProvision (integração, banco isolado)", () => {
-  beforeEach(async () => { /* truncar clinics/users/accounts/users_to_clinics/clinic_entitlements/clinic_invites/vis_entitlement_events de teste */ });
-
-  it("provisiona feliz: cria clínica, user admin, vínculo e entitlement — SEM account", async () => {
-    const r = await applyProvision(base());
+  it("feliz: chama commitProvision 1x com clínica+admin+vínculo+entitlement, SEM accounts", async () => {
+    const deps = makeDeps({ eventSeen: null, clinicExists: false, userByEmail: null });
+    const r = await applyProvision(deps, base());
     expect(r.applied).toBe(true);
-    // asserts: clinic existe; user admin existe; users_to_clinics(role=admin); clinic_entitlements(writeAllowed=true, planTier=clinic_full)
-    // asserts: NÃO há linha em accounts para esse user (credencial só no aceite do convite)
+    expect(deps.calls.commitProvision).toBe(1);
+    // assert: o objeto passado a commitProvision tem clinic, user(role admin), vínculo, entitlement
+    expect(deps.lastCommit.entitlement).toBeTruthy();      // fail-open fechado
+    expect(deps.lastCommit.account).toBeUndefined();        // credencial só no aceite
   });
 
-  it("idempotente: 2º call com mesmo eventId é no-op (não duplica user/vínculo)", async () => {
-    await applyProvision(base());
-    const r2 = await applyProvision(base());
-    expect(r2.applied).toBe(true); // replay idempotente retorna sucesso
-    // assert: exatamente 1 user, 1 vínculo, 1 entitlement
+  it("idempotente: evento applied=true → no-op (não chama commit)", async () => {
+    const deps = makeDeps({ eventSeen: { applied: true } });
+    const r = await applyProvision(deps, base());
+    expect(r.applied).toBe(true);
+    expect(deps.calls.commitProvision).toBe(0);
   });
 
-  it("fail-open fechado: entitlement nasce na MESMA tx da clínica", async () => {
-    await applyProvision(base());
-    // assert: existe clinic_entitlements para o clinicId (nunca clínica sem espelho)
+  it("REQ-4: evento applied=false NÃO envenena → RE-EXECUTA (chama commit)", async () => {
+    const deps = makeDeps({ eventSeen: { applied: false }, clinicExists: false, userByEmail: null });
+    const r = await applyProvision(deps, base());
+    expect(r.applied).toBe(true);
+    expect(deps.calls.commitProvision).toBe(1); // não tratou "evento existe" como aplicado
   });
 
-  it("colisão de email já-existente em outra clínica → identity_conflict (terminal)", async () => {
-    await applyProvision(base({ clinicId: "22222222-2222-2222-2222-222222222222", eventId: "provision:22222222-2222-2222-2222-222222222222" }));
-    const r = await applyProvision(base({ clinicId: "33333333-3333-3333-3333-333333333333", eventId: "provision:33333333-3333-3333-3333-333333333333" })); // mesmo email
+  it("colisão: email já vinculado a OUTRA clínica → identity_conflict terminal, sem commit", async () => {
+    const deps = makeDeps({ userByEmail: { id: "u-x", clinicId: "outra-clinica" } });
+    const r = await applyProvision(deps, base());
     expect(r.applied).toBe(false);
     expect(r.terminal).toBe(true);
     expect(r.error).toBe("identity_conflict");
+    expect(deps.calls.commitProvision).toBe(0);
   });
 
-  it("REQ-4: evento com applied=false NÃO envenena — retry posterior APLICA", async () => {
-    // Simula o caso provision-vs-entitlement: um evento do mesmo clinicId foi gravado
-    // com applied=false (ex.: entitlement chegou antes e deu clinic_not_found).
-    // O dedupe do provision NÃO pode tratar "evento existe" como idempotente-aplicado;
-    // só um evento applied=true bloqueia re-execução.
-    // (setup: inserir manualmente uma linha em vis_entitlement_events com o mesmo
-    //  eventId e applied=false, depois chamar applyProvision e exigir applied=true.)
-    // assert: applyProvision RE-EXECUTA e cria a clínica (não devolve no-op).
+  it("reprovision: clínica já existe com o MESMO vínculo → no-op idempotente", async () => {
+    const deps = makeDeps({ clinicExists: true, sameLink: true });
+    const r = await applyProvision(deps, base());
+    expect(r.applied).toBe(true);
+    expect(deps.calls.commitProvision).toBe(0);
   });
 });
 ```
 
+> `makeDeps` espelha o de `apply-entitlement-snapshot.test.ts`: retorna `ProvisionDeps` + `calls` (contadores) + `lastCommit` (o payload do último commitProvision). Métodos não configurados explodem. Nada de banco.
+
+```typescript
+// (fim do exemplo — o bloco acima substitui os asserts contra banco)
+```
+
 - [ ] **Step 3: Rodar — deve falhar**
 
-Run: `NODE_ENV=test ./node_modules/.bin/vitest run tests/vis-provision/provision-sync.test.ts`
-Expected: FAIL (`@/lib/vis-provision-sync` não existe). Se falhar com "TEST_DATABASE_URL ausente", PARE e peça ao dono para confirmar o `.env.test` (banco isolado) — nunca cair para o banco padrão.
+Run: `./node_modules/.bin/vitest run tests/vis-provision/provision-sync.test.ts`
+Expected: FAIL (`@/lib/vis-provision-sync` não existe). É teste UNIT com fakes — NÃO precisa de banco/NODE_ENV=test.
 
-- [ ] **Step 4: Implementar `applyProvision`**
+- [ ] **Step 4: Implementar `applyProvision(deps, input)` + `pgProvisionDeps`**
 
-Create `src/lib/vis-provision-sync.ts`. Requisitos (spec §4/§5):
-- Assinatura: `applyProvision(input): Promise<{ applied: boolean; appliedRevision?: string; terminal?: boolean; error?: string }>`.
-- **Dedupe correto (REQ-4):** o replay só é no-op se existir evento com `applied=true` para o `eventId`. Um evento existente com `applied=false` (ex.: entitlement chegou antes → clinic_not_found gravou applied=false) NÃO bloqueia — o provision re-executa e grava applied=true. NÃO usar "evento existe ⇒ idempotente"; checar a coluna `applied`. (Confirmar no `vis-entitlement-sync.ts` como `applied` é gravado.)
-- **Id do user:** `users.id` é `text` SEM default no schema (o script sombra usa string própria). Gerar com `crypto.randomUUID()` (string) — NÃO usar `defaultRandom()` do Drizzle (a coluna não tem default). `accounts` NÃO nasce aqui.
-- **Uma tx Drizzle** (`db.transaction`): registra o evento + insere `clinics` (onConflictDoNothing por id) + `users` (admin, SEM account) + `users_to_clinics` (role=admin) + `clinic_entitlements` (writeAllowed/planTier do input, na MESMA tx). O evento e as 5 escritas no mesmo `db.transaction` (REQ-4/REQ-5).
-- **Colisão de email:** antes de inserir user, checar se `lower(email)` já existe. Se existe e o vínculo NÃO é exatamente `(clinicId ↔ visCompanyId)` deste request → retornar `{applied:false, terminal:true, error:"identity_conflict"}` SEM escrever (REQ-2). Capturar violação de `users_lower_email_key` como terminal também (corrida REQ-2b).
-- **Reprovision:** clinicId já existe COM o mesmo vínculo → no-op idempotente `{applied:true}` (nunca re-executa, nunca toca PHT).
-- NÃO cria `accounts` (credencial nasce no aceite do convite — Marco 2).
+Create `src/lib/vis-provision-sync.ts`. Espelha a arquitetura de `vis-entitlement-sync.ts` (lógica pura + deps injetáveis + impl pg real). Requisitos (spec §4/§5):
+- **`ProvisionDeps` interface** (I/O injetável, espelha `SyncDeps`): `findEvent(eventId) → {eventId, applied}|null`; `findClinic(clinicId) → {id, visCompanyId}|null`; `findUserByLowerEmail(email) → {id, clinicId}|null`; `commitProvision(payload) → void` (executa a tx real das 5 tabelas + registra evento applied=true).
+- **`applyProvision(deps, input): Promise<{applied:boolean; appliedRevision?:string; terminal?:boolean; error?:string}>`** — LÓGICA PURA, sem I/O direto (só via deps):
+  - **Dedupe (REQ-4):** `findEvent`; se existe com `applied=true` → no-op `{applied:true}`. Se `applied=false` (ex.: entitlement chegou antes) NÃO bloqueia — segue para commit. NÃO tratar "evento existe" como aplicado.
+  - **Colisão (REQ-2):** `findUserByLowerEmail`; se existe e o vínculo NÃO é `(clinicId ↔ visCompanyId)` deste request → `{applied:false, terminal:true, error:"identity_conflict"}` SEM commit.
+  - **Reprovision:** `findClinic` existe com mesmo vínculo → no-op `{applied:true}`.
+  - Caso feliz: monta o payload (clinic + user admin com id `crypto.randomUUID()` string + vínculo role=admin + entitlement writeAllowed/planTier, SEM account) e chama `commitProvision`. Fail-open fechado: o payload SEMPRE inclui entitlement (REQ-5).
+- **`pgProvisionDeps: ProvisionDeps`** — impl real: `commitProvision` faz UMA `db.transaction` inserindo clinics(onConflictDoNothing por id) + users + users_to_clinics + clinic_entitlements + evento applied=true, na MESMA tx (REQ-4/REQ-5); captura violação de `users_lower_email_key`/`accounts_user_credential_key` como terminal (corrida REQ-2b). NÃO cria `accounts` (só no aceite do convite — Marco 2). **Esta impl NÃO é testada contra banco aqui — dívida registrada (banco isolado com credencial inválida).**
 
-> Espelhe os helpers de `vis-entitlement-sync.ts` (findClinic, findEvent) e o client `db`. Confirme nomes reais das tabelas Drizzle no schema.
+> Espelhe helpers de `vis-entitlement-sync.ts` e o client `db`. Confirme nomes reais das tabelas Drizzle no schema (`usersToClinicsTable`, `clinicEntitlementsTable`, etc.).
 
 - [ ] **Step 5: Rodar — deve passar**
 
-Run: `NODE_ENV=test ./node_modules/.bin/vitest run tests/vis-provision/provision-sync.test.ts`
-Expected: PASS (todos os casos).
+Run: `./node_modules/.bin/vitest run tests/vis-provision/provision-sync.test.ts`
+Expected: PASS (todos os casos, com fakes).
 
 - [ ] **Step 6: Commit**
 
@@ -359,11 +369,11 @@ Expected: ver como a rota lê headers, verifica HMAC, retorna 401/422; e confirm
 
 - [ ] **Step 2: Escrever o teste da rota que falha**
 
-Create `tests/vis-provision/route.test.ts`. Cobre: (1) HMAC inválido → 401; (2) payload SEM `requestedByAdminId` → 400 (REQ-6); (3) host fora da allowlist → 403 `host_not_allowed` (REQ-7); (4) feliz → 200 `{applied:true}`; (5) colisão de email → 409 `identity_conflict`. (Pode mockar `applyProvision` para os casos de HMAC/host e usar o banco real só no feliz.)
+Create `tests/vis-provision/route.test.ts`. **Mocka `applyProvision`** (`vi.mock`) — a rota é testada isolada da I/O, sem banco. Cobre: (1) HMAC inválido → 401; (2) payload SEM `requestedByAdminId` → 400 (REQ-6); (3) host fora da allowlist → 403 `host_not_allowed` (REQ-7, via `isDbHostAllowed` mockável); (4) feliz (applyProvision mockado → `{applied:true}`) → 200; (5) colisão (mock → `{terminal:true, error:"identity_conflict"}`) → 409; (6) transitório (mock → `{applied:false}`) → 422.
 
 - [ ] **Step 3: Rodar — deve falhar** (rota não existe → 404)
 
-Run: `NODE_ENV=test ./node_modules/.bin/vitest run tests/vis-provision/route.test.ts`
+Run: `./node_modules/.bin/vitest run tests/vis-provision/route.test.ts`
 Expected: FAIL.
 
 - [ ] **Step 4: Implementar a rota**
@@ -396,8 +406,8 @@ Com teste unitário: `test` só aceita `ep-dawn-haze`; `production` só `ep-odd-
 
 - [ ] **Step 6: Rodar — deve passar**
 
-Run: `NODE_ENV=test ./node_modules/.bin/vitest run tests/vis-provision/`
-Expected: PASS (route + sync + hmac).
+Run: `./node_modules/.bin/vitest run tests/vis-provision/`
+Expected: PASS (route + sync + hmac, todos com fakes/mocks).
 
 - [ ] **Step 7: Commit**
 
@@ -409,7 +419,7 @@ git commit -m "feat(f2): endpoint /provision (HMAC + guard-rail de host + delega
 ### Task A5: Verificação da Parte A (Domus)
 
 - [ ] Typecheck: `./node_modules/.bin/tsc --noEmit` — expected: 0 erros.
-- [ ] Suíte nova + a de entitlements (regressão): `NODE_ENV=test ./node_modules/.bin/vitest run tests/vis-provision tests/vis-entitlements` — expected: todos passam (baseline era 44 em entitlements).
+- [ ] Suíte nova + a de entitlements (regressão): `./node_modules/.bin/vitest run tests/vis-provision tests/vis-entitlements` — expected: todos passam (baseline era 44 em entitlements; a nova é unit com fakes).
 - [ ] Build: `./node_modules/.bin/next build` — expected: sucesso. (Se pesado, ao menos o typecheck acima.)
 - [ ] Commit de qualquer resto. **NÃO fazer push nem pedir deploy da Parte A ainda** — o deploy do Domus acontece no fim do Marco 1, junto da aplicação da migração em prod pelo dono.
 
@@ -433,6 +443,7 @@ git commit -m "feat(f2): endpoint /provision (HMAC + guard-rail de host + delega
 - [ ] **Domus:** tsc 0 erros + `tests/vis-provision` e `tests/vis-entitlements` verdes.
 - [ ] **Vis:** tsc 0 erros + suíte completa verde + build ok.
 - [ ] **Contrato:** um teste end-to-end (pode ser no Vis, mockando a rede) confirma que o payload que o `vis-provision-client` gera casa com o que a rota `/provision` espera (§6.1).
-- [ ] **Migração prod (dono):** só depois de tudo verde no isolado, dono aplica a migração do Domus em prod (`ep-odd-credit`) e a do Vis, cada uma com `!`, ANTES do push do código.
+- [ ] **DÍVIDA — validação de integração contra banco real:** a lógica de `applyProvision` está testada com fakes; a impl `pgProvisionDeps` (SQL/tx real) NÃO foi exercitada contra Postgres (banco isolado `ep-dawn-haze` com credencial inválida em 2026-07-23). ANTES do deploy, o dono provê um banco isolado válido (senha atual do ep-dawn-haze OU um Neon descartável novo) e roda `tests/vis-provision` de integração contra ele. NUNCA validar contra prod (`ep-odd-credit`, PHI).
+- [ ] **Migração prod (dono):** só depois de tudo verde (inclusive a integração acima), dono aplica a migração do Domus em prod (`ep-odd-credit`) e a do Vis, cada uma com `!`, ANTES do push do código.
 - [ ] **Deploy:** dono confirma `VIS_DOMUS_PROVISION_SECRET` nos dois projetos Vercel; então push de cada branch dispara o deploy.
 - [ ] **Validação do Marco 1:** super admin cria um cliente Medical de teste → clínica nasce no Domus (banco isolado em homologação) → convite gravado (verificável no banco), e-mail não disparado (flag off). Sem rodar script.
