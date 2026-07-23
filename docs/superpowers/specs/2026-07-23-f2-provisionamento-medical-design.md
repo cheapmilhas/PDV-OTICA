@@ -10,7 +10,7 @@
 
 Um cliente Vis Medical passa a ser criado das MESMAS duas formas que a ótica — **auto-cadastro no site (com trial)** e **criação pelo super admin** — e o cliente opera pela URL **`medical.vis.app.br`** (o sistema clínico, Domus). Hoje só o super admin cria a Company, e a clínica no Domus é feita por **script manual** (`link-domus-clinic.cjs` + `sombra-e2e-3-domus-insert.ts`). A F2+ automatiza o provisionamento cross-sistema, com onboarding do admin da clínica por convite (senha nunca transita entre os dois bancos).
 
-**Entrega em 3 marcos sobre um motor comum**, cada um validável isoladamente. O destino é o pedido do dono; o faseamento evita um big-bang que toca PHI + 2 sistemas + funil público de uma vez.
+**Entrega em 3 marcos sobre um motor comum**, cada um validável isoladamente **quanto ao que ele entrega** (ver dependência convite→domínio na §4/§10 — o convite é gravado no M1 mas só se torna acionável no M2, quando `medical.vis.app.br` existe). O destino é o pedido do dono; o faseamento evita um big-bang que toca PHI + 2 sistemas + funil público de uma vez.
 
 ### Não-objetivos (explícitos)
 - **Não tocar a clínica Domus existente** ("Domus Saude", clinicId `7110db1b-528b-4451-a2c4-3581f370b9df`, 116 pacientes reais/PHI). A F2+ vale só para clínicas NOVAS. A idempotência protege caso alguém dispare provision nela por engano (nada é sobrescrito).
@@ -63,12 +63,16 @@ Extrai a sequência hoje duplicada (Company→Branch→User→UserBranch→Subsc
 ### Marco 1 — Super admin cria e provisiona (motor + lado Domus)
 
 **Máquina de estados** (`Company.provisioningState`, só relevante p/ VIS_MEDICAL):
-`NOT_REQUIRED` (ótica) · para medical: `PROVISIONING → PROVISIONED`, ou permanece `PROVISIONING` reintentando · ramo `SUSPENDED` (offboarding). Transição para `PROVISIONED` protegida por **`attemptId`** (tentativa lenta não sobrescreve resultado de rápida — corrida do Codex).
+`NOT_REQUIRED` (ótica) · para medical: `PROVISIONING → PROVISIONED` (sucesso) · `PROVISIONING → PROVISION_FAILED` (falha TERMINAL — ver abaixo) · ramo `SUSPENDED` (offboarding). Enquanto `PROVISIONING`, o worker reintenta (transitório). Transição para `PROVISIONED` protegida por **`attemptId`** (tentativa lenta não sobrescreve resultado de rápida — corrida do Codex).
+
+**Falha transitória vs terminal.** O worker distingue:
+- **Transitória** (Domus fora, timeout, 5xx, 422 provision-antes-de-entitlement): permanece `PROVISIONING`, reintenta com backoff.
+- **Terminal** (409 identity_conflict de email, violação de unique no Domus, payload inválido): vai para `PROVISION_FAILED`, o worker PARA de tentar, o super admin vê o motivo no detalhe e um botão "Reprovisionar" (que só reabre para `PROVISIONING` após ele resolver o conflito, ex.: trocar o email do admin).
 
 **Fluxo:**
 1. **Vis, 1 tx local:** `createTenantCompany` grava Company(VIS_MEDICAL, `domusClinicId`=uuid alocado, `provisioningState=PROVISIONING`) + Subscription + `ProvisioningOutbox`. **NÃO toca `EntitlementRevision`** (triggers cuidam — REQ-1). Commit → cliente completo no lado Vis.
-2. **Fast-path síncrono:** POST imediato ao Domus. Sucesso → `PROVISIONED`, admin vê "provisionado ✓".
-3. **Worker** drena o outbox e retenta se o fast-path falhou. **Relê do banco a cada tentativa** (nunca assina body do browser — REQ-6).
+2. **Fast-path síncrono:** POST imediato ao Domus, **timeout 5s** (o mesmo do publisher de entitlement, que já lida com cold start serverless do Domus). Sucesso → `PROVISIONED`, admin vê "provisionado ✓". Timeout/falha → cai limpo para `PROVISIONING` + worker (a resposta do admin NÃO trava além dos 5s).
+3. **Worker** drena o outbox e retenta se o fast-path falhou. **Relê do banco a cada tentativa** (nunca assina body do browser — REQ-6). **Política:** backoff exponencial (base 30s, teto 1h), `maxAttempts = 10`; ao esgotar sem falha terminal, marca `PROVISION_FAILED` + alerta (reusa `system-alert.service`), NÃO fica em loop infinito. Falha terminal (409/unique) interrompe o retry imediatamente.
 
 **Endpoint `POST /api/internal/vis/provision`** (Domus, irmão do `/entitlements`): 1 tx Drizzle atômica cria `clinics` + `users`(admin, SEM senha) + `users_to_clinics`(admin) + `clinic_entitlements`(espelho, mesma tx → mata fail-open) + registra evento `provision:{clinicId}` **na mesma tx**. `accounts` **não** nasce aqui (só no aceite do convite). Idempotente por clinicId/evento. Responde revisão aplicada.
 
@@ -80,7 +84,7 @@ Extrai a sequência hoje duplicada (Company→Branch→User→UserBranch→Subsc
 - **Trava:** aceite resolve a clínica pelo `clinicId` do TOKEN, **nunca** `session.clinic[0]`.
 
 ### Marco 3 — Auto-cadastro público com trial (paridade)
-- `/registro` Medical (ou o `/registro` existente parametrizado por produto — decidir na implementação por menor duplicação) usando o motor comum.
+- `/registro` Medical usando o motor comum. **Critério de decisão (novo vs parametrizar o existente):** parametrizar o `/registro` atual SE o branding por produto couber em props/config sem ramificações condicionais espalhadas; criar rota separada SE o wizard medical divergir em passos/campos (ex.: sem "filial", com CPF). Marcar como spike de 1 dia no início do Marco 3.
 - Cria Company VIS_MEDICAL + Subscription **TRIAL** (`trialEndsAt = now + plan.trialDays`) → dispara o mesmo provisionamento do Marco 1.
 - **Plano:** só planos medical self-service (`medical-profissional` R$89,90, `medical-clinica` R$189,90, `selfServiceSelectable=true`). Guard do P0 mantido: funil de ótica nunca serve plano medical e vice-versa. **NUNCA filtrar por selfServiceSelectable no funil de ótica** (planos de ótica são todos `false` em prod).
 - **CPF ou CNPJ** aceito (medical); ótica continua só CNPJ.
@@ -110,7 +114,8 @@ Extrai a sequência hoje duplicada (Company→Branch→User→UserBranch→Subsc
 ## 6. Modelo de dados / migrações
 
 **Vis (Prisma):**
-- `Company.provisioningState` enum (`NOT_REQUIRED | PROVISIONING | PROVISIONED | SUSPENDED`), default `NOT_REQUIRED`.
+- `Company.provisioningState` enum (`NOT_REQUIRED | PROVISIONING | PROVISIONED | PROVISION_FAILED | SUSPENDED`), default `NOT_REQUIRED`.
+- `ProvisioningOutbox.failureReason` (string, nullable) — motivo da falha terminal, exibido ao super admin.
 - `Company.provisioningAttemptId` (string, nullable) — guarda de corrida.
 - Tabela `ProvisioningOutbox` (id, companyId, clinicId, payload, attempts, nextAttemptAt, status) + índice para o worker.
 - `Company.domusClinicId` já existe (uuid @unique @db.Uuid) — passa a ser SETADO na criação (hoje é null até o script).
@@ -123,13 +128,25 @@ Extrai a sequência hoje duplicada (Company→Branch→User→UserBranch→Subsc
 
 **Invariante:** o provision NUNCA re-executa a tx num reenvio (evento já registrado ⇒ no-op) → nunca toca pacientes/PHI. Reprovision de clínica existente é no-op idempotente.
 
+### 6.1 Contrato do canal `POST /api/internal/vis/provision` (wire format — Vis e Domus DEVEM concordar)
+**Headers:** `x-vis-timestamp`, `x-vis-signature` (HMAC sobre `${version}.${method}.${path}.${nonce}.${ts}.${body}` — REQ-6, mais que o `${ts}.${body}` do entitlement), secret `VIS_DOMUS_PROVISION_SECRET` (separado).
+**Body (JSON):**
+```
+{ version: 1, requestId: string(uuid), requestedByAdminId: string,
+  clinicId: string(uuid, alocado pelo Vis), visCompanyId: string,
+  clinicName: string (= Company.tradeName ?? Company.name),
+  admin: { email: string, name: string, role: "admin" },
+  entitlement: { writeAllowed: boolean, planTier: string, sourceRevision: string(decimal) } }
+```
+**Respostas:** `200 { applied: true, appliedRevision: string }` (sucesso ou replay idempotente) · `409 { error: "identity_conflict", field: "email" }` (terminal) · `422 { error: "..." }` (retryable) · `401` (HMAC inválido) · `403 { error: "host_not_allowed" }` (guard-rail de ambiente). `sourceRevision` vem dos triggers do Vis (REQ-1), nunca alocado à mão.
+
 ---
 
 ## 7. Tratamento de erro / falha
 
 - **Domus fora no fast-path:** Company nasce `PROVISIONING` (não órfã); worker reconcilia. Admin vê "Provisionando…" no detalhe.
 - **Timeout com sucesso remoto (resposta perdida):** retry idempotente por clinicId/evento — não duplica user/account (evento já registrado ⇒ no-op).
-- **Colisão de email:** 409 identity_conflict, provisionamento não completa, admin vê erro claro (não cria acesso à clínica errada).
+- **Colisão de email:** 409 identity_conflict, provisionamento não completa, admin vê erro claro (não cria acesso à clínica errada). Cobre DOIS casos: (a) email já existe no Domus com vínculo a outra clínica; (b) **corrida** — super admin cria duas Companies medical novas com o mesmo email de admin quase simultaneamente (nenhuma provisionou ainda, então REQ-2 não dispara na criação): a primeira tx vence no Domus, a segunda bate no `unique(lower(email))` (REQ-7) → **erro TERMINAL** → a segunda Company vai para `PROVISION_FAILED` (não fica presa em `PROVISIONING` nem em retry infinito).
 - **Convite expirado:** estado próprio; super admin reenvia (invalida antigo).
 - **Corrida provision-vs-entitlement:** 422 retryable, evento não envenenado (REQ-4).
 - **Offboarding (CFM 20 anos):** `SUSPENDED` + `writeAllowed=false` no Domus; leitura de prontuário preservada; NUNCA delete físico. PII do admin (não-paciente) pode ser anonimizada sob pedido LGPD — distinta do PHI de paciente (retido).
@@ -140,11 +157,13 @@ Extrai a sequência hoje duplicada (Company→Branch→User→UserBranch→Subsc
 
 **Ambiente:** contra o banco ISOLADO do Domus (`ep-dawn-haze`, `TEST_DATABASE_URL`, `NODE_ENV=test`), estendendo a suíte `tests/vis-entitlements`. PHI real (`ep-odd-credit`) NUNCA tocado.
 
-**Domus (`/provision`):** feliz; idempotência (2º POST não duplica user/account/vínculo); colisão de email → 409; fail-open fechado (clínica sempre com entitlement); guard-rail de host; corrida provision-vs-entitlement (422 retryable, evento não envenenado); reprovision = no-op (não toca PHI).
+**Domus (`/provision`):** feliz; idempotência (2º POST não duplica user/account/vínculo); colisão de email já-existente → 409; **corrida de dois provision novos com mesmo email → 2º falha unique → terminal** (REQ-2b); fail-open fechado (clínica sempre com entitlement); guard-rail de host; HMAC inválido → 401 + **ausência de `requestedByAdminId` no payload → rejeita** (REQ-6); corrida provision-vs-entitlement (422 retryable, evento não envenenado — REQ-4); reprovision = no-op (não toca PHI).
 
-**Vis:** `createTenantCompany` criando ótica E medical pelo caminho único; máquina de estados com `attemptId` (tentativa lenta não sobrescreve rápida); NÃO gravar EntitlementRevision (triggers intactos); outbox + worker (retry, reconciliação); convite (token hash, TTL, reenvio invalida antigo).
+**Vis:** `createTenantCompany` criando ótica E medical pelo caminho único; máquina de estados com `attemptId` (tentativa lenta não sobrescreve rápida) + transição para `PROVISION_FAILED` em erro terminal; NÃO gravar EntitlementRevision (triggers intactos); outbox + worker (backoff, maxAttempts, dead-letter → PROVISION_FAILED + alerta); fast-path timeout 5s cai para PROVISIONING; convite (token hash, TTL 72h, reenvio invalida antigo, e-mail suprimido por flag no M1).
 
 **Marco 2/3:** aceite do convite resolve clínica pelo token (não clinics[0]); better-auth login na origem `medical.vis.app.br`; auto-cadastro público cria VIS_MEDICAL TRIAL + dispara provisionamento; guard do P0 (funil ótica não serve plano medical).
+
+**Offboarding (braço secundário):** transição para `SUSPENDED` fecha escrita no Domus (`writeAllowed=false`) e preserva leitura de prontuário. Teste dedicado é opcional nesta fase (foco é provisionamento), mas o braço existe na máquina de estados — registrar como dívida de teste se não coberto.
 
 ---
 
@@ -161,6 +180,8 @@ Extrai a sequência hoje duplicada (Company→Branch→User→UserBranch→Subsc
 ---
 
 ## 10. Ordem de execução (marcos, cada um validável)
-1. **Marco 1:** motor comum (`createTenantCompany`) + `/provision` no Domus + máquina de estados + outbox/worker + convite (gerar link + e-mail). Validação: super admin cria cliente Medical → clínica nasce no Domus, sem script.
-2. **Marco 2:** `medical.vis.app.br` (Vercel + better-auth 2 origens + noindex) + tela de aceite do convite. Validação: cliente do Marco 1 entra pela URL nova e opera.
+1. **Marco 1:** motor comum (`createTenantCompany`) + `/provision` no Domus + máquina de estados + outbox/worker + **registro do convite** (grava o token; e-mail SUPRIMIDO por flag `MEDICAL_INVITE_EMAIL_ENABLED=false` porque o link `medical.vis.app.br/aceitar-convite` ainda não resolve). Validação: super admin cria cliente Medical → clínica nasce no Domus, sem script; convite gravado no banco (verificável), e-mail não disparado.
+2. **Marco 2:** `medical.vis.app.br` (Vercel + better-auth 2 origens + noindex) + tela de aceite do convite + **liga a flag do e-mail de convite**. Validação: cliente do Marco 1 recebe o convite (link + e-mail), entra pela URL nova, define senha e opera. **É aqui que o convite fecha o ciclo ponta a ponta.**
 3. **Marco 3:** `/registro` público Medical (trial) + branding por produto. Validação: cliente se cadastra sozinho, ganha trial, entra por medical.vis.app.br.
+
+**Dependência explícita:** o convite é GRAVADO no M1 mas só ACIONÁVEL no M2 (o domínio/tela de aceite nascem lá). Por isso o M1 valida "clínica provisionada + convite persistido", não "convite aceito". Isso corrige a alegação de independência total: os marcos são sequenciais nesse ponto, não paralelos.
