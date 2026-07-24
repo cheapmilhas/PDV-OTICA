@@ -17,10 +17,13 @@ interface ClientesFiltersProps {
   onboardingFilter: string;
   segmentFilter: string;
   tagFilter: string;
+  provisioningFilter: string;
   counts: Record<string, number>;
   allTags: Tag[];
   /** Health só se aplica a ótica — na visão Medical o filtro/quick-filter some. */
   showHealth?: boolean;
+  /** Provisionamento só se aplica a medical — na visão Ótica o filtro some. */
+  showProvisioning?: boolean;
 }
 
 export function ClientesFilters({
@@ -30,9 +33,11 @@ export function ClientesFilters({
   onboardingFilter,
   segmentFilter,
   tagFilter,
+  provisioningFilter,
   counts,
   allTags,
   showHealth = true,
+  showProvisioning = false,
 }: ClientesFiltersProps) {
   // Sem health (Medical): remove o quick-filter "Health Crítico" da barra.
   const quickFilters = showHealth
@@ -111,6 +116,16 @@ export function ClientesFilters({
           <option value="COMPLETED">Completo</option>
           <option value="STALLED">Parado</option>
         </select>
+        {showProvisioning && (
+          <select
+            name="provisioning"
+            defaultValue={provisioningFilter}
+            className="px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:outline-none focus:ring-2 focus:ring-ring"
+          >
+            <option value="">Todo provisionamento</option>
+            <option value="failed">Com problema</option>
+          </select>
+        )}
         <select
           name="segment"
           defaultValue={segmentFilter}
@@ -140,7 +155,7 @@ export function ClientesFilters({
         >
           Filtrar
         </button>
-        {(search || statusFilter || healthFilter || onboardingFilter || segmentFilter || tagFilter) && (
+        {(search || statusFilter || healthFilter || onboardingFilter || segmentFilter || tagFilter || provisioningFilter) && (
           <Link
             href="/admin/clientes"
             className="px-4 py-2 bg-muted hover:bg-muted/80 text-foreground text-sm font-medium rounded-lg transition-colors"

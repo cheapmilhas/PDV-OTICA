@@ -3,11 +3,12 @@ import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import { getProductContext } from "@/lib/admin-product-context";
 import Link from "next/link";
-import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign } from "lucide-react";
+import { ArrowLeft, Building2, MapPin, Users, ShoppingCart, Package, Calendar, DollarSign, AlertTriangle } from "lucide-react";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
 import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
+import { CompanyClinic } from "./company-clinic";
 import { CompanyNotes } from "./company-notes";
 import { CompanyUsers } from "./company-users";
 import { CompanyBranches } from "./company-branches";
@@ -49,6 +50,10 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
       branches: { select: { id: true, name: true, city: true, state: true } },
       users: { select: { id: true, name: true, email: true, role: true, active: true } },
       subscriptions: { orderBy: { createdAt: "desc" }, include: { plan: true } },
+      // F2 (aba Clínica): estado do canal Vis↔Domus. entitlementRevision = última
+      // revisão publicada; provisioningOutbox.failureReason = motivo da falha terminal.
+      entitlementRevision: true,
+      provisioningOutbox: { select: { failureReason: true } },
       _count: { select: { sales: true, products: true, customers: true } },
     },
   });
@@ -62,6 +67,19 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
   if (company.platformProduct !== product) notFound();
 
   const currentSubscription = company.subscriptions[0] ?? null;
+
+  // Aba Clínica (só medical): dados do canal de provisionamento Vis↔Domus.
+  const isMedical = company.platformProduct === "VIS_MEDICAL";
+  const clinicProps = {
+    provisioningState: company.provisioningState,
+    domusClinicId: company.domusClinicId,
+    medicalInviteUrl: company.medicalInviteUrl,
+    planTier: currentSubscription?.plan?.tier ?? null,
+    entitlementRevision: company.entitlementRevision
+      ? company.entitlementRevision.revision.toString()
+      : null,
+    failureReason: company.provisioningOutbox?.failureReason ?? null,
+  };
   const invoices = currentSubscription
     ? await prisma.invoice.findMany({
         where: { subscriptionId: currentSubscription.id },
@@ -155,8 +173,27 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
         </div>
       </div>
 
+      {/* N1: alerta de falha de provisionamento — visível em qualquer aba, não só
+          na Clínica, para o operador não perder uma clínica presa em falha. */}
+      {isMedical && company.provisioningState === "PROVISION_FAILED" && (
+        <div className="mb-6 flex items-start gap-3 rounded-xl border border-destructive/30 bg-destructive/10 p-4">
+          <AlertTriangle className="h-5 w-5 text-destructive flex-shrink-0 mt-0.5" />
+          <div>
+            <p className="text-sm font-medium text-foreground">
+              Provisionamento da clínica falhou
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {company.provisioningOutbox?.failureReason
+                ? `Motivo: ${company.provisioningOutbox.failureReason}. `
+                : ""}
+              Veja a aba <span className="font-medium">Clínica</span> para detalhes.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* Tabs */}
-      <CompanyTabs>
+      <CompanyTabs product={company.platformProduct as "VIS_APP" | "VIS_MEDICAL"}>
         {/* TAB: RESUMO */}
         <TabPanel tabId="resumo">
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-5">
@@ -429,6 +466,13 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             )}
           </div>
         </TabPanel>
+
+        {/* TAB: CLÍNICA (só medical) */}
+        {isMedical && (
+          <TabPanel tabId="clinica">
+            <CompanyClinic {...clinicProps} />
+          </TabPanel>
+        )}
 
         {/* TAB: FILIAIS */}
         <TabPanel tabId="filiais">

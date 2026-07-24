@@ -32,6 +32,7 @@ export default async function EmpresasPage({
     onboarding?: string;
     segment?: string;
     tag?: string;
+    provisioning?: string;
     quick?: string;
   }>;
 }) {
@@ -52,6 +53,9 @@ export default async function EmpresasPage({
   const onboardingFilter = params.onboarding ?? "";
   const segmentFilter = params.segment ?? "";
   const tagFilter = params.tag ?? "";
+  // N1: filtro "com problema" de provisionamento — só medical (VIS_APP fica sempre
+  // NOT_REQUIRED). Ignora o param na visão ótica (evita filtro fantasma ao trocar produto).
+  const provisioningFilter = product === "VIS_MEDICAL" ? (params.provisioning ?? "") : "";
 
   // Buscar todas as tags para o filtro
   const allTags = await prisma.tag.findMany({ orderBy: { name: "asc" } });
@@ -87,6 +91,13 @@ export default async function EmpresasPage({
         : {},
       tagFilter
         ? { companyTags: { some: { tagId: tagFilter } } }
+        : {},
+      // Falha TERMINAL do provisionamento (o operador precisa agir). Não inclui
+      // PROVISIONING: uma clínica recém-criada em processamento normal não é
+      // problema — misturar os dois sob "com problema" seria enganoso (sem um
+      // critério de "preso há X" explícito, ficaria com PROVISIONING).
+      provisioningFilter === "failed"
+        ? { provisioningState: "PROVISION_FAILED" as any }
         : {},
     ],
   };
@@ -149,9 +160,11 @@ export default async function EmpresasPage({
         onboardingFilter={onboardingFilter}
         segmentFilter={segmentFilter}
         tagFilter={tagFilter}
+        provisioningFilter={provisioningFilter}
         counts={counts}
         allTags={allTags}
         showHealth={product === "VIS_APP"}
+        showProvisioning={product === "VIS_MEDICAL"}
       />
 
       <ClientesTable companies={companies} product={product} />

@@ -1,6 +1,6 @@
 import type { StatusVariant } from "@/components/ui/status-badge";
 
-export type StatusKind = "subscription" | "invoice" | "ticket" | "health";
+export type StatusKind = "subscription" | "invoice" | "ticket" | "health" | "provisioning";
 
 const VARIANT_MAP: Record<StatusKind, Record<string, StatusVariant>> = {
   subscription: {
@@ -32,6 +32,12 @@ const VARIANT_MAP: Record<StatusKind, Record<string, StatusVariant>> = {
     HEALTHY: "success",
     AT_RISK: "warning",
     CRITICAL: "danger",
+  },
+  provisioning: {
+    NOT_REQUIRED: "neutral",
+    PROVISIONING: "info",
+    PROVISIONED: "success",
+    PROVISION_FAILED: "danger",
   },
 };
 
@@ -65,6 +71,12 @@ const LABEL_MAP: Record<StatusKind, Record<string, string>> = {
     HEALTHY: "Saudável",
     AT_RISK: "Em risco",
     CRITICAL: "Crítico",
+  },
+  provisioning: {
+    NOT_REQUIRED: "Não aplicável",
+    PROVISIONING: "Provisionando",
+    PROVISIONED: "Provisionada",
+    PROVISION_FAILED: "Falha no provisionamento",
   },
 };
 
