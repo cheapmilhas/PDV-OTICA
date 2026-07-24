@@ -8,6 +8,7 @@ import { logger } from "@/lib/logger";
 import { asaas } from "@/lib/asaas";
 import { planValueForCycle } from "@/lib/plan-pricing";
 import { schedulePublishEntitlement } from "@/lib/vis-domus-publisher";
+import { checkCanResendMedicalInvite } from "../resend-invite-guard";
 
 const log = logger.child({ route: "admin/clientes/[id]/actions" });
 
@@ -399,6 +400,75 @@ export async function POST(
 
         await logActivity({ companyId, type: "CYCLE_CHANGED", title: `Ciclo alterado para ${cycle === "MONTHLY" ? "Mensal" : "Anual"}`, detail: { fromCycle: oldCycle, toCycle: cycle }, actorId: admin.id, actorType: ActorType.ADMIN, actorName: admin.name });
         return NextResponse.json({ success: true, message: `Ciclo alterado para ${cycle === "MONTHLY" ? "Mensal" : "Anual"}` });
+      }
+
+      // B3: reenviar o convite medical. Re-enfileira o e-mail para o
+      // medicalInviteUrl JÁ gravado (não fala com o Domus — o token/validade são
+      // do Domus e não mudam; isto NÃO regenera o token). Se a linha de e-mail
+      // original existir (dedupeKey medical-invite:<companyId>), reusa o data dela
+      // (que tem o expiresAt real do Domus) e só re-arma o status; senão monta a
+      // partir dos dados de contato da company.
+      case "resend_medical_invite": {
+        const company = await prisma.company.findUnique({
+          where: { id: companyId },
+          select: {
+            platformProduct: true,
+            provisioningState: true,
+            medicalInviteUrl: true,
+            email: true,
+            name: true,
+            tradeName: true,
+          },
+        });
+        if (!company) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+        const canResend = checkCanResendMedicalInvite({
+          platformProduct: company.platformProduct,
+          medicalInviteUrl: company.medicalInviteUrl,
+          email: company.email,
+        });
+        if (!canResend.ok) {
+          return NextResponse.json({ error: canResend.error }, { status: canResend.status });
+        }
+        // email garantido não-nulo pela checagem acima.
+        const to = company.email as string;
+
+        // upsert ATÔMICO no dedupeKey (@unique): elimina a corrida do
+        // findUnique+create (dois cliques concorrentes dariam 500 por constraint)
+        // e resolve os dois casos numa operação. update = reusa o data original
+        // (com o expiresAt real do Domus) e só re-arma o envio; create = monta a
+        // partir dos dados de contato da company (e-mail estava desligado no
+        // provisionamento). Reenvio concorrente com o worker pode, no pior caso,
+        // duplicar um convite — inofensivo (não é PHI/cobrança) e inerente a "reenviar".
+        const dedupeKey = `medical-invite:${companyId}`;
+        await prisma.emailQueue.upsert({
+          where: { dedupeKey },
+          update: { status: "PENDING", sentAt: null, attempts: 0, lastError: null },
+          create: {
+            to,
+            subject: "Acesse sua clínica no Vis Medical",
+            template: "medical-invite",
+            dedupeKey,
+            data: {
+              name: company.tradeName ?? company.name,
+              clinicName: company.tradeName ?? company.name,
+              acceptUrl: company.medicalInviteUrl,
+            },
+          },
+        });
+
+        // Auditoria no globalAudit (action é String livre). Não uso logActivity
+        // aqui porque o enum ActivityType não tem um valor para isto e adicionar
+        // um valor de enum exigiria migração só por uma linha de timeline.
+        await prisma.globalAudit.create({
+          data: {
+            actorType: "ADMIN_USER",
+            actorId: admin.id,
+            companyId,
+            action: "MEDICAL_INVITE_RESENT",
+            metadata: { adminEmail: admin.email, to },
+          },
+        });
+        return NextResponse.json({ success: true, message: "Convite reenviado" });
       }
 
       case "delete": {

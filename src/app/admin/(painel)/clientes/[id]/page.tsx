@@ -169,6 +169,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
             subscriptionStatus={currentSubscription?.status ?? null}
             billingCycle={currentSubscription?.billingCycle ?? null}
             currentPlanId={currentSubscription?.planId ?? null}
+            product={company.platformProduct as "VIS_APP" | "VIS_MEDICAL"}
+            hasMedicalInvite={!!company.medicalInviteUrl}
           />
         </div>
       </div>

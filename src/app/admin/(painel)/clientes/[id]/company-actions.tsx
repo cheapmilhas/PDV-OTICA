@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRightLeft, Ban, CheckCircle, CreditCard, Eye, Loader2, MoreVertical, RefreshCw, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { ArrowRightLeft, Ban, CheckCircle, CreditCard, Eye, Loader2, Mail, MoreVertical, RefreshCw, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { brl } from "@/lib/format-brl";
 import {
   AlertDialog,
@@ -34,6 +34,10 @@ interface CompanyActionsProps {
   subscriptionStatus: string | null;
   billingCycle: string | null;
   currentPlanId: string | null;
+  /** Produto do cliente — gate das ações óticas vs medical (B3/B4). */
+  product?: "VIS_APP" | "VIS_MEDICAL";
+  /** Só medical: há convite disponível para reenviar (medicalInviteUrl gravado). */
+  hasMedicalInvite?: boolean;
 }
 
 interface Plan {
@@ -43,7 +47,8 @@ interface Plan {
   isActive: boolean;
 }
 
-export function CompanyActions({ companyId, companyName, isBlocked, subscriptionStatus, billingCycle, currentPlanId }: CompanyActionsProps) {
+export function CompanyActions({ companyId, companyName, isBlocked, subscriptionStatus, billingCycle, currentPlanId, product = "VIS_APP", hasMedicalInvite = false }: CompanyActionsProps) {
+  const isMedical = product === "VIS_MEDICAL";
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
   const router = useRouter();
@@ -180,9 +185,23 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
                 <ActionBtn icon={XCircle} label="Cancelar assinatura" color="red" onClick={() => { setOpen(false); setCancelOpen(true); }} />
               </>
             )}
-            <div className="my-1 border-t border-border" />
-            <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={() => { setOpen(false); setImpersonateOpen(true); }} />
-            <ActionBtn icon={RotateCcw} label="Re-sincronizar setup" color="blue" onClick={handleResync} />
+            {/* B3: reenviar convite — só medical, quando o link já existe. */}
+            {isMedical && hasMedicalInvite && (
+              <>
+                <div className="my-1 border-t border-border" />
+                <ActionBtn icon={Mail} label="Reenviar convite" color="blue" onClick={() => handleAction("resend_medical_invite")} />
+              </>
+            )}
+            {/* B4: "Acessar como empresa" (impersonação ótica; o Domus é banco
+                separado) e "Re-sincronizar setup" (finance ótico) NÃO se aplicam a
+                medical — escondidas para não oferecer ação que falharia. */}
+            {!isMedical && (
+              <>
+                <div className="my-1 border-t border-border" />
+                <ActionBtn icon={Eye} label="Acessar como empresa" color="blue" onClick={() => { setOpen(false); setImpersonateOpen(true); }} />
+                <ActionBtn icon={RotateCcw} label="Re-sincronizar setup" color="blue" onClick={handleResync} />
+              </>
+            )}
             <div className="my-1 border-t border-border" />
             <ActionBtn icon={Trash2} label="Excluir empresa" color="red" onClick={() => { setOpen(false); setDeleteOpen(true); }} />
           </div>
