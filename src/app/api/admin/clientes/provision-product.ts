@@ -9,6 +9,22 @@ export interface ProvisionProductDecision {
 }
 
 /**
+ * Gate de produto do fluxo de criação de cliente (A4).
+ *
+ * A criação de user local com senha (banco do Vis) e o e-mail de ativação
+ * "/activate" são o fluxo da ÓTICA. Medical acessa o Domus (banco separado) por
+ * convite provisionado (medical.vis.app.br) — criar credencial ou disparar o
+ * e-mail ótico para medical "fura" o onboarding clínico. Defense-in-depth: o
+ * servidor decide isto independentemente do que o form envia.
+ *
+ * `allowLocalAdminUser` também governa o e-mail de ativação ótico: os dois são
+ * exclusivos do Vis App e caminham juntos.
+ */
+export function allowLocalAdminUser(product: PlatformProduct): boolean {
+  return product === "VIS_APP";
+}
+
+/**
  * Decide o produto de uma NOVA conta a partir do valor cru do body.
  *
  * Diferente de `parseProductContext` (que tolera lixo num cookie legado e cai em

@@ -743,7 +743,11 @@ export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: P
             </div>
           </div>
 
-          {/* Admin da ótica */}
+          {/* Admin da ótica — SÓ Vis App. Medical acessa o Domus por convite
+              provisionado (medical.vis.app.br), não por credencial criada aqui;
+              o backend ignora adminPassword para medical (gate A4). Esconder o
+              card evita que o operador tente definir senha e "fure" o onboarding. */}
+          {platformProduct === "VIS_APP" && (
           <div className="bg-card rounded-xl border border-border p-5 space-y-4">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
               <KeyRound className="h-4 w-4 text-muted-foreground" />
@@ -789,6 +793,21 @@ export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: P
               </div>
             </Field>
           </div>
+          )}
+
+          {/* Medical: explica que o acesso é por convite provisionado, não senha aqui. */}
+          {platformProduct === "VIS_MEDICAL" && (
+            <div className="bg-card rounded-xl border border-border p-5">
+              <h3 className="text-sm font-semibold text-foreground flex items-center gap-2">
+                <KeyRound className="h-4 w-4 text-muted-foreground" />
+                Acesso do administrador
+              </h3>
+              <p className="text-xs text-muted-foreground mt-2">
+                A clínica acessa o sistema Medical por <span className="font-medium text-foreground">medical.vis.app.br</span>.
+                O administrador recebe um convite para definir a própria senha — não é preciso criar credencial aqui.
+              </p>
+            </div>
+          )}
         </div>
       )}
 
@@ -897,7 +916,10 @@ export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: P
             </Field>
           </div>
 
-          {/* Opções */}
+          {/* Opções — o toggle de convite por e-mail é do fluxo ótico (/activate).
+              Medical tem convite provisionado automático; esconder evita a impressão
+              de que o operador controla o envio do convite clínico aqui. */}
+          {platformProduct === "VIS_APP" && (
           <div className="bg-card rounded-xl border border-border p-5">
             <h3 className="text-sm font-semibold text-foreground flex items-center gap-2 mb-4">
               <Settings className="h-4 w-4 text-muted-foreground" />
@@ -918,6 +940,7 @@ export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: P
               </div>
             </label>
           </div>
+          )}
         </div>
       )}
 
@@ -950,14 +973,22 @@ export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: P
               <SummaryRow label="Desconto" value={discountPercent > 0 ? `${discountPercent}%` : "Nenhum"} />
             </div>
 
-            {/* Acesso */}
+            {/* Acesso — o detalhe (login/senha/convite) é do fluxo ótico. Medical
+                acessa por convite provisionado (medical.vis.app.br); mostrar os
+                campos óticos aqui mentiria (o backend os ignora para medical). */}
             <div className="bg-card rounded-xl border border-border p-5">
               <h3 className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-3">Acesso</h3>
               <SummaryRow label="Responsável" value={ownerName} />
               <SummaryRow label="Email responsável" value={ownerEmail} />
-              <SummaryRow label="Admin login" value={adminEmail || ownerEmail} />
-              <SummaryRow label="Senha gerada" value={adminPassword ? "Sim" : "Não"} />
-              <SummaryRow label="Enviar convite" value={sendInviteEmail ? "Sim" : "Não"} />
+              {platformProduct === "VIS_APP" ? (
+                <>
+                  <SummaryRow label="Admin login" value={adminEmail || ownerEmail} />
+                  <SummaryRow label="Senha gerada" value={adminPassword ? "Sim" : "Não"} />
+                  <SummaryRow label="Enviar convite" value={sendInviteEmail ? "Sim" : "Não"} />
+                </>
+              ) : (
+                <SummaryRow label="Acesso" value="Convite Medical (medical.vis.app.br)" />
+              )}
             </div>
 
             {/* Extras */}

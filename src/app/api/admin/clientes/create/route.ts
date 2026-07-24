@@ -12,7 +12,7 @@ import { createOnboardingChecklist, completeOnboardingStep } from "@/services/on
 import { ActorType } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { containsHtml } from "@/lib/validations/safe-text";
-import { resolveProvisionProduct } from "../provision-product";
+import { resolveProvisionProduct, allowLocalAdminUser } from "../provision-product";
 
 const log = logger.child({ route: "admin/clientes/create" });
 
@@ -115,7 +115,10 @@ export async function POST(request: Request) {
   // ÓTICA NOVA (super-admin) e seu owner; ainda não há companyId. Mesmo com email
   // único por-empresa, bloquear reuso global de email do owner na criação evita
   // ambiguidade (qual conta seria dona da nova empresa). Igual ao /public/register.
-  if (adminEmail) {
+  // Gate A4: só p/ VIS_APP — medical NÃO cria user no banco do Vis (o admin da
+  // clínica vive no Domus), então uma colisão de e-mail no Vis é irrelevante e
+  // bloquearia o provisionamento medical sem motivo.
+  if (adminEmail && allowLocalAdminUser(provision.platformProduct)) {
     const existingUserEmail = await prisma.user.findFirst({ where: { email: { equals: adminEmail.toLowerCase().trim(), mode: "insensitive" } } });
     if (existingUserEmail) {
       return NextResponse.json({ error: "Email do administrador já está em uso por outro usuário" }, { status: 400 });
@@ -271,8 +274,19 @@ export async function POST(request: Request) {
       });
 
       // 6. Criar User admin da ótica (se dados fornecidos)
+      // Gate de produto (A4): SÓ Vis App cria user local com senha no banco do Vis.
+      // Medical loga no Domus (banco separado) via convite provisionado
+      // (medicalInviteUrl / medical.vis.app.br) — criar um user aqui geraria uma
+      // credencial fantasma no Vis e marcaria a company ACTIVE/accessEnabled,
+      // curto-circuitando o onboarding do Domus. Defense-in-depth: mesmo que o
+      // form vaze adminPassword para medical, o servidor ignora.
       let user = null;
-      if (adminEmail && adminPassword && adminName) {
+      if (
+        allowLocalAdminUser(provision.platformProduct) &&
+        adminEmail &&
+        adminPassword &&
+        adminName
+      ) {
         const passwordHash = await bcrypt.hash(adminPassword, 12);
         user = await tx.user.create({
           data: {
@@ -377,25 +391,39 @@ export async function POST(request: Request) {
         await setupCompanyFinance(tx, company.id, branch?.id);
       }
 
-      // 8. Criar Invite (mantém para fluxo de ativação por email)
+      // 8. Criar Invite (fluxo de ativação ótico por e-mail / link /activate).
+      // Gate A4: só p/ VIS_APP. Um Invite role="admin" com token /activate criado
+      // p/ medical é um caminho LATENTE de criação de credencial no Vis — a
+      // Entrega 2 adiciona "reenviar convite", que dispararia o fluxo ótico
+      // errado. Medical usa o convite provisionado (Domus/medical.vis.app.br).
       const inviteToken = randomBytes(32).toString("hex");
-      const invite = await tx.invite.create({
-        data: {
-          companyId: company.id,
-          email: ownerEmail,
-          name: ownerName,
-          role: "admin",
-          token: inviteToken,
-          expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000), // 7 dias
-          createdById: admin.id,
-          createdByName: admin.name,
-          // Se user já criado, marcar invite como ativado
-          ...(user ? { status: "ACTIVATED" as const, activatedAt: now, activatedUserId: user.id } : {}),
-        },
-      });
+      const invite = allowLocalAdminUser(provision.platformProduct)
+        ? await tx.invite.create({
+            data: {
+              companyId: company.id,
+              email: ownerEmail,
+              name: ownerName,
+              role: "admin",
+              token: inviteToken,
+              expiresAt: new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000), // 7 dias
+              createdById: admin.id,
+              createdByName: admin.name,
+              // Se user já criado, marcar invite como ativado
+              ...(user ? { status: "ACTIVATED" as const, activatedAt: now, activatedUserId: user.id } : {}),
+            },
+          })
+        : null;
 
       // 9. Adicionar à fila de email
-      if (sendInviteEmail && !user) {
+      // Gate de produto (A4): o e-mail "Bem-vindo ao PDV Ótica" com link /activate
+      // é o fluxo de ativação da ÓTICA (Vis App). Medical NÃO usa /activate — o
+      // convite dele é o medicalInviteUrl (host medical.vis.app.br), entregue pelo
+      // provisionamento/outbox, com template "Vis Medical". Disparar o e-mail ótico
+      // para medical mandaria a marca e o link errados ao cliente clínico.
+      // `invite &&` dá o narrowing ao TS: o invite ótico só existe p/ VIS_APP,
+      // exatamente o produto que dispara este e-mail (redundante com o gate, mas
+      // torna a não-nulidade explícita para o compilador).
+      if (invite && sendInviteEmail && !user) {
         await tx.emailQueue.create({
           data: {
             to: ownerEmail,
@@ -443,7 +471,7 @@ export async function POST(request: Request) {
             trialDays,
             isNetwork,
             networkId,
-            inviteId: invite.id,
+            inviteId: invite?.id ?? null,
             sendInviteEmail,
             adminUserCreated: !!user,
             adminEmail: user?.email || null,
@@ -495,7 +523,7 @@ export async function POST(request: Request) {
     return NextResponse.json({
       success: true,
       company: result.company,
-      inviteId: result.invite.id,
+      inviteId: result.invite?.id ?? null,
       adminUserCreated: !!result.user,
       adminEmail: result.user?.email || null,
       provisioningState,

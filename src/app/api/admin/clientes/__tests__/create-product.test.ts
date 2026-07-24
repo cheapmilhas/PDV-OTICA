@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
-import { resolveProvisionProduct } from "@/app/api/admin/clientes/provision-product";
+import {
+  resolveProvisionProduct,
+  allowLocalAdminUser,
+} from "@/app/api/admin/clientes/provision-product";
 
 describe("resolveProvisionProduct", () => {
   it("default VIS_APP quando ausente (undefined/null/vazio)", () => {
@@ -18,5 +21,14 @@ describe("resolveProvisionProduct", () => {
     expect(resolveProvisionProduct("VIS-MEDICAL")).toBeNull(); // typo com hífen
     expect(resolveProvisionProduct("vis_app")).toBeNull(); // case errado
     expect(resolveProvisionProduct("lixo")).toBeNull();
+  });
+});
+
+describe("allowLocalAdminUser (gate A4)", () => {
+  it("Vis App PODE criar user local + disparar e-mail de ativação ótico", () => {
+    expect(allowLocalAdminUser("VIS_APP")).toBe(true);
+  });
+  it("Medical NÃO cria credencial no Vis nem manda e-mail ótico (acessa via convite provisionado)", () => {
+    expect(allowLocalAdminUser("VIS_MEDICAL")).toBe(false);
   });
 });
