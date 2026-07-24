@@ -127,6 +127,9 @@ export async function runProvisioningOnce(
                   name: payload.admin.name,
                   clinicName: payload.clinicName,
                   acceptUrl: inviteUrl,
+                  // Validade REAL do convite (72h) vinda do Domus — o template
+                  // não deve cair no fallback genérico de 7 dias (P2 do review).
+                  expiresAt: result.inviteExpiresAt,
                 },
               },
             }),
