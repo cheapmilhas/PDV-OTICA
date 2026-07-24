@@ -6,6 +6,7 @@ import { getAdminSession } from "@/lib/admin-session";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { FEATURES } from "@/lib/plan-feature-catalog";
+import { resolvePlanProductTier } from "./plan-product-tier";
 
 const log = logger.child({ route: "admin/plans" });
 
@@ -27,6 +28,10 @@ const createPlanSchema = z.object({
   isFeatured: z.boolean().default(false),
   sortOrder: z.number().int().default(0),
   status: z.enum(["ACTIVE", "COMING_SOON"]).optional(),
+  // Produto do plano. Ausente → VIS_APP (compat com planos óticos existentes).
+  platformProduct: z.enum(["VIS_APP", "VIS_MEDICAL"]).default("VIS_APP"),
+  // Tier bruto — validado contra o produto por resolvePlanProductTier (fail-closed).
+  tier: z.enum(["clinic_full", "ophthalmology", "specialist"]).optional().nullable(),
   highlightFeatures: z.array(z.string()).optional().nullable(),
   features: z.array(z.object({
     key: z.enum(FEATURE_KEYS),
@@ -74,11 +79,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Já existe um plano com este slug" }, { status: 409 });
     }
 
-    const { features, highlightFeatures, ...planData } = data;
+    // Fail-closed produto×tier: medical exige tier conhecido; ótica normaliza null.
+    const productTier = resolvePlanProductTier(data.platformProduct, data.tier);
+    if (!productTier.ok) {
+      return NextResponse.json({ error: productTier.error }, { status: 400 });
+    }
+
+    const { features, highlightFeatures, tier: _rawTier, ...planData } = data;
 
     const plan = await prisma.plan.create({
       data: {
         ...planData,
+        tier: productTier.tier,
         // Json? do Prisma não aceita `null` cru: usar Prisma.JsonNull para limpar.
         ...(highlightFeatures !== undefined
           ? { highlightFeatures: highlightFeatures === null ? Prisma.JsonNull : highlightFeatures }

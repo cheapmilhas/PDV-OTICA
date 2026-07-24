@@ -26,6 +26,15 @@ interface PlanFeature {
   value: string;
 }
 
+type PlatformProduct = "VIS_APP" | "VIS_MEDICAL";
+type PlanTier = "clinic_full" | "ophthalmology" | "specialist";
+
+const TIER_LABELS: Record<PlanTier, string> = {
+  clinic_full: "Clínica completa",
+  ophthalmology: "Oftalmologia",
+  specialist: "Especialista",
+};
+
 interface Plan {
   id: string;
   name: string;
@@ -42,6 +51,8 @@ interface Plan {
   isFeatured: boolean;
   sortOrder: number;
   status: string;
+  platformProduct: PlatformProduct;
+  tier: PlanTier | null;
   highlightFeatures: string[] | null;
   features: PlanFeature[];
   _count: { subscriptions: number };
@@ -72,6 +83,8 @@ const emptyForm = {
   isFeatured: false,
   sortOrder: 0,
   status: "ACTIVE",
+  platformProduct: "VIS_APP" as PlatformProduct,
+  tier: "" as "" | PlanTier,
   highlightFeatures: "",
   features: [] as string[],
 };
@@ -109,6 +122,8 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
       isFeatured: plan.isFeatured,
       sortOrder: plan.sortOrder,
       status: plan.status,
+      platformProduct: plan.platformProduct,
+      tier: plan.tier ?? "",
       highlightFeatures: (plan.highlightFeatures ?? []).join("\n"),
       features: plan.features.filter((f) => f.value === "true").map((f) => f.key),
     });
@@ -118,12 +133,27 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
+
+    // Fail-closed no cliente: plano medical PRECISA de tier (senão o gating do
+    // Domus abre tudo e a criação de cliente aborta). Bloqueia antes do 400.
+    if (form.platformProduct === "VIS_MEDICAL" && !form.tier) {
+      setError("Selecione o tier do plano Vis Medical.");
+      return;
+    }
+
     setLoading(true);
     setError("");
+
+    // tier só faz sentido em medical; ótica manda null (o servidor também normaliza).
+    const tierForPayload =
+      form.platformProduct === "VIS_MEDICAL" && form.tier ? form.tier : null;
 
     const payload = {
       ...form,
       status: form.status,
+      // platformProduct só é aplicado na criação (imutável no PATCH — o servidor ignora).
+      platformProduct: form.platformProduct,
+      tier: tierForPayload,
       highlightFeatures: form.highlightFeatures
         .split("\n").map((s) => s.trim()).filter(Boolean),
       features: AVAILABLE_FEATURES.map((f) => ({
@@ -250,7 +280,24 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
               <div className="p-5">
                 <div className="flex items-start justify-between mb-3">
                   <div>
-                    <h2 className="text-lg font-bold text-foreground">{plan.name}</h2>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <h2 className="text-lg font-bold text-foreground">{plan.name}</h2>
+                      {/* Badge de produto — cor + rótulo (cor nunca é o único sinal). */}
+                      <span
+                        className={`px-2 py-0.5 rounded text-xs font-medium ${
+                          plan.platformProduct === "VIS_MEDICAL"
+                            ? "bg-teal-100 text-teal-700"
+                            : "bg-blue-100 text-blue-700"
+                        }`}
+                      >
+                        {plan.platformProduct === "VIS_MEDICAL" ? "Medical" : "Ótica"}
+                      </span>
+                      {plan.platformProduct === "VIS_MEDICAL" && plan.tier && (
+                        <span className="px-2 py-0.5 rounded text-xs font-medium bg-muted text-muted-foreground">
+                          {TIER_LABELS[plan.tier]}
+                        </span>
+                      )}
+                    </div>
                     {plan.description && <p className="text-xs text-muted-foreground mt-0.5">{plan.description}</p>}
                   </div>
                   <div className="flex items-center gap-2">
@@ -380,6 +427,51 @@ export function PlanosClient({ initialPlans }: { initialPlans: Plan[] }) {
                   className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none"
                 />
               </FormField>
+
+              {/* Produto — imutável na edição (trocar o produto de um plano com
+                  assinaturas quebra a integridade produto×plano). Medical exige tier. */}
+              <div className="grid grid-cols-2 gap-4">
+                <FormField label="Produto" required>
+                  <select
+                    value={form.platformProduct}
+                    onChange={(e) => {
+                      const platformProduct = e.target.value as PlatformProduct;
+                      // Ao voltar p/ ótica, zera o tier (ótica não tem tier).
+                      setForm({
+                        ...form,
+                        platformProduct,
+                        tier: platformProduct === "VIS_APP" ? "" : form.tier,
+                      });
+                    }}
+                    disabled={!!editingPlan}
+                    className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none disabled:opacity-60"
+                  >
+                    <option value="VIS_APP">Vis App (Ótica)</option>
+                    <option value="VIS_MEDICAL">Vis Medical (Clínica)</option>
+                  </select>
+                  {editingPlan && (
+                    <p className="text-xs text-muted-foreground mt-1">Não editável após criado</p>
+                  )}
+                </FormField>
+
+                {form.platformProduct === "VIS_MEDICAL" && (
+                  <FormField label="Tier (Domus)" required>
+                    <select
+                      value={form.tier}
+                      onChange={(e) => setForm({ ...form, tier: e.target.value as "" | PlanTier })}
+                      className="w-full px-3 py-2 bg-background border border-input rounded-lg text-foreground text-sm focus:border-primary focus:outline-none"
+                    >
+                      <option value="">Selecione…</option>
+                      {(Object.keys(TIER_LABELS) as PlanTier[]).map((t) => (
+                        <option key={t} value={t}>{TIER_LABELS[t]}</option>
+                      ))}
+                    </select>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Define os módulos liberados na clínica
+                    </p>
+                  </FormField>
+                )}
+              </div>
 
               <div className="grid grid-cols-2 gap-4">
                 <FormField label="Preço Mensal (R$)">

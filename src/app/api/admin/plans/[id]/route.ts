@@ -7,6 +7,7 @@ import { propagatePlanLimits } from "@/services/plan-propagation.service";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { FEATURES } from "@/lib/plan-feature-catalog";
+import { resolvePlanProductTier } from "../plan-product-tier";
 
 const log = logger.child({ route: "admin/plans/[id]" });
 
@@ -30,6 +31,9 @@ const updatePlanSchema = z.object({
   isFeatured: z.boolean().optional(),
   sortOrder: z.number().int().optional(),
   status: z.enum(["ACTIVE", "COMING_SOON"]).optional(),
+  // tier editável; platformProduct é IMUTÁVEL no PATCH (trocar o produto de um
+  // plano com assinaturas quebraria a integridade produto×plano). Ignorado se vier.
+  tier: z.enum(["clinic_full", "ophthalmology", "specialist"]).optional().nullable(),
   highlightFeatures: z.array(z.string()).optional().nullable(),
   features: z.array(z.object({
     key: z.enum(FEATURE_KEYS),
@@ -63,11 +67,24 @@ export async function PATCH(
       return NextResponse.json({ error: "Plano não encontrado" }, { status: 404 });
     }
 
-    const { features, highlightFeatures, ...rest } = data;
+    const { features, highlightFeatures, tier: rawTier, ...rest } = data;
+
+    // tier: SEMPRE reconciliado contra o produto EXISTENTE (platformProduct é
+    // imutável aqui), com fail-closed total. Usa o tier enviado quando presente,
+    // senão o tier atual do plano — assim uma edição de um plano medical legado
+    // com tier=null (estado inseguro que abre TUDO no Domus) NÃO consegue
+    // sobreviver: o PATCH exige um tier válido. Para ótica, normaliza null.
+    const effectiveTier = rawTier !== undefined ? rawTier : existing.tier;
+    const productTier = resolvePlanProductTier(existing.platformProduct, effectiveTier);
+    if (!productTier.ok) {
+      return NextResponse.json({ error: productTier.error }, { status: 400 });
+    }
+    const tierUpdate: Prisma.PlanUpdateInput = { tier: productTier.tier };
 
     // Json? do Prisma não aceita `null` cru: usar Prisma.JsonNull para limpar.
     const planData: Prisma.PlanUpdateInput = {
       ...rest,
+      ...tierUpdate,
       ...(highlightFeatures !== undefined
         ? { highlightFeatures: highlightFeatures === null ? Prisma.JsonNull : highlightFeatures }
         : {}),
