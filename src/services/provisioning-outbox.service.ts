@@ -18,6 +18,11 @@ import { postProvision, type ProvisionRequest } from "@/lib/vis-provision-client
 const BACKOFF_BASE_MS = 30_000;
 const BACKOFF_CAP_MS = 60 * 60_000;
 const MAX_ATTEMPTS = 10;
+// Janela de lease do claim: enquanto uma execução processa uma linha, empurra
+// nextAttemptAt para o futuro; concorrentes (fast-path + cron) não a reivindicam.
+// Cobre o postProvision (I/O de rede) com folga; se a execução morre, o lease
+// expira e outro tick reprocessa. Ver P0#2 (exclusão mútua do outbox).
+const LEASE_MS = 2 * 60_000;
 
 const log = logger.child({ service: "provisioning-outbox" });
 
@@ -56,6 +61,21 @@ export async function runProvisioningOnce(
   companyId: string,
   db: PrismaClient = prisma,
 ): Promise<"PROVISIONED" | "PROVISIONING" | "PROVISION_FAILED"> {
+  const now = new Date();
+  // Claim atômico (P0#2): reivindica a linha empurrando nextAttemptAt para o
+  // futuro. Só quem venceu o updateMany (count === 1) processa; concorrentes
+  // (fast-path + cron simultâneos) veem count === 0 e saem sem re-POSTar nem
+  // duplicar e-mail. Crash-safe: se esta execução morrer, o lease expira em
+  // LEASE_MS e outro tick reprocessa.
+  const claim = await db.provisioningOutbox.updateMany({
+    where: { companyId, nextAttemptAt: { lte: now } },
+    data: { nextAttemptAt: new Date(now.getTime() + LEASE_MS) },
+  });
+  if (claim.count === 0) {
+    // Ou já foi drenada, ou outra execução tem o lease agora.
+    return "PROVISIONING";
+  }
+
   const row = await db.provisioningOutbox.findUnique({ where: { companyId } });
   if (!row) return "PROVISIONED"; // já drenado por outra tentativa
 
@@ -110,17 +130,27 @@ export async function runProvisioningOnce(
   return "PROVISIONING";
 }
 
-/** Worker: processa todas as linhas vencidas (nextAttemptAt <= agora). */
+/**
+ * Worker: processa as linhas vencidas (nextAttemptAt <= agora). Ignora linhas
+ * TERMINAIS (failureReason setado = PROVISION_FAILED): elas ficam só para o
+ * super admin inspecionar, nunca são re-POSTadas (senão o cron martelaria um
+ * conflito 409 pra sempre). O claim atômico em runProvisioningOnce garante que
+ * fast-path e cron não processem a mesma linha em paralelo (P0#2).
+ */
 export async function drainProvisioningOutbox(db: PrismaClient = prisma): Promise<number> {
   const due = await db.provisioningOutbox.findMany({
-    where: { nextAttemptAt: { lte: new Date() } },
+    where: { nextAttemptAt: { lte: new Date() }, failureReason: null },
     select: { companyId: true },
     take: 50,
   });
+  let claimed = 0;
   for (const { companyId } of due) {
-    await runProvisioningOnce(companyId, db).catch((err) => {
+    const state = await runProvisioningOnce(companyId, db).catch((err) => {
       log.error("erro no drain", { companyId, error: err instanceof Error ? err.message : String(err) });
+      return null;
     });
+    // PROVISIONING vindo de claim perdido (outro tick pegou) não conta como trabalho.
+    if (state && state !== "PROVISIONING") claimed++;
   }
   return due.length;
 }

@@ -6,19 +6,21 @@ vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
 
-import { runProvisioningOnce } from "../provisioning-outbox.service";
+import { runProvisioningOnce, drainProvisioningOutbox } from "../provisioning-outbox.service";
 import { postProvision } from "@/lib/vis-provision-client";
 
 const COMPANY = "cmp-1";
 const payload = { clinicId: "c1", admin: { email: "a@b.c" } };
 
-/** Fake mínimo do PrismaClient para o service. */
-function makeDb(row: { attempts: number } | null) {
+/** Fake mínimo do PrismaClient para o service. `claimCount` simula o resultado
+ *  do claim atômico (1 = venceu e processa; 0 = outro tick tem o lease). */
+function makeDb(row: { attempts: number } | null, claimCount = 1) {
   const state = { companyState: "PROVISIONING" as string, deleted: false, updated: {} as Record<string, unknown> };
   const outboxRow = row ? { companyId: COMPANY, payload, attempts: row.attempts, failureReason: null } : null;
   const db = {
     state,
     provisioningOutbox: {
+      updateMany: vi.fn(async () => ({ count: claimCount })),
       findUnique: vi.fn(async () => outboxRow),
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { state.updated = data; }),
       delete: vi.fn(async () => { state.deleted = true; }),
@@ -81,5 +83,41 @@ describe("runProvisioningOnce", () => {
     const r = await runProvisioningOnce(COMPANY, db);
     expect(r).toBe("PROVISIONED");
     expect(postProvision).not.toHaveBeenCalled();
+  });
+
+  it("P0#2: claim perdido (outro tick tem o lease) → PROVISIONING sem POSTar nem ler a linha", async () => {
+    const db = makeDb({ attempts: 0 }, 0); // updateMany afeta 0 linhas
+    const r = await runProvisioningOnce(COMPANY, db);
+    expect(r).toBe("PROVISIONING");
+    // não avança: não relê a linha, não chama o Domus, não duplica trabalho/e-mail
+    expect(db.provisioningOutbox.findUnique).not.toHaveBeenCalled();
+    expect(postProvision).not.toHaveBeenCalled();
+  });
+
+  it("P0#2: claim vencido (count=1) → prossegue e POSTa normalmente", async () => {
+    vi.mocked(postProvision).mockResolvedValue({ kind: "applied", appliedRevision: "1" });
+    const db = makeDb({ attempts: 0 }, 1);
+    const r = await runProvisioningOnce(COMPANY, db);
+    expect(r).toBe("PROVISIONED");
+    expect(db.provisioningOutbox.updateMany).toHaveBeenCalled(); // reivindicou
+    expect(postProvision).toHaveBeenCalled();
+  });
+});
+
+describe("drainProvisioningOutbox", () => {
+  beforeEach(() => vi.clearAllMocks());
+
+  it("P0#2: só drena linhas vencidas E não-terminais (failureReason null)", async () => {
+    let capturedWhere: Record<string, unknown> = {};
+    const findMany = vi.fn(async (args: { where: Record<string, unknown> }) => {
+      capturedWhere = args.where;
+      return [] as Array<{ companyId: string }>;
+    });
+    const db = { provisioningOutbox: { findMany } } as any;
+    await drainProvisioningOutbox(db);
+    // exclui terminais (PROVISION_FAILED): nunca re-POSTa um conflito 409
+    expect(capturedWhere.failureReason).toBeNull();
+    // só linhas vencidas
+    expect(capturedWhere.nextAttemptAt).toHaveProperty("lte");
   });
 });

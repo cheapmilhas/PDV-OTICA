@@ -68,6 +68,10 @@
     {
       "path": "/api/cron/drain-entitlement-outbox",
       "schedule": "0 * * * *"
+    },
+    {
+      "path": "/api/cron/drain-provisioning-outbox",
+      "schedule": "0 * * * *"
     }
   ]
 }
