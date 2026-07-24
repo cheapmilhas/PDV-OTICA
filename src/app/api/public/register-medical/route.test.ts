@@ -71,4 +71,26 @@ describe("POST /api/public/register-medical", () => {
     // não é 400 (documento válido); é 500 por falta de plano no mock
     expect(res.status).not.toBe(400);
   });
+
+  it("plano medical SEM tier válido → 500 (fail-closed, não provisiona)", async () => {
+    companyFindFirst.mockResolvedValue(null);
+    // plano existe mas com tier nulo → gating do Domus abriria tudo; deve barrar.
+    planFindFirst.mockResolvedValue({ id: "p1", tier: null, trialDays: 14 });
+    const res = await POST(req(valid));
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/tier/i);
+    // nunca chegou a enfileirar o provisionamento
+    const { enqueueProvisioning } = await import("@/services/provisioning-outbox.service");
+    expect(enqueueProvisioning).not.toHaveBeenCalled();
+  });
+
+  it("plano com tier desconhecido → 500 (não confia em 'não vazio')", async () => {
+    companyFindFirst.mockResolvedValue(null);
+    planFindFirst.mockResolvedValue({ id: "p1", tier: "premium_typo", trialDays: 14 });
+    const res = await POST(req(valid));
+    expect(res.status).toBe(500);
+    const body = (await res.json()) as { error: string };
+    expect(body.error).toMatch(/tier/i);
+  });
 });

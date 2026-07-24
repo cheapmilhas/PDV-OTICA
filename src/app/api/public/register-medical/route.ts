@@ -5,6 +5,7 @@ import { rateLimitResponse } from "@/lib/rate-limit";
 import { logger } from "@/lib/logger";
 import { containsHtml } from "@/lib/validations/safe-text";
 import { enqueueProvisioning, runProvisioningOnce } from "@/services/provisioning-outbox.service";
+import { isPlanTier } from "@/lib/resolve-plan-for-tier";
 import type { ProvisionRequest } from "@/lib/vis-provision-client";
 
 const log = logger.child({ route: "public/register-medical" });
@@ -78,6 +79,16 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Nenhum plano de clínica disponível no momento." }, { status: 500 });
     }
 
+    // Fail-closed de tier: tier vazio/desconhecido abriria TUDO no gating do
+    // Domus (isModuleEnabled é fail-open lá). Um plano medical sem tier é erro
+    // de configuração — não provisionar. Ver plan.tier (nullable) no schema.
+    if (!isPlanTier(plan.tier ?? "")) {
+      return NextResponse.json(
+        { error: "Plano de clínica sem tier configurado. Contate o suporte." },
+        { status: 500 },
+      );
+    }
+
     // Slug único.
     const baseSlug = companyName.toLowerCase().normalize("NFD").replace(/[̀-ͯ]/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-|-$/g, "");
     let slug = baseSlug;
@@ -134,7 +145,8 @@ export async function POST(request: Request) {
         visCompanyId: company.id,
         clinicName: companyName.trim(),
         admin: { email: email.toLowerCase().trim(), name: name.trim(), role: "admin" },
-        entitlement: { writeAllowed: true, planTier: plan.tier ?? "", sourceRevision: "0" },
+        // planTier já validado como tier conhecido acima (fail-closed) — nunca "".
+        entitlement: { writeAllowed: true, planTier: plan.tier as string, sourceRevision: "0" },
       };
       await enqueueProvisioning(tx, company.id, payload, randomUUID());
 

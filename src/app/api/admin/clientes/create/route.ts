@@ -5,6 +5,7 @@ import { randomBytes, randomUUID } from "crypto";
 import bcrypt from "bcryptjs";
 import { setupCompanyFinance } from "@/services/finance-setup.service";
 import { enqueueProvisioning, runProvisioningOnce } from "@/services/provisioning-outbox.service";
+import { isPlanTier } from "@/lib/resolve-plan-for-tier";
 import type { ProvisionRequest } from "@/lib/vis-provision-client";
 import { logActivity } from "@/services/activity-log.service";
 import { createOnboardingChecklist, completeOnboardingStep } from "@/services/onboarding-checklist.service";
@@ -207,6 +208,16 @@ export async function POST(request: Request) {
       // vínculo 1:1. Ótica não tem clínica → null.
       const allocatedClinicId =
         provision.platformProduct === "VIS_MEDICAL" ? randomUUID() : null;
+
+      // F2 fail-closed: clínica medical PRECISA de um tier conhecido. Um tier
+      // vazio/desconhecido faz o gating do Domus abrir TUDO (isModuleEnabled é
+      // fail-open lá). Rejeitar aqui aborta a tx — nada é criado — em vez de
+      // provisionar um entitlement sem tier. Ver plan.tier (nullable) no schema.
+      if (allocatedClinicId && !isPlanTier(plan.tier ?? "")) {
+        throw new Error(
+          `Plano Medical "${plan.slug ?? plan.id}" sem tier válido (tier="${plan.tier ?? ""}"). Configure o tier do plano antes de criar a clínica.`,
+        );
+      }
       const company = await tx.company.create({
         data: {
           name: companyName || tradeName,
@@ -333,7 +344,9 @@ export async function POST(request: Request) {
           },
           entitlement: {
             writeAllowed: true,
-            planTier: plan.tier ?? "",
+            // Já validado como tier conhecido acima (guard fail-closed sob
+            // allocatedClinicId) — nunca "" aqui.
+            planTier: plan.tier as string,
             sourceRevision: "0", // placeholder: os triggers do Vis produzem a revision real
           },
         };
