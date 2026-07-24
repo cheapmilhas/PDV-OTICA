@@ -144,6 +144,10 @@ model Company {
   /// bater com o da tentativa corrente (uma tentativa lenta não sobrescreve
   /// o resultado de uma rápida).
   provisioningAttemptId   String?
+  /// Link de convite do admin da clínica (F2), montado quando o provisionamento
+  /// conclui. O super admin copia/envia; o admin define a senha em medical.vis.app.br.
+  /// Só VIS_MEDICAL. Null até provisionar (ou em replay idempotente).
+  medicalInviteUrl        String?
   provisioningOutbox      ProvisioningOutbox?
   ownerGroupId            String?
   accountsPayable         AccountPayable[]

@@ -10,7 +10,8 @@ EXCEPTION WHEN duplicate_object THEN null; END $$;
 -- Colunas na Company
 ALTER TABLE "Company"
   ADD COLUMN IF NOT EXISTS "provisioningState" "ProvisioningState" NOT NULL DEFAULT 'NOT_REQUIRED',
-  ADD COLUMN IF NOT EXISTS "provisioningAttemptId" TEXT;
+  ADD COLUMN IF NOT EXISTS "provisioningAttemptId" TEXT,
+  ADD COLUMN IF NOT EXISTS "medicalInviteUrl" TEXT;
 
 -- Outbox de provisionamento (1:1 com Company)
 CREATE TABLE IF NOT EXISTS "ProvisioningOutbox" (

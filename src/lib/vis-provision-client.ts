@@ -28,7 +28,7 @@ export interface ProvisionRequest {
 }
 
 export type ProvisionClientResult =
-  | { kind: "applied"; appliedRevision?: string }
+  | { kind: "applied"; appliedRevision?: string; inviteToken?: string }
   | { kind: "terminal"; error: string }
   | { kind: "transient"; reason: string };
 
@@ -70,8 +70,8 @@ export async function postProvision(req: ProvisionRequest): Promise<ProvisionCli
   }
 
   if (res.ok) {
-    const data = (await res.json().catch(() => ({}))) as { appliedRevision?: string };
-    return { kind: "applied", appliedRevision: data.appliedRevision };
+    const data = (await res.json().catch(() => ({}))) as { appliedRevision?: string; inviteToken?: string };
+    return { kind: "applied", appliedRevision: data.appliedRevision, inviteToken: data.inviteToken };
   }
   // 409 = conflito terminal (não retentar); 422/5xx = transitório.
   if (res.status === 409) {

@@ -41,6 +41,12 @@ function backoffMs(attempts: number): number {
   return Math.min(BACKOFF_BASE_MS * 2 ** attempts, BACKOFF_CAP_MS);
 }
 
+/** Monta o link de aceite do convite. Base = medical.vis.app.br (Marco 2). */
+function buildInviteUrl(token: string): string {
+  const base = process.env.MEDICAL_APP_URL ?? "https://medical.vis.app.br";
+  return `${base}/aceitar-convite?token=${token}`;
+}
+
 /**
  * Processa o provisionamento de UMA company. Idempotente por chamada: relê o
  * outbox do banco (nunca confia num payload de fora). Usado pelo fast-path e
@@ -57,12 +63,20 @@ export async function runProvisioningOnce(
   const result = await postProvision(payload);
 
   if (result.kind === "applied") {
-    // Guarda de corrida: só confirma se ainda somos a tentativa corrente.
+    // Monta o link de convite quando veio token cru (provisionamento NOVO).
+    // Em replay idempotente o token é undefined → preserva o link já gravado.
+    const inviteUrl = result.inviteToken ? buildInviteUrl(result.inviteToken) : undefined;
     await db.$transaction([
-      db.company.update({ where: { id: companyId }, data: { provisioningState: "PROVISIONED" } }),
+      db.company.update({
+        where: { id: companyId },
+        data: {
+          provisioningState: "PROVISIONED",
+          ...(inviteUrl ? { medicalInviteUrl: inviteUrl } : {}),
+        },
+      }),
       db.provisioningOutbox.delete({ where: { companyId } }),
     ]);
-    log.info("provisionado", { companyId });
+    log.info("provisionado", { companyId, inviteGerado: !!inviteUrl });
     return "PROVISIONED";
   }
 
