@@ -16,6 +16,21 @@ describe("email templates", () => {
     expect(email.text).toContain("Ative seu acesso");
   });
 
+  it("renderiza convite medical (Vis Medical) com HTML escapado e link de aceite", () => {
+    const email = renderEmailTemplate("medical-invite", {
+      name: "Dra. <Ana>",
+      clinicName: "Clínica & Saúde",
+      acceptUrl: "https://medical.vis.app.br/aceitar-convite?token=xyz",
+      expiresAt: "2026-06-10T12:00:00.000Z",
+    });
+
+    expect(email.html).toContain("Vis Medical");
+    expect(email.html).toContain("Dra. &lt;Ana&gt;");
+    expect(email.html).toContain("Clínica &amp; Saúde");
+    expect(email.html).toContain("https://medical.vis.app.br/aceitar-convite?token=xyz");
+    expect(email.text).toContain("Defina sua senha");
+  });
+
   it("rejeita template desconhecido", () => {
     expect(() => renderEmailTemplate("unknown", {})).toThrow(/Unsupported email template/);
   });

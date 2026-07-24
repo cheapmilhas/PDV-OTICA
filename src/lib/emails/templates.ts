@@ -14,6 +14,15 @@ const inviteEmailSchema = z.object({
   expiresAt: z.string().optional(),
 });
 
+// Convite do admin da clínica (F2 medical). Branding "Vis Medical", link de
+// aceite (define a senha). Distinto do invite ótico ("PDV Ótica"/ativar conta).
+const medicalInviteEmailSchema = z.object({
+  name: z.string().min(1),
+  clinicName: z.string().min(1),
+  acceptUrl: z.string().url(),
+  expiresAt: z.string().optional(),
+});
+
 function formatExpiration(value?: string): string {
   if (!value) return "7 dias";
   const date = new Date(value);
@@ -77,6 +86,66 @@ function renderInviteEmail(data: unknown): RenderedEmail {
     "",
     `Sua conta da ${parsed.companyName} foi criada.`,
     `Ative seu acesso: ${parsed.activationUrl}`,
+    `Este convite expira em ${formatExpiration(parsed.expiresAt)}.`,
+    "",
+    "Se voce nao esperava este convite, ignore este email.",
+  ].join("\n");
+
+  return { html, text };
+}
+
+function renderMedicalInviteEmail(data: unknown): RenderedEmail {
+  const parsed = medicalInviteEmailSchema.parse(data);
+  const name = escapeHtml(parsed.name);
+  const clinicName = escapeHtml(parsed.clinicName);
+  const acceptUrl = escapeHtml(parsed.acceptUrl);
+  const expiresAt = escapeHtml(formatExpiration(parsed.expiresAt));
+
+  const html = `<!doctype html>
+<html lang="pt-BR">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Acesse sua clínica no Vis Medical</title>
+  </head>
+  <body style="margin:0;background:#f6f7fb;color:#111827;font-family:Arial,Helvetica,sans-serif;">
+    <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="background:#f6f7fb;padding:32px 16px;">
+      <tr>
+        <td align="center">
+          <table role="presentation" width="100%" cellspacing="0" cellpadding="0" style="max-width:560px;background:#ffffff;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <tr>
+              <td style="padding:28px 28px 8px;">
+                <p style="margin:0 0 10px;color:#0d9488;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Vis Medical</p>
+                <h1 style="margin:0;color:#111827;font-size:24px;line-height:1.25;">Bem-vindo(a), ${name}</h1>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:8px 28px 4px;color:#374151;font-size:15px;line-height:1.6;">
+                <p style="margin:0 0 16px;">A clínica <strong>${clinicName}</strong> foi criada no Vis Medical. Para acessar, defina sua senha pelo botão abaixo.</p>
+                <p style="margin:0 0 22px;">Este convite expira em <strong>${expiresAt}</strong>.</p>
+                <p style="margin:0 0 26px;">
+                  <a href="${acceptUrl}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;border-radius:6px;padding:12px 18px;font-weight:700;">Definir minha senha</a>
+                </p>
+                <p style="margin:0;color:#6b7280;font-size:13px;">Se o botão não abrir, copie e cole este link no navegador:<br /><a href="${acceptUrl}" style="color:#0d9488;word-break:break-all;">${acceptUrl}</a></p>
+              </td>
+            </tr>
+            <tr>
+              <td style="padding:22px 28px 28px;color:#6b7280;font-size:12px;line-height:1.5;">
+                Se você não esperava este convite, ignore este email.
+              </td>
+            </tr>
+          </table>
+        </td>
+      </tr>
+    </table>
+  </body>
+</html>`;
+
+  const text = [
+    `Bem-vindo(a), ${parsed.name}`,
+    "",
+    `A clínica ${parsed.clinicName} foi criada no Vis Medical.`,
+    `Defina sua senha: ${parsed.acceptUrl}`,
     `Este convite expira em ${formatExpiration(parsed.expiresAt)}.`,
     "",
     "Se voce nao esperava este convite, ignore este email.",
@@ -381,6 +450,8 @@ export function renderEmailTemplate(template: string, data: unknown): RenderedEm
   switch (template) {
     case "invite":
       return renderInviteEmail(data);
+    case "medical-invite":
+      return renderMedicalInviteEmail(data);
     case "saas-welcome":
       return renderSaasWelcome(data);
     case "saas-trial-ending":

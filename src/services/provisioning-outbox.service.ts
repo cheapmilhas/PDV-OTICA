@@ -53,6 +53,16 @@ function buildInviteUrl(token: string): string {
 }
 
 /**
+ * Envio do e-mail de convite. Desligado por padrão: até medical.vis.app.br
+ * existir (Marco 2), o link não resolve — enfileirar/enviar seria pior que
+ * segurar. Ligar (`MEDICAL_INVITE_EMAIL_ENABLED=true`) quando o domínio subir.
+ * O link já fica gravado em Company.medicalInviteUrl independentemente disto.
+ */
+function medicalInviteEmailEnabled(): boolean {
+  return process.env.MEDICAL_INVITE_EMAIL_ENABLED === "true";
+}
+
+/**
  * Processa o provisionamento de UMA company. Idempotente por chamada: relê o
  * outbox do banco (nunca confia num payload de fora). Usado pelo fast-path e
  * pelo worker. Retorna o estado final desta tentativa.
@@ -83,9 +93,17 @@ export async function runProvisioningOnce(
   const result = await postProvision(payload);
 
   if (result.kind === "applied") {
-    // Monta o link de convite quando veio token cru (provisionamento NOVO).
-    // Em replay idempotente o token é undefined → preserva o link já gravado.
+    // Monta o link de convite quando veio token cru (provisionamento NOVO ou
+    // retry que reentregou — P0#3). Em replay sem token, preserva o já gravado.
     const inviteUrl = result.inviteToken ? buildInviteUrl(result.inviteToken) : undefined;
+
+    // P0#4: quando há link novo, enfileira o e-mail de convite DENTRO da mesma
+    // tx (durável — nunca envia sem o estado confirmado; nunca confirma sem
+    // enfileirar). O envio real acontece FORA, no worker processEmailQueue. O
+    // dedupeKey (unique parcial) garante 1 e-mail por company mesmo com
+    // fast-path + cron concorrentes. Envio atrás de flag até medical.vis.app.br
+    // existir (senão o link não resolve).
+    const enqueueEmail = inviteUrl && medicalInviteEmailEnabled();
     await db.$transaction([
       db.company.update({
         where: { id: companyId },
@@ -94,9 +112,29 @@ export async function runProvisioningOnce(
           ...(inviteUrl ? { medicalInviteUrl: inviteUrl } : {}),
         },
       }),
+      ...(enqueueEmail
+        ? [
+            db.emailQueue.upsert({
+              where: { dedupeKey: `medical-invite:${companyId}` },
+              // Se já existe (retry), NÃO recria nem reenvia — mantém a linha.
+              update: {},
+              create: {
+                to: payload.admin.email,
+                subject: "Acesse sua clínica no Vis Medical",
+                template: "medical-invite",
+                dedupeKey: `medical-invite:${companyId}`,
+                data: {
+                  name: payload.admin.name,
+                  clinicName: payload.clinicName,
+                  acceptUrl: inviteUrl,
+                },
+              },
+            }),
+          ]
+        : []),
       db.provisioningOutbox.delete({ where: { companyId } }),
     ]);
-    log.info("provisionado", { companyId, inviteGerado: !!inviteUrl });
+    log.info("provisionado", { companyId, inviteGerado: !!inviteUrl, emailEnfileirado: !!enqueueEmail });
     return "PROVISIONED";
   }
 

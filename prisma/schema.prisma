@@ -3157,6 +3157,11 @@ model EmailQueue {
   lastError String?
   sentAt    DateTime?
   createdAt DateTime    @default(now())
+  /// Chave de deduplicação: garante NO MÁXIMO 1 e-mail por evento lógico
+  /// (ex.: "medical-invite:<companyId>"). @unique — em Postgres o índice unique
+  /// trata cada NULL como distinto, então os e-mails legados (dedupeKey nulo)
+  /// não colidem entre si. Nulo = sem dedupe.
+  dedupeKey String?     @unique
 
   @@index([status])
   @@index([status, createdAt])

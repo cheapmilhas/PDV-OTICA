@@ -10,12 +10,16 @@ import { runProvisioningOnce, drainProvisioningOutbox } from "../provisioning-ou
 import { postProvision } from "@/lib/vis-provision-client";
 
 const COMPANY = "cmp-1";
-const payload = { clinicId: "c1", admin: { email: "a@b.c" } };
+const payload = {
+  clinicId: "c1",
+  clinicName: "Clínica Teste",
+  admin: { email: "a@b.c", name: "Admin Teste", role: "admin" },
+};
 
 /** Fake mínimo do PrismaClient para o service. `claimCount` simula o resultado
  *  do claim atômico (1 = venceu e processa; 0 = outro tick tem o lease). */
 function makeDb(row: { attempts: number } | null, claimCount = 1) {
-  const state = { companyState: "PROVISIONING" as string, deleted: false, updated: {} as Record<string, unknown> };
+  const state = { companyState: "PROVISIONING" as string, deleted: false, updated: {} as Record<string, unknown>, emailEnqueued: null as Record<string, unknown> | null };
   const outboxRow = row ? { companyId: COMPANY, payload, attempts: row.attempts, failureReason: null } : null;
   const db = {
     state,
@@ -25,6 +29,11 @@ function makeDb(row: { attempts: number } | null, claimCount = 1) {
       update: vi.fn(async ({ data }: { data: Record<string, unknown> }) => { state.updated = data; }),
       delete: vi.fn(async () => { state.deleted = true; }),
       findMany: vi.fn(async () => []),
+    },
+    emailQueue: {
+      upsert: vi.fn(async (args: { create: Record<string, unknown> }) => {
+        state.emailEnqueued = args.create;
+      }),
     },
     company: {
       update: vi.fn(async ({ data }: { data: { provisioningState?: string } }) => {
@@ -101,6 +110,37 @@ describe("runProvisioningOnce", () => {
     expect(r).toBe("PROVISIONED");
     expect(db.provisioningOutbox.updateMany).toHaveBeenCalled(); // reivindicou
     expect(postProvision).toHaveBeenCalled();
+  });
+
+  it("P0#4: flag OFF → grava medicalInviteUrl mas NÃO enfileira e-mail", async () => {
+    delete process.env.MEDICAL_INVITE_EMAIL_ENABLED;
+    vi.mocked(postProvision).mockResolvedValue({ kind: "applied", inviteToken: "tok-123" });
+    const db = makeDb({ attempts: 0 });
+    await runProvisioningOnce(COMPANY, db);
+    expect(db.emailQueue.upsert).not.toHaveBeenCalled();
+    expect(db.state.emailEnqueued).toBeNull();
+  });
+
+  it("P0#4: flag ON + token → enfileira e-mail com dedupeKey e template medical-invite", async () => {
+    process.env.MEDICAL_INVITE_EMAIL_ENABLED = "true";
+    vi.mocked(postProvision).mockResolvedValue({ kind: "applied", inviteToken: "tok-123" });
+    const db = makeDb({ attempts: 0 });
+    await runProvisioningOnce(COMPANY, db);
+    expect(db.emailQueue.upsert).toHaveBeenCalledTimes(1);
+    const enq = db.state.emailEnqueued!;
+    expect(enq.template).toBe("medical-invite");
+    expect(enq.dedupeKey).toBe(`medical-invite:${COMPANY}`);
+    expect(enq.to).toBe("a@b.c");
+    delete process.env.MEDICAL_INVITE_EMAIL_ENABLED;
+  });
+
+  it("P0#4: flag ON mas SEM token (retry sem reentrega) → não enfileira", async () => {
+    process.env.MEDICAL_INVITE_EMAIL_ENABLED = "true";
+    vi.mocked(postProvision).mockResolvedValue({ kind: "applied" }); // sem inviteToken
+    const db = makeDb({ attempts: 0 });
+    await runProvisioningOnce(COMPANY, db);
+    expect(db.emailQueue.upsert).not.toHaveBeenCalled();
+    delete process.env.MEDICAL_INVITE_EMAIL_ENABLED;
   });
 });
 
