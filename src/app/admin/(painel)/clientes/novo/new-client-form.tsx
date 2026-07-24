@@ -7,7 +7,7 @@ import Link from "next/link";
 import {
   Loader2, Building2, User, CreditCard, Users, BarChart3,
   KeyRound, RefreshCw, CheckCircle, ChevronRight, ChevronLeft,
-  MapPin, Settings, AlertTriangle,
+  MapPin, Settings, Info,
 } from "lucide-react";
 
 type PlatformProduct = "VIS_APP" | "VIS_MEDICAL";
@@ -589,16 +589,17 @@ export function NewClientForm({ plans, networks, defaultProduct = "VIS_APP" }: P
               </div>
             </Field>
 
-            {/* Aviso: nesta fase o provisionamento da clínica no Domus NÃO é
-                automático — o operador precisa rodar o script de vínculo. */}
+            {/* F2: o provisionamento da clínica no Domus é AUTOMÁTICO ao concluir
+                o cadastro (fast-path + outbox durável). Nada de script manual. */}
             {platformProduct === "VIS_MEDICAL" && (
-              <div className="flex items-start gap-3 bg-warning/10 border border-warning/25 text-foreground px-4 py-3 rounded-lg text-sm">
-                <AlertTriangle className="h-4 w-4 text-warning flex-shrink-0 mt-0.5" />
+              <div className="flex items-start gap-3 bg-info/10 border border-info/25 text-foreground px-4 py-3 rounded-lg text-sm">
+                <Info className="h-4 w-4 text-info flex-shrink-0 mt-0.5" />
                 <div className="space-y-1">
-                  <p className="font-medium">A clínica no sistema Medical (Domus) não é criada automaticamente nesta fase.</p>
+                  <p className="font-medium">A clínica no sistema Medical (Domus) é criada automaticamente.</p>
                   <p className="text-muted-foreground text-xs">
-                    Este cadastro cria a empresa e a assinatura no Vis (operadora). Após concluir,
-                    rode o script de vínculo com o Domus. O provisionamento automático chega na próxima fase.
+                    Este cadastro cria a empresa e a assinatura no Vis (operadora) e provisiona a
+                    clínica no Domus na hora. O convite de acesso do administrador é gerado junto — o
+                    envio por e-mail é ativado quando o domínio medical.vis.app.br estiver no ar.
                   </p>
                 </div>
               </div>
