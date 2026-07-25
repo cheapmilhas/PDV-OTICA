@@ -30,6 +30,12 @@ const ACTION_LABELS: Record<string, string> = {
   ADMIN_USER_DEACTIVATED: "Admin desativado",
   IMPERSONATION_STARTED: "Impersonação iniciada",
   IMPERSONATION_ENDED: "Impersonação encerrada",
+  // Acesso de suporte ao Medical (Entrega 3): o operador resgata o código que o
+  // CLIENTE gerou. Registramos os três desfechos — uma sequência de recusas é
+  // sinal de tateio e sumiria se só logássemos o sucesso.
+  SUPPORT_ACCESS_GRANTED: "Acesso de suporte concedido",
+  SUPPORT_ACCESS_DENIED: "Acesso de suporte recusado",
+  SUPPORT_ACCESS_STUCK: "Acesso de suporte travado (código consumido sem link)",
 };
 
 function buildUrl(

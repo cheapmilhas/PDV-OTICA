@@ -100,6 +100,14 @@ export async function POST(
       supportGrantId,
       domusGrantId: result.grantId,
     });
+    await auditSupportAttempt({
+      adminId: admin.id,
+      adminEmail: admin.email,
+      companyId,
+      supportGrantId,
+      action: "SUPPORT_ACCESS_STUCK",
+      detail: `Código consumido sem link (grant Domus: ${result.grantId ?? "?"})`,
+    });
     return NextResponse.json(
       {
         error:
@@ -116,6 +124,14 @@ export async function POST(
       status: result.status,
       error: result.error,
     });
+    await auditSupportAttempt({
+      adminId: admin.id,
+      adminEmail: admin.email,
+      companyId,
+      supportGrantId,
+      action: "SUPPORT_ACCESS_DENIED",
+      detail: `${result.status} ${result.error}`,
+    });
     return NextResponse.json(
       { error: rejectionMessage(result.status, result.error) },
       { status: result.status === 429 ? 429 : 409 },
@@ -127,6 +143,14 @@ export async function POST(
     supportGrantId,
     domusGrantId: result.grantId,
   });
+  await auditSupportAttempt({
+    adminId: admin.id,
+    adminEmail: admin.email,
+    companyId,
+    supportGrantId,
+    action: "SUPPORT_ACCESS_GRANTED",
+    detail: `Grant Domus: ${result.grantId || "?"}`,
+  });
   return NextResponse.json({
     success: true,
     data: {
@@ -136,6 +160,54 @@ export async function POST(
       clinicName: company.name,
     },
   });
+}
+
+/**
+ * Registra a TENTATIVA de acesso de suporte na trilha do Vis.
+ *
+ * Grava o desfecho — concedido, recusado ou queimado — porque "quem TENTOU
+ * entrar no dado clínico" é tão auditável quanto "quem entrou": uma sequência de
+ * recusas é o sinal de operador tateando código, e some se só logarmos sucesso.
+ *
+ * O `supportGrantId` é a chave que amarra esta linha à trilha do Domus (bancos
+ * separados, sem FK entre eles) — é por ele que um humano investiga os dois
+ * lados. Nunca gravamos o CÓDIGO do cliente: ele é credencial.
+ *
+ * NÃO é fail-closed (diferente da trilha do Domus, que é a autoritativa sobre o
+ * PHI): aqui o acesso já foi decidido pelo Domus, e derrubar um acesso legítimo
+ * porque o log do Vis falhou trocaria um problema de observabilidade por um de
+ * disponibilidade no meio de um atendimento.
+ */
+async function auditSupportAttempt(params: {
+  adminId: string;
+  adminEmail: string;
+  companyId: string;
+  supportGrantId: string;
+  action: "SUPPORT_ACCESS_GRANTED" | "SUPPORT_ACCESS_DENIED" | "SUPPORT_ACCESS_STUCK";
+  detail?: string;
+}): Promise<void> {
+  try {
+    await prisma.globalAudit.create({
+      data: {
+        actorType: "ADMIN_USER",
+        actorId: params.adminId,
+        companyId: params.companyId,
+        action: params.action,
+        metadata: {
+          supportGrantId: params.supportGrantId,
+          adminEmail: params.adminEmail,
+          ...(params.detail ? { detail: params.detail } : {}),
+        },
+      },
+    });
+  } catch (err) {
+    log.error("Falha ao gravar auditoria do acesso de suporte", {
+      companyId: params.companyId,
+      supportGrantId: params.supportGrantId,
+      action: params.action,
+      error: err instanceof Error ? err.message : String(err),
+    });
+  }
 }
 
 /**
