@@ -9,6 +9,7 @@ import { NovaCobrancaButton } from "@/components/admin/nova-cobranca-button";
 import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyClinic } from "./company-clinic";
+import { CompanySupportAccess } from "./company-support-access";
 import { CompanyNotes } from "./company-notes";
 import { CompanyUsers } from "./company-users";
 import { CompanyBranches } from "./company-branches";
@@ -472,7 +473,14 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
         {/* TAB: CLÍNICA (só medical) */}
         {isMedical && (
           <TabPanel tabId="clinica">
-            <CompanyClinic {...clinicProps} />
+            <div className="space-y-5">
+              <CompanyClinic {...clinicProps} />
+              {/* F3.6 — resgate do código que o CLIENTE gerou no Domus. */}
+              <CompanySupportAccess
+                companyId={id}
+                hasClinic={Boolean(company.domusClinicId)}
+              />
+            </div>
           </TabPanel>
         )}
 
