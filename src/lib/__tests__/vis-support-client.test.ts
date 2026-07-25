@@ -160,6 +160,15 @@ describe("postSupportRedeem — classificação da resposta", () => {
     expect(r.kind).toBe("transient");
   });
 
+  it("503 activation_unavailable (F3.7) → transient: a tx reverteu, código intacto", async () => {
+    // Desde a F3.7 a emissão do token vive na MESMA transação do resgate. Se ela
+    // falha, tudo reverte e o código do cliente NÃO foi gasto — logo é
+    // retentável, e classificar como rejeição mandaria pedir código novo à toa.
+    mockJson(503, { error: "activation_unavailable" });
+    const r = await postSupportRedeem(REQ);
+    expect(r.kind).toBe("transient");
+  });
+
   it("503 not_enabled → transient (fail-closed, sem efeito colateral)", async () => {
     // O Domus checa a flag ANTES de consumir qualquer coisa: o código do cliente
     // segue válido, então é retentável — não é rejeição.

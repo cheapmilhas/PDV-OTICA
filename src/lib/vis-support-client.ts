@@ -113,9 +113,11 @@ export async function postSupportRedeem(
     };
   }
 
-  // 500 activation_unavailable: caso especial — o código JÁ foi consumido do
-  // lado de lá. Não é transitório (retentar o mesmo código dá 409) e não é uma
-  // recusa comum (o grant existe). Merece tratamento próprio na UI.
+  // 500 activation_unavailable: o código JÁ foi consumido sem sair link. Desde a
+  // F3.7 o Domus emite o token na MESMA transação do resgate, então este estado
+  // não deve mais nascer — mas a checagem fica porque um Domus mais antigo em
+  // produção (deploys independentes) ainda pode respondê-lo, e classificá-lo
+  // como transitório faria a UI mandar retentar um código já queimado.
   if (res.status === 500 && data.error === "activation_unavailable") {
     return { kind: "activation_unavailable", grantId: data.grantId ?? null };
   }
@@ -127,9 +129,11 @@ export async function postSupportRedeem(
     return { kind: "rejected", status: res.status, error: data.error ?? "rejected" };
   }
 
-  // 503 not_enabled é fail-closed e SEM efeito colateral (o Domus checa a flag
-  // antes de consumir qualquer coisa) → transitório, o código do cliente segue
-  // válido.
+  // 503 → transitório, e nos DOIS casos o código do cliente segue válido:
+  //  - `not_enabled`: o Domus checa a flag antes de consumir qualquer coisa;
+  //  - `activation_unavailable` (F3.7): a emissão do token falhou DENTRO da
+  //    transação do resgate, que reverteu — o código nem chegou a ser gasto.
+  // Por isso a orientação certa é "tente de novo", não "peça outro código".
   return { kind: "transient", reason: data.error ?? `http ${res.status}` };
 }
 
