@@ -40,6 +40,11 @@ export async function POST(req: Request) {
   const signature = req.headers.get("x-domus-signature");
   const verify = verifyVisDomus(secret, ts, rawBody, signature, Date.now());
   if (!verify.ok) {
+    // O motivo vai para o log (nunca para a resposta): sem ele, um 401 não
+    // distingue segredo divergente de relógio fora de janela, e o diagnóstico
+    // do outro lado do canal fica cego. `reason` é categórico — não carrega
+    // assinatura, corpo nem segredo.
+    log.error("send-reset-email recusado no HMAC", { reason: verify.reason });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 

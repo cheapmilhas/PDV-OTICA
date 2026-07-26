@@ -52,6 +52,9 @@ export async function POST(req: Request) {
   const signature = req.headers.get("x-domus-signature");
   const verify = verifyVisDomus(secret, ts, rawBody, signature, Date.now());
   if (!verify.ok) {
+    // Mesmo motivo do send-reset-email: sem o `reason` no log, um 401 não
+    // distingue segredo divergente de relógio fora de janela.
+    logger.error("plan-change recusado no HMAC", { window: WINDOW_LOG, reason: verify.reason });
     return NextResponse.json({ error: "unauthorized" }, { status: 401 });
   }
 
