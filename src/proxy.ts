@@ -3,6 +3,7 @@ import NextAuth from "next-auth";
 import { authConfig } from "@/auth.config";
 import { jwtVerify } from "jose";
 import { decode } from "next-auth/jwt";
+import { isPublicPath } from "@/lib/proxy-public-routes";
 
 // Auth para rotas do PDV (Edge-safe)
 const pdvAuth = NextAuth(authConfig).auth;
@@ -116,31 +117,10 @@ export async function proxy(request: NextRequest) {
     return nextWithCurrentPath(request);
   }
 
-  // Permitir rotas públicas (landing page, auth, etc.)
-  const publicRoutes = ["/", "/precos", "/contato", "/sobre", "/login", "/force-logout", "/impersonate", "/registro", "/termos", "/privacidade"];
-  if (
-    publicRoutes.includes(pathname) ||
-    pathname.startsWith("/api/auth") ||
-    pathname.startsWith("/api/public") ||
-    // Webhooks e crons NÃO usam cookie de sessão — têm auth própria:
-    // webhooks validam HMAC/token do provedor; crons validam CRON_SECRET
-    // (Bearer no header). Sem este bypass o middleware barra com 401 ANTES
-    // do handler e os webhooks (Asaas/Focus) + crons nunca executam.
-    pathname.startsWith("/api/webhooks/") ||
-    pathname.startsWith("/api/cron/") ||
-    // Canal interno Vis↔Domus (entitlements): o Domus chama com Bearer
-    // (VIS_DOMUS_WEBHOOK_SECRET, timing-safe, fail-closed), não com cookie de
-    // sessão do PDV. Sem este bypass o middleware barra com 401 "Não
-    // autenticado" ANTES do handler e o pull/listagem nunca executam.
-    // Escopo ESTREITO ao subtree exato do canal (não `/api/internal/*` amplo):
-    // uma rota interna futura sem auth própria não deve herdar o bypass.
-    pathname.startsWith("/api/internal/domus/entitlements") ||
-    // Canal interno Domus→Vis (troca de plano): o Domus chama com HMAC
-    // (DOMUS_VIS_API_SECRET, `verifyVisDomus`, fail-closed), não com cookie de
-    // sessão. Mesmo motivo do entitlements: sem este bypass o middleware barra
-    // com 401 ANTES do handler e a saga de troca de plano nunca executa.
-    pathname.startsWith("/api/internal/domus/plan-change")
-  ) {
+  // Rotas públicas (landing page) e APIs com auth própria (HMAC/Bearer/token
+  // de provedor). A lista vive em `@/lib/proxy-public-routes` porque esquecer
+  // de registrar um canal aqui já causou dois 401 silenciosos em produção.
+  if (isPublicPath(pathname)) {
     return nextWithCurrentPath(request);
   }
 
