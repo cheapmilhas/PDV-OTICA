@@ -155,3 +155,20 @@ export async function getResendConfig(): Promise<ResendRuntimeConfig> {
     baseUrl: process.env.RESEND_API_URL || DEFAULT_RESEND_API_URL,
   };
 }
+
+/**
+ * Há provedor de e-mail utilizável NESTE ambiente?
+ *
+ * Serve para a fila decidir se vale sequer tentar: sem chave/remetente, cada
+ * passada queimaria uma tentativa de mensagens válidas até marcá-las como
+ * FAILED — e o ambiente que TEM a chave não as reenviaria mais. Diferente de
+ * `getResendConfig`, não lança: a ausência é uma resposta legítima.
+ */
+export async function hasEmailProvider(): Promise<boolean> {
+  try {
+    await getResendConfig();
+    return true;
+  } catch {
+    return false;
+  }
+}

@@ -3,6 +3,7 @@ import { renderEmailTemplate } from "@/lib/emails/templates";
 import { sendEmail } from "@/lib/emails/resend";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { hasEmailProvider } from "@/services/saas-email-config.service";
 
 const log = logger.child({ service: "email-queue" });
 
@@ -43,6 +44,17 @@ export async function processEmailQueue(
   // "Too many requests" que derrubava parte do lote. Configurável via env.
   const throttleMs = envInt("EMAIL_QUEUE_THROTTLE_MS", 220);
   const sleep = deps.sleep ?? defaultSleep;
+
+  // Sem provedor configurado, NÃO tocar na fila. Falta de chave é problema de
+  // AMBIENTE, não do e-mail: cada passada aqui incrementaria `attempts` de
+  // mensagens perfeitamente válidas até estourarem em FAILED — e aí nem o
+  // ambiente que TEM a chave as reenvia. Aconteceu de verdade: rodar a suíte
+  // local (que aponta para o banco de produção) queimou 2 das 3 tentativas de
+  // um convite real (2026-07-26).
+  if (!(await hasEmailProvider())) {
+    log.warn("fila de e-mail ignorada: provedor não configurado neste ambiente");
+    return { picked: 0, sent: 0, retryable: 0, failed: 0, skipped: 0 };
+  }
 
   const pending = await prisma.emailQueue.findMany({
     where: {

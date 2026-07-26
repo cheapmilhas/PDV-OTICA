@@ -17,13 +17,20 @@ vi.mock("@/lib/prisma", () => ({
 const sendEmail = vi.fn();
 vi.mock("@/lib/emails/resend", () => ({ sendEmail: (...a: unknown[]) => sendEmail(...a) }));
 
+// Provedor configurado por padrão nos testes; o cenário "sem provedor" tem
+// bloco próprio abaixo e sobrescreve este mock.
+const hasEmailProvider = vi.fn(async () => true);
+vi.mock("@/services/saas-email-config.service", () => ({
+  hasEmailProvider: () => hasEmailProvider(),
+}));
+
 const renderEmailTemplate = vi.fn();
 vi.mock("@/lib/emails/templates", () => ({
   renderEmailTemplate: (...a: unknown[]) => renderEmailTemplate(...a),
 }));
 
 vi.mock("@/lib/logger", () => ({
-  logger: { child: () => ({ info: vi.fn(), error: vi.fn() }) },
+  logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
 
 import { processEmailQueue } from "./email-queue.service";
@@ -47,6 +54,20 @@ describe("processEmailQueue", () => {
     update.mockReset().mockResolvedValue({});
     sendEmail.mockReset().mockResolvedValue({ id: "resend-1" });
     renderEmailTemplate.mockReset().mockReturnValue({ html: "<p>oi</p>", text: "oi" });
+    hasEmailProvider.mockReset().mockResolvedValue(true);
+  });
+
+  it("SEM provedor configurado: não toca na fila (não queima tentativa)", async () => {
+    // Falta de chave é problema de AMBIENTE. Sem esta guarda, rodar a suíte
+    // local (que aponta para o banco de PRODUÇÃO) incrementava `attempts` de
+    // e-mails reais até estourarem em FAILED — e nem produção os reenviaria.
+    // Aconteceu com um convite de cadastro real em 2026-07-26.
+    hasEmailProvider.mockResolvedValue(false);
+    const r = await processEmailQueue();
+    expect(r).toEqual({ picked: 0, sent: 0, retryable: 0, failed: 0, skipped: 0 });
+    expect(findMany).not.toHaveBeenCalled();
+    expect(updateMany).not.toHaveBeenCalled();
+    expect(sendEmail).not.toHaveBeenCalled();
   });
 
   it("envia e marca como SENT em caso de sucesso", async () => {
