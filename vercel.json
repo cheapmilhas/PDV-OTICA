@@ -23,7 +23,7 @@
     },
     {
       "path": "/api/cron/email-queue",
-      "schedule": "0 7 * * *"
+      "schedule": "0 * * * *"
     },
     {
       "path": "/api/cron/sync-all-companies",
