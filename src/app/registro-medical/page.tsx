@@ -79,14 +79,23 @@ export default function RegistroMedicalPage() {
   });
 
   useEffect(() => {
+    // `?plano=` vem dos cards de preço da landing: quem clicou em "Começar com
+    // Clínica" tem que chegar aqui JÁ nesse plano. Sem honrar o parâmetro, a
+    // pessoa escolheria um plano na landing e veria outro selecionado aqui.
+    const pedido = new URLSearchParams(window.location.search).get("plano");
+
     fetch("/api/public/plans?product=medical")
       .then((r) => (r.ok ? r.json() : Promise.reject(new Error("falha"))))
       .then((d) => {
         const list: Plan[] = d.plans ?? [];
         setPlans(list);
-        // Pré-seleciona o destacado (ou o 1º): sem seleção o cadastro cairia no
-        // fallback do servidor, e a pessoa não veria o que está contratando.
-        const preferido = list.find((p) => p.isFeatured) ?? list[0];
+        // Só aceita o plano da URL se ele estiver na lista VENDÁVEL — um id
+        // antigo/inválido colado no link não pode virar seleção fantasma.
+        const daUrl = pedido ? list.find((p) => p.id === pedido) : undefined;
+        // Sem escolha explícita, pré-seleciona o destacado (ou o 1º): sem
+        // seleção o cadastro cairia no fallback do servidor e a pessoa não
+        // veria o que está contratando.
+        const preferido = daUrl ?? list.find((p) => p.isFeatured) ?? list[0];
         if (preferido) setFormData((f) => ({ ...f, planId: preferido.id }));
       })
       .catch(() => setPlansError(true));
