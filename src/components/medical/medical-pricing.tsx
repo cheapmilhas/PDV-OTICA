@@ -26,6 +26,37 @@ interface Plan {
   highlightFeatures: string[] | null;
 }
 
+/** Primeira frase da descrição — o resumo do plano. */
+function resumoDe(plan: Plan): string {
+  const d = (plan.description ?? "").trim();
+  if (!d) return "";
+  const corte = d.indexOf(". ");
+  return corte === -1 ? d : d.slice(0, corte + 1);
+}
+
+/**
+ * Itens do card. Usa `highlightFeatures` quando o dono cadastrou; senão, deriva
+ * do RESTO da descrição (a parte depois da 1ª frase), quebrando por vírgula e
+ * pelo "+". É melhor mostrar o que o plano entrega do que um card com preço e
+ * nada mais — e não inventa nada: o texto é o que já está cadastrado.
+ */
+function bulletsDe(plan: Plan): string[] {
+  const cadastrados = (Array.isArray(plan.highlightFeatures) ? plan.highlightFeatures : [])
+    .filter((f): f is string => typeof f === "string" && f.trim() !== "");
+  if (cadastrados.length) return cadastrados;
+
+  const d = (plan.description ?? "").trim();
+  const corte = d.indexOf(". ");
+  const resto = corte === -1 ? "" : d.slice(corte + 1);
+  return resto
+    .replace(/^\s*Tudo do /i, "Tudo do ")
+    .split(/,|\se\s|\+/)
+    .map((s) => s.replace(/\.$/, "").trim())
+    .filter((s) => s.length > 2)
+    .map((s) => s.charAt(0).toUpperCase() + s.slice(1))
+    .slice(0, 6);
+}
+
 export function MedicalPricing() {
   const [plans, setPlans] = useState<Plan[] | null>(null);
   const [erro, setErro] = useState(false);
@@ -71,6 +102,9 @@ export function MedicalPricing() {
     );
   }
 
+  // Só vale exibir o teto de usuários se ele variar entre os planos.
+  const mostrarLimite = new Set(plans.map((p) => p.maxUsers)).size > 1;
+
   return (
     <div className="mt-10 grid gap-6 sm:grid-cols-2">
       {plans.map((plan) => (
@@ -86,8 +120,11 @@ export function MedicalPricing() {
             </span>
           )}
           <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
-          {plan.description && (
-            <p className="mt-1.5 text-sm text-muted-foreground">{plan.description}</p>
+          {/* A 1ª frase da descrição é o resumo ("Plano para 1 profissional.");
+              o resto vira bullets abaixo. Sem esse corte, o mesmo texto
+              apareceria duas vezes no card. */}
+          {resumoDe(plan) && (
+            <p className="mt-1.5 text-sm text-muted-foreground">{resumoDe(plan)}</p>
           )}
 
           <p className="mt-5">
@@ -103,23 +140,29 @@ export function MedicalPricing() {
           )}
 
           <ul className="mt-5 space-y-2 text-sm">
-            <li className="flex gap-2">
-              <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
-              <span className="text-muted-foreground">
-                Até {plan.maxUsers} {plan.maxUsers === 1 ? "usuário" : "usuários"}
-              </span>
-            </li>
+            {/* O limite de usuários só entra quando DIFERENCIA os planos. Hoje
+                ambos têm o mesmo teto no banco: repetir "Até 3 usuários" nos
+                dois não ajuda a escolher e ainda contradiz a descrição do
+                Profissional ("para 1 profissional"). */}
+            {mostrarLimite && (
+              <li className="flex gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
+                <span className="text-muted-foreground">
+                  Até {plan.maxUsers} {plan.maxUsers === 1 ? "usuário" : "usuários"}
+                </span>
+              </li>
+            )}
             {/* `highlightFeatures` é Json no banco: um valor malformado (objeto,
                 string solta) quebraria o .map e derrubaria a página de preços
-                inteira. Só renderiza se for mesmo uma lista de textos. */}
-            {(Array.isArray(plan.highlightFeatures) ? plan.highlightFeatures : [])
-              .filter((f): f is string => typeof f === "string" && f.trim() !== "")
-              .map((f) => (
-                <li key={f} className="flex gap-2">
-                  <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
-                  <span className="text-muted-foreground">{f}</span>
-                </li>
-              ))}
+                inteira. Só renderiza se for mesmo uma lista de textos.
+                Sem destaques cadastrados, os itens saem da própria descrição —
+                o card fica com substância em vez de só preço e botão. */}
+            {bulletsDe(plan).map((f) => (
+              <li key={f} className="flex gap-2">
+                <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
+                <span className="text-muted-foreground">{f}</span>
+              </li>
+            ))}
           </ul>
 
           <Link

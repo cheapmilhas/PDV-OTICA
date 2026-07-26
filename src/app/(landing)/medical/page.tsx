@@ -83,7 +83,7 @@ export default function MedicalLandingPage() {
   return (
     <>
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
-      <section className="section-padding">
+      <section className="py-16 sm:py-20">
         <div className="mx-auto max-w-4xl px-4 text-center">
           <p className="inline-flex items-center gap-2 rounded-full bg-teal-100 px-3 py-1 text-sm font-medium text-teal-800">
             <Stethoscope className="h-4 w-4" aria-hidden="true" />
@@ -119,7 +119,7 @@ export default function MedicalLandingPage() {
       </section>
 
       {/* ── Recursos ─────────────────────────────────────────────────────── */}
-      <section className="section-padding bg-muted/30">
+      <section className="py-16 sm:py-20 bg-muted/30">
         <div className="mx-auto max-w-5xl px-4">
           <h2 className="text-center text-2xl font-bold text-foreground sm:text-3xl">
             O que você deixa de fazer à mão
@@ -144,7 +144,7 @@ export default function MedicalLandingPage() {
       {/* ── Confiança ────────────────────────────────────────────────────
           Ocupa o lugar da prova social: não temos depoimentos REAIS de clínicas
           ainda, e inventar seria mentir para quem guarda dado de paciente. */}
-      <section className="section-padding">
+      <section className="py-16 sm:py-20">
         <div className="mx-auto max-w-5xl px-4">
           <h2 className="text-center text-2xl font-bold text-foreground sm:text-3xl">
             Dado de paciente é sério — e a gente trata assim
@@ -164,7 +164,7 @@ export default function MedicalLandingPage() {
       </section>
 
       {/* ── Preços (client: busca o catálogo real) ───────────────────────── */}
-      <section id="precos" className="section-padding bg-muted/30 scroll-mt-20">
+      <section id="precos" className="py-16 sm:py-20 bg-muted/30 scroll-mt-24">
         <div className="mx-auto max-w-4xl px-4">
           <h2 className="text-center text-2xl font-bold text-foreground sm:text-3xl">
             Planos
@@ -177,7 +177,7 @@ export default function MedicalLandingPage() {
       </section>
 
       {/* ── CTA final ────────────────────────────────────────────────────── */}
-      <section className="section-padding">
+      <section className="py-16 sm:py-20">
         <div className="mx-auto max-w-3xl px-4 text-center">
           <h2 className="text-2xl font-bold text-foreground sm:text-3xl">
             Comece hoje, sem compromisso
