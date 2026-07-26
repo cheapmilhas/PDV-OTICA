@@ -88,10 +88,10 @@ export function MedicalPricing() {
   if (plans === null) {
     return (
       <div className="mt-10 grid gap-6 sm:grid-cols-2" aria-busy="true">
-        {/* Altura aproximada do card REAL. Reservar demais deixa um buraco
+        {/* Altura MEDIDA do card renderizado em prod (404px). Reservar demais deixa buraco
             quando o conteúdo chega; de menos, a página "pula" (layout shift). */}
-        <div className="h-80 animate-pulse rounded-xl bg-muted" />
-        <div className="h-80 animate-pulse rounded-xl bg-muted" />
+        <div className="h-[404px] animate-pulse rounded-xl bg-muted" />
+        <div className="h-[404px] animate-pulse rounded-xl bg-muted" />
       </div>
     );
   }
