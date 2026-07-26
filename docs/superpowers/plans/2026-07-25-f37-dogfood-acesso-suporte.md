@@ -82,6 +82,40 @@ credencial inválida. A costura lógica desses pontos está coberta em
 - **Alguma escrita passou** → falha de segurança. Parar, anotar exatamente qual tela e
   qual ação, e reportar.
 
+## Achados do dogfood executado (2026-07-25, CLINICA TESTE em prod)
+
+Passos 1–4, 6 e 7 ✅ validados. Passo 5 (escrita bloqueada) verificado por código
+e escopo; falta a tentativa manual na UI.
+
+**Corrigido durante o dogfood:**
+1. **TTL do link: 3min → 15min** (commit na main). Três links venceram entre
+   emitir e colar. Sem UI de reemissão, cada vencimento obriga o CLIENTE a gerar
+   outro código.
+
+**Achados abertos (não bloqueiam, viram tarefa):**
+2. **Botão "Encerrar acesso" do banner é inútil para o OPERADOR.** O banner é
+   renderizado em toda página autenticada — inclusive para a sessão de suporte —
+   mas o botão é um `<Link>` para `/clinic-settings/suporte`, tela que exige
+   `settings.clinic`. O operador clica e "não acontece nada" (redirect silencioso).
+   Correção: esconder o botão quando `isSupportSession`, ou dar ao operador uma
+   ação própria de encerrar a PRÓPRIA sessão.
+3. **`/suporte/ativar` não relê o token quando só o fragmento muda.** O efeito
+   roda uma vez por carregamento (`readHashRef`), então colar um link NOVO numa
+   aba que já tem a página aberta mantém o token velho → "link não é mais válido"
+   com um link válido em mãos. Correção: ouvir `hashchange`.
+4. **Reemissão de link não existe** (dívida já conhecida do Codex, confirmada na
+   prática): grant em REDEEMED/TOKEN_ISSUED é reemitível por desenho, mas não há
+   endpoint nem UI. Hoje o caminho é o cliente gerar código novo.
+
+**Confirmações valiosas (comportamento real que fake não pegaria):**
+- `code_redeemed` e `token_issued` com o MESMO timestamp → o fix P0 (transação
+  única) funcionando em produção.
+- Escopo congelado com 25 permissões, **todas `.view`** — nenhuma de escrita.
+- 234 actions usam o client que bloqueia suporte; só 8 são leitura liberada.
+- Revogação: grant `REVOKED`, `session_revoked` na trilha, sessão better-auth
+  DELETADA (0 linhas) e sidecar removido por **FK cascade** — exatamente o
+  comportamento que o Codex apontou que os fakes não modelam.
+
 ## Pendências que este dogfood NÃO resolve
 
 - Casos de falha (rollback, concorrência, expiração forçada) — dependem de credencial de
