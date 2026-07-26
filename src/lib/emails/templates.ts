@@ -94,6 +94,62 @@ function renderInviteEmail(data: unknown): RenderedEmail {
   return { html, text };
 }
 
+/**
+ * Redefinição de senha pedida pelo Domus (o Domus não envia e-mail; ver
+ * /api/internal/domus/send-reset-email). O nome é opcional: o pedido pode vir
+ * de um e-mail que não corresponde a ninguém, e nesse caso não se inventa
+ * saudação.
+ */
+const domusPasswordResetSchema = z.object({
+  name: z.string().min(1).nullable().optional(),
+  resetUrl: z.string().url(),
+});
+
+function renderDomusPasswordReset(data: unknown): RenderedEmail {
+  const parsed = domusPasswordResetSchema.parse(data);
+  const nome = parsed.name ? escapeHtml(parsed.name) : null;
+  const url = escapeHtml(parsed.resetUrl);
+  const saudacao = nome ? `Olá, ${nome}` : "Olá";
+
+  const html = `<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><title>Redefinir sua senha</title></head>
+<body style="margin:0;background:#f8fafc;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,Arial,sans-serif;color:#374151;">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f8fafc;padding:32px 12px;">
+    <tr><td align="center">
+      <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="max-width:520px;background:#ffffff;border-radius:12px;border:1px solid #e5e7eb;">
+        <tr><td style="padding:32px 32px 24px;">
+          <p style="margin:0 0 10px;color:#0d9488;font-size:13px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;">Vis Medical</p>
+          <h1 style="margin:0;color:#111827;font-size:24px;line-height:1.25;">${saudacao}</h1>
+        </td></tr>
+        <tr><td style="padding:0 32px 8px;font-size:15px;line-height:1.6;">
+          <p style="margin:0 0 16px;">Recebemos um pedido para redefinir a senha da sua conta. Clique no botão abaixo para escolher uma nova.</p>
+        </td></tr>
+        <tr><td style="padding:8px 32px 24px;">
+          <a href="${url}" style="display:inline-block;background:#0d9488;color:#ffffff;text-decoration:none;padding:13px 26px;border-radius:8px;font-weight:600;font-size:15px;">Redefinir minha senha</a>
+        </td></tr>
+        <tr><td style="padding:0 32px 28px;font-size:13px;line-height:1.6;color:#6b7280;">
+          <p style="margin:0 0 10px;">O link vale por 1 hora e serve uma única vez.</p>
+          <p style="margin:0;"><strong>Não foi você?</strong> Ignore este e-mail — sua senha continua a mesma. Ninguém consegue redefini-la sem abrir este link.</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
+
+  const text = [
+    saudacao + ",",
+    "",
+    "Recebemos um pedido para redefinir a senha da sua conta.",
+    "Abra o link abaixo para escolher uma nova:",
+    parsed.resetUrl,
+    "",
+    "O link vale por 1 hora e serve uma única vez.",
+    "Não foi você? Ignore este e-mail — sua senha continua a mesma.",
+  ].join("\n");
+
+  return { html, text };
+}
+
 function renderMedicalInviteEmail(data: unknown): RenderedEmail {
   const parsed = medicalInviteEmailSchema.parse(data);
   const name = escapeHtml(parsed.name);
@@ -452,6 +508,8 @@ export function renderEmailTemplate(template: string, data: unknown): RenderedEm
       return renderInviteEmail(data);
     case "medical-invite":
       return renderMedicalInviteEmail(data);
+    case "domus-password-reset":
+      return renderDomusPasswordReset(data);
     case "saas-welcome":
       return renderSaasWelcome(data);
     case "saas-trial-ending":
