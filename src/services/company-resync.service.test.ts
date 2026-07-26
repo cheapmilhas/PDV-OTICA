@@ -96,7 +96,11 @@ const fullSettings = {
 describe("resyncCompanySetup", () => {
   beforeEach(() => {
     vi.clearAllMocks();
-    companyFindUnique.mockResolvedValue({ id: "co-1", name: "Ótica X" });
+    companyFindUnique.mockResolvedValue({
+      id: "co-1",
+      name: "Ótica X",
+      platformProduct: "VIS_APP",
+    });
     branchFindFirst.mockResolvedValue({ id: "br-1" });
     chartCount.mockResolvedValue(28);
     financeCount.mockResolvedValue(4);
@@ -110,6 +114,20 @@ describe("resyncCompanySetup", () => {
   it("retorna null quando a empresa não existe", async () => {
     companyFindUnique.mockResolvedValue(null);
     const r = await resyncCompanySetup("nope", { actorType: "SYSTEM" });
+    expect(r).toBeNull();
+    expect(setupCompanyFinance).not.toHaveBeenCalled();
+  });
+
+  it("NÃO semeia estrutura de PDV em cliente medical (dívida B4)", async () => {
+    // O gate vive no SERVIÇO, não só na rota do admin: o cron de auto-sync
+    // chama esta função direto, então um gate só na rota deixaria clínicas
+    // recebendo plano de contas ótico automaticamente.
+    companyFindUnique.mockResolvedValue({
+      id: "co-1",
+      name: "Clínica Y",
+      platformProduct: "VIS_MEDICAL",
+    });
+    const r = await resyncCompanySetup("co-1", { actorType: "SYSTEM" });
     expect(r).toBeNull();
     expect(setupCompanyFinance).not.toHaveBeenCalled();
   });
@@ -177,13 +195,21 @@ describe("syncAllCompanies", () => {
     configUpsert.mockResolvedValue({ id: "singleton", isEnabled: true, dryRun: false });
     configUpdate.mockResolvedValue({});
     companyFindMany.mockResolvedValue([]);
-    companyFindUnique.mockResolvedValue({ id: "co-x", name: "X" });
+    companyFindUnique.mockResolvedValue({ id: "co-x", name: "X", platformProduct: "VIS_APP" });
     branchFindFirst.mockResolvedValue({ id: "br-1" });
     chartCount.mockResolvedValue(28);
     financeCount.mockResolvedValue(4);
     templateCount.mockResolvedValue(4);
     settingsFindUnique.mockResolvedValue(fullSettings);
     auditCreate.mockResolvedValue({});
+  });
+
+  it("varre SÓ empresas Vis App — clínicas não entram no laço (dívida B4)", async () => {
+    // Filtrar na consulta, e não só dentro do resync, evita que clínicas
+    // contem como "unchanged" e mascarem o total real sincronizado.
+    await syncAllCompanies();
+    const [arg] = companyFindMany.mock.calls[0] as [{ where: Record<string, unknown> }];
+    expect(arg.where.platformProduct).toBe("VIS_APP");
   });
 
   it("desligado → no-op (não consulta empresas)", async () => {

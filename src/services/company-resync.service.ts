@@ -13,6 +13,7 @@ import {
   type MessageKey,
 } from "@/lib/default-messages-history";
 import { getAutoSyncConfig } from "@/services/auto-sync-config.service";
+import { isOpticalOnlyActionAllowed } from "@/lib/admin-optical-only";
 import { ensureDefaultStages, ensureOpticalStages } from "@/services/lead-stage.service";
 import { logger } from "@/lib/logger";
 
@@ -134,9 +135,25 @@ export async function resyncCompanySetup(
   const dryRun = opts.dryRun ?? false;
   const company = await prisma.company.findUnique({
     where: { id: companyId },
-    select: { id: true, name: true },
+    select: { id: true, name: true, platformProduct: true },
   });
   if (!company) return null;
+
+  // Gate de produto (dívida B4) NO SERVIÇO, não só na rota: o que este resync
+  // reaplica é a configuração do PDV ótico (plano de contas, contas financeiras,
+  // templates de conciliação) e uma clínica não tem nenhuma dessas estruturas.
+  //
+  // Precisa estar aqui porque `syncAllCompanies` (cron de auto-sync) varre TODAS
+  // as empresas ativas: um gate só na rota do admin deixaria o cron continuar
+  // semeando estrutura de ótica em cliente medical sem ninguém clicar em nada.
+  // Tratado como "empresa fora de escopo" (null) — o chamador já sabe lidar.
+  if (!isOpticalOnlyActionAllowed(company.platformProduct)) {
+    log.info("resync ignorado: empresa não é Vis App", {
+      companyId,
+      product: company.platformProduct,
+    });
+    return null;
+  }
 
   let before: FinanceCounts;
   let after: FinanceCounts;
@@ -230,6 +247,10 @@ export async function syncAllCompanies(): Promise<SyncAllResult> {
   const companies = await prisma.company.findMany({
     where: {
       isBlocked: false,
+      // Só ótica: o auto-sync semeia configuração do PDV. Filtrar aqui (e não
+      // só no resync) mantém clínicas fora do laço — senão elas contariam como
+      // "unchanged" no relatório e mascarariam o total real sincronizado.
+      platformProduct: "VIS_APP",
       subscriptions: { some: { status: { in: ["ACTIVE", "TRIAL", "PAST_DUE"] } } },
     },
     select: { id: true },

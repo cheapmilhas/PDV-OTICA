@@ -1,7 +1,9 @@
 import { NextResponse } from "next/server";
 import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { resyncCompanySetup } from "@/services/company-resync.service";
+import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { isOpticalOnlyActionAllowed, OPTICAL_ONLY_ACTION_MESSAGE } from "@/lib/admin-optical-only";
 
 const log = logger.child({ route: "admin/companies/[id]/resync" });
 
@@ -36,6 +38,23 @@ export async function POST(
   if (!scoped) return NextResponse.json({ error: "Sem permissão para esta empresa" }, { status: 403 });
 
   try {
+    // Gate de produto (dívida B4). O que este resync reaplica — plano de contas,
+    // contas financeiras, templates de conciliação — é a configuração do PDV
+    // ótico; uma clínica não tem nenhuma dessas estruturas. A UI já esconde o
+    // botão para medical, mas esconder não é gatear: até aqui a chamada direta
+    // à API passava.
+    const company = await prisma.company.findUnique({
+      where: { id: companyId },
+      select: { platformProduct: true },
+    });
+    if (!company) {
+      return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+    }
+    if (!isOpticalOnlyActionAllowed(company.platformProduct)) {
+      log.warn("resync bloqueado por produto", { companyId, product: company.platformProduct });
+      return NextResponse.json({ error: OPTICAL_ONLY_ACTION_MESSAGE }, { status: 403 });
+    }
+
     const result = await resyncCompanySetup(companyId, {
       actorType: "ADMIN_USER",
       actorId: admin.id,

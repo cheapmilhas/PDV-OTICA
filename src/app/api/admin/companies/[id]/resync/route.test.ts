@@ -24,7 +24,7 @@ vi.mock("@/services/finance-setup.service", async (importOriginal) => {
 });
 
 vi.mock("@/lib/logger", () => ({
-  logger: { child: () => ({ info: vi.fn(), error: vi.fn() }) },
+  logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }) },
 }));
 
 const ensureDefaultStages = vi.fn();
@@ -100,7 +100,9 @@ describe("POST /api/admin/companies/[id]/resync", () => {
   beforeEach(() => {
     getAdminSession.mockReset();
     setupCompanyFinance.mockReset().mockResolvedValue(undefined);
-    companyFindUnique.mockReset().mockResolvedValue({ id: "co-1", name: "Ótica X" });
+    companyFindUnique
+      .mockReset()
+      .mockResolvedValue({ id: "co-1", name: "Ótica X", platformProduct: "VIS_APP" });
     branchFindFirst.mockReset().mockResolvedValue({ id: "br-1" });
     globalAuditCreate.mockReset().mockResolvedValue({});
     counts.chartOfAccounts = [0, 0];
@@ -130,6 +132,20 @@ describe("POST /api/admin/companies/[id]/resync", () => {
     companyFindUnique.mockResolvedValue(null);
     const res = await POST(req(), ctx());
     expect(res.status).toBe(404);
+    expect(setupCompanyFinance).not.toHaveBeenCalled();
+  });
+
+  it("retorna 403 para cliente medical, mesmo por chamada direta à API (dívida B4)", async () => {
+    // A UI já escondia o botão; o furo era a API aceitar a chamada direta. O
+    // resync reaplica configuração do PDV, que uma clínica não tem.
+    getAdminSession.mockResolvedValue({ id: "a1", email: "a@x", role: "ADMIN" });
+    companyFindUnique.mockResolvedValue({
+      id: "co-1",
+      name: "Clínica Y",
+      platformProduct: "VIS_MEDICAL",
+    });
+    const res = await POST(req(), ctx());
+    expect(res.status).toBe(403);
     expect(setupCompanyFinance).not.toHaveBeenCalled();
   });
 

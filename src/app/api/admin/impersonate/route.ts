@@ -5,6 +5,7 @@ import { encode } from "next-auth/jwt";
 import { z } from "zod";
 import { logger } from "@/lib/logger";
 import { rateLimitResponse, clientIp } from "@/lib/rate-limit";
+import { isOpticalOnlyActionAllowed, OPTICAL_ONLY_ACTION_MESSAGE } from "@/lib/admin-optical-only";
 
 const log = logger.child({ route: "admin/impersonate" });
 
@@ -58,11 +59,34 @@ export async function POST(request: Request) {
     // Buscar empresa e seu primeiro usuário admin/owner
     const company = await prisma.company.findUnique({
       where: { id: companyId },
-      select: { id: true, name: true },
+      select: { id: true, name: true, platformProduct: true },
     });
 
     if (!company) {
       return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+    }
+
+    // Gate de produto (dívida B4). Impersonação é acesso SEM consentimento e sem
+    // trilha do lado do Domus — para medical o caminho legítimo é o código de
+    // autorização da Entrega 3. Vem ANTES de abrir sessão ou emitir token, e a
+    // tentativa é auditada: chamada direta à API é justamente o que este gate
+    // fecha, então precisa deixar rastro.
+    if (!isOpticalOnlyActionAllowed(company.platformProduct)) {
+      await prisma.globalAudit.create({
+        data: {
+          actorType: "ADMIN_USER",
+          actorId: admin.id,
+          companyId,
+          action: "IMPERSONATION_DENIED",
+          metadata: {
+            attemptedCompanyId: companyId,
+            reason: "produto não permite impersonação",
+            platformProduct: company.platformProduct,
+            adminEmail: admin.email,
+          },
+        },
+      });
+      return NextResponse.json({ error: OPTICAL_ONLY_ACTION_MESSAGE }, { status: 403 });
     }
 
     // Buscar o user ADMIN MAIS ANTIGO da empresa para impersonar.

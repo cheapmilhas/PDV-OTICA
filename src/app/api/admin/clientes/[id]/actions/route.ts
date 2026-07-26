@@ -100,6 +100,23 @@ export async function POST(
         const newPlan = await prisma.plan.findUnique({ where: { id: planId } });
         if (!newPlan) return NextResponse.json({ error: "Plano não encontrado" }, { status: 400 });
 
+        // Integridade produto×plano: a CRIAÇÃO de cliente já valida isto
+        // (create/route.ts), a troca não validava. Aplicar plano de ótica numa
+        // clínica (ou o inverso) desalinha cobrança, limites e o entitlement
+        // publicado para o Domus — e o seletor da UI já só oferece planos do
+        // produto certo, então divergência aqui só chega por chamada direta.
+        const empresa = await prisma.company.findUnique({
+          where: { id: companyId },
+          select: { platformProduct: true },
+        });
+        if (!empresa) return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
+        if (newPlan.platformProduct !== empresa.platformProduct) {
+          return NextResponse.json(
+            { error: "O plano escolhido é de outro produto da plataforma." },
+            { status: 400 },
+          );
+        }
+
         const subscription = await prisma.subscription.findFirst({
           where: { companyId, status: { in: ["TRIAL", "ACTIVE", "PAST_DUE"] } },
           include: { plan: true },
