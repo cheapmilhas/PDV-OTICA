@@ -183,25 +183,9 @@ export async function POST(request: Request) {
         });
         return "PROVISIONING";
       });
-
-      // Despacha a fila de e-mail NA HORA. O provisionamento acabou de
-      // enfileirar o convite; sem isto ele só sairia no próximo tick do cron —
-      // e um convite de cadastro que chega horas depois é um cadastro perdido
-      // (a pessoa fecha a aba achando que não funcionou).
-      //
-      // Best-effort e isolado: o cron horário continua sendo a rede de
-      // segurança, então falhar aqui atrasa o e-mail, não perde. Limite baixo
-      // porque o objetivo é despachar ESTE convite, não drenar a fila inteira
-      // dentro do request de alguém.
-      try {
-        const { processEmailQueue } = await import("@/services/email-queue.service");
-        await processEmailQueue(5);
-      } catch (err) {
-        log.error("fast-path de e-mail falhou (cron reenvia)", {
-          companyId: result.company.id,
-          error: err instanceof Error ? err.message : String(err),
-        });
-      }
+      // O convite é despachado dentro do próprio provisionamento (que é quem o
+      // enfileira) — não repetir aqui, senão o mesmo envio sairia de dois
+      // lugares.
     }
 
     return NextResponse.json({

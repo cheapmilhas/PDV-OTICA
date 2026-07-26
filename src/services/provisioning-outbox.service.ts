@@ -138,6 +138,29 @@ export async function runProvisioningOnce(
       db.provisioningOutbox.delete({ where: { companyId } }),
     ]);
     log.info("provisionado", { companyId, inviteGerado: !!inviteUrl, emailEnfileirado: !!enqueueEmail });
+
+    // Despacha o convite recém-enfileirado. Fica AQUI (e não só no cadastro
+    // público) porque este é o ponto por onde passam TODOS os caminhos que
+    // geram convite — cadastro no site, criação pelo super admin e o worker
+    // horário. Sem isto, o e-mail dependia só do cron `email-queue`, e um
+    // convite que chega horas depois é um cadastro perdido: a pessoa fecha a
+    // aba achando que não funcionou (constatado no dogfood 2026-07-26).
+    //
+    // Best-effort e DEPOIS do commit: o estado já está consistente, então
+    // falhar aqui só adia o envio — o cron horário continua sendo a rede de
+    // segurança e o dedupeKey impede e-mail duplicado.
+    if (enqueueEmail) {
+      try {
+        const { processEmailQueue } = await import("@/services/email-queue.service");
+        await processEmailQueue(5);
+      } catch (err) {
+        log.error("despacho imediato do convite falhou (cron reenvia)", {
+          companyId,
+          error: err instanceof Error ? err.message : String(err),
+        });
+      }
+    }
+
     return "PROVISIONED";
   }
 
