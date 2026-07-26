@@ -68,6 +68,17 @@ export async function POST(request: Request) {
       plan = await prisma.plan.findFirst({
         where: { id: planId, isActive: true, status: "ACTIVE", platformProduct: "VIS_MEDICAL", selfServiceSelectable: true },
       });
+      // Plano ESCOLHIDO e inelegível → ERRO, nunca fallback silencioso. Cair no
+      // "mais barato" aqui assinaria a pessoa num plano que ela não escolheu:
+      // quem clicou em "Clínica" (R$189,90) terminaria no "Profissional"
+      // (R$89,90) sem ser avisado — cobrança errada e sem rastro de decisão.
+      // O fallback abaixo existe só para quem NÃO escolheu nada.
+      if (!plan) {
+        return NextResponse.json(
+          { error: "O plano selecionado não está mais disponível. Escolha outro." },
+          { status: 409 },
+        );
+      }
     }
     if (!plan) {
       plan = await prisma.plan.findFirst({

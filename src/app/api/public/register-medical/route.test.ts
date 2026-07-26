@@ -48,6 +48,29 @@ describe("POST /api/public/register-medical", () => {
     expect(res.status).toBe(400);
   });
 
+  it("planId ESCOLHIDO e inelegível → 409, NUNCA cai no plano mais barato", async () => {
+    // Sem isto, quem clicou em "Clínica" (R$189,90) e teve o plano desativado
+    // entre a tela e o envio terminaria assinado no "Profissional" (R$89,90)
+    // sem ser avisado — cobrança errada e silenciosa. Achado do Codex.
+    companyFindFirst.mockResolvedValue(null); // e-mail e doc livres
+    planFindFirst.mockResolvedValue(null); // o plano pedido não casa
+    const res = await POST(req({ ...valid, planId: "plano-que-sumiu" }));
+    expect(res.status).toBe(409);
+    // Só a busca do plano ESCOLHIDO acontece — sem 2ª busca de fallback.
+    expect(planFindFirst).toHaveBeenCalledOnce();
+  });
+
+  it("SEM planId → fallback para o mais barato é legítimo", async () => {
+    // Quem não escolheu nada não tem expectativa violada; aqui o fallback ajuda.
+    companyFindFirst.mockResolvedValue(null);
+    planFindFirst.mockResolvedValue(null); // nenhum plano medical disponível
+    const res = await POST(req(valid));
+    // 500 (e não 409): é falha de configuração nossa, não escolha do usuário.
+    expect(res.status).toBe(500);
+    const arg = planFindFirst.mock.calls[0][0] as { orderBy?: unknown };
+    expect(arg.orderBy).toEqual({ priceMonthly: "asc" });
+  });
+
   it("409 se email já cadastrado", async () => {
     companyFindFirst.mockResolvedValueOnce({ id: "existing" }); // email check
     const res = await POST(req(valid));
