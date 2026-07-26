@@ -104,6 +104,19 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
+              {/* Outro PRODUTO da casa, separado por uma linha: sem essa
+                  distinção pareceria mais uma página da ótica, e quem procura
+                  sistema para clínica passaria batido. */}
+              {FOOTER_LINKS.outrosProdutos.map((link) => (
+                <li key={link.href} className="pt-2.5 mt-2.5 border-t border-border/60">
+                  <Link
+                    href={link.href}
+                    className="text-sm font-medium text-muted hover:text-foreground transition-colors"
+                  >
+                    {link.label}
+                  </Link>
+                </li>
+              ))}
             </ul>
           </div>
 

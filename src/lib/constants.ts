@@ -43,6 +43,13 @@ export const FOOTER_LINKS = {
     { label: "Blog", href: "/blog" },
     { label: "Vis vs Planilha", href: "/vis-vs-planilha" },
   ],
+  // Outro PRODUTO, não outra página da ótica. Fica no rodapé (e não no menu
+  // principal) de propósito: o topo do site vende ótica, e disputar espaço lá
+  // confundiria quem chegou procurando PDV. Quem é da saúde encontra aqui ou
+  // pelo link direto de campanha.
+  outrosProdutos: [
+    { label: "Vis Medical — para clínicas", href: "/medical" },
+  ],
   legal: [
     { label: "Política de Privacidade", href: "/privacidade" },
     { label: "Termos de Uso", href: "/termos" },
