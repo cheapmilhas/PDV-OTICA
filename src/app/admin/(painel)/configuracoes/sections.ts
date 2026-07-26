@@ -10,6 +10,7 @@ import {
   ShieldCheck,
   PlugZap,
   HeartPulse,
+  Network,
 } from "lucide-react";
 
 /**
@@ -117,6 +118,14 @@ export const CONFIG_SECTIONS: ConfigSection[] = [
     title: "Sincronização",
     desc: "Auto-sync de configurações entre óticas",
     navLabel: "Sincronização",
+    group: "sistema",
+  },
+  {
+    href: "/admin/configuracoes/federacao",
+    icon: Network,
+    title: "Saúde da Federação",
+    desc: "Estado do canal entre o Vis e o Domus",
+    navLabel: "Federação",
     group: "sistema",
   },
   {
