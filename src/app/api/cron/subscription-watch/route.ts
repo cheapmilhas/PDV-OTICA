@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { trialAction } from "@/services/subscription-watch.service";
 import { notifyCompany } from "@/services/saas-notification.service";
+import { alertOperators } from "@/services/trial-alert.service";
 import { withHeartbeat } from "@/lib/cron-instrument";
 
 export const runtime = "nodejs";
@@ -30,7 +31,10 @@ export async function GET(request: Request) {
         },
       });
 
-      const summary = { total: trials.length, ending: 0, expired: 0 };
+      // `alerted` conta notificações CRIADAS (não trials): quando o alerta já
+      // existe, a contagem não sobe — assim o retorno do cron distingue
+      // "avisei agora" de "já estava avisado".
+      const summary = { total: trials.length, ending: 0, expired: 0, alerted: 0 };
       for (const sub of trials) {
         const action = trialAction(sub.trialEndsAt, now);
         if (!action) continue;
@@ -55,6 +59,21 @@ export async function GET(request: Request) {
                 },
               }
             );
+            // N5: avisa o OPERADOR, além do cliente.
+            //
+            // 🔑 SÓ neste ramo, nunca no de expiração. O outro ramo VIRA O
+            // STATUS do cliente; misturar o alerta ali faria uma falha de
+            // notificação interna interromper a transição de estado de uma
+            // assinatura — ou, na ordem inversa, perder o alerta para sempre.
+            // Aqui o alerta é um efeito colateral puro: se falhar, o pior caso
+            // é o operador não ser avisado hoje, e o cron tenta de novo amanhã.
+            summary.alerted += await alertOperators({
+              subscriptionId: sub.id,
+              companyId: sub.companyId,
+              companyName: name,
+              trialEndsAt: sub.trialEndsAt!,
+              daysLeft,
+            });
             summary.ending++;
           } else {
             // ORDEM IMPORTA: notificar ANTES de virar o status. Se virássemos o status

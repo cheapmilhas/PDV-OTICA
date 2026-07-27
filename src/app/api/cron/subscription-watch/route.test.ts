@@ -18,6 +18,13 @@ vi.mock("@/services/saas-notification.service", () => ({
   notifyCompany: (...a: unknown[]) => notifyCompany(...a),
 }));
 
+// N5: alerta ao operador. Mockado no limite do SERVIÇO (não do prisma) — o que
+// este teste verifica é QUANDO o cron alerta, não como a notificação é gravada.
+const alertOperators = vi.fn().mockResolvedValue(1);
+vi.mock("@/services/trial-alert.service", () => ({
+  alertOperators: (...a: unknown[]) => alertOperators(...a),
+}));
+
 // Mock logger
 vi.mock("@/lib/logger", () => ({
   logger: { child: () => ({ info: vi.fn(), error: vi.fn(), warn: vi.fn() }) },
@@ -37,6 +44,7 @@ beforeEach(() => {
   notifyCompany.mockResolvedValue({ status: "SENT" });
   updateMany.mockResolvedValue({ count: 1 });
   findMany.mockResolvedValue([]);
+  alertOperators.mockResolvedValue(1);
   process.env.CRON_SECRET = "test-secret";
 });
 
@@ -133,5 +141,74 @@ describe("GET /api/cron/subscription-watch", () => {
     const body = await res.json();
     expect(body.ok).toBe(true);
     expect(typeof body.total).toBe("number");
+  });
+
+  // ── N5: alerta ao OPERADOR ────────────────────────────────────────────────
+  describe("N5 — alerta ao operador", () => {
+    function trialTerminando() {
+      const em2Dias = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      findMany.mockResolvedValue([
+        { id: "sub-2", companyId: "company-2", trialEndsAt: em2Dias, company: { name: "Clínica Vida" } },
+      ]);
+      return em2Dias;
+    }
+
+    it("alerta o operador quando o trial está TERMINANDO", async () => {
+      const fim = trialTerminando();
+      const res = await GET(makeRequest("Bearer test-secret"));
+      expect(res.status).toBe(200);
+      expect(alertOperators).toHaveBeenCalledWith(
+        expect.objectContaining({
+          subscriptionId: "sub-2",
+          companyId: "company-2",
+          companyName: "Clínica Vida",
+          trialEndsAt: fim,
+        })
+      );
+      expect((await res.json()).alerted).toBe(1);
+    });
+
+    it("NÃO alerta no ramo que EXPIRA — alerta não pode se acoplar à virada de status", async () => {
+      // 🔑 A propriedade central da fatia. O ramo de expiração muda o STATUS do
+      // cliente; se o alerta vivesse ali, uma falha ao notificar o operador
+      // poderia interromper a transição de estado de uma assinatura (ou, na
+      // ordem inversa, o alerta se perderia para sempre).
+      const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
+      findMany.mockResolvedValue([
+        { id: "sub-1", companyId: "company-1", trialEndsAt: ontem, company: { name: "Ótica Teste" } },
+      ]);
+      const res = await GET(makeRequest("Bearer test-secret"));
+      expect(res.status).toBe(200);
+      expect(updateMany).toHaveBeenCalled(); // o status VIRA
+      expect(alertOperators).not.toHaveBeenCalled(); // e o alerta não entra aqui
+    });
+
+    it("falha do alerta NÃO derruba o cron nem os trials seguintes", async () => {
+      // alertOperators é contratado para nunca lançar, mas o cron não pode
+      // depender disso: se um dia lançar, o processamento tem que continuar.
+      const em2Dias = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+      findMany.mockResolvedValue([
+        { id: "sub-a", companyId: "co-a", trialEndsAt: em2Dias, company: { name: "A" } },
+        { id: "sub-b", companyId: "co-b", trialEndsAt: em2Dias, company: { name: "B" } },
+      ]);
+      alertOperators.mockRejectedValueOnce(new Error("banco fora"));
+
+      const res = await GET(makeRequest("Bearer test-secret"));
+      expect(res.status).toBe(200);
+      // o segundo trial foi processado mesmo com o primeiro alerta falhando
+      expect(alertOperators).toHaveBeenCalledTimes(2);
+      expect(notifyCompany).toHaveBeenCalledTimes(2);
+    });
+
+    it("summary.alerted conta notificações CRIADAS, não trials", async () => {
+      // Quando o alerta já existe (dedupe), alertOperators devolve 0 — o cron
+      // roda igual, mas o resumo distingue "avisei agora" de "já avisado".
+      trialTerminando();
+      alertOperators.mockResolvedValue(0);
+      const res = await GET(makeRequest("Bearer test-secret"));
+      const body = await res.json();
+      expect(body.ending).toBe(1); // o trial foi processado
+      expect(body.alerted).toBe(0); // mas nada de novo foi criado
+    });
   });
 });

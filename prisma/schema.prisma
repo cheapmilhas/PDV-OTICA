@@ -3893,18 +3893,23 @@ model DunningEvent {
 }
 
 model AdminNotification {
-  id        String                @id @default(cuid())
-  adminId   String?
-  type      AdminNotificationType
-  title     String
-  message   String
-  link      String?
+  id      String                @id @default(cuid())
+  adminId String?
+  type    AdminNotificationType
+  title   String
+  message String
+  link    String?
+  /// Janela lógica do evento, para não reemitir o mesmo alerta a cada tick do
+  /// cron. NULL nos fluxos sem idempotência (dunning, tickets) — no Postgres
+  /// cada NULL é distinto, então eles nunca colidem entre si.
+  periodKey String?
   metadata  Json?
   isRead    Boolean               @default(false)
   readAt    DateTime?
   createdAt DateTime              @default(now())
   admin     AdminUser?            @relation(fields: [adminId], references: [id], onDelete: Cascade)
 
+  @@unique([adminId, type, periodKey])
   @@index([adminId, isRead, createdAt])
   @@index([isRead, createdAt])
   @@map("admin_notifications")
