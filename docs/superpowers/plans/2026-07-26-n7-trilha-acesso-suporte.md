@@ -45,6 +45,32 @@
 
 ---
 
+## Task 0: Marcar o ponto de partida
+
+**Files:** nenhum (só anotação).
+
+- [ ] **Step 1: Gravar o SHA atual dos dois repos**
+
+Os passos de verificação da Task 9 comparam contra estes pontos. Usar `HEAD~N` seria frágil: as
+revisões do Codex (Tasks 3 e 8) podem acrescentar commits e deslocar a contagem, fazendo a
+checagem de "nenhuma migração" passar sem olhar nada.
+
+```bash
+cd /Users/matheusreboucas/SISTEMACLINICADOMUS && git rev-parse HEAD | tee /tmp/n7-base-domus
+cd "/Users/matheusreboucas/PDV OTICA" && git rev-parse HEAD | tee /tmp/n7-base-vis
+```
+
+- [ ] **Step 2: Confirmar que as duas árvores estão na `main` e limpas**
+
+```bash
+cd /Users/matheusreboucas/SISTEMACLINICADOMUS && git branch --show-current && git status --short | grep -v '^??' || true
+cd "/Users/matheusreboucas/PDV OTICA" && git branch --show-current && git status --short | grep -v '^??' || true
+```
+Expected: `main` nos dois, e nenhuma linha de arquivo modificado (arquivos não rastreados são
+esperados e não atrapalham).
+
+---
+
 ## Task 1: Projeção — o contrato de fronteira (Domus)
 
 **Files:**
@@ -777,8 +803,8 @@ describe("mergeSupportTrail — resolução do operador", () => {
   });
 });
 
-describe("mergeSupportTrail — agrupamento por dia", () => {
-  it("agrupa por dia, mais recente primeiro", () => {
+describe("mergeSupportTrail — dia decrescente, evento crescente dentro do dia", () => {
+  it("dia mais recente primeiro", () => {
     const out = mergeSupportTrail({
       domus: [
         evDomus({ id: "ontem", createdAt: "2026-07-25T10:00:00.000Z" }) as never,
@@ -787,6 +813,21 @@ describe("mergeSupportTrail — agrupamento por dia", () => {
       vis: [],
     });
     expect(out.map((e) => e.id)).toEqual(["hoje", "ontem"]);
+  });
+
+  it("DENTRO do dia a ordem é cronológica — a narrativa tem que ser legível", () => {
+    // As duas regras convivem: o dia mais novo abre a lista, mas dentro dele o
+    // ciclo se lê de cima para baixo (autorizou → resgatou → entrou). Inverter
+    // aqui poria todo efeito antes da causa.
+    const out = mergeSupportTrail({
+      domus: [
+        evDomus({ id: "depois", createdAt: "2026-07-26T15:00:00.000Z" }) as never,
+        evDomus({ id: "antes", createdAt: "2026-07-26T09:00:00.000Z" }) as never,
+        evDomus({ id: "ontem", createdAt: "2026-07-25T23:00:00.000Z" }) as never,
+      ],
+      vis: [],
+    });
+    expect(out.map((e) => e.id)).toEqual(["antes", "depois", "ontem"]);
   });
 });
 ```
@@ -904,12 +945,18 @@ export function mergeSupportTrail(input: {
   });
 
   return [...doDomus, ...doVis].sort((a, b) => {
-    // Mais recente primeiro.
-    if (a.createdAt !== b.createdAt) {
-      return a.createdAt < b.createdAt ? 1 : -1;
-    }
-    // Horário IDÊNTICO: só aqui o rank lógico decide, e em ordem crescente
-    // (o ciclo lido de cima para baixo dentro do mesmo instante).
+    // (1) DIA mais recente primeiro — a tela abre no que acabou de acontecer.
+    if (a.dia !== b.dia) return a.dia < b.dia ? 1 : -1;
+
+    // (2) DENTRO do dia, ordem CRONOLÓGICA (mais antigo primeiro). É o que
+    // permite ler o ciclo como narrativa: autorizou → resgatou → entrou → saiu.
+    // Inverter aqui poria todo efeito antes da sua causa — o oposto do que esta
+    // trilha existe para mostrar.
+    if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? -1 : 1;
+
+    // (3) Horário IDÊNTICO: só aqui o rank lógico decide. Caso garantido pelo
+    // Postgres: code_redeemed e token_issued saem na mesma transação, e
+    // DEFAULT now() é transaction_timestamp() — timestamps byte-idênticos.
     const ra = RANK[a.event] ?? RANK_DESCONHECIDO;
     const rb = RANK[b.event] ?? RANK_DESCONHECIDO;
     return ra - rb;
@@ -920,14 +967,30 @@ export function mergeSupportTrail(input: {
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `cd "/Users/matheusreboucas/PDV OTICA" && ./node_modules/.bin/vitest run src/services/__tests__/support-trail.service.test.ts`
-Expected: PASS (8 testes)
+Expected: PASS (9 testes)
 
-- [ ] **Step 5: SABOTAR para provar o teste de causa/efeito**
+- [ ] **Step 5: SABOTAR — duas sabotagens, cada uma com resultado definido**
 
-Adicionar `access_denied: 6` ao objeto `RANK` (o rank fixo que a spec proíbe) e rodar de novo.
-Expected: **FAIL** em "uma recusa POSTERIOR não é reordenada para antes da sua causa"?
-→ **Não necessariamente**: como os horários diferem, o rank não é consultado. Se o teste passar, **isto está correto** — mas então troque também os `createdAt` dos dois eventos para o mesmo instante e confirme que aí a inversão aparece. Documente no teste qual das duas situações vale.
-Depois **desfazer a sabotagem**.
+**Sabotagem A — a ordem dentro do dia.** Trocar a linha (2) do comparador por
+`if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;` (inverte para
+decrescente) e rodar.
+Expected: **FAIL** em pelo menos "uma recusa POSTERIOR não é reordenada para antes da sua causa"
+e em "DENTRO do dia a ordem é cronológica". Desfazer.
+
+**Sabotagem B — o rank fixo que a spec proíbe.** Restaurar o comparador, e então:
+(a) adicionar `access_denied: 6` ao objeto `RANK`; **e**
+(b) no teste da corrida, igualar os dois `createdAt` para `"2026-07-26T10:00:01.000Z"`.
+
+Expected: **FAIL** — com horários iguais o rank passa a decidir, e `access_denied` (6) vem antes
+de `pending_access_revoked` (5)... na verdade **depois**, porque 6 > 5. Então inverta também os
+ranks na sabotagem (`access_denied: 4`) para forçar a inversão e ver o teste quebrar.
+
+> O ponto da sabotagem B é provar que **existe** um estado do código em que a ordem causal
+> inverte e o teste **detecta**. Se nenhuma variação conseguir quebrá-lo, o teste da corrida está
+> só documentando o comportamento do horário, não protegendo o rank — nesse caso adicione um
+> caso com `createdAt` idêntico e ordem causal conhecida.
+
+Desfazer as duas sabotagens e confirmar PASS de novo.
 
 - [ ] **Step 6: Commit**
 
@@ -1181,6 +1244,11 @@ Criar `src/app/admin/(painel)/clientes/[id]/company-support-trail.tsx` como clie
 - Cada item: horário (`HH:mm`), rótulo do evento em português, operador (quando houver), e um selo discreto de origem (`Medical` / `Vis`). Quando `reason` existir num encerramento, exibi-lo com destaque.
 - Rótulos: mapa local `Record<string, string>` cobrindo os 7 eventos do Domus + as 3 ações do Vis, com fallback genérico para evento desconhecido (o vocabulário não tem CHECK constraint).
 
+> ⚠️ A spec §3.4 fala em "reaproveitar `support-audit-labels.ts`". **Esse módulo só existe no
+> repo do Domus** — não há equivalente no Vis e não se importa código entre repos. O mapa local
+> é a forma correta aqui; a intenção da spec (mesmas palavras nas duas telas) se cumpre copiando
+> os textos, não o arquivo. Não perca tempo procurando o módulo no Vis.
+
 - [ ] **Step 3: Montar na página, atrás do gate de papel**
 
 Em `src/app/admin/(painel)/clientes/[id]/page.tsx`, dentro do `<TabPanel tabId="clinica">`, logo após `<CompanySupportAccess ... />`:
@@ -1293,9 +1361,12 @@ Expected: sucesso.
 
 - [ ] **Step 4: Confirmar que nada de schema mudou**
 
+⚠️ Use os SHAs anotados na Task 0, não `HEAD~N`: as Tasks 3 e 8 podem acrescentar commits de
+correção do Codex, o que deslocaria a janela e faria a checagem passar sem olhar nada.
+
 ```bash
-cd /Users/matheusreboucas/SISTEMACLINICADOMUS && git diff HEAD~6 --stat -- src/db/schema.ts drizzle/
-cd "/Users/matheusreboucas/PDV OTICA" && git diff HEAD~5 --stat -- prisma/
+cd /Users/matheusreboucas/SISTEMACLINICADOMUS && git diff "$(cat /tmp/n7-base-domus)" --stat -- src/db/schema.ts drizzle/
+cd "/Users/matheusreboucas/PDV OTICA" && git diff "$(cat /tmp/n7-base-vis)" --stat -- prisma/
 ```
 Expected: **saída vazia nos dois**. Esta entrega não tem migração; qualquer linha aqui é erro.
 
