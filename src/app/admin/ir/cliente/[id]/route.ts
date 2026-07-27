@@ -1,6 +1,6 @@
 import { NextResponse } from "next/server";
 
-import { getAdminSession } from "@/lib/admin-session";
+import { getAdminSession, requireSupportScope } from "@/lib/admin-session";
 import { PRODUCT_COOKIE } from "@/lib/admin-product-context";
 import { prisma } from "@/lib/prisma";
 
@@ -15,33 +15,44 @@ import { prisma } from "@/lib/prisma";
  * Tem que ser no SERVIDOR: o cookie é httpOnly, então nem o link nem o cliente
  * conseguem trocá-lo.
  *
- * ⚠️ Isto é UX de navegação, NÃO autorização. Trocar a lente não concede acesso
- * a nada: a fronteira real continua sendo o gate da própria ficha (que revalida
- * sessão e escopo). Por isso aqui basta exigir sessão — sem ela, um link
- * vazado viraria um oráculo de "esta empresa existe e é medical".
+ * 🚨 O GATE DE ESCOPO VEM ANTES DE LER `Company` — e isso não é zelo excessivo.
+ * A URL é adivinhável (é só um id numa rota pública do painel). Sem o gate,
+ * qualquer admin autenticado descobriria, por diferença de comportamento, se
+ * uma empresa existe e QUAL PRODUTO ela é: o cookie só seria escrito quando o
+ * registro existisse. Um redirecionador vira oráculo de existência com a mesma
+ * facilidade que uma página.
+ *
+ * Por isso o comportamento é IDÊNTICO ao da ficha: escopo primeiro, e o mesmo
+ * destino para "não existe" e "existe mas não é seu" — quem não tem escopo não
+ * distingue os dois casos.
  */
 export const dynamic = "force-dynamic";
 
-export async function GET(_request: Request, { params }: { params: Promise<{ id: string }> }) {
+export async function GET(request: Request, { params }: { params: Promise<{ id: string }> }) {
   const { id } = await params;
+  const fichaUrl = new URL(`/admin/clientes/${id}`, request.url);
 
   const admin = await getAdminSession();
-  if (!admin) {
-    // Sem sessão vai para o login, não para a ficha: preserva o destino para
-    // depois de autenticar.
-    return NextResponse.redirect(
-      new URL(`/admin/login?next=${encodeURIComponent(`/admin/clientes/${id}`)}`, _request.url)
-    );
+  // Sem sessão o proxy do admin já teria barrado antes de chegar aqui; este
+  // ramo é defesa em profundidade. Manda para a ficha, que reexecuta o gate.
+  if (!admin) return NextResponse.redirect(fichaUrl);
+
+  // 🔑 ESCOPO ANTES DA LEITURA. Mesmo gate da ficha (`requireSupportScope`), e
+  // pela razão que o comentário dela já registra: "a URL é adivinhável".
+  const scoped = await requireSupportScope(admin.id, id);
+  if (!scoped) {
+    // Sem trocar o cookie: alinhar a lente para uma empresa que este admin não
+    // pode ver já seria vazamento. A ficha responde notFound() — nunca 403 —
+    // para não confirmar a existência do id.
+    return NextResponse.redirect(fichaUrl);
   }
 
-  // Descobre o produto da empresa para alinhar a lente. `select` mínimo: esta
-  // rota não precisa de mais nada, e não deve carregar dado do cliente.
   const company = await prisma.company.findUnique({
     where: { id },
     select: { platformProduct: true },
   });
 
-  const res = NextResponse.redirect(new URL(`/admin/clientes/${id}`, _request.url));
+  const res = NextResponse.redirect(fichaUrl);
 
   // Empresa inexistente: segue para a ficha assim mesmo e deixa ELA responder
   // 404. Decidir aqui duplicaria a regra de existência em dois lugares.

@@ -12,6 +12,7 @@ import { Prisma, type AdminRole } from "@prisma/client";
 
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
+import { canAccessCompany } from "@/lib/admin-scope";
 
 const log = logger.child({ service: "trial-alert" });
 
@@ -81,12 +82,20 @@ export function trialAlertLink(companyId: string): string {
  */
 export async function alertOperators(target: TrialAlertTarget): Promise<number> {
   try {
-    const admins = await prisma.adminUser.findMany({
+    const candidatos = await prisma.adminUser.findMany({
       where: { active: true, role: { in: TRIAL_ALERT_ROLES } },
-      select: { id: true },
+      select: { id: true, role: true, scopeAllCompanies: true, scopedCompanyIds: true },
     });
+
+    // 🚨 PAPEL NÃO É ESCOPO. Filtrar só por role entregaria nome do cliente,
+    // prazo, companyId e link de empresas FORA do escopo de um ADMIN restrito —
+    // e a API do sino devolve a notificação inteira ao destinatário, então o
+    // vazamento seria direto na tela. `canAccessCompany` é a mesma regra que a
+    // lista e a ficha usam; reimplementá-la aqui criaria uma segunda verdade.
+    const admins = candidatos.filter((a) => canAccessCompany(a, target.companyId));
+
     if (admins.length === 0) {
-      log.warn("Nenhum admin elegível para alerta de trial", { companyId: target.companyId });
+      log.warn("Nenhum admin elegível no escopo desta empresa", { companyId: target.companyId });
       return 0;
     }
 

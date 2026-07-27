@@ -3,12 +3,25 @@
  *
  * Cada bloco trava um defeito que o challenge do Codex encontrou (2026-07-27).
  */
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi, beforeEach } from "vitest";
+
+const adminFindMany = vi.fn();
+const notificationCreate = vi.fn();
+vi.mock("@/lib/prisma", () => ({
+  prisma: {
+    adminUser: { findMany: (...a: unknown[]) => adminFindMany(...a) },
+    adminNotification: { create: (...a: unknown[]) => notificationCreate(...a) },
+  },
+}));
+vi.mock("@/lib/logger", () => ({
+  logger: { child: () => ({ info: vi.fn(), error: vi.fn(), warn: vi.fn() }) },
+}));
 
 import {
   trialAlertPeriodKey,
   trialAlertLink,
   trialAlertContent,
+  alertOperators,
   TRIAL_ALERT_ROLES,
 } from "./trial-alert.service";
 
@@ -62,6 +75,77 @@ describe("TRIAL_ALERT_ROLES — quem recebe", () => {
 
   it("NÃO inclui BILLING", () => {
     expect(TRIAL_ALERT_ROLES).not.toContain("BILLING");
+  });
+});
+
+describe("alertOperators — PAPEL não é ESCOPO", () => {
+  const alvo = {
+    subscriptionId: "sub1",
+    companyId: "co-alvo",
+    companyName: "Clínica Vida",
+    trialEndsAt: new Date("2026-08-01T12:00:00Z"),
+    daysLeft: 2,
+  };
+
+  beforeEach(() => {
+    adminFindMany.mockReset();
+    notificationCreate.mockReset().mockResolvedValue({ id: "n1" });
+  });
+
+  it("NÃO alerta admin restrito a OUTRAS empresas", async () => {
+    // 🚨 O defeito que o Codex achou. Filtrar só por papel entregaria nome do
+    // cliente, prazo, companyId e link para um ADMIN fora do escopo — e a API
+    // do sino devolve a notificação inteira ao destinatário.
+    adminFindMany.mockResolvedValue([
+      { id: "a1", role: "ADMIN", scopeAllCompanies: false, scopedCompanyIds: ["outra-co"] },
+    ]);
+    const criadas = await alertOperators(alvo);
+    expect(criadas).toBe(0);
+    expect(notificationCreate).not.toHaveBeenCalled();
+  });
+
+  it("alerta admin restrito QUE INCLUI esta empresa", async () => {
+    adminFindMany.mockResolvedValue([
+      { id: "a1", role: "ADMIN", scopeAllCompanies: false, scopedCompanyIds: ["co-alvo"] },
+    ]);
+    expect(await alertOperators(alvo)).toBe(1);
+  });
+
+  it("SUPER_ADMIN recebe mesmo com scopeAllCompanies false", async () => {
+    adminFindMany.mockResolvedValue([
+      { id: "su", role: "SUPER_ADMIN", scopeAllCompanies: false, scopedCompanyIds: [] },
+    ]);
+    expect(await alertOperators(alvo)).toBe(1);
+  });
+
+  it("uma linha POR ADMIN elegível — direcionada, nunca global", async () => {
+    adminFindMany.mockResolvedValue([
+      { id: "a1", role: "ADMIN", scopeAllCompanies: true, scopedCompanyIds: [] },
+      { id: "a2", role: "SUPER_ADMIN", scopeAllCompanies: true, scopedCompanyIds: [] },
+    ]);
+    expect(await alertOperators(alvo)).toBe(2);
+    // adminId sempre preenchido: broadcast (null) não pode ser marcado como lido
+    for (const call of notificationCreate.mock.calls) {
+      expect(call[0].data.adminId).toBeTruthy();
+      expect(call[0].data.periodKey).toBe(trialAlertPeriodKey("sub1", alvo.trialEndsAt));
+    }
+  });
+
+  it("NUNCA lança, mesmo se o banco cair — o cron não pode parar por isso", async () => {
+    adminFindMany.mockRejectedValue(new Error("banco fora"));
+    await expect(alertOperators(alvo)).resolves.toBe(0);
+  });
+
+  it("P2002 é duplicata esperada: não conta, não lança, não interrompe o resto", async () => {
+    adminFindMany.mockResolvedValue([
+      { id: "a1", role: "ADMIN", scopeAllCompanies: true, scopedCompanyIds: [] },
+      { id: "a2", role: "ADMIN", scopeAllCompanies: true, scopedCompanyIds: [] },
+    ]);
+    const dup = Object.assign(new Error("dup"), { code: "P2002" });
+    Object.setPrototypeOf(dup, (await import("@prisma/client")).Prisma.PrismaClientKnownRequestError.prototype);
+    notificationCreate.mockRejectedValueOnce(dup).mockResolvedValueOnce({ id: "n2" });
+
+    expect(await alertOperators(alvo)).toBe(1); // só o segundo admin foi criado
   });
 });
 
