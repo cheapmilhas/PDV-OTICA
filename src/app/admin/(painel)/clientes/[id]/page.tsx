@@ -11,6 +11,7 @@ import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyClinic } from "./company-clinic";
 import { CompanySupportAccess } from "./company-support-access";
 import { CompanySupportTrail } from "./company-support-trail";
+import { CompanyClinicUsage } from "./company-clinic-usage";
 import { CompanyNotes } from "./company-notes";
 import { CompanyUsers } from "./company-users";
 import { CompanyBranches } from "./company-branches";
@@ -481,6 +482,12 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
           <TabPanel tabId="clinica">
             <div className="space-y-5">
               <CompanyClinic {...clinicProps} />
+              {/* N6 — "a clínica começou a usar?". Client component de propósito:
+                  a ficha carrega tudo em await serial, então uma leitura do
+                  Domus no servidor bloquearia a página inteira mesmo com o
+                  operador na aba Resumo. Mesmo gate da trilha: quem vê o perfil
+                  de uso é quem já poderia ver a trilha de acessos. */}
+              {podeVerTrilha && <CompanyClinicUsage companyId={id} />}
               {/* F3.6 — resgate do código que o CLIENTE gerou no Domus. */}
               <CompanySupportAccess
                 companyId={id}
