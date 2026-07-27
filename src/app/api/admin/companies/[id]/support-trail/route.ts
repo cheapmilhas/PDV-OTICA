@@ -48,6 +48,21 @@ const ACOES_SUPORTE = [
 /** Teto local, espelhando o do Domus. */
 const LIMITE_VIS = 200;
 
+/**
+ * O que efetivamente atravessa para o browser.
+ *
+ * `grantId` NÃO vai: o componente não usa, e identificador de acesso a PHI que
+ * não é necessário na tela não atravessa a fronteira. Ele segue existindo em
+ * `TrailItem` porque é a chave que CORRELACIONA as duas metades — só não é
+ * dado de tela.
+ *
+ * `reason` FICA: a tela traduz o motivo por evento (encerrado pelo cliente,
+ * expirou, acesso recusado). Sem ele o operador perde COMO o acesso terminou.
+ */
+function paraTela(itens: ReturnType<typeof mergeSupportTrail>) {
+  return itens.map(({ grantId: _grantId, ...visivel }) => visivel);
+}
+
 export async function GET(
   _req: Request,
   { params }: { params: Promise<{ id: string }> },
@@ -110,7 +125,7 @@ export async function GET(
   if (!company?.domusClinicId) {
     return NextResponse.json({
       data: {
-        items: mergeSupportTrail({ domus: [], vis }),
+        items: paraTela(mergeSupportTrail({ domus: [], vis })),
         truncated: false,
         medical: "not_provisioned",
       },
@@ -139,7 +154,7 @@ export async function GET(
     });
     return NextResponse.json({
       data: {
-        items: mergeSupportTrail({ domus: [], vis }),
+        items: paraTela(mergeSupportTrail({ domus: [], vis })),
         truncated: false,
         medical: "unavailable",
       },
@@ -148,7 +163,7 @@ export async function GET(
 
   return NextResponse.json({
     data: {
-      items: mergeSupportTrail({ domus: remoto.events, vis }),
+      items: paraTela(mergeSupportTrail({ domus: remoto.events, vis })),
       truncated: remoto.truncated,
       medical: "ok",
     },

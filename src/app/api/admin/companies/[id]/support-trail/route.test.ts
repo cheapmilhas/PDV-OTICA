@@ -180,6 +180,22 @@ describe("GET support-trail — o gate é ENFORÇADO, não só chamado", () => {
         adminUser: null,
       },
     ] as never);
+    // A contraparte do Domus usa "42" — a forma STRING do grant numérico acima.
+    // Se a coerção deixasse o número entrar no Map, ele casaria aqui.
+    mockDomus.mockResolvedValue({
+      kind: "ok",
+      truncated: false,
+      events: [
+        {
+          id: "d1",
+          grantId: "42",
+          event: "session_activated",
+          visOperatorRef: "vis-op-opaco",
+          createdAt: "2026-07-20T12:02:00.000Z",
+          details: null,
+        },
+      ],
+    } as never);
 
     const res = await GET(makeRequest(), { params });
     const body = await res.json();
@@ -187,7 +203,14 @@ describe("GET support-trail — o gate é ENFORÇADO, não só chamado", () => {
     expect(res.status).toBe(200);
     const itens = body.data.items.filter((i: { origem: string }) => i.origem === "vis");
     expect(itens).toHaveLength(2);
-    expect(itens.map((i: { grantId: string | null }) => i.grantId)).toEqual([null, null]);
+    // `grantId` não é mais devolvido (identificador de acesso a PHI não vai à
+    // tela), então a coerção é medida pelo EFEITO dela: a linha do Domus tem
+    // grant "42" e a linha local tem 42 NUMÉRICO. Se o número entrasse no Map da
+    // junção como chave, o evento do Domus resolveria para um nome local; tem
+    // que continuar no ref opaco.
+    const medical = body.data.items.filter((i: { origem: string }) => i.origem === "medical");
+    expect(medical).toHaveLength(1);
+    expect(medical[0].operador).toBe("vis-op-opaco");
     // O array não derrubou o fallback de nome: o adminUser continua resolvido.
     expect(itens[0].operador).toBe("Operador");
     // adminEmail numérico não vaza como operador.

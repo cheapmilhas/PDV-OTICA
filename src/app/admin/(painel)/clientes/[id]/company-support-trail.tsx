@@ -16,7 +16,8 @@ interface TrailItem {
   event: string;
   createdAt: string;
   operador: string | null;
-  grantId: string | null;
+  // `grantId` não vem da rota de propósito: identificador de acesso a PHI que a
+  // tela não usa não atravessa a fronteira. A correlação acontece no servidor.
   reason: string | null;
   /** Dia (YYYY-MM-DD) JÁ no fuso America/Sao_Paulo, calculado no servidor. */
   dia: string;

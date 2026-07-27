@@ -114,6 +114,38 @@ describe("mergeSupportTrail — resolução do operador", () => {
   });
 });
 
+describe("mergeSupportTrail — grant ambíguo não inventa um vencedor", () => {
+  it("mesmo grant com operadores DIFERENTES cai para o ref opaco", () => {
+    // Nada garante unicidade de metadata.supportGrantId. Escolher a última
+    // linha processada atribuiria a um humano um acesso a PHI que pode não ter
+    // sido dele — num artefato de auditoria, nome confiantemente errado é pior
+    // que nome nenhum.
+    const out = mergeSupportTrail({
+      domus: [evDomus({ grantId: "g-dup", visOperatorRef: "vis-op-opaco" }) as never],
+      vis: [
+        evVis({ id: "v1", supportGrantId: "g-dup", operatorName: "Maria" }) as never,
+        evVis({ id: "v2", supportGrantId: "g-dup", operatorName: "João" }) as never,
+      ],
+    });
+    const medical = out.find((e) => e.origem === "medical");
+    expect(medical?.operador).toBe("vis-op-opaco");
+  });
+
+  it("mesmo grant com o MESMO operador repetido continua resolvendo o nome", () => {
+    // Repetição não é conflito: duas linhas do mesmo operador (ex.: uma tentativa
+    // recusada e depois uma concedida) devem seguir resolvendo o nome real.
+    const out = mergeSupportTrail({
+      domus: [evDomus({ grantId: "g-rep", visOperatorRef: "vis-op-opaco" }) as never],
+      vis: [
+        evVis({ id: "v1", supportGrantId: "g-rep", operatorName: "Maria" }) as never,
+        evVis({ id: "v2", supportGrantId: "g-rep", operatorName: "Maria" }) as never,
+      ],
+    });
+    const medical = out.find((e) => e.origem === "medical");
+    expect(medical?.operador).toBe("Maria");
+  });
+});
+
 describe("mergeSupportTrail — dia decrescente, evento crescente dentro do dia", () => {
   it("dia mais recente primeiro", () => {
     const out = mergeSupportTrail({

@@ -15,6 +15,18 @@ import type { SupportAuditEventFromDomus } from "@/lib/vis-support-audit-client"
  * causa e efeito. Por isso: agrupa por DIA, e dentro do dia o horário ordena;
  * o rank lógico só desempata quando o horário é IDÊNTICO (caso garantido:
  * code_redeemed × token_issued, gravados na mesma transação).
+ *
+ * ⚠️ LIMITES CONHECIDOS desta ordenação — ela reduz inversão causal, não a
+ * elimina:
+ *  (a) ENTRE origens, dentro do mesmo dia, compara-se timestamp cru. Vis e
+ *      Domus têm relógios independentes (a camada HMAC tolera ±5min), então uma
+ *      linha local pode aparecer antes do evento do Domus que a causou. Sem
+ *      relógio compartilhado não há como fechar isso.
+ *  (b) Na VIRADA DO DIA a ordem se inverte por desenho: dias descem, eventos
+ *      sobem dentro do dia — então um efeito às 00:01 aparece ACIMA da causa às
+ *      23:59 do dia anterior. É o preço de abrir a lista no que acabou de
+ *      acontecer.
+ * A trilha é autoritativa DENTRO de cada origem; entre origens é aproximada.
  */
 
 /**
@@ -77,12 +89,31 @@ export function mergeSupportTrail(input: {
   // Mapa grant → operador real. O nome vem do GlobalAudit, que já grava actorId
   // e adminEmail em CLARO. NÃO se recomputa HMAC de todo admin para montar mapa
   // reverso: isso materializaria uma tabela pseudônimo→nome de toda a equipe.
+  //
+  // ⚠️ CONFLITO NÃO ESCOLHE VENCEDOR. Nada garante unicidade de
+  // `metadata.supportGrantId` (é campo JSON sem índice), então retry, backfill
+  // ou escrita manual podem repetir o grant com operadores DIFERENTES. Um `set`
+  // simples deixaria a última linha processada vencer — atribuindo a um humano
+  // um acesso a PHI que talvez não tenha sido dele. Num artefato de auditoria,
+  // nome CONFIANTEMENTE ERRADO é pior que nome nenhum: o evento cai para o ref
+  // opaco do Domus, que é verdadeiro.
   const operadorPorGrant = new Map<string, string>();
+  const grantsAmbiguos = new Set<string>();
   for (const v of input.vis) {
-    if (v.supportGrantId && v.operatorName) {
-      operadorPorGrant.set(v.supportGrantId, v.operatorName);
+    if (!v.supportGrantId || !v.operatorName) continue;
+    const jaVisto = operadorPorGrant.get(v.supportGrantId);
+    if (jaVisto !== undefined && jaVisto !== v.operatorName) {
+      grantsAmbiguos.add(v.supportGrantId);
+      continue;
     }
+    operadorPorGrant.set(v.supportGrantId, v.operatorName);
   }
+
+  /** Nome real só quando o grant resolve para UM operador; senão, o ref opaco. */
+  const resolverOperador = (grantId: string, visOperatorRef: string | null) =>
+    grantsAmbiguos.has(grantId)
+      ? visOperatorRef
+      : operadorPorGrant.get(grantId) ?? visOperatorRef;
 
   const doDomus: TrailItem[] = input.domus.map((e) => ({
     id: e.id,
@@ -90,7 +121,7 @@ export function mergeSupportTrail(input: {
     event: e.event,
     createdAt: e.createdAt,
     // Sem grant (code_generated) o ato é do CLIENTE — não há operador a exibir.
-    operador: e.grantId ? operadorPorGrant.get(e.grantId) ?? e.visOperatorRef : null,
+    operador: e.grantId ? resolverOperador(e.grantId, e.visOperatorRef) : null,
     grantId: e.grantId,
     reason: e.details?.reason ?? null,
     dia: diaDe(e.createdAt),
