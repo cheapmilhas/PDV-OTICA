@@ -1,8 +1,9 @@
 import { requireAdmin } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
-import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity } from "lucide-react";
+import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity, TrendingUp } from "lucide-react";
 import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
+import { computeTrialConversion } from "@/lib/trial-conversion";
 import { startOfLocalMonth } from "@/lib/date-utils";
 import { getProductContext } from "@/lib/admin-product-context";
 import { buildDashboardFilters } from "../dashboard-filters";
@@ -34,6 +35,7 @@ export default async function RelatoriosPage() {
     ticketsThisMonth,
     activeAtMonthStart,
     mrrData,
+    trialsForConversion,
   ] = await Promise.all([
     prisma.subscription.count({ where: { AND: [pSub, { status: "ACTIVE" }] } }),
     prisma.subscription.count({ where: { AND: [pSub, { status: "TRIAL" }] } }),
@@ -59,6 +61,20 @@ export default async function RelatoriosPage() {
       where: { AND: [pSub, { status: "ACTIVE" }] },
       include: { plan: { select: { priceMonthly: true, priceYearly: true } } },
     }),
+    // N4: conversão de trial. Traz TODA assinatura que um dia teve trial —
+    // inclusive canceladas: quem converteu e depois cancelou continua sendo
+    // conversão histórica, e filtrar por status apagaria isso da série.
+    // Sem filtro de status, portanto; o recorte é `trialStartedAt != null`.
+    prisma.subscription.findMany({
+      where: { AND: [pSub, { trialStartedAt: { not: null } }] },
+      select: {
+        id: true,
+        companyId: true,
+        trialStartedAt: true,
+        trialEndsAt: true,
+        activatedAt: true,
+      },
+    }),
   ]);
 
   // MRR com desconto vigente + ciclo normalizado (helper puro, em centavos).
@@ -76,6 +92,9 @@ export default async function RelatoriosPage() {
     activeAtPeriodStart: activeAtMonthStart,
   });
   const churnPct = (churnRate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
+
+  // N4: conversão de trial (helper puro; a query já veio filtrada por produto).
+  const conv = computeTrialConversion(trialsForConversion, now);
 
   return (
     <div className="p-6">
@@ -109,6 +128,56 @@ export default async function RelatoriosPage() {
           label="Tickets (Mês)"
           value={String(ticketsThisMonth)}
         />
+      </div>
+
+      {/* N4 — Conversão de trial.
+          A unidade é a ASSINATURA-TRIAL, não a empresa: uma empresa pode ter
+          várias assinaturas, e contar por empresa esconderia a tentativa que
+          falhou de quem trialou duas vezes. Por isso o rótulo diz "trials". */}
+      <h2 className="text-lg font-semibold mb-1">Conversão de trial</h2>
+      <p className="text-sm text-muted-foreground mb-4">
+        Trials com resultado fechado: converteram, ou o prazo acabou sem conversão.
+        {conv.inProgress > 0 && ` ${conv.inProgress} ainda em andamento (fora da taxa).`}
+      </p>
+      <div className="grid grid-cols-2 md:grid-cols-3 gap-4 mb-6">
+        <KPICard
+          icon={TrendingUp}
+          label="Taxa de conversão"
+          // rate null = nenhum trial fechou ainda. Mostrar "0%" aqui seria
+          // mentira: não houve nada para converter.
+          value={
+            conv.rate === null
+              ? "—"
+              : `${(conv.rate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 })}%`
+          }
+          hint={
+            conv.rate === null
+              ? "nenhum trial fechado ainda"
+              : `${conv.converted} de ${conv.eligible} trials`
+          }
+        />
+        <KPICard
+          icon={Users}
+          label="Trials convertidos"
+          value={String(conv.converted)}
+          hint="inclui quem cancelou depois"
+        />
+        <KPICard
+          icon={Activity}
+          label="Tempo até converter"
+          value={
+            conv.avgDaysToConvert === null
+              ? "—"
+              : `${conv.avgDaysToConvert.toLocaleString("pt-BR", { maximumFractionDigits: 1 })}d`
+          }
+          hint="média do início do trial à ativação"
+        />
+      </div>
+      <div className="bg-muted/50 border border-border rounded-lg px-4 py-3 mb-6">
+        <p className="text-muted-foreground text-sm">
+          A série começa em 27/07/2026. Trials que expiraram antes disso não são
+          recuperáveis: o instante da expiração não era registrado em lugar nenhum.
+        </p>
       </div>
 
       {/* Aviso */}

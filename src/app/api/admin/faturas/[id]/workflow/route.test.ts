@@ -10,10 +10,14 @@ vi.mock("@/lib/admin-session", () => ({
 const invoiceFindUnique = vi.fn();
 const invoiceUpdate = vi.fn();
 const subscriptionUpdate = vi.fn();
+const subscriptionUpdateMany = vi.fn();
 const auditCreate = vi.fn();
 const txMock = {
   invoice: { update: (...a: unknown[]) => invoiceUpdate(...a) },
-  subscription: { update: (...a: unknown[]) => subscriptionUpdate(...a) },
+  subscription: {
+    update: (...a: unknown[]) => subscriptionUpdate(...a),
+    updateMany: (...a: unknown[]) => subscriptionUpdateMany(...a),
+  },
   globalAudit: { create: (...a: unknown[]) => auditCreate(...a) },
 };
 vi.mock("@/lib/prisma", () => ({
@@ -50,6 +54,7 @@ describe("POST faturas/[id]/workflow — mark_paid (F4)", () => {
     invoiceFindUnique.mockReset();
     invoiceUpdate.mockReset().mockResolvedValue({});
     subscriptionUpdate.mockReset().mockResolvedValue({});
+    subscriptionUpdateMany.mockReset().mockResolvedValue({ count: 1 });
     auditCreate.mockReset().mockResolvedValue({});
   });
 
@@ -61,6 +66,32 @@ describe("POST faturas/[id]/workflow — mark_paid (F4)", () => {
     expect(subscriptionUpdate.mock.calls[0][0].data.status).toBe("ACTIVE");
     // F8: grava o método declarado
     expect(invoiceUpdate.mock.calls[0][0].data.paymentMethod).toBe("PIX");
+  });
+
+  it("N4: reativar por fatura CARIMBA activatedAt — senão a conversão manual some da métrica", async () => {
+    setInvoice("TRIAL");
+    await POST(req({ action: "mark_paid" }), { params });
+    expect(subscriptionUpdateMany).toHaveBeenCalledTimes(1);
+    expect(subscriptionUpdateMany.mock.calls[0][0].data.activatedAt).toBeInstanceOf(Date);
+  });
+
+  it("N4: o carimbo é GUARDADO por activatedAt:null — reativação não reconta o tempo", async () => {
+    // updateMany com a guarda no where, e NÃO update: activatedAt é o instante
+    // da PRIMEIRA ativação. Uma assinatura que reativa depois de PAST_DUE não
+    // pode ter o relógio zerado, senão o "tempo até converter" vira ficção.
+    // Mesma semântica do webhook do Asaas — divergir dela quebraria a métrica.
+    setInvoice("PAST_DUE");
+    await POST(req({ action: "mark_paid" }), { params });
+    expect(subscriptionUpdateMany.mock.calls[0][0].where).toMatchObject({
+      id: "sub1",
+      activatedAt: null,
+    });
+  });
+
+  it("N4: quem NÃO reativa também não carimba activatedAt", async () => {
+    setInvoice("CANCELED");
+    await POST(req({ action: "mark_paid" }), { params });
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
   });
 
   it("CANCELED → marca paga mas NÃO ressuscita a assinatura (F4)", async () => {

@@ -91,6 +91,20 @@ export async function POST(
                 lastDunningStage: null, // F5: zera régua na recuperação
               },
             });
+
+            // N4: confirmar a fatura à mão é uma CONVERSÃO de trial tão real
+            // quanto a do webhook — e antes deste fix ela não era registrada em
+            // lugar nenhum, então sumia da taxa de conversão.
+            //
+            // `updateMany` com `activatedAt: null` no where, e não `update`:
+            // activatedAt é o instante da PRIMEIRA ativação e não pode ser
+            // sobrescrito quando uma assinatura reativa depois de PAST_DUE
+            // (senão o "tempo até converter" seria recontado do zero). É a
+            // MESMA semântica do webhook do Asaas — não divergir dela.
+            await tx.subscription.updateMany({
+              where: { id: invoice.subscriptionId!, activatedAt: null },
+              data: { activatedAt: new Date() },
+            });
           }
 
           await tx.globalAudit.create({
