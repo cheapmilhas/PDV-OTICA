@@ -79,8 +79,21 @@ Ordem das guardas — **a mesma do resgate**, que é o padrão maduro do repo:
 4. Guarda de host de banco (`isDbHostAllowed`) → 403
 5. Validação do `clinicId` (uuid) → 400
 
+O `clinicId` ser validado **por último** é intencional, não descuido: ele viaja num header
+**assinado**, então no passo 3 já está autenticado — só chega aqui o que o Vis assinou. Validar
+formato antes do HMAC daria resposta a quem não provou posse do segredo.
+
 **Sem** `consumeNonce` e **sem** rate limit por clínica (a justificativa de ambos é
 não-idempotência; ver §2). Leitura é `listSupportAudit(clinicId, LIMIT)`, já existente.
+
+**`LIMIT = 200`, e o truncamento é VISÍVEL.** O Domus pede 201 linhas e devolve no máximo 200
+mais um booleano `truncated`. Um número fixo sem sinal seria um defeito de correção, não de
+interface: numa trilha de consentimento, uma lista cortada em silêncio leva o operador a
+concluir que um acesso **não aconteceu**. Quando `truncated` é verdadeiro a tela diz que está
+mostrando os 200 eventos mais recentes e que há mais história — é o quarto estado da tabela em
+§3.4. 200 é folgado para o volume real (16 eventos hoje, ~7 por ciclo de acesso) e continua
+sendo uma resposta pequena; se um dia apertar, a saída é cursor — que hoje seria **incorreto**
+pelo motivo do §2, não apenas prematuro.
 
 ### 3.2 Projeção — o contrato de fronteira
 
@@ -93,6 +106,30 @@ não listada.
 
 Implementação por allowlist explícita — jamais por deleção de campos indesejados, que falha
 aberto quando alguém adiciona um campo novo.
+
+`grantId` vem **null** em `code_generated` (o acesso ainda não existia; a linha é identificada
+por `event` + `createdAt`). Isso é correto, não defeito de projeção — e é justamente por isso
+que a lista não pode ser agrupada estritamente por acesso (§3.3).
+
+#### Como o operador é exibido — `visOperatorRef` NÃO é o nome
+
+`visOperatorRef` é `vis-op-<32 hex>`: um HMAC do id do admin sob `VIS_DOMUS_SUPPORT_SECRET`
+(`support-redeem/route.ts:242-259`), opaco **de propósito**, porque é o que o cliente vê na tela
+dele. Renderizar isso cru para o operador não serve a ninguém.
+
+**A resolução acontece no Vis, por junção local:** o nome sai de `GlobalAudit`, que já grava
+`actorId` (FK para `AdminUser`) e `metadata.adminEmail` **em texto claro**, correlacionado por
+`supportGrantId`. Ou seja: `grantId` do evento → linha do `GlobalAudit` → operador real.
+
+⛔ **NÃO recomputar o HMAC de todos os `AdminUser` para montar um mapa reverso.** Foi
+explicitamente rejeitado no painel (§9): materializaria uma tabela pseudônimo→nome+e-mail de
+toda a equipe, numa página cujo gate é frouxo. A junção local já dá o mesmo resultado sem
+construir esse artefato.
+
+Consequência aceita: eventos **sem** `grantId` (o `code_generated`, que é ato do cliente e não
+do operador) não têm operador a exibir — e não deveriam ter. Eventos com `grantId` que não
+casem com nenhuma linha do `GlobalAudit` (resgate feito antes desta feature, ou trilha do Domus
+sem contraparte local) exibem o ref opaco como fallback, nunca em branco.
 
 ### 3.3 Junção no Vis
 
@@ -110,8 +147,29 @@ Portanto:
 
 - Agrupamento **por dia**; dentro do dia, por horário.
 - Nenhuma promessa de precisão de segundos **entre origens diferentes**.
-- Eventos do mesmo `grantId` ficam encadeados na **ordem lógica do ciclo** (que é conhecida),
+- Eventos do mesmo `grantId` ficam encadeados na **ordem lógica do ciclo** (tabela abaixo),
   não na ordem deduzida do horário.
+
+**Ordem lógica do ciclo — a tabela é normativa** (é o único desempate possível quando
+`created_at` é idêntico, o que acontece **sempre** entre `code_redeemed` e `token_issued`):
+
+| Rank | Evento | Observação |
+|---|---|---|
+| 1 | `code_generated` | Consentimento do cliente. **Sem `grantId`** — não entra em nenhuma cadeia; ancora pelo horário. |
+| 2 | `code_redeemed` | Mesma transação do rank 3. |
+| 3 | `token_issued` | **Reemissível**: pode repetir para o mesmo grant. |
+| 4 | `session_activated` | |
+| 5 | `access_denied` | Pode repetir e pode ocorrer **antes** da ativação (grant não-ativável). |
+| 6 | `pending_access_revoked` | **Mutuamente exclusivo** com 4-5: o acesso morreu antes de virar sessão. |
+| 7 | `session_revoked` | Terminal. `details.reason` distingue cliente / operador / expirado. |
+
+Desempate **entre repetições do mesmo evento** (`token_issued` reemitido, `access_denied`
+múltiplo): por `createdAt` crescente e, se idêntico, pela ordem em que o Domus retornou —
+`listSupportAudit` já ordena por `created_at DESC` de forma estável. Não inventar critério novo.
+
+Evento **fora desta tabela** (o vocabulário não tem CHECK constraint no banco): vai para o fim
+da cadeia do seu grant, com rótulo genérico. Nunca descartado — trilha de LGPD não some com
+evento que não se reconhece.
 
 **O evento de consentimento.** `code_generated` grava `codeId` e **não** `grantId`
 (`generate-support-code/index.ts:60`) — o acesso ainda não existia. Por isso a unidade da lista
@@ -135,6 +193,7 @@ Três estados, e a distinção entre eles é requisito, não estética:
 | Com dados | Lista agrupada por dia: horário, descrição em linguagem simples, operador, origem. Nos encerramentos, o **motivo** em destaque (cliente cortou / expirou / operador encerrou) — a informação que a tela do cliente não exibe. |
 | Vazio real | "Nenhum acesso de suporte registrado para esta clínica." |
 | Falha | Aviso explícito de que o Medical não respondeu **+ a metade que o Vis conhece**. **Nunca lista vazia** — trilha vazia que significa erro de rede leva a concluir que não houve acesso. |
+| Truncado | Os 200 mais recentes **+ aviso de que há mais história** (§3.1). Mesma razão do estado de falha: silêncio aqui vira conclusão errada sobre um artefato de LGPD. |
 
 Herda o design do repo: mesmo card, mesmos ícones, e os rótulos de evento reaproveitados de
 `support-audit-labels.ts` (módulo folha, sem `db` no bundle) — as duas telas contam a mesma
@@ -169,8 +228,15 @@ Papéis sem permissão não recebem o card.
 
 ## 5. Testes
 
-Restrição real: o banco de teste do Domus está com credencial inválida, então **teste de
-integração novo é inviável** (falharia, não seria pulado). Cobertura por unidade e fakes.
+Restrição real: **teste de integração novo é inviável hoje** — `TEST_DATABASE_URL` não está
+configurada no `.env` do Domus, e `hasTestDatabase()` só checa se a variável existe (não se
+conecta), então testes de integração **falham** em vez de serem pulados. Cobertura por unidade e
+fakes.
+
+> Nuance verificada nesta revisão: o guarda de host já aceita **dois** bancos de teste
+> (`ep-dawn-haze` e `ep-round-lab`, `db-host-guard.ts:11`), então o bloqueio é **falta de
+> credencial configurada**, não host proibido. Se o dono provisionar a credencial, o teste de
+> integração deixa de ser inviável — mas isso não é pré-requisito desta entrega.
 
 | Teste | Propriedade travada |
 |---|---|
@@ -209,6 +275,7 @@ versão do teste do reaper passou com um `catch` mal posicionado que tornaria a 
 | Falha de auditoria no reaper é permanente | **Dívida registrada** (SERIOUS do Codex, escopo próprio): o tick seguinte não reprocessa e não há outbox/alerta, só log crítico com os grantIds. Mesmo padrão já em produção na revogação manual. |
 | Divergência de vocabulário de eventos | A migration 0053 comenta 8 eventos; o tipo TS tem 7; não há CHECK constraint. A projeção **não** depende de lista fechada — evento desconhecido é repassado e a tela usa rótulo genérico. |
 | Índice DESC divergente | `schema.ts:6310` declara sem `DESC`, o SQL tem `DESC`. Inerte (btree varre nos dois sentidos), mas um `drizzle-kit push` futuro pode emitir DROP/CREATE numa tabela append-only. Fora do escopo; anotado. |
+| **A tela do CLIENTE engole falha de leitura** | `get-support-access-state.ts:88-91` faz `.catch(→[])` — exatamente o anti-padrão que §3.4 proíbe para o operador. Foi decisão consciente lá (não conseguir **encerrar** o acesso seria pior que perder o histórico), mas o resultado é que o cliente pode ver trilha vazia por erro de rede. Assimetria **deliberada e agora documentada**; revisitar junto com o retry durável. |
 
 ---
 
