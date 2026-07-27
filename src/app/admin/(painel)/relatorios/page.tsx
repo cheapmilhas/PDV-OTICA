@@ -3,7 +3,7 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity, TrendingUp } from "lucide-react";
 import { computeMRR, computeChurnRate, type SubscriptionForMRR } from "@/lib/admin-metrics";
-import { computeTrialConversion } from "@/lib/trial-conversion";
+import { computeTrialConversion, TRIAL_COHORT_START } from "@/lib/trial-conversion";
 import { startOfLocalMonth } from "@/lib/date-utils";
 import { getProductContext } from "@/lib/admin-product-context";
 import { buildDashboardFilters } from "../dashboard-filters";
@@ -94,7 +94,13 @@ export default async function RelatoriosPage() {
   const churnPct = (churnRate * 100).toLocaleString("pt-BR", { maximumFractionDigits: 1 });
 
   // N4: conversão de trial (helper puro; a query já veio filtrada por produto).
-  const conv = computeTrialConversion(trialsForConversion, now);
+  //
+  // 🔑 O corte de coorte NÃO é cosmético. `trialEndsAt` sobrevive à expiração,
+  // então sem ele todo trial antigo entraria na conta — e como a conversão
+  // manual por fatura só passou a gravar `activatedAt` a partir desta entrega,
+  // cliente antigo que converteu à mão entraria como PERDA, afundando a taxa
+  // por um defeito de registro e não por um fato comercial.
+  const conv = computeTrialConversion(trialsForConversion, now, TRIAL_COHORT_START);
 
   return (
     <div className="p-6">
@@ -175,8 +181,18 @@ export default async function RelatoriosPage() {
       </div>
       <div className="bg-muted/50 border border-border rounded-lg px-4 py-3 mb-6">
         <p className="text-muted-foreground text-sm">
-          A série começa em 27/07/2026. Trials que expiraram antes disso não são
-          recuperáveis: o instante da expiração não era registrado em lugar nenhum.
+          Conta apenas trials iniciados a partir de 27/07/2026
+          {conv.excludedLegacy > 0 && (
+            <>
+              {" "}
+              — <strong>{conv.excludedLegacy}</strong> trial
+              {conv.excludedLegacy === 1 ? "" : "s"} anterior
+              {conv.excludedLegacy === 1 ? "" : "es"} {conv.excludedLegacy === 1 ? "ficou" : "ficaram"} de fora
+            </>
+          )}
+          . Antes dessa data, conversão confirmada manualmente por fatura não era
+          registrada, então esses trials apareceriam como perda mesmo tendo virado
+          cliente.
         </p>
       </div>
 

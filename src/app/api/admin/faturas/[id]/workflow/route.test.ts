@@ -75,17 +75,28 @@ describe("POST faturas/[id]/workflow — mark_paid (F4)", () => {
     expect(subscriptionUpdateMany.mock.calls[0][0].data.activatedAt).toBeInstanceOf(Date);
   });
 
-  it("N4: o carimbo é GUARDADO por activatedAt:null — reativação não reconta o tempo", async () => {
+  it("N4: o carimbo é GUARDADO por activatedAt:null — nunca sobrescreve a 1ª ativação", async () => {
     // updateMany com a guarda no where, e NÃO update: activatedAt é o instante
-    // da PRIMEIRA ativação. Uma assinatura que reativa depois de PAST_DUE não
-    // pode ter o relógio zerado, senão o "tempo até converter" vira ficção.
-    // Mesma semântica do webhook do Asaas — divergir dela quebraria a métrica.
-    setInvoice("PAST_DUE");
+    // da PRIMEIRA ativação e não pode ser reescrito, senão o "tempo até
+    // converter" vira ficção. Mesma semântica do webhook do Asaas.
+    setInvoice("TRIAL");
     await POST(req({ action: "mark_paid" }), { params });
     expect(subscriptionUpdateMany.mock.calls[0][0].where).toMatchObject({
       id: "sub1",
       activatedAt: null,
     });
+  });
+
+  it("N4: PAST_DUE reativa mas NÃO carimba — recuperação não é primeira ativação", async () => {
+    // 🔥 Achado do Codex: `reactivate` cobre PAST_DUE e TRIAL, mas sair de
+    // PAST_DUE com activatedAt nulo é AMBÍGUO — pode ser recuperação de uma
+    // assinatura antiga que converteu antes desta entrega (quando ninguém
+    // gravava activatedAt). Carimbar ali registraria a RECUPERAÇÃO como
+    // primeira ativação e o tempo-até-converter viraria meses.
+    setInvoice("PAST_DUE");
+    await POST(req({ action: "mark_paid" }), { params });
+    expect(subscriptionUpdate).toHaveBeenCalledTimes(1); // reativa: status vira ACTIVE
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled(); // mas não carimba
   });
 
   it("N4: quem NÃO reativa também não carimba activatedAt", async () => {

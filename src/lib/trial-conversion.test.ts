@@ -186,6 +186,60 @@ describe("computeTrialConversion", () => {
   });
 });
 
+describe("corte de coorte — o que impede a taxa de mentir com dado legado", () => {
+  const CORTE = new Date("2026-07-27T00:00:00Z");
+
+  it("exclui trial INICIADO antes do corte e conta quantos ficaram de fora", () => {
+    // 🔥 DEFEITO REAL (achado pelo Codex): `trialEndsAt` SOBREVIVE à expiração —
+    // os dois caminhos que expiram trial só mudam `status`. Sem corte, todo
+    // trial antigo entraria na conta. E como conversão manual por fatura não
+    // gravava activatedAt antes desta entrega, entrariam TODOS como perda.
+    const r = computeTrialConversion(
+      [
+        sub({ id: "velho", trialStartedAt: new Date("2026-05-01T12:00:00Z"), trialEndsAt: new Date("2026-05-15T12:00:00Z") }),
+        sub({ id: "novo", trialStartedAt: new Date("2026-07-28T12:00:00Z"), trialEndsAt: new Date("2026-08-11T12:00:00Z"), activatedAt: new Date("2026-07-30T12:00:00Z") }),
+      ],
+      new Date("2026-08-20T12:00:00Z"),
+      CORTE
+    );
+    expect(r.excludedLegacy).toBe(1);
+    expect(r.eligible).toBe(1);
+    expect(r.converted).toBe(1);
+    expect(r.rate).toBe(1); // sem o corte seria 50% — perda falsa do trial velho
+  });
+
+  it("o trial legado NÃO entra em nenhum balde (nem elegível, nem em andamento)", () => {
+    const r = computeTrialConversion(
+      [sub({ trialStartedAt: new Date("2026-01-01T12:00:00Z"), trialEndsAt: new Date("2026-01-15T12:00:00Z") })],
+      NOW,
+      CORTE
+    );
+    expect(r.excludedLegacy).toBe(1);
+    expect(r.eligible).toBe(0);
+    expect(r.inProgress).toBe(0);
+    expect(r.rate).toBeNull();
+  });
+
+  it("sem corte informado, conta o histórico inteiro (comportamento de teste)", () => {
+    const r = computeTrialConversion(
+      [sub({ trialStartedAt: new Date("2026-01-01T12:00:00Z"), trialEndsAt: new Date("2026-01-15T12:00:00Z") })],
+      NOW
+    );
+    expect(r.excludedLegacy).toBe(0);
+    expect(r.eligible).toBe(1);
+  });
+
+  it("trial que começa EXATAMENTE no corte entra (fronteira inclusiva)", () => {
+    const r = computeTrialConversion(
+      [sub({ trialStartedAt: CORTE, trialEndsAt: new Date("2026-08-10T12:00:00Z") })],
+      new Date("2026-08-20T12:00:00Z"),
+      CORTE
+    );
+    expect(r.excludedLegacy).toBe(0);
+    expect(r.eligible).toBe(1);
+  });
+});
+
 describe("daysUntil — a coluna 'expira em'", () => {
   it("conta dias inteiros restantes", () => {
     expect(daysUntil(new Date("2026-07-04T12:00:00Z"), NOW)).toBe(3);

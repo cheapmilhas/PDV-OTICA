@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { ArrowDownUp, CreditCard, ExternalLink } from "lucide-react";
 import { daysUntil, formatDaysUntil } from "@/lib/trial-conversion";
+import { formatInTimeZone } from "date-fns-tz";
+import { TIMEZONE } from "@/lib/date-utils";
 import { getProductContext } from "@/lib/admin-product-context";
 import { buildDashboardFilters } from "../dashboard-filters";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -165,8 +167,11 @@ export default async function AssinaturasPage({
                           <span className={urgente ? "font-medium text-amber-600 dark:text-amber-500" : "text-foreground"}>
                             {formatDaysUntil(dias)}
                           </span>
+                          {/* MESMO fuso do relativo acima. toLocaleDateString usa
+                              o fuso do PROCESSO (UTC na Vercel): um trial que
+                              vence 01:00Z mostraria "hoje" ao lado de "02/07". */}
                           <p className="text-muted-foreground">
-                            {new Date(sub.trialEndsAt).toLocaleDateString("pt-BR")}
+                            {formatInTimeZone(sub.trialEndsAt, TIMEZONE, "dd/MM/yyyy")}
                           </p>
                         </>
                       );

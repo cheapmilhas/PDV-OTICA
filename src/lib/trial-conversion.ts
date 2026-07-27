@@ -34,9 +34,30 @@ export interface TrialConversionResult {
   inProgress: number;
   /** Média de dias entre início do trial e ativação. null se ninguém converteu. */
   avgDaysToConvert: number | null;
+  /**
+   * Trials excluídos por serem ANTERIORES ao corte de coorte. Contados à parte
+   * para a tela poder dizer quantos ficaram de fora em vez de fingir que não
+   * existem.
+   */
+  excludedLegacy: number;
 }
 
 const MS_PER_DAY = 86_400_000;
+
+/**
+ * Início da coorte medida: 27/07/2026, dia em que a N4 entrou.
+ *
+ * Por que existe um corte, e por que ele é ESTA data: antes daqui, converter
+ * confirmando fatura à mão NÃO gravava `activatedAt` (o `mark_paid` só passou a
+ * gravar nesta entrega). Como `trialEndsAt` sobrevive à expiração, esses trials
+ * antigos entrariam na conta — e todos como PERDA, porque a conversão deles
+ * nunca foi registrada. A taxa ficaria pior que a realidade por um defeito de
+ * registro, não por um fato comercial.
+ *
+ * Para MEXER nesta data seria preciso auditar/backfillar o `activatedAt` do
+ * dado legado primeiro. Sem isso, recuar o corte piora a métrica em silêncio.
+ */
+export const TRIAL_COHORT_START = new Date("2026-07-27T00:00:00Z");
 
 /**
  * Entrou no NUMERADOR? Teve trial E ativou depois de o trial começar.
@@ -77,15 +98,35 @@ export function isTrialEligible(sub: SubscriptionForTrial, now: Date): boolean {
  */
 export function computeTrialConversion(
   subscriptions: SubscriptionForTrial[],
-  now: Date
+  now: Date,
+  /**
+   * Corte de coorte: só entram trials INICIADOS a partir daqui.
+   *
+   * 🔥 Sem isto a métrica MENTE, e a mentira é silenciosa. `trialEndsAt`
+   * SOBREVIVE à expiração (os dois caminhos que expiram trial só mudam
+   * `status`), então trials antigos entram na conta normalmente. E antes do fix
+   * do `mark_paid`, conversão confirmada à mão NÃO gravava `activatedAt` — logo
+   * todo cliente antigo que converteu por fatura entra como PERDA. A taxa
+   * apareceria pior do que a realidade, e ninguém saberia por quê.
+   *
+   * Omitir = sem corte (todo o histórico). Use apenas em teste ou quando o dado
+   * legado tiver sido auditado.
+   */
+  cohortStart?: Date
 ): TrialConversionResult {
   let converted = 0;
   let eligible = 0;
   let inProgress = 0;
   let totalDays = 0;
+  let excludedLegacy = 0;
 
   for (const sub of subscriptions) {
     if (!sub.trialStartedAt) continue; // nunca teve trial: fora da conta inteira
+
+    if (cohortStart && sub.trialStartedAt.getTime() < cohortStart.getTime()) {
+      excludedLegacy++;
+      continue;
+    }
 
     if (isTrialConversion(sub)) {
       converted++;
@@ -103,6 +144,7 @@ export function computeTrialConversion(
     rate: eligible > 0 ? converted / eligible : null,
     inProgress,
     avgDaysToConvert: converted > 0 ? totalDays / converted : null,
+    excludedLegacy,
   };
 }
 

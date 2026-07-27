@@ -96,15 +96,24 @@ export async function POST(
             // quanto a do webhook — e antes deste fix ela não era registrada em
             // lugar nenhum, então sumia da taxa de conversão.
             //
+            // 🔑 SÓ carimba saindo de TRIAL, embora `reactivate` também cubra
+            // PAST_DUE. Sair de PAST_DUE com activatedAt nulo é AMBÍGUO: tanto
+            // pode ser um primeiro pagamento atrasado quanto a recuperação de
+            // uma assinatura antiga que converteu antes deste commit (quando
+            // ninguém gravava activatedAt). Carimbar o segundo caso registraria
+            // a RECUPERAÇÃO como primeira ativação e o "tempo até converter"
+            // viraria meses. Perder um carimbo é melhor que inventar uma data:
+            // o numerador erra para menos, que é o lado seguro de errar.
+            //
             // `updateMany` com `activatedAt: null` no where, e não `update`:
-            // activatedAt é o instante da PRIMEIRA ativação e não pode ser
-            // sobrescrito quando uma assinatura reativa depois de PAST_DUE
-            // (senão o "tempo até converter" seria recontado do zero). É a
-            // MESMA semântica do webhook do Asaas — não divergir dela.
-            await tx.subscription.updateMany({
-              where: { id: invoice.subscriptionId!, activatedAt: null },
-              data: { activatedAt: new Date() },
-            });
+            // activatedAt é o instante da PRIMEIRA ativação e nunca é
+            // sobrescrito. MESMA semântica do webhook do Asaas.
+            if (invoice.subscription!.status === "TRIAL") {
+              await tx.subscription.updateMany({
+                where: { id: invoice.subscriptionId!, activatedAt: null },
+                data: { activatedAt: new Date() },
+              });
+            }
           }
 
           await tx.globalAudit.create({
