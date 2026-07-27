@@ -487,7 +487,7 @@ export async function GET(req: Request) {
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `cd /Users/matheusreboucas/SISTEMACLINICADOMUS && npx vitest run tests/vis-support/support-audit-route.test.ts`
-Expected: PASS (10 testes)
+Expected: PASS (9 testes)
 
 - [ ] **Step 5: Typecheck**
 
@@ -527,7 +527,7 @@ LIMIT 200 buscando 201 para detectar truncamento."
 
 ```bash
 cd /Users/matheusreboucas/SISTEMACLINICADOMUS
-git diff HEAD~2 > /tmp/n7-domus.diff
+git diff "$(cat /tmp/n7-base-domus)" > /tmp/n7-domus.diff
 ```
 
 - [ ] **Step 2: Pedir a revisão**
@@ -967,30 +967,54 @@ export function mergeSupportTrail(input: {
 - [ ] **Step 4: Rodar e ver passar**
 
 Run: `cd "/Users/matheusreboucas/PDV OTICA" && ./node_modules/.bin/vitest run src/services/__tests__/support-trail.service.test.ts`
-Expected: PASS (9 testes)
+Expected: PASS (8 testes)
 
-- [ ] **Step 5: SABOTAR — duas sabotagens, cada uma com resultado definido**
+- [ ] **Step 5: SABOTAR a ordenação — resultado definido**
 
-**Sabotagem A — a ordem dentro do dia.** Trocar a linha (2) do comparador por
-`if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;` (inverte para
-decrescente) e rodar.
-Expected: **FAIL** em pelo menos "uma recusa POSTERIOR não é reordenada para antes da sua causa"
-e em "DENTRO do dia a ordem é cronológica". Desfazer.
+Trocar a linha (2) do comparador por
+`if (a.createdAt !== b.createdAt) return a.createdAt < b.createdAt ? 1 : -1;`
+(inverte a ordem dentro do dia para decrescente) e rodar de novo.
 
-**Sabotagem B — o rank fixo que a spec proíbe.** Restaurar o comparador, e então:
-(a) adicionar `access_denied: 6` ao objeto `RANK`; **e**
-(b) no teste da corrida, igualar os dois `createdAt` para `"2026-07-26T10:00:01.000Z"`.
+Expected: **FAIL** em três testes — "uma recusa POSTERIOR não é reordenada para antes da sua
+causa", "code_generated NÃO é descartado nem vira órfão" e "DENTRO do dia a ordem é cronológica".
 
-Expected: **FAIL** — com horários iguais o rank passa a decidir, e `access_denied` (6) vem antes
-de `pending_access_revoked` (5)... na verdade **depois**, porque 6 > 5. Então inverta também os
-ranks na sabotagem (`access_denied: 4`) para forçar a inversão e ver o teste quebrar.
+Depois **desfazer a sabotagem** e confirmar PASS nos 8.
 
-> O ponto da sabotagem B é provar que **existe** um estado do código em que a ordem causal
-> inverte e o teste **detecta**. Se nenhuma variação conseguir quebrá-lo, o teste da corrida está
-> só documentando o comportamento do horário, não protegendo o rank — nesse caso adicione um
-> caso com `createdAt` idêntico e ordem causal conhecida.
+> Sabotar SÓ a implementação, nunca o teste. Mexer no fixture para forçar uma falha provaria
+> apenas que o teste alterado detecta o código alterado — que é exatamente o nada que o ritual
+> existe para evitar.
 
-Desfazer as duas sabotagens e confirmar PASS de novo.
+- [ ] **Step 5b: Travar a ausência de rank para `access_denied`**
+
+A spec §3.3 diz que `access_denied` **não** entra no `RANK`. O Step 5 não cobre isso (lá os
+horários diferem, então o rank nem é consultado). Adicionar este teste ao arquivo:
+
+```ts
+describe("mergeSupportTrail — access_denied fora do RANK (spec §3.3)", () => {
+  it("com horário IDÊNTICO, access_denied não é promovido na frente da causa", () => {
+    // Aqui o rank É consultado (timestamps iguais). Como access_denied não tem
+    // entrada, cai no rank desconhecido (99) e fica DEPOIS de qualquer evento
+    // ranqueado — inclusive de pending_access_revoked (5), que é a sua causa.
+    const mesmoInstante = "2026-07-26T10:00:01.000Z";
+    const out = mergeSupportTrail({
+      domus: [
+        evDomus({ id: "efeito", event: "access_denied", createdAt: mesmoInstante }) as never,
+        evDomus({ id: "causa", event: "pending_access_revoked", createdAt: mesmoInstante }) as never,
+      ],
+      vis: [],
+    });
+    expect(out.map((e) => e.id)).toEqual(["causa", "efeito"]);
+  });
+});
+```
+
+Rodar: Expected **PASS (9 testes)**.
+
+Então sabotar **só a implementação**: adicionar `access_denied: 4` ao objeto `RANK` (rank fixo
+menor que o de `pending_access_revoked`, que é 5).
+Expected: **FAIL** neste teste novo — a recusa aparece antes da revogação que a causou.
+
+Desfazer e confirmar PASS nos 9.
 
 - [ ] **Step 6: Commit**
 
@@ -1302,7 +1326,7 @@ vazia, que levaria a concluir que nao houve acesso."
 
 ```bash
 cd "/Users/matheusreboucas/PDV OTICA"
-git diff HEAD~4 > /tmp/n7-vis.diff
+git diff "$(cat /tmp/n7-base-vis)" > /tmp/n7-vis.diff
 ```
 
 - [ ] **Step 2: Pedir a revisão**
