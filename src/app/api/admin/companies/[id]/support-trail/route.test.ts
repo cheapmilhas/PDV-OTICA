@@ -155,6 +155,45 @@ describe("GET support-trail — o gate é ENFORÇADO, não só chamado", () => {
     expect(mockDomus).not.toHaveBeenCalled();
   });
 
+  it("metadata em formato inesperado (ARRAY) não corrompe a correlação", async () => {
+    // `GlobalAudit.metadata` é Json?: no runtime aceita array. `?? {}` não cobre
+    // esse caso e `meta.supportGrantId` viria undefined em SILÊNCIO. Aqui a
+    // linha tem que SOBREVIVER com grantId null — nunca estourar, nunca casar
+    // por acidente com a metade do Domus.
+    mockSession.mockResolvedValue(ADMIN as never);
+    mockScope.mockResolvedValue({ id: ADMIN.id, role: "ADMIN" });
+    mockAuditRows.mockResolvedValue([
+      {
+        id: "a1",
+        action: "SUPPORT_ACCESS_DENIED",
+        createdAt: new Date("2026-07-20T12:00:00.000Z"),
+        metadata: ["isto não é objeto"],
+        adminUser: { name: "Operador", email: "op@vis.com" },
+      },
+      {
+        // Segunda armadilha: metadata é objeto, mas o grant veio NUMÉRICO. Como
+        // string ele entraria no Map da junção e nunca casaria com o Domus.
+        id: "a2",
+        action: "SUPPORT_ACCESS_DENIED",
+        createdAt: new Date("2026-07-20T12:01:00.000Z"),
+        metadata: { supportGrantId: 42, adminEmail: 7 },
+        adminUser: null,
+      },
+    ] as never);
+
+    const res = await GET(makeRequest(), { params });
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    const itens = body.data.items.filter((i: { origem: string }) => i.origem === "vis");
+    expect(itens).toHaveLength(2);
+    expect(itens.map((i: { grantId: string | null }) => i.grantId)).toEqual([null, null]);
+    // O array não derrubou o fallback de nome: o adminUser continua resolvido.
+    expect(itens[0].operador).toBe("Operador");
+    // adminEmail numérico não vaza como operador.
+    expect(itens[1].operador).toBeNull();
+  });
+
   it("admin com escopo: 200 — prova que o 403 acima veio do gate, não de mock quebrado", async () => {
     // Contraprova. Sem ela, um mock mal montado faria os dois testes acima
     // passarem por acidente (403/401 por qualquer outro motivo).

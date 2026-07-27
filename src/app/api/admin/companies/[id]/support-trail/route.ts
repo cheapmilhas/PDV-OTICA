@@ -28,6 +28,12 @@ const log = logger.child({ route: "admin/companies/[id]/support-trail" });
  * (O nome do gate rejeitado é deliberadamente NÃO escrito aqui: o teste desta
  * rota proíbe esse identificador no arquivo inteiro, para que nem um import
  * acidental nem um "vou trocar só pra destravar" passem despercebidos.)
+ *
+ * 📌 Existe um helper `requireAdminAndScope` em `@/lib/admin-session` que
+ * empacota sessão+escopo. NÃO é usado aqui de propósito: o modo dele decide o
+ * gate por parâmetro, e nesta rota — o único ponto de autorização do canal — a
+ * escolha do gate tem que estar VISÍVEL na chamada, não num default. Adotá-lo
+ * aqui também esconderia do teste a chamada que ele verifica.
  */
 
 export const dynamic = "force-dynamic";
@@ -76,15 +82,27 @@ export async function GET(
   });
 
   const vis = visRows.map((r) => {
-    const meta = (r.metadata ?? {}) as { supportGrantId?: string; adminEmail?: string };
+    // `metadata` é Json?: no runtime pode ser string, número ou ARRAY, não só
+    // objeto — e `?? {}` só cobre null/undefined. Num array, `.supportGrantId`
+    // devolve undefined em SILÊNCIO: a linha perde a correlação e deixa de casar
+    // com a metade do Domus. Numa trilha que existe justamente para correlacionar
+    // dois bancos SEM foreign key entre eles, esse é o pior modo de falha.
+    const meta =
+      r.metadata && typeof r.metadata === "object" && !Array.isArray(r.metadata)
+        ? (r.metadata as { supportGrantId?: unknown; adminEmail?: unknown })
+        : {};
+    // Os valores vêm de JSON sem tipo: um supportGrantId numérico entraria no
+    // `Map<string, string>` da junção como número e nunca casaria com a string
+    // do Domus. Coage aqui, na fronteira.
+    const adminEmail = typeof meta.adminEmail === "string" ? meta.adminEmail : null;
     return {
       id: r.id,
       action: r.action,
       createdAt: r.createdAt,
-      supportGrantId: meta.supportGrantId ?? null,
+      supportGrantId: typeof meta.supportGrantId === "string" ? meta.supportGrantId : null,
       // Nome real do operador: já está em claro no GlobalAudit. O e-mail
       // congelado no metadata é o fallback para admin removido depois.
-      operatorName: r.adminUser?.name ?? r.adminUser?.email ?? meta.adminEmail ?? null,
+      operatorName: r.adminUser?.name ?? r.adminUser?.email ?? adminEmail,
     };
   });
 
@@ -102,6 +120,11 @@ export async function GET(
   const remoto = await getSupportAuditFromDomus(company.domusClinicId);
 
   if (remoto.kind === "unavailable") {
+    // Destructurado, e não acessado inline pelo caminho `remoto.<reason>`,
+    // porque o teste proíbe ESSA expressão literal em qualquer ponto do handler
+    // — comentário incluído, então nem aqui ela pode ser escrita por extenso. A
+    // proibição existe para a RESPOSTA: o log pode carregar a causa, mas o campo
+    // não deve ressuscitar na tela por acidente.
     const { reason: causaDiagnostica } = remoto;
     // Degrada com a metade local + aviso. NUNCA lista vazia: trilha vazia que
     // significa erro de rede leva a concluir que não houve acesso.
