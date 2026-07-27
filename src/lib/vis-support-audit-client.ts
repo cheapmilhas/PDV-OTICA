@@ -37,7 +37,11 @@ export async function getSupportAuditFromDomus(
   clinicId: string,
 ): Promise<SupportAuditReadResult> {
   const secret = process.env.VIS_DOMUS_SUPPORT_SECRET ?? "";
-  const baseUrl = process.env.DOMUS_WEBHOOK_URL ?? "";
+  // Barra no fim vira "//api/..." na URL montada, mas a ASSINATURA é sobre o
+  // PATH com UMA barra — o Domus recusaria a assinatura e o operador leria
+  // `http_401` como "segredo errado", indo rotacionar um segredo que está
+  // intacto. Normaliza ANTES de assinar qualquer coisa.
+  const baseUrl = (process.env.DOMUS_WEBHOOK_URL ?? "").replace(/\/+$/, "");
   if (!secret || !baseUrl) {
     return { kind: "unavailable", reason: "canal_nao_configurado" };
   }
@@ -71,6 +75,12 @@ export async function getSupportAuditFromDomus(
       return { kind: "unavailable", reason: `http_${res.status}` };
     }
 
+    // Ao contrário do irmão do resgate, o parse fica DENTRO do try e sem
+    // `.catch(() => ({}))`. Lá o corpo é necessário para distinguir recusa
+    // definitiva de transitório mesmo em não-2xx; aqui não há taxonomia a
+    // recuperar — corpo ilegível JÁ É indisponibilidade, e uma conexão que cai
+    // no meio do corpo tem que cair no catch em vez de virar `{}`.
+    // ⚠️ NÃO "alinhar" com o irmão.
     const json = (await res.json()) as {
       events?: SupportAuditEventFromDomus[];
       truncated?: boolean;
@@ -78,10 +88,23 @@ export async function getSupportAuditFromDomus(
     if (!Array.isArray(json.events)) {
       return { kind: "unavailable", reason: "resposta_invalida" };
     }
+    // `truncated` ausente → false: os dois lados sobem juntos hoje. Se o Domus
+    // parar de emitir a flag, uma lista cortada passaria por trilha COMPLETA —
+    // o mesmo erro de leitura que o estado `unavailable` existe para evitar.
     return { kind: "ok", events: json.events, truncated: json.truncated === true };
-  } catch {
-    // Timeout, DNS, TLS, JSON quebrado — tudo indisponibilidade do ponto de
-    // vista de quem lê a tela. NUNCA devolver lista vazia aqui.
-    return { kind: "unavailable", reason: "falha_de_rede" };
+  } catch (err) {
+    // Timeout, DNS, TLS, corpo ilegível — tudo indisponibilidade do ponto de
+    // vista de quem lê a tela, e por isso um `kind` só. NUNCA devolver lista
+    // vazia aqui.
+    //
+    // Mas a CAUSA vai junto (como nos irmãos): esta tela é consultada DURANTE
+    // incidente, e "falha_de_rede" sem detalhe não distingue timeout de TLS de
+    // corpo quebrado quando alguém for ler o log depois. O `reason` é campo de
+    // DIAGNÓSTICO — a rota que consome colapsa tudo em "unavailable" e nunca o
+    // renderiza, então enriquecê-lo não afeta a tela.
+    return {
+      kind: "unavailable",
+      reason: err instanceof Error ? `falha_de_rede: ${err.message}` : "falha_de_rede",
+    };
   }
 }
