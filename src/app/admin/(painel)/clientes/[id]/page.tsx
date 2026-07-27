@@ -10,6 +10,7 @@ import { CompanyActions } from "./company-actions";
 import { CompanyTabs, TabPanel } from "./company-tabs";
 import { CompanyClinic } from "./company-clinic";
 import { CompanySupportAccess } from "./company-support-access";
+import { CompanySupportTrail } from "./company-support-trail";
 import { CompanyNotes } from "./company-notes";
 import { CompanyUsers } from "./company-users";
 import { CompanyBranches } from "./company-branches";
@@ -71,6 +72,11 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
 
   // Aba Clínica (só medical): dados do canal de provisionamento Vis↔Domus.
   const isMedical = company.platformProduct === "VIS_MEDICAL";
+  // Gate de PAPEL, separado do gate da PÁGINA: a página usa um gate que não checa
+  // papel de propósito (a equipe de suporte precisa abrir a ficha), e
+  // `AdminUser.role` tem default SUPPORT. A trilha de quem acessou o PHI só
+  // aparece para quem também poderia CONCEDER o acesso.
+  const podeVerTrilha = scoped.role === "SUPER_ADMIN" || scoped.role === "ADMIN";
   const clinicProps = {
     provisioningState: company.provisioningState,
     domusClinicId: company.domusClinicId,
@@ -480,6 +486,8 @@ export default async function EmpresaDetalhesPage({ params }: { params: Promise<
                 companyId={id}
                 hasClinic={Boolean(company.domusClinicId)}
               />
+              {/* N7 — trilha de acessos, só para quem também poderia conceder. */}
+              {podeVerTrilha && <CompanySupportTrail companyId={id} />}
             </div>
           </TabPanel>
         )}
