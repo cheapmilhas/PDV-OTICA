@@ -8,6 +8,15 @@
 
 **Tech Stack:** Domus = Next.js + Drizzle. Vis = Next.js 16 + Prisma. Vitest nos dois.
 
+> 🔥 **CORREÇÃO APRENDIDA NA TASK 2 — vale para TODO teste estrutural deste plano
+> (inclusive o da Task 6):** varrer o arquivo inteiro com `SRC.indexOf(...)` mede o **bloco de
+> imports** (que é alfabético) e o **texto dos comentários**, não a ordem de execução. Na Task 2
+> isso reprovou 3 de 9 testes contra uma implementação CORRETA — e a proibição de `consumeNonce`
+> era disparada pelo próprio comentário que explicava por que ele não está lá. **Sempre recortar
+> o corpo do handler antes de medir ordem:**
+> `const HANDLER = SRC.slice(SRC.indexOf("export async function GET"));`
+> e ancorar chamadas com o parêntese (`verifyVisProvision(`) para casar o call site, não a prosa.
+
 **Environment notes:**
 - **SEM migração** em nenhum dos dois repos. Nenhum schema muda.
 - **SEM segredo novo:** reusa `VIS_DOMUS_SUPPORT_SECRET`, já configurado nos dois projetos.
@@ -1039,6 +1048,13 @@ Operador resolvido pelo GlobalAudit local, nunca recomputando HMAC."
 
 ## Task 6: Rota autenticada com gate de papel (Vis)
 
+> 🚨 **ESTA TAREFA É O ÚNICO GATE DE AUTORIZAÇÃO DO CANAL INTEIRO.** A revisão do Codex
+> estabeleceu que o endpoint do Domus é *autenticado, não autorizado*: quem tem o segredo assina
+> qualquer `clinicId`. Isso foi aceito como propriedade deliberada **porque a fronteira de tenant
+> vive aqui** — e o docblock da rota do Domus (`support/audit/route.ts`) já **afirma como fato**
+> que o Vis exige SUPER_ADMIN/ADMIN. Se esta tarefa entregar sem o gate de papel, aquele
+> comentário vira mentira e o canal fica sem autorização em ponto nenhum. Não é opcional.
+
 **Files:**
 - Create: `src/app/api/admin/companies/[id]/support-trail/route.ts`
 - Test: `src/app/api/admin/companies/[id]/support-trail/route.test.ts`
@@ -1273,6 +1289,24 @@ Criar `src/app/admin/(painel)/clientes/[id]/company-support-trail.tsx` como clie
 > é a forma correta aqui; a intenção da spec (mesmas palavras nas duas telas) se cumpre copiando
 > os textos, não o arquivo. Não perca tempo procurando o módulo no Vis.
 
+> ⚠️ **NÃO renderizar o `reason` do CLIENTE na tela.** Desde a Task 4 ele carrega a mensagem
+> crua do erro de rede (`falha_de_rede: <err.message>`) — é campo de DIAGNÓSTICO, pensado para
+> log, e só é seguro enriquecer porque a rota colapsa tudo em `medical: "unavailable"`. Exibi-lo
+> poria texto técnico de timeout/TLS na cara do operador. ⚠️ Não confundir com o `reason` de
+> `details` (o do Domus), que é o vocabulário fechado descrito abaixo.
+
+> 🔑 **`reason` tem DOIS vocabulários disjuntos** (descoberto ao implementar a Task 1, traçando
+> os writers): nas revogações vale `client | operator | expired`; em `access_denied` vale
+> `grant_not_activatable`. **Rotular por `reason` sozinho está errado** — mostraria
+> `grant_not_activatable` cru, ou pior, rotularia uma recusa como se fosse revogação. O rótulo
+> deve ser decidido por `event` PRIMEIRO, e só então refinado por `reason`.
+
+> 📌 Payload real por evento, já verificado no código (não presumir): `code_generated` e
+> `token_issued` → `{expiresAt}`; `code_redeemed` → **sem `details`** (o conteúdo útil está no
+> `token_issued` da mesma transação, então `{}` aqui é legítimo); `session_activated` →
+> `{absoluteExpiresAt, readOnly}`; `session_revoked` e `pending_access_revoked` → `{reason}`;
+> `access_denied` → `{reason}`. A tela não pode assumir que todo evento traz `details`.
+
 - [ ] **Step 3: Montar na página, atrás do gate de papel**
 
 Em `src/app/admin/(painel)/clientes/[id]/page.tsx`, dentro do `<TabPanel tabId="clinica">`, logo após `<CompanySupportAccess ... />`:
@@ -1365,6 +1399,11 @@ cd /Users/matheusreboucas/SISTEMACLINICADOMUS && npx tsc --noEmit
 cd "/Users/matheusreboucas/PDV OTICA" && ./node_modules/.bin/tsc --noEmit
 ```
 Expected: 0 erros nos dois.
+
+> 🔥 **`PASS (0) FAIL (0)` NÃO é sucesso.** O wrapper local comprime a saída do vitest, e uma
+> suíte que falhou na COLEÇÃO (erro em escopo de módulo, import quebrado) aparece exatamente
+> assim — idêntica a "passou sem nada a fazer". Descoberto na Task 2. **Conferir sempre a
+> contagem esperada**, não só a ausência de FAIL; se vier 0/0, a suíte não rodou.
 
 - [ ] **Step 2: Testes**
 
