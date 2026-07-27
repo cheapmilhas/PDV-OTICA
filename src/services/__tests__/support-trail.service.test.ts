@@ -138,3 +138,41 @@ describe("mergeSupportTrail — dia decrescente, evento crescente dentro do dia"
     expect(out.map((e) => e.id)).toEqual(["antes", "depois", "ontem"]);
   });
 });
+
+describe("mergeSupportTrail — o dia é o do OPERADOR, não o do servidor", () => {
+  it("22h em São Paulo NÃO cai no dia seguinte", () => {
+    // 2026-07-26T23:30:00Z = 20:30 de 26/07 em São Paulo (UTC-3). Cortar a
+    // string ISO daria "2026-07-26" por sorte aqui; o caso que quebra é o
+    // inverso, abaixo.
+    const out = mergeSupportTrail({
+      domus: [evDomus({ id: "noite", createdAt: "2026-07-26T23:30:00.000Z" }) as never],
+      vis: [],
+    });
+    expect(out[0].dia).toBe("2026-07-26");
+  });
+
+  it("01h UTC pertence ao dia ANTERIOR em São Paulo", () => {
+    // 2026-07-27T01:00:00Z = 22:00 de 26/07 em São Paulo. Cortando a string ISO
+    // isto viraria "2026-07-27" — o acesso apareceria no cabeçalho do dia
+    // seguinte, com data errada numa trilha de LGPD.
+    const out = mergeSupportTrail({
+      domus: [evDomus({ id: "virada", createdAt: "2026-07-27T01:00:00.000Z" }) as never],
+      vis: [],
+    });
+    expect(out[0].dia).toBe("2026-07-26");
+  });
+
+  it("dois eventos do MESMO dia local agrupam juntos mesmo cruzando a meia-noite UTC", () => {
+    // 23:00 e 01:00 UTC são 20:00 e 22:00 do MESMO dia em São Paulo.
+    const out = mergeSupportTrail({
+      domus: [
+        evDomus({ id: "depois", createdAt: "2026-07-27T01:00:00.000Z" }) as never,
+        evDomus({ id: "antes", createdAt: "2026-07-26T23:00:00.000Z" }) as never,
+      ],
+      vis: [],
+    });
+    expect(out.map((e) => e.dia)).toEqual(["2026-07-26", "2026-07-26"]);
+    // E dentro do dia, ordem cronológica.
+    expect(out.map((e) => e.id)).toEqual(["antes", "depois"]);
+  });
+});

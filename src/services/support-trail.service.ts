@@ -1,3 +1,6 @@
+import { formatInTimeZone } from "date-fns-tz";
+
+import { TIMEZONE } from "@/lib/date-utils";
 import type { SupportAuditEventFromDomus } from "@/lib/vis-support-audit-client";
 
 /**
@@ -54,8 +57,17 @@ export interface VisAuditRow {
   operatorName: string | null;
 }
 
+/**
+ * O DIA em que o operador (humano, no Brasil) enxerga o evento — não o dia UTC.
+ *
+ * Cortar a string ISO daria o dia do SERVIDOR: a Vercel roda em UTC, então um
+ * acesso às 22h de São Paulo cairia sob o cabeçalho do dia SEGUINTE. Numa trilha
+ * de consentimento, data errada não é detalhe estético. Este projeto já tomou
+ * esse bug em métricas e fixou `formatInTimeZone` como fonte única (ver
+ * admin-metrics.ts e admin-metrics.series.utc.test.ts).
+ */
 function diaDe(iso: string): string {
-  return iso.slice(0, 10);
+  return formatInTimeZone(new Date(iso), TIMEZONE, "yyyy-MM-dd");
 }
 
 export function mergeSupportTrail(input: {
