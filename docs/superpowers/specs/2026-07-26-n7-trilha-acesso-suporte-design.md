@@ -131,6 +131,12 @@ do operador) não têm operador a exibir — e não deveriam ter. Eventos com `g
 casem com nenhuma linha do `GlobalAudit` (resgate feito antes desta feature, ou trilha do Domus
 sem contraparte local) exibem o ref opaco como fallback, nunca em branco.
 
+⚠️ **Sentido inverso, e não é o mesmo caso:** as linhas `SUPPORT_ACCESS_DENIED` do Vis carregam
+um `supportGrantId` que **nunca chegou ao Domus** — o resgate foi recusado antes de o grant
+existir (`support-redeem/route.ts:127-134`). Elas não são "trilha do Domus sem contraparte
+local"; são o oposto, e são justamente o que o Domus não pode saber. Entram na lista pela origem
+`vis`, com o operador já resolvido localmente, e **não** devem ser tratadas como junção órfã.
+
 ### 3.3 Junção no Vis
 
 `src/services/support-trail.service.ts`, função pura com a chamada ao Domus injetada.
@@ -157,15 +163,30 @@ Portanto:
 |---|---|---|
 | 1 | `code_generated` | Consentimento do cliente. **Sem `grantId`** — não entra em nenhuma cadeia; ancora pelo horário. |
 | 2 | `code_redeemed` | Mesma transação do rank 3. |
-| 3 | `token_issued` | **Reemissível**: pode repetir para o mesmo grant. |
-| 4 | `session_activated` | |
-| 5 | `access_denied` | Pode repetir e pode ocorrer **antes** da ativação (grant não-ativável). |
-| 6 | `pending_access_revoked` | **Mutuamente exclusivo** com 4-5: o acesso morreu antes de virar sessão. |
+| 3 | `token_issued` | **Reemissível**: é o único que de fato repete para o mesmo grant. |
+| 4 | `session_activated` | Mutuamente exclusivo com 6 (ou virou sessão, ou morreu antes). |
+| 5 | `pending_access_revoked` | O acesso morreu **antes** de virar sessão. Exclusivo com 4, **não** com `access_denied`. |
+| 6 | `access_denied` | **Sem rank fixo — ordena por `createdAt`.** Ver abaixo. |
 | 7 | `session_revoked` | Terminal. `details.reason` distingue cliente / operador / expirado. |
 
-Desempate **entre repetições do mesmo evento** (`token_issued` reemitido, `access_denied`
-múltiplo): por `createdAt` crescente e, se idêntico, pela ordem em que o Domus retornou —
-`listSupportAudit` já ordena por `created_at DESC` de forma estável. Não inventar critério novo.
+🔑 **`access_denied` NÃO tem posição fixa na cadeia, de propósito.** Ele é escrito quando o
+token é válido mas o grant não está mais em `TOKEN_ISSUED` (`support-activate.ts:240-268`), o
+que inclui uma corrida ordinária: o cliente revoga enquanto o operador abre o link. Nesse caso a
+revogação marca o grant como `REVOKED` e grava `pending_access_revoked`
+(`support-revoke.ts:120-144`), e o clique seguinte do operador grava `access_denied` para o
+**mesmo grant** — ou seja, *depois*, e **causado por** ela. Um rank fixo colocaria a recusa antes
+da revogação que a provocou, invertendo causa e efeito no artefato de LGPD — exatamente o que
+esta ordenação existe para impedir. Como os dois eventos são escritos pelo **Domus**, sob um
+único relógio, `createdAt` os ordena corretamente sozinho.
+
+**Regra geral que decorre disso:** o rank só desempata eventos com `createdAt` **idêntico**
+(o caso garantido é `code_redeemed` × `token_issued`, mesma transação). Havendo diferença de
+horário **dentro da mesma origem**, o horário vence o rank. O rank nunca reordena eventos que o
+Domus já distinguiu no tempo.
+
+Desempate **entre repetições do mesmo evento** (`token_issued` reemitido é o caso real): por
+`createdAt` crescente e, se idêntico, pela ordem em que o Domus retornou — `listSupportAudit` já
+ordena por `created_at DESC` de forma estável. Não inventar critério novo.
 
 Evento **fora desta tabela** (o vocabulário não tem CHECK constraint no banco): vai para o fim
 da cadeia do seu grant, com rótulo genérico. Nunca descartado — trilha de LGPD não some com
@@ -186,7 +207,7 @@ Segundo card, irmão do de resgate, na aba "Clínica" (só cliente medical). Fec
 abre com "Ver histórico de acessos" — assim a ficha do cliente **não paga a ida ao Domus** para
 quem não quer a trilha, e lentidão do Medical não atrasa a página inteira.
 
-Três estados, e a distinção entre eles é requisito, não estética:
+**Quatro** estados, e a distinção entre eles é requisito, não estética:
 
 | Estado | O que mostra |
 |---|---|
