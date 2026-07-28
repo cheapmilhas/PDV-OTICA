@@ -223,6 +223,10 @@ export async function createTrialConversionCharge(
     return {
       kind: "ok",
       invoiceId: decision.invoiceId,
+      // Na REUSA o valor vem da fatura já emitida, não de um recálculo: o preço
+      // é CONGELADO no momento da emissão. Recalcular aqui faria uma mudança de
+      // tabela alterar o valor de uma cobrança que o cliente já recebeu — e o
+      // PIX dele continuaria com o valor antigo.
       amountCents:
         decision.kind === "created" ? decision.amountCents : charged.total,
       reused: decision.kind === "reuse",
