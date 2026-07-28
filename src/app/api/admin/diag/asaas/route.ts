@@ -20,9 +20,14 @@ import { asaas } from "@/lib/asaas";
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
 
-export async function GET() {
+export async function GET(request: Request) {
   const admin = await getAdminSession();
   if (!admin) return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+
+  const url = new URL(request.url);
+  const criar = url.searchParams.get("criar") === "1";
+  // Default = a clínica TESTE, que é o caso que estamos diagnosticando.
+  const companyId = url.searchParams.get("companyId") ?? "cmryty1230088wikgisdtcxvb";
 
   const key = process.env.ASAAS_API_KEY;
   const explicitUrl = process.env.ASAAS_API_URL ?? null;
@@ -52,9 +57,33 @@ export async function GET() {
     consulta = { ok: false, detalhe: e instanceof Error ? e.message : String(e) };
   }
 
+  // A leitura já provou credencial+ambiente. O que falha é a ESCRITA, então o
+  // diagnóstico precisa exercitar a mesma cadeia da cobrança: criar o customer.
+  // `?criar=1` porque isto ESCREVE no gateway (idempotente por CNPJ: o
+  // ensureAsaasCustomer procura antes de criar, então repetir não duplica).
+  let criacao: { tentada: boolean; ok?: boolean; detalhe?: string } = { tentada: false };
+  if (criar) {
+    try {
+      const { ensureAsaasCustomer } = await import("@/services/asaas-customer.service");
+      const r = await ensureAsaasCustomer(companyId);
+      criacao = {
+        tentada: true,
+        ok: true,
+        detalhe: `customer ${r.asaasCustomerId} (${r.created ? "criado agora" : "já existia"})`,
+      };
+    } catch (e) {
+      criacao = {
+        tentada: true,
+        ok: false,
+        detalhe: e instanceof Error ? `${e.name}: ${e.message}` : String(e),
+      };
+    }
+  }
+
   return NextResponse.json({
     ok: consulta.ok,
     keyPresente: true,
+    criacao,
     // 11 chars: mostra o FORMATO ($aact_prod_, $aact_YTU…) sem identificar a chave.
     keyPrefixo: key.slice(0, 11),
     keyTamanho: key.length,
