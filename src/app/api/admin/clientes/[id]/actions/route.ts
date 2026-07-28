@@ -9,6 +9,7 @@ import { asaas } from "@/lib/asaas";
 import { planValueForCycle } from "@/lib/plan-pricing";
 import { schedulePublishEntitlement } from "@/lib/vis-domus-publisher";
 import { checkCanResendMedicalInvite } from "../resend-invite-guard";
+import { createTrialConversionCharge } from "@/services/trial-conversion-charge.service";
 
 const log = logger.child({ route: "admin/clientes/[id]/actions" });
 
@@ -425,6 +426,74 @@ export async function POST(
       // original existir (dedupeKey medical-invite:<companyId>), reusa o data dela
       // (que tem o expiresAt real do Domus) e só re-arma o status; senão monta a
       // partir dos dados de contato da company.
+      case "charge_trial_conversion": {
+        // Gera a cobrança que converte o trial da clínica em assinatura paga.
+        //
+        // 🔑 Quem dispara é o OPERADOR, não o cliente. Autoatendimento aqui
+        // seria uma rota de ESCRITA cross-system criando cobrança em produção,
+        // e o rate limit disponível é em memória por instância serverless —
+        // não protegeria. Com duas clínicas e datas conhecidas, o disparo
+        // manual entrega o mesmo resultado sem essa superfície.
+        if (process.env.VIS_MEDICAL_TRIAL_BILLING_ENABLED !== "true") {
+          return NextResponse.json(
+            { error: "Cobrança de conversão desativada" },
+            { status: 503 },
+          );
+        }
+
+        const result = await createTrialConversionCharge(companyId);
+
+        if (result.kind === "error") {
+          // Guardas de negócio (não-medical, sem documento, sem trial, preço
+          // inválido) são 422: o pedido é válido, o ESTADO é que não permite.
+          log.warn("cobrança de conversão recusada", {
+            companyId,
+            code: result.code,
+            adminId: admin.id,
+          });
+          return NextResponse.json(
+            { error: result.message, code: result.code },
+            { status: 422 },
+          );
+        }
+
+        if (result.kind === "already_paid") {
+          return NextResponse.json({
+            success: true,
+            alreadyPaid: true,
+            invoiceId: result.invoiceId,
+            message: "Esta conversão já foi paga",
+          });
+        }
+
+        await prisma.globalAudit.create({
+          data: {
+            actorType: "ADMIN_USER",
+            actorId: admin.id,
+            companyId,
+            action: "TRIAL_CONVERSION_CHARGED",
+            metadata: {
+              invoiceId: result.invoiceId,
+              amountCents: result.amountCents,
+              // `reused` distingue "criei agora" de "já existia": sem isso, a
+              // trilha faria dois cliques parecerem duas cobranças.
+              reused: result.reused,
+            },
+          },
+        });
+
+        return NextResponse.json({
+          success: true,
+          invoiceId: result.invoiceId,
+          amountCents: result.amountCents,
+          reused: result.reused,
+          paymentUrl: result.paymentUrl,
+          message: result.reused
+            ? "Cobrança já existente reenviada"
+            : "Cobrança de conversão gerada",
+        });
+      }
+
       case "resend_medical_invite": {
         const company = await prisma.company.findUnique({
           where: { id: companyId },

@@ -7,6 +7,7 @@ import { asaas, AsaasError } from "@/lib/asaas";
 import { resolveAsaasCustomerId } from "@/services/asaas-customer.service";
 import { handleApiError } from "@/lib/error-handler";
 import { initialSubscriptionState } from "@/lib/checkout-status";
+import { advisoryKeyForCompany } from "@/lib/advisory-lock";
 
 const checkoutSchema = z.object({
   planId: z.string().min(1),
@@ -271,15 +272,3 @@ async function doCheckout(
   };
 }
 
-/**
- * Deriva uma chave bigint estável (2 int32 → não usado; aqui só hashtext) para
- * o pg_advisory_xact_lock a partir do companyId. hashtext do Postgres dá int4.
- */
-function advisoryKeyForCompany(companyId: string): number {
-  // hash simples e determinístico → int32 (faixa segura para advisory lock).
-  let h = 0;
-  for (let i = 0; i < companyId.length; i++) {
-    h = (Math.imul(31, h) + companyId.charCodeAt(i)) | 0;
-  }
-  return h;
-}
