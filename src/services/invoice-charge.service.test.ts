@@ -36,14 +36,33 @@ it("re-busca pixCode quando falta: paymentUrl + asaasPaymentId + pixCode null �
   expect(asaasClient.payments.create).not.toHaveBeenCalled();
 });
 
-it("no-op puro quando já tem pixCode: NÃO chama pixQrCode nem update", async () => {
-  const inv = { id:"i1", total:500, paymentUrl:"https://x/i/1", pixCode:"PIXEXISTING", asaasPaymentId:"pay_1", subscription:{ id:"s1" } };
+it("no-op puro quando já tem pixCode E QR: NÃO chama pixQrCode nem update", async () => {
+  const inv = { id:"i1", total:500, paymentUrl:"https://x/i/1", pixCode:"PIXEXISTING", pixQrCodeUrl:"data:image/png;base64,AAA", asaasPaymentId:"pay_1", subscription:{ id:"s1" } };
   const prismaClient = mkPrisma([inv]);
   const asaasClient = { payments: { create: vi.fn(), pixQrCode: vi.fn() } } as any;
   const out = await ensureInvoiceCharge("i1", { prismaClient, asaasClient, syncFn: vi.fn() });
   expect(asaasClient.payments.pixQrCode).not.toHaveBeenCalled();
   expect(prismaClient.invoice.update).not.toHaveBeenCalled();
   expect(out.pixCode).toBe("PIXEXISTING");
+});
+
+it("tem pixCode mas NÃO tem QR: re-busca e preenche a imagem", async () => {
+  // 🔥 O caso real: faturas cobradas ANTES de o QR passar a ser salvo têm o
+  // código mas nunca a imagem. Checar só `pixCode` fazia o atalho devolvê-las
+  // intactas para sempre — o QR só apareceria em cobranças novas.
+  const inv = { id:"i1", total:500, paymentUrl:"https://x/i/1", pixCode:"PIXEXISTING", pixQrCodeUrl:null, asaasPaymentId:"pay_1", subscription:{ id:"s1" } };
+  const prismaClient = mkPrisma([inv]);
+  const asaasClient = { payments: {
+    create: vi.fn(),
+    pixQrCode: vi.fn().mockResolvedValue({ payload:"PIXEXISTING", encodedImage:"BASE64AQUI" }),
+  } } as any;
+
+  await ensureInvoiceCharge("i1", { prismaClient, asaasClient, syncFn: vi.fn() });
+
+  expect(asaasClient.payments.pixQrCode).toHaveBeenCalledWith("pay_1");
+  const data = prismaClient.invoice.update.mock.calls[0][0].data;
+  expect(data.pixQrCodeUrl).toBe("data:image/png;base64,BASE64AQUI");
+  expect(asaasClient.payments.create).not.toHaveBeenCalled();
 });
 
 it("PIX ainda indisponível: pixQrCode lança → retorna invoice sem update e sem propagar erro", async () => {

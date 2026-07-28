@@ -37,16 +37,27 @@ export async function ensureInvoiceCharge(
     throw new Error("Fatura não encontrada");
   }
 
-  // 2. Já tem paymentUrl → normalmente no-op. Mas se faltar o pixCode (o QR do
-  // Asaas demora a ser gerado na criação), re-busca aqui (ex.: no reenvio).
+  // 2. Já tem paymentUrl → normalmente no-op. Mas se faltar o código PIX ou a
+  // IMAGEM do QR (o Asaas demora a gerá-los na criação), re-busca aqui.
+  //
+  // 🔥 A condição olha os DOIS campos de propósito. Antes checava só o
+  // `pixCode`: faturas cobradas antes de o QR passar a ser salvo tinham o
+  // código mas nunca a imagem, e este atalho as devolvia intactas para sempre —
+  // o QR só apareceria em cobranças novas. Uma única requisição traz os dois.
   if (invoice.paymentUrl) {
-    if (!invoice.pixCode && invoice.asaasPaymentId) {
+    const faltaAlgumPix = !invoice.pixCode || !invoice.pixQrCodeUrl;
+    if (faltaAlgumPix && invoice.asaasPaymentId) {
       try {
-        const pix = (await asaasClient.payments.pixQrCode(invoice.asaasPaymentId)).payload;
-        if (pix) {
+        const qr = await asaasClient.payments.pixQrCode(invoice.asaasPaymentId);
+        if (qr.payload || qr.encodedImage) {
           return await prismaClient.invoice.update({
             where: { id: invoice.id },
-            data: { pixCode: pix },
+            data: {
+              pixCode: qr.payload || invoice.pixCode,
+              pixQrCodeUrl: qr.encodedImage
+                ? `data:image/png;base64,${qr.encodedImage}`
+                : invoice.pixQrCodeUrl,
+            },
           });
         }
       } catch {
