@@ -442,7 +442,17 @@ ${periodRow}
 </td></tr>
 </table>`
     : "";
-  const bodyHtml = `${intro}${card}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Para pagar com <strong>QR Code</strong>, cartão ou outras opções, clique em "Pagar agora".</p>${boletoBlock}`;
+  // 🔑 PADRÃO do e-mail de cobrança: o QR NÃO é embutido como imagem (Gmail e
+  // Outlook bloqueiam `data:` URI, e o Asaas não expõe o QR por URL pública —
+  // só a página da fatura). Em vez de um quadrado quebrado, o e-mail aponta em
+  // destaque para onde o QR existe de verdade. Mesma estrutura em toda fatura.
+  const qrBlock = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 4px;background:#eff6ff;border:1px solid #bfdbfe;border-radius:8px;">
+<tr><td style="padding:14px 16px;">
+<p style="margin:0;color:#1e40af;font-size:14px;"><strong>Quer pagar pelo QR Code?</strong></p>
+<p style="margin:6px 0 0;color:#1e3a8a;font-size:13px;line-height:1.5;">Clique em <strong>"Pagar agora"</strong> abaixo: a página abre com o QR Code do PIX, cartão e outras opções.</p>
+</td></tr>
+</table>`;
+  const bodyHtml = `${intro}${card}${pixBlock}${qrBlock}${boletoBlock}`;
   const html = renderSaasEmailLayout({
     previewTitle: isReminder ? "Sua fatura vence em breve" : "Sua fatura está disponível",
     heading: isReminder ? `${p.name}, sua fatura vence em breve` : `${p.name}, sua fatura está disponível`,

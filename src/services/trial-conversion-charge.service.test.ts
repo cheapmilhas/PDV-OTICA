@@ -19,6 +19,7 @@ const companyFindUnique = vi.fn();
 const subscriptionFindMany = vi.fn();
 const invoiceFindFirst = vi.fn();
 const invoiceCreate = vi.fn();
+const invoiceUpdate = vi.fn();
 const executeRaw = vi.fn();
 
 /** Prisma falso: $transaction executa o callback com o mesmo `tx`. */
@@ -31,6 +32,7 @@ function makePrisma() {
     invoice: {
       findFirst: (...a: unknown[]) => invoiceFindFirst(...a),
       create: (...a: unknown[]) => invoiceCreate(...a),
+      update: (...a: unknown[]) => invoiceUpdate(...a),
     },
   };
   return { $transaction: async (fn: (t: typeof tx) => unknown) => fn(tx) } as never;
@@ -73,6 +75,7 @@ beforeEach(() => {
   ]);
   invoiceFindFirst.mockResolvedValue(null);
   invoiceCreate.mockResolvedValue({ id: "inv-new" });
+  invoiceUpdate.mockResolvedValue({});
   ensureCustomerFn.mockResolvedValue({ asaasCustomerId: "cus_1", created: false });
   sendChargeEmailFn.mockResolvedValue({ status: "SENT", alreadySentToday: false });
   ensureChargeFn.mockResolvedValue({

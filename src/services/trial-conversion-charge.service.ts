@@ -154,7 +154,7 @@ export async function createTrialConversionCharge(
     // Já existe cobrança de conversão para esta assinatura?
     const existing = await tx.invoice.findFirst({
       where: { subscriptionId: sub.id, source },
-      select: { id: true, status: true },
+      select: { id: true, status: true, billingType: true, asaasPaymentId: true },
       orderBy: { createdAt: "desc" },
     });
     if (existing) {
@@ -164,6 +164,16 @@ export async function createTrialConversionCharge(
       }
       if (d.action === "needs_review") {
         return { kind: "error" as const, code: "needs_review" as const, message: d.reason };
+      }
+      // Fatura reusada que ainda NÃO foi ao gateway pode ter nascido com
+      // `billingType` antigo ("PIX"), que gera cobrança sem boleto. Normaliza
+      // para UNDEFINED (cliente escolhe) enquanto dá tempo — depois de emitida
+      // no Asaas o meio já está fixado e mudar aqui não teria efeito.
+      if (!existing.asaasPaymentId && existing.billingType !== "UNDEFINED") {
+        await tx.invoice.update({
+          where: { id: existing.id },
+          data: { billingType: "UNDEFINED" },
+        });
       }
       return { kind: "reuse" as const, invoiceId: existing.id };
     }
