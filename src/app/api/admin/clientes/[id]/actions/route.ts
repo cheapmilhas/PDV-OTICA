@@ -441,7 +441,28 @@ export async function POST(
           );
         }
 
-        const result = await createTrialConversionCharge(companyId);
+        // A falha do GATEWAY não pode virar "Erro interno" no toast: o operador
+        // precisa distinguir chave errada de documento recusado ou gateway fora
+        // — são três ações diferentes. A fatura local já existe e o retry a
+        // reusa, então mostrar o motivo é seguro (nada é recriado).
+        let result: Awaited<ReturnType<typeof createTrialConversionCharge>>;
+        try {
+          result = await createTrialConversionCharge(companyId);
+        } catch (e) {
+          const detalhe = e instanceof Error ? e.message : String(e);
+          log.error("falha ao gerar cobrança de conversão", {
+            companyId,
+            adminId: admin.id,
+            error: detalhe,
+          });
+          return NextResponse.json(
+            {
+              error: `Falha no gateway de cobrança: ${detalhe}`,
+              code: "gateway_error",
+            },
+            { status: 502 },
+          );
+        }
 
         if (result.kind === "error") {
           // Guardas de negócio (não-medical, sem documento, sem trial, preço

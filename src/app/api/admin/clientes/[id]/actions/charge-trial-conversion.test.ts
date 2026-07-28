@@ -135,6 +135,23 @@ describe("charge_trial_conversion", () => {
     expect(auditCreate).not.toHaveBeenCalled();
   });
 
+  it("falha do GATEWAY mostra o motivo, não 'Erro interno'", async () => {
+    // Sem isto o operador vê um toast genérico e o motivo real (chave errada,
+    // documento recusado, gateway fora) fica só no log da Vercel — três causas
+    // com ações diferentes, indistinguíveis na tela.
+    createTrialConversionCharge.mockRejectedValue(
+      new Error("Asaas 401: invalid api key")
+    );
+
+    const res = await POST(req(), { params });
+    const body = await res.json();
+
+    expect(res.status).toBe(502);
+    expect(body.code).toBe("gateway_error");
+    expect(body.error).toContain("invalid api key");
+    expect(auditCreate).not.toHaveBeenCalled();
+  });
+
   it("cobrança já paga responde sucesso sem cobrar de novo", async () => {
     createTrialConversionCharge.mockResolvedValue({
       kind: "already_paid",
