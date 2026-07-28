@@ -29,9 +29,13 @@ const billingEventFindUnique = vi.fn();
 const billingEventUpsert = vi.fn();
 const billingEventUpdate = vi.fn();
 const subscriptionFindFirst = vi.fn();
+const subscriptionFindUnique = vi.fn();
 const subscriptionUpdate = vi.fn();
 const subscriptionUpdateMany = vi.fn();
+const invoiceUpdate = vi.fn();
 const invoiceUpdateMany = vi.fn();
+const invoiceFindUnique = vi.fn();
+const invoiceFindMany = vi.fn();
 const companyFindUnique = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
@@ -43,11 +47,15 @@ vi.mock("@/lib/prisma", () => ({
     },
     subscription: {
       findFirst: (...a: unknown[]) => subscriptionFindFirst(...a),
+      findUnique: (...a: unknown[]) => subscriptionFindUnique(...a),
       update: (...a: unknown[]) => subscriptionUpdate(...a),
       updateMany: (...a: unknown[]) => subscriptionUpdateMany(...a),
     },
     invoice: {
+      update: (...a: unknown[]) => invoiceUpdate(...a),
       updateMany: (...a: unknown[]) => invoiceUpdateMany(...a),
+      findUnique: (...a: unknown[]) => invoiceFindUnique(...a),
+      findMany: (...a: unknown[]) => invoiceFindMany(...a),
     },
     company: {
       findUnique: (...a: unknown[]) => companyFindUnique(...a),
@@ -145,16 +153,31 @@ beforeEach(() => {
   billingEventUpsert.mockResolvedValue({ id: "be-1", retryCount: 0 });
   billingEventUpdate.mockResolvedValue({});
 
-  // Subscription resolves to our company
+  // Subscription resolves to our company. `status: PAST_DUE` = elegível para
+  // ativação (o webhook não ressuscita assinatura CANCELED/SUSPENDED).
   subscriptionFindFirst.mockResolvedValue({
     id: SUBSCRIPTION_DB_ID,
     companyId: COMPANY_ID,
+    status: "PAST_DUE",
+    asaasCustomerId: "cust-1",
+    asaasSubscriptionId: "asaas-sub-1",
+  });
+  subscriptionFindUnique.mockResolvedValue({
+    id: SUBSCRIPTION_DB_ID,
+    companyId: COMPANY_ID,
+    status: "PAST_DUE",
+    asaasCustomerId: "cust-1",
+    asaasSubscriptionId: "asaas-sub-1",
   });
   subscriptionUpdate.mockResolvedValue({});
   subscriptionUpdateMany.mockResolvedValue({ count: 1 });
 
-  // Invoice update
+  // Invoice: por padrão nenhuma fatura é achada pelas novas consultas de
+  // evidência — os testes legados exercitam o caminho RECORRENTE.
+  invoiceUpdate.mockResolvedValue({});
   invoiceUpdateMany.mockResolvedValue({ count: 1 });
+  invoiceFindUnique.mockResolvedValue(null);
+  invoiceFindMany.mockResolvedValue([]);
 
   // Company findUnique (for name lookup inside the new block)
   companyFindUnique.mockResolvedValue({ name: "Óticas Teste" });
@@ -274,10 +297,26 @@ describe("POST /api/webhooks/asaas — Task 8: notifyCompany on PAYMENT_CONFIRME
     expect(payload.amountLabel).toMatch(/R\$|R \$|149/);
   });
 
+  it("evento de pagamento COM referência que não resolve → 500 (Asaas reenvia)", async () => {
+    // 🔥 A corrida do checkout: a cobrança nasce no Asaas ANTES do commit local,
+    // então um webhook muito rápido não acha a Subscription. Responder 200 aqui
+    // arquivaria o pagamento PARA SEMPRE e o cliente ficaria em TRIAL tendo pago.
+    subscriptionFindFirst.mockResolvedValue(null);
+    invoiceFindUnique.mockResolvedValue(null);
+    invoiceFindMany.mockResolvedValue([]);
+
+    const res = await POST(makeRequest(confirmEvent));
+
+    expect(res.status).toBe(500);
+    expect(billingEventUpdate).not.toHaveBeenCalled(); // não marca processedAt
+  });
+
   it("sem companyId → notifyCompany não é chamado", async () => {
     // subscriptionFindFirst retorna nulo → companyId fica null
     subscriptionFindFirst.mockResolvedValue(null);
 
+    // Sem NENHUMA referência: segue arquivado com 200 (não é a corrida do
+    // checkout; devolver 500 para ruído viraria reentrega infinita).
     const eventWithoutRef = {
       ...confirmEvent,
       id: "evt-no-company",
@@ -296,5 +335,216 @@ describe("POST /api/webhooks/asaas — Task 8: notifyCompany on PAYMENT_CONFIRME
     const body = await res.json();
     expect(body.duplicate).toBe(true);
     expect(notifyCompany).not.toHaveBeenCalled();
+  });
+});
+
+// ─── cobrança AVULSA (o furo que motivou a correção) ─────────────────────────
+//
+// A cobrança avulsa sai com externalReference "invoice:<id>" e SEM assinatura
+// recorrente. Antes, ela não resolvia subscription nenhuma: a fatura virava
+// PAID, a Subscription nunca virava ACTIVE e o entitlement nunca era publicado
+// — o cliente pagava e continuava bloqueado no Domus.
+describe("POST /api/webhooks/asaas — cobrança avulsa por externalReference", () => {
+  const INVOICE_ID = "inv-avulsa-1";
+
+  const avulsaEvent = {
+    id: "evt-avulsa-1",
+    event: "PAYMENT_CONFIRMED",
+    payment: {
+      id: "pay_avulsa_1",
+      customer: "cust-1",
+      value: 89.9,
+      status: "CONFIRMED",
+      externalReference: `invoice:${INVOICE_ID}`,
+    },
+  };
+
+  /**
+   * Fatura resolvida por `invoice:<id>`. `isManual: false` = fatura do CICLO
+   * (mensalidade) cobrada pelo caminho standalone — é ela que controla acesso.
+   * Passe `isManual: true` para simular taxa avulsa (implantação/hardware).
+   */
+  function invoiceResolvida(over: Record<string, unknown> = {}) {
+    invoiceFindUnique.mockResolvedValue({
+      id: INVOICE_ID,
+      subscriptionId: SUBSCRIPTION_DB_ID,
+      asaasPaymentId: null,
+      status: "PENDING",
+      periodEnd: new Date("2026-09-01T00:00:00Z"),
+      isManual: false,
+      ...over,
+    });
+    // sem assinatura recorrente no evento
+    subscriptionFindFirst.mockResolvedValue(null);
+  }
+
+  it("ATIVA a assinatura e publica o entitlement (antes, nada acontecia)", async () => {
+    invoiceResolvida();
+
+    const res = await POST(makeRequest(avulsaEvent));
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: SUBSCRIPTION_DB_ID }),
+        data: expect.objectContaining({ status: "ACTIVE" }),
+      })
+    );
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
+  });
+
+  it("usa o periodEnd DA FATURA como currentPeriodEnd (não recalcula por ciclo)", async () => {
+    invoiceResolvida();
+
+    await POST(makeRequest(avulsaEvent));
+
+    const call = subscriptionUpdateMany.mock.calls.find(
+      ([arg]) => (arg as any)?.data?.status === "ACTIVE"
+    );
+    expect((call![0] as any).data.currentPeriodEnd).toEqual(
+      new Date("2026-09-01T00:00:00Z")
+    );
+  });
+
+  it("marca a fatura pelo PK (asaasPaymentId não é unique sozinho)", async () => {
+    invoiceResolvida({ asaasPaymentId: null });
+
+    await POST(makeRequest(avulsaEvent));
+
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: INVOICE_ID },
+        data: expect.objectContaining({ status: "PAID", paymentConfirmed: true }),
+      })
+    );
+  });
+
+  it("NÃO ressuscita assinatura CANCELED — espelha a política do mark_paid manual", async () => {
+    invoiceResolvida();
+    subscriptionFindUnique.mockResolvedValue({
+      id: SUBSCRIPTION_DB_ID,
+      companyId: COMPANY_ID,
+      status: "CANCELED",
+      asaasCustomerId: "cust-1",
+      asaasSubscriptionId: null,
+    });
+    // o guard de status faz o updateMany não atingir nenhuma linha
+    subscriptionUpdateMany.mockResolvedValue({ count: 0 });
+
+    const res = await POST(makeRequest(avulsaEvent));
+    expect(res.status).toBe(200);
+
+    // fatura paga sim; acesso NÃO devolvido
+    expect(invoiceUpdate).toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+  });
+
+  it("recusa (500) quando o pagador diverge do customer da assinatura", async () => {
+    invoiceResolvida();
+    subscriptionFindUnique.mockResolvedValue({
+      id: SUBSCRIPTION_DB_ID,
+      companyId: COMPANY_ID,
+      status: "PAST_DUE",
+      asaasCustomerId: "cust-OUTRO",
+      asaasSubscriptionId: null,
+    });
+
+    const res = await POST(makeRequest(avulsaEvent));
+
+    // Não decidir > escolher errado: 500 faz o Asaas reenviar.
+    expect(res.status).toBe(500);
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+  });
+
+  it("taxa avulsa VENCIDA não rebaixa a assinatura nem bloqueia a clínica", async () => {
+    // Regressão que esta correção precisa EVITAR: createManualCharge cobra
+    // qualquer coisa (taxa de implantação, hardware). Deixá-la vencer não pode
+    // trancar o cliente.
+    invoiceResolvida({ isManual: true });
+
+    const res = await POST(
+      makeRequest({
+        id: "evt-avulsa-overdue",
+        event: "PAYMENT_OVERDUE",
+        payment: {
+          id: "pay_avulsa_1",
+          customer: "cust-1",
+          value: 89.9,
+          status: "OVERDUE",
+          externalReference: `invoice:${INVOICE_ID}`,
+        },
+      })
+    );
+
+    expect(res.status).toBe(200);
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+    // mas a fatura É marcada em atraso — o financeiro precisa enxergar isso
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: INVOICE_ID }, data: { status: "OVERDUE" } })
+    );
+  });
+
+  it("taxa avulsa PAGA não ativa a assinatura (pagar hardware não compra mês)", async () => {
+    invoiceResolvida({ isManual: true });
+    subscriptionFindUnique.mockResolvedValue({
+      id: SUBSCRIPTION_DB_ID,
+      companyId: COMPANY_ID,
+      status: "PAST_DUE",
+      asaasCustomerId: "cust-1",
+      asaasSubscriptionId: null,
+    });
+
+    const res = await POST(makeRequest(avulsaEvent));
+    expect(res.status).toBe(200);
+
+    // fatura quitada sim; acesso NÃO comprado
+    expect(invoiceUpdate).toHaveBeenCalled();
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+  });
+
+  it("cliente SUSPENSO pelo dunning paga a mensalidade e RECUPERA o acesso", async () => {
+    // 🔥 O dunning suspende AUTOMATICAMENTE aos 14 dias de atraso e o e-mail
+    // promete a volta ao regularizar. Tratar SUSPENDED como terminal faria o
+    // cliente pagar e continuar bloqueado — o próprio bug que estamos consertando.
+    invoiceResolvida({ isManual: false });
+    subscriptionFindUnique.mockResolvedValue({
+      id: SUBSCRIPTION_DB_ID,
+      companyId: COMPANY_ID,
+      status: "SUSPENDED",
+      asaasCustomerId: "cust-1",
+      asaasSubscriptionId: null,
+    });
+
+    const res = await POST(makeRequest(avulsaEvent));
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          id: SUBSCRIPTION_DB_ID,
+          status: { in: expect.arrayContaining(["SUSPENDED"]) },
+        }),
+        data: expect.objectContaining({ status: "ACTIVE" }),
+      })
+    );
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
+  });
+
+  it("backfill do asaasPaymentId é atômico (só quando ainda está nulo)", async () => {
+    invoiceResolvida({ asaasPaymentId: null });
+
+    await POST(makeRequest(avulsaEvent));
+
+    // A guarda vai no WHERE: entre ler a evidência e escrever, o
+    // ensureInvoiceCharge pode ter gravado outro id.
+    expect(invoiceUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: INVOICE_ID, asaasPaymentId: null },
+        data: { asaasPaymentId: "pay_avulsa_1" },
+      })
+    );
   });
 });

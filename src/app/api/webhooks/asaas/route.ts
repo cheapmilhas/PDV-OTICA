@@ -1,4 +1,5 @@
 import { NextResponse } from "next/server";
+import type { SubscriptionStatus } from "@prisma/client";
 import { createHmac, timingSafeEqual } from "crypto";
 import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
@@ -8,6 +9,14 @@ import { logger } from "@/lib/logger";
 import { captureMessage } from "@/lib/sentry";
 import { notifyCompany } from "@/services/saas-notification.service";
 import { publishEntitlementForCompany } from "@/lib/vis-domus-publisher";
+import {
+  ACTIVATABLE_FROM,
+  INVOICE_REF_PREFIX,
+  parseRefId,
+  resolvePaymentTarget,
+  type PaymentEventRefs,
+  type TargetResolution,
+} from "@/lib/asaas-payment-target";
 
 const log = logger.child({ webhook: "asaas" });
 
@@ -94,6 +103,106 @@ interface AsaasWebhookEvent {
   };
 }
 
+/**
+ * Status a partir dos quais um pagamento ATIVA a assinatura.
+ *
+ * A anotação `SubscriptionStatus[]` (em vez de `string[]`) é intencional: se um
+ * valor do enum for renomeado, isto quebra o BUILD. Uma lista de strings soltas
+ * viraria um filtro que nunca casa, e a ativação sumiria em silêncio.
+ */
+const ACTIVATABLE_STATUSES: SubscriptionStatus[] = [...ACTIVATABLE_FROM];
+
+/**
+ * Eventos em que NÃO resolver o alvo significa perder dinheiro/acesso — devem
+ * ser reenviados pelo Asaas em vez de arquivados. Cancelamento de assinatura
+ * fica de fora: sem assinatura local, não há o que cancelar.
+ */
+const PAYMENT_EVENTS_REQUIRING_TARGET: string[] = [
+  "PAYMENT_CONFIRMED",
+  "PAYMENT_RECEIVED",
+  "PAYMENT_OVERDUE",
+  "PAYMENT_REFUNDED",
+  "PAYMENT_CHARGEBACK_REQUESTED",
+  "PAYMENT_CHARGEBACK_DISPUTE",
+];
+
+const SUB_EVIDENCE_SELECT = {
+  id: true,
+  companyId: true,
+  status: true,
+  asaasCustomerId: true,
+  asaasSubscriptionId: true,
+} as const;
+
+const INVOICE_EVIDENCE_SELECT = {
+  id: true,
+  subscriptionId: true,
+  asaasPaymentId: true,
+  status: true,
+  periodEnd: true,
+  // Finalidade da cobrança: avulsa (taxa/hardware) não controla acesso.
+  isManual: true,
+} as const;
+
+/**
+ * Carrega do banco a evidência que `resolvePaymentTarget` precisa e delega a
+ * DECISÃO para ele (função pura, testada isoladamente).
+ *
+ * A separação é de propósito: as regras de concordância entre identificadores
+ * são o coração da segurança desta rota e não podem depender de banco para
+ * serem exercitadas.
+ */
+async function resolveTargetFromDb(refs: PaymentEventRefs): Promise<TargetResolution> {
+  const invoiceId = parseRefId(refs.externalRef, INVOICE_REF_PREFIX);
+
+  const [byExternalRef, bySubscriptionRef, byPaymentId] = await Promise.all([
+    invoiceId
+      ? prisma.invoice.findUnique({
+          where: { id: invoiceId },
+          select: INVOICE_EVIDENCE_SELECT,
+        })
+      : Promise.resolve(null),
+    refs.subscriptionRef
+      ? prisma.subscription.findFirst({
+          where: { asaasSubscriptionId: refs.subscriptionRef },
+          select: SUB_EVIDENCE_SELECT,
+        })
+      : Promise.resolve(null),
+    refs.paymentId
+      ? prisma.invoice.findMany({
+          where: { asaasPaymentId: refs.paymentId },
+          select: INVOICE_EVIDENCE_SELECT,
+          // 2 basta para DETECTAR ambiguidade sem varrer a tabela: o banco só
+          // garante @@unique([subscriptionId, asaasPaymentId]).
+          take: 2,
+        })
+      : Promise.resolve([]),
+  ]);
+
+  const [invoiceSubscription, paymentIdSubscription] = await Promise.all([
+    byExternalRef
+      ? prisma.subscription.findUnique({
+          where: { id: byExternalRef.subscriptionId },
+          select: SUB_EVIDENCE_SELECT,
+        })
+      : Promise.resolve(null),
+    byPaymentId.length === 1
+      ? prisma.subscription.findUnique({
+          where: { id: byPaymentId[0].subscriptionId },
+          select: SUB_EVIDENCE_SELECT,
+        })
+      : Promise.resolve(null),
+  ]);
+
+  return resolvePaymentTarget(refs, {
+    byExternalRef,
+    bySubscriptionRef,
+    invoiceSubscription,
+    byPaymentId,
+    paymentIdSubscription,
+  });
+}
+
 export async function POST(request: Request) {
   // Q5.1: Rate limit por IP. Asaas legítimo envia ~10-30 webhooks/min mesmo
   // em ondas; 120/min absorve picos sem bloquear. Bloqueia replay malicioso
@@ -154,23 +263,76 @@ export async function POST(request: Request) {
   const externalRef =
     event.payment?.externalReference ?? event.subscription?.externalReference ?? null;
 
-  let companyId: string | null = null;
-  let subscriptionDbId: string | null = null;
+  // Carrega a EVIDÊNCIA e resolve o alvo (ver asaas-payment-target.ts).
+  //
+  // 🔥 O furo que isto fecha: a cobrança AVULSA sai com
+  // `externalReference = "invoice:<id>"` e sem `asaasSubscriptionId`. Antes, ela
+  // não resolvia subscription nenhuma → a Subscription nunca virava ACTIVE e
+  // `publishEntitlementForCompany` (dentro do `if (subscriptionDbId)`) nunca
+  // rodava: o cliente pagava e continuava bloqueado no Domus.
+  const target = await resolveTargetFromDb({
+    paymentId: event.payment?.id ?? null,
+    customerId: event.payment?.customer ?? null,
+    subscriptionRef: subRef,
+    externalRef,
+  });
 
-  if (subRef) {
-    const sub = await prisma.subscription.findFirst({
-      where: { asaasSubscriptionId: subRef },
-      select: { id: true, companyId: true },
+  // Referências contraditórias: NÃO decidir é mais seguro que escolher a
+  // primeira que casar e mexer no acesso da empresa errada. 500 → Asaas reenvia.
+  if (target.kind === "conflict") {
+    log.error("Referências do evento Asaas divergem — não processado", {
+      eventId: event.id,
+      eventType: event.event,
+      reason: target.reason,
     });
-    if (sub) {
-      companyId = sub.companyId;
-      subscriptionDbId = sub.id;
-    }
+    captureMessage(`Webhook Asaas ${event.id}: referências divergentes (${target.reason})`, {
+      level: "error",
+      extra: { eventType: event.event, externalRef, subRef },
+    });
+    return NextResponse.json({ error: "ambiguous references" }, { status: 500 });
   }
-  // externalReference pode trazer companyId quando criamos a subscription
-  if (!companyId && externalRef?.startsWith("company:")) {
-    companyId = externalRef.slice("company:".length);
+
+  // 🔥 Evento de PAGAMENTO que traz referência forte mas não resolveu nada:
+  // pedir REENVIO em vez de arquivar. A corrida real é o checkout — a cobrança
+  // é criada no Asaas ANTES do commit local (`billing/checkout`), então um
+  // webhook muito rápido não acha a Subscription ainda. Marcar `processedAt` e
+  // responder 200 ali descartaria o pagamento PARA SEMPRE: o cliente pagou e
+  // ficaria em TRIAL/TRIAL_EXPIRED, que é o mesmo defeito que esta correção
+  // existe para consertar.
+  //
+  // Restrito a eventos de pagamento COM referência: evento sem referência
+  // nenhuma (ou de outros tipos) segue arquivado como antes — devolver 500 para
+  // tudo que não conhecemos transformaria ruído em reentrega infinita.
+  if (
+    target.kind === "unresolved" &&
+    PAYMENT_EVENTS_REQUIRING_TARGET.includes(event.event) &&
+    (externalRef !== null || subRef !== null)
+  ) {
+    log.warn("Evento de pagamento com referência não resolvida — pedindo reenvio", {
+      eventId: event.id,
+      eventType: event.event,
+      externalRef,
+      subRef,
+    });
+    return NextResponse.json({ error: "target not found yet" }, { status: 500 });
   }
+
+  const companyId: string | null =
+    target.kind === "resolved" ? target.companyId : null;
+  const subscriptionDbId: string | null =
+    target.kind === "resolved" ? target.subscriptionDbId : null;
+  const resolvedInvoiceId: string | null =
+    target.kind === "resolved" ? target.invoiceId : null;
+  const invoicePeriodEnd: Date | null =
+    target.kind === "resolved" ? target.invoicePeriodEnd : null;
+  /**
+   * A cobrança tem autoridade sobre o ACESSO (ativar/rebaixar/publicar
+   * entitlement)? Decidido pela finalidade PERSISTIDA na fatura
+   * (`Invoice.isManual`), não pelo formato do evento do Asaas — ver
+   * `controlsAccess` em asaas-payment-target.ts.
+   */
+  const controlsAccess: boolean =
+    target.kind === "resolved" ? target.controlsAccess : false;
 
   // Cria/atualiza BillingEvent
   const billingEvent = await prisma.billingEvent.upsert({
@@ -193,29 +355,105 @@ export async function POST(request: Request) {
     switch (event.event) {
       case "PAYMENT_CONFIRMED":
       case "PAYMENT_RECEIVED": {
-        if (subscriptionDbId) {
-          await prisma.subscription.update({
-            where: { id: subscriptionDbId },
+        // `controlsAccess` false = cobrança AVULSA (taxa/hardware). A fatura é
+        // marcada PAID abaixo, mas pagar uma taxa não compra mensalidade: nem
+        // ativa, nem estende período, nem publica entitlement.
+        if (subscriptionDbId && controlsAccess) {
+          // 🔑 `updateMany` com guarda de status, NÃO `update` incondicional.
+          // O único estado que um pagamento NÃO recupera é CANCELED — decisão
+          // deliberada (dono cancelou, ou dunning cancelou aos 30d após avisos).
+          // Um webhook atrasado é o caso "fatura antiga chegando depois" e não
+          // pode ressuscitá-lo. Todos os demais (inclusive SUSPENDED e
+          // TRIAL_EXPIRED, que são AUTOMÁTICOS) voltam ao pagar — ver
+          // ACTIVATABLE_FROM.
+          const activated = await prisma.subscription.updateMany({
+            where: { id: subscriptionDbId, status: { in: ACTIVATABLE_STATUSES } },
             data: {
               status: "ACTIVE",
               pastDueSince: null,
               lastDunningStage: null, // F5: recuperou → zera a régua p/ próxima inadimplência avisar do zero
               currentPeriodStart: new Date(),
+              // Período coberto vem da PRÓPRIA fatura paga, quando a conhecemos.
+              // Derivar de billingCycle criaria uma segunda verdade divergindo
+              // do periodEnd que a Invoice já carrega.
+              ...(invoicePeriodEnd && { currentPeriodEnd: invoicePeriodEnd }),
             },
           });
-          // activatedAt = momento da PRIMEIRA ativação; não sobrescrever em
-          // reenvios (idempotência) — preserva a data real de ativação.
-          await prisma.subscription.updateMany({
-            where: { id: subscriptionDbId, activatedAt: null },
-            data: { activatedAt: new Date() },
-          });
-          // Propaga writeAllowed=true ao Domus na hora (Cadeado, simetria do bloqueio):
-          // cliente pagou → DESbloqueia escrita clínica sem esperar o pull diário
-          // (senão ficaria bloqueado ~24h APÓS pagar). AWAIT best-effort (ver ramo CANCELED).
-          if (companyId) await publishEntitlementForCompany(companyId);
+          if (activated.count > 0) {
+            // activatedAt = momento da PRIMEIRA ativação; não sobrescrever em
+            // reenvios (idempotência) — preserva a data real de ativação.
+            await prisma.subscription.updateMany({
+              where: { id: subscriptionDbId, activatedAt: null },
+              data: { activatedAt: new Date() },
+            });
+            // Propaga writeAllowed=true ao Domus na hora (Cadeado, simetria do bloqueio):
+            // cliente pagou → DESbloqueia escrita clínica sem esperar o pull diário
+            // (senão ficaria bloqueado ~24h APÓS pagar). AWAIT best-effort (ver ramo CANCELED).
+            if (companyId) await publishEntitlementForCompany(companyId);
+          } else if (invoicePeriodEnd) {
+            // 📌 DÍVIDA: sem Invoice local identificada não há período para
+            // avançar (fica no `else` abaixo). Inventar a data a partir de
+            // billingCycle recriaria a segunda verdade que este ramo evita. Só
+            // acontece no caminho recorrente puro — hoje ZERO assinaturas têm
+            // asaasSubscriptionId, então não afeta nenhum cliente atual.
+            //
+            // RENOVAÇÃO: quem já está ACTIVE não "ativa" de novo, mas o período
+            // precisa AVANÇAR — senão a mensalidade paga não estende nada e o
+            // agendamento de troca de plano (que lê currentPeriodEnd) usa data
+            // velha. Só avança para FRENTE: um webhook atrasado de fatura antiga
+            // não pode ENCURTAR um período já pago.
+            const renewed = await prisma.subscription.updateMany({
+              where: {
+                id: subscriptionDbId,
+                status: "ACTIVE",
+                OR: [
+                  { currentPeriodEnd: null },
+                  { currentPeriodEnd: { lt: invoicePeriodEnd } },
+                ],
+              },
+              data: { currentPeriodEnd: invoicePeriodEnd },
+            });
+            if (renewed.count === 0) {
+              log.warn("Pagamento confirmado não alterou a assinatura", {
+                eventId: event.id,
+                subscriptionId: subscriptionDbId,
+              });
+            }
+          } else {
+            log.warn("Pagamento confirmado não ativou a assinatura (status não elegível)", {
+              eventId: event.id,
+              subscriptionId: subscriptionDbId,
+            });
+          }
         }
-        // Atualiza Invoice se existir
-        if (event.payment?.id) {
+        // Atualiza a Invoice pelo PK quando resolvida; `asaasPaymentId` sozinho
+        // NÃO é unique (só @@unique([subscriptionId, asaasPaymentId])), então
+        // usá-lo como chave de update podia atingir mais de uma linha.
+        if (resolvedInvoiceId) {
+          await prisma.invoice.update({
+            where: { id: resolvedInvoiceId },
+            data: {
+              status: "PAID",
+              paidAt: new Date(),
+              paymentConfirmed: true,
+              paymentConfirmedAt: new Date(),
+            },
+          });
+          // Backfill do vínculo quando a cobrança foi resolvida por
+          // `invoice:<id>` antes de o id do pagamento ter sido persistido (a
+          // corrida do QR PIX).
+          //
+          // 🔑 Guarda ATÔMICA no próprio WHERE, não no update acima: entre a
+          // leitura da evidência e esta escrita, o `ensureInvoiceCharge` pode
+          // ter gravado outro id. Sem `asaasPaymentId: null` no filtro, nós o
+          // sobrescreveríamos — a leitura anterior não vale como garantia.
+          if (event.payment?.id) {
+            await prisma.invoice.updateMany({
+              where: { id: resolvedInvoiceId, asaasPaymentId: null },
+              data: { asaasPaymentId: event.payment.id },
+            });
+          }
+        } else if (event.payment?.id) {
           await prisma.invoice.updateMany({
             where: { asaasPaymentId: event.payment.id },
             data: {
@@ -257,7 +495,17 @@ export async function POST(request: Request) {
       }
 
       case "PAYMENT_OVERDUE": {
-        if (subscriptionDbId) {
+        // 🔑 ESCOPO DELIBERADO: só a cobrança da MENSALIDADE rebaixa a assinatura.
+        //
+        // Antes desta correção, uma cobrança avulsa nunca resolvia subscription
+        // e portanto nunca podia rebaixar ninguém. Agora ela resolve — e deixar
+        // o rebaixamento valer para ela seria uma REGRESSÃO NOVA:
+        // `createManualCharge` aceita valor e descrição arbitrários (taxa de
+        // implantação, hardware), então uma taxa avulsa vencida bloquearia a
+        // clínica inteira. Pior ainda sem dedupe empresa+mês: de duas cobranças
+        // concorrentes, a vencida rebaixaria quem já pagou a mensalidade.
+        const downgradesSubscription = subscriptionDbId !== null && controlsAccess;
+        if (downgradesSubscription) {
           // H6/idempotência: NÃO sobrescrever pastDueSince num reenvio do
           // mesmo OVERDUE — isso resetaria o relógio de dunning (suspensão/
           // cancelamento contam dias desde pastDueSince). Só marca a primeira
@@ -279,7 +527,14 @@ export async function POST(request: Request) {
             data: { status: "PAST_DUE" },
           });
         }
-        if (event.payment?.id) {
+        // A fatura é marcada OVERDUE nos dois casos — o atraso é real e o
+        // financeiro precisa vê-lo. O que NÃO muda é o acesso do cliente.
+        if (resolvedInvoiceId) {
+          await prisma.invoice.update({
+            where: { id: resolvedInvoiceId },
+            data: { status: "OVERDUE" },
+          });
+        } else if (event.payment?.id) {
           await prisma.invoice.updateMany({
             where: { asaasPaymentId: event.payment.id },
             data: { status: "OVERDUE" },
@@ -289,12 +544,26 @@ export async function POST(request: Request) {
         // read-only): PAST_DUE agora bloqueia escrita no Domus. Sem isto, a
         // clínica só ficaria bloqueada no pull diário (~24h). AWAIT best-effort
         // (publishEntitlementForCompany nunca lança); ver ramos CONFIRMED/DELETED.
-        if (companyId) await publishEntitlementForCompany(companyId);
+        // Só quando o status DE FATO mudou (ver escopo acima) — publicar por uma
+        // taxa avulsa vencida empurraria um bloqueio que ninguém decidiu.
+        if (companyId && downgradesSubscription) {
+          await publishEntitlementForCompany(companyId);
+        }
         break;
       }
 
       case "PAYMENT_REFUNDED": {
-        if (event.payment?.id) {
+        // Política inalterada de propósito: o estorno marca a FATURA, não mexe
+        // na assinatura nem no entitlement. Definir o efeito de um refund sobre
+        // o acesso é decisão de produto (com que período o cliente fica? perde
+        // na hora?) e exige a máquina de estados citada no ramo OVERDUE.
+        // Registrado como dívida — não é regressão: é o comportamento atual.
+        if (resolvedInvoiceId) {
+          await prisma.invoice.update({
+            where: { id: resolvedInvoiceId },
+            data: { status: "REFUNDED" },
+          });
+        } else if (event.payment?.id) {
           await prisma.invoice.updateMany({
             where: { asaasPaymentId: event.payment.id },
             data: { status: "REFUNDED" },
@@ -305,7 +574,12 @@ export async function POST(request: Request) {
 
       case "PAYMENT_CHARGEBACK_REQUESTED":
       case "PAYMENT_CHARGEBACK_DISPUTE": {
-        if (event.payment?.id) {
+        if (resolvedInvoiceId) {
+          await prisma.invoice.update({
+            where: { id: resolvedInvoiceId },
+            data: { status: "OVERDUE", adminNotes: "Chargeback solicitado" },
+          });
+        } else if (event.payment?.id) {
           await prisma.invoice.updateMany({
             where: { asaasPaymentId: event.payment.id },
             data: { status: "OVERDUE", adminNotes: "Chargeback solicitado" },
@@ -314,13 +588,21 @@ export async function POST(request: Request) {
         // Suspende assinatura preventivamente — updateMany com guard de status
         // (não `update`): um chargeback não pode regredir uma assinatura terminal
         // (SUSPENDED/CANCELED) de volta a PAST_DUE.
-        if (subscriptionDbId) {
+        //
+        // Mesmo escopo do OVERDUE: só a cobrança da MENSALIDADE mexe no acesso.
+        // Chargeback de uma taxa avulsa não pode trancar a clínica — antes desta
+        // correção ele nem resolvia assinatura, e alargar isso aqui seria
+        // regressão nova, não conserto.
+        const chargebackHitsSubscription = subscriptionDbId !== null && controlsAccess;
+        if (chargebackHitsSubscription) {
           await prisma.subscription.updateMany({
-            where: { id: subscriptionDbId, status: { notIn: ["SUSPENDED", "CANCELED"] } },
+            where: { id: subscriptionDbId!, status: { notIn: ["SUSPENDED", "CANCELED"] } },
             data: { status: "PAST_DUE" },
           });
         }
-        if (companyId) await publishEntitlementForCompany(companyId);
+        if (companyId && chargebackHitsSubscription) {
+          await publishEntitlementForCompany(companyId);
+        }
         break;
       }
 
