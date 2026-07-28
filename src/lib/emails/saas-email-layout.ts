@@ -13,6 +13,12 @@ export interface SaasEmailLayoutInput {
   /** corpo já em HTML seguro (montado pelo template, dados já escapados lá) */
   bodyHtml: string;
   cta?: SaasEmailCta;
+  /**
+   * Rodapé alternativo. O padrão diz "sistema de gestão para óticas" — texto
+   * ERRADO para o cliente medical, que é clínica e receberia uma cobrança
+   * parecendo e-mail de outra empresa.
+   */
+  footerText?: string;
 }
 
 const BRAND = "#2E6BFF";
@@ -63,7 +69,7 @@ export function renderSaasEmailLayout(input: SaasEmailLayoutInput): string {
             </tr>
             <tr>
               <td style="padding:22px 28px 28px;color:#9ca3af;font-size:12px;line-height:1.5;border-top:1px solid #f0f1f4;">
-                Vis — Sistema de gestão para óticas.<br />
+                ${escapeHtml(input.footerText ?? "Vis — Sistema de gestão para óticas.")}<br />
                 Você recebeu este email porque tem uma conta no Vis.
               </td>
             </tr>

@@ -138,6 +138,26 @@ describe("saas-invoice-created", () => {
     const { html } = renderEmailTemplate("saas-invoice-created", { name: "João", amountLabel: "R$ 149,90", dueDateLabel: "10/07/2026", paymentUrl: "https://asaas/i/1" });
     expect(html).toContain("https://asaas/i/1");
   });
+
+  it("rodapé NÃO diz 'para óticas' — a mesma fatura vai para clínicas médicas", () => {
+    // 🔥 Uma clínica recebendo cobrança assinada "sistema de gestão para
+    // óticas" parece e-mail de outra empresa — e essa fatura é justamente a
+    // que converte o trial medical.
+    const { html } = renderEmailTemplate("saas-invoice-created", data);
+    expect(html).not.toContain("para óticas.");
+    expect(html).toContain("óticas e clínicas");
+  });
+
+  it("leva a marca Vis no topo", () => {
+    const { html } = renderEmailTemplate("saas-invoice-created", data);
+    expect(html).toContain("vis-logo-email.png");
+  });
+
+  it("aponta onde ver o QR Code (não embute imagem: cliente de e-mail bloqueia)", () => {
+    const { html, text } = renderEmailTemplate("saas-invoice-created", data);
+    expect(html).toContain("QR Code");
+    expect(text).toContain("QR Code");
+  });
 });
 
 describe("saas-invoice-due-soon", () => {

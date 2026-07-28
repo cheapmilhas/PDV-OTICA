@@ -427,12 +427,16 @@ ${descriptionRow}
   const boletoBlock = boleto
     ? `<p style="margin:18px 0 0;font-size:13px;"><a href="${boleto}" style="color:#2563eb;">Baixar boleto em PDF</a></p>`
     : "";
-  const bodyHtml = `${intro}${card}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Prefere cartão ou ver o QR Code? Clique em "Pagar agora".</p>${boletoBlock}`;
+  const bodyHtml = `${intro}${card}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Para pagar com <strong>QR Code</strong>, cartão ou outras opções, clique em "Pagar agora".</p>${boletoBlock}`;
   const html = renderSaasEmailLayout({
     previewTitle: isReminder ? "Sua fatura vence em breve" : "Sua fatura está disponível",
     heading: isReminder ? `${p.name}, sua fatura vence em breve` : `${p.name}, sua fatura está disponível`,
     bodyHtml,
     cta: { label: "Pagar agora", url: p.paymentUrl },
+    // 🔑 Rodapé NEUTRO: o padrão diz "sistema de gestão para óticas", e a mesma
+    // fatura vai para clínicas médicas. Não dá para variar por produto aqui
+    // (o template não recebe o produto), então o texto serve aos dois.
+    footerText: "Vis — Gestão para óticas e clínicas.",
   });
   const textLines = [
     isReminder
@@ -441,7 +445,7 @@ ${descriptionRow}
     p.description ? `Descrição: ${p.description}` : "",
     "",
     pix ? `PIX copia e cola: ${p.pixCode}` : "",
-    `Pagar agora: ${p.paymentUrl}`,
+    `Pagar agora (QR Code, cartão e outras opções): ${p.paymentUrl}`,
     boleto ? `Boleto: ${p.boletoUrl}` : "",
   ].filter(Boolean);
   return { html, text: textLines.join("\n") };
