@@ -447,7 +447,7 @@ export async function POST(
         // reusa, então mostrar o motivo é seguro (nada é recriado).
         let result: Awaited<ReturnType<typeof createTrialConversionCharge>>;
         try {
-          result = await createTrialConversionCharge(companyId);
+          result = await createTrialConversionCharge(companyId, { adminId: admin.id });
         } catch (e) {
           const detalhe = e instanceof Error ? e.message : String(e);
           log.error("falha ao gerar cobrança de conversão", {
@@ -509,9 +509,14 @@ export async function POST(
           amountCents: result.amountCents,
           reused: result.reused,
           paymentUrl: result.paymentUrl,
-          message: result.reused
-            ? "Cobrança já existente reenviada"
-            : "Cobrança de conversão gerada",
+          emailStatus: result.emailStatus,
+          // O operador precisa saber se o cliente FOI avisado: sem isso ele
+          // acha que a cobrança chegou por e-mail e não chegou.
+          message:
+            (result.reused ? "Cobrança já existente reenviada" : "Cobrança gerada") +
+            (result.emailStatus === "SENT"
+              ? " e e-mail enviado ao cliente"
+              : " — cliente NÃO foi avisado por e-mail (veja pela tela dele)"),
         });
       }
 

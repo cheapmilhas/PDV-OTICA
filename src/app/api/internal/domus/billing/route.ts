@@ -163,6 +163,7 @@ export async function GET(request: Request) {
       periodEnd: true,
       paymentUrl: true,
       pixCode: true,
+      pixQrCodeUrl: true,
       boletoUrl: true,
     },
     orderBy: { createdAt: "desc" },
@@ -184,6 +185,7 @@ export async function GET(request: Request) {
     periodEnd: invoice?.periodEnd?.toISOString() ?? null,
     paymentUrl: invoice?.paymentUrl ?? null,
     pixCode: invoice?.pixCode ?? null,
+    pixQrCodeUrl: invoice?.pixQrCodeUrl ?? null,
     boletoUrl: invoice?.boletoUrl ?? null,
   });
 }

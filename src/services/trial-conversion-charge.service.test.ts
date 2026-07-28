@@ -38,12 +38,15 @@ function makePrisma() {
 
 const ensureCustomerFn = vi.fn();
 const ensureChargeFn = vi.fn();
+const sendChargeEmailFn = vi.fn();
 
 function run() {
   return createTrialConversionCharge(COMPANY_ID, {
     prismaClient: makePrisma(),
     ensureCustomerFn,
     ensureChargeFn,
+    sendChargeEmailFn,
+    adminId: "admin-1",
     now: NOW,
   });
 }
@@ -71,6 +74,7 @@ beforeEach(() => {
   invoiceFindFirst.mockResolvedValue(null);
   invoiceCreate.mockResolvedValue({ id: "inv-new" });
   ensureCustomerFn.mockResolvedValue({ asaasCustomerId: "cus_1", created: false });
+  sendChargeEmailFn.mockResolvedValue({ status: "SENT", alreadySentToday: false });
   ensureChargeFn.mockResolvedValue({
     id: "inv-new",
     total: 18990,
@@ -108,6 +112,26 @@ describe("createTrialConversionCharge — caminho feliz", () => {
     await run();
     expect(ensureCustomerFn).toHaveBeenCalledWith(COMPANY_ID);
     expect(ensureChargeFn).toHaveBeenCalledWith("inv-new");
+  });
+
+  it("AVISA o cliente por e-mail", async () => {
+    // Sem isto a cobrança existia só dentro do sistema: a clínica só
+    // descobriria abrindo a tela de Assinatura por conta própria.
+    const r = await run();
+
+    expect(sendChargeEmailFn).toHaveBeenCalledWith("inv-new", "admin-1");
+    expect(r).toMatchObject({ kind: "ok", emailStatus: "SENT" });
+  });
+
+  it("falha no e-mail NÃO desfaz a cobrança nem propaga erro", async () => {
+    // A cobrança já existe e é válida. Propagar o erro faria o operador ver
+    // "falhou" e clicar de novo, achando que nada aconteceu.
+    sendChargeEmailFn.mockRejectedValue(new Error("provedor fora"));
+
+    const r = await run();
+
+    expect(r).toMatchObject({ kind: "ok", invoiceId: "inv-new" });
+    expect((r as { emailStatus: string }).emailStatus).toBe("NOT_SENT");
   });
 });
 

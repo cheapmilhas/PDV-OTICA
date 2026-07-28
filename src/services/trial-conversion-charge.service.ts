@@ -2,6 +2,7 @@ import { prisma as defaultPrisma } from "@/lib/prisma";
 import { advisoryKeyForCompany } from "@/lib/advisory-lock";
 import { ensureAsaasCustomer } from "@/services/asaas-customer.service";
 import { ensureInvoiceCharge } from "@/services/invoice-charge.service";
+import { sendInvoiceCharge } from "@/services/invoice-send.service";
 import { nextSaasInvoiceNumber } from "@/lib/saas-invoice-number";
 import { logger } from "@/lib/logger";
 import {
@@ -34,6 +35,8 @@ export type TrialChargeResult =
       invoiceId: string;
       amountCents: number;
       reused: boolean;
+      /** Resultado do e-mail ao cliente (best-effort — não bloqueia a cobrança). */
+      emailStatus: string;
       paymentUrl: string | null;
       pixCode: string | null;
       dueDate: Date | null;
@@ -57,6 +60,9 @@ interface Deps {
   prismaClient?: typeof defaultPrisma;
   ensureCustomerFn?: typeof ensureAsaasCustomer;
   ensureChargeFn?: typeof ensureInvoiceCharge;
+  sendChargeEmailFn?: typeof sendInvoiceCharge;
+  /** Admin que disparou (fica registrado em `invoiceSentBy`). */
+  adminId?: string;
   now?: Date;
 }
 
@@ -67,6 +73,8 @@ export async function createTrialConversionCharge(
   const prisma = deps.prismaClient ?? defaultPrisma;
   const ensureCustomerFn = deps.ensureCustomerFn ?? ensureAsaasCustomer;
   const ensureChargeFn = deps.ensureChargeFn ?? ensureInvoiceCharge;
+  const sendChargeEmailFn = deps.sendChargeEmailFn ?? sendInvoiceCharge;
+  const adminId = deps.adminId;
   const now = deps.now ?? new Date();
 
   // ── Fase 1: decidir e RESERVAR a fatura sob advisory lock ──────────────────
@@ -220,8 +228,31 @@ export async function createTrialConversionCharge(
   try {
     await ensureCustomerFn(companyId);
     const charged = await ensureChargeFn(decision.invoiceId);
+
+    // AVISA O CLIENTE. Sem isto a cobrança existia só dentro do sistema: a
+    // clínica só descobriria abrindo a tela de Assinatura por conta própria —
+    // frágil demais para quem está com o trial vencendo, ainda mais porque o
+    // e-mail de fim de trial promete que a equipe entra em contato.
+    //
+    // Best-effort DE PROPÓSITO: a cobrança JÁ existe e é válida; falhar o envio
+    // não pode desfazê-la nem propagar erro para o operador, que veria "falhou"
+    // e clicaria de novo. `sendInvoiceCharge` é idempotente por dia
+    // (periodKey inclui a data), então reenviar não duplica e-mail.
+    let emailStatus = "NOT_SENT";
+    try {
+      const r = await sendChargeEmailFn(decision.invoiceId, adminId ?? "system");
+      emailStatus = r.status;
+    } catch (e) {
+      log.warn("cobrança criada mas e-mail falhou (cliente vê pela tela)", {
+        companyId,
+        invoiceId: decision.invoiceId,
+        error: e instanceof Error ? e.message : String(e),
+      });
+    }
+
     return {
       kind: "ok",
+      emailStatus,
       invoiceId: decision.invoiceId,
       // Na REUSA o valor vem da fatura já emitida, não de um recálculo: o preço
       // é CONGELADO no momento da emissão. Recalcular aqui faria uma mudança de

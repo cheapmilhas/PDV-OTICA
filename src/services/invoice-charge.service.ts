@@ -113,8 +113,16 @@ export async function ensureInvoiceCharge(
   );
 
   let pixCode: string | undefined;
+  let pixQrCodeUrl: string | undefined;
   try {
-    pixCode = (await asaasClient.payments.pixQrCode(payment.id)).payload;
+    const qr = await asaasClient.payments.pixQrCode(payment.id);
+    pixCode = qr.payload;
+    // A imagem vem em base64 SEM o prefixo data:. Guardamos já como data URI
+    // para a tela poder usar direto em <img src>, sem cada consumidor ter que
+    // lembrar de montar o prefixo (e errar em silêncio se esquecer).
+    pixQrCodeUrl = qr.encodedImage
+      ? `data:image/png;base64,${qr.encodedImage}`
+      : undefined;
   } catch {
     // PIX QR code is optional; proceed without it
   }
@@ -126,6 +134,7 @@ export async function ensureInvoiceCharge(
       paymentUrl: payment.invoiceUrl,
       boletoUrl: payment.bankSlipUrl,
       pixCode,
+      pixQrCodeUrl,
       billingType: payment.billingType,
     },
   });

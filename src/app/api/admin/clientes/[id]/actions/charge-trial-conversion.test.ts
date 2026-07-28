@@ -91,7 +91,11 @@ describe("charge_trial_conversion", () => {
       amountCents: 18990,
       reused: false,
     });
-    expect(createTrialConversionCharge).toHaveBeenCalledWith("co-medical");
+    // adminId vai junto: é ele que fica registrado em `invoiceSentBy`.
+    expect(createTrialConversionCharge).toHaveBeenCalledWith(
+      "co-medical",
+      expect.objectContaining({ adminId: "admin-1" })
+    );
   });
 
   it("registra auditoria com valor e se a cobrança foi REUSADA", async () => {
