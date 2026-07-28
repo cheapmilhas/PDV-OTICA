@@ -7,6 +7,7 @@ import { containsHtml } from "@/lib/validations/safe-text";
 import { enqueueProvisioning, runProvisioningOnce } from "@/services/provisioning-outbox.service";
 import { isPlanTier } from "@/lib/resolve-plan-for-tier";
 import type { ProvisionRequest } from "@/lib/vis-provision-client";
+import { erroDocumento, limparDocumento } from "@/lib/documento-br";
 
 const log = logger.child({ route: "public/register-medical" });
 
@@ -51,12 +52,12 @@ export async function POST(request: Request) {
     // LANÇA (asaas-customer.service.ts) — ou seja, o trial acabava e não havia
     // como emitir cobrança nenhuma, nem pelo super admin. Barrar no cadastro é
     // o único ponto barato: depois exige contato com o cliente.
-    const cleanDoc = typeof document === "string" ? document.replace(/\D/g, "") : "";
-    if (!cleanDoc) {
-      return NextResponse.json({ error: "CPF ou CNPJ é obrigatório" }, { status: 400 });
-    }
-    if (cleanDoc.length !== 11 && cleanDoc.length !== 14) {
-      return NextResponse.json({ error: "CPF (11) ou CNPJ (14 dígitos) inválido" }, { status: 400 });
+    const cleanDoc = typeof document === "string" ? limparDocumento(document) : "";
+    // Valida o DÍGITO VERIFICADOR, não só o comprimento — um número inventado
+    // passaria e a clínica entraria em trial sem poder ser cobrada depois.
+    const erroDoc = erroDocumento(typeof document === "string" ? document : "");
+    if (erroDoc) {
+      return NextResponse.json({ error: erroDoc }, { status: 400 });
     }
 
     // Email único global (o admin da clínica não pode colidir).

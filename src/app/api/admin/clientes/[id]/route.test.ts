@@ -55,7 +55,7 @@ function makePatchRequest(companyId: string, body: unknown): Request {
 const validBody = {
   name: "Ótica Atualizada",
   tradeName: "Ótica",
-  cnpj: "12.345.678/0001-99",
+  cnpj: "33.000.167/0001-01",
   email: "otica@example.com",
   phone: "11999999999",
   address: "Rua X, 1",
@@ -102,7 +102,7 @@ describe("PATCH /api/admin/clientes/[id] — cross-tenant isolation", () => {
     companyFindUniqueMock.mockResolvedValue({
       id: "company-A",
       name: "Ótica Antiga",
-      cnpj: "12.345.678/0001-99",
+      cnpj: "33.000.167/0001-01",
     });
     // Sem conflito de CNPJ
     companyFindFirstMock.mockResolvedValue(null);

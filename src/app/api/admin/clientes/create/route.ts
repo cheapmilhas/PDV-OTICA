@@ -11,6 +11,7 @@ import { logActivity } from "@/services/activity-log.service";
 import { createOnboardingChecklist, completeOnboardingStep } from "@/services/onboarding-checklist.service";
 import { ActorType } from "@prisma/client";
 import { logger } from "@/lib/logger";
+import { erroDocumento, limparDocumento } from "@/lib/documento-br";
 import { containsHtml } from "@/lib/validations/safe-text";
 import { resolveProvisionProduct, allowLocalAdminUser } from "../provision-product";
 
@@ -128,9 +129,13 @@ export async function POST(request: Request) {
   // CNPJ obrigatório (DEC-2): a checagem de truthiness acima roda no valor CRU, mas
   // entradas como "." ou "   " passam e viram string vazia após remover não-dígitos.
   // Sem esta validação, criaríamos uma Company com cnpj="" (estado inválido).
-  const cleanCnpj = cnpj.replace(/\D/g, "");
-  if (cleanCnpj.length !== 14) {
-    return NextResponse.json({ error: "CNPJ inválido (14 dígitos)" }, { status: 400 });
+  // Valida DÍGITO VERIFICADOR, não só comprimento: um número inventado com 14
+  // dígitos entrava e só era recusado pelo gateway na hora de cobrar, com o
+  // cliente já em trial. Aceita CPF (consultório individual) ou CNPJ.
+  const cleanCnpj = limparDocumento(cnpj);
+  const erroDoc = erroDocumento(cnpj);
+  if (erroDoc) {
+    return NextResponse.json({ error: erroDoc }, { status: 400 });
   }
 
   // Verificar CNPJ duplicado

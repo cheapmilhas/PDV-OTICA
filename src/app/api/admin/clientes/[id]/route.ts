@@ -3,6 +3,7 @@ import { prisma } from "@/lib/prisma";
 import { getAdminSession, requireCompanyScope } from "@/lib/admin-session";
 import { logger } from "@/lib/logger";
 import { containsHtml } from "@/lib/validations/safe-text";
+import { erroDocumento, limparDocumento } from "@/lib/documento-br";
 
 const log = logger.child({ route: "admin/clientes/[id]" });
 
@@ -47,13 +48,27 @@ export async function PATCH(
       return NextResponse.json({ error: "Empresa não encontrada" }, { status: 404 });
     }
 
-    // Verificar CNPJ único (se mudou)
-    if (cnpj && cnpj !== company.cnpj) {
+    // Documento: valida DÍGITO VERIFICADOR e normaliza para só dígitos.
+    //
+    // 🔥 Antes só o comprimento era checado (e só na criação): um número
+    // inventado com 14 dígitos entrava, e a falha aparecia semanas depois,
+    // quando o gateway recusava a cobrança com o cliente já em trial.
+    //
+    // Normalizar é parte da correção: gravar com máscara faria "123.456" e
+    // "123456" contarem como empresas diferentes na checagem de duplicidade, e
+    // o gateway receberia a pontuação junto.
+    const docLimpo = cnpj ? limparDocumento(cnpj) : "";
+    if (cnpj && cnpj.trim()) {
+      const erro = erroDocumento(cnpj);
+      if (erro) return NextResponse.json({ error: erro }, { status: 400 });
+    }
+
+    if (docLimpo && docLimpo !== company.cnpj) {
       const existingCnpj = await prisma.company.findFirst({
-        where: { cnpj, id: { not: companyId } },
+        where: { cnpj: docLimpo, id: { not: companyId } },
       });
       if (existingCnpj) {
-        return NextResponse.json({ error: "CNPJ já está em uso por outra empresa" }, { status: 400 });
+        return NextResponse.json({ error: "CPF/CNPJ já está em uso por outra empresa" }, { status: 400 });
       }
     }
 
@@ -62,7 +77,7 @@ export async function PATCH(
       data: {
         name: name.trim(),
         tradeName: tradeName?.trim() || null,
-        cnpj: cnpj?.trim() || null,
+        cnpj: docLimpo || null,
         email: email?.trim() || null,
         phone: phone?.trim() || null,
         address: address?.trim() || null,

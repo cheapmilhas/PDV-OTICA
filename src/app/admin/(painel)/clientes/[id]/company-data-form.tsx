@@ -5,6 +5,8 @@ import { useRouter } from "next/navigation";
 import { Loader2, Save } from "lucide-react";
 import { toast } from "sonner";
 
+import { erroDocumento, formatarDocumento } from "@/lib/documento-br";
+
 interface CompanyData {
   id: string;
   name: string;
@@ -41,10 +43,19 @@ export function CompanyDataForm({ company }: { company: CompanyData }) {
     website: company.website || "",
   });
 
+  // Documento é OPCIONAL no cadastro (nem toda empresa antiga tem), mas se
+  // preenchido precisa ser VÁLIDO — gravar um número inventado só adia a falha
+  // para a hora de cobrar.
+  const erroDoc = form.cnpj.trim() ? erroDocumento(form.cnpj) : null;
+
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
     if (!form.name.trim()) {
       toast.error("Nome é obrigatório");
+      return;
+    }
+    if (erroDoc) {
+      toast.error(erroDoc);
       return;
     }
     setSaving(true);
@@ -103,12 +114,28 @@ export function CompanyDataForm({ company }: { company: CompanyData }) {
             />
           </div>
           <div>
-            <label className="block text-xs text-muted-foreground mb-1">CNPJ</label>
+            {/* "CPF ou CNPJ": o produto atende consultório individual (pessoa
+                física) e clínica (pessoa jurídica) — rotular só CNPJ fazia
+                parecer que PF não cabia. */}
+            <label className="block text-xs text-muted-foreground mb-1">CPF ou CNPJ</label>
             <input
               value={form.cnpj}
-              onChange={(e) => setForm({ ...form, cnpj: e.target.value })}
-              className="w-full px-3 py-2 bg-background border border-input rounded-lg text-sm text-foreground focus:outline-none focus:border-primary"
+              onChange={(e) => setForm({ ...form, cnpj: formatarDocumento(e.target.value) })}
+              placeholder="000.000.000-00 ou 00.000.000/0000-00"
+              className={`w-full px-3 py-2 bg-background border rounded-lg text-sm text-foreground focus:outline-none focus:border-primary ${
+                erroDoc ? "border-destructive" : "border-input"
+              }`}
             />
+            {/* Valida o DÍGITO VERIFICADOR, não só o comprimento: um número
+                inventado com 14 dígitos passava e só era recusado pelo gateway
+                na hora de cobrar, com o cliente já dentro. */}
+            {erroDoc ? (
+              <p className="mt-1 text-xs text-destructive">{erroDoc}</p>
+            ) : (
+              <p className="mt-1 text-xs text-muted-foreground">
+                Necessário para emitir cobrança.
+              </p>
+            )}
           </div>
           <div>
             <label className="block text-xs text-muted-foreground mb-1">Email</label>

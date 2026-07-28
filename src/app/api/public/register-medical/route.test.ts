@@ -33,7 +33,7 @@ function req(body: unknown) {
   });
 }
 
-const valid = { name: "Dra. Ana", email: "ana@clinica.test", companyName: "Clínica Ana", document: "12345678901" };
+const valid = { name: "Dra. Ana", email: "ana@clinica.test", companyName: "Clínica Ana", document: "52998224725" };
 
 describe("POST /api/public/register-medical", () => {
   beforeEach(() => vi.clearAllMocks());
@@ -100,7 +100,7 @@ describe("POST /api/public/register-medical", () => {
   it("aceita CPF (11 dígitos) — clínica pode ser PF", async () => {
     companyFindFirst.mockResolvedValue(null);
     planFindFirst.mockResolvedValue(null); // para no 500, mas passou da validação de doc
-    const res = await POST(req({ ...valid, document: "12345678901" }));
+    const res = await POST(req({ ...valid, document: "52998224725" }));
     // não é 400 (documento válido); é 500 por falta de plano no mock
     expect(res.status).not.toBe(400);
   });
