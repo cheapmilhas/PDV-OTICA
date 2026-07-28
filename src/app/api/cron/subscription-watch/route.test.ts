@@ -72,7 +72,7 @@ describe("GET /api/cron/subscription-watch", () => {
         id: "sub-1",
         companyId: "company-1",
         trialEndsAt: pastDate,
-        company: { name: "Ótica Teste" },
+        company: { name: "Ótica Teste", platformProduct: "VIS_APP" },
       },
     ]);
 
@@ -117,7 +117,7 @@ describe("GET /api/cron/subscription-watch", () => {
         id: "sub-2",
         companyId: "company-2",
         trialEndsAt: soonDate,
-        company: { name: "Ótica XYZ" },
+        company: { name: "Ótica XYZ", platformProduct: "VIS_APP" },
       },
     ]);
 
@@ -148,7 +148,7 @@ describe("GET /api/cron/subscription-watch", () => {
     function trialTerminando() {
       const em2Dias = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
       findMany.mockResolvedValue([
-        { id: "sub-2", companyId: "company-2", trialEndsAt: em2Dias, company: { name: "Clínica Vida" } },
+        { id: "sub-2", companyId: "company-2", trialEndsAt: em2Dias, company: { name: "Clínica Vida", platformProduct: "VIS_APP" } },
       ]);
       return em2Dias;
     }
@@ -175,7 +175,7 @@ describe("GET /api/cron/subscription-watch", () => {
       // ordem inversa, o alerta se perderia para sempre).
       const ontem = new Date(Date.now() - 24 * 60 * 60 * 1000);
       findMany.mockResolvedValue([
-        { id: "sub-1", companyId: "company-1", trialEndsAt: ontem, company: { name: "Ótica Teste" } },
+        { id: "sub-1", companyId: "company-1", trialEndsAt: ontem, company: { name: "Ótica Teste", platformProduct: "VIS_APP" } },
       ]);
       const res = await GET(makeRequest("Bearer test-secret"));
       expect(res.status).toBe(200);
@@ -188,8 +188,8 @@ describe("GET /api/cron/subscription-watch", () => {
       // depender disso: se um dia lançar, o processamento tem que continuar.
       const em2Dias = new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
       findMany.mockResolvedValue([
-        { id: "sub-a", companyId: "co-a", trialEndsAt: em2Dias, company: { name: "A" } },
-        { id: "sub-b", companyId: "co-b", trialEndsAt: em2Dias, company: { name: "B" } },
+        { id: "sub-a", companyId: "co-a", trialEndsAt: em2Dias, company: { name: "A", platformProduct: "VIS_APP" } },
+        { id: "sub-b", companyId: "co-b", trialEndsAt: em2Dias, company: { name: "B", platformProduct: "VIS_APP" } },
       ]);
       alertOperators.mockRejectedValueOnce(new Error("banco fora"));
 
@@ -209,6 +209,91 @@ describe("GET /api/cron/subscription-watch", () => {
       const body = await res.json();
       expect(body.ending).toBe(1); // o trial foi processado
       expect(body.alerted).toBe(0); // mas nada de novo foi criado
+    });
+  });
+
+  // O cliente VIS_MEDICAL usa o Domus e NÃO tem usuário no app Vis. O cron
+  // mandava para ele o mesmo "Assine agora → /dashboard/upgrade" da ótica:
+  // porta trancada. Estes testes travam o comportamento por produto.
+  describe("cliente medical", () => {
+    const em2Dias = () => new Date(Date.now() + 2 * 24 * 60 * 60 * 1000);
+    const ontem = () => new Date(Date.now() - 24 * 60 * 60 * 1000);
+
+    function trialMedical(trialEndsAt: Date) {
+      findMany.mockResolvedValue([
+        {
+          id: "sub-med",
+          companyId: "clinica-1",
+          trialEndsAt,
+          company: { name: "Clínica MedFacil", platformProduct: "VIS_MEDICAL" },
+        },
+      ]);
+    }
+
+    it("não manda CTA nem in-app do Vis no aviso de fim de trial", async () => {
+      trialMedical(em2Dias());
+
+      await GET(makeRequest("Bearer test-secret"));
+
+      const [, eventType, payload, opts] = notifyCompany.mock.calls[0];
+      expect(eventType).toBe("TRIAL_ENDING");
+      expect(payload).not.toHaveProperty("subscribeUrl");
+      expect(opts.channels).toEqual(["email"]);
+      expect(opts.inapp).toBeUndefined();
+      expect(opts.templateOverride).toEqual({ template: "saas-trial-ending-medical" });
+    });
+
+    it("usa o template medical também no trial expirado", async () => {
+      trialMedical(ontem());
+
+      await GET(makeRequest("Bearer test-secret"));
+
+      const [, eventType, payload, opts] = notifyCompany.mock.calls[0];
+      expect(eventType).toBe("TRIAL_EXPIRED");
+      expect(payload).not.toHaveProperty("subscribeUrl");
+      expect(opts.templateOverride).toEqual({ template: "saas-trial-expired-medical" });
+    });
+
+    it("AINDA vira o status para TRIAL_EXPIRED (estado de cobrança não depende do aviso)", async () => {
+      trialMedical(ontem());
+
+      await GET(makeRequest("Bearer test-secret"));
+
+      expect(updateMany).toHaveBeenCalledWith(
+        expect.objectContaining({
+          where: { id: "sub-med", status: "TRIAL" },
+          data: { status: "TRIAL_EXPIRED" },
+        })
+      );
+    });
+
+    it("AINDA alerta o operador — silenciar o CTA do cliente não pode cegar o dono", async () => {
+      trialMedical(em2Dias());
+
+      await GET(makeRequest("Bearer test-secret"));
+
+      expect(alertOperators).toHaveBeenCalledWith(
+        expect.objectContaining({ companyId: "clinica-1", companyName: "Clínica MedFacil" })
+      );
+    });
+
+    it("a ótica segue recebendo CTA e in-app (sem regressão)", async () => {
+      findMany.mockResolvedValue([
+        {
+          id: "sub-otica",
+          companyId: "otica-1",
+          trialEndsAt: em2Dias(),
+          company: { name: "Ótica Teste", platformProduct: "VIS_APP" },
+        },
+      ]);
+
+      await GET(makeRequest("Bearer test-secret"));
+
+      const [, , payload, opts] = notifyCompany.mock.calls[0];
+      expect(payload).toHaveProperty("subscribeUrl");
+      expect(String(payload.subscribeUrl)).toContain("/dashboard/upgrade");
+      expect(opts.channels).toEqual(["email", "inapp"]);
+      expect(opts.templateOverride).toBeUndefined();
     });
   });
 });

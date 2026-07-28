@@ -5,6 +5,7 @@ import { trialAction } from "@/services/subscription-watch.service";
 import { notifyCompany } from "@/services/saas-notification.service";
 import { alertOperators } from "@/services/trial-alert.service";
 import { withHeartbeat } from "@/lib/cron-instrument";
+import { resolveTrialNotice } from "@/lib/trial-notice-target";
 
 export const runtime = "nodejs";
 export const dynamic = "force-dynamic";
@@ -27,7 +28,7 @@ export async function GET(request: Request) {
           id: true,
           companyId: true,
           trialEndsAt: true,
-          company: { select: { name: true } },
+          company: { select: { name: true, platformProduct: true } },
         },
       });
 
@@ -39,6 +40,13 @@ export async function GET(request: Request) {
         const action = trialAction(sub.trialEndsAt, now);
         if (!action) continue;
         const name = sub.company?.name ?? "Cliente";
+        // Para onde o aviso manda o cliente depende do PRODUTO dele: o cliente
+        // medical usa o Domus e não tem usuário no app Vis — CTA e in-app do
+        // Vis não servem para ele. Ver trial-notice-target.ts.
+        // Sem `?? "VIS_APP"`: a relação company e o campo platformProduct são
+        // obrigatórios no schema. Um default aqui seria fail-OPEN — dado
+        // inconsistente viraria "é ótica" e receberia o CTA errado calado.
+        const notice = resolveTrialNotice(sub.company.platformProduct, base);
         try {
           if (action === "TRIAL_ENDING") {
             const daysLeft = Math.max(
@@ -48,15 +56,25 @@ export async function GET(request: Request) {
             await notifyCompany(
               sub.companyId,
               "TRIAL_ENDING",
-              { name, daysLeft, subscribeUrl: `${base}/dashboard/upgrade` },
+              notice.subscribeUrl
+                ? { name, daysLeft, subscribeUrl: notice.subscribeUrl }
+                : { name, daysLeft },
               {
                 periodKey: "trial-ending",
-                channels: ["email", "inapp"],
-                inapp: {
-                  title: "Seu teste está acabando",
-                  message: `Faltam ${daysLeft} dia(s) do seu período de teste.`,
-                  link: "/dashboard/upgrade",
-                },
+                // Sem link in-app (medical) → só e-mail. A notificação in-app é
+                // lida DENTRO do app Vis; criá-la para quem não entra lá seria
+                // registrar um aviso que ninguém nunca vê.
+                channels: notice.inappLink ? ["email", "inapp"] : ["email"],
+                ...(notice.inappLink && {
+                  inapp: {
+                    title: "Seu teste está acabando",
+                    message: `Faltam ${daysLeft} dia(s) do seu período de teste.`,
+                    link: notice.inappLink,
+                  },
+                }),
+                ...(notice.templateOverride && {
+                  templateOverride: { template: notice.templateOverride.ending },
+                }),
               }
             );
             // N5: avisa o OPERADOR, além do cliente.
@@ -84,15 +102,22 @@ export async function GET(request: Request) {
             await notifyCompany(
               sub.companyId,
               "TRIAL_EXPIRED",
-              { name, subscribeUrl: `${base}/dashboard/upgrade` },
+              notice.subscribeUrl
+                ? { name, subscribeUrl: notice.subscribeUrl }
+                : { name },
               {
                 periodKey: "trial-expired",
-                channels: ["email", "inapp"],
-                inapp: {
-                  title: "Seu teste terminou",
-                  message: "Assine para continuar usando o Vis.",
-                  link: "/dashboard/upgrade",
-                },
+                channels: notice.inappLink ? ["email", "inapp"] : ["email"],
+                ...(notice.inappLink && {
+                  inapp: {
+                    title: "Seu teste terminou",
+                    message: "Assine para continuar usando o Vis.",
+                    link: notice.inappLink,
+                  },
+                }),
+                ...(notice.templateOverride && {
+                  templateOverride: { template: notice.templateOverride.expired },
+                }),
               }
             );
             // persiste a transição de status (idempotente: só TRIAL → TRIAL_EXPIRED)

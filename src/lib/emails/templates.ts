@@ -263,6 +263,57 @@ function renderSaasTrialExpired(data: unknown): RenderedEmail {
   return { html, text };
 }
 
+/**
+ * Variantes MEDICAL dos avisos de trial.
+ *
+ * 🔑 Por que templates próprios em vez de tornar `subscribeUrl` opcional nos de
+ * cima: aquele campo é obrigatório de propósito. Afrouxá-lo faria o CTA das
+ * ÓTICAS poder sumir em silêncio numa mudança futura — o Zod é o que trava isso.
+ *
+ * O cliente `VIS_MEDICAL` usa o Domus e ainda não tem autoatendimento de
+ * assinatura, então aqui o e-mail AVISA sem prometer um botão que não existe:
+ * sem `cta`, e dizendo que a equipe entra em contato (o alerta ao operador sai
+ * no mesmo tick do cron, via trial-alert.service).
+ */
+const trialEndingMedicalSchema = z.object({
+  name: z.string().min(1),
+  daysLeft: z.number().int().nonnegative(),
+});
+function renderSaasTrialEndingMedical(data: unknown): RenderedEmail {
+  const p = trialEndingMedicalSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Seu período de teste termina em <strong>${p.daysLeft} dia(s)</strong>.</p>
+<p style="margin:0 0 22px;">Para manter o acesso da sua clínica sem interrupção, nossa equipe entrará em contato para ativar sua assinatura.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Seu teste está acabando",
+    heading: `${p.name}, seu teste está acabando`,
+    bodyHtml,
+  });
+  const text = [
+    `${p.name}, seu teste termina em ${p.daysLeft} dia(s).`,
+    "",
+    "Nossa equipe entrará em contato para ativar sua assinatura.",
+  ].join("\n");
+  return { html, text };
+}
+
+const trialExpiredMedicalSchema = z.object({ name: z.string().min(1) });
+function renderSaasTrialExpiredMedical(data: unknown): RenderedEmail {
+  const p = trialExpiredMedicalSchema.parse(data);
+  const bodyHtml = `<p style="margin:0 0 16px;">Seu período de teste chegou ao fim.</p>
+<p style="margin:0 0 22px;">Para reativar o acesso da sua clínica, nossa equipe entrará em contato para ativar sua assinatura.</p>`;
+  const html = renderSaasEmailLayout({
+    previewTitle: "Seu teste terminou",
+    heading: `${p.name}, seu teste terminou`,
+    bodyHtml,
+  });
+  const text = [
+    `${p.name}, seu período de teste terminou.`,
+    "",
+    "Nossa equipe entrará em contato para ativar sua assinatura.",
+  ].join("\n");
+  return { html, text };
+}
+
 const invoiceOverdueSchema = z.object({
   name: z.string().min(1),
   daysOverdue: z.number().int().nonnegative(),
@@ -516,6 +567,10 @@ export function renderEmailTemplate(template: string, data: unknown): RenderedEm
       return renderSaasTrialEnding(data);
     case "saas-trial-expired":
       return renderSaasTrialExpired(data);
+    case "saas-trial-ending-medical":
+      return renderSaasTrialEndingMedical(data);
+    case "saas-trial-expired-medical":
+      return renderSaasTrialExpiredMedical(data);
     case "saas-invoice-overdue":
       return renderSaasInvoiceOverdue(data);
     case "saas-payment-confirmed":

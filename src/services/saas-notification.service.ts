@@ -20,6 +20,20 @@ export interface NotifyCompanyOpts {
    * o cron o reprocessa depois (fallback automático).
    */
   flushImmediately?: boolean;
+  /**
+   * Troca o template (e opcionalmente o assunto) do catálogo por uma variante,
+   * mantendo o mesmo `SaasEmailType`.
+   *
+   * Existe para o mesmo evento renderizar diferente por PRODUTO — o aviso de
+   * trial do cliente `VIS_MEDICAL` não pode levar o CTA "Assinar agora" que
+   * aponta para uma tela do app Vis, que ele não acessa.
+   *
+   * 🔑 Override do TEMPLATE, não do TIPO: o tipo continua `TRIAL_ENDING`, então
+   * a flag liga/desliga do catálogo, a idempotência por `periodKey` e o
+   * histórico em `SaasEmailLog` seguem valendo iguais para os dois produtos.
+   * Criar um valor novo no enum exigiria migração e duplicaria essas regras.
+   */
+  templateOverride?: { template: string; subject?: string };
 }
 
 export interface NotifyResult {
@@ -105,7 +119,12 @@ export async function notifyCompany(
       // que o cron passa intacto ao renderEmailTemplate). NÃO injetar `to` no
       // payload — os schemas Zod dos templates (Task 5) não têm campo `to`.
       const queued = await prisma.emailQueue.create({
-        data: { to, subject: entry.subject, template: entry.template, data: payload as Prisma.InputJsonValue },
+        data: {
+          to,
+          subject: opts.templateOverride?.subject ?? entry.subject,
+          template: opts.templateOverride?.template ?? entry.template,
+          data: payload as Prisma.InputJsonValue,
+        },
       });
       emailQueueId = queued.id;
 
