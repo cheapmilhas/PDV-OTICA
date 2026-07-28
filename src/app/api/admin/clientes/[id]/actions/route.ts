@@ -516,7 +516,9 @@ export async function POST(
             (result.reused ? "Cobrança já existente reenviada" : "Cobrança gerada") +
             (result.emailStatus === "SENT"
               ? " e e-mail enviado ao cliente"
-              : " — cliente NÃO foi avisado por e-mail (veja pela tela dele)"),
+              : result.emailStatus === "SKIPPED"
+                ? " — e-mail já havia sido enviado hoje (não reenviamos para não duplicar)"
+                : " — cliente NÃO foi avisado por e-mail (veja pela tela dele)"),
         });
       }
 
