@@ -37,6 +37,16 @@ const WINDOW_MS = 5 * 60 * 1000;
 
 export type BillingReadState = "no_charge" | "pending" | "overdue" | "paid";
 
+/**
+ * Faturas cujo estado admite PAGAMENTO.
+ *
+ * 🔥 Só estas são consultadas. Um `else` que jogasse todo status desconhecido em
+ * "pending" faria a tela exibir PIX de fatura CANCELADA ou ESTORNADA — o cliente
+ * pagaria uma cobrança que não existe mais, e o dinheiro teria de ser devolvido
+ * à mão. DRAFT também fica fora: é rascunho, ninguém deve pagar.
+ */
+const PAYABLE_STATUSES = ["PENDING", "OVERDUE", "PAID"] as const;
+
 function unauthorized(reason: string) {
   // Motivo só no log: a resposta não diferencia causa para não virar oráculo.
   log.warn("leitura de cobrança recusada", { reason });
@@ -52,11 +62,19 @@ function safeEqualHex(a: string, b: string): boolean {
   }
 }
 
-/** Mapeia o status da fatura para o que a tela do Domus precisa saber. */
+/**
+ * Mapeia o status da fatura para o que a tela do Domus precisa saber.
+ *
+ * EXAUSTIVO de propósito: qualquer status fora da lista pagável vira
+ * `no_charge`, e a tela não oferece meio de pagamento. É o lado seguro de
+ * errar — deixar de mostrar um PIX legítimo é recuperável (o operador reemite);
+ * mostrar o PIX de uma fatura cancelada cobra dinheiro que precisa voltar.
+ */
 function stateFromInvoice(status: string): BillingReadState {
   if (status === "PAID") return "paid";
   if (status === "OVERDUE") return "overdue";
-  return "pending";
+  if (status === "PENDING") return "pending";
+  return "no_charge";
 }
 
 export async function GET(request: Request) {
@@ -129,7 +147,13 @@ export async function GET(request: Request) {
 
   const sub = subs[0];
   const invoice = await prisma.invoice.findFirst({
-    where: { subscriptionId: sub.id, isManual: false },
+    // Só mensalidade (isManual false) e só estado pagável: uma fatura cancelada
+    // não pode ser servida como "a cobrança atual" da clínica.
+    where: {
+      subscriptionId: sub.id,
+      isManual: false,
+      status: { in: [...PAYABLE_STATUSES] },
+    },
     select: {
       id: true,
       status: true,

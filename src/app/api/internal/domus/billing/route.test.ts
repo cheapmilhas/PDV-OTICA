@@ -147,7 +147,7 @@ describe("GET /api/internal/domus/billing — resolução e resposta", () => {
     await GET(req());
     expect(invoiceFindFirst).toHaveBeenCalledWith(
       expect.objectContaining({
-        where: { subscriptionId: "sub-1", isManual: false },
+        where: expect.objectContaining({ subscriptionId: "sub-1", isManual: false }),
       })
     );
   });
@@ -163,6 +163,27 @@ describe("GET /api/internal/domus/billing — resolução e resposta", () => {
     invoiceFindFirst.mockResolvedValue({ status: "PAID", total: 18990 });
     const body = await (await GET(req())).json();
     expect(body.state).toBe("paid");
+  });
+
+  it("só consulta fatura em estado PAGÁVEL (não serve cancelada como atual)", async () => {
+    await GET(req());
+    expect(invoiceFindFirst).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({
+          status: { in: ["PENDING", "OVERDUE", "PAID"] },
+        }),
+      })
+    );
+  });
+
+  it("status não-pagável NUNCA vira 'pending' (senão a tela ofereceria PIX)", async () => {
+    // 🔥 Um `else return "pending"` faria fatura CANCELADA/ESTORNADA aparecer
+    // como cobrança a pagar — o cliente pagaria algo que não existe mais.
+    for (const status of ["CANCELED", "REFUNDED", "DRAFT", "QUALQUER_COISA"]) {
+      invoiceFindFirst.mockResolvedValue({ status, total: 18990 });
+      const body = await (await GET(req())).json();
+      expect(body.state).toBe("no_charge");
+    }
   });
 
   it("404 quando a clínica não tem par no Vis", async () => {
