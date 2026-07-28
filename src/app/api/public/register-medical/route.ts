@@ -44,9 +44,18 @@ export async function POST(request: Request) {
       return NextResponse.json({ error: "Email inválido" }, { status: 400 });
     }
 
-    // CPF ou CNPJ (medical aceita PF). Se fornecido, valida tamanho e unicidade.
+    // CPF ou CNPJ (medical aceita PF) — OBRIGATÓRIO.
+    //
+    // 🔥 Era opcional, e foi assim que uma clínica real entrou sem documento:
+    // na hora de cobrar, `resolveAsaasCustomerId` exige 11 ou 14 dígitos e
+    // LANÇA (asaas-customer.service.ts) — ou seja, o trial acabava e não havia
+    // como emitir cobrança nenhuma, nem pelo super admin. Barrar no cadastro é
+    // o único ponto barato: depois exige contato com o cliente.
     const cleanDoc = typeof document === "string" ? document.replace(/\D/g, "") : "";
-    if (cleanDoc && cleanDoc.length !== 11 && cleanDoc.length !== 14) {
+    if (!cleanDoc) {
+      return NextResponse.json({ error: "CPF ou CNPJ é obrigatório" }, { status: 400 });
+    }
+    if (cleanDoc.length !== 11 && cleanDoc.length !== 14) {
       return NextResponse.json({ error: "CPF (11) ou CNPJ (14 dígitos) inválido" }, { status: 400 });
     }
 
@@ -55,11 +64,9 @@ export async function POST(request: Request) {
     if (existingEmail) {
       return NextResponse.json({ error: "Este email já está cadastrado." }, { status: 409 });
     }
-    if (cleanDoc) {
-      const existingDoc = await prisma.company.findFirst({ where: { cnpj: cleanDoc } });
-      if (existingDoc) {
-        return NextResponse.json({ error: "Já existe um cadastro com este CPF/CNPJ." }, { status: 409 });
-      }
+    const existingDoc = await prisma.company.findFirst({ where: { cnpj: cleanDoc } });
+    if (existingDoc) {
+      return NextResponse.json({ error: "Já existe um cadastro com este CPF/CNPJ." }, { status: 409 });
     }
 
     // Plano medical self-service. Guard do P0: NUNCA serve plano de ótica aqui.

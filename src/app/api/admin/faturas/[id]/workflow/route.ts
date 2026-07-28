@@ -60,9 +60,16 @@ export async function POST(
         // Só REATIVA a assinatura se ela estava inadimplente/em trial. Marcar uma
         // fatura antiga como paga NÃO deve "ressuscitar" uma assinatura que o dono
         // cancelou/suspendeu de propósito (F4). subscription já foi carregado acima.
+        //
+        // 🔑 E só a fatura da MENSALIDADE concede acesso: `isManual` é a fronteira
+        // de autoridade (mesma regra do webhook, ver asaas-payment-target.ts).
+        // Sem esta checagem, confirmar à mão uma taxa de implantação de R$ 1
+        // ativaria a assinatura — e o caminho manual ficaria MAIS permissivo que
+        // o automático, que é o pior lugar para uma divergência de política.
         const reactivate =
           invoice.subscriptionId != null &&
           invoice.subscription != null &&
+          !invoice.isManual &&
           ["PAST_DUE", "TRIAL"].includes(invoice.subscription.status);
 
         // Transação: fatura + subscription + auditoria juntas (F4). Se a 2ª escrita

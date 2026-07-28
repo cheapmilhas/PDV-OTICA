@@ -61,6 +61,18 @@ export async function POST(request: Request) {
     // Calcular valor (centavos, Int). customValue já validado como inteiro positivo.
     const value = customValue ?? subscription.plan.priceMonthly;
 
+    // 🔑 FINALIDADE da fatura. `isManual` deixou de ser rótulo informativo e
+    // virou FRONTEIRA DE AUTORIDADE: o webhook do Asaas só deixa uma fatura
+    // ativar/rebaixar assinatura quando `isManual === false`
+    // (ver src/lib/asaas-payment-target.ts).
+    //
+    // Valor digitado à mão não é mensalidade — pode ser taxa, acerto, hardware.
+    // Sem esta marcação a fatura herdaria o default `false` do schema e pagar
+    // R$ 1 de acerto ATIVARIA a assinatura; deixá-la vencer BLOQUEARIA a
+    // clínica. Quando o admin não digita valor, a fatura é o preço do plano do
+    // ciclo e mantém autoridade.
+    const isManual = customValue !== undefined;
+
     // billingType: mapeia rótulo da UI → enum do Asaas (default PIX).
     const billingType = BILLING_TYPE_MAP[body.billingType ?? "PIX"] ?? "PIX";
 
@@ -77,6 +89,7 @@ export async function POST(request: Request) {
     const invoice = await prisma.invoice.create({
       data: {
         subscriptionId,
+        isManual,
         number: invoiceNumber,
         status: "PENDING",
         total: value,

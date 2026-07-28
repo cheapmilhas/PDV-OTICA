@@ -88,4 +88,21 @@ describe("POST faturas/create (F2/F3/F6)", () => {
     expect(res.status).toBe(403);
     expect(invoiceCreate).not.toHaveBeenCalled();
   });
+
+  // `isManual` é FRONTEIRA DE AUTORIDADE: o webhook só deixa uma fatura
+  // ativar/rebaixar assinatura quando é false (asaas-payment-target.ts).
+  describe("isManual — finalidade da fatura", () => {
+    it("valor digitado à mão vira AVULSA (não compra mensalidade)", async () => {
+      // Antes deste fix herdava o default false do schema: pagar R$ 1 de acerto
+      // ATIVARIA a assinatura, e deixá-lo vencer bloquearia a clínica.
+      await POST(req({ subscriptionId: "sub1", customValue: 100 }));
+      expect(invoiceCreate.mock.calls[0][0].data.isManual).toBe(true);
+    });
+
+    it("sem valor digitado usa o preço do plano e MANTÉM autoridade", async () => {
+      await POST(req({ subscriptionId: "sub1" }));
+      expect(invoiceCreate.mock.calls[0][0].data.isManual).toBe(false);
+      expect(invoiceCreate.mock.calls[0][0].data.total).toBe(14990);
+    });
+  });
 });

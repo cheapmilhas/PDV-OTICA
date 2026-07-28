@@ -39,10 +39,12 @@ function req(body: unknown) {
 }
 const params = Promise.resolve({ id: "inv1" });
 
-function setInvoice(subStatus: string) {
+/** `isManual` default false = fatura da MENSALIDADE (a que concede acesso). */
+function setInvoice(subStatus: string, isManual = false) {
   invoiceFindUnique.mockResolvedValue({
     id: "inv1",
     subscriptionId: "sub1",
+    isManual,
     subscription: { companyId: "co1", status: subStatus },
   });
 }
@@ -102,6 +104,19 @@ describe("POST faturas/[id]/workflow — mark_paid (F4)", () => {
   it("N4: quem NÃO reativa também não carimba activatedAt", async () => {
     setInvoice("CANCELED");
     await POST(req({ action: "mark_paid" }), { params });
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("fatura AVULSA paga NÃO reativa — confirmar taxa à mão não compra mensalidade", async () => {
+    // 🔑 Mesma fronteira do webhook (asaas-payment-target.ts): `isManual` decide
+    // autoridade. Sem esta checagem o caminho MANUAL ficaria mais permissivo que
+    // o automático — o pior lugar para as duas políticas divergirem.
+    setInvoice("TRIAL", true);
+    const res = await POST(req({ action: "mark_paid" }), { params });
+
+    expect(res.status).toBe(200);
+    expect(invoiceUpdate).toHaveBeenCalled(); // a fatura é quitada
+    expect(subscriptionUpdate).not.toHaveBeenCalled(); // o acesso não é concedido
     expect(subscriptionUpdateMany).not.toHaveBeenCalled();
   });
 

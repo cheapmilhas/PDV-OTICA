@@ -48,6 +48,16 @@ describe("POST /api/public/register-medical", () => {
     expect(res.status).toBe(400);
   });
 
+  it("400 quando o documento NÃO é informado (era opcional e virou obrigatório)", async () => {
+    // 🔥 Uma clínica real entrou sem documento por este caminho e depois NÃO
+    // pôde ser cobrada: resolveAsaasCustomerId exige 11/14 dígitos e lança.
+    // Barrar no cadastro é o único ponto barato de corrigir.
+    for (const doc of [undefined, "", "   ", "..-/"]) {
+      const res = await POST(req({ ...valid, document: doc }));
+      expect(res.status).toBe(400);
+    }
+  });
+
   it("planId ESCOLHIDO e inelegível → 409, NUNCA cai no plano mais barato", async () => {
     // Sem isto, quem clicou em "Clínica" (R$189,90) e teve o plano desativado
     // entre a tela e o envio terminaria assinado no "Profissional" (R$89,90)

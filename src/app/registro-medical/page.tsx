@@ -60,7 +60,9 @@ const STEPS = [
   { title: "Plano", description: "Escolha como quer começar" },
 ];
 
-type Errors = Partial<Record<"name" | "email" | "companyName" | "planId" | "form", string>>;
+type Errors = Partial<
+  Record<"name" | "email" | "companyName" | "document" | "planId" | "form", string>
+>;
 
 export default function RegistroMedicalPage() {
   const [step, setStep] = useState(0);
@@ -135,8 +137,19 @@ export default function RegistroMedicalPage() {
       if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(formData.email.trim()))
         next.email = "Informe um e-mail válido — é nele que chega o convite.";
     }
-    if (step === 1 && !formData.companyName.trim()) {
-      next.companyName = "Informe o nome da clínica.";
+    if (step === 1) {
+      if (!formData.companyName.trim()) {
+        next.companyName = "Informe o nome da clínica.";
+      }
+      // Documento é obrigatório porque sem ele NÃO existe cobrança possível:
+      // o gateway exige CPF/CNPJ para criar o pagador. Validar aqui evita o
+      // 400 só no fim do wizard, depois de a pessoa preencher tudo.
+      const doc = formData.document.replace(/\D/g, "");
+      if (!doc) {
+        next.document = "Informe o CPF ou o CNPJ.";
+      } else if (doc.length !== 11 && doc.length !== 14) {
+        next.document = "CPF tem 11 dígitos e CNPJ tem 14.";
+      }
     }
     if (step === 2 && !formData.planId) {
       next.planId = "Escolha um plano para continuar.";
@@ -329,7 +342,9 @@ export default function RegistroMedicalPage() {
                   value={formData.document}
                   onChange={(v) => updateField("document", formatDocument(v))}
                   placeholder="000.000.000-00"
-                  hint="Opcional agora. Atende tanto consultório individual quanto clínica."
+                  required
+                  error={errors.document}
+                  hint="Atende tanto consultório individual (CPF) quanto clínica (CNPJ)."
                 />
               </div>
             )}
