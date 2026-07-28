@@ -3,7 +3,7 @@
 import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { toast } from "sonner";
-import { ArrowRightLeft, Ban, CheckCircle, CreditCard, Eye, Loader2, Mail, MoreVertical, RefreshCw, RotateCcw, Trash2, XCircle } from "lucide-react";
+import { ArrowRightLeft, Ban, CheckCircle, CreditCard, DollarSign, Eye, Loader2, Mail, MoreVertical, RefreshCw, RotateCcw, Trash2, XCircle } from "lucide-react";
 import { brl } from "@/lib/format-brl";
 import {
   AlertDialog,
@@ -63,6 +63,10 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
   const [selectedPlanId, setSelectedPlanId] = useState<string | null>(null);
 
   const hasActiveSubscription = subscriptionStatus && ["TRIAL", "ACTIVE", "PAST_DUE"].includes(subscriptionStatus);
+  // Cobrança de CONVERSÃO só faz sentido para quem está em trial (é o que ela
+  // converte). O backend valida de novo — aqui é só não oferecer o que falharia.
+  const isTrial = subscriptionStatus === "TRIAL" || subscriptionStatus === "TRIAL_EXPIRED";
+  const [chargeOpen, setChargeOpen] = useState(false);
 
   async function handleAction(action: string, extra?: Record<string, string>) {
     setLoading(true);
@@ -192,6 +196,20 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
                 <ActionBtn icon={Mail} label="Reenviar convite" color="blue" onClick={() => handleAction("resend_medical_invite")} />
               </>
             )}
+            {/* Cobrança de conversão — só medical em trial (é o que ela
+                converte). Passa por diálogo: gera cobrança REAL no gateway e
+                manda e-mail ao cliente; um clique torto custa dinheiro. */}
+            {isMedical && isTrial && (
+              <>
+                <div className="my-1 border-t border-border" />
+                <ActionBtn
+                  icon={DollarSign}
+                  label="Gerar cobrança da assinatura"
+                  color="green"
+                  onClick={() => { setOpen(false); setChargeOpen(true); }}
+                />
+              </>
+            )}
             {/* B4: "Acessar como empresa" (impersonação ótica; o Domus é banco
                 separado) e "Re-sincronizar setup" (finance ótico) NÃO se aplicam a
                 medical — escondidas para não oferecer ação que falharia. */}
@@ -235,6 +253,34 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
         loading={loading}
         onConfirm={confirmCancel}
       />
+
+      {/* Cobrança de conversão — confirmação porque gera cobrança REAL no
+          gateway e dispara e-mail ao cliente. Repetir a ação NÃO cria uma
+          segunda cobrança (o serviço reusa a existente), mas o operador não
+          precisa saber disso para agir com segurança. */}
+      <Dialog open={chargeOpen} onOpenChange={(o) => !loading && setChargeOpen(o)}>
+        <DialogContent className="max-w-md">
+          <DialogHeader>
+            <DialogTitle>Gerar cobrança da assinatura</DialogTitle>
+            <DialogDescription>
+              Emite a cobrança da mensalidade de {companyName} no gateway (PIX e
+              boleto) e a disponibiliza na tela da clínica. O valor vem do plano
+              contratado.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex justify-end gap-2 pt-2">
+            <Button variant="outline" onClick={() => setChargeOpen(false)} disabled={loading}>
+              Cancelar
+            </Button>
+            <Button
+              onClick={() => { setChargeOpen(false); handleAction("charge_trial_conversion"); }}
+              disabled={loading}
+            >
+              Gerar cobrança
+            </Button>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {/* Troca de plano — radio-list (era prompt numérico) */}
       <Dialog open={planOpen} onOpenChange={(o) => !loading && setPlanOpen(o)}>
