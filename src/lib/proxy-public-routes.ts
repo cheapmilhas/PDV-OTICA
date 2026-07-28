@@ -49,6 +49,9 @@ export const SELF_AUTHENTICATED_API_PREFIXES = [
   // Canais Domus→Vis — HMAC DOMUS_VIS_API_SECRET (`verifyVisDomus`).
   "/api/internal/domus/plan-change",
   "/api/internal/domus/send-reset-email",
+  // Leitura de cobrança — HMAC path-bound com segredo PRÓPRIO
+  // (DOMUS_VIS_BILLING_SECRET), verificado no próprio handler.
+  "/api/internal/domus/billing",
 ] as const;
 
 /** True quando o middleware deve liberar o caminho sem exigir sessão. */
