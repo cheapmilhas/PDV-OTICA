@@ -12,6 +12,14 @@
  */
 
 const SANDBOX_URL = "https://api-sandbox.asaas.com/v3";
+
+/**
+ * Teto de espera por chamada ao gateway.
+ *
+ * Menor que o limite de execução da função serverless DE PROPÓSITO: é a
+ * diferença entre "erro que diz o que houve" e "função cortada sem resposta".
+ */
+const ASAAS_TIMEOUT_MS = 12_000;
 const PROD_URL = "https://api.asaas.com/v3";
 
 function getConfig() {
@@ -181,7 +189,16 @@ async function asaasFetch<T>(
   };
   if (idempotencyKey) headers["asaas-idempotency-key"] = idempotencyKey;
 
-  const res = await fetch(`${baseUrl}${path}`, { ...rest, headers });
+  // 🔥 Timeout OBRIGATÓRIO. Sem ele, uma chamada lenta ao gateway fica pendurada
+  // até a função serverless ser CORTADA — e o corte não devolve JSON, então o
+  // cliente cai no catch genérico ("Erro ao executar ação") sem nenhuma pista
+  // do que houve. Com o timeout, a falha vira um erro nomeado que sobe até a
+  // tela. `rest.signal` (quando o caller passa o dele) tem precedência.
+  const res = await fetch(`${baseUrl}${path}`, {
+    ...rest,
+    headers,
+    signal: rest.signal ?? AbortSignal.timeout(ASAAS_TIMEOUT_MS),
+  });
   const text = await res.text();
   let body: unknown = null;
   try {

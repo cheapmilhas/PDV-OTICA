@@ -77,11 +77,23 @@ export function CompanyActions({ companyId, companyName, isBlocked, subscription
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ action, ...extra }),
       });
-      const data = await res.json();
-      if (!res.ok) { toast.error(data.error || "Erro ao executar ação"); return; }
+      // Resposta pode NÃO ser JSON (função serverless cortada por timeout,
+      // erro de plataforma): `res.json()` lançaria e o catch de baixo apagaria
+      // a única pista que existe — o status HTTP.
+      const raw = await res.text();
+      let data: { error?: string; message?: string } = {};
+      try {
+        data = raw ? JSON.parse(raw) : {};
+      } catch {
+        data = { error: `Resposta inválida do servidor (HTTP ${res.status})` };
+      }
+      if (!res.ok) { toast.error(data.error || `Falha na ação (HTTP ${res.status})`); return; }
       toast.success(data.message || "Ação executada com sucesso");
       router.refresh();
-    } catch { toast.error("Erro ao executar ação"); }
+    } catch (e) {
+      // Rede caiu ou a requisição foi abortada antes de qualquer resposta.
+      toast.error(e instanceof Error ? `Erro de rede: ${e.message}` : "Erro ao executar ação");
+    }
     finally { setLoading(false); }
   }
 
