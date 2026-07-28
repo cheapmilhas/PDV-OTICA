@@ -158,6 +158,28 @@ describe("saas-invoice-created", () => {
     expect(html).toContain("QR Code");
     expect(text).toContain("QR Code");
   });
+
+  it("mostra o PERÍODO coberto — o cliente precisa saber do que é a fatura", () => {
+    const { html, text } = renderEmailTemplate("saas-invoice-created", {
+      ...data,
+      periodLabel: "09/08/2026 a 09/09/2026",
+    });
+    expect(html).toContain("09/08/2026 a 09/09/2026");
+    expect(text).toContain("Período: 09/08/2026 a 09/09/2026");
+  });
+
+  it("sem periodLabel o e-mail continua válido (faturas antigas)", () => {
+    const { html } = renderEmailTemplate("saas-invoice-created", data);
+    expect(html).not.toContain("Período:");
+  });
+
+  it("boleto ganha bloco próprio, não link enterrado", () => {
+    // Para quem paga por boleto ele é o meio PRINCIPAL; escondê-lo abaixo do
+    // PIX faz parecer que a única opção é PIX.
+    const { html } = renderEmailTemplate("saas-invoice-created", data);
+    expect(html).toContain("Prefere boleto?");
+    expect(html).toContain("Baixar boleto bancário em PDF");
+  });
 });
 
 describe("saas-invoice-due-soon", () => {

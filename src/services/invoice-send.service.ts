@@ -69,6 +69,12 @@ export async function sendInvoiceCharge(
       name: invoice.subscription.company?.name ?? "cliente",
       amountLabel: brl(invoice.total),
       dueDateLabel: dateBR(invoice.dueDate) || "—",
+      // Período coberto: o cliente precisa saber DE QUE a fatura é, não só
+      // quanto e quando pagar.
+      periodLabel:
+        invoice.periodStart && invoice.periodEnd
+          ? `${dateBR(invoice.periodStart)} a ${dateBR(invoice.periodEnd)}`
+          : undefined,
       description: invoice.description ?? undefined,
       pixCode: invoice.pixCode ?? undefined,
       paymentUrl: invoice.paymentUrl!,

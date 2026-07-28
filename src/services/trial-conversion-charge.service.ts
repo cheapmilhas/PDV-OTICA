@@ -202,7 +202,11 @@ export async function createTrialConversionCharge(
         total: amountCents,
         discount: 0,
         status: "PENDING",
-        billingType: "PIX",
+        // 🔑 UNDEFINED = o cliente escolhe. O Asaas gera PIX **e** boleto na
+        // mesma cobrança. Fixar "PIX" (como estava) emitia só PIX, e o
+        // `boletoUrl` ficava sempre vazio — clínica que paga por boleto ficava
+        // sem opção, e o e-mail nunca podia oferecer a segunda via.
+        billingType: "UNDEFINED",
         periodStart,
         periodEnd,
         dueDate,

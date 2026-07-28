@@ -393,6 +393,9 @@ const invoiceCreatedSchema = z.object({
   amountLabel: z.string().min(1),
   dueDateLabel: z.string().min(1),
   description: z.string().optional(),
+  /** Período coberto ("09/08/2026 a 09/09/2026") — o cliente precisa saber do
+   *  que é a fatura, não só quanto e quando pagar. */
+  periodLabel: z.string().optional(),
   pixCode: z.string().optional(),
   paymentUrl: safeUrl,
   boletoUrl: safeUrl.optional(),
@@ -410,6 +413,9 @@ function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: 
   const descriptionRow = description
     ? `<tr><td style="padding:6px 0 0;font-size:13px;color:#6b7280;">Descrição: <span style="color:#374151;">${description}</span></td></tr>`
     : "";
+  const periodRow = p.periodLabel
+    ? `<tr><td style="padding:6px 0 0;font-size:13px;color:#6b7280;">Período: <span style="color:#374151;">${escapeHtml(p.periodLabel)}</span></td></tr>`
+    : "";
   const card = `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:0 0 22px;border:1px solid #e5e7eb;border-radius:10px;background:#f8fafc;">
 <tr><td style="padding:20px 22px;">
 <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
@@ -417,6 +423,7 @@ function renderInvoiceBody(p: z.infer<typeof invoiceCreatedSchema>, isReminder: 
 <tr><td style="padding:2px 0 0;font-size:28px;font-weight:700;color:#111827;line-height:1.2;">${amount}</td></tr>
 <tr><td style="padding:8px 0 0;font-size:14px;color:#374151;">Vencimento: <strong>${due}</strong></td></tr>
 ${descriptionRow}
+${periodRow}
 </table>
 </td></tr>
 </table>`;
@@ -424,8 +431,16 @@ ${descriptionRow}
     ? `<p style="margin:0 0 8px;color:#374151;">PIX copia e cola:</p>
 <p style="margin:0 0 22px;padding:12px;background:#f3f4f6;border-radius:6px;font-family:monospace;font-size:13px;word-break:break-all;">${pix}</p>`
     : "";
+  // Boleto ganha bloco PRÓPRIO, não um link solto no fim: para quem paga por
+  // boleto, é o meio principal — enterrá-lo abaixo do PIX faz parecer que a
+  // única opção é PIX.
   const boletoBlock = boleto
-    ? `<p style="margin:18px 0 0;font-size:13px;"><a href="${boleto}" style="color:#2563eb;">Baixar boleto em PDF</a></p>`
+    ? `<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="margin:18px 0 0;border-top:1px solid #e5e7eb;">
+<tr><td style="padding:16px 0 0;">
+<p style="margin:0 0 8px;color:#374151;font-size:14px;"><strong>Prefere boleto?</strong></p>
+<p style="margin:0;font-size:14px;"><a href="${boleto}" style="color:#2563eb;font-weight:600;">Baixar boleto bancário em PDF</a></p>
+</td></tr>
+</table>`
     : "";
   const bodyHtml = `${intro}${card}${pixBlock}<p style="margin:0 0 6px;color:#6b7280;font-size:13px;">Para pagar com <strong>QR Code</strong>, cartão ou outras opções, clique em "Pagar agora".</p>${boletoBlock}`;
   const html = renderSaasEmailLayout({
@@ -443,6 +458,7 @@ ${descriptionRow}
       ? `${p.name}, sua fatura do Vis de ${p.amountLabel} vence em ${p.dueDateLabel}.`
       : `${p.name}, sua fatura do Vis de ${p.amountLabel} está disponível (vence ${p.dueDateLabel}).`,
     p.description ? `Descrição: ${p.description}` : "",
+    p.periodLabel ? `Período: ${p.periodLabel}` : "",
     "",
     pix ? `PIX copia e cola: ${p.pixCode}` : "",
     `Pagar agora (QR Code, cartão e outras opções): ${p.paymentUrl}`,
