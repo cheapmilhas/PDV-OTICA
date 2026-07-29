@@ -13,6 +13,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const subscriptionFindMany = vi.fn();
 const subscriptionUpdate = vi.fn();
 const globalAuditCreate = vi.fn();
+const invoiceFindFirst = vi.fn();
+const dunningEventCreate = vi.fn();
+const dunningEventFindFirst = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -22,6 +25,13 @@ vi.mock("@/lib/prisma", () => ({
     },
     globalAudit: {
       create: (...a: unknown[]) => globalAuditCreate(...a),
+    },
+    invoice: {
+      findFirst: (...a: unknown[]) => invoiceFindFirst(...a),
+    },
+    dunningEvent: {
+      create: (...a: unknown[]) => dunningEventCreate(...a),
+      findFirst: (...a: unknown[]) => dunningEventFindFirst(...a),
     },
   },
 }));
@@ -94,6 +104,9 @@ beforeEach(() => {
   logActivity.mockReset().mockResolvedValue(undefined);
   notifyCompany.mockReset().mockResolvedValue({ status: "SENT" });
   publishEntitlementForCompany.mockReset().mockResolvedValue(undefined);
+  invoiceFindFirst.mockReset().mockResolvedValue({ id: "inv-1" });
+  dunningEventCreate.mockReset().mockResolvedValue({ id: "evt-1" });
+  dunningEventFindFirst.mockReset().mockResolvedValue({ id: "evt-1" });
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -124,9 +137,9 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
       {
         id: "sub-1",
         companyId: "co-1",
-        pastDueSince: daysAgo(8), // 8 dias → nextDunningStage = 7
+        pastDueSince: daysAgo(8), // 8 dias → nextDunningStage = 7 (já avisou o 3)
         status: "PAST_DUE",
-        lastDunningStage: null, // nenhum aviso ainda
+        lastDunningStage: 3, // marco 3 já avisado; próximo pendente é o 7
       },
     ]);
 
@@ -214,6 +227,72 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
 
     // Cadeado: a suspensão deve propagar writeAllowed=false ao Domus na hora.
     expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-4");
+  });
+
+  it("sem trilha de aviso despachado → NÃO suspende, adia e contabiliza", async () => {
+    // I3 (spec §4.6.3): 'nem tentamos avisar' não pode virar bloqueio.
+    // Foi o caso da MedFacil — e-mail suprimido por testMode, cliente sem saber.
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-9",
+        companyId: "co-9",
+        pastDueSince: daysAgo(15),
+        status: "PAST_DUE",
+        lastDunningStage: 14, // já avisou pela régua...
+      },
+    ]);
+    dunningEventFindFirst.mockResolvedValue(null); // ...mas o aviso NÃO foi despachado
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    expect(body.suspended).toBe(0);
+    expect(body.suspendDeferred).toBe(1);
+  });
+
+  it("caso MedFacil: notifyCompany redirecionado (testMode+testEmail) → trilha NÃO conta como avisado e NÃO suspende", async () => {
+    // I3 (spec §4.6.3): notifyCompany devolve SENT quando o testMode troca o
+    // destinatário pelo do operador — o e-mail saiu, mas não pro cliente. A
+    // trilha tem que tratar isso como NÃO despachado, senão o cliente é
+    // suspenso sem nunca ter sido avisado de verdade (o bug real da MedFacil).
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-medfacil",
+        companyId: "co-medfacil",
+        pastDueSince: daysAgo(15),
+        status: "PAST_DUE",
+        lastDunningStage: 7, // marco 7 já avisado; o pendente desta rodada é o 14
+      },
+    ]);
+    // notifyCompany devolve SENT+redirected para a chamada de aviso (stage 14).
+    notifyCompany.mockImplementation(
+      async (_companyId: string, eventType: string) => {
+        if (eventType === "INVOICE_OVERDUE") {
+          return { status: "SENT", redirected: true };
+        }
+        return { status: "SENT" };
+      }
+    );
+    // Sem trilha prévia de aviso despachado (dunningEvent real não existe, já
+    // que o único envio foi redirecionado — hasDispatchedNotice não acha nada).
+    dunningEventFindFirst.mockResolvedValue(null);
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+
+    // A trilha (recordDunningNotice) tem que gravar como NÃO despachado.
+    expect(dunningEventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "SKIPPED",
+          sentAt: null,
+          errorDetail: "test_mode_redirected",
+        }),
+      })
+    );
+
+    // E a suspensão tem que ser ADIADA — não pode restringir quem nunca soube.
+    expect(body.suspended).toBe(0);
+    expect(body.suspendDeferred).toBe(1);
   });
 
   it("já SUSPENDED → não dispara SUBSCRIPTION_SUSPENDED novamente", async () => {
@@ -306,7 +385,7 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
         companyId: "co-A",
         pastDueSince: daysAgo(8),
         status: "PAST_DUE",
-        lastDunningStage: null,
+        lastDunningStage: 3, // marco 3 já avisado; próximo pendente é o 7
       },
       {
         id: "sub-B",
@@ -342,13 +421,55 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
         companyId: "co-8",
         pastDueSince: daysAgo(8),
         status: "PAST_DUE",
-        lastDunningStage: null,
+        lastDunningStage: 3, // marco 3 já avisado; próximo pendente é o 7
       },
     ]);
 
     // Should still return 200 (errors counted in summary.errors, not thrown)
     const res = await GET(makeRequest());
     expect(res.status).toBe(200);
+  });
+
+  // ── Regression guard: composição nextDunningStage + guarda de suspensão ────
+
+  // Guarda de regressão da promessa "três avisos antes de perder acesso"
+  // (spec 2026-07-29 §4.6.2). Os testes de bloco acima cobrem a régua
+  // (nextDunningStage) isolada e a integração com notifyCompany, mas nenhum
+  // deles prova a COMPOSIÇÃO real do cron: cliente achado já fundo em atraso,
+  // sem nenhum aviso registrado, não pode ser avisado E suspenso na mesma
+  // execução. Este teste DEVE falhar contra a implementação antiga de
+  // nextDunningStage (que retornava o MAIOR marco atingido em vez do primeiro
+  // pendente) — se não falhar, não está travando o comportamento certo.
+  it("cliente 20d atrasado sem nenhum aviso → avisa o marco 3 e NÃO suspende na mesma rodada", async () => {
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-20d",
+        companyId: "co-9",
+        pastDueSince: daysAgo(20), // bem além dos 14d de suspensão
+        status: "PAST_DUE",
+        lastDunningStage: null, // nenhum aviso jamais enviado
+      },
+    ]);
+
+    const res = await GET(makeRequest());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // Promessa: um degrau por execução — não pode suspender quem nunca foi avisado.
+    expect(body.suspended).toBe(0);
+
+    // E o aviso disparado tem que ser o PRIMEIRO pendente (marco 3), não o último (14).
+    expect(notifyCompany).toHaveBeenCalledWith(
+      "co-9",
+      "INVOICE_OVERDUE",
+      expect.objectContaining({ daysOverdue: 20 }),
+      expect.objectContaining({ periodKey: "stage:3", channels: ["email"] })
+    );
+
+    const suspendedCall = notifyCompany.mock.calls.find(
+      (c) => c[1] === "SUBSCRIPTION_SUSPENDED"
+    );
+    expect(suspendedCall).toBeUndefined();
   });
 
   // ── Summary response ──────────────────────────────────────────────────────

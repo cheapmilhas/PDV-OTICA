@@ -99,6 +99,20 @@ describe("notifyCompany", () => {
     );
   });
 
+  it("testMode + testEmail → SENT com redirected:true (caso MedFacil: destinatário trocado pro operador)", async () => {
+    configUpsert.mockResolvedValue({ ...fullConfig, testMode: true, testEmail: "dono@vis.com" });
+    const r = await notifyCompany("c1", "INVOICE_OVERDUE" as never, {}, { periodKey: "stage:14", channels: ["email"] });
+    expect(r.status).toBe("SENT");
+    expect(r.redirected).toBe(true);
+  });
+
+  it("testMode OFF → SENT sem redirected (comportamento existente preservado)", async () => {
+    // fullConfig já tem testMode:false
+    const r = await notifyCompany("c1", "INVOICE_OVERDUE" as never, {}, { periodKey: "stage:14", channels: ["email"] });
+    expect(r.status).toBe("SENT");
+    expect(r.redirected).toBeUndefined();
+  });
+
   it("idempotência: P2002 no log → SKIPPED duplicate, não enfileira", async () => {
     // IMPORTANTE: rejeitar com a CLASSE real de erro do Prisma — a implementação
     // checa `instanceof Prisma.PrismaClientKnownRequestError`; um objeto plano

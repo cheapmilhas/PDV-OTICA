@@ -1,0 +1,31 @@
+import { SUSPEND_DAYS } from "@/lib/dunning";
+
+/**
+ * Dia de atraso a partir do qual a ESCRITA é restrita.
+ *
+ * 🔑 É o mesmo marco da suspensão da régua (`SUSPEND_DAYS`), de propósito: são a
+ * mesma decisão vista de dois lugares. Duplicar o número aqui faria a régua e o
+ * gate divergirem no dia em que alguém mudasse só um dos dois.
+ *
+ * ANTES desta entrega o gate restringia no dia 0 (todo `PAST_DUE` era readOnly),
+ * de modo que os avisos de 3/7/14 chegavam a quem já não conseguia trabalhar.
+ * Ver spec 2026-07-29 §4.6.1.
+ */
+export const WRITE_RESTRICTION_DAY = SUSPEND_DAYS;
+
+/**
+ * A escrita já está restrita para quem está `daysOverdue` dias em atraso?
+ *
+ * Pura de propósito: é a regra de negócio que decide se um cliente inadimplente
+ * pode continuar operando, e precisa ser testável sem banco.
+ *
+ * 🔑 SEGUNDO FATOR (spec 2026-07-29 §4.6.4, I3 estendida ao gate): passar do
+ * marco não basta — o aviso final (dia 14) precisa ter sido REALMENTE
+ * despachado (`hasDispatchedNotice`). Sem isso, uma falha silenciosa de envio
+ * (o caso MedFacil: e-mail redirecionado pelo modo de teste) ainda cortaria a
+ * escrita de um cliente que nunca foi avisado. `noticeDispatched` é resolvido
+ * fora desta função (I/O não pertence à regra pura) e injetado aqui já pronto.
+ */
+export function isWriteRestricted(daysOverdue: number, noticeDispatched: boolean): boolean {
+  return daysOverdue >= WRITE_RESTRICTION_DAY && noticeDispatched;
+}

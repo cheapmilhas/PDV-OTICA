@@ -15,22 +15,26 @@ export const SUSPEND_DAYS = 14;
 export const CANCEL_DAYS = 30;
 
 /**
- * Próximo marco a notificar agora: o MAIOR marco já atingido (`<= daysOverdue`)
+ * Próximo marco a notificar agora: o MENOR marco já atingido (`<= daysOverdue`)
  * que ainda não foi avisado (`> lastStage`). Retorna null se não há aviso novo.
  *
- * - Pula marcos: entrou com 10 dias de atraso e lastStage=0 → retorna 7 (não 3).
- *   No run seguinte, lastStage=7 e daysOverdue=10 → null (próximo é 14, ainda não atingido).
+ * 🔑 NÃO pula marcos (spec 2026-07-29 §4.6.2). Antes devolvia o MAIOR marco
+ * atingido, e um cliente encontrado já com 14 dias de atraso recebia UM aviso e
+ * era suspenso na mesma execução do cron — a régua prometia três avisos e
+ * entregava um. Agora cada execução sobe um degrau, então restringir exige
+ * necessariamente execuções distintas.
+ *
+ * - Entrou com 10 dias e lastStage=0 → 3. Na execução seguinte → 7. Depois → 14.
  * - lastStage null trata-se como 0 (nenhum aviso ainda).
  */
 export function nextDunningStage(daysOverdue: number, lastStage: number | null): number | null {
   const last = lastStage ?? 0;
-  let candidate: number | null = null;
   for (const stage of DUNNING_STAGES) {
     if (stage <= daysOverdue && stage > last) {
-      candidate = stage; // mantém o maior aplicável
+      return stage; // primeiro pendente — um degrau por execução
     }
   }
-  return candidate;
+  return null;
 }
 
 /**
