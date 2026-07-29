@@ -1,10 +1,10 @@
 import { describe, it, expect } from "vitest";
-import { resolveEffectiveSubscription } from "./effective-subscription";
+import { SubscriptionStatus } from "@prisma/client";
+import { resolveEffectiveSubscription, type SubscriptionCandidate } from "./effective-subscription";
 
-const sub = (over: Partial<{ id: string; status: string; createdAt: Date }> = {}) => ({
+const sub = (over: Partial<SubscriptionCandidate> = {}): SubscriptionCandidate => ({
   id: over.id ?? "s1",
-  status: (over.status ?? "ACTIVE") as never,
-  createdAt: over.createdAt ?? new Date("2026-01-01"),
+  status: over.status ?? "ACTIVE",
 });
 
 describe("resolveEffectiveSubscription", () => {
@@ -16,8 +16,8 @@ describe("resolveEffectiveSubscription", () => {
 
   it("ignora CANCELED ao escolher", () => {
     const r = resolveEffectiveSubscription([
-      sub({ id: "morta", status: "CANCELED", createdAt: new Date("2026-06-01") }),
-      sub({ id: "viva", status: "ACTIVE", createdAt: new Date("2026-01-01") }),
+      sub({ id: "morta", status: "CANCELED" }),
+      sub({ id: "viva", status: "ACTIVE" }),
     ]);
     expect(r.kind).toBe("ok");
     if (r.kind === "ok") expect(r.subscription.id).toBe("viva");
@@ -35,10 +35,33 @@ describe("resolveEffectiveSubscription", () => {
       sub({ id: "b", status: "PAST_DUE" }),
     ]);
     expect(r.kind).toBe("ambiguous");
-    if (r.kind === "ambiguous") expect(r.ids.sort()).toEqual(["a", "b"]);
+    // Ordem determinística (a função ordena os ids) — não mascarar com .sort() aqui.
+    if (r.kind === "ambiguous") expect(r.ids).toEqual(["a", "b"]);
   });
 
   it("lista vazia → none", () => {
     expect(resolveEffectiveSubscription([]).kind).toBe("none");
+  });
+
+  // Table-driven sobre os SEIS valores do enum SubscriptionStatus
+  // (prisma/schema.prisma). Os testes acima só exercitam 3 (ACTIVE,
+  // PAST_DUE, CANCELED) — não bastam para travar a costura com
+  // LIVE_STATUSES: sabotagens que trocam a definição de "viva" (ex.: "tudo
+  // menos CANCELED", que promoveria SUSPENDED/TRIAL_EXPIRED a vivas) passam
+  // por eles sem protestar. `status` é tipado como SubscriptionStatus de
+  // verdade (não `as never`) para que o compilador force a tabela a cobrir
+  // o enum inteiro.
+  const casos: Array<{ status: SubscriptionStatus; viva: boolean }> = [
+    { status: "TRIAL", viva: true },
+    { status: "ACTIVE", viva: true },
+    { status: "PAST_DUE", viva: true },
+    { status: "TRIAL_EXPIRED", viva: false },
+    { status: "SUSPENDED", viva: false },
+    { status: "CANCELED", viva: false },
+  ];
+
+  it.each(casos)("status $status → viva=$viva", ({ status, viva }) => {
+    const r = resolveEffectiveSubscription([sub({ id: "x", status })]);
+    expect(r.kind).toBe(viva ? "ok" : "none");
   });
 });

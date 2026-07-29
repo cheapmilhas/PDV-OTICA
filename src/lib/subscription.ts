@@ -31,7 +31,7 @@ export type SubscriptionDbClient = {
  * Fora destes (SUSPENDED, CANCELED, TRIAL_EXPIRED) as features são zeradas.
  * Exportado para caracterização em testes — não alterar sem revisar o gating.
  */
-export const LIVE_STATUSES: SubscriptionStatus[] = ["TRIAL", "ACTIVE", "PAST_DUE"];
+export const LIVE_STATUSES: readonly SubscriptionStatus[] = ["TRIAL", "ACTIVE", "PAST_DUE"] as const;
 
 export interface SubscriptionCheckResult {
   allowed: boolean;

@@ -55,7 +55,7 @@ export async function propagatePlanLimits(
   // qual é a mais recente. Filtro por companyId mantém O(N_empresas_do_plano).
   const companyIdsInPlan = (
     await prisma.subscription.findMany({
-      where: { planId, status: { in: LIVE_STATUSES } },
+      where: { planId, status: { in: [...LIVE_STATUSES] } },
       select: { companyId: true },
       distinct: ["companyId"],
     })
@@ -64,7 +64,7 @@ export async function propagatePlanLimits(
   if (companyIdsInPlan.length === 0) return 0;
 
   const liveSubs = await prisma.subscription.findMany({
-    where: { companyId: { in: companyIdsInPlan }, status: { in: LIVE_STATUSES } },
+    where: { companyId: { in: companyIdsInPlan }, status: { in: [...LIVE_STATUSES] } },
     select: { companyId: true, planId: true, createdAt: true },
   });
 
