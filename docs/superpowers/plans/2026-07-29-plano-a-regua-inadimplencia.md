@@ -858,6 +858,16 @@ caso MedFacil: email suprimido por testMode nao pode virar bloqueio."
 
 ---
 
+## 📌 Dívidas herdadas da Task 4 (levar para o Plano B, que carrega migração)
+
+Achadas na revisão da trilha, verificadas no schema. Nenhuma bloqueia o Plano A:
+
+1. **`DunningEvent` não tem índice para a consulta do gate.** Os 3 índices criados pela migração de 2026-03 são `(companyId, createdAt)`, `(invoiceId)` e `(status)` — nenhum cobre `(companyId, action, status)`, que é o predicado de `hasDispatchedNotice`. No volume atual o Postgres resolve pelo índice de `companyId` e filtra o resto, o que é aceitável; **antes de o gate (Task 5b) ir para produção com tráfego maior**, adicionar `@@index([companyId, action, status])`.
+2. **O schema Prisma está dessincronizado do banco.** O modelo `DunningEvent` não declara `@@index` nenhum, mas os 3 índices existem fisicamente (criados em SQL cru pela migração). Reconciliar junto com o item 1.
+3. **`recordDunningNotice` não é idempotente.** Sem `stage` nem unique, reexecução do cron grava linha duplicada. Não afeta a decisão de restringir (que consulta só `WARNING_EMAIL` e usa `findFirst`), mas **não assumir idempotência** ao construir em cima disso.
+
+---
+
 ## Task 5b: O GATE também exige aviso despachado (acrescentada 2026-07-29)
 
 > **Por que esta task existe.** A revisão de qualidade da Task 2 achou um furo no plano original: a invariante I3 estava sendo construída só para a **suspensão feita pelo cron**, mas quem impede o cliente de trabalhar no dia a dia é o **gate** (`checkSubscription` → `requireWriteAccess`, que guarda 15 rotas: clientes, produtos, contas a receber…), e ele decidia puramente por data. Uma falha de entrega do aviso do dia 14 — exatamente o caso MedFacil, e-mail suprimido por modo de teste — ainda cortaria a escrita. A garantia aprovada pelo dono ("só restringe quem foi comprovadamente avisado") ficaria decorativa justamente no caminho que importa.
