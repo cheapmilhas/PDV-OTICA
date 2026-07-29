@@ -31,6 +31,19 @@ describe("recordDunningNotice", () => {
     expect(data.companyId).toBe("c1");
   });
 
+  it("grava a coluna stage (marco explícito, não só a action)", async () => {
+    // Sem `stage`, os marcos 3 e 7 gravam ambos REMINDER_EMAIL e ficam
+    // indistinguíveis para sempre — e o unique (invoiceId, action, stage) não
+    // teria como impedir a duplicata de uma reexecução do cron.
+    await recordDunningNotice(
+      { companyId: "c1", invoiceId: "i1", stage: 7, delivered: true },
+      { db }
+    );
+    const data = create.mock.calls[0][0].data;
+    expect(data.stage).toBe(7);
+    expect(data.action).toBe("REMINDER_EMAIL");
+  });
+
   it("aviso NÃO entregue → grava FAILED, sem sentAt", async () => {
     await recordDunningNotice(
       { companyId: "c1", invoiceId: "i1", stage: 3, delivered: false, error: "smtp caiu" },
@@ -80,13 +93,33 @@ describe("hasDispatchedNotice", () => {
   it("consulta o aviso DO MARCO pedido, não qualquer aviso", async () => {
     // Sem isto, um lembrete do dia 3 autorizaria a restrição do dia 14 —
     // I3 viraria "foi avisado alguma vez".
+    //
+    // A consulta aceita DUAS formas do mesmo fato (ver docblock): `stage`
+    // exato nas linhas novas, ou `stage: null` + `action` nas linhas legadas,
+    // gravadas antes de a coluna existir. Nos dois ramos o MARCO é respeitado.
     findFirst.mockResolvedValue(null);
     await hasDispatchedNotice("c1", 14, { db });
-    expect(findFirst.mock.calls[0][0].where.action).toBe("WARNING_EMAIL");
+    expect(findFirst.mock.calls[0][0].where.OR).toEqual([
+      { stage: 14 },
+      { stage: null, action: "WARNING_EMAIL" },
+    ]);
 
     findFirst.mockClear();
     await hasDispatchedNotice("c1", 3, { db });
-    expect(findFirst.mock.calls[0][0].where.action).toBe("REMINDER_EMAIL");
+    expect(findFirst.mock.calls[0][0].where.OR).toEqual([
+      { stage: 3 },
+      { stage: null, action: "REMINDER_EMAIL" },
+    ]);
+  });
+
+  it("marco 3 legado NÃO satisfaz a consulta do marco 14", async () => {
+    // O ramo legado herda a imprecisão antiga (3 e 7 dividem REMINDER_EMAIL),
+    // mas o marco 14 — o ÚNICO que autoriza restringir — nunca teve essa
+    // ambiguidade: WARNING_EMAIL é só dele. Este teste trava isso.
+    findFirst.mockResolvedValue(null);
+    await hasDispatchedNotice("c1", 14, { db });
+    const or = findFirst.mock.calls[0][0].where.OR;
+    expect(or).not.toContainEqual({ stage: null, action: "REMINDER_EMAIL" });
   });
 
   it("erro de leitura → false (fail-closed: na dúvida, não restringe)", async () => {

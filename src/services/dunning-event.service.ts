@@ -67,6 +67,12 @@ export async function recordDunningNotice(
         companyId: input.companyId,
         invoiceId: input.invoiceId,
         action: noticeActionFor(input.stage),
+        // Marco explícito (Plano B). Antes desta coluna, os marcos 3 e 7
+        // gravavam ambos `REMINDER_EMAIL` e ficavam indistinguíveis para
+        // sempre. Também é o que dá idempotência à régua: o unique
+        // (invoiceId, action, stage) faz a reexecução do cron colidir em vez
+        // de gravar linha duplicada.
+        stage: input.stage,
         channel: "EMAIL",
         status,
         sentAt: input.delivered ? new Date() : null,
@@ -87,20 +93,33 @@ export async function recordDunningNotice(
 /**
  * Existe aviso EFETIVAMENTE DESPACHADO do marco `stage` para esta empresa?
  *
- * 🔑 O marco importa. `DunningEvent` não tem coluna `stage` (a spec §4.6.3 pediu
- * uma decisão aqui; sem migração nesta fatia, a resolução é a `action`): o marco
- * 14 grava `WARNING_EMAIL` e os marcos 3/7 gravam `REMINDER_EMAIL`. Consultar
- * "qualquer aviso" faria um lembrete do dia 3 autorizar a restrição do dia 14 —
- * I3 viraria "foi avisado alguma vez", que é bem mais fraco do que se pretende.
+ * 🔑 O marco importa. Consultar "qualquer aviso" faria um lembrete do dia 3
+ * autorizar a restrição do dia 14 — I3 viraria "foi avisado alguma vez", que é
+ * bem mais fraco do que se pretende.
  *
  * 🔑 Fail-closed: erro de leitura devolve `false`. Na dúvida sobre ter avisado,
  * não se restringe o acesso do cliente.
  *
- * 📌 Limite aceito: sem `stage` nem unique na tabela, dois marcos que compartilham
- * a mesma `action` são indistinguíveis (hoje 3 e 7, ambos `REMINDER_EMAIL`) e uma
- * reexecução do cron grava linha duplicada. Nenhum dos dois afeta a decisão de
- * restringir, que só consulta `WARNING_EMAIL`. Coluna `stage` + unique
- * `(invoiceId, action, stage)` ficam para a fatia que carregar migração (Plano B).
+ * ## Por que a consulta aceita DUAS formas do mesmo fato
+ *
+ * A coluna `stage` chegou no Plano B; as linhas gravadas antes dela têm
+ * `stage = NULL` e só carregam a `action`, que era o substituto na ausência da
+ * coluna. Consultar SÓ por `stage` seria mais preciso, mas descartaria toda a
+ * evidência já gravada: uma empresa realmente avisada no marco 14 antes da
+ * migração passaria a parecer NÃO avisada.
+ *
+ * Isso não desbloquearia ninguém indevidamente (o efeito é não restringir, que
+ * é o lado seguro de I3), mas apagaria trilha legítima e faria o cron reenviar
+ * avisos já entregues. Então a consulta aceita:
+ *
+ *   - `stage` exatamente igual (linhas novas — precisão máxima); OU
+ *   - `stage: null` **com** a `action` correspondente (linhas legadas).
+ *
+ * ⚠️ O ramo legado herda a imprecisão antiga: uma linha legada do marco 3 tem a
+ * mesma `action` do marco 7, então ela satisfaz a consulta dos dois. Aceito e
+ * TEMPORÁRIO — some sozinho conforme as linhas novas (com `stage`) substituem
+ * as antigas. O marco 14, que é o único que autoriza restringir, nunca teve
+ * essa ambiguidade: `WARNING_EMAIL` é só dele.
  */
 export async function hasDispatchedNotice(
   companyId: string,
@@ -113,8 +132,11 @@ export async function hasDispatchedNotice(
     const found = await db.dunningEvent.findFirst({
       where: {
         companyId,
-        action: noticeActionFor(stage),
         status: { in: [...DISPATCHED] },
+        OR: [
+          { stage },
+          { stage: null, action: noticeActionFor(stage) },
+        ],
       },
       select: { id: true },
     });

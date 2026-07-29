@@ -2669,6 +2669,7 @@ model Plan {
   updatedAt             DateTime        @updatedAt
   features              PlanFeature[]
   subscriptions         Subscription[]
+  obligations           BillingObligation[]
 
   @@index([isActive, sortOrder])
 }
@@ -2716,6 +2717,8 @@ model Subscription {
   company              Company               @relation(fields: [companyId], references: [id])
   plan                 Plan                  @relation(fields: [planId], references: [id])
   history              SubscriptionHistory[]
+  obligations          BillingObligation[]
+  courtesies           SubscriptionCourtesy[]
 
   @@index([companyId, status])
   @@index([status])
@@ -2778,9 +2781,20 @@ model Invoice {
   nfeNumber            String?
   nfeUrl               String?
   sentAt               DateTime?
+  /// Obrigação que esta fatura tenta cobrar. NULLABLE de propósito: toda fatura
+  /// anterior ao motor (e as manuais/avulsas) fica com NULL, e a coluna é
+  /// aditiva — nenhuma linha viva é reescrita.
+  ///
+  /// 🔑 É por aqui que o webhook de pagamento acha a obrigação a partir da
+  /// fatura paga. Sem esta coluna, o pagamento confirmaria a fatura e a
+  /// obrigação seguiria `ISSUED` e vencida — restringindo um cliente que pagou.
+  billingObligationId  String?
+
   subscription         Subscription          @relation(fields: [subscriptionId], references: [id])
+  billingObligation    BillingObligation?    @relation(fields: [billingObligationId], references: [id], onDelete: SetNull)
   dunningEvents        DunningEvent[]
 
+  @@index([billingObligationId])
   @@unique([subscriptionId, asaasPaymentId])
   @@index([subscriptionId, status])
   @@index([dueDate, status])
@@ -2998,6 +3012,168 @@ model SubscriptionHistory {
   @@index([subscriptionId, createdAt])
   @@index([action])
   @@map("subscription_history")
+}
+
+/// Obrigação de cobrança: "a assinatura X deve o valor V pelo período
+/// [periodStart, periodEnd)". É a fonte de verdade do PERÍODO — as decisões de
+/// cobrança e o gate de acesso consultam esta tabela, não uma data de calendário.
+///
+/// 🔑 Dois eixos ORTOGONAIS, não um enum só (spec §4.1). `disposition` diz o que
+/// se pretende fazer com o período; `state` diz onde o período está no ciclo de
+/// vida. Fundir os dois tornaria "emitida e vencida" — a base da invariante I1
+/// ("ninguém é restringido sem ter sido cobrado") — não consultável de forma
+/// inequívoca.
+///
+/// 🔑 `priceCents` é a MESMA unidade de `Plan.priceMonthly` (Int, em CENTAVOS —
+/// ver `scripts/seed-medical-plans.cjs`). Cópia direta na emissão: sem `* 100`
+/// nem `/ 100`. O preço é congelado na EMISSÃO, não na criação (spec §4.1.2):
+/// obrigação `PLANNED` é recalculada quando o plano muda.
+///
+/// ⚠️ `@@unique([subscriptionId, sequence])` garante UNICIDADE, não
+/// contiguidade: não impede lacuna (sequence 3 sem 2) nem sobreposição de datas.
+/// A contiguidade é responsabilidade de `nextPeriod`/`isContiguous`
+/// (`src/lib/billing-clock.ts`), travada por teste.
+///
+/// ⚠️ Registro CONTÁBIL: `onDelete: Restrict` na FK de assinatura — apagar uma
+/// assinatura com obrigações é erro, não cascata (ver docstring da relação).
+model BillingObligation {
+  id             String       @id @default(cuid())
+  subscriptionId String
+  /// Número da obrigação dentro da assinatura, começando em 1. A obrigação n+1
+  /// começa exatamente onde a n terminou — nunca em "agora".
+  sequence       Int
+  /// Intervalo SEMIABERTO [periodStart, periodEnd), tudo em UTC: o fim de um
+  /// período é exatamente o início do próximo.
+  periodStart    DateTime
+  periodEnd      DateTime
+  /// Plano e ciclo congelados na emissão. FK com `onDelete: Restrict` porque o
+  /// histórico precisa saber QUAL plano foi cobrado; apagar o plano apagaria
+  /// essa evidência.
+  planId         String
+  cycle          BillingCycle
+  /// Preço cheio do plano no momento da emissão, em CENTAVOS (mesma unidade de
+  /// `Plan.priceMonthly`). Em `COURTESY` este valor é a receita NÃO FATURADA;
+  /// em `INTERNAL` é sempre 0 e não entra nessa conta.
+  priceCents     Int
+
+  disposition ObligationDisposition @default(CHARGE)
+  state       ObligationState       @default(PLANNED)
+
+  /// Motivo obrigatório em `VOID` (anulação): "duplicata do bootstrap",
+  /// "trial estendido", "troca de plano". Nulo nos demais estados.
+  voidReason String?
+
+  /// Carimbos que I1 consulta. `issuedAt` + `dueAt` no passado + `state=ISSUED`
+  /// = obrigação emitida e vencida, único gatilho legítimo de restrição.
+  issuedAt DateTime?
+  dueAt    DateTime?
+  paidAt   DateTime?
+
+  /// Tentativa de cobrança vigente no gateway. Reemitir NÃO cria período novo —
+  /// aponta outra fatura para a mesma obrigação (spec §4.2). Nullable: obrigação
+  /// `PLANNED`, `COURTESY` e `INTERNAL` nunca têm fatura.
+  invoiceId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Restrict)
+  plan         Plan         @relation(fields: [planId], references: [id], onDelete: Restrict)
+  invoices     Invoice[]
+
+  @@unique([subscriptionId, sequence])
+  @@index([subscriptionId, state])
+  @@index([periodEnd])
+  @@map("billing_obligations")
+}
+
+/// O que se pretende fazer com o período de uma obrigação.
+///
+/// `INTERNAL` (plano de preço zero, conta interna do dono) é PRECEDENTE sobre
+/// `COURTESY`: um plano que não cobra ninguém não tem valor cheio a perder, e
+/// contá-lo como receita não faturada inflaria a métrica com dinheiro que nunca
+/// existiu (spec §4.3, "Cortesia ≠ plano interno").
+///
+/// `LEGACY_WAIVED` é disposição de BOOTSTRAP — o passado regularizado na etapa 2
+/// do rollout. `resolveObligationDisposition` (`src/lib/billing-courtesy.ts`)
+/// nunca a produz; ela é gravada por escrita direta e existe aqui para que essa
+/// escrita seja possível.
+enum ObligationDisposition {
+  CHARGE
+  COURTESY
+  INTERNAL
+  LEGACY_WAIVED
+}
+
+/// Onde o período está: `PLANNED` → `ISSUED` → `PAID`, mais `VOID` (anulada,
+/// com `voidReason`). Só `ISSUED` com `dueAt` no passado autoriza restrição (I1).
+enum ObligationState {
+  PLANNED
+  ISSUED
+  PAID
+  VOID
+}
+
+/// Cortesia comercial concedida sobre uma assinatura: início, fim, motivo e
+/// autor. Substitui o improviso de `Company.accessEnabled` (bypass sem registro,
+/// sem prazo e sem dono) por uma concessão datada e auditável.
+///
+/// 🔑 O acesso de quem está em cortesia é liberado pelo caminho NORMAL — a
+/// obrigação do período nasce `COURTESY`/`PAID`, logo o cliente está em dia — e
+/// não por bypass. Quando a cortesia vencer, o cadeado age sozinho.
+///
+/// ⚠️ Compatível por estrutura com `CourtesyCandidate`
+/// (`src/lib/billing-courtesy.ts`): `startsAt`, `endsAt`, `revokedAt` com os
+/// mesmos tipos e nulabilidade. `endsAt` nulo = cortesia permanente;
+/// `revokedAt` não nulo = concessão desfeita, sem apagar o histórico.
+model SubscriptionCourtesy {
+  id             String    @id @default(cuid())
+  subscriptionId String
+  startsAt       DateTime
+  /// Nulo = permanente (sem data de término).
+  endsAt         DateTime?
+  /// Por que foi concedida. Obrigatório: cortesia sem motivo é o improviso que
+  /// esta tabela existe para acabar.
+  reason         String
+  /// Quem concedeu (id ou e-mail do admin). Obrigatório pelo mesmo motivo.
+  grantedBy      String
+  /// Não nulo = revogada; não vale mais, independente das datas de vigência.
+  revokedAt      DateTime?
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  subscription Subscription @relation(fields: [subscriptionId], references: [id], onDelete: Cascade)
+
+  @@index([subscriptionId, startsAt])
+  @@map("subscription_courtesies")
+}
+
+/// Artefato DESCARTÁVEL do modo sombra (rollout etapa 3): o motor roda sem
+/// emitir e sem bloquear, e grava aqui o que TERIA feito.
+///
+/// 🔑 Nunca escreve em `BillingObligation` — se escrevesse, o modo sombra
+/// congelaria preço, plano e sequência reais, e ao ligar a emissão o sistema
+/// cobraria decisões tomadas dias antes.
+///
+/// Diagnóstico, não registro contábil: pode ser truncado ou dropado a qualquer
+/// momento sem perda. Por isso `companyId` é coluna solta (sem FK) e não há
+/// unique — duplicata de diagnóstico não faz mal, e uma FK faria um artefato
+/// descartável travar o DELETE de uma empresa.
+model BillingShadowDecision {
+  id             String                @id @default(cuid())
+  subscriptionId String
+  companyId      String
+  runAt          DateTime              @default(now())
+  wouldCharge    Boolean
+  wouldRestrict  Boolean
+  periodStart    DateTime
+  periodEnd      DateTime
+  priceCents     Int
+  disposition    ObligationDisposition
+  note           String?
+
+  @@index([runAt])
+  @@map("billing_shadow_decisions")
 }
 
 model HealthScore {
@@ -3883,12 +4059,43 @@ model DunningEvent {
   action      DunningAction
   channel     DunningChannel
   status      DunningEventStatus @default(PENDING)
+  /// Marco da régua de inadimplência que gerou este aviso (3, 7, 14…).
+  ///
+  /// NULLABLE porque as linhas gravadas antes desta migração não têm marco — e
+  /// no Postgres cada NULL é distinto, então elas nunca colidem no unique
+  /// abaixo (mesmo raciocínio de `AdminNotification.periodKey`).
+  ///
+  /// ⚠️ A consequência: o unique NÃO protege as linhas legadas contra
+  /// duplicata. Ele passa a valer a partir da primeira linha gravada com
+  /// `stage`. Aceito — o alvo é impedir duplicata NOVA, não reescrever passado.
+  ///
+  /// Antes desta coluna, os marcos 3 e 7 gravavam ambos `REMINDER_EMAIL` e
+  /// eram indistinguíveis para sempre.
+  stage       Int?
   sentAt      DateTime?
   errorDetail String?
   createdAt   DateTime           @default(now())
   company     Company            @relation(fields: [companyId], references: [id], onDelete: Cascade)
   invoice     Invoice            @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
 
+  /// Idempotência da régua: uma reexecução do cron no mesmo marco pega P2002 em
+  /// vez de gravar linha duplicada.
+  @@unique([invoiceId, action, stage])
+  /// Cobrem `hasDispatchedNotice`, que roda no gate de ~15 rotas. Sem eles,
+  /// seq scan em `dunning_events` a cada requisição de escrita de tenant em
+  /// atraso. São DOIS porque a consulta é um OR de dois ramos — o legado
+  /// (`stage: null` + `action`) e o novo (`stage` exato) — e o planner do
+  /// Postgres resolve cada ramo do OR com seu próprio índice.
+  @@index([companyId, action, status])
+  @@index([companyId, stage, status])
+  /// Os três abaixo existem FISICAMENTE desde 2026-03
+  /// (`20260326_sprint1_saas_admin_evolution/migration.sql:233-235`) e nunca
+  /// entraram no modelo. Declarados aqui para acabar com o drift — uma
+  /// introspecção acusaria a diferença. Não criam índice novo: a migração usa
+  /// `CREATE INDEX IF NOT EXISTS` e eles já estão lá.
+  @@index([companyId, createdAt])
+  @@index([invoiceId])
+  @@index([status])
   @@map("dunning_events")
 }
 
