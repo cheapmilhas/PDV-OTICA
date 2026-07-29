@@ -397,7 +397,7 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
   it("cliente 20d atrasado sem nenhum aviso → avisa o marco 3 e NÃO suspende na mesma rodada", async () => {
     subscriptionFindMany.mockResolvedValue([
       {
-        id: "sub-9",
+        id: "sub-20d",
         companyId: "co-9",
         pastDueSince: daysAgo(20), // bem além dos 14d de suspensão
         status: "PAST_DUE",
