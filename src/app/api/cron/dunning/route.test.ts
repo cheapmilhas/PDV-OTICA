@@ -13,6 +13,9 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 const subscriptionFindMany = vi.fn();
 const subscriptionUpdate = vi.fn();
 const globalAuditCreate = vi.fn();
+const invoiceFindFirst = vi.fn();
+const dunningEventCreate = vi.fn();
+const dunningEventFindFirst = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -22,6 +25,13 @@ vi.mock("@/lib/prisma", () => ({
     },
     globalAudit: {
       create: (...a: unknown[]) => globalAuditCreate(...a),
+    },
+    invoice: {
+      findFirst: (...a: unknown[]) => invoiceFindFirst(...a),
+    },
+    dunningEvent: {
+      create: (...a: unknown[]) => dunningEventCreate(...a),
+      findFirst: (...a: unknown[]) => dunningEventFindFirst(...a),
     },
   },
 }));
@@ -94,6 +104,9 @@ beforeEach(() => {
   logActivity.mockReset().mockResolvedValue(undefined);
   notifyCompany.mockReset().mockResolvedValue({ status: "SENT" });
   publishEntitlementForCompany.mockReset().mockResolvedValue(undefined);
+  invoiceFindFirst.mockReset().mockResolvedValue({ id: "inv-1" });
+  dunningEventCreate.mockReset().mockResolvedValue({ id: "evt-1" });
+  dunningEventFindFirst.mockReset().mockResolvedValue({ id: "evt-1" });
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -214,6 +227,26 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
 
     // Cadeado: a suspensão deve propagar writeAllowed=false ao Domus na hora.
     expect(publishEntitlementForCompany).toHaveBeenCalledWith("co-4");
+  });
+
+  it("sem trilha de aviso despachado → NÃO suspende, adia e contabiliza", async () => {
+    // I3 (spec §4.6.3): 'nem tentamos avisar' não pode virar bloqueio.
+    // Foi o caso da MedFacil — e-mail suprimido por testMode, cliente sem saber.
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-9",
+        companyId: "co-9",
+        pastDueSince: daysAgo(15),
+        status: "PAST_DUE",
+        lastDunningStage: 14, // já avisou pela régua...
+      },
+    ]);
+    dunningEventFindFirst.mockResolvedValue(null); // ...mas o aviso NÃO foi despachado
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+    expect(body.suspended).toBe(0);
+    expect(body.suspendDeferred).toBe(1);
   });
 
   it("já SUSPENDED → não dispara SUBSCRIPTION_SUSPENDED novamente", async () => {

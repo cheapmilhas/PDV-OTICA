@@ -18,6 +18,7 @@ import { createCompanyNotification } from "@/services/company-notification.servi
 import { createAdminNotification } from "@/services/admin-notification.service";
 import { logActivity } from "@/services/activity-log.service";
 import { notifyCompany } from "@/services/saas-notification.service";
+import { recordDunningNotice, hasDispatchedNotice } from "@/services/dunning-event.service";
 import { withHeartbeat } from "@/lib/cron-instrument";
 import { publishEntitlementForCompany } from "@/lib/vis-domus-publisher";
 
@@ -70,6 +71,7 @@ export async function GET(request: Request) {
         total: overdue.length,
         noticeSent: 0,
         suspended: 0,
+        suspendDeferred: 0,
         canceled: 0,
         cancelDeferred: 0,
         errors: 0,
@@ -132,21 +134,61 @@ export async function GET(request: Request) {
                     error: e instanceof Error ? e.message : String(e),
                   })
                 );
-              await notifyCompany(
+              const notifyResult = await notifyCompany(
                 sub.companyId,
                 "INVOICE_OVERDUE",
                 { name: "Cliente", daysOverdue, payUrl: `${base}/dashboard/configuracoes` },
                 { periodKey: `stage:${stage}`, channels: ["email"] }
               );
+
+              // Trilha de comunicação (spec §4.6.2): registra TAMBÉM o que não saiu.
+              // `notifyCompany` devolve SENT ao ENFILEIRAR, e SKIPPED quando o envio
+              // foi suprimido (modo de teste, sem destinatário) — a distinção é o que
+              // impede punir o cliente por falha nossa.
+              const overdueInvoice = await prisma.invoice.findFirst({
+                where: {
+                  subscriptionId: sub.id,
+                  isManual: false,
+                  status: { in: ["PENDING", "OVERDUE"] },
+                  // `dueDate` é nullable no schema. Fatura sem vencimento não pode
+                  // ancorar trilha de ATRASO — não há do que estar atrasada.
+                  dueDate: { not: null },
+                },
+                orderBy: { dueDate: "asc" },
+                select: { id: true },
+              });
+              if (overdueInvoice) {
+                await recordDunningNotice({
+                  companyId: sub.companyId,
+                  invoiceId: overdueInvoice.id,
+                  stage,
+                  delivered: notifyResult.status === "SENT",
+                  skipped: notifyResult.status === "SKIPPED",
+                  error: notifyResult.status === "SENT" ? undefined : notifyResult.status,
+                });
+              }
             }
           }
 
-          // 2) Suspensão aos 14d — só se o aviso de 14 já foi registrado (não suspende sem avisar).
-          if (
+          // 2) Suspensão aos 14d — só se o aviso de 14 já foi registrado (não suspende sem avisar)
+          // E só com trilha de que o aviso REALMENTE foi despachado (I3, spec §4.6.3).
+          const podeRestringir =
             daysOverdue >= SUSPEND_DAYS &&
             (lastStage ?? 0) >= SUSPEND_DAYS &&
-            sub.status !== "SUSPENDED"
-          ) {
+            sub.status !== "SUSPENDED";
+
+          if (podeRestringir && !(await hasDispatchedNotice(sub.companyId, SUSPEND_DAYS))) {
+            // I3 (spec §4.6.3): não restringe sem trilha de aviso DESPACHADO.
+            // `lastDunningStage` sozinho não basta — ele avança com a notificação
+            // in-app, e o cliente pode nunca ter recebido o e-mail (modo de teste,
+            // provedor fora). Sem trilha, o cron adia e loga, não pune.
+            log.warn("Suspensão ADIADA: sem trilha de aviso despachado", {
+              subscriptionId: sub.id,
+              companyId: sub.companyId,
+              daysOverdue,
+            });
+            summary.suspendDeferred++;
+          } else if (podeRestringir) {
             await prisma.subscription.update({
               where: { id: sub.id },
               data: { status: "SUSPENDED" },
