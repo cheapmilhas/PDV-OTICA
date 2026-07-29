@@ -124,9 +124,9 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
       {
         id: "sub-1",
         companyId: "co-1",
-        pastDueSince: daysAgo(8), // 8 dias → nextDunningStage = 7
+        pastDueSince: daysAgo(8), // 8 dias → nextDunningStage = 7 (já avisou o 3)
         status: "PAST_DUE",
-        lastDunningStage: null, // nenhum aviso ainda
+        lastDunningStage: 3, // marco 3 já avisado; próximo pendente é o 7
       },
     ]);
 
@@ -306,7 +306,7 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
         companyId: "co-A",
         pastDueSince: daysAgo(8),
         status: "PAST_DUE",
-        lastDunningStage: null,
+        lastDunningStage: 3, // marco 3 já avisado; próximo pendente é o 7
       },
       {
         id: "sub-B",
@@ -342,7 +342,7 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
         companyId: "co-8",
         pastDueSince: daysAgo(8),
         status: "PAST_DUE",
-        lastDunningStage: null,
+        lastDunningStage: 3, // marco 3 já avisado; próximo pendente é o 7
       },
     ]);
 

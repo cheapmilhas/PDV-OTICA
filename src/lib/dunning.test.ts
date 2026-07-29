@@ -22,12 +22,29 @@ describe("nextDunningStage", () => {
     expect(nextDunningStage(14, 7)).toBe(14);
   });
 
-  it("PULA marcos: entrou com 10 dias, nada avisado → 7 (não 3)", () => {
-    expect(nextDunningStage(10, null)).toBe(7);
+  it("NÃO pula marcos: entrou com 10 dias, nada avisado → 3 (o primeiro pendente)", () => {
+    expect(nextDunningStage(10, null)).toBe(3);
   });
 
-  it("PULA direto para 14: entrou com 20 dias, nada avisado → 14", () => {
-    expect(nextDunningStage(20, null)).toBe(14);
+  it("NÃO pula marcos: entrou com 20 dias, nada avisado → 3, e sobe um por execução", () => {
+    expect(nextDunningStage(20, null)).toBe(3);
+    expect(nextDunningStage(20, 3)).toBe(7);
+    expect(nextDunningStage(20, 7)).toBe(14);
+    expect(nextDunningStage(20, 14)).toBeNull();
+  });
+
+  it("cliente que entra atrasado recebe os 3 avisos, um por execução do cron", () => {
+    // Regressão da spec §4.6.2: antes, este cenário mandava UM aviso e suspendia
+    // na mesma rodada. Agora exige 3 execuções antes de a régua permitir restringir.
+    let last: number | null = null;
+    const marcos: number[] = [];
+    for (let i = 0; i < 5; i++) {
+      const s = nextDunningStage(40, last);
+      if (s === null) break;
+      marcos.push(s);
+      last = s;
+    }
+    expect(marcos).toEqual([3, 7, 14]);
   });
 
   it("após 14 avisado, mesmo com 30 dias → null (14 é o último marco)", () => {
