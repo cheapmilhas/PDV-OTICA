@@ -16,12 +16,7 @@ export function noticeActionFor(stage: number): "REMINDER_EMAIL" | "WARNING_EMAI
 const DISPATCHED = ["SENT", "DELIVERED"] as const;
 
 interface Deps {
-  db?: {
-    dunningEvent: {
-      create: (args: never) => Promise<unknown>;
-      findFirst: (args: never) => Promise<unknown>;
-    };
-  };
+  db?: Pick<typeof defaultPrisma, "dunningEvent">;
 }
 
 interface RecordInput {
@@ -63,7 +58,7 @@ export async function recordDunningNotice(
         sentAt: input.delivered ? new Date() : null,
         errorDetail: input.error ?? null,
       },
-    } as never);
+    });
     return true;
   } catch (error) {
     log.error("Falha ao gravar trilha de dunning", {
@@ -108,7 +103,7 @@ export async function hasDispatchedNotice(
         status: { in: [...DISPATCHED] },
       },
       select: { id: true },
-    } as never);
+    });
     return found !== null;
   } catch (error) {
     log.error("Falha ao ler trilha de dunning — assumindo NÃO avisado", {
