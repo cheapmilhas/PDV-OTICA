@@ -186,7 +186,8 @@ Dois defeitos reais, ambos confirmados no código:
 
 **Confunde enfileirado com enviado.** `notifyCompany` grava `SaasEmailLog = SENT` ao enfileirar (`saas-notification.service.ts:160`), e `Invoice.invoiceSent = true` é gravado logo em seguida (`invoice-send.service.ts:86`) — mas o despacho real pode falhar depois, com até 3 tentativas (`email-queue.service.ts:101`). Também retorna `SKIPPED` silenciosamente quando o envio está desligado, sem destinatário, ou em modo de teste (`saas-notification.service.ts:67`).
 → **É exatamente o caso que acabou de acontecer com a MedFacil** (e-mail redirecionado para o operador por `testMode`, cliente nunca avisado).
-→ Por D9, o gate exige **evidência de despacho efetivo**. `DunningEvent` já tem os estados `SENT`/`DELIVERED`/`FAILED` (`prisma/schema.prisma:3878`) e hoje **não é usado pelo cron** — passa a ser a trilha de comunicação que autoriza a restrição.
+→ Por D9, o gate exige **evidência de despacho efetivo**. A peça já existe e está **órfã**: `DunningEvent` (`prisma/schema.prisma:3878`) tem `status`, `sentAt`, `errorDetail`, canal (`EMAIL`/`WHATSAPP`/`SYSTEM`) e os cinco estados `PENDING`/`SENT`/`DELIVERED`/`FAILED`/`SKIPPED` (`:4707`) — e **nenhuma linha de código a escreve ou lê hoje** (verificado por varredura). Passa a ser a trilha de comunicação que autoriza a restrição.
+`SKIPPED` é justamente o caso da MedFacil (e-mail suprimido por modo de teste): a tabela já distingue "falhou ao enviar" de "nem tentou", que é a diferença entre punir o cliente por problema nosso e não punir.
 
 #### 4.6.3. Invariante resultante
 
