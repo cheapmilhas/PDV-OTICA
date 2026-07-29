@@ -20,24 +20,50 @@
  *      Sem esta prova o trigger é suposto, não provado; e I2 falhando em
  *      silêncio significa clínica escrevendo prontuário achando-se bloqueada.
  *
+ * ## COMO O SQL CHEGA AO BANCO (leia antes de mexer)
+ *
+ * Um statement POR CHAMADA, todos dentro de UMA `$transaction` interativa.
+ *
+ * A primeira versão deste script mandava o `.sql` inteiro num único
+ * `$executeRawUnsafe` e confiava no `BEGIN;`/`COMMIT;` escritos dentro do
+ * arquivo. Isso FALHOU em produção, sem escrever nada:
+ *
+ *   Code: `42601`. `cannot insert multiple commands into a prepared statement`
+ *
+ * O Prisma emite `$executeRawUnsafe` como PREPARED STATEMENT, e um prepared
+ * statement aceita EXATAMENTE UM comando — não existe como mandar 35 juntos.
+ * (O script irmão `apply-admin-notification-period-key.cjs` nunca bateu nisso
+ * porque sempre mandou um statement por vez.)
+ *
+ * Dividir o arquivo, porém, NÃO pode ser `split(";")`: medido contra este
+ * `.sql`, isso produz 59 fragmentos, vários deles pedaços SOLTOS do corpo das
+ * funções plpgsql (`END IF`, `RETURN OLD`, `PERFORM ...`), inválidos isolados.
+ * O divisor correto vive em `src/lib/sql-statements.cjs` — respeita `$$` e
+ * `$tag$`, string literal, identificador entre aspas e comentário — e é coberto
+ * por `src/lib/sql-statements.test.ts`, inclusive contra o `.sql` REAL desta
+ * migração, provando que os corpos `$$` ficam intactos.
+ *
+ * A atomicidade passou a vir da `$transaction` do Prisma, e não do envelope
+ * escrito no arquivo. O porquê está no docblock de `aplicarAtomicamente`
+ * (resumo: chamadas raw separadas são aquisições separadas do pool do Prisma,
+ * e nada garante que caiam na mesma conexão — `$transaction` reserva uma só).
+ * E o inventário dos objetos virou GATE DE COMMIT: é conferido dentro da
+ * transação, então "faltou trigger" vira ROLLBACK, não um laudo pós-fato.
+ *
  * ## ANTES de rodar isto: faça o dry-run
  *
  * O repo tem `scripts/dry-run-migration.cjs`, que aplica um `.sql` dentro de
- * uma transação e dá ROLLBACK — prova o SQL inteiro contra o schema REAL sem
- * deixar rastro. Custa nada e pega erro de sintaxe/tipo antes do apply.
+ * uma transação e dá ROLLBACK — prova o SQL contra o schema REAL sem deixar
+ * rastro.
  *
- *   node scripts/dry-run-migration.cjs \
- *     prisma/migrations/20260729180000_billing_obligations/migration.sql
- *
- * ⚠️ RESSALVA VERIFICADA: aquele script, hoje, está amarrado a OUTRA migração —
- * ele afirma o efeito de `Company.domusClinicId` e "tem que continuar 14
- * empresas" no fim, e divide o arquivo por ';', o que estilhaça os corpos
- * `$$ ... $$` das funções plpgsql deste `.sql` em fragmentos inválidos. Ou
- * seja: rodá-lo cru contra ESTA migração vai falhar por limitação DELE, não
- * por defeito do SQL. Para usá-lo aqui é preciso antes ensiná-lo a respeitar
- * `$$` e trocar as asserções finais. Enquanto isso não for feito, o envelope
- * BEGIN/COMMIT do próprio `.sql` é a rede de segurança — e é verificado por
- * `exigirEnvelopeTransacional` antes de qualquer escrita.
+ * ⚠️ RESSALVA VERIFICADA, AINDA VÁLIDA: aquele script está amarrado a OUTRA
+ * migração — afirma o efeito de `Company.domusClinicId` e "tem que continuar 14
+ * empresas" no fim, e divide o arquivo por ';', que é exatamente o erro que
+ * estilhaça os corpos `$$`. Rodá-lo cru contra ESTA migração falha por
+ * limitação DELE, não por defeito do SQL. Para usá-lo aqui seria preciso trocar
+ * o split por `splitSqlStatements` e reescrever as asserções finais. Enquanto
+ * isso não for feito, a rede de segurança é a `$transaction` deste script mais
+ * o preflight `prepararStatements`, que roda antes de qualquer escrita.
  *
  * ## Códigos de saída
  *
@@ -54,6 +80,11 @@ const fs = require("node:fs");
 const path = require("node:path");
 const crypto = require("node:crypto");
 const { PrismaClient } = require("@prisma/client");
+const {
+  splitSqlStatements,
+  removerComentarios,
+  ehControleDeTransacao,
+} = require("../src/lib/sql-statements.cjs");
 
 const MIGRATION_SQL = path.join(
   __dirname,
@@ -100,49 +131,36 @@ async function main() {
     imprimirInventario(estadoAntes);
 
     // -----------------------------------------------------------------------
-    // 2) Aplica. O .sql inteiro num ÚNICO $executeRawUnsafe.
-    //
-    //    🔑 A ATOMICIDADE VEM DO PRÓPRIO .sql, que abre com BEGIN e fecha com
-    //    COMMIT. Isso importa muito aqui: o `.env` deste repo tem DATABASE_URL
-    //    e DIRECT_URL IDÊNTICAS, ambas no endpoint `-pooler` (PgBouncer em
-    //    transaction pooling) — não existe conexão direta configurada. Sem o
-    //    envelope, ~30 statements DDL independentes atravessariam o pooler e
-    //    uma falha no meio deixaria as TABELAS CRIADAS E OS TRIGGERS NÃO, que
-    //    é a violação silenciosa de I2 que esta migração existe para impedir.
-    //
-    //    No Postgres o DDL é transacional, então ou tudo entra ou nada entra.
-    //    O preflight abaixo RECUSA aplicar um .sql que tenha perdido o BEGIN —
-    //    a garantia é verificada, não confiada.
-    //
-    //    ⚠️ SEM FALLBACK DE SPLIT, DE PROPÓSITO. Uma versão anterior deste
-    //    comentário prometia "se o driver recusar, divide por statement" —
-    //    promessa que nunca foi implementada, e que seria ERRADA se fosse:
-    //    dividir por ';' estilhaça os corpos `$$ ... $$` das 3 funções plpgsql
-    //    em fragmentos inválidos (`END IF`, `RETURN NEW`, ...), e cada
-    //    fragmento rodaria FORA da transação. O comportamento real, hoje, é:
-    //    se o driver recusar múltiplos statements, o erro SOBE e NADA é
-    //    aplicado. Falhar inteiro é o resultado correto.
+    // 2) Aplica: UM statement por chamada, TODOS dentro de UMA transação
+    //    interativa do Prisma.
     // -----------------------------------------------------------------------
     const sql = fs.readFileSync(MIGRATION_SQL, "utf8");
-    exigirEnvelopeTransacional(sql);
+    const statements = prepararStatements(sql);
     console.log(`\n── APLICANDO (${MIGRATION_SQL.split("/").slice(-2).join("/")}) ──`);
-    console.log("   envelope transacional: BEGIN ... COMMIT ✔");
-    await prisma.$executeRawUnsafe(sql);
-    console.log("   statements executados");
+    console.log(
+      `   ${statements.length} statements DDL, todos dentro de UMA $transaction interativa`
+    );
+    await aplicarAtomicamente(prisma, statements);
+    console.log("   statements executados, inventário conferido DENTRO da tx, e commitados");
 
     // -----------------------------------------------------------------------
-    // 3) DEPOIS: prova que TUDO existe. Sem esta checagem o script "passaria"
-    //    mesmo se algum CREATE fosse silenciosamente ignorado.
+    // 3) DEPOIS: reconfere FORA da transação, agora contra o estado commitado.
+    //
+    //    Não é redundância com a conferência de dentro da tx: aquela DECIDE
+    //    (commit ou rollback), esta CONSTATA o que ficou no banco de verdade.
+    //    Se as duas divergissem, algo muito errado aconteceu entre o commit e
+    //    agora — e é melhor descobrir aqui do que no primeiro cliente.
     // -----------------------------------------------------------------------
     console.log("\n── DEPOIS ──");
     const estadoDepois = await inventario(q);
     imprimirInventario(estadoDepois);
 
-    const faltando = Object.entries(estadoDepois)
-      .filter(([, presente]) => !presente)
-      .map(([nome]) => nome);
+    const faltando = nomesAusentes(estadoDepois);
     if (faltando.length > 0) {
-      throw new Error(`verificação pós-migração FALHOU — ausentes: ${faltando.join(", ")}`);
+      throw new Error(
+        `verificação pós-COMMIT FALHOU — ausentes: ${faltando.join(", ")}. ` +
+          "A transação reportou sucesso mas os objetos não estão no banco."
+      );
     }
     console.log("\n✅ todos os objetos presentes");
 
@@ -264,34 +282,214 @@ async function registrarMigracao(prisma, q, sql) {
 }
 
 /**
- * Recusa aplicar um `.sql` que não traga o próprio `BEGIN`/`COMMIT`.
+ * Divide o `.sql` em statements executáveis e PROVA que a aplicação vai ser
+ * atômica. Este é o preflight — a mesma intenção do antigo
+ * `exigirEnvelopeTransacional`, adaptada ao novo transporte.
  *
- * A atomicidade desta migração não é opinião do script — é uma propriedade do
- * arquivo. Se alguém editar o `.sql` e derrubar o envelope sem perceber, o
- * apply passaria a rodar ~30 DDLs soltos através do pooler, e o modo de falha
- * seria "tabelas sim, triggers não" (I2 quebrada em silêncio). Melhor recusar
- * alto do que aplicar pela metade.
+ * ## O que mudou, e por quê
  *
- * Ignora comentários de linha para não confundir a palavra BEGIN de um corpo
- * plpgsql (ou de um comentário) com o BEGIN da transação.
+ * A versão anterior mandava o arquivo INTEIRO num único `$executeRawUnsafe` e
+ * dependia do `BEGIN;`/`COMMIT;` escritos DENTRO do `.sql`. Isso falhou em
+ * produção, sem escrever nada:
+ *
+ *   Code: `42601`. `cannot insert multiple commands into a prepared statement`
+ *
+ * O Prisma emite `$executeRawUnsafe` como prepared statement, e um prepared
+ * statement aceita EXATAMENTE UM comando. Não há como mandar 35 de uma vez.
+ *
+ * Então agora vai um por chamada — e a atomicidade passa a vir de uma
+ * `$transaction` interativa do Prisma, que é uma transação DE VERDADE numa
+ * conexão pinada. Consequência direta: o `BEGIN;`/`COMMIT;` do arquivo viram
+ * ESTORVO. `BEGIN` dentro de transação aberta gera `WARNING: there is already a
+ * transaction in progress`, e `COMMIT` no meio encerraria a transação do Prisma
+ * pelas costas dele — que é exatamente o cenário "tabelas sim, triggers não"
+ * que queremos impedir. Por isso este preflight os LOCALIZA e os REMOVE da
+ * lista, em vez de mandá-los ao banco.
+ *
+ * ## O que continua sendo exigido
+ *
+ * A garantia não afrouxou; mudou de dono. Antes: "o arquivo tem envelope".
+ * Agora, três exigências verificadas ANTES de qualquer escrita:
+ *
+ *   1. o arquivo declara a intenção de atomicidade (BEGIN … COMMIT presentes);
+ *   2. o BEGIN é o PRIMEIRO statement e o COMMIT é o ÚLTIMO — envelope de
+ *      verdade, não um `COMMIT` perdido no meio que deixaria metade fora;
+ *   3. não sobra NENHUM outro comando de controle de transação no miolo. E
+ *      "controle" aqui é a família inteira (`COMMIT WORK`, `END`, `ABORT`,
+ *      `SAVEPOINT`, `COMMIT AND CHAIN`…), não só as formas secas — ver
+ *      `ehControleDeTransacao`. Um reconhecedor estreito seria um furo: o
+ *      comando escaparia para dentro da `$transaction` e a encerraria pelo
+ *      meio.
+ *
+ * Falhando qualquer uma, o script aborta sem tocar no banco.
+ *
+ * A quarta garantia não cabe aqui e mora em `aplicarAtomicamente`: o inventário
+ * dos objetos é conferido DENTRO da transação e é ele quem autoriza o commit.
+ * Preflight lê o arquivo; só o gate de dentro da tx sabe o que o banco REALMENTE
+ * ganhou.
  */
-function exigirEnvelopeTransacional(sql) {
-  const semComentarios = sql
-    .split("\n")
-    .filter((linha) => !linha.trim().startsWith("--"))
-    .join("\n");
+function prepararStatements(sql) {
+  const statements = splitSqlStatements(sql);
 
-  const temBegin = /^\s*BEGIN\s*;/im.test(semComentarios);
-  const temCommit = /^\s*COMMIT\s*;/im.test(semComentarios);
+  const indicesControle = statements
+    .map((st, i) => (ehControleDeTransacao(st) ? i : -1))
+    .filter((i) => i >= 0);
 
-  if (!temBegin || !temCommit) {
+  const primeiro = statements[0] ?? "";
+  const ultimo = statements[statements.length - 1] ?? "";
+  const abreComBegin = /^(BEGIN|START\s+TRANSACTION)$/i.test(
+    removerComentarios(primeiro).trim().replace(/;+$/, "").trim()
+  );
+  const fechaComCommit = /^COMMIT$/i.test(
+    removerComentarios(ultimo).trim().replace(/;+$/, "").trim()
+  );
+
+  if (!abreComBegin || !fechaComCommit) {
     throw new Error(
-      "ABORTADO: o migration.sql NÃO está envolvido em BEGIN/COMMIT " +
-        `(BEGIN=${temBegin}, COMMIT=${temCommit}). Aplicar assim faria ~30 statements ` +
-        "DDL independentes atravessarem o pooler; uma falha no meio deixaria as tabelas " +
-        "criadas e os TRIGGERS NÃO — I2 quebrada em silêncio. Restaure o envelope."
+      "ABORTADO: o migration.sql não declara envelope transacional " +
+        `(primeiro statement é BEGIN? ${abreComBegin}; último é COMMIT? ${fechaComCommit}). ` +
+        "O envelope é a declaração explícita de que este arquivo SÓ pode ser aplicado " +
+        "por inteiro. Sem ele, alguém poderia aplicá-lo com outra ferramenta, statement a " +
+        "statement, e uma falha no meio deixaria as tabelas criadas e os TRIGGERS NÃO — " +
+        "I2 quebrada em silêncio. Restaure o envelope."
     );
   }
+
+  // Controle de transação SÓ nas pontas. Um COMMIT no miolo dividiria a
+  // migração em dois pedaços commitáveis — atomicidade de mentira.
+  const controleNoMiolo = indicesControle.filter(
+    (i) => i !== 0 && i !== statements.length - 1
+  );
+  if (controleNoMiolo.length > 0) {
+    const amostra = controleNoMiolo
+      .map((i) => `#${i + 1} ${resumo(statements[i])}`)
+      .join("; ");
+    throw new Error(
+      `ABORTADO: há comando de controle de transação NO MEIO do arquivo (${amostra}). ` +
+        "Isso partiria a migração em pedaços commitáveis separados — o oposto de atômico."
+    );
+  }
+
+  // Fora as pontas, o que roda é o miolo. O BEGIN/COMMIT do arquivo NÃO é
+  // enviado: quem abre e fecha a transação é o Prisma.
+  const miolo = statements.slice(1, -1);
+  if (miolo.length === 0) {
+    throw new Error("ABORTADO: o migration.sql não tem nenhum statement além do envelope.");
+  }
+  return miolo;
+}
+
+/**
+ * Executa os statements DENTRO de uma `$transaction` interativa. Ou tudo entra,
+ * ou nada entra.
+ *
+ * ## Por que `$transaction` e não o BEGIN/COMMIT do arquivo
+ *
+ * Escolha deliberada entre duas opções:
+ *
+ *  (a) `$transaction` interativa, mandando cada statement pelo `tx`. ESCOLHIDA.
+ *      O Prisma abre `BEGIN`, PINA a conexão para todas as chamadas do callback
+ *      e dá `COMMIT` no fim (ou `ROLLBACK` se o callback lançar). A conexão
+ *      pinada é o ponto: é o único jeito de garantir que os 33 statements caem
+ *      na MESMA sessão.
+ *
+ *  (b) mandar `BEGIN;` e `COMMIT;` como statements soltos via
+ *      `$executeRawUnsafe`, confiando que caiam na mesma conexão. RECUSADA.
+ *
+ *      Precisão sobre o porquê, porque é fácil errar o argumento: o PgBouncer
+ *      em transaction pooling NÃO troca a conexão upstream a cada statement
+ *      depois de um `BEGIN` — ele segura a conexão até a transação fechar. O
+ *      problema está um andar acima: quem não garante nada é o POOL DO PRISMA.
+ *      Duas chamadas `$executeRawUnsafe` separadas são duas aquisições
+ *      independentes do pool, e nada obriga a segunda a pegar a mesma conexão
+ *      da primeira. Basta uma para o `BEGIN` cair numa conexão e o
+ *      `CREATE TRIGGER` em outra — a segunda em autocommit, cada DDL entrando
+ *      sozinho, e o `COMMIT` final sem transação para fechar.
+ *
+ *      O modo de falha seria silencioso e seria exatamente "tabelas sim,
+ *      triggers não". `$transaction` existe precisamente para resolver isso:
+ *      ela reserva UMA conexão para todo o callback. Por isso (a).
+ *
+ * ## Timeout: explícito, não o padrão
+ *
+ * O padrão do Prisma é `timeout: 5000` (5s) e `maxWait: 2000`. São 33 DDLs
+ * contra um Postgres remoto atrás de pooler — estourar 5s é plausível, e o
+ * estouro cairia como ROLLBACK no meio: nada perdido, mas o dono ficaria
+ * olhando um erro obscuro de timeout achando que o SQL está errado. 120s dá
+ * folga de sobra sem virar espera infinita; `maxWait` de 20s cobre cold start
+ * da conexão.
+ *
+ * ## Mensagem de erro
+ *
+ * Se um statement falhar, o erro do Postgres sozinho ("relation already
+ * exists") não diz ONDE. Aqui o erro é reembalado com o índice, o total e o
+ * início do statement — o dono abre o `.sql` e vai direto no ponto.
+ *
+ * ## O inventário roda DENTRO da transação — e é ele quem decide o commit
+ *
+ * 🔑 Conferir os objetos DEPOIS do commit seria conferir tarde demais. Se
+ * alguém editasse o `.sql` e removesse os `CREATE TRIGGER` (ou um `IF NOT
+ * EXISTS` encontrasse um objeto homônimo e virasse no-op), todos os statements
+ * "passariam", o COMMIT aconteceria, e só então a conferência acusaria os
+ * triggers ausentes. O script gritaria — mas o banco já estaria commitado no
+ * estado PROIBIDO: tabelas criadas, triggers não. Exatamente o que a I2 existe
+ * para impedir, e o pior estado possível segundo a própria migração.
+ *
+ * Por isso o inventário é lido aqui, com o `tx`, antes do callback retornar:
+ * faltando qualquer objeto, este código LANÇA, o Prisma dá ROLLBACK, e o banco
+ * volta ao estado anterior. A verificação deixa de ser um laudo e passa a ser
+ * um GATE.
+ */
+async function aplicarAtomicamente(prisma, statements) {
+  await prisma.$transaction(
+    async (tx) => {
+      for (let i = 0; i < statements.length; i += 1) {
+        const st = statements[i];
+        try {
+          await tx.$executeRawUnsafe(st);
+        } catch (err) {
+          throw new Error(
+            `statement ${i + 1}/${statements.length} FALHOU — nada foi aplicado (ROLLBACK).\n` +
+              `   statement: ${resumo(st)}\n` +
+              `   erro do banco: ${String(err.message ?? err).split("\n")[0]}`
+          );
+        }
+      }
+
+      // Gate de commit: o inventário lido pela MESMA transação.
+      const qTx = async (sql, params) => {
+        const rows = params
+          ? await tx.$queryRawUnsafe(sql, ...params)
+          : await tx.$queryRawUnsafe(sql);
+        return { rows, rowCount: Array.isArray(rows) ? rows.length : 0 };
+      };
+      const faltando = nomesAusentes(await inventario(qTx));
+      if (faltando.length > 0) {
+        throw new Error(
+          `os ${statements.length} statements rodaram sem erro, mas ${faltando.length} objeto(s) ` +
+            `NÃO existem ao fim da transação: ${faltando.join(", ")}.\n` +
+            "   ROLLBACK feito — o banco NÃO ficou com metade da migração. Um `.sql` que roda\n" +
+            "   sem erro e não cria o objeto é sinal de CREATE virado no-op (IF NOT EXISTS que\n" +
+            "   achou homônimo) ou de statement removido do arquivo por engano."
+        );
+      }
+    },
+    // 33 DDLs remotos mais o inventário não cabem nos 5s padrão do Prisma.
+    { timeout: 120_000, maxWait: 20_000 }
+  );
+}
+
+/** Nomes dos objetos ausentes num inventário. */
+function nomesAusentes(estado) {
+  return Object.entries(estado)
+    .filter(([, presente]) => !presente)
+    .map(([nome]) => nome);
+}
+
+/** Início legível de um statement, para mensagem de erro. */
+function resumo(statement) {
+  const limpo = removerComentarios(statement).replace(/\s+/g, " ").trim();
+  return limpo.length > 80 ? `${limpo.slice(0, 80)}…` : limpo;
 }
 
 /** Presença de cada objeto que a migração cria. */

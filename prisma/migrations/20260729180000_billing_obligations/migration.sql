@@ -5,12 +5,29 @@
 --
 -- ⚠️ TUDO DENTRO DE UMA TRANSACAO (BEGIN no fim deste cabecalho, COMMIT no fim
 -- do arquivo). No Postgres o DDL e transacional — CREATE TABLE, CREATE INDEX,
--- CREATE TRIGGER, CREATE TYPE e ALTER TABLE ADD COLUMN todos revertem. Sem o
--- envelope, ~30 statements independentes atravessariam o PgBouncer (o `.env`
+-- CREATE TRIGGER, CREATE TYPE e ALTER TABLE ADD COLUMN todos revertem. Sem
+-- atomicidade, ~30 statements independentes atravessariam o PgBouncer (o `.env`
 -- deste repo tem DATABASE_URL e DIRECT_URL IDENTICAS, ambas no endpoint
 -- `-pooler`) e uma falha no meio deixaria o banco com AS TABELAS CRIADAS E OS
 -- TRIGGERS NAO — que e precisamente a violacao silenciosa de I2 que esta
 -- migracao existe para impedir. Ou tudo entra, ou nada entra.
+--
+-- ⚠️ QUEM GARANTE A ATOMICIDADE, NA PRATICA: o BEGIN/COMMIT abaixo e a
+-- DECLARACAO DE INTENCAO — "este arquivo so pode ser aplicado por inteiro" — e
+-- o preflight do apply EXIGE que eles estejam aqui. Mas a transacao de verdade
+-- e aberta pelo `prisma.$transaction` de `scripts/apply-billing-obligations.cjs`,
+-- que executa UM statement por chamada numa conexao PINADA e PULA estas duas
+-- linhas (mandar BEGIN dentro de uma transacao ja aberta so gera warning, e um
+-- COMMIT no meio encerraria a transacao do Prisma pelas costas dele).
+--
+-- Motivo da mudanca: mandar o arquivo inteiro numa chamada so falhou em
+-- producao com `42601: cannot insert multiple commands into a prepared
+-- statement` — o Prisma emite raw query como prepared statement, e prepared
+-- statement aceita UM comando. Nada foi escrito naquela tentativa.
+--
+-- ⚠️ Se voce editar este arquivo, NAO remova o BEGIN/COMMIT: o preflight
+-- recusa aplicar sem eles. E NAO acrescente COMMIT no meio — o preflight
+-- tambem recusa, porque partiria a migracao em pedacos commitaveis separados.
 --
 -- Nenhum statement precisou ficar FORA da transacao: nao ha CREATE INDEX
 -- CONCURRENTLY, VACUUM, nem ALTER TYPE ... ADD VALUE (o unico DDL de enum aqui
