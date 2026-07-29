@@ -19,6 +19,20 @@ interface Deps {
   db?: Pick<typeof defaultPrisma, "dunningEvent">;
 }
 
+/**
+ * Dependência de `hasDispatchedNotice`: só o método que ela de fato chama
+ * (`findFirst`), não o delegate `dunningEvent` inteiro.
+ *
+ * 🔑 Deliberadamente mais estreita que `Deps` (usada por `recordDunningNotice`,
+ * que também precisa de `create`): é o que permite `SubscriptionDbClient`
+ * (`src/lib/subscription.ts`), que só expõe `findFirst`, satisfazer esta
+ * assinatura por estrutura — sem `as never` mascarando a checagem de tipos
+ * (uma tarefa anterior foi refeita exatamente por causa disso).
+ */
+interface ReadDeps {
+  db?: { dunningEvent: Pick<typeof defaultPrisma.dunningEvent, "findFirst"> };
+}
+
 interface RecordInput {
   companyId: string;
   invoiceId: string;
@@ -91,7 +105,7 @@ export async function recordDunningNotice(
 export async function hasDispatchedNotice(
   companyId: string,
   stage: number,
-  deps: Deps = {}
+  deps: ReadDeps = {}
 ): Promise<boolean> {
   const db = deps.db ?? defaultPrisma;
 

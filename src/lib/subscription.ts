@@ -2,7 +2,8 @@ import { prisma } from "@/lib/prisma";
 import { SubscriptionStatus } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
-import { isWriteRestricted } from "@/lib/subscription-grace";
+import { isWriteRestricted, WRITE_RESTRICTION_DAY } from "@/lib/subscription-grace";
+import { hasDispatchedNotice } from "@/services/dunning-event.service";
 
 const log = logger.child({ module: "subscription" });
 
@@ -10,6 +11,11 @@ const log = logger.child({ module: "subscription" });
  * Cliente de banco aceito pelas peças de leitura/mutação — o `prisma` global OU
  * um `TransactionClient` de uma transação interativa (V3b: snapshot coerente no
  * publisher). Só os métodos usados aqui; qualquer um dos dois satisfaz.
+ *
+ * `dunningEvent` entrou junto com o segundo fator do gate (I3 estendida): o
+ * mesmo client injetável precisa alcançar `hasDispatchedNotice` para que uma
+ * transação/mocks de teste vejam uma leitura coerente, sem abrir uma segunda
+ * via de acesso ao banco (`prisma` global) por baixo do pé de quem chamou.
  */
 export type SubscriptionDbClient = {
   company: { findUnique: typeof prisma.company.findUnique };
@@ -17,6 +23,7 @@ export type SubscriptionDbClient = {
     findFirst: typeof prisma.subscription.findFirst;
     updateMany: typeof prisma.subscription.updateMany;
   };
+  dunningEvent: { findFirst: typeof prisma.dunningEvent.findFirst };
 };
 
 /**
@@ -39,19 +46,33 @@ export interface SubscriptionCheckResult {
 }
 
 /**
- * Decide o acesso de quem está em PAST_DUE, a partir dos dias de atraso.
+ * Decide o acesso de quem está em PAST_DUE, a partir dos dias de atraso e de
+ * um segundo fator já resolvido: o aviso final foi REALMENTE despachado?
  *
- * 🔑 MUDANÇA DE SEMÂNTICA (spec 2026-07-29 §4.6.1): antes, todo PAST_DUE era
- * `readOnly: true` já no dia do vencimento — os avisos de 3/7/14 chegavam a um
- * cliente que já não conseguia trabalhar. Agora a escrita sobrevive à janela de
- * avisos e cai só no marco final.
+ * 🔑 MUDANÇA DE SEMÂNTICA (spec 2026-07-29 §4.6.1 + §4.6.4): antes, todo
+ * PAST_DUE era `readOnly: true` já no dia do vencimento — os avisos de
+ * 3/7/14 chegavam a um cliente que já não conseguia trabalhar. Depois, a
+ * escrita passou a sobreviver à janela de avisos e cair só no marco final.
+ * Agora o marco sozinho também não basta: se o aviso do dia 14 falhou
+ * silenciosamente (caso MedFacil), o cliente não pode ser restringido sem
+ * nunca ter sido avisado — daí `noticeDispatched` como segundo fator.
+ *
+ * Pura de propósito, como `isWriteRestricted`: quem faz I/O é o chamador
+ * (`checkSubscription`), que decide SE vale a pena consultar a trilha antes
+ * de chegar aqui.
  *
  * A leitura NUNCA é cortada aqui: quem perde tudo é SUSPENDED, que é outro ramo.
  */
-export function resolvePastDueAccess(daysOverdue: number): SubscriptionCheckResult {
-  const restricted = isWriteRestricted(daysOverdue);
+export function resolvePastDueAccess(
+  daysOverdue: number,
+  noticeDispatched: boolean,
+): SubscriptionCheckResult {
+  const restricted = isWriteRestricted(daysOverdue, noticeDispatched);
   const dias = `${daysOverdue} dia${daysOverdue === 1 ? "" : "s"}`;
 
+  // ⚠️ Passou do marco mas NÃO foi avisado: a mensagem tem que continuar no
+  // tom de aviso, não de bloqueio — o cliente ainda escreve, então dizer que
+  // "o acesso está bloqueado" seria mentira.
   return {
     allowed: true,
     status: "PAST_DUE",
@@ -243,7 +264,17 @@ export async function checkSubscription(
       (now.getTime() - pastDueSince.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    return { ...resolvePastDueAccess(daysOverdue), planName };
+    const pastMarker = daysOverdue >= WRITE_RESTRICTION_DAY;
+    // Só toca o banco de quem já passou do marco — antes disso a resposta é a
+    // mesma com ou sem trilha, e o gate roda em caminho quente (toda página,
+    // toda escrita). `db` propaga o client injetado (transação/mock) até
+    // `hasDispatchedNotice`, que já é fail-closed (erro de leitura → `false`,
+    // ou seja, NÃO restringe — o lado seguro é errar a favor do cliente).
+    const noticeDispatched = pastMarker
+      ? await hasDispatchedNotice(companyId, WRITE_RESTRICTION_DAY, { db })
+      : false;
+
+    return { ...resolvePastDueAccess(daysOverdue, noticeDispatched), planName };
   }
 
   // SUSPENDED

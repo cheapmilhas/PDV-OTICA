@@ -26,27 +26,41 @@ describe("LIVE_STATUSES (caracterização)", () => {
 });
 
 describe("resolvePastDueAccess", () => {
-  it("recém-vencido (0 dias) → pode LER e ESCREVER, com aviso", () => {
-    const r = resolvePastDueAccess(0);
+  it("recém-vencido (0 dias), aviso despachado → pode LER e ESCREVER, com aviso", () => {
+    const r = resolvePastDueAccess(0, true);
     expect(r.allowed).toBe(true);
     expect(r.readOnly).toBe(false);
   });
 
-  it("durante os avisos (7 dias) → ainda escreve", () => {
-    expect(resolvePastDueAccess(7).readOnly).toBe(false);
+  it("durante os avisos (7 dias), aviso despachado → ainda escreve", () => {
+    expect(resolvePastDueAccess(7, true).readOnly).toBe(false);
   });
 
-  it("no marco final (14 dias) → perde a escrita, mantém a leitura", () => {
-    const r = resolvePastDueAccess(14);
+  it("no marco final (14 dias), aviso despachado → perde a escrita, mantém a leitura", () => {
+    const r = resolvePastDueAccess(14, true);
     expect(r.allowed).toBe(true);
     expect(r.readOnly).toBe(true);
   });
 
+  it("passou do marco (20 dias) MAS o aviso NÃO foi despachado → mantém a escrita", () => {
+    const r = resolvePastDueAccess(20, false);
+    expect(r.allowed).toBe(true);
+    expect(r.readOnly).toBe(false);
+  });
+
   it("a mensagem muda de tom entre avisar e restringir", () => {
-    expect(resolvePastDueAccess(3).message).not.toBe(resolvePastDueAccess(14).message);
+    expect(resolvePastDueAccess(3, true).message).not.toBe(
+      resolvePastDueAccess(14, true).message
+    );
+  });
+
+  it("passou do marco sem aviso despachado → mensagem continua no tom de aviso, não de bloqueio", () => {
+    // Não pode dizer "está bloqueado" para quem ainda escreve — seria mentira.
+    const r = resolvePastDueAccess(20, false);
+    expect(r.message).not.toContain("bloqueado");
   });
 
   it("a mensagem sempre informa os dias de atraso", () => {
-    expect(resolvePastDueAccess(9).message).toContain("9");
+    expect(resolvePastDueAccess(9, true).message).toContain("9");
   });
 });

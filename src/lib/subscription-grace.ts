@@ -18,7 +18,14 @@ export const WRITE_RESTRICTION_DAY = SUSPEND_DAYS;
  *
  * Pura de propósito: é a regra de negócio que decide se um cliente inadimplente
  * pode continuar operando, e precisa ser testável sem banco.
+ *
+ * 🔑 SEGUNDO FATOR (spec 2026-07-29 §4.6.4, I3 estendida ao gate): passar do
+ * marco não basta — o aviso final (dia 14) precisa ter sido REALMENTE
+ * despachado (`hasDispatchedNotice`). Sem isso, uma falha silenciosa de envio
+ * (o caso MedFacil: e-mail redirecionado pelo modo de teste) ainda cortaria a
+ * escrita de um cliente que nunca foi avisado. `noticeDispatched` é resolvido
+ * fora desta função (I/O não pertence à regra pura) e injetado aqui já pronto.
  */
-export function isWriteRestricted(daysOverdue: number): boolean {
-  return daysOverdue >= WRITE_RESTRICTION_DAY;
+export function isWriteRestricted(daysOverdue: number, noticeDispatched: boolean): boolean {
+  return daysOverdue >= WRITE_RESTRICTION_DAY && noticeDispatched;
 }
