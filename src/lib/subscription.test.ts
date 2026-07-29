@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { LIVE_STATUSES } from "./subscription";
+import { LIVE_STATUSES, resolvePastDueAccess } from "./subscription";
 
 /**
  * Testes de CARACTERIZAÇÃO: travam o comportamento atual de LIVE_STATUSES
@@ -22,5 +22,31 @@ describe("LIVE_STATUSES (caracterização)", () => {
 
   it("tem exatamente 3 status vivos", () => {
     expect(LIVE_STATUSES).toHaveLength(3);
+  });
+});
+
+describe("resolvePastDueAccess", () => {
+  it("recém-vencido (0 dias) → pode LER e ESCREVER, com aviso", () => {
+    const r = resolvePastDueAccess(0);
+    expect(r.allowed).toBe(true);
+    expect(r.readOnly).toBe(false);
+  });
+
+  it("durante os avisos (7 dias) → ainda escreve", () => {
+    expect(resolvePastDueAccess(7).readOnly).toBe(false);
+  });
+
+  it("no marco final (14 dias) → perde a escrita, mantém a leitura", () => {
+    const r = resolvePastDueAccess(14);
+    expect(r.allowed).toBe(true);
+    expect(r.readOnly).toBe(true);
+  });
+
+  it("a mensagem muda de tom entre avisar e restringir", () => {
+    expect(resolvePastDueAccess(3).message).not.toBe(resolvePastDueAccess(14).message);
+  });
+
+  it("a mensagem sempre informa os dias de atraso", () => {
+    expect(resolvePastDueAccess(9).message).toContain("9");
   });
 });

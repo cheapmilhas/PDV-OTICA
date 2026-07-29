@@ -2,6 +2,7 @@ import { prisma } from "@/lib/prisma";
 import { SubscriptionStatus } from "@prisma/client";
 import { logger } from "@/lib/logger";
 import { AppError, ERROR_CODES } from "@/lib/error-handler";
+import { isWriteRestricted } from "@/lib/subscription-grace";
 
 const log = logger.child({ module: "subscription" });
 
@@ -35,6 +36,31 @@ export interface SubscriptionCheckResult {
   planName?: string;
   trialEndsAt?: Date;
   currentPeriodEnd?: Date;
+}
+
+/**
+ * Decide o acesso de quem está em PAST_DUE, a partir dos dias de atraso.
+ *
+ * 🔑 MUDANÇA DE SEMÂNTICA (spec 2026-07-29 §4.6.1): antes, todo PAST_DUE era
+ * `readOnly: true` já no dia do vencimento — os avisos de 3/7/14 chegavam a um
+ * cliente que já não conseguia trabalhar. Agora a escrita sobrevive à janela de
+ * avisos e cai só no marco final.
+ *
+ * A leitura NUNCA é cortada aqui: quem perde tudo é SUSPENDED, que é outro ramo.
+ */
+export function resolvePastDueAccess(daysOverdue: number): SubscriptionCheckResult {
+  const restricted = isWriteRestricted(daysOverdue);
+  const dias = `${daysOverdue} dia${daysOverdue === 1 ? "" : "s"}`;
+
+  return {
+    allowed: true,
+    status: "PAST_DUE",
+    readOnly: restricted,
+    message: restricted
+      ? `Pagamento pendente há ${dias}. O acesso de escrita está bloqueado até a regularização.`
+      : `Pagamento pendente há ${dias}. Regularize para não perder o acesso de escrita.`,
+    daysOverdue,
+  };
 }
 
 /**
@@ -196,25 +222,28 @@ export async function checkSubscription(
     };
   }
 
-  // PAST_DUE — Q8.1.1: acesso de LEITURA (readOnly) enquanto inadimplente. A
+  // PAST_DUE — Q8.1.1: acesso de LEITURA sempre liberado enquanto inadimplente. A
   // SUSPENSÃO (PAST_DUE→SUSPENDED) é EXCLUSIVA do cron de dunning (F5), que avisa
   // o cliente em 3/7/14 dias ANTES de suspender. checkSubscription NÃO suspende
   // mais sozinho — antes ele trancava aos 7d sem aviso (quebrava a régua F5 e
   // suspendia antes de comunicar). Agora só decide acesso; quem muda status é o cron.
+  //
+  // A ESCRITA (readOnly) segue `resolvePastDueAccess`/`isWriteRestricted`: fica
+  // liberada durante a janela de avisos e só é cortada no marco final (14d).
+  //
+  // 🔑 `Math.floor`, NÃO `Math.ceil`: precisa bater com o mesmo cálculo do cron
+  // de dunning (src/app/api/cron/dunning/route.ts). Se os dois arredondarem
+  // diferente, há uma janela (ex.: 13.2 dias) em que este gate já restringe a
+  // escrita mas o cron ainda não disparou o aviso final — o cliente perderia
+  // acesso ANTES de a régua terminar de avisar, o bug que esta mudança existe
+  // para evitar.
   if (subscription.status === "PAST_DUE") {
     const pastDueSince = subscription.pastDueSince ?? subscription.currentPeriodEnd ?? now;
-    const daysOverdue = Math.ceil(
+    const daysOverdue = Math.floor(
       (now.getTime() - pastDueSince.getTime()) / (1000 * 60 * 60 * 24)
     );
 
-    return {
-      allowed: true,
-      status: "PAST_DUE",
-      readOnly: true,
-      message: `Pagamento pendente há ${daysOverdue} dia${daysOverdue > 1 ? "s" : ""}. Regularize para continuar usando todas as funções.`,
-      daysOverdue,
-      planName,
-    };
+    return { ...resolvePastDueAccess(daysOverdue), planName };
   }
 
   // SUSPENDED

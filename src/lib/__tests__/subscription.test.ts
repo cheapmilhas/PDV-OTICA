@@ -46,19 +46,19 @@ beforeEach(() => {
 });
 
 describe("checkSubscription — Q8.1 suspensão é exclusiva do cron F5", () => {
-  it("PAST_DUE recente (2d) → readOnly, NÃO suspende", async () => {
+  it("PAST_DUE recente (2d) → AINDA ESCREVE, NÃO suspende", async () => {
     mockCompany();
     mockPastDue(2);
     const r = await checkSubscription("co1");
     expect(r.allowed).toBe(true);
     expect(r.status).toBe("PAST_DUE");
-    expect(r.readOnly).toBe(true);
+    expect(r.readOnly).toBe(false);
     expect(subUpdateMany).not.toHaveBeenCalled();
   });
 
   it("PAST_DUE há MUITO tempo (40d) → continua PAST_DUE readOnly, NÃO suspende sozinho", async () => {
-    // Antes (Q8 antigo) suspendia aos 7d aqui mesmo, sem aviso. Agora a régua
-    // do F5 (cron dunning) é a ÚNICA que suspende — e só depois de avisar.
+    // 40d passa muito do marco de 14d (WRITE_RESTRICTION_DAY): a régua já teria
+    // restringido a escrita há tempo. Quem SUSPENDE continua sendo só o cron F5.
     mockCompany();
     mockPastDue(40);
     const r = await checkSubscription("co1");
@@ -66,6 +66,18 @@ describe("checkSubscription — Q8.1 suspensão é exclusiva do cron F5", () => 
     expect(r.readOnly).toBe(true);
     expect(r.allowed).toBe(true);
     expect(subUpdateMany).not.toHaveBeenCalled(); // NÃO escreve SUSPENDED
+  });
+
+  it("PAST_DUE a 13.9 dias (Math.floor) → NÃO restringe ainda (bate com o cron)", async () => {
+    // Trava o arredondamento: 13.9 dias tem que dar daysOverdue=13 (floor), não
+    // 14 (ceil). Se este gate usasse ceil, restringiria a escrita 1 dia ANTES de
+    // o cron de dunning (que usa floor) disparar o aviso final — o cliente
+    // perderia acesso antes de a régua terminar de avisar.
+    mockCompany();
+    mockPastDue(13.9);
+    const r = await checkSubscription("co1");
+    expect(r.daysOverdue).toBe(13);
+    expect(r.readOnly).toBe(false);
   });
 
   it("status SUSPENDED (vindo do cron F5) → bloqueia acesso", async () => {
@@ -145,10 +157,16 @@ describe("requireWriteAccess — contrato de segurança Q8.1", () => {
     delete process.env.DISABLE_PLAN_FEATURE_GATING;
   });
 
-  it("PAST_DUE (readOnly) BLOQUEIA escrita com 403", async () => {
+  it("PAST_DUE ALÉM do marco (20d) BLOQUEIA escrita com 403", async () => {
+    mockCompany();
+    mockPastDue(20);
+    await expect(requireWriteAccess("co1")).rejects.toMatchObject({ statusCode: 403 });
+  });
+
+  it("PAST_DUE dentro da janela de avisos (2d) PERMITE escrita", async () => {
     mockCompany();
     mockPastDue(2);
-    await expect(requireWriteAccess("co1")).rejects.toMatchObject({ statusCode: 403 });
+    await expect(requireWriteAccess("co1")).resolves.not.toThrow();
   });
 
   it("ACTIVE permite escrita (não lança)", async () => {
