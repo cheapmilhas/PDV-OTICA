@@ -20,11 +20,39 @@
  *      Sem esta prova o trigger é suposto, não provado; e I2 falhando em
  *      silêncio significa clínica escrevendo prontuário achando-se bloqueada.
  *
+ * ## ANTES de rodar isto: faça o dry-run
+ *
+ * O repo tem `scripts/dry-run-migration.cjs`, que aplica um `.sql` dentro de
+ * uma transação e dá ROLLBACK — prova o SQL inteiro contra o schema REAL sem
+ * deixar rastro. Custa nada e pega erro de sintaxe/tipo antes do apply.
+ *
+ *   node scripts/dry-run-migration.cjs \
+ *     prisma/migrations/20260729180000_billing_obligations/migration.sql
+ *
+ * ⚠️ RESSALVA VERIFICADA: aquele script, hoje, está amarrado a OUTRA migração —
+ * ele afirma o efeito de `Company.domusClinicId` e "tem que continuar 14
+ * empresas" no fim, e divide o arquivo por ';', o que estilhaça os corpos
+ * `$$ ... $$` das funções plpgsql deste `.sql` em fragmentos inválidos. Ou
+ * seja: rodá-lo cru contra ESTA migração vai falhar por limitação DELE, não
+ * por defeito do SQL. Para usá-lo aqui é preciso antes ensiná-lo a respeitar
+ * `$$` e trocar as asserções finais. Enquanto isso não for feito, o envelope
+ * BEGIN/COMMIT do próprio `.sql` é a rede de segurança — e é verificado por
+ * `exigirEnvelopeTransacional` antes de qualquer escrita.
+ *
+ * ## Códigos de saída
+ *
+ *   0 — migração aplicada, registrada, e AS DUAS PROVAS passaram
+ *   2 — migração aplicada e registrada, mas as provas foram PULADAS
+ *       (nenhuma Subscription no banco). Constraint e trigger seguem NÃO
+ *       PROVADOS — não é sucesso pleno, e o exit code diz isso.
+ *   1 — falhou
+ *
  * Uso: node scripts/apply-billing-obligations.cjs
  */
 require("dotenv").config();
 const fs = require("node:fs");
 const path = require("node:path");
+const crypto = require("node:crypto");
 const { PrismaClient } = require("@prisma/client");
 
 const MIGRATION_SQL = path.join(
@@ -72,18 +100,33 @@ async function main() {
     imprimirInventario(estadoAntes);
 
     // -----------------------------------------------------------------------
-    // 2) Aplica. O .sql inteiro num único $executeRawUnsafe: todos os
-    //    statements são idempotentes (IF NOT EXISTS / DO $$ / DROP antes de
-    //    CREATE TRIGGER), então reexecutar é seguro.
+    // 2) Aplica. O .sql inteiro num ÚNICO $executeRawUnsafe.
     //
-    //    ⚠️ $executeRawUnsafe com múltiplos statements exige que o Postgres
-    //    aceite simple query protocol. Se o driver recusar, o fallback é
-    //    dividir por statement — mas dividir DO $$ ... $$ por ';' quebraria os
-    //    corpos de função. Por isso mandamos inteiro e, se falhar, o erro sobe
-    //    claro em vez de aplicar metade.
+    //    🔑 A ATOMICIDADE VEM DO PRÓPRIO .sql, que abre com BEGIN e fecha com
+    //    COMMIT. Isso importa muito aqui: o `.env` deste repo tem DATABASE_URL
+    //    e DIRECT_URL IDÊNTICAS, ambas no endpoint `-pooler` (PgBouncer em
+    //    transaction pooling) — não existe conexão direta configurada. Sem o
+    //    envelope, ~30 statements DDL independentes atravessariam o pooler e
+    //    uma falha no meio deixaria as TABELAS CRIADAS E OS TRIGGERS NÃO, que
+    //    é a violação silenciosa de I2 que esta migração existe para impedir.
+    //
+    //    No Postgres o DDL é transacional, então ou tudo entra ou nada entra.
+    //    O preflight abaixo RECUSA aplicar um .sql que tenha perdido o BEGIN —
+    //    a garantia é verificada, não confiada.
+    //
+    //    ⚠️ SEM FALLBACK DE SPLIT, DE PROPÓSITO. Uma versão anterior deste
+    //    comentário prometia "se o driver recusar, divide por statement" —
+    //    promessa que nunca foi implementada, e que seria ERRADA se fosse:
+    //    dividir por ';' estilhaça os corpos `$$ ... $$` das 3 funções plpgsql
+    //    em fragmentos inválidos (`END IF`, `RETURN NEW`, ...), e cada
+    //    fragmento rodaria FORA da transação. O comportamento real, hoje, é:
+    //    se o driver recusar múltiplos statements, o erro SOBE e NADA é
+    //    aplicado. Falhar inteiro é o resultado correto.
     // -----------------------------------------------------------------------
     const sql = fs.readFileSync(MIGRATION_SQL, "utf8");
+    exigirEnvelopeTransacional(sql);
     console.log(`\n── APLICANDO (${MIGRATION_SQL.split("/").slice(-2).join("/")}) ──`);
+    console.log("   envelope transacional: BEGIN ... COMMIT ✔");
     await prisma.$executeRawUnsafe(sql);
     console.log("   statements executados");
 
@@ -104,15 +147,27 @@ async function main() {
     console.log("\n✅ todos os objetos presentes");
 
     // -----------------------------------------------------------------------
+    // 3b) Registra em `_prisma_migrations`.
+    // -----------------------------------------------------------------------
+    await registrarMigracao(prisma, q, sql);
+
+    // -----------------------------------------------------------------------
     // 4) PROVAS em transação revertida.
     // -----------------------------------------------------------------------
     const alvo = await escolherAssinaturaDeProva(q);
     if (!alvo) {
+      // Exit 2, não 0: os objetos existem, mas constraint e trigger NÃO foram
+      // exercitados. "Aplicado" e "provado" são coisas diferentes, e o exit
+      // code precisa distingui-las — senão um CI (ou o próprio dono) leria
+      // sucesso pleno onde houve meia verificação.
       console.log(
         "\n⚠️  Nenhuma assinatura no banco — as duas provas foram PULADAS.\n" +
-          "    Os objetos existem, mas constraint e trigger seguem NÃO PROVADOS.\n" +
-          "    Rode este script de novo quando houver ao menos uma assinatura."
+          "    Os objetos existem e a migração foi registrada, mas a constraint de\n" +
+          "    unicidade e os triggers de I2 seguem NÃO PROVADOS.\n" +
+          "    Rode este script de novo quando houver ao menos uma assinatura.\n" +
+          "    (exit 2 = aplicado sem provas)"
       );
+      process.exitCode = 2;
       return;
     }
     console.log(
@@ -135,6 +190,107 @@ async function main() {
     console.log("\n✅ migração aplicada e provada.\n");
   } finally {
     await prisma.$disconnect();
+  }
+}
+
+/**
+ * Registra a migração em `_prisma_migrations` — a tabela de controle do Prisma.
+ *
+ * 🔑 Sem isto, o Prisma considera esta migração PENDENTE mesmo com o DDL já
+ * aplicado, e o próximo `migrate deploy` tentaria re-rodá-la. Aqui o dano é
+ * pior que o normal: `migrate deploy` PARA na primeira migração pendente que
+ * falhe, então TODA migração futura ficaria travada atrás desta.
+ *
+ * O repo já tem essa cicatriz — as 3 migrações do F1 estão aplicadas no banco
+ * e ausentes da tabela (`docs/superpowers/plans/2026-07-16-vis-medical-fluxo-atendimento.md:150`),
+ * e o plano da Fase 2 de cobrança registra o alerta textualmente
+ * (`2026-06-11-saas-cobranca-asaas-fase2.md:1580`). Não repetir.
+ *
+ * `checksum` = SHA-256 do arquivo, que é como o Prisma o calcula. Se o `.sql`
+ * for editado depois de aplicado, o Prisma acusa drift — comportamento
+ * desejado, e o motivo de gravar o checksum real em vez de um placeholder.
+ *
+ * Idempotente: se a linha já existe (reexecução do script), não duplica.
+ */
+async function registrarMigracao(prisma, q, sql) {
+  const NOME = "20260729180000_billing_obligations";
+  console.log("\n── REGISTRO EM _prisma_migrations ──");
+
+  const existeTabela = await q(
+    `SELECT 1 FROM information_schema.tables
+      WHERE table_schema = 'public' AND table_name = '_prisma_migrations'`
+  );
+  if (existeTabela.rowCount === 0) {
+    console.log(
+      "   ⚠️  tabela _prisma_migrations não existe neste banco — nada a registrar.\n" +
+        "       (Se um dia usarem `migrate deploy` aqui, esta migração vai parecer pendente.)"
+    );
+    return;
+  }
+
+  const jaRegistrada = await q(
+    `SELECT "finished_at" FROM "_prisma_migrations" WHERE "migration_name" = $1`,
+    [NOME]
+  );
+  if (jaRegistrada.rowCount > 0) {
+    console.log(`   já registrada (finished_at=${jaRegistrada.rows[0].finished_at}) — ok`);
+    return;
+  }
+
+  const checksum = crypto.createHash("sha256").update(sql).digest("hex");
+  await prisma.$executeRawUnsafe(
+    `INSERT INTO "_prisma_migrations"
+       ("id", "checksum", "migration_name", "started_at", "finished_at",
+        "applied_steps_count", "logs", "rolled_back_at")
+     VALUES ($1, $2, $3, now(), now(), 1, NULL, NULL)`,
+    crypto.randomUUID(),
+    checksum,
+    NOME
+  );
+
+  // Verificação: o INSERT precisa ter produzido a linha.
+  const conferindo = await q(
+    `SELECT "checksum" FROM "_prisma_migrations" WHERE "migration_name" = $1`,
+    [NOME]
+  );
+  if (conferindo.rowCount !== 1) {
+    throw new Error(
+      `FALHOU registrar em _prisma_migrations. Rode à mão:\n` +
+        `  ./node_modules/.bin/prisma migrate resolve --applied ${NOME}`
+    );
+  }
+  console.log(`   ✅ registrada (checksum sha256 ${checksum.slice(0, 12)}…)`);
+  console.log("   `migrate deploy` futuro não vai tentar re-rodar esta migração.");
+}
+
+/**
+ * Recusa aplicar um `.sql` que não traga o próprio `BEGIN`/`COMMIT`.
+ *
+ * A atomicidade desta migração não é opinião do script — é uma propriedade do
+ * arquivo. Se alguém editar o `.sql` e derrubar o envelope sem perceber, o
+ * apply passaria a rodar ~30 DDLs soltos através do pooler, e o modo de falha
+ * seria "tabelas sim, triggers não" (I2 quebrada em silêncio). Melhor recusar
+ * alto do que aplicar pela metade.
+ *
+ * Ignora comentários de linha para não confundir a palavra BEGIN de um corpo
+ * plpgsql (ou de um comentário) com o BEGIN da transação.
+ */
+function exigirEnvelopeTransacional(sql) {
+  const semComentarios = sql
+    .split("\n")
+    .filter((linha) => !linha.trim().startsWith("--"))
+    .join("\n");
+
+  const temBegin = /^\s*BEGIN\s*;/im.test(semComentarios);
+  const temCommit = /^\s*COMMIT\s*;/im.test(semComentarios);
+
+  if (!temBegin || !temCommit) {
+    throw new Error(
+      "ABORTADO: o migration.sql NÃO está envolvido em BEGIN/COMMIT " +
+        `(BEGIN=${temBegin}, COMMIT=${temCommit}). Aplicar assim faria ~30 statements ` +
+        "DDL independentes atravessarem o pooler; uma falha no meio deixaria as tabelas " +
+        "criadas e os TRIGGERS NÃO — I2 quebrada em silêncio. Restaure o envelope."
+    );
   }
 }
 

@@ -1,8 +1,43 @@
 -- Plano B — motor de recorrencia: obrigacoes, cortesias e sombra.
 --
 -- ESTRITAMENTE ADITIVA e IDEMPOTENTE. Nenhum ALTER destrutivo, nenhum NOT NULL
--- novo em tabela existente, nenhum UPDATE em linha viva. Reversivel por
--- DROP TABLE / DROP COLUMN / DROP TRIGGER / DROP TYPE.
+-- novo em tabela existente, nenhum UPDATE em linha viva.
+--
+-- ⚠️ TUDO DENTRO DE UMA TRANSACAO (BEGIN no fim deste cabecalho, COMMIT no fim
+-- do arquivo). No Postgres o DDL e transacional — CREATE TABLE, CREATE INDEX,
+-- CREATE TRIGGER, CREATE TYPE e ALTER TABLE ADD COLUMN todos revertem. Sem o
+-- envelope, ~30 statements independentes atravessariam o PgBouncer (o `.env`
+-- deste repo tem DATABASE_URL e DIRECT_URL IDENTICAS, ambas no endpoint
+-- `-pooler`) e uma falha no meio deixaria o banco com AS TABELAS CRIADAS E OS
+-- TRIGGERS NAO — que e precisamente a violacao silenciosa de I2 que esta
+-- migracao existe para impedir. Ou tudo entra, ou nada entra.
+--
+-- Nenhum statement precisou ficar FORA da transacao: nao ha CREATE INDEX
+-- CONCURRENTLY, VACUUM, nem ALTER TYPE ... ADD VALUE (o unico DDL de enum aqui
+-- e CREATE TYPE, que e transacional). As tabelas nascem vazias, entao indice
+-- normal nao trava ninguem; e as duas colunas novas em tabelas existentes sao
+-- nullable, ou seja, ADD COLUMN sem reescrita de heap.
+--
+-- REVERSAO — leia antes de apertar o botao. Os OBJETOS NOVOS saem por DROP
+-- (as 3 tabelas, os 2 tipos, os 6 triggers, as 2 funcoes, a coluna
+-- Invoice."billingObligationId"): nada depende deles enquanto o motor estiver
+-- desligado por env var.
+--
+-- ⚠️ A coluna dunning_events."stage" NAO e reversivel sozinha. O codigo ja
+-- deployado escreve nela (`recordDunningNotice`) e a consulta
+-- (`hasDispatchedNotice`, que roda no gate de ~15 rotas de escrita). Remove-la
+-- com o codigo novo no ar QUEBRA ESSE GATE EM RUNTIME. A ordem correta e:
+--   1) reverter o codigo (voltar dunning-event.service.ts a versao do Plano A);
+--   2) so entao remover a coluna.
+-- E mesmo nessa ordem ha PERDA DE DADO: as linhas gravadas depois desta
+-- migracao carregam o marco (3/7/14) apenas na coluna `stage`, e a informacao
+-- de qual marco foi avisado some junto — os marcos 3 e 7 voltam a ser
+-- indistinguiveis. Na pratica: preferir DESLIGAR o motor por env var a reverter
+-- a migracao.
+--
+-- ANTES DE APLICAR, rode o dry-run (aplica tudo numa transacao e reverte, sem
+-- deixar rastro):
+--   node scripts/dry-run-migration.cjs prisma/migrations/20260729180000_billing_obligations/migration.sql
 --
 -- Aplicar SO pelo script cirurgico `scripts/apply-billing-obligations.cjs`
 -- (o `.env` local aponta para PRODUCAO; este repo ja teve um incidente de banco
@@ -26,6 +61,12 @@
 -- Motivo: acrescentar booleanos a SaasEmailConfig repetiria o erro de
 -- `invoiceGenerationEnabled` — ligar o faturamento do SaaS numa tela de e-mail.
 -- Precedente do repo: ENFORCE_SUSPENSION / SUBSCRIPTION_BYPASS_COMPANY_IDS.
+
+-- ===========================================================================
+-- INICIO DA TRANSACAO. O COMMIT esta na ultima linha do arquivo. Se qualquer
+-- statement abaixo falhar, NADA e aplicado.
+-- ===========================================================================
+BEGIN;
 
 -- ---------------------------------------------------------------------------
 -- 1. Enums. Padrao DO $$ do projeto (idempotente: CREATE TYPE nao tem
@@ -358,3 +399,8 @@ CREATE TRIGGER "subscription_courtesy_entitlement_revision_upd"
 -- Nenhum backfill. Nenhuma linha existente e tocada. O motor nasce desligado
 -- por env var; enquanto BILLING_OBLIGATION_ENABLED nao for "true", as tres
 -- tabelas ficam vazias e nada muda para ninguem.
+
+-- ===========================================================================
+-- FIM DA TRANSACAO. Ate aqui, nada foi persistido.
+-- ===========================================================================
+COMMIT;
