@@ -351,6 +351,48 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
     expect(res.status).toBe(200);
   });
 
+  // ── Regression guard: composição nextDunningStage + guarda de suspensão ────
+
+  // Guarda de regressão da promessa "três avisos antes de perder acesso"
+  // (spec 2026-07-29 §4.6.2). Os testes de bloco acima cobrem a régua
+  // (nextDunningStage) isolada e a integração com notifyCompany, mas nenhum
+  // deles prova a COMPOSIÇÃO real do cron: cliente achado já fundo em atraso,
+  // sem nenhum aviso registrado, não pode ser avisado E suspenso na mesma
+  // execução. Este teste DEVE falhar contra a implementação antiga de
+  // nextDunningStage (que retornava o MAIOR marco atingido em vez do primeiro
+  // pendente) — se não falhar, não está travando o comportamento certo.
+  it("cliente 20d atrasado sem nenhum aviso → avisa o marco 3 e NÃO suspende na mesma rodada", async () => {
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-9",
+        companyId: "co-9",
+        pastDueSince: daysAgo(20), // bem além dos 14d de suspensão
+        status: "PAST_DUE",
+        lastDunningStage: null, // nenhum aviso jamais enviado
+      },
+    ]);
+
+    const res = await GET(makeRequest());
+    expect(res.status).toBe(200);
+    const body = await res.json();
+
+    // Promessa: um degrau por execução — não pode suspender quem nunca foi avisado.
+    expect(body.suspended).toBe(0);
+
+    // E o aviso disparado tem que ser o PRIMEIRO pendente (marco 3), não o último (14).
+    expect(notifyCompany).toHaveBeenCalledWith(
+      "co-9",
+      "INVOICE_OVERDUE",
+      expect.objectContaining({ daysOverdue: 20 }),
+      expect.objectContaining({ periodKey: "stage:3", channels: ["email"] })
+    );
+
+    const suspendedCall = notifyCompany.mock.calls.find(
+      (c) => c[1] === "SUBSCRIPTION_SUSPENDED"
+    );
+    expect(suspendedCall).toBeUndefined();
+  });
+
   // ── Summary response ──────────────────────────────────────────────────────
 
   it("resposta inclui ok:true + sumário quando não há assinaturas vencidas", async () => {
