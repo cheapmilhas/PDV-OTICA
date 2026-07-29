@@ -44,6 +44,7 @@ Para clínica (`VIS_MEDICAL`), `readOnly` vira `writeAllowed: false` no Domus vi
 | `src/services/dunning-event.service.ts` | **NOVO** — grava a trilha de comunicação em `DunningEvent` | Criar |
 | `src/services/dunning-event.service.test.ts` | **NOVO** — testes da trilha | Criar |
 | `src/app/api/cron/dunning/route.ts` | Orquestra a régua | Modificar |
+| `src/app/api/cron/dunning/route.test.ts` | ⚠️ Testes do cron — quebram em 2 tasks: seeds de 8 dias esperando marco 7 (Task 3) e mock de Prisma incompleto (Task 5) | Modificar |
 
 ---
 
@@ -747,7 +748,8 @@ por:
           } else if (podeRestringir) {
             // ⚠️ O corpo do `if` ORIGINAL (que suspende, audita e adiciona a
             // company em `toPublish`) entra AQUI, sem nenhuma alteração — só
-            // muda a condição que o guarda. Não reescrever o corpo.
+            // muda a condição que o guarda. Não reescrever o corpo, e a chave
+            // que fechava o `if` original passa a fechar este `else if`.
 ```
 
 - [ ] **Step 4: Declarar o contador no resumo**
@@ -766,7 +768,7 @@ O `summary` é um **objeto literal** declarado em `src/app/api/cron/dunning/rout
       };
 ```
 
-Com o campo inicializado em `0`, o uso vira `summary.suspendDeferred++` (sem o `?? 0` do trecho anterior). Ajustar o Step 3 conforme.
+Com o campo inicializado em `0`, o uso é `summary.suspendDeferred++` — que é exatamente o que o Step 3 já escreve. Nada a ajustar lá.
 
 - [ ] **Step 5: Verificar tipos**
 
@@ -811,19 +813,30 @@ dunningEventCreate.mockResolvedValue({ id: "evt-1" });
 dunningEventFindFirst.mockResolvedValue({ id: "evt-1" }); // aviso já despachado
 ```
 
-- [ ] **Step 7: Atualizar o teste de suspensão do cron**
+🔑 As re-semeaduras da Task 3 Step 5 (`lastDunningStage: 3`) **continuam válidas** com estes defaults — o default "aviso já despachado" só afeta a decisão de suspender, não a de avisar. Não re-litigar aquelas edições.
 
-`route.test.ts:189` (`"suspensão (>=14d, lastStage>=14) → ..."`) passa a depender da trilha. Com o default acima ele volta a passar sem mais edição.
+- [ ] **Step 7: Acrescentar o teste que trava a invariante I3**
 
-E **acrescentar** o caso novo, que trava a invariante:
+O teste de suspensão existente (`route.test.ts:189`, `"suspensão (>=14d, lastStage>=14) → ..."`) volta a passar sozinho com o default do Step 6 — nenhuma edição nele.
+
+**Acrescentar** o caso novo. ⚠️ O arquivo **não** tem um objeto `prismaMock`: os mocks são spies soltos no nível do módulo (`subscriptionFindMany`, `globalAuditCreate`, e agora os três do Step 6). E o helper de request é `makeRequest()` (linha ~70), não `authedRequest`:
 
 ```typescript
 it("sem trilha de aviso despachado → NÃO suspende, adia e contabiliza", async () => {
   // I3 (spec §4.6.3): 'nem tentamos avisar' não pode virar bloqueio.
   // Foi o caso da MedFacil — e-mail suprimido por testMode, cliente sem saber.
-  prismaMock.dunningEvent.findFirst.mockResolvedValueOnce(null);
-  // ...mesmo cenário do teste de suspensão (>=14d, lastStage>=14, PAST_DUE)
-  const res = await GET(authedRequest());
+  subscriptionFindMany.mockResolvedValue([
+    {
+      id: "sub-9",
+      companyId: "co-9",
+      pastDueSince: daysAgo(15),
+      status: "PAST_DUE",
+      lastDunningStage: 14, // já avisou pela régua...
+    },
+  ]);
+  dunningEventFindFirst.mockResolvedValue(null); // ...mas o aviso NÃO foi despachado
+
+  const res = await GET(makeRequest());
   const body = await res.json();
   expect(body.suspended).toBe(0);
   expect(body.suspendDeferred).toBe(1);
@@ -833,10 +846,10 @@ it("sem trilha de aviso despachado → NÃO suspende, adia e contabiliza", async
 Run: `npx vitest run src/app/api/cron/dunning/route.test.ts`
 Expected: PASS, incluindo o caso novo.
 
-- [ ] **Step 7: Commit**
+- [ ] **Step 8: Commit**
 
 ```bash
-git add src/app/api/cron/dunning/route.ts src/services/
+git add src/app/api/cron/dunning/route.ts src/app/api/cron/dunning/route.test.ts
 git commit -m "feat(cobranca): cron so suspende com trilha de aviso despachado
 
 Sem evidencia de que o aviso saiu, a suspensao e adiada e logada. Fecha o
