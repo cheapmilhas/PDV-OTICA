@@ -189,4 +189,80 @@ describe("resolveObligationDisposition", () => {
       expect(disposition).toBe("CHARGE");
     });
   });
+
+  describe("fail-closed: data inválida nunca vira isenção", () => {
+    // ESTA É A TRAVA DE UMA FALHA QUE NÃO GRITA. Toda comparação com `NaN` é
+    // `false` em JS, então uma `Invalid Date` fazia as três checagens de
+    // vigência retornarem `false` e a cortesia era considerada ATIVA — isenção
+    // permanente concedida por acidente, sem erro e sem log. Um motor de
+    // receita não pode ter uma borda cujo modo de falha é "para de cobrar".
+    // Mesma política de `previousEnd` em billing-clock.ts: falha alto, na
+    // origem. Se alguém "simplificar" as guardas, estes testes ficam vermelhos.
+
+    it("rejeita periodStart inválido em vez de isentar por acidente", () => {
+      expect(() =>
+        resolveObligationDisposition({
+          periodStart: new Date("não-é-data"),
+          planPriceMonthly: 9900,
+          // Cortesia que NÃO cobre período nenhum plausível: se a função
+          // retornasse algo em vez de lançar, o valor seria COURTESY — a prova
+          // de que a data inválida, e não a concessão, decidiu a disposição.
+          courtesies: [
+            { startsAt: d("2030-01-01"), endsAt: d("2030-02-01"), revokedAt: null },
+          ],
+        }),
+      ).toThrow(/periodStart é uma data inválida/);
+    });
+
+    it("rejeita startsAt inválido da cortesia (campo digitado pelo operador)", () => {
+      expect(() =>
+        resolveObligationDisposition({
+          periodStart: d("2026-08-01"),
+          planPriceMonthly: 9900,
+          courtesies: [
+            { startsAt: new Date("não-é-data"), endsAt: null, revokedAt: null },
+          ],
+        }),
+      ).toThrow(/courtesy\.startsAt é uma data inválida/);
+    });
+
+    it("rejeita endsAt inválido da cortesia", () => {
+      expect(() =>
+        resolveObligationDisposition({
+          periodStart: d("2026-08-01"),
+          planPriceMonthly: 9900,
+          courtesies: [
+            { startsAt: d("2020-01-01"), endsAt: new Date("não-é-data"), revokedAt: null },
+          ],
+        }),
+      ).toThrow(/courtesy\.endsAt é uma data inválida/);
+    });
+
+    it("cortesia REVOGADA com data corrompida não derruba o motor → CHARGE", () => {
+      // A revogação é avaliada antes das datas de propósito: uma concessão já
+      // desfeita não deve poder travar a cobrança da empresa inteira só porque
+      // suas datas ficaram inválidas no banco.
+      const disposition = resolveObligationDisposition({
+        periodStart: d("2026-08-01"),
+        planPriceMonthly: 9900,
+        courtesies: [
+          { startsAt: new Date("não-é-data"), endsAt: null, revokedAt: d("2026-07-15") },
+        ],
+      });
+      expect(disposition).toBe("CHARGE");
+    });
+
+    it("plano interno com periodStart inválido ainda falha alto", () => {
+      // INTERNAL tem precedência sobre COURTESY, mas não sobre a validação:
+      // um período inválido indica dado corrompido a montante (billing-clock),
+      // e isso precisa aparecer mesmo na conta interna do dono.
+      expect(() =>
+        resolveObligationDisposition({
+          periodStart: new Date("não-é-data"),
+          planPriceMonthly: 0,
+          courtesies: [],
+        }),
+      ).toThrow(/periodStart é uma data inválida/);
+    });
+  });
 });

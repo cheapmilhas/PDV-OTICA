@@ -59,6 +59,8 @@ export function resolveObligationDisposition(
 ): ObligationDisposition {
   const { periodStart, planPriceMonthly, courtesies } = input;
 
+  assertValidDate(periodStart, "periodStart");
+
   if (planPriceMonthly === 0) return "INTERNAL";
 
   const hasActiveCourtesy = courtesies.some((courtesy) =>
@@ -66,6 +68,26 @@ export function resolveObligationDisposition(
   );
 
   return hasActiveCourtesy ? "COURTESY" : "CHARGE";
+}
+
+/**
+ * Rejeita `Invalid Date` em vez de deixá-la virar isenção silenciosa.
+ *
+ * Este módulo decide se alguém é COBRADO. Com uma data inválida, todo
+ * `getTime()` vira `NaN`, e em JS toda comparação com `NaN` é `false`: as três
+ * checagens de `isCourtesyActiveAt` retornariam `false` e a função cairia no
+ * `return true` final — concedendo cortesia PERMANENTE por acidente, sem erro,
+ * sem log, sem teste vermelho. O modo de falha do dado ruim seria "para de
+ * cobrar", o pior default possível para um motor de receita.
+ *
+ * Mesma guarda de `previousEnd` em billing-clock.ts (Task 2): o motor inteiro é
+ * fail-closed, e um módulo fail-open no meio da cadeia anula a garantia dos
+ * outros. Falha alto, na origem, em vez de propagar NaN até a fatura.
+ */
+function assertValidDate(value: Date, field: string): void {
+  if (Number.isNaN(value.getTime())) {
+    throw new Error(`billing-courtesy: ${field} é uma data inválida`);
+  }
 }
 
 /**
@@ -82,7 +104,20 @@ export function resolveObligationDisposition(
  * há outras expiradas ou revogadas na mesma lista.
  */
 function isCourtesyActiveAt(courtesy: CourtesyCandidate, periodStart: Date): boolean {
+  // `revokedAt` primeiro: uma cortesia revogada não vale, mesmo que suas datas
+  // estejam corrompidas — não faz sentido barrar o motor inteiro por causa de
+  // uma concessão que já foi desfeita.
   if (courtesy.revokedAt !== null) return false;
+
+  // Datas da PRÓPRIA cortesia também são validadas, e não só `periodStart`.
+  // Estas são as mais expostas: `periodStart` é calculado pelo billing-clock,
+  // mas `startsAt`/`endsAt` vêm do formulário em que o dono digita a concessão.
+  // Sem esta guarda, uma cortesia gravada com data inválida isentaria a empresa
+  // para sempre — exatamente o improviso silencioso que a tabela
+  // `SubscriptionCourtesy` existe para substituir.
+  assertValidDate(courtesy.startsAt, "courtesy.startsAt");
+  if (courtesy.endsAt !== null) assertValidDate(courtesy.endsAt, "courtesy.endsAt");
+
   if (courtesy.startsAt.getTime() > periodStart.getTime()) return false;
   if (courtesy.endsAt !== null && courtesy.endsAt.getTime() <= periodStart.getTime()) {
     return false;
