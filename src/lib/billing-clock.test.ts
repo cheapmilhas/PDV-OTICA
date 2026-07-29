@@ -77,6 +77,26 @@ describe("nextPeriod", () => {
     expect(p.periodEnd.toISOString()).toBe("2026-06-10T14:32:07.500Z");
   });
 
+  it("rejeita ciclo desconhecido em vez de faturá-lo como mensal", () => {
+    // ESTA É A TRAVA DA REGRESSÃO MAIS CARA DO MÓDULO. Com o `cycle === "YEARLY"
+    // ? 12 : 1` original, um ciclo novo (ex.: QUARTERLY) caía no `else` e era
+    // faturado como 1 mês — cobrando um terço do devido, sem nenhum sinal.
+    // O `as never` existe só aqui, no teste, para simular uma linha do banco
+    // com um ciclo que o tipo atual não conhece; em produção o Record já
+    // impede isso em tempo de compilação.
+    expect(() =>
+      nextPeriod({ previousEnd: d("2026-01-15"), cycle: "QUARTERLY" as never }),
+    ).toThrow(/ciclo de cobrança não suportado/);
+  });
+
+  it("rejeita previousEnd inválido em vez de propagar NaN", () => {
+    // Sem a guarda, o retorno seria um par de "Invalid Date" e o erro só
+    // apareceria muito depois, na gravação ou na fatura.
+    expect(() =>
+      nextPeriod({ previousEnd: new Date("não-é-data"), cycle: "MONTHLY" }),
+    ).toThrow(/data inválida/);
+  });
+
   it("não muta a data de entrada (previousEnd)", () => {
     // Mutação plausível: usar setUTCMonth diretamente sobre o objeto Date
     // recebido, mutando o argumento do chamador (que pode ser reusado).

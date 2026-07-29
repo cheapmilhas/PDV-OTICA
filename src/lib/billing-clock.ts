@@ -25,6 +25,25 @@ export interface Period {
 }
 
 /**
+ * Quantos meses cada ciclo avança.
+ *
+ * É um `Record<BillingCycle, number>` — e não um `cycle === "YEARLY" ? 12 : 1` —
+ * de propósito. Com o ternário, adicionar um valor ao enum `BillingCycle` no
+ * schema (ex.: `QUARTERLY`) compilaria em silêncio e o motor faturaria o
+ * trimestral como MENSAL: um terço do devido, sem erro, sem log, sem teste
+ * vermelho. Com o Record, o mesmo dia vira erro de compilação (TS2741,
+ * "Property 'QUARTERLY' is missing"), obrigando quem mexer no enum a decidir
+ * aqui quantos meses o ciclo novo avança.
+ *
+ * Não é hipótese remota: `recurring-expenses` já opera com MONTHLY/BIMONTHLY/
+ * QUARTERLY/YEARLY.
+ */
+const MONTHS_BY_CYCLE: Record<BillingCycle, number> = {
+  MONTHLY: 1,
+  YEARLY: 12,
+};
+
+/**
  * Próximo período de cobrança, encadeado a partir do FIM do anterior.
  *
  * 🔑 Duas regras de sobrevivência:
@@ -55,12 +74,28 @@ export interface Period {
  */
 export function nextPeriod(input: NextPeriodInput): Period {
   const { previousEnd, cycle } = input;
+
+  // `previousEnd` vem do banco (fim do período anterior). Uma Date inválida se
+  // propagaria como NaN por toda a aritmética e produziria um período
+  // "Invalid Date" — que o Prisma aceitaria gravar como null/erro tardio, longe
+  // da causa. Falha aqui, alto e claro.
+  if (Number.isNaN(previousEnd.getTime())) {
+    throw new Error("billing-clock: previousEnd é uma data inválida");
+  }
+
+  // A tabela é exaustiva em tempo de compilação, mas `cycle` pode chegar de uma
+  // linha do banco gravada antes de um deploy que reverteu o enum. Sem esta
+  // guarda, o lookup daria `undefined` e a conta viraria NaN silencioso.
+  const monthsToAdd = MONTHS_BY_CYCLE[cycle];
+  if (monthsToAdd === undefined) {
+    throw new Error(`billing-clock: ciclo de cobrança não suportado: ${String(cycle)}`);
+  }
+
   const periodStart = new Date(previousEnd);
 
   const anchorDay = previousEnd.getUTCDate();
   const year = previousEnd.getUTCFullYear();
   const month = previousEnd.getUTCMonth();
-  const monthsToAdd = cycle === "YEARLY" ? 12 : 1;
   const targetYear = year + Math.floor((month + monthsToAdd) / 12);
   const targetMonth = (month + monthsToAdd) % 12;
 
