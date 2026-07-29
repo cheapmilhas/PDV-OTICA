@@ -115,11 +115,10 @@ export function InstitucionalHero() {
             <motion.div key={href} variants={fadeInUp}>
               <Link
                 href={href}
-                className="group flex h-full flex-col rounded-2xl p-8 transition-shadow"
+                className="group flex h-full flex-col rounded-2xl p-8 shadow-card transition-shadow hover:shadow-card-hover"
                 style={{
                   background: "var(--lp-surface)",
                   border: "1px solid var(--lp-border)",
-                  boxShadow: "0 1px 2px rgba(10,31,68,0.04)",
                 }}
               >
                 <div
