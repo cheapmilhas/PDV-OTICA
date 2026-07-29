@@ -37,6 +37,8 @@ Para clínica (`VIS_MEDICAL`), `readOnly` vira `writeAllowed: false` no Domus vi
 | `src/lib/dunning.ts` | Régua pura: marcos, decisão de suspender/cancelar | Modificar |
 | `src/lib/dunning.test.ts` | Testes da régua pura | Modificar (casos existentes mudam de expectativa) |
 | `src/lib/subscription.ts` | Gate de acesso | Modificar (`:204-218`) |
+| `src/lib/subscription.test.ts` | Caracterização de `LIVE_STATUSES` | Modificar (acrescentar casos) |
+| `src/lib/__tests__/subscription.test.ts` | ⚠️ Trava o comportamento ANTIGO (`PAST_DUE ⇒ readOnly` no dia 2) | Modificar — 3 casos invertem de propósito |
 | `src/lib/subscription-grace.ts` | **NOVO** — decisão pura "vencido há N dias já restringe?" | Criar |
 | `src/lib/subscription-grace.test.ts` | **NOVO** — testes da decisão pura | Criar |
 | `src/services/dunning-event.service.ts` | **NOVO** — grava a trilha de comunicação em `DunningEvent` | Criar |
@@ -240,19 +242,42 @@ Substituir o corpo do ramo `PAST_DUE` (hoje em `:204-218`) por:
 Run: `npx vitest run src/lib/subscription.test.ts`
 Expected: PASS — os 3 testes de caracterização de `LIVE_STATUSES` seguem passando (esta mudança não altera quais status são "vivos") + os 5 novos.
 
-- [ ] **Step 5: Verificar que nada mais quebrou**
+- [ ] **Step 5: Atualizar os testes que travam o comportamento ANTIGO**
+
+⚠️ Existe um **segundo** arquivo de teste de subscription — `src/lib/__tests__/subscription.test.ts` — que trava explicitamente o comportamento que esta task inverte. Ele vai falhar, e isso é **esperado**. Não "conserte" mudando o código de volta.
+
+Run: `npx vitest run src/lib/__tests__/subscription.test.ts`
+Expected: FAIL em 3 casos.
+
+Atualizar cada um, preservando a intenção original (que era "o gate não suspende sozinho") e corrigindo só a expectativa de `readOnly`:
+
+1. `"PAST_DUE recente (2d) → readOnly, NÃO suspende"` (linha ~49): renomear para `"PAST_DUE recente (2d) → AINDA ESCREVE, NÃO suspende"` e trocar `expect(r.readOnly).toBe(true)` por `expect(r.readOnly).toBe(false)`. Manter o `expect(subUpdateMany).not.toHaveBeenCalled()` — a propriedade "o gate não escreve status" continua valendo e é o ponto do teste.
+2. `"PAST_DUE há MUITO tempo (40d) → continua PAST_DUE readOnly, NÃO suspende sozinho"` (linha ~59): 40 dias **passa** do marco de 14, então `readOnly` continua `true` aqui. Só ajustar o comentário para explicar que agora é a régua que decide, não o vencimento.
+3. `"PAST_DUE (readOnly) BLOQUEIA escrita com 403"` (linha ~148, no bloco "contrato de segurança"): usa `mockPastDue(2)`. Trocar para `mockPastDue(20)` e renomear para `"PAST_DUE ALÉM do marco (20d) BLOQUEIA escrita com 403"`. **Acrescentar** o caso complementar, que é a nova garantia:
+
+```typescript
+  it("PAST_DUE dentro da janela de avisos (2d) PERMITE escrita", async () => {
+    mockCompany();
+    mockPastDue(2);
+    await expect(requireWriteAccess("co1")).resolves.not.toThrow();
+  });
+```
+
+- [ ] **Step 6: Verificar que nada mais quebrou**
 
 Run: `npx vitest run src/lib/ src/services/`
-Expected: PASS. Se algum teste de entitlement falhar, **pare**: pode ser mudança real de comportamento no cadeado do Domus. Leia o teste antes de ajustar.
+Expected: PASS.
+Se um teste de **entitlement** ou do **publisher** falhar, **pare e leia**: `writeAllowed` deriva de `readOnly`, então a mudança propaga para o cadeado do Domus por construção. É esperado que uma clínica recém-vencida passe a manter escrita até o marco — mas confirme que a falha é essa, e não outra coisa.
 
-- [ ] **Step 6: Commit**
+- [ ] **Step 7: Commit**
 
 ```bash
-git add src/lib/subscription.ts src/lib/subscription.test.ts
+git add src/lib/subscription.ts src/lib/subscription.test.ts src/lib/__tests__/subscription.test.ts
 git commit -m "feat(cobranca): PAST_DUE deixa de restringir escrita no vencimento
 
 A restricao passa a valer so no marco final da regua (14 dias). Antes, os
-avisos de 3/7/14 chegavam a um cliente que ja estava travado desde o dia 0."
+avisos de 3/7/14 chegavam a um cliente que ja estava travado desde o dia 0.
+Atualiza os testes que travavam o comportamento antigo."
 ```
 
 ---
@@ -719,10 +744,36 @@ Com o campo inicializado em `0`, o uso vira `summary.suspendDeferred++` (sem o `
 Run: `npx tsc --noEmit`
 Expected: 0 erros.
 
-- [ ] **Step 6: Rodar os testes do cron**
+- [ ] **Step 6: Atualizar o teste de suspensão do cron**
 
-Run: `npx vitest run src/app/api/cron/`
-Expected: PASS. Se um teste de dunning falhar por causa da suspensão adiada, ele precisa passar a semear um `DunningEvent` despachado — a mudança é intencional.
+⚠️ `src/app/api/cron/dunning/route.test.ts:189` (`"suspensão (>=14d, lastStage>=14) → notifyCompany com SUBSCRIPTION_SUSPENDED"`) **vai falhar**: ele não semeia nenhum `DunningEvent`, e agora a suspensão exige trilha despachada. A falha é a prova de que a invariante I3 está ativa.
+
+O arquivo já mocka o Prisma. Acrescentar `dunningEvent` ao mock, devolvendo um evento despachado para o caso que deve suspender:
+
+```typescript
+  dunningEvent: {
+    create: vi.fn().mockResolvedValue({ id: "evt_1" }),
+    findFirst: vi.fn().mockResolvedValue({ id: "evt_1" }), // aviso já despachado
+  },
+```
+
+E **acrescentar** o caso novo, que trava a invariante:
+
+```typescript
+it("sem trilha de aviso despachado → NÃO suspende, adia e contabiliza", async () => {
+  // I3 (spec §4.6.3): 'nem tentamos avisar' não pode virar bloqueio.
+  // Foi o caso da MedFacil — e-mail suprimido por testMode, cliente sem saber.
+  prismaMock.dunningEvent.findFirst.mockResolvedValueOnce(null);
+  // ...mesmo cenário do teste de suspensão (>=14d, lastStage>=14, PAST_DUE)
+  const res = await GET(authedRequest());
+  const body = await res.json();
+  expect(body.suspended).toBe(0);
+  expect(body.suspendDeferred).toBe(1);
+});
+```
+
+Run: `npx vitest run src/app/api/cron/dunning/route.test.ts`
+Expected: PASS, incluindo o caso novo.
 
 - [ ] **Step 7: Commit**
 
