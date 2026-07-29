@@ -14,6 +14,8 @@ import {
 } from "lucide-react";
 
 import { MedicalPricing } from "@/components/medical/medical-pricing";
+import { JsonLd, buildMedicalSoftwareApplicationJsonLd } from "@/components/seo/json-ld";
+import { SITE_URL } from "@/lib/constants";
 
 /**
  * Landing do VIS MEDICAL.
@@ -30,6 +32,29 @@ export const metadata: Metadata = {
   title: "Vis Medical — sistema para clínicas e consultórios",
   description:
     "Prontuário eletrônico, agenda, receituário e financeiro num sistema só. Teste 14 dias grátis, sem cartão de crédito.",
+  // Canonical PRÓPRIO. O RootLayout define `canonical: "/"` como padrão e todas as
+  // páginas óticas o sobrescrevem; esta era a única que não sobrescrevia, então
+  // apontava para a home de ótica e pedia ao Google para não a indexar — o funil de
+  // clínicas ficava invisível na busca. Aponta para vis.app.br/medical (aquisição),
+  // não para medical.vis.app.br (aplicação).
+  alternates: { canonical: "/medical" },
+  // OG/Twitter próprios: sem isto, compartilhar esta página no WhatsApp ou LinkedIn
+  // exibia "Vis — Sistema de Gestão para Óticas", herdado do RootLayout.
+  openGraph: {
+    title: "Vis Medical — sistema para clínicas e consultórios",
+    description:
+      "Prontuário eletrônico, agenda, receituário e financeiro num sistema só. Teste 14 dias grátis, sem cartão de crédito.",
+    url: `${SITE_URL}/medical`,
+    siteName: "Vis Medical",
+    type: "website",
+    locale: "pt_BR",
+  },
+  twitter: {
+    card: "summary_large_image",
+    title: "Vis Medical — sistema para clínicas e consultórios",
+    description:
+      "Prontuário eletrônico, agenda, receituário e financeiro. Teste 14 dias grátis.",
+  },
 };
 
 const RECURSOS = [
@@ -82,6 +107,11 @@ const CONFIANCA = [
 export default function MedicalLandingPage() {
   return (
     <>
+      {/* SoftwareApplication PRÓPRIO. O RootLayout injeta o schema ÓTICO em toda
+          página; sem este, a /medical declarava ao Google ser "Sistema de Gestão
+          para Óticas" com oferta apontando para /precos. */}
+      <JsonLd data={buildMedicalSoftwareApplicationJsonLd()} />
+
       {/* ── Hero ─────────────────────────────────────────────────────────── */}
       <section className="py-16 sm:py-20">
         <div className="mx-auto max-w-4xl px-4 text-center">
