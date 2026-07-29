@@ -128,7 +128,9 @@ describe("resolveEffectiveSubscription", () => {
 
 - [ ] **Step 4: Implementar**
 
-Definir "viva" reusando `LIVE_STATUSES` de `src/lib/subscription.ts` se couber (TRIAL, ACTIVE, PAST_DUE) — **verificar antes**; se o conjunto certo aqui incluir `SUSPENDED`/`TRIAL_EXPIRED`, documentar a diferença no código com o motivo. Retorno discriminado: `{kind:"ok",subscription} | {kind:"none"} | {kind:"ambiguous",ids}`.
+Definir "viva" reusando `LIVE_STATUSES` de `src/lib/subscription.ts:26` — já verificado: é exatamente `["TRIAL","ACTIVE","PAST_DUE"]`, exportado, e travado por teste de caracterização que exige comprimento 3. Bate com os casos de teste acima (`PAST_DUE` viva, `CANCELED` morta). Reusar, não duplicar.
+
+Retorno discriminado: `{kind:"ok",subscription} | {kind:"none"} | {kind:"ambiguous",ids}`.
 
 - [ ] **Step 5: Rodar e ver passar.** `npx tsc --noEmit` limpo.
 
@@ -261,7 +263,19 @@ O script novo **precisa** ter: `require("dotenv").config()`, impressão do **hos
 
 `SubscriptionCourtesy`: `id`, `subscriptionId`, `startsAt`, `endsAt DateTime?`, `reason String`, `grantedBy String`, `revokedAt DateTime?`, timestamps. `@@index([subscriptionId, startsAt])`.
 
+`BillingShadowDecision` (**a terceira tabela — sem ela a Task 6 não tem onde escrever**): `id`, `subscriptionId`, `companyId`, `runAt`, `wouldCharge Boolean`, `wouldRestrict Boolean`, `periodStart`, `periodEnd`, `priceCents Int`, `disposition`, `note String?`. Descartável por natureza (`DROP` a qualquer momento) — é diagnóstico, não registro contábil. `@@index([runAt])`.
+
+`Invoice.billingObligationId String?` — coluna **nullable** na tabela existente. **A Task 8 precisa dela** para achar a obrigação a partir da fatura paga. Aditiva, sem reescrever linha.
+
 ⚠️ **Dois eixos separados** (`disposition` × `state`), não um enum só — misturá-los torna "emitida e vencida" (a base de I1) não consultável.
+
+- [ ] **Step 2b: As quatro flags do rollout (decidir AQUI, não na Task 7)**
+
+O rollout (§7 da spec) tem quatro chaves independentes: **geração de obrigação**, **modo sombra**, **emissão real** e **enforcement**. Elas precisam existir antes da Task 7 tentar usá-las.
+
+⚠️ **Não** reusar `invoiceGenerationEnabled` (`schema.prisma:4822`, default `false`, mora em `SaasEmailConfig`, editada numa tela chamada "E-mails"). E atenção ao detalhe que decide o desenho: `runInvoiceReminders` **retorna cedo** quando essa flag é falsa (`invoice-reminders.service.ts:32-36`). Se a fase nova ficar depois desse `return`, o motor inteiro fica gateado justamente pela flag que este plano rejeita.
+
+Decidir entre acrescentar 4 booleanos a `SaasEmailConfig` (mesma migração) ou usar env vars, seguindo o precedente que já existe (`ENFORCE_SUSPENSION`, `SUBSCRIPTION_BYPASS_COMPANY_IDS`). Registrar a escolha no `.sql` ou no código, e **posicionar a fase nova ANTES do early return**.
 
 - [ ] **Step 3: Triggers de revisão do entitlement (I2 — NÃO ESQUECER)**
 
@@ -269,17 +283,37 @@ Sem isto, mudar obrigação/cortesia altera o acesso **sem** bumpar a revisão, 
 
 ⚠️ `BillingObligation` não tem `companyId` — a função precisa resolvê-lo via `subscriptionId`. Ler `prisma/migrations/20260719140000_entitlement_revision/migration.sql` e seguir o mesmo estilo.
 
-- [ ] **Step 4: Índice que o Plano A deixou pendente**
+- [ ] **Step 4: As dívidas de `DunningEvent` que o Plano A parcelou para cá**
 
-Acrescentar `@@index([companyId, action, status])` em `DunningEvent` (dívida registrada no Plano A: a consulta do gate hoje não tem índice que a cubra). Declarar também os 3 índices que já existem fisicamente desde 2026-03 e nunca entraram no schema — o modelo está dessincronizado do banco.
+Esta é a **única migração** dos três planos, então o que o Plano A adiou "para a fatia que carregar migração" vence aqui:
+
+1. `@@index([companyId, action, status])` — a consulta de `hasDispatchedNotice` (que hoje roda no gate de ~15 rotas) não tem índice que a cubra.
+2. **Coluna `stage Int?` + `@@unique([invoiceId, action, stage])`** — a spec §4.6.3 chama isso de "preferível" e o docblock de `hasDispatchedNotice` promete explicitamente esta fatia. Sem ela: os marcos 3 e 7 gravam ambos `REMINDER_EMAIL` e ficam **indistinguíveis para sempre**, e uma reexecução do cron grava linha duplicada sem nada para impedir.
+   ⚠️ Nullable porque as linhas já gravadas pelo Plano A não têm `stage`. O unique parcial precisa tolerar isso (no Postgres, NULLs não colidem — o que aqui é conveniente, mas registre a consequência).
+   ⚠️ Depois de criar a coluna, **atualizar `recordDunningNotice`** para gravá-la, e considerar apertar `hasDispatchedNotice` para consultar por `stage` em vez de por `action` (mais preciso; a `action` era o substituto na ausência da coluna).
+3. Declarar os 3 índices que existem **fisicamente** desde 2026-03 (`companyId_createdAt`, `invoiceId`, `status`) e nunca entraram no modelo — o schema está dessincronizado do banco, e uma introspecção futura acusaria drift.
 
 - [ ] **Step 5: Escrever o script de aplicação**
 
-Idempotente, com verificação ANTES e DEPOIS, e **prova da constraint**: inserir duas linhas com o mesmo `(subscriptionId, sequence)` dentro de uma transação, exigir que a segunda falhe, e dar `ROLLBACK`. Sem isso, a unicidade é suposta, não provada. (Precedente: o script da migração `0050` do Domus provou a imutabilidade da mesma forma.)
+Idempotente, com verificação ANTES e DEPOIS, e **duas provas em transação com `ROLLBACK`** — o script é o único lugar onde elas podem existir, porque mock de Prisma não executa constraint nem trigger:
 
-- [ ] **Step 6: Verificar que NÃO executou nada**
+1. **Prova da unicidade:** inserir duas linhas com o mesmo `(subscriptionId, sequence)`, exigir que a segunda falhe.
+2. **Prova da I2 (a mais importante):** ler a revisão de entitlement de uma empresa, inserir/alterar uma obrigação dela, reler a revisão e **exigir que tenha aumentado**. Sem isso, o trigger é suposto e não provado — e I2 falhando em silêncio significa clínica escrevendo prontuário achando-se bloqueada.
 
-Run: `git status --short` e confirmar que só há arquivos novos. **Não rode o script.**
+Ambas dentro de transação revertida, para não deixar lixo em produção. (Precedente: o script da migração `0050` do Domus provou a imutabilidade da trilha exatamente assim.)
+
+- [ ] **Step 6: Gerar os tipos do Prisma (necessário para as tasks seguintes)**
+
+Run: `npx prisma generate`
+Expected: exit 0.
+
+🔑 **Isto NÃO toca o banco.** `prisma generate` lê apenas o `schema.prisma` e escreve o client tipado — verificado neste repo. É o que permite às Tasks 5-8 compilar e testar contra `BillingObligation`/`SubscriptionCourtesy` **antes** de a migração ser aplicada: os testes usam mocks, e mock não precisa que a tabela exista. Sem este passo, as tasks seguintes não compilam.
+
+⚠️ Corolário: enquanto a migração não for aplicada pelo dono, qualquer código que **realmente consulte** essas tabelas falha em runtime contra o banco. Por isso o motor nasce desligado por flag (Task 7) e o modo sombra (Task 6) vem antes da emissão real.
+
+- [ ] **Step 7: Verificar que NÃO executou nada no banco**
+
+Run: `git status --short` e confirmar que só há arquivos novos/modificados. **Não rode `scripts/apply-billing-obligations.cjs`.**
 
 - [ ] **Step 7: Commit**
 
@@ -364,21 +398,42 @@ Sem sandbox no gateway, esta é a única forma honesta de validar o motor. Grava
 
 ---
 
-## Task 9: Tela de cobrança e cortesia
+## Task 9: Recalcular obrigação não emitida quando o contrato muda
+
+Spec §4.1.2 e §4.1.3. Sem isto, a emissão antecipada cria janelas de incoerência.
 
 **Files:**
-- Create: `src/app/admin/(painel)/financeiro/...` (seguir a estrutura existente)
+- Modify: `src/app/api/admin/clientes/[id]/actions/route.ts` (troca de plano em `:130`, extensão de trial em `:84`)
+- Modify: `src/lib/domus-plan-change/deps.ts` (`:324`)
 
-- [ ] Obrigações por assinatura, com período, disposição, estado e valor.
-- [ ] Conceder/revogar cortesia com **prazo, motivo e autor**; a interface **arredonda a data para o limite do ciclo** e mostra a data efetiva antes de confirmar (spec §4.3).
-- [ ] **Receita não faturada** somada — responde "quanto de cortesia eu dei".
-- [ ] Relatório do modo sombra.
-- [ ] ⚠️ As telas leem a **obrigação**, não `currentPeriodEnd` (que vai divergir em cortesia e em `mark_paid` — dívida assumida na spec §8.2).
+- [ ] **Troca de plano:** obrigação ainda `PLANNED` é **recalculada** (preço e plano novos). Obrigação já `ISSUED` é anulada e reemitida, **ou** mantida com o preço antigo por decisão explícita registrada em `voidReason`. "Preço congelado" vale a partir da **emissão**, não da criação.
+- [ ] **Extensão de trial:** hoje só altera `trialEndsAt`, sem tocar em fatura. Se a obrigação do período seguinte já foi emitida, a extensão passaria a cobrar dias que voltaram a ser gratuitos → **recalcular ou anular** a obrigação não paga do período afetado.
+- [ ] Testes dos dois caminhos, incluindo o caso "já emitida" (que exige decisão, não recálculo silencioso).
+- [ ] Commit — `fix(cobranca): contrato que muda recalcula obrigacao nao emitida`
+
+> Correção factual para quem for implementar: a troca de plano **não** emite cobrança imediata — faz `PUT /subscriptions/{id}` no Asaas, afetando só cobranças futuras (`domus-plan-change/deps.ts:230`, `lib/asaas.ts:95`), e downgrade hoje é recusado com 501 (`internal/domus/plan-change/route.ts:189`).
+
+---
+
+## Task 10: Tela de cobrança e cortesia
+
+⚠️ **Esta task é a menos especificada do plano.** Se ao chegar aqui as decisões abaixo ainda estiverem abertas, **pare e planeje a tela separadamente** em vez de improvisar — é a única task que expõe dado financeiro e permite conceder benefício.
+
+**Files:**
+- Create: rota sob `src/app/admin/(painel)/financeiro/` (definir o caminho exato antes de codar)
+
+- [ ] **Step 1: Decidir o gate ANTES de escrever a tela.** 🚨 `requireSupportScope` **não checa papel** — `AdminUser.role` tem default `SUPPORT` e `scopeAllCompanies` default `true`. Uma tela que mostra receita e **concede cortesia** (ou seja, dá dinheiro) precisa de gate próprio de papel, não do gate de escopo. Ver a memória `admin-gates-scope-vs-role`. Escolher e justificar no código.
+- [ ] **Step 2: Ler a estrutura existente** — `ls src/app/admin/\(painel\)/financeiro/` e seguir o padrão de uma tela vizinha (server component + client component, `AdminStatusBadge`, etc.).
+- [ ] **Step 3:** Obrigações por assinatura: período, disposição, estado, valor.
+- [ ] **Step 4:** Conceder/revogar cortesia com **prazo, motivo e autor**. A interface **arredonda a data para o limite do ciclo** e mostra a data efetiva antes de confirmar (spec §4.3) — cortesia parcial de período está fora de escopo.
+- [ ] **Step 5:** **Receita não faturada** somada — responde "quanto de cortesia eu dei este mês".
+- [ ] **Step 6:** Relatório do modo sombra.
+- [ ] ⚠️ As telas leem a **obrigação**, não `currentPeriodEnd` (que diverge em cortesia e em `mark_paid` — dívida assumida na spec §8.2).
 - [ ] Commit — `feat(cobranca): tela de obrigacoes, cortesias e receita nao faturada`
 
 ---
 
-## Task 10: Verificação completa (OBRIGATÓRIA)
+## Task 11: Verificação completa (OBRIGATÓRIA)
 
 - [ ] `npx tsc --noEmit` → 0 erros.
 - [ ] `npx vitest run` → tudo verde. Baseline com `git stash -u` (o `-u` é obrigatório: sem ele os arquivos novos não são guardados e a baseline falha por import não resolvido).
@@ -386,8 +441,10 @@ Sem sandbox no gateway, esta é a única forma honesta de validar o motor. Grava
 - [ ] **Sabotagem de cada invariante**, conferindo no símbolo real com `grep` antes de concluir:
   1. Remover o `&& noticeDispatched` do gate → teste de "sem aviso" falha.
   2. Trocar `novoPeriodStart = periodEnd anterior` por `now` → teste de contiguidade falha.
-  3. Remover o trigger de revisão da migração → teste/prova de I2 falha.
-  4. Fazer cortesia emitir fatura → teste de cortesia falha.
+  3. Fazer cortesia emitir fatura → teste de cortesia falha.
+  4. Escolher a assinatura "mais recente" em vez de falhar na ambiguidade → teste de `resolveEffectiveSubscription` falha.
+
+⚠️ **A I2 não é sabotável por teste unitário** — mock de Prisma não executa trigger. A prova dela vive na sonda em transação revertida dentro de `scripts/apply-billing-obligations.cjs` (Task 4, Step 5), e só roda quando o **dono** executa o script. Registrar isso no resumo em vez de fingir cobertura.
 - [ ] Commit final.
 
 ⚠️ **NÃO fazer `git push`.** ⚠️ **NÃO rodar a migração.**
@@ -398,6 +455,7 @@ Sem sandbox no gateway, esta é a única forma honesta de validar o motor. Grava
 
 - Não liga enforcement por coorte nem aposenta `accessEnabled` (Plano C).
 - Não liga a recorrência nativa do Asaas — bloqueada por três defeitos próprios (período não avança sem Invoice local; o sync inventa mês-calendário até para ciclo anual; e só importa `PENDING`/`OVERDUE`, ignorando pagamento confirmado).
-- Não unifica `currentPeriodEnd` com o ledger (dívida assumida, spec §8.2).
-- Não faz proration nem cortesia parcial de período.
-- Não emite nenhuma cobrança real: a emissão é a etapa 4 do rollout, do dono.
+- Não unifica `currentPeriodEnd` com o ledger (dívida assumida, spec §8.2) — o campo **vai divergir** da obrigação em cortesia (não cria fatura, ninguém avança o campo) e em `mark_paid` (ativa sem renovar período). O gate fica correto; telas antigas e o canal do Domus podem exibir período vencido para cliente em dia. Por isso a Task 10 lê a obrigação.
+- Não faz proration nem cortesia parcial de período (§4.3: arredonda para o limite do ciclo).
+- Não emite nenhuma cobrança real: a emissão é a etapa 4 do rollout, executada pelo dono.
+- Não corrige o "adiado para sempre" silencioso herdado do Plano A (assinatura sem fatura-âncora nunca vira suspensível e ninguém é avisado). Verificado em prod 2026-07-29: cenário inexistente hoje (0 faturas sem `dueDate`, 0 assinaturas em atraso).
