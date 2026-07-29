@@ -858,6 +858,64 @@ caso MedFacil: email suprimido por testMode nao pode virar bloqueio."
 
 ---
 
+## Task 5b: O GATE também exige aviso despachado (acrescentada 2026-07-29)
+
+> **Por que esta task existe.** A revisão de qualidade da Task 2 achou um furo no plano original: a invariante I3 estava sendo construída só para a **suspensão feita pelo cron**, mas quem impede o cliente de trabalhar no dia a dia é o **gate** (`checkSubscription` → `requireWriteAccess`, que guarda 15 rotas: clientes, produtos, contas a receber…), e ele decidia puramente por data. Uma falha de entrega do aviso do dia 14 — exatamente o caso MedFacil, e-mail suprimido por modo de teste — ainda cortaria a escrita. A garantia aprovada pelo dono ("só restringe quem foi comprovadamente avisado") ficaria decorativa justamente no caminho que importa.
+>
+> **Decisão do dono (2026-07-29):** estender a regra ao gate.
+
+**Files:**
+- Modify: `src/lib/subscription.ts` (ramo `PAST_DUE`)
+- Modify: `src/lib/subscription-grace.ts` (a decisão pura ganha o segundo fator)
+- Test: `src/lib/subscription-grace.test.ts`, `src/lib/__tests__/subscription.test.ts`
+
+**Depende da Task 4** (`hasDispatchedNotice` precisa existir).
+
+### Restrições de desenho
+
+1. **O gate é caminho quente.** `checkSubscription` roda em request de página e em toda escrita. Uma consulta a mais por request é aceitável nesta escala (2 clínicas, ~2 óticas), mas precisa ser **barata e à prova de falha**: uma consulta estreita, com índice, e `catch` que devolve "não avisado".
+2. **Fail-closed na direção do CLIENTE, não do cofre.** Se a leitura da trilha falhar, o resultado é **não restringir** (o cliente continua trabalhando). Errar para menos aqui é o lado seguro: o pior caso é um inadimplente escrever por mais um dia; o pior caso do contrário é travar quem está em dia por um erro de banco.
+3. **Só consulta a trilha quando o resultado pode mudar.** Antes do dia 14, a resposta é "não restringe" independentemente da trilha → **não consultar o banco**. A consulta só acontece para quem já passou do marco, que é uma fração mínima do tráfego.
+
+### Forma sugerida
+
+`isWriteRestricted` passa a receber dois fatores, permanecendo **pura**:
+
+```typescript
+export function isWriteRestricted(daysOverdue: number, noticeDispatched: boolean): boolean {
+  return daysOverdue >= WRITE_RESTRICTION_DAY && noticeDispatched;
+}
+```
+
+E o ramo `PAST_DUE` de `checkSubscription` resolve o segundo fator **só quando necessário**:
+
+```typescript
+    const pastMarker = daysOverdue >= WRITE_RESTRICTION_DAY;
+    // Só toca o banco de quem já passou do marco — antes disso a resposta é a
+    // mesma com ou sem trilha, e o gate roda em caminho quente.
+    const noticeDispatched = pastMarker
+      ? await hasDispatchedNotice(companyId, WRITE_RESTRICTION_DAY)
+      : false;
+```
+
+⚠️ `resolvePastDueAccess` deixa de derivar `readOnly` sozinha: ou recebe `noticeDispatched` como parâmetro, ou o ramo passa o booleano já resolvido. Manter a função **pura** — a consulta fica no `checkSubscription`.
+
+⚠️ A mensagem ao cliente também muda: quem passou do marco mas **não** foi avisado não pode ler "seu acesso está bloqueado" (não está). Usar a mensagem de aviso.
+
+### Testes obrigatórios
+
+| Caso | Esperado |
+|---|---|
+| 20 dias de atraso, aviso despachado | `readOnly: true` |
+| 20 dias de atraso, **sem** aviso despachado | `readOnly: false` — o furo que esta task fecha |
+| 2 dias de atraso, aviso despachado | `readOnly: false` (não passou do marco) |
+| 2 dias de atraso | **não consulta o banco** (provar que o spy não foi chamado) |
+| leitura da trilha lança erro, 20 dias | `readOnly: false` (fail-closed a favor do cliente) |
+
+Sabotagem: remover o segundo fator de `isWriteRestricted` deve quebrar o caso "20 dias sem aviso".
+
+---
+
 ## Task 6: Verificação completa (OBRIGATÓRIA)
 
 - [ ] **Step 1: Typecheck do projeto inteiro**
