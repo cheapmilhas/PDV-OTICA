@@ -13,8 +13,19 @@ export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_ME
 export const REGISTER_URL = "/registro";
 export const LOGIN_URL = "/login";
 
+/**
+ * Meta description da home. É CONSUMIDA pelo RootLayout — não duplicar o texto lá.
+ *
+ * Ficou órfã por um tempo (o layout tinha a própria string hardcoded), e a
+ * duplicação escondeu um furo: a copy do site foi reposicionada para dois
+ * produtos, mas o metadado que o Google e o WhatsApp leem continuou dizendo
+ * "sistema de gestão para óticas".
+ *
+ * Mantém os termos óticos que já ranqueiam (PDV, ordem de serviço de lentes) e
+ * ACRESCENTA os de clínica. Somar, nunca trocar.
+ */
 export const SITE_DESCRIPTION =
-  "Software para quem cuida de gente. Dois sistemas: um para óticas (PDV, ordem de serviço, estoque e financeiro) e outro para clínicas e consultórios de qualquer especialidade (prontuário, agenda e receituário). Comece grátis.";
+  "Vis são dois sistemas de gestão: um para óticas (PDV, ordens de serviço de lentes, estoque e financeiro) e outro para clínicas e consultórios de qualquer especialidade (prontuário eletrônico, agenda e receituário). Comece grátis, sem cartão e sem fidelidade.";
 
 // Os dois segmentos abrem o menu: a home é institucional e o visitante precisa
 // se identificar antes de qualquer outra coisa. "Planos" leva à /precos, que
