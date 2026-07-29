@@ -14,10 +14,14 @@ export const REGISTER_URL = "/registro";
 export const LOGIN_URL = "/login";
 
 export const SITE_DESCRIPTION =
-  "A gestão clara da sua ótica. Vendas, ordens de serviço de lentes, estoque e financeiro num sistema simples, feito para óticas modernas. Comece grátis.";
+  "Software para quem cuida de gente. Dois sistemas: um para óticas (PDV, ordem de serviço, estoque e financeiro) e outro para clínicas e consultórios de qualquer especialidade (prontuário, agenda e receituário). Comece grátis.";
 
+// Os dois segmentos abrem o menu: a home é institucional e o visitante precisa
+// se identificar antes de qualquer outra coisa. "Planos" leva à /precos, que
+// tem a alternância entre os produtos.
 export const NAV_LINKS = [
-  { label: "Funcionalidades", href: "/funcionalidades" },
+  { label: "Para óticas", href: "/oticas" },
+  { label: "Para clínicas", href: "/medical" },
   { label: "Planos", href: "/precos" },
   { label: "Blog", href: "/blog" },
   { label: "Contato", href: "/contato" },
@@ -43,13 +47,10 @@ export const FOOTER_LINKS = {
     { label: "Blog", href: "/blog" },
     { label: "Vis vs Planilha", href: "/vis-vs-planilha" },
   ],
-  // Outro PRODUTO, não outra página da ótica. Fica no rodapé (e não no menu
-  // principal) de propósito: o topo do site vende ótica, e disputar espaço lá
-  // confundiria quem chegou procurando PDV. Quem é da saúde encontra aqui ou
-  // pelo link direto de campanha.
-  outrosProdutos: [
-    { label: "Vis Medical — para clínicas", href: "/medical" },
-  ],
+  // O link para o OUTRO produto saiu daqui: ele precisa inverter conforme a
+  // rota (dentro da /medical, o "outro produto" é o Vis para óticas, e o item
+  // fixo virava um self-link). Passou a viver em `FooterOtherProduct`, no
+  // landing-layout/footer-tagline.tsx, que conhece o pathname.
   legal: [
     { label: "Política de Privacidade", href: "/privacidade" },
     { label: "Termos de Uso", href: "/termos" },
