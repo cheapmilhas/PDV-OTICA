@@ -193,6 +193,12 @@ Dois defeitos reais, ambos confirmados no código:
 
 **(I3) Não se restringe acesso sem trilha de aviso despachado.** Falha de e-mail vira alerta ao operador, nunca punição ao cliente. Se o aviso não saiu, o relógio da régua não avança.
 
+Duas notas para quem for planejar, porque I3 é a invariante com menos andaime pronto:
+
+**O canal in-app já é honesto — não reconstruir.** `notifyCompany` devolve `SENT` ao *enfileirar* (e-mail), mas `createCompanyNotification` devolve booleano de uma escrita real, e o cron **já** condiciona o avanço de `lastDunningStage` a ele. Ou seja, a régua hoje tem um sinal confiável (in-app) e um não confiável (e-mail). I3 cobre os dois; o trabalho é consertar o lado do e-mail, não refazer o que funciona.
+
+**`DunningEvent` não tem `stage` nem unique.** A tabela existe e está órfã, mas foi desenhada para outra coisa (evento por fatura e canal). Ligar evento a marco da régua (3/7/14) e garantir idempotência — para o cron não gravar dois eventos do mesmo marco em execuções seguidas — é decisão do plano: ou coluna `stage` + unique `(invoiceId, action, stage)`, ou derivar o marco de `createdAt`. A primeira é preferível; derivar de data repete a classe de bug que a chave por `YYYY-MM` já causou.
+
 ---
 
 ## 5. Componentes
@@ -243,7 +249,8 @@ Cinco etapas isoladas, reversíveis **até a etapa 4** (ver ressalva na própria
 4. **Ligar emissão.** Cobra de verdade; ainda não restringe ninguém. Acompanhar o primeiro ciclo real.
    > **Esta etapa não é reversível no sentido comercial.** Desligar a flag não cancela cobrança já criada no Asaas nem "desmanda" e-mail. A reversão precisa de procedimento explícito: cancelar as tentativas `PENDING` no gateway e tratar caso a caso o que já foi pago.
 5. **Ligar restrição, por coorte**, começando pelas assinaturas íntegras. `accessEnabled` é desligado **nesta etapa, empresa por empresa**, e só depois de verificar, no mesmo instante: exatamente uma assinatura efetiva; obrigação cobrindo a data atual; cortesia (se houver) já materializada em obrigação; nenhuma tentativa antiga capaz de rebaixar; e decisão do gate ainda favorável. Registrar a cortesia **não basta** como preflight.
-   > **Aposentar os escritores do bypass antes da coorte.** Três caminhos ainda gravam `accessEnabled: true` (`public/register/route.ts:143`, `auth/activate/route.ts:90`, `admin/clientes/create/route.ts:315`) — sem tratá-los, o bypass reaparece em cadastro novo depois do cutover. Também não existe hoje ação administrativa para alternar o campo por empresa: o procedimento operacional precisa ser criado.
+   > **Aposentar os escritores do bypass antes da coorte.** Três caminhos ainda gravam `accessEnabled: true` (`public/register/route.ts:153`, `auth/activate/route.ts:94`, `admin/clientes/create/route.ts:319`) — sem tratá-los, o bypass reaparece em cadastro novo depois do cutover. Também não existe hoje ação administrativa para alternar o campo por empresa: o procedimento operacional precisa ser criado.
+   > 🔑 **`Company.accessEnabledAt` existe** (gravado junto do booleano nos dois últimos caminhos) — é o carimbo de **quando** o bypass foi ligado, e serve de ponto de partida para datar a cortesia retroativa de cada empresa no bootstrap, em vez de inventar uma data.
    > **Destino do campo:** `accessEnabled` deixa de ser bypass de cobrança e **permanece** apenas como isenção declarada de conta interna, ou é aposentado em favor de `SUBSCRIPTION_BYPASS_COMPANY_IDS`. Decidir no plano — manter dois caminhos de bypass sem dono é o estado que criou este problema.
 
 Reversão: `ENFORCE_SUSPENSION=false` (kill-switch global existente) e `SUBSCRIPTION_BYPASS_COMPANY_IDS` (isenção por empresa existente) seguem valendo.
