@@ -249,6 +249,52 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
     expect(body.suspendDeferred).toBe(1);
   });
 
+  it("caso MedFacil: notifyCompany redirecionado (testMode+testEmail) → trilha NÃO conta como avisado e NÃO suspende", async () => {
+    // I3 (spec §4.6.3): notifyCompany devolve SENT quando o testMode troca o
+    // destinatário pelo do operador — o e-mail saiu, mas não pro cliente. A
+    // trilha tem que tratar isso como NÃO despachado, senão o cliente é
+    // suspenso sem nunca ter sido avisado de verdade (o bug real da MedFacil).
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-medfacil",
+        companyId: "co-medfacil",
+        pastDueSince: daysAgo(15),
+        status: "PAST_DUE",
+        lastDunningStage: 7, // marco 7 já avisado; o pendente desta rodada é o 14
+      },
+    ]);
+    // notifyCompany devolve SENT+redirected para a chamada de aviso (stage 14).
+    notifyCompany.mockImplementation(
+      async (_companyId: string, eventType: string) => {
+        if (eventType === "INVOICE_OVERDUE") {
+          return { status: "SENT", redirected: true };
+        }
+        return { status: "SENT" };
+      }
+    );
+    // Sem trilha prévia de aviso despachado (dunningEvent real não existe, já
+    // que o único envio foi redirecionado — hasDispatchedNotice não acha nada).
+    dunningEventFindFirst.mockResolvedValue(null);
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+
+    // A trilha (recordDunningNotice) tem que gravar como NÃO despachado.
+    expect(dunningEventCreate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({
+          status: "SKIPPED",
+          sentAt: null,
+          errorDetail: "test_mode_redirected",
+        }),
+      })
+    );
+
+    // E a suspensão tem que ser ADIADA — não pode restringir quem nunca soube.
+    expect(body.suspended).toBe(0);
+    expect(body.suspendDeferred).toBe(1);
+  });
+
   it("já SUSPENDED → não dispara SUBSCRIPTION_SUSPENDED novamente", async () => {
     subscriptionFindMany.mockResolvedValue([
       {

@@ -143,8 +143,18 @@ export async function GET(request: Request) {
 
               // Trilha de comunicação (spec §4.6.2): registra TAMBÉM o que não saiu.
               // `notifyCompany` devolve SENT ao ENFILEIRAR, e SKIPPED quando o envio
-              // foi suprimido (modo de teste, sem destinatário) — a distinção é o que
-              // impede punir o cliente por falha nossa.
+              // foi suprimido (modo de teste sem testEmail, sem destinatário) — a
+              // distinção é o que impede punir o cliente por falha nossa.
+              //
+              // 🔑 `redirected: true` (testMode COM testEmail configurado) também é
+              // SENT — o e-mail foi enfileirado de verdade — mas foi enfileirado pro
+              // INBOX DO OPERADOR, não do cliente. Foi exatamente o caso da MedFacil:
+              // testMode ligado + testEmail preenchido, notifyCompany devolvia SENT,
+              // e a trilha achava que o cliente tinha sido avisado. Aqui a trilha
+              // trata como NÃO despachado (skipped), então I3 nunca aceita isso como
+              // prova de aviso.
+              const dispatchedToCustomer =
+                notifyResult.status === "SENT" && !notifyResult.redirected;
               const overdueInvoice = await prisma.invoice.findFirst({
                 where: {
                   subscriptionId: sub.id,
@@ -162,9 +172,16 @@ export async function GET(request: Request) {
                   companyId: sub.companyId,
                   invoiceId: overdueInvoice.id,
                   stage,
-                  delivered: notifyResult.status === "SENT",
-                  skipped: notifyResult.status === "SKIPPED",
-                  error: notifyResult.status === "SENT" ? undefined : notifyResult.status,
+                  delivered: dispatchedToCustomer,
+                  // Redirecionado conta como "não tentamos" (SKIPPED), igual a
+                  // no_recipient/test_mode_no_email — nunca como FAILED (que
+                  // significa "tentamos entregar ao cliente e deu erro").
+                  skipped: notifyResult.status === "SKIPPED" || notifyResult.redirected === true,
+                  error: dispatchedToCustomer
+                    ? undefined
+                    : notifyResult.redirected
+                      ? "test_mode_redirected"
+                      : notifyResult.status,
                 });
               }
             }

@@ -39,6 +39,20 @@ export interface NotifyCompanyOpts {
 export interface NotifyResult {
   status: "SENT" | "SKIPPED" | "FAILED";
   reason?: string;
+  /**
+   * `true` quando `config.testMode` trocou o destinatário pelo `testEmail` do
+   * operador — o e-mail foi enfileirado (por isso `status` continua `SENT`,
+   * que outros consumidores tratam como "despachado com sucesso", ex.:
+   * `sendInvoiceCharge` marca a fatura como enviada), mas NINGUÉM do lado do
+   * cliente recebeu nada. Foi exatamente o caso da clínica MedFacil.
+   *
+   * Campo opcional e aditivo de propósito: não reaproveitar `status` para isto
+   * mudaria o contrato para todo consumidor existente (`invoice-send.service`,
+   * `invoice-reminders.service`, os crons) que só checa `status === "SENT"`.
+   * Quem precisa saber se o aviso chegou de fato ao CLIENTE (a trilha de
+   * dunning, `I3`) deve olhar este campo — ver `route.ts` do cron de dunning.
+   */
+  redirected?: boolean;
 }
 
 async function resolveRecipient(companyId: string): Promise<string | null> {
@@ -80,12 +94,14 @@ export async function notifyCompany(
       await safeLog(companyId, eventType, opts.periodKey, "—", "SKIPPED", channels, "no_recipient");
       return { status: "SKIPPED", reason: "no_recipient" };
     }
+    let redirected = false;
     if (config.testMode) {
       if (!config.testEmail) {
         await safeLog(companyId, eventType, opts.periodKey, "—", "SKIPPED", channels, "test_mode_no_email");
         return { status: "SKIPPED", reason: "test_mode_no_email" };
       }
       to = config.testEmail;
+      redirected = true;
     }
 
     // Idempotência: criar o log ANTES de enfileirar. Unique colidiu = já enviado.
@@ -161,7 +177,7 @@ export async function notifyCompany(
       where: { id: logId },
       data: { status: "SENT", emailQueueId },
     });
-    return { status: "SENT" };
+    return redirected ? { status: "SENT", redirected: true } : { status: "SENT" };
   } catch (error) {
     log.error("notifyCompany falhou (fail-silent)", {
       companyId,
