@@ -150,11 +150,9 @@ git commit -m "feat(cobranca): decisao pura de restricao de escrita por dias de 
 
 - [ ] **Step 1: Escrever o teste que falha**
 
-Acrescentar ao final de `src/lib/subscription.test.ts` (mantendo o conteúdo atual do arquivo):
+Em `src/lib/subscription.test.ts`, acrescentar `resolvePastDueAccess` ao import que **já existe** no topo do arquivo (`import { LIVE_STATUSES } from "./subscription";` → `import { LIVE_STATUSES, resolvePastDueAccess } from "./subscription";`) e acrescentar o bloco ao final, mantendo o conteúdo atual:
 
 ```typescript
-import { resolvePastDueAccess } from "./subscription";
-
 describe("resolvePastDueAccess", () => {
   it("recém-vencido (0 dias) → pode LER e ESCREVER, com aviso", () => {
     const r = resolvePastDueAccess(0);
@@ -372,10 +370,19 @@ export function nextDunningStage(daysOverdue: number, lastStage: number | null):
 Run: `npx vitest run src/lib/dunning.test.ts`
 Expected: PASS.
 
-- [ ] **Step 5: Commit**
+- [ ] **Step 5: Corrigir os testes do cron que semeiam 8 dias esperando o marco 7**
+
+⚠️ `src/app/api/cron/dunning/route.test.ts` tem **três** casos que semeiam `pastDueSince: daysAgo(8)` com `lastDunningStage: null` e esperam `stage:7`. Com a régua nova, 8 dias sem nada avisado dá **stage 3**. Vão falhar, e é o comportamento correto.
+
+Run: `npx vitest run src/app/api/cron/dunning/route.test.ts`
+Expected: FAIL em ~3 casos, com `periodKey` recebendo `"stage:3"` onde se esperava `"stage:7"`.
+
+Para cada um — `"aviso stage:7 → notifyCompany com INVOICE_OVERDUE..."` (~linha 122), `"notifyCompany lançando erro não quebra o cron"`, e o sub-caso A de `"todas as chamadas notifyCompany usam EXCLUSIVAMENTE channels:['email']"` — a correção é a mesma: para continuar exercitando o marco 7, semear `lastDunningStage: 3` (o marco anterior já avisado) em vez de `null`. Assim o cenário passa a ser "já avisou o 3, agora avisa o 7", que é o que a régua nova faz.
+
+- [ ] **Step 6: Commit**
 
 ```bash
-git add src/lib/dunning.ts src/lib/dunning.test.ts
+git add src/lib/dunning.ts src/lib/dunning.test.ts src/app/api/cron/dunning/route.test.ts
 git commit -m "fix(cobranca): regua de dunning para de pular marcos
 
 Antes, cliente encontrado com 14 dias de atraso recebia UM aviso e era
@@ -487,11 +494,16 @@ describe("hasDispatchedNotice", () => {
     expect(where.companyId).toBe("c1");
   });
 
-  it("só conta AVISO como aviso — bloqueio/cancelamento não valem", async () => {
+  it("consulta o aviso DO MARCO pedido, não qualquer aviso", async () => {
+    // Sem isto, um lembrete do dia 3 autorizaria a restrição do dia 14 —
+    // I3 viraria "foi avisado alguma vez".
     findFirst.mockResolvedValue(null);
     await hasDispatchedNotice("c1", 14, { db });
-    const where = findFirst.mock.calls[0][0].where;
-    expect(where.action).toEqual({ in: ["REMINDER_EMAIL", "WARNING_EMAIL"] });
+    expect(findFirst.mock.calls[0][0].where.action).toBe("WARNING_EMAIL");
+
+    findFirst.mockClear();
+    await hasDispatchedNotice("c1", 3, { db });
+    expect(findFirst.mock.calls[0][0].where.action).toBe("REMINDER_EMAIL");
   });
 
   it("erro de leitura → false (fail-closed: na dúvida, não restringe)", async () => {
@@ -524,9 +536,6 @@ const log = logger.child({ service: "dunning-event" });
 export function noticeActionFor(stage: number): "REMINDER_EMAIL" | "WARNING_EMAIL" {
   return stage >= 14 ? "WARNING_EMAIL" : "REMINDER_EMAIL";
 }
-
-/** Ações que contam como aviso ao cliente (exclui BLOCK_ACCESS/CANCEL_SUBSCRIPTION). */
-const NOTICE_ACTIONS = ["REMINDER_EMAIL", "WARNING_EMAIL"] as const;
 
 /** Status que provam que o aviso REALMENTE saiu. */
 const DISPATCHED = ["SENT", "DELIVERED"] as const;
@@ -592,10 +601,22 @@ export async function recordDunningNotice(
 }
 
 /**
- * Existe aviso EFETIVAMENTE DESPACHADO para esta empresa?
+ * Existe aviso EFETIVAMENTE DESPACHADO do marco `stage` para esta empresa?
+ *
+ * 🔑 O marco importa. `DunningEvent` não tem coluna `stage` (a spec §4.6.3 pediu
+ * uma decisão aqui; sem migração nesta fatia, a resolução é a `action`): o marco
+ * 14 grava `WARNING_EMAIL` e os marcos 3/7 gravam `REMINDER_EMAIL`. Consultar
+ * "qualquer aviso" faria um lembrete do dia 3 autorizar a restrição do dia 14 —
+ * I3 viraria "foi avisado alguma vez", que é bem mais fraco do que se pretende.
  *
  * 🔑 Fail-closed: erro de leitura devolve `false`. Na dúvida sobre ter avisado,
- * não se restringe o acesso do cliente (invariante I3 da spec).
+ * não se restringe o acesso do cliente.
+ *
+ * 📌 Limite aceito: sem `stage` nem unique na tabela, dois marcos que compartilham
+ * a mesma `action` são indistinguíveis (hoje 3 e 7, ambos `REMINDER_EMAIL`) e uma
+ * reexecução do cron grava linha duplicada. Nenhum dos dois afeta a decisão de
+ * restringir, que só consulta `WARNING_EMAIL`. Coluna `stage` + unique
+ * `(invoiceId, action, stage)` ficam para a fatia que carregar migração (Plano B).
  */
 export async function hasDispatchedNotice(
   companyId: string,
@@ -608,7 +629,7 @@ export async function hasDispatchedNotice(
     const found = await db.dunningEvent.findFirst({
       where: {
         companyId,
-        action: { in: [...NOTICE_ACTIONS] },
+        action: noticeActionFor(stage),
         status: { in: [...DISPATCHED] },
       },
       select: { id: true },
@@ -666,6 +687,11 @@ No bloco de aviso, logo após o `if (ok) { ... }` que atualiza `lastDunningStage
                 subscriptionId: sub.id,
                 isManual: false,
                 status: { in: ["PENDING", "OVERDUE"] },
+                // `dueDate` é nullable no schema (:2735). Fatura sem vencimento
+                // não pode ancorar trilha de ATRASO — não há do que estar
+                // atrasada. (No Postgres, ASC já joga nulos para o fim, então o
+                // filtro é sobre significado, não sobre ordenação.)
+                dueDate: { not: null },
               },
               orderBy: { dueDate: "asc" },
               select: { id: true },
@@ -719,6 +745,9 @@ por:
             });
             summary.suspendDeferred++;
           } else if (podeRestringir) {
+            // ⚠️ O corpo do `if` ORIGINAL (que suspende, audita e adiciona a
+            // company em `toPublish`) entra AQUI, sem nenhuma alteração — só
+            // muda a condição que o guarda. Não reescrever o corpo.
 ```
 
 - [ ] **Step 4: Declarar o contador no resumo**
@@ -744,18 +773,47 @@ Com o campo inicializado em `0`, o uso vira `summary.suspendDeferred++` (sem o `
 Run: `npx tsc --noEmit`
 Expected: 0 erros.
 
-- [ ] **Step 6: Atualizar o teste de suspensão do cron**
+- [ ] **Step 6: Estender o mock do Prisma no teste do cron (OBRIGATÓRIO — senão tudo quebra em silêncio)**
 
-⚠️ `src/app/api/cron/dunning/route.test.ts:189` (`"suspensão (>=14d, lastStage>=14) → notifyCompany com SUBSCRIPTION_SUSPENDED"`) **vai falhar**: ele não semeia nenhum `DunningEvent`, e agora a suspensão exige trilha despachada. A falha é a prova de que a invariante I3 está ativa.
+⚠️ O `vi.mock("@/lib/prisma")` em `src/app/api/cron/dunning/route.test.ts:18-30` mocka **apenas** `subscription` e `globalAudit`. A Task 5 acrescenta chamadas a `prisma.invoice.findFirst` e `prisma.dunningEvent.*`, que seriam `undefined` — o `try/catch` por assinatura engoliria o `TypeError`, virando `summary.errors++`, e os testes falhariam com mensagens que **não apontam para a causa**.
 
-O arquivo já mocka o Prisma. Acrescentar `dunningEvent` ao mock, devolvendo um evento despachado para o caso que deve suspender:
+Substituir o corpo do mock por:
 
 ```typescript
-  dunningEvent: {
-    create: vi.fn().mockResolvedValue({ id: "evt_1" }),
-    findFirst: vi.fn().mockResolvedValue({ id: "evt_1" }), // aviso já despachado
+  prisma: {
+    subscription: {
+      findMany: (...a: unknown[]) => subscriptionFindMany(...a),
+      update: (...a: unknown[]) => subscriptionUpdate(...a),
+    },
+    globalAudit: {
+      create: (...a: unknown[]) => globalAuditCreate(...a),
+    },
+    invoice: {
+      findFirst: (...a: unknown[]) => invoiceFindFirst(...a),
+    },
+    dunningEvent: {
+      create: (...a: unknown[]) => dunningEventCreate(...a),
+      findFirst: (...a: unknown[]) => dunningEventFindFirst(...a),
+    },
   },
 ```
+
+Declarar os spies junto dos existentes, e dar default no `beforeEach` (fatura encontrada + aviso já despachado, que é o caminho feliz da maioria dos casos):
+
+```typescript
+const invoiceFindFirst = vi.fn();
+const dunningEventCreate = vi.fn();
+const dunningEventFindFirst = vi.fn();
+
+// dentro do beforeEach existente:
+invoiceFindFirst.mockResolvedValue({ id: "inv-1" });
+dunningEventCreate.mockResolvedValue({ id: "evt-1" });
+dunningEventFindFirst.mockResolvedValue({ id: "evt-1" }); // aviso já despachado
+```
+
+- [ ] **Step 7: Atualizar o teste de suspensão do cron**
+
+`route.test.ts:189` (`"suspensão (>=14d, lastStage>=14) → ..."`) passa a depender da trilha. Com o default acima ele volta a passar sem mais edição.
 
 E **acrescentar** o caso novo, que trava a invariante:
 
@@ -798,7 +856,13 @@ Expected: 0 erros.
 
 Run: `npx vitest run`
 Expected: todos passam.
-⚠️ Este projeto tem falhas **pré-existentes** de testes de integração que exigem banco de teste. Para saber se uma falha é sua, compare com a baseline: `git stash && npx vitest run 2>&1 | tail -5 && git stash pop`. Só falha NOVA conta.
+⚠️ Este projeto tem falhas **pré-existentes** de testes de integração que exigem banco de teste. Para saber se uma falha é sua, compare com a baseline:
+
+```bash
+git stash -u && npx vitest run 2>&1 | tail -5 && git stash pop
+```
+
+🔑 O `-u` é obrigatório: sem ele os arquivos **novos** (`subscription-grace.ts`, `dunning-event.service.ts`) não são guardados, e a baseline falha por import não resolvido — dando a impressão de que a mudança quebrou tudo. Só falha NOVA conta.
 
 - [ ] **Step 3: Build de produção**
 
@@ -833,3 +897,16 @@ git commit -m "chore(cobranca): verificacao completa do plano A"
 - Não liga enforcement por coorte (Plano C).
 - Não altera o webhook do Asaas.
 - Não corrige o defeito de `nextDunningStage` para o caso de o cron ficar dias sem rodar: com a mudança, um cliente muito atrasado leva 3 execuções (3 dias) para chegar ao marco final. Isso é **desejado** — é o preço de garantir os três avisos.
+
+## Efeito em clientes reais no dia do deploy (contar ao dono antes de subir)
+
+Esta fatia sobe sozinha contra o parque de produção. O que muda para quem já está inadimplente:
+
+| Situação atual | Antes | Depois |
+|---|---|---|
+| `PAST_DUE` há poucos dias | sem escrever | **volta a escrever** até o marco de 14 |
+| `PAST_DUE` há mais de 14 dias, com `lastDunningStage = 14` | sem escrever | igual — segue restrito |
+| `PAST_DUE` há mais de 14 dias, com `lastDunningStage` nulo | sem escrever, e seria suspenso na próxima rodada | **ganha ~3 dias** de trégua enquanto recebe os 3 avisos |
+| Nunca cobrado (fatura nunca foi ao gateway) | — | sem mudança nesta fatia; é o Plano B que passa a cobrar |
+
+Nenhum cliente **perde** acesso por causa deste deploy — o efeito é sempre no sentido de devolver escrita ou adiar restrição. É o lado seguro de errar.
