@@ -39,6 +39,10 @@ export function buildSoftwareApplicationJsonLd(
   return {
     "@context": "https://schema.org",
     "@type": "SoftwareApplication",
+    // `@id` explícito: a /medical publica um SoftwareApplication PRÓPRIO (o Vis
+    // Medical). Sem identidade distinta, os dois schemas na mesma página seriam
+    // lidos como descrições conflitantes da mesma entidade.
+    "@id": `${SITE_URL}/#software-otica`,
     name: "Vis",
     applicationCategory: "BusinessApplication",
     applicationSubCategory: "Sistema de Gestão para Óticas",
@@ -53,6 +57,35 @@ export function buildSoftwareApplicationJsonLd(
       url: `${SITE_URL}/precos`,
       availability: "https://schema.org/InStock",
     },
+  };
+}
+
+/**
+ * SoftwareApplication do VIS MEDICAL (clínicas e consultórios).
+ *
+ * Existe porque o RootLayout injeta o schema ÓTICO em toda página — inclusive na
+ * /medical, que assim declarava ao Google ser "Sistema de Gestão para Óticas" com
+ * oferta apontando para /precos (a página de preços da ótica). O schema ótico não
+ * foi removido do layout de propósito: tirá-lo exigiria declará-lo nas 11 páginas
+ * do site, escopo bem maior que esta correção.
+ *
+ * Sem `offers`: os preços do Medical são carregados no cliente (MedicalPricing,
+ * via /api/public/plans?product=medical) e não estão disponíveis na renderização
+ * do servidor. Declarar preço aqui exigiria uma segunda consulta — anunciar valor
+ * errado é pior que omitir a oferta.
+ */
+export function buildMedicalSoftwareApplicationJsonLd(): Record<string, unknown> {
+  return {
+    "@context": "https://schema.org",
+    "@type": "SoftwareApplication",
+    "@id": `${SITE_URL}/medical#software-medical`,
+    name: "Vis Medical",
+    applicationCategory: "HealthApplication",
+    applicationSubCategory: "Sistema para Clínicas e Consultórios",
+    operatingSystem: "Web",
+    url: `${SITE_URL}/medical`,
+    description:
+      "Sistema para clínicas e consultórios com prontuário eletrônico, agenda, receituário e financeiro.",
   };
 }
 

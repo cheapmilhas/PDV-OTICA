@@ -1,6 +1,7 @@
 import Link from "next/link";
 import { FOOTER_LINKS, WHATSAPP_URL } from "@/lib/constants";
 import { VisLogo } from "./vis-logo";
+import { FooterBrandLine, FooterMadeFor, FooterOtherProduct } from "./footer-tagline";
 
 export function Footer() {
   return (
@@ -13,9 +14,7 @@ export function Footer() {
             <Link href="/" className="mb-4 inline-flex" aria-label="Vis — início">
               <VisLogo height={32} />
             </Link>
-            <p className="text-sm text-muted leading-relaxed mb-1">
-              A gestão clara da sua ótica.
-            </p>
+            <FooterBrandLine />
             <p className="text-xs text-subtle leading-relaxed mb-4">
               Visão. Clareza. Confiança.
             </p>
@@ -104,19 +103,11 @@ export function Footer() {
                   </Link>
                 </li>
               ))}
-              {/* Outro PRODUTO da casa, separado por uma linha: sem essa
-                  distinção pareceria mais uma página da ótica, e quem procura
-                  sistema para clínica passaria batido. */}
-              {FOOTER_LINKS.outrosProdutos.map((link) => (
-                <li key={link.href} className="pt-2.5 mt-2.5 border-t border-border/60">
-                  <Link
-                    href={link.href}
-                    className="text-sm font-medium text-muted hover:text-foreground transition-colors"
-                  >
-                    {link.label}
-                  </Link>
-                </li>
-              ))}
+              {/* Outro PRODUTO da casa, com rótulo próprio: como item solto na
+                  lista pareceria mais uma página da ótica, e quem procura
+                  sistema para clínica passaria batido. Inverte por rota — na
+                  /medical o "outro produto" é o Vis para óticas. */}
+              <FooterOtherProduct />
             </ul>
           </div>
 
@@ -140,7 +131,7 @@ export function Footer() {
         {/* Bottom */}
         <div className="mt-12 pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-subtle">
           <p>© 2026 Vis — Todos os direitos reservados</p>
-          <p>Feito para óticas brasileiras 🇧🇷</p>
+          <FooterMadeFor />
         </div>
       </div>
     </footer>

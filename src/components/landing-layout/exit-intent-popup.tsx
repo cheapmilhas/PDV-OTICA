@@ -7,10 +7,36 @@ import { Button } from "@/components/ui/button";
 import { useExitIntent } from "@/hooks/use-exit-intent";
 import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
+
+/**
+ * Este popup aparece em TODAS as páginas do site, /medical inclusive. Fixo em
+ * copy ótica, ele dizia ao médico: ícone de óculos, "sua ótica no controle",
+ * "7 dias grátis" (o Medical dá 14) e um botão para o cadastro ÓTICO. Ou seja,
+ * a última coisa que a clínica via antes de sair era a oferta errada.
+ */
+const OFERTA = {
+  otica: {
+    emoji: "👓",
+    titulo: "Espera! Não saia sem testar.",
+    texto: "7 dias grátis, sem cartão, sem compromisso. Sua ótica no controle em minutos.",
+    href: REGISTER_URL,
+  },
+  medical: {
+    emoji: "🩺",
+    titulo: "Espera! Não saia sem testar.",
+    texto: "14 dias grátis, sem cartão, sem compromisso. Sua clínica organizada em minutos.",
+    href: "/registro-medical",
+  },
+} as const;
 
 export function ExitIntentPopup() {
   const { show, dismiss } = useExitIntent();
   const [submitted] = useState(false);
+
+  const pathname = usePathname();
+  const emMedical = pathname === "/medical" || pathname?.startsWith("/medical/") === true;
+  const oferta = emMedical ? OFERTA.medical : OFERTA.otica;
 
   return (
     <AnimatePresence>
@@ -41,19 +67,17 @@ export function ExitIntentPopup() {
 
               <div className="text-center">
                 <div className="mb-4 inline-flex h-12 w-12 items-center justify-center rounded-xl bg-brand-primary/10">
-                  <span className="text-2xl">👓</span>
+                  <span className="text-2xl">{oferta.emoji}</span>
                 </div>
                 <h3 className="font-heading text-xl font-bold text-foreground mb-2">
-                  Espera! Não saia sem testar.
+                  {oferta.titulo}
                 </h3>
-                <p className="text-sm text-muted mb-6">
-                  7 dias grátis, sem cartão, sem compromisso. Sua ótica no controle em minutos.
-                </p>
+                <p className="text-sm text-muted mb-6">{oferta.texto}</p>
 
                 {!submitted ? (
                   <div className="space-y-3">
                     <Button size="lg" className="w-full" asChild>
-                      <Link href={REGISTER_URL}>
+                      <Link href={oferta.href}>
                         Quero testar grátis agora
                       </Link>
                     </Button>

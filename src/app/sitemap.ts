@@ -28,6 +28,15 @@ export default function sitemap(): MetadataRoute.Sitemap {
       changeFrequency: "weekly",
       priority: 1,
     },
+    // As duas landings de produto. A /oticas nasceu de um desmembramento: a home
+    // virou institucional e as 13 seções óticas mudaram para lá, então ela herda
+    // a prioridade alta que aquele conteúdo tinha.
+    {
+      url: `${baseUrl}/oticas`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.9,
+    },
     {
       url: `${baseUrl}/funcionalidades`,
       lastModified: now,
@@ -58,6 +67,22 @@ export default function sitemap(): MetadataRoute.Sitemap {
       lastModified: now,
       changeFrequency: "monthly",
       priority: 0.6,
+    },
+    // Vis Medical. Estava fora do sitemap e sem canonical próprio: o Google não
+    // conhecia a página e ela ainda apontava para a home, então o funil de clínicas
+    // era invisível na busca. Mesma prioridade da /oticas — com a home institucional,
+    // os dois produtos têm peso igual (decisão do dono, 2026-07-29).
+    //
+    // `/registro-medical` NÃO entra aqui: o layout dela não define canonical, então
+    // herda `/` do RootLayout. Listá-la pediria indexação enquanto o canonical aponta
+    // para a home — sinais contraditórios. (O `/registro` ótico acima tem o mesmo
+    // defeito; é dívida pré-existente, anotada na spec, não corrigida junto para não
+    // misturar escopo.)
+    {
+      url: `${baseUrl}/medical`,
+      lastModified: now,
+      changeFrequency: "weekly",
+      priority: 0.9,
     },
     {
       url: `${baseUrl}/blog`,
