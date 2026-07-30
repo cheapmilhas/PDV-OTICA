@@ -3,9 +3,17 @@
 import { useState, useEffect } from "react";
 import { X } from "lucide-react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 
 export function AnnouncementBar() {
   const [visible, setVisible] = useState(false);
+
+  // A faixa aparece em toda página, /medical inclusive — onde "ver planos"
+  // levava aos planos ÓTICOS. Na landing de clínicas o destino é a seção de
+  // planos dela.
+  const pathname = usePathname();
+  const emMedical = pathname === "/medical" || pathname?.startsWith("/medical/") === true;
+  const planosHref = emMedical ? "/medical#precos" : "/precos";
 
   useEffect(() => {
     const dismissed = localStorage.getItem("announcement-dismissed");
@@ -41,7 +49,7 @@ export function AnnouncementBar() {
           <strong style={{ color: "var(--lp-foreground)" }}>Novo:</strong>{" "}
           o Vis já está no ar. Comece grátis hoje, sem cartão —{" "}
           <Link
-            href="/precos"
+            href={planosHref}
             className="underline underline-offset-2 hover:no-underline transition-colors"
             style={{ color: "var(--brand-primary)" }}
           >

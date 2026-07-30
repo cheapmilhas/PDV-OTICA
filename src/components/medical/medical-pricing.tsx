@@ -73,9 +73,17 @@ export function MedicalPricing() {
 
   if (erro) {
     return (
-      <p role="alert" className="mt-8 text-center text-sm text-muted-foreground">
+      <p
+        role="alert"
+        className="mt-8 text-center text-sm"
+        style={{ color: "var(--lp-muted)" }}
+      >
         Não foi possível carregar os planos agora.{" "}
-        <Link href="/registro-medical" className="font-medium text-teal-700 hover:underline">
+        <Link
+          href="/registro-medical"
+          className="font-medium hover:underline"
+          style={{ color: "var(--brand-primary)" }}
+        >
           Começar o teste grátis
         </Link>
         .
@@ -88,17 +96,24 @@ export function MedicalPricing() {
   if (plans === null) {
     return (
       <div className="mt-10 grid gap-6 sm:grid-cols-2" aria-busy="true">
-        {/* Altura MEDIDA do card renderizado em prod (404px). Reservar demais deixa buraco
-            quando o conteúdo chega; de menos, a página "pula" (layout shift). */}
-        <div className="h-[404px] animate-pulse rounded-xl bg-muted" />
-        <div className="h-[404px] animate-pulse rounded-xl bg-muted" />
+        {/* Altura aproximada do card real, para a página não "pular" quando o
+            catálogo chega (layout shift). O card ganhou padding maior (p-7) na
+            unificação visual — se o valor destoar do render, remedir em prod. */}
+        <div
+          className="h-[420px] animate-pulse rounded-2xl"
+          style={{ background: "var(--lp-surface-hover)" }}
+        />
+        <div
+          className="h-[420px] animate-pulse rounded-2xl"
+          style={{ background: "var(--lp-surface-hover)" }}
+        />
       </div>
     );
   }
 
   if (plans.length === 0) {
     return (
-      <p className="mt-8 text-center text-sm text-muted-foreground">
+      <p className="mt-8 text-center text-sm" style={{ color: "var(--lp-muted)" }}>
         Nenhum plano disponível no momento.
       </p>
     );
@@ -112,31 +127,48 @@ export function MedicalPricing() {
       {plans.map((plan) => (
         <div
           key={plan.id}
-          className={`flex flex-col rounded-xl border bg-card p-6 ${
-            plan.isFeatured ? "border-teal-600 ring-1 ring-teal-600" : "border-border"
-          }`}
+          className="flex flex-col rounded-2xl p-7"
+          style={{
+            background: "var(--lp-surface)",
+            border: plan.isFeatured
+              ? "1px solid var(--brand-primary)"
+              : "1px solid var(--lp-border)",
+            boxShadow: plan.isFeatured ? "0 6px 24px var(--brand-glow)" : "none",
+          }}
         >
           {plan.isFeatured && (
-            <span className="mb-3 self-start rounded-full bg-teal-100 px-2.5 py-0.5 text-xs font-medium text-teal-800">
+            <span
+              className="mb-3 self-start rounded-full px-2.5 py-0.5 text-xs font-semibold"
+              style={{ background: "var(--brand-tint)", color: "var(--brand-primary)" }}
+            >
               Mais escolhido
             </span>
           )}
-          <h3 className="text-lg font-semibold text-foreground">{plan.name}</h3>
+          <h3 className="text-lg font-semibold" style={{ color: "var(--lp-foreground)" }}>
+            {plan.name}
+          </h3>
           {/* A 1ª frase da descrição é o resumo ("Plano para 1 profissional.");
               o resto vira bullets abaixo. Sem esse corte, o mesmo texto
               apareceria duas vezes no card. */}
           {resumoDe(plan) && (
-            <p className="mt-1.5 text-sm text-muted-foreground">{resumoDe(plan)}</p>
+            <p className="mt-2 text-sm" style={{ color: "var(--lp-muted)" }}>
+              {resumoDe(plan)}
+            </p>
           )}
 
-          <p className="mt-5">
-            <span className="text-3xl font-bold text-foreground">
+          <p className="mt-6">
+            <span
+              className="font-heading text-3xl font-extrabold"
+              style={{ color: "var(--lp-foreground)", letterSpacing: "-0.02em" }}
+            >
               {money(plan.priceMonthly)}
             </span>
-            <span className="text-sm text-muted-foreground">/mês</span>
+            <span className="text-sm" style={{ color: "var(--lp-muted)" }}>
+              /mês
+            </span>
           </p>
           {plan.trialDays > 0 && (
-            <p className="mt-1 text-sm font-medium text-teal-700">
+            <p className="mt-1.5 text-sm font-semibold" style={{ color: "var(--brand-primary)" }}>
               {plan.trialDays} dias grátis
             </p>
           )}
@@ -148,8 +180,12 @@ export function MedicalPricing() {
                 Profissional ("para 1 profissional"). */}
             {mostrarLimite && (
               <li className="flex gap-2">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
-                <span className="text-muted-foreground">
+                <Check
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  style={{ color: "var(--brand-primary)" }}
+                  aria-hidden="true"
+                />
+                <span style={{ color: "var(--lp-muted)" }}>
                   Até {plan.maxUsers} {plan.maxUsers === 1 ? "usuário" : "usuários"}
                 </span>
               </li>
@@ -161,22 +197,40 @@ export function MedicalPricing() {
                 o card fica com substância em vez de só preço e botão. */}
             {bulletsDe(plan).map((f) => (
               <li key={f} className="flex gap-2">
-                <Check className="mt-0.5 h-4 w-4 shrink-0 text-teal-700" aria-hidden="true" />
-                <span className="text-muted-foreground">{f}</span>
+                <Check
+                  className="mt-0.5 h-4 w-4 shrink-0"
+                  style={{ color: "var(--brand-primary)" }}
+                  aria-hidden="true"
+                />
+                <span style={{ color: "var(--lp-muted)" }}>{f}</span>
               </li>
             ))}
           </ul>
 
           <Link
             href={`/registro-medical?plano=${plan.id}`}
-            className={`mt-6 inline-flex h-11 items-center justify-center rounded-lg px-5 font-medium transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 ${
+            className="group mt-7 inline-flex items-center justify-center gap-2 rounded-xl px-5 text-sm font-bold transition-colors"
+            style={
               plan.isFeatured
-                ? "bg-teal-700 text-white hover:bg-teal-800"
-                : "border border-border text-foreground hover:bg-muted"
-            }`}
+                ? {
+                    minHeight: "48px",
+                    background: "var(--gradient-brand-vivid)",
+                    color: "#fff",
+                    boxShadow: "0 6px 24px var(--brand-glow)",
+                  }
+                : {
+                    minHeight: "48px",
+                    background: "var(--lp-surface)",
+                    border: "1px solid var(--lp-border-hover)",
+                    color: "var(--lp-foreground)",
+                  }
+            }
           >
             Começar com {plan.name}
-            <ArrowRight className="ml-2 h-4 w-4" aria-hidden="true" />
+            <ArrowRight
+              className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5"
+              aria-hidden="true"
+            />
           </Link>
         </div>
       ))}

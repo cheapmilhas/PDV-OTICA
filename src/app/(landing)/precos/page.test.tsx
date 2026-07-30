@@ -31,7 +31,7 @@ describe("/precos — JSON-LD", () => {
 
   it("filtra por platformProduct VIS_APP (não deixa plano Medical vazar)", async () => {
     const { default: PrecosPage } = await import("./page");
-    await PrecosPage();
+    await PrecosPage({ searchParams: Promise.resolve({}) });
 
     expect(findMany).toHaveBeenCalledTimes(1);
     const where = findMany.mock.calls[0][0].where;
@@ -40,7 +40,7 @@ describe("/precos — JSON-LD", () => {
 
   it("mantém os filtros de plano vendável (ativo, ACTIVE, preço > 0)", async () => {
     const { default: PrecosPage } = await import("./page");
-    await PrecosPage();
+    await PrecosPage({ searchParams: Promise.resolve({}) });
 
     const where = findMany.mock.calls[0][0].where;
     expect(where.isActive).toBe(true);
@@ -52,6 +52,17 @@ describe("/precos — JSON-LD", () => {
     findMany.mockRejectedValue(new Error("db indisponível"));
 
     const { default: PrecosPage } = await import("./page");
-    await expect(PrecosPage()).resolves.toBeTruthy();
+    await expect(PrecosPage({ searchParams: Promise.resolve({}) })).resolves.toBeTruthy();
+  });
+
+  // O JSON-LD descreve a IDENTIDADE da página (preços de ÓTICA, é o que o
+  // canonical diz). Abrir na aba de clínicas por link direto não pode mudar o
+  // structured data — senão o Google veria o preço do produto errado.
+  it("mantém o JSON-LD ÓTICO mesmo abrindo na aba de clínicas", async () => {
+    const { default: PrecosPage } = await import("./page");
+    await PrecosPage({ searchParams: Promise.resolve({ produto: "clinica" }) });
+
+    const where = findMany.mock.calls[0][0].where;
+    expect(where.platformProduct).toBe("VIS_APP");
   });
 });
