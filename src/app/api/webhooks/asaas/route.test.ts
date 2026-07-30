@@ -37,6 +37,7 @@ const invoiceUpdateMany = vi.fn();
 const invoiceFindUnique = vi.fn();
 const invoiceFindMany = vi.fn();
 const companyFindUnique = vi.fn();
+const billingObligationUpdateMany = vi.fn();
 
 vi.mock("@/lib/prisma", () => ({
   prisma: {
@@ -59,6 +60,9 @@ vi.mock("@/lib/prisma", () => ({
     },
     company: {
       findUnique: (...a: unknown[]) => companyFindUnique(...a),
+    },
+    billingObligation: {
+      updateMany: (...a: unknown[]) => billingObligationUpdateMany(...a),
     },
   },
 }));
@@ -178,6 +182,11 @@ beforeEach(() => {
   invoiceUpdateMany.mockResolvedValue({ count: 1 });
   invoiceFindUnique.mockResolvedValue(null);
   invoiceFindMany.mockResolvedValue([]);
+
+  // Task 8: por padrão a fatura NÃO tem obrigação vinculada — é o estado das 8
+  // faturas legadas de produção e de toda cobrança manual. Os testes de
+  // obrigação sobrescrevem via `comObrigacao()`.
+  billingObligationUpdateMany.mockResolvedValue({ count: 1 });
 
   // Company findUnique (for name lookup inside the new block)
   companyFindUnique.mockResolvedValue({ name: "Óticas Teste" });
@@ -546,5 +555,301 @@ describe("POST /api/webhooks/asaas — cobrança avulsa por externalReference", 
         data: { asaasPaymentId: "pay_avulsa_1" },
       })
     );
+  });
+});
+
+// ─── Task 8: o webhook marca a OBRIGAÇÃO como paga ───────────────────────────
+//
+// 🔥 O defeito: o webhook não mencionava `billingObligation` em lugar nenhum.
+// O bootstrap cria obrigações `ISSUED` amarradas a faturas com PIX vivo, então
+// o cliente pagava, a fatura virava PAID e a obrigação ficava ISSUED com `dueAt`
+// no passado — o gatilho EXATO de I1: restringir quem acabou de pagar.
+describe("POST /api/webhooks/asaas — Task 8: obrigação de cobrança", () => {
+  const INVOICE_ID = "inv-com-obrigacao";
+  const OBLIGATION_ID = "obl-1";
+
+  /**
+   * Fatura resolvida por `invoice:<id>` COM obrigação vinculada.
+   *
+   * O webhook faz DUAS leituras de `invoice.findUnique`: a evidência do alvo
+   * (com `subscriptionId`, `isManual`...) e o vínculo da obrigação (`select:
+   * { billingObligation: ... }`). O mock despacha pelo `select` porque as duas
+   * consultas usam a MESMA função.
+   */
+  function comObrigacao(
+    obl: { state: string; invoiceId?: string | null; disposition?: string } | null,
+    invoiceOver: Record<string, unknown> = {},
+  ) {
+    const evidencia = {
+      id: INVOICE_ID,
+      subscriptionId: SUBSCRIPTION_DB_ID,
+      asaasPaymentId: null,
+      status: "PENDING",
+      periodEnd: new Date("2026-09-07T00:00:00Z"),
+      isManual: false,
+      ...invoiceOver,
+    };
+    const vinculo = {
+      billingObligation: obl
+        ? {
+            id: OBLIGATION_ID,
+            state: obl.state,
+            invoiceId: obl.invoiceId === undefined ? INVOICE_ID : obl.invoiceId,
+            disposition: obl.disposition ?? "CHARGE",
+          }
+        : null,
+    };
+    invoiceFindUnique.mockImplementation((args: unknown) => {
+      const select = (args as { select?: Record<string, unknown> })?.select ?? {};
+      if ("billingObligation" in select) return Promise.resolve(vinculo);
+      return Promise.resolve(evidencia);
+    });
+    subscriptionFindFirst.mockResolvedValue(null);
+    subscriptionFindUnique.mockResolvedValue({
+      id: SUBSCRIPTION_DB_ID,
+      companyId: COMPANY_ID,
+      status: "TRIAL",
+      asaasCustomerId: "cust-1",
+      asaasSubscriptionId: null,
+    });
+  }
+
+  const pagoEvent = {
+    id: "evt-obl-pago",
+    event: "PAYMENT_CONFIRMED",
+    payment: {
+      id: "pay_pix_vivo",
+      customer: "cust-1",
+      value: 189.9,
+      status: "CONFIRMED",
+      externalReference: `invoice:${INVOICE_ID}`,
+    },
+  };
+
+  const overdueEvent = {
+    id: "evt-obl-overdue",
+    event: "PAYMENT_OVERDUE",
+    payment: {
+      id: "pay_pix_vivo",
+      customer: "cust-1",
+      value: 189.9,
+      status: "OVERDUE",
+      externalReference: `invoice:${INVOICE_ID}`,
+    },
+  };
+
+  it("🔥 PAYMENT_CONFIRMED promove a obrigação ISSUED para PAID com paidAt", async () => {
+    comObrigacao({ state: "ISSUED" });
+
+    const res = await POST(makeRequest(pagoEvent));
+    expect(res.status).toBe(200);
+
+    expect(billingObligationUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: expect.objectContaining({ id: OBLIGATION_ID }),
+        data: expect.objectContaining({ state: "PAID", paidAt: expect.any(Date) }),
+      }),
+    );
+  });
+
+  it("PAYMENT_RECEIVED (boleto compensado) também promove — os dois caminhos do dinheiro", async () => {
+    comObrigacao({ state: "ISSUED" });
+
+    const res = await POST(
+      makeRequest({ ...pagoEvent, id: "evt-obl-recebido", event: "PAYMENT_RECEIVED" }),
+    );
+    expect(res.status).toBe(200);
+
+    expect(billingObligationUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ state: "PAID" }),
+      }),
+    );
+  });
+
+  it("🔑 o CAS guarda estado E invoiceId (reemissão entre a leitura e a escrita)", async () => {
+    comObrigacao({ state: "ISSUED" });
+
+    await POST(makeRequest(pagoEvent));
+
+    const [arg] = billingObligationUpdateMany.mock.calls[0] as [
+      { where: { state?: { in?: string[] }; invoiceId?: string } },
+    ];
+    // Sem `invoiceId` no WHERE, uma troca de tentativa no intervalo faria o CAS
+    // quitar o período pela fatura ERRADA.
+    expect(arg.where.invoiceId).toBe(INVOICE_ID);
+    // VOID não pode entrar na lista.
+    expect(arg.where.state?.in).toEqual(["PLANNED", "ISSUED"]);
+    expect(arg.where.state?.in).not.toContain("VOID");
+  });
+
+  it("obrigação PLANNED também é promovida (o gateway responde antes do ISSUED)", async () => {
+    comObrigacao({ state: "PLANNED" });
+
+    await POST(makeRequest(pagoEvent));
+
+    expect(billingObligationUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ state: "PAID" }) }),
+    );
+  });
+
+  it("🔥 obrigação VOID NÃO é promovida (período anulado, refeito por outra)", async () => {
+    comObrigacao({ state: "VOID" });
+
+    const res = await POST(makeRequest(pagoEvent));
+    expect(res.status).toBe(200);
+
+    // a fatura é marcada paga (dinheiro entrou), a obrigação anulada NÃO
+    expect(invoiceUpdate).toHaveBeenCalled();
+    expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("obrigação já PAID → não reescreve (idempotente em reenvio)", async () => {
+    comObrigacao({ state: "PAID" });
+
+    const res = await POST(makeRequest(pagoEvent));
+    expect(res.status).toBe(200);
+    expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("🔥 fatura paga SEM obrigação vinculada → fluxo antigo INTACTO, nada quebra", async () => {
+    // Todas as 8 faturas legadas de produção e todas as manuais/avulsas são
+    // assim, para sempre.
+    comObrigacao(null);
+
+    const res = await POST(makeRequest(pagoEvent));
+    expect(res.status).toBe(200);
+
+    // fatura paga, assinatura ativada, entitlement publicado — como antes
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        where: { id: INVOICE_ID },
+        data: expect.objectContaining({ status: "PAID" }),
+      }),
+    );
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "ACTIVE" }) }),
+    );
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
+    // e nenhuma escrita de obrigação foi tentada
+    expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+  });
+
+  it("🔥 tentativa SUPERADA paga → não promove, mas ALERTA (não é noop silencioso)", async () => {
+    // A obrigação foi reemitida: a tentativa vigente é outra fatura. O cliente
+    // pagou a antiga — se ficar em silêncio, I1 restringe quem pagou E a
+    // tentativa vigente segue cobrável.
+    comObrigacao({ state: "ISSUED", invoiceId: "inv-outra-tentativa" });
+
+    const res = await POST(makeRequest(pagoEvent));
+    expect(res.status).toBe(200);
+    expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+  });
+
+  // ── Evento FORA DE ORDEM: o cenário central da task ────────────────────────
+
+  it("🔥 PAYMENT_OVERDUE atrasado sobre obrigação PAID NÃO rebaixa a assinatura", async () => {
+    // O caso que a task existe para arbitrar: várias tentativas por obrigação,
+    // um OVERDUE de tentativa cancelada chegando depois do pagamento.
+    comObrigacao({ state: "PAID" });
+
+    const res = await POST(makeRequest(overdueEvent));
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+    // a fatura ainda é marcada OVERDUE — o financeiro precisa ver o atraso
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: INVOICE_ID }, data: { status: "OVERDUE" } }),
+    );
+  });
+
+  it("🔥 PAYMENT_OVERDUE de tentativa SUPERADA não rebaixa (mesmo com obrigação ISSUED)", async () => {
+    comObrigacao({ state: "ISSUED", invoiceId: "inv-outra-tentativa" });
+
+    const res = await POST(makeRequest(overdueEvent));
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+  });
+
+  it("PAYMENT_OVERDUE sobre obrigação ISSUED VIGENTE ainda rebaixa (não afrouxou o enforcement)", async () => {
+    comObrigacao({ state: "ISSUED" });
+
+    const res = await POST(makeRequest(overdueEvent));
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "PAST_DUE" }) }),
+    );
+    expect(publishEntitlementForCompany).toHaveBeenCalledWith(COMPANY_ID);
+  });
+
+  it("PAYMENT_OVERDUE de fatura SEM obrigação continua rebaixando (caminho legado)", async () => {
+    comObrigacao(null);
+
+    const res = await POST(makeRequest(overdueEvent));
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).toHaveBeenCalledWith(
+      expect.objectContaining({ data: expect.objectContaining({ status: "PAST_DUE" }) }),
+    );
+  });
+
+  it("🔥 chargeback sobre obrigação PAID NÃO bloqueia a clínica (I1 + I3)", async () => {
+    // Este ramo JÁ publica o entitlement, então sem a arbitragem ele bloqueia a
+    // escrita clínica na hora, sem aviso despachado — atropelando I1 e I3.
+    comObrigacao({ state: "PAID" });
+
+    const res = await POST(
+      makeRequest({
+        id: "evt-obl-chargeback",
+        event: "PAYMENT_CHARGEBACK_REQUESTED",
+        payment: {
+          id: "pay_pix_vivo",
+          customer: "cust-1",
+          value: 189.9,
+          status: "CHARGEBACK_REQUESTED",
+          externalReference: `invoice:${INVOICE_ID}`,
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    expect(subscriptionUpdateMany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+    // a fatura ainda registra o chargeback
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({
+        data: expect.objectContaining({ adminNotes: "Chargeback solicitado" }),
+      }),
+    );
+  });
+
+  it("estorno sobre obrigação PAID mantém a obrigação PAID (não restringe por I1)", async () => {
+    comObrigacao({ state: "PAID" });
+
+    const res = await POST(
+      makeRequest({
+        id: "evt-obl-refund",
+        event: "PAYMENT_REFUNDED",
+        payment: {
+          id: "pay_pix_vivo",
+          customer: "cust-1",
+          value: 189.9,
+          status: "REFUNDED",
+          externalReference: `invoice:${INVOICE_ID}`,
+        },
+      }),
+    );
+    expect(res.status).toBe(200);
+
+    // a fatura vira REFUNDED; a obrigação NÃO é revertida para ISSUED (isso
+    // casaria o gatilho de I1 e restringiria sem decisão humana nem aviso)
+    expect(invoiceUpdate).toHaveBeenCalledWith(
+      expect.objectContaining({ where: { id: INVOICE_ID }, data: { status: "REFUNDED" } }),
+    );
+    expect(billingObligationUpdateMany).not.toHaveBeenCalled();
   });
 });

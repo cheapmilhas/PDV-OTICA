@@ -17,6 +17,11 @@ import {
   type PaymentEventRefs,
   type TargetResolution,
 } from "@/lib/asaas-payment-target";
+import {
+  arbitrateAccessEvent,
+  decideObligationPromotion,
+  type ObligationEvidence,
+} from "@/lib/asaas-obligation-arbitration";
 
 const log = logger.child({ webhook: "asaas" });
 
@@ -334,6 +339,32 @@ export async function POST(request: Request) {
   const controlsAccess: boolean =
     target.kind === "resolved" ? target.controlsAccess : false;
 
+  /**
+   * Obrigação vinculada à fatura deste evento — a segunda dimensão da decisão.
+   *
+   * 🔑 `controlsAccess` (acima) responde "esta cobrança é a MENSALIDADE?" pela
+   * finalidade persistida em `Invoice.isManual`. Esta leitura responde "a dívida
+   * deste período ainda está em aberto?". Uma não substitui a outra: sem a
+   * primeira, uma taxa avulsa vencida tranca a clínica; sem a segunda, um
+   * `PAYMENT_OVERDUE` atrasado de tentativa superada rebaixa quem já pagou.
+   *
+   * Fica `null` quando a fatura não tem vínculo — as 8 faturas legadas de
+   * produção e TODA cobrança manual/avulsa, para sempre. Nesse caso o fluxo
+   * antigo segue exatamente como era.
+   */
+  let obligation: ObligationEvidence | null = null;
+  if (resolvedInvoiceId) {
+    const linked = await prisma.invoice.findUnique({
+      where: { id: resolvedInvoiceId },
+      select: {
+        billingObligation: {
+          select: { id: true, state: true, invoiceId: true, disposition: true },
+        },
+      },
+    });
+    obligation = linked?.billingObligation ?? null;
+  }
+
   // Cria/atualiza BillingEvent
   const billingEvent = await prisma.billingEvent.upsert({
     where: { externalEventId: event.id },
@@ -464,6 +495,78 @@ export async function POST(request: Request) {
             },
           });
         }
+
+        // ── A OBRIGAÇÃO É QUITADA AQUI (Task 8) ─────────────────────────────
+        //
+        // 🔥 O defeito que isto conserta: sem esta escrita a fatura virava `PAID`
+        // e a obrigação seguia `ISSUED` com `dueAt` no passado — o gatilho EXATO
+        // de I1, ou seja, restringir o acesso de quem acabou de pagar. As duas
+        // obrigações que o bootstrap cria estão amarradas a faturas com PIX vivo,
+        // então este é o caminho real, não hipótese.
+        //
+        // Vale para `PAYMENT_CONFIRMED` e `PAYMENT_RECEIVED` (mesmo `case`): PIX/
+        // cartão e boleto compensado são os dois caminhos do dinheiro, e o Asaas
+        // não garante qual chega nem em que ordem.
+        if (resolvedInvoiceId) {
+          const decision = decideObligationPromotion(resolvedInvoiceId, obligation);
+
+          if (decision.action === "promote" && obligation) {
+            // CAS com guarda de estado E de `invoiceId`.
+            //
+            // 🔑 O `invoiceId` no WHERE não é redundante com a decisão acima: ela
+            // foi tomada sobre um ponteiro LIDO antes desta escrita, e uma
+            // reemissão pode ter trocado a tentativa vigente no intervalo. Sem
+            // ele, o CAS quitaria o período pela fatura ERRADA, deixando a
+            // tentativa nova cobrável.
+            //
+            // `state` no `in` em vez de `not: PAID`: `VOID` NÃO pode ser
+            // promovida (já barrada acima, e aqui de novo — a guarda do banco é a
+            // que vale sob concorrência).
+            const promoted = await prisma.billingObligation.updateMany({
+              where: {
+                id: obligation.id,
+                invoiceId: resolvedInvoiceId,
+                state: { in: ["PLANNED", "ISSUED"] },
+              },
+              data: { state: "PAID", paidAt: new Date() },
+            });
+            if (promoted.count === 0) {
+              // Perdeu a corrida (outro evento/o motor mudou o estado ou a
+              // tentativa). Não insiste: o estado de lá é mais recente.
+              log.info("Obrigação não promovida — estado mudou entre a leitura e o CAS", {
+                eventId: event.id,
+                obligationId: obligation.id,
+                invoiceId: resolvedInvoiceId,
+              });
+            }
+          } else if (decision.action === "needs_review") {
+            log.error("Pagamento não pôde quitar a obrigação vinculada", {
+              eventId: event.id,
+              invoiceId: resolvedInvoiceId,
+              reason: decision.reason,
+            });
+            captureMessage(
+              `Webhook Asaas ${event.id}: pagamento não quitou a obrigação (${decision.reason})`,
+              { level: "warning", extra: { invoiceId: resolvedInvoiceId, companyId } },
+            );
+          } else if (decision.action === "paid_but_unresolved") {
+            // 🔴 ALERTA ALTO, não log. O cliente PAGOU e a obrigação segue em
+            // aberto: se `dueAt` já venceu, I1 restringe quem pagou, e a
+            // tentativa vigente continua cobrável — bloqueado E cobrado de novo
+            // pelo mesmo período. Precisa de mão humana hoje, não no relatório.
+            log.error("PAGAMENTO SEM QUITAR OBRIGAÇÃO — risco de restringir quem pagou", {
+              eventId: event.id,
+              invoiceId: resolvedInvoiceId,
+              companyId,
+              reason: decision.reason,
+            });
+            captureMessage(
+              `Webhook Asaas ${event.id}: PAGOU e a obrigação seguiu em aberto (${decision.reason})`,
+              { level: "error", extra: { invoiceId: resolvedInvoiceId, companyId } },
+            );
+          }
+        }
+
         if (companyId) {
           await trackServer(companyId, "payment_succeeded", {
             asaasPaymentId: event.payment?.id,
@@ -504,7 +607,28 @@ export async function POST(request: Request) {
         // implantação, hardware), então uma taxa avulsa vencida bloquearia a
         // clínica inteira. Pior ainda sem dedupe empresa+mês: de duas cobranças
         // concorrentes, a vencida rebaixaria quem já pagou a mensalidade.
-        const downgradesSubscription = subscriptionDbId !== null && controlsAccess;
+        //
+        // ── SOMA-SE a isto a arbitragem PELO ESTADO DA OBRIGAÇÃO (Task 8) ────
+        //
+        // 🔥 O caso que ela conserta: com várias TENTATIVAS por obrigação (spec
+        // §4.2 — reemitir aponta outra fatura para a mesma obrigação), um
+        // `PAYMENT_OVERDUE` atrasado da tentativa SUPERADA chega depois de a
+        // obrigação estar `PAID`. Pela regra antiga ele rebaixaria a assinatura
+        // por ser "fatura não manual vencida" — rebaixando quem já pagou.
+        //
+        // As duas condições valem JUNTAS: `controlsAccess` diz se a cobrança é a
+        // mensalidade; a arbitragem diz se a dívida do período ainda existe.
+        const accessArbitration = arbitrateAccessEvent(resolvedInvoiceId, obligation);
+        if (!accessArbitration.controls) {
+          log.info("Evento de atraso não mexe no acesso — arbitrado pela obrigação", {
+            eventId: event.id,
+            invoiceId: resolvedInvoiceId,
+            obligationId: obligation?.id,
+            reason: accessArbitration.reason,
+          });
+        }
+        const downgradesSubscription =
+          subscriptionDbId !== null && controlsAccess && accessArbitration.controls;
         if (downgradesSubscription) {
           // H6/idempotência: NÃO sobrescrever pastDueSince num reenvio do
           // mesmo OVERDUE — isso resetaria o relógio de dunning (suspensão/
@@ -569,6 +693,31 @@ export async function POST(request: Request) {
             data: { status: "REFUNDED" },
           });
         }
+        // Task 8 — a OBRIGAÇÃO permanece `PAID` de propósito. Ver a justificativa
+        // completa em `REFUND_KEEPS_OBLIGATION_PAID`
+        // (`lib/asaas-obligation-arbitration.ts`): reverter para `ISSUED` com
+        // `dueAt` no passado casaria o gatilho de I1 e restringiria o cliente
+        // AUTOMATICAMENTE, sem decisão humana e sem o aviso que I3 exige; e o
+        // webhook não sabe se o estorno foi cortesia, cobrança duplicada ou
+        // disputa. `VOID` seria pior — perdoaria uma dívida que segue devida.
+        //
+        // 🔴 DÍVIDA ASSUMIDA: `PAID` passa a significar "houve pagamento", não
+        // "está quitada". Quem estorna todo mês fica com acesso de graça e nenhum
+        // relatório que leia só `state` enxerga. O estado que falta (`REVERSED`) é
+        // migração, fora do escopo desta task. Mitigação de hoje: alerta + a
+        // divergência é consultável cruzando `state = PAID` com
+        // `Invoice.status = REFUNDED` — par que a tela da Task 10 deve mostrar.
+        if (obligation && obligation.state === "PAID") {
+          log.warn("Estorno sobre obrigação quitada — obrigação segue PAID (decisão)", {
+            eventId: event.id,
+            obligationId: obligation.id,
+            invoiceId: resolvedInvoiceId,
+          });
+          captureMessage(
+            `Webhook Asaas ${event.id}: estorno sobre obrigação quitada ${obligation.id} — receita revertida, revisar`,
+            { level: "warning", extra: { invoiceId: resolvedInvoiceId, companyId } },
+          );
+        }
         break;
       }
 
@@ -593,7 +742,35 @@ export async function POST(request: Request) {
         // Chargeback de uma taxa avulsa não pode trancar a clínica — antes desta
         // correção ele nem resolvia assinatura, e alargar isso aqui seria
         // regressão nova, não conserto.
-        const chargebackHitsSubscription = subscriptionDbId !== null && controlsAccess;
+        //
+        // A arbitragem por obrigação vale AQUI TAMBÉM, e este ramo é o mais
+        // urgente dos dois: ele já publica o entitlement, então hoje um
+        // chargeback sobre um período QUITADO bloqueia a escrita clínica na hora
+        // — sem checar `DunningEvent` despachado, o que também atropela I3. Com
+        // a obrigação `PAID`, o cliente está em dia pela fonte que I1 usa;
+        // rebaixá-lo aqui criaria duas verdades contraditórias, e a que restringe
+        // seria justamente a que I1 não reconhece.
+        //
+        // ⚠️ Isto NÃO deixa o chargeback impune: a fatura vira `OVERDUE` com
+        // `adminNotes` (acima) e o alerta operacional continua. O que sai é o
+        // bloqueio AUTOMÁTICO por trás da máscara de inadimplência. Suspensão
+        // preventiva antifraude, se for desejada, é política EXPLÍCITA e própria
+        // — não um efeito colateral deste ramo.
+        const chargebackArbitration = arbitrateAccessEvent(resolvedInvoiceId, obligation);
+        if (!chargebackArbitration.controls) {
+          log.warn("Chargeback sobre período quitado/superado — acesso NÃO rebaixado", {
+            eventId: event.id,
+            invoiceId: resolvedInvoiceId,
+            obligationId: obligation?.id,
+            reason: chargebackArbitration.reason,
+          });
+          captureMessage(
+            `Webhook Asaas ${event.id}: chargeback sobre obrigação ${obligation?.state} — revisar manualmente`,
+            { level: "warning", extra: { invoiceId: resolvedInvoiceId, companyId } },
+          );
+        }
+        const chargebackHitsSubscription =
+          subscriptionDbId !== null && controlsAccess && chargebackArbitration.controls;
         if (chargebackHitsSubscription) {
           await prisma.subscription.updateMany({
             where: { id: subscriptionDbId!, status: { notIn: ["SUSPENDED", "CANCELED"] } },
