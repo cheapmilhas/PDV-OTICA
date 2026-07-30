@@ -9,7 +9,6 @@ import {
   isComingSoon,
   type PublicPlan,
 } from "@/lib/plan-display";
-import { ComingSoonInterestModal } from "@/components/plan/coming-soon-interest-modal";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
 import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
 
@@ -23,7 +22,6 @@ const PLAN_ICONS = {
 export function PricingSection() {
   const [annual, setAnnual] = useState(false);
   const [plans, setPlans] = useState<PublicPlan[]>([]);
-  const [interest, setInterest] = useState<PublicPlan | null>(null);
 
   useEffect(() => {
     fetch("/api/public/plans")
@@ -31,6 +29,17 @@ export function PricingSection() {
       .then((d) => setPlans(d.plans ?? []))
       .catch(() => setPlans([]));
   }, []);
+
+  // A contagem de planos é DADO, não constante: `isActive` é editável pelo admin
+  // (api/admin/plans/[id]/route.ts:30) e o plano Empresarial está no banco a um
+  // clique de aparecer. Um grid cravado em 5 colunas quebraria em silêncio nesse
+  // dia (2 ativos + 3 em breve = 7 colunas de conteúdo num grid de 5).
+  //
+  // Destacar só faz sentido quando existe UM plano contratável. Qualquer outra
+  // contagem cai no layout de 4 colunas — que é exatamente o que já roda hoje.
+  const ativos = plans.filter((p) => !isComingSoon(p));
+  const destacar = ativos.length === 1;
+  const classeGrid = destacar ? "lg:grid-cols-5" : "lg:grid-cols-4";
 
   return (
     <section
@@ -135,9 +144,12 @@ export function PricingSection() {
           </div>
         </motion.div>
 
-        {/* Loading skeleton — no fake prices */}
+        {/* Loading skeleton — no fake prices.
+            MESMAS classes do caso de fallback do grid real. Não imita o
+            destaque de propósito: o esqueleto renderiza antes do fetch e não
+            sabe quantos planos virão — fingir que sabe daria um salto pior. */}
         {plans.length === 0 ? (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch">
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch max-w-6xl mx-auto">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -178,14 +190,19 @@ export function PricingSection() {
           </div>
         ) : (
           <>
-          {/* Planos disponíveis em destaque; "Em breve" ficam num rodapé compacto
-              (roadmap) para não competirem como colunas vazias. */}
+          {/* UM grid só, com ativos e "em breve" lado a lado como colunas do mesmo
+              conjunto — é o catálogo inteiro, não uma lista mais um rodapé.
+              Os "em breve" vêm DEPOIS (ordenados abaixo) e se distinguem pelo
+              tratamento visual, não pela posição na página: borda tracejada, fundo
+              recuado, sem preço e sem botão.
+              Largura acompanha a contagem: com 4 planos, `max-w-3xl` apertaria as
+              colunas — daí `max-w-6xl` e até 4 colunas em telas grandes. */}
           <motion.div
             variants={staggerContainer}
             initial="hidden"
             whileInView="visible"
             viewport={viewportConfig}
-            className="grid grid-cols-1 md:grid-cols-2 gap-5 items-stretch max-w-3xl mx-auto"
+            className={`grid grid-cols-1 sm:grid-cols-2 ${classeGrid} gap-5 items-stretch max-w-6xl mx-auto`}
           >
             {plans.filter((p) => !isComingSoon(p)).map((plan) => {
               const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
@@ -212,7 +229,9 @@ export function PricingSection() {
                       ? { y: -6, transition: { duration: 0.28, ease: [0.25, 1, 0.5, 1] } }
                       : { y: -4, transition: { duration: 0.28, ease: [0.25, 1, 0.5, 1] } }
                   }
-                  className="relative rounded-2xl p-7 flex flex-col transition-all duration-300"
+                  className={`relative rounded-2xl p-7 flex flex-col transition-all duration-300 ${
+                    destacar ? "sm:col-span-2 lg:col-span-2" : ""
+                  }`}
                   style={
                     isHighlighted
                       ? {
@@ -403,84 +422,75 @@ export function PricingSection() {
                 </motion.div>
               );
             })}
-          </motion.div>
 
-          {/* Roadmap — planos "Em breve" em cards compactos, sem competir com os ativos */}
-          {plans.some((p) => isComingSoon(p)) && (
-            <motion.div
-              initial={{ opacity: 0, y: 12 }}
-              whileInView={{ opacity: 1, y: 0 }}
-              viewport={viewportConfig}
-              transition={{ duration: 0.3 }}
-              className="mt-10"
-            >
-              <p
-                className="text-xs font-bold uppercase tracking-widest mb-4"
-                style={{ color: "var(--lp-subtle)", letterSpacing: "0.15em" }}
-              >
-                No radar
-              </p>
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {plans.filter((p) => isComingSoon(p)).map((plan) => {
+            {/* Planos "Em breve" — MESMAS colunas do grid acima, fechado logo abaixo.
+                Sem preço, sem botão e sem modal de interesse: ainda não há o que
+                contratar, e mostrar valor de plano indisponível (dois deles estão
+                com preço 0 no banco) seria anunciar o que não se pode vender.
+                O que os distingue é o tratamento visual, não o tamanho. */}
+            {plans.filter((p) => isComingSoon(p)).map((plan) => {
                   const Icon = PLAN_ICONS[plan.slug as keyof typeof PLAN_ICONS] ?? Zap;
                   return (
-                    <button
+                    <motion.div
                       key={plan.id}
-                      type="button"
-                      onClick={() => setInterest(plan)}
-                      className="group flex items-center gap-3 rounded-xl p-4 text-left transition-colors"
+                      variants={fadeInUp}
+                      className="relative rounded-2xl p-7 flex flex-col"
                       style={{
                         background: "var(--lp-background)",
-                        border: "1px solid var(--lp-border)",
+                        border: "1px dashed var(--lp-border-hover)",
                       }}
                     >
-                      <div
-                        className="flex h-9 w-9 items-center justify-center rounded-lg flex-shrink-0"
-                        style={{ background: "var(--lp-surface)", border: "1px solid var(--lp-border)" }}
-                      >
-                        <Icon className="h-4 w-4" style={{ color: "var(--lp-muted)" }} />
-                      </div>
-                      <div className="min-w-0 flex-1">
-                        <div className="flex items-center gap-2">
-                          <h3
-                            className="font-heading font-bold truncate"
-                            style={{ color: "var(--lp-foreground)", fontSize: "0.9375rem" }}
-                          >
-                            {plan.name}
-                          </h3>
-                          <span
-                            className="inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[0.625rem] font-bold flex-shrink-0"
-                            style={{
-                              background: "var(--lp-surface)",
-                              border: "1px solid var(--lp-border-hover)",
-                              color: "var(--lp-muted)",
-                            }}
-                          >
-                            <Bell className="h-2.5 w-2.5" />
-                            Em breve
-                          </span>
+                      <div className="flex items-center gap-3">
+                        <div
+                          className="flex h-10 w-10 items-center justify-center rounded-xl flex-shrink-0"
+                          style={{
+                            background: "var(--lp-surface)",
+                            border: "1px solid var(--lp-border)",
+                          }}
+                        >
+                          <Icon className="h-5 w-5" style={{ color: "var(--lp-subtle)" }} />
                         </div>
-                        {plan.description && (
-                          <p
-                            className="truncate"
-                            style={{ color: "var(--lp-subtle)", fontSize: "0.75rem" }}
-                          >
-                            {plan.description}
-                          </p>
-                        )}
+                        <span
+                          className="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[0.6875rem] font-bold"
+                          style={{
+                            background: "var(--lp-surface)",
+                            border: "1px solid var(--lp-border-hover)",
+                            color: "var(--lp-muted)",
+                          }}
+                        >
+                          <Bell className="h-2.5 w-2.5" />
+                          Em breve
+                        </span>
                       </div>
-                      <span
-                        className="text-xs font-semibold flex-shrink-0 transition-colors group-hover:underline"
-                        style={{ color: "var(--brand-primary)" }}
+
+                      <h3
+                        className="font-heading font-bold mt-5"
+                        style={{ color: "var(--lp-foreground)", fontSize: "1.125rem" }}
                       >
-                        Avise-me
-                      </span>
-                    </button>
+                        {plan.name}
+                      </h3>
+
+                      {plan.description && (
+                        <p
+                          className="mt-2 text-sm"
+                          style={{ color: "var(--lp-muted)", lineHeight: 1.6 }}
+                        >
+                          {plan.description}
+                        </p>
+                      )}
+
+                      {/* Empurra a nota para o rodapé do card, alinhando-a entre
+                          os cards mesmo com descrições de tamanhos diferentes. */}
+                      <p
+                        className="mt-auto pt-6 text-xs"
+                        style={{ color: "var(--lp-subtle)" }}
+                      >
+                        Ainda não disponível para contratação.
+                      </p>
+                    </motion.div>
                   );
                 })}
-              </div>
-            </motion.div>
-          )}
+          </motion.div>
           </>
         )}
 
@@ -492,12 +502,10 @@ export function PricingSection() {
         </p>
       </div>
 
-      <ComingSoonInterestModal
-        open={!!interest}
-        planSlug={interest?.slug ?? ""}
-        planName={interest?.name ?? ""}
-        onClose={() => setInterest(null)}
-      />
+      {/* O modal de interesse ("Avise-me") saiu junto com o botão dos cards
+          "Em breve", que agora são meramente informativos. O componente
+          `ComingSoonInterestModal` foi PRESERVADO em components/plan/ — se a
+          captura de interesse voltar, é só religar o gatilho aqui. */}
     </section>
   );
 }
