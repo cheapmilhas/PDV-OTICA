@@ -75,6 +75,8 @@ export function ProductCta({ role, variant }: { role: Role; variant: Variant }) 
   const containerRef = useRef<HTMLDivElement>(null);
   const botaoRef = useRef<HTMLButtonElement>(null);
   const itensRef = useRef<Array<HTMLAnchorElement | null>>([]);
+  /** Sinaliza que a abertura veio do TECLADO — só então o foco vai ao 1º item. */
+  const focarAoAbrir = useRef(false);
 
   /** Move o foco entre os itens do menu (roving focus). */
   function focarItem(indice: number) {
@@ -119,16 +121,25 @@ export function ProductCta({ role, variant }: { role: Role; variant: Variant }) 
       focarItem(0);
     } else if (e.key === "End") {
       e.preventDefault();
-      focarItem(itensRef.current.length - 1);
+      focarItem(-1);
     }
   }
 
-  /** Abre o menu e põe o foco no 1º item — o que o teclado espera de um menu. */
   function abrirEFocar() {
+    focarAoAbrir.current = true;
     setAberto(true);
-    // O item só existe/está visível após o render, daí o timeout de 1 tick.
-    setTimeout(() => focarItem(0), 0);
   }
+
+  // O foco só pode ir ao item DEPOIS que o React commitou a remoção do `hidden`:
+  // no navegador, .focus() em subárvore display:none é no-op SILENCIOSO — o menu
+  // abriria visualmente com o foco preso no botão, sem saída pelo teclado.
+  // Nenhum teste em jsdom pega isso (lá não há CSS, então .focus() sempre
+  // funciona): a garantia vem do padrão estar correto por construção. NÃO trocar
+  // de volta por setTimeout só porque o teste fica verde.
+  useEffect(() => {
+    if (aberto && focarAoAbrir.current) focarItem(0);
+    if (!aberto) focarAoAbrir.current = false;
+  }, [aberto]);
 
   const ehPrimario = role === "cadastrar";
 
@@ -199,10 +210,10 @@ export function ProductCta({ role, variant }: { role: Role; variant: Variant }) 
         type="button"
         aria-haspopup="menu"
         aria-expanded={aberto}
-        onClick={() => (aberto ? setAberto(false) : abrirEFocar())}
+        onClick={() => setAberto((v) => !v)}
         onKeyDown={(e) => {
-          // Seta para baixo abre o menu já com o foco no 1º item.
-          if (e.key === "ArrowDown" && !aberto) {
+          // Enter, Espaço e seta para baixo abrem o menu já com foco no 1º item.
+          if (!aberto && (e.key === "ArrowDown" || e.key === "Enter" || e.key === " ")) {
             e.preventDefault();
             abrirEFocar();
           }
@@ -216,7 +227,9 @@ export function ProductCta({ role, variant }: { role: Role; variant: Variant }) 
         )}
       </button>
 
-      {/* O nó fica montado mesmo fechado para o teste poder ler os destinos.
+      {/* O nó fica montado mesmo fechado: evita remontar a cada abertura e, com
+          ele já no DOM, o foco não corre atrás de elemento que acabou de nascer.
+          (De lambuja, o teste consegue ler os destinos com `{ hidden: true }`.)
           NÃO é por acessibilidade: com a classe `hidden` o navegador aplica
           display:none e o nó sai da árvore de acessibilidade de qualquer forma.
           Por isso o estado fechado é afirmado TAMBÉM no markup (`aria-hidden` e

@@ -12,12 +12,6 @@ import { render, screen } from "@testing-library/react";
 const usePathname = vi.fn();
 vi.mock("next/navigation", () => ({ usePathname: () => usePathname() }));
 
-// framer-motion: substituído por elementos simples — animação não interessa aqui.
-vi.mock("framer-motion", () => ({
-  motion: { div: (p: Record<string, unknown>) => <div {...p} /> },
-  AnimatePresence: ({ children }: { children: React.ReactNode }) => <>{children}</>,
-}));
-
 import { ProductCta } from "./product-cta";
 
 describe("ProductCta — rota declara o segmento", () => {
@@ -143,5 +137,39 @@ describe("ProductCta — teclado", () => {
     itens[0].focus();
     fireEvent.keyDown(itens[0], { key: "ArrowDown" });
     expect(document.activeElement).toBe(itens[1]);
+  });
+
+  it("ArrowUp no 1º item circula para o ÚLTIMO", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    usePathname.mockReturnValue("/");
+    render(<ProductCta role="entrar" variant="desktop" />);
+    fireEvent.click(screen.getByRole("button"));
+    const itens = screen.getAllByRole("menuitem");
+    itens[0].focus();
+    fireEvent.keyDown(itens[0], { key: "ArrowUp" });
+    expect(document.activeElement).toBe(itens[itens.length - 1]);
+  });
+
+  it("ArrowDown no botão fechado abre o menu E foca o 1º item", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    usePathname.mockReturnValue("/");
+    render(<ProductCta role="entrar" variant="desktop" />);
+    const botao = screen.getByRole("button");
+    fireEvent.keyDown(botao, { key: "ArrowDown" });
+    expect(botao.getAttribute("aria-expanded")).toBe("true");
+    expect(document.activeElement).toBe(screen.getAllByRole("menuitem")[0]);
+  });
+
+  it("End vai para o último item e Home volta para o primeiro", async () => {
+    const { fireEvent } = await import("@testing-library/react");
+    usePathname.mockReturnValue("/");
+    render(<ProductCta role="entrar" variant="desktop" />);
+    fireEvent.click(screen.getByRole("button"));
+    const itens = screen.getAllByRole("menuitem");
+    itens[0].focus();
+    fireEvent.keyDown(itens[0], { key: "End" });
+    expect(document.activeElement).toBe(itens[itens.length - 1]);
+    fireEvent.keyDown(document.activeElement!, { key: "Home" });
+    expect(document.activeElement).toBe(itens[0]);
   });
 });
