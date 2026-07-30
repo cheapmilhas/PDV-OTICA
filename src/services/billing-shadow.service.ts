@@ -12,6 +12,8 @@ import {
 import { isShadowModeEnabled } from "@/lib/billing-engine-flags";
 import { hasDispatchedNotice } from "@/services/dunning-event.service";
 import { WRITE_RESTRICTION_DAY } from "@/lib/subscription-grace";
+import { formatInTimeZone } from "date-fns-tz";
+import { TIMEZONE } from "@/lib/date-utils";
 
 const log = logger.child({ service: "billing-shadow" });
 
@@ -56,12 +58,28 @@ const log = logger.child({ service: "billing-shadow" });
  *    nunca chegar ao relatório.
  *
  * Então o custo aceito é o oposto: este módulo é uma SEGUNDA implementação da
- * leitura, e pode divergir do motor se um dos dois mudar. A mitigação é que
- * toda a REGRA vive nos módulos puros compartilhados
- * (`resolveEffectiveSubscription`, `resolveNextObligationPlan`,
- * `resolveObligationDisposition`, `resolveObligationPriceCents`,
- * `periodsOverlap`) — aqui só mora a leitura do banco e a ordem das guardas. O
- * que pode divergir é a ordem, não a aritmética do dinheiro.
+ * leitura, e PODE DIVERGIR DO MOTOR.
+ *
+ * ⚠️ Não subestime esse custo — ele já se materializou três vezes nesta task:
+ * `DRAFT` tratada como cobrável, a disposição GRAVADA ignorada, e a obrigação
+ * pendente lida sem recálculo. Nenhuma das três foi diferença de "ordem" ou de
+ * "aritmética": foram GUARDAS INTEIRAS que existiam só no motor. E como o motor
+ * vai continuar ganhando guardas, haverá uma quarta.
+ *
+ * A defesa é em três camadas, e nenhuma delas sozinha basta:
+ *
+ * 1. A REGRA vive nos módulos puros compartilhados
+ *    (`resolveEffectiveSubscription`, `resolveNextObligationPlan`,
+ *    `resolveObligationDisposition`, `resolveObligationPriceCents`,
+ *    `periodsOverlap`) — a aritmética do dinheiro é a MESMA função, não uma cópia.
+ * 2. Um teste de PARIDADE extrai os `reason:` do motor e falha quando aparece um
+ *    que este módulo não reproduz nem justificou como inaplicável. Ele pega
+ *    guarda NOVA; não pega mudança de semântica numa guarda existente.
+ * 3. Testes por caso para cada guarda reproduzida — é o que pega semântica.
+ *
+ * O teste de paridade explica no próprio corpo por que não se comparou motor e
+ * sombra lado a lado sobre o mesmo estado (exigiria deixar o motor alcançar a
+ * fase 3 dentro da suíte do sombra, ou seja, o gateway).
  *
  * ## O que este modo NÃO prova (spec §7, etapa 3)
  *
@@ -493,26 +511,40 @@ type PeriodoAlvo =
   | { reason: ShadowReason; note: string };
 
 /**
- * Reavalia uma obrigação já materializada (`PLANNED`) como a FASE 2 do motor
- * faria — e não como ela está gravada.
+ * Reavalia uma obrigação já materializada (`PLANNED`) como o motor faria.
  *
- * 🔑 O PERÍODO é congelado; a DISPOSIÇÃO e o PREÇO não. `reserveAttempt`
- * (`billing-obligation.service.ts`) recalcula os dois dentro do lock antes de
- * emitir, porque o preço é congelado na EMISSÃO, não na criação. Ler os valores
- * gravados faria o relatório mentir em quatro casos reais: cortesia concedida
- * depois da materialização (o motor quita, o sombra diria "cobraria"), plano que
- * virou interno, reajuste/desconto aplicado no intervalo, e preço de plano
- * inválido (o motor falha antes do gateway).
+ * 🔑 O motor faz DUAS coisas, e o sombra tem que fazer as duas:
  *
- * O ciclo, esse sim, é comparado com o congelado: trocar mensal↔anual depois de
- * o período estar fechado cobraria um ano pelo período de um mês, e o motor
- * exige anulação manual em vez de recalcular em silêncio.
+ * 1. **RESPEITA a disposição GRAVADA quando ela não é `CHARGE`.** A guarda de
+ *    `runObligationForCompany` (`billing-obligation.service.ts`, "Só `CHARGE`
+ *    chega ao gateway") lê a disposição como está no banco e, se for
+ *    `COURTESY`, `INTERNAL` ou `LEGACY_WAIVED`, quita a linha e devolve
+ *    `settled` — nunca cobra. Isso acontece ANTES de qualquer recálculo.
+ *
+ * 2. **RECALCULA disposição e preço quando a gravada é `CHARGE`.** O preço é
+ *    congelado na EMISSÃO, não na criação, então `reserveAttempt` refaz a conta
+ *    dentro do lock. Ler o valor gravado faria o relatório mentir com cortesia
+ *    concedida depois da materialização, plano que virou interno, ou reajuste
+ *    aplicado no intervalo.
+ *
+ * ⚠️ Fazer só (2) — como esta função fazia antes — inverte o erro em vez de
+ * corrigi-lo: uma linha `LEGACY_WAIVED` seria recalculada como `CHARGE` e o
+ * relatório afirmaria que o motor cobraria um período que o dono declarou
+ * encerrado. Não é hipótese: o bootstrap escreve `LEGACY_WAIVED` em massa no
+ * passado regularizado, e a ordem prevista é bootstrap → sombra → emissão — ou
+ * seja, o relatório seria lido exatamente na janela em que estaria errado.
+ *
+ * O ciclo é comparado com o congelado: trocar mensal↔anual depois de o período
+ * estar fechado cobraria um ano pelo período de um mês, e o motor exige
+ * anulação manual em vez de recalcular em silêncio.
  */
 async function reavaliarPendente(
   pending: {
     periodStart: Date;
     periodEnd: Date;
     cycle: "MONTHLY" | "YEARLY";
+    disposition: PrismaObligationDisposition;
+    priceCents: number;
   },
   sub: {
     id: string;
@@ -524,6 +556,26 @@ async function reavaliarPendente(
   prisma: typeof defaultPrisma,
   now: Date,
 ): Promise<PeriodoAlvo> {
+  // 🔑 PRIMEIRO de todos, como no motor: disposição GRAVADA que não é `CHARGE`
+  // encerra a decisão aqui. O motor quita a linha e devolve `settled` sem
+  // recalcular nada — e `LEGACY_WAIVED` (passado que o dono declarou encerrado)
+  // é justamente a que menos pode voltar a ser cobrada. Recalcular por cima dela
+  // devolveria `CHARGE` e o relatório prometeria uma cobrança que não existe.
+  //
+  // Vem antes até da guarda de ciclo: numa linha isenta o ciclo é irrelevante,
+  // porque não há preço a recalcular de jeito nenhum.
+  if (pending.disposition !== "CHARGE") {
+    return {
+      periodStart: pending.periodStart,
+      periodEnd: pending.periodEnd,
+      disposition: pending.disposition,
+      // O preço GRAVADO, não recalculado: numa linha isenta ele é o registro do
+      // que se deixou de faturar, e refazer a conta com o plano de hoje
+      // reescreveria um número histórico que o bootstrap já fechou.
+      priceCents: pending.priceCents,
+    };
+  }
+
   if (sub.billingCycle !== pending.cycle) {
     return {
       reason: "needs_review",
@@ -883,7 +935,7 @@ function renderResumo(input: {
     input;
   const linhas: string[] = [];
 
-  linhas.push(`MODO SOMBRA — rodada de ${runAt.toISOString()}`);
+  linhas.push(`MODO SOMBRA — rodada de ${dataHora(runAt)}`);
   linhas.push(`Nada foi cobrado, nada foi enviado, ninguém foi restringido.`);
   linhas.push(
     `${decisions.length} decisão(ões) avaliada(s); ${persistidas} coube(ram) na tabela billing_shadow_decisions.`,
@@ -1016,6 +1068,20 @@ function reais(cents: number): string {
   return `R$ ${(cents / 100).toFixed(2).replace(".", ",")}`;
 }
 
+/**
+ * Data no fuso do cliente, no formato que o dono lê — não UTC cru.
+ *
+ * O banco guarda UTC e a Vercel roda em UTC; imprimir `toISOString()` mostraria
+ * "2026-09-04" para um período que, em `America/Sao_Paulo`, começa no dia 3. Num
+ * documento cujo propósito é o dono conferir A QUEM e QUANDO se cobraria, um dia
+ * de diferença é erro de leitura. `formatInTimeZone` + `TIMEZONE` é a fonte
+ * única deste repo para isso.
+ */
 function dia(date: Date): string {
-  return date.toISOString().slice(0, 10);
+  return formatInTimeZone(date, TIMEZONE, "dd/MM/yyyy");
+}
+
+/** Data e hora da rodada, no mesmo fuso e com o mesmo motivo. */
+function dataHora(date: Date): string {
+  return formatInTimeZone(date, TIMEZONE, "dd/MM/yyyy 'às' HH:mm");
 }

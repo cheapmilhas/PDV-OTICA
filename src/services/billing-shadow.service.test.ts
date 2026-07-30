@@ -214,9 +214,13 @@ describe("garantia estrutural — o modo sombra não alcança o Asaas", () => {
       if (visitados.has(arquivo)) continue;
 
       const fonte = readFileSync(arquivo, "utf8");
-      // Pega `import ... from "x"`, `export ... from "x"` e `import("x")`.
+      // Pega `import ... from "x"`, `export ... from "x"`, `import("x")` e
+      // `require("x")`. O `require` entrou depois de a revisão furar a versão
+      // anterior com ele: em ESM um require de topo quebraria ruidosamente, mas
+      // um buraco estreito num teste que existe para impedir cobrança indevida
+      // não se deixa aberto por ser estreito.
       const especificadores = [
-        ...fonte.matchAll(/(?:from|import)\s*\(?\s*["']([^"']+)["']/g),
+        ...fonte.matchAll(/(?:from|import|require)\s*\(?\s*["']([^"']+)["']/g),
       ].map((m) => m[1]);
 
       visitados.set(arquivo, especificadores);
@@ -269,6 +273,103 @@ describe("garantia estrutural — o modo sombra não alcança o Asaas", () => {
     expect(fonte).not.toContain("billingObligation.update");
     expect(fonte).not.toContain("invoice.create");
     expect(fonte).not.toContain("$executeRaw");
+  });
+});
+
+// ═════════════════════════════════════════════════════════════════════════════
+// PARIDADE DE GUARDAS — o alarme para quando o motor ganhar uma guarda nova
+// ═════════════════════════════════════════════════════════════════════════════
+
+describe("paridade com as guardas do motor", () => {
+  /**
+   * 🔑 POR QUE ESTE TESTE EXISTE. O modo sombra é uma SEGUNDA implementação da
+   * leitura (ver a docstring do serviço), e o custo dessa escolha é exatamente
+   * este: uma guarda nova no motor pode nascer ausente aqui, e o relatório passa
+   * a prometer cobrança que o motor recusaria. Já aconteceu duas vezes nesta
+   * task — `DRAFT` tratada como cobrável, e a disposição GRAVADA ignorada.
+   *
+   * O que este teste consegue provar, de forma robusta: toda guarda do motor
+   * emite um `reason:` literal, e esse conjunto é extraível do fonte. Se o motor
+   * ganhar um motivo que o sombra não conhece nem justificou, o teste falha e
+   * obriga uma decisão consciente.
+   *
+   * O que ele NÃO prova, e não há como provar por análise estática: que a
+   * SEMÂNTICA de cada guarda seja equivalente. Um `needs_review` novo no motor,
+   * com condição diferente, reusa um motivo já mapeado e passaria por aqui — foi
+   * o caso da disposição gravada, que caiu em `settled`, um desfecho já
+   * conhecido. Contra isso a defesa é o teste por caso (acima), não este.
+   *
+   * A alternativa considerada e recusada: rodar motor e sombra lado a lado sobre
+   * o mesmo estado e comparar. Ela provaria semântica de verdade, mas exigiria
+   * dar ao motor um banco falso ESCRITÁVEL e deixá-lo chegar à fase 3 — ou seja,
+   * ao gateway — dentro da suíte do sombra. É precisamente a fronteira que o
+   * teste de grafo de imports existe para manter fechada, e um mock mal
+   * configurado ali é dinheiro real. Não vale o risco.
+   */
+
+  /** Motivos do motor que o sombra reproduz, com o motivo equivalente aqui. */
+  const MAPEADOS: Record<string, string> = {
+    // Guardas com equivalente direto no sombra.
+    no_effective_subscription: "no_effective_subscription",
+    ambiguous_subscription: "ambiguous_subscription",
+    company_not_found: "company_not_found",
+    native_asaas_subscription: "native_asaas_subscription",
+    needs_bootstrap: "needs_bootstrap",
+    outside_horizon: "outside_horizon",
+    missing_document: "missing_document",
+    unmapped_invoice_overlap: "unmapped_invoice_overlap",
+    needs_review: "needs_review",
+    already_settled: "already_settled",
+    invalid_calendar: "invalid_data",
+    invalid_price: "invalid_data",
+    unexpected: "invalid_data",
+    courtesy: "courtesy",
+
+    // Guardas deliberadamente SEM equivalente — cada uma com o porquê.
+    //
+    // O sombra tem a própria flag (`shadow_disabled`) e não observa a etapa 1.
+    generation_disabled: "N/A: flag de outra etapa do rollout",
+    // O sombra roda justamente COM a emissão desligada; é a premissa dele.
+    issuance_not_enabled: "N/A: o modo sombra existe porque a emissão está off",
+    // Corridas e locks não existem no sombra: ele não escreve e não pega lock.
+    attempt_race: "N/A: o sombra não reserva tentativa (não escreve)",
+    lock_timeout: "N/A: o sombra não pega advisory lock",
+    // Só alcançável na fase 3, que o sombra declaradamente não exercita.
+    gateway_error: "N/A: fase 3 (gateway) — declarado em SHADOW_NAO_PROVA",
+  };
+
+  it("todo motivo do motor está mapeado ou justificado como ausente", () => {
+    const fonte = readFileSync(
+      resolve(process.cwd(), "src/services/billing-obligation.service.ts"),
+      "utf8",
+    );
+    const doMotor = new Set(
+      [...fonte.matchAll(/reason:\s*"([a-z_]+)"/g)].map((m) => m[1]),
+    );
+
+    expect(doMotor.size).toBeGreaterThan(10); // sanidade da extração
+
+    const naoMapeados = [...doMotor].filter((r) => !(r in MAPEADOS));
+
+    expect(
+      naoMapeados,
+      `O motor ganhou guarda(s) que o modo sombra não conhece: ${naoMapeados.join(", ")}.\n` +
+        `O sombra é uma SEGUNDA implementação da leitura — uma guarda nova no motor\n` +
+        `NÃO aparece aqui sozinha, e o relatório passa a prometer cobrança que o\n` +
+        `motor recusaria. Decida conscientemente: ou reproduza a guarda em\n` +
+        `billing-shadow.service.ts, ou registre em MAPEADOS por que ela não se aplica.`,
+    ).toEqual([]);
+  });
+
+  it("a disposição GRAVADA não-CHARGE é uma guarda do motor que o sombra reproduz", () => {
+    // Trava específica do defeito que escapou: o motor decide pela disposição
+    // como está no banco antes de recalcular. Se essa guarda sumir do sombra,
+    // os testes de caso caem — este documenta que ela é obrigatória.
+    const sombra = readFileSync(
+      resolve(process.cwd(), "src/services/billing-shadow.service.ts"),
+      "utf8",
+    );
+    expect(sombra).toContain('pending.disposition !== "CHARGE"');
   });
 });
 
@@ -525,6 +626,62 @@ describe("obrigação PLANNED é reavaliada, não lida como está gravada", () =
       ...over,
     };
   }
+
+  it("LEGACY_WAIVED gravada: NUNCA cobra — o motor quita e devolve settled", async () => {
+    // 🔑 O passado que o dono declarou encerrado. O motor lê a disposição
+    // GRAVADA antes de recalcular qualquer coisa e devolve `settled`. Recalcular
+    // por cima devolveria "CHARGE" e o relatório prometeria uma cobrança que o
+    // motor não faria — justamente na janela bootstrap → sombra → emissão, em
+    // que o bootstrap acabou de escrever LEGACY_WAIVED em massa.
+    state.obligations = [pendente({ disposition: "LEGACY_WAIVED" })];
+
+    const [d] = (await run()).decisions;
+    expect(d.wouldCharge).toBe(false);
+    expect(d.disposition).toBe("LEGACY_WAIVED");
+    expect(d.reason).toBe("legacy_waived");
+    expect(d.note).not.toContain("COBRARIA");
+  });
+
+  it("COURTESY gravada à mão numa linha PLANNED: não cobra", async () => {
+    // Sem cortesia vigente na tabela — só a disposição escrita direto pelo
+    // bootstrap ou pelas ferramentas de operação. O recálculo sozinho diria
+    // CHARGE; a guarda da disposição gravada é o que impede.
+    state.obligations = [pendente({ disposition: "COURTESY" })];
+    state.courtesies = [];
+
+    const [d] = (await run()).decisions;
+    expect(d.wouldCharge).toBe(false);
+    expect(d.disposition).toBe("COURTESY");
+    expect(d.reason).toBe("courtesy");
+  });
+
+  it("INTERNAL gravada preserva o preço GRAVADO, não recalcula", async () => {
+    // Numa linha isenta o preço é registro histórico do que se deixou de
+    // faturar; refazer a conta com o plano de hoje reescreveria esse número.
+    state.obligations = [pendente({ disposition: "INTERNAL", priceCents: 0 })];
+    state.subscriptions = [
+      defaultSubscription({
+        plan: { id: "plan-1", name: "Clinica", priceMonthly: 24990, priceYearly: 249900 },
+      }),
+    ];
+
+    const [d] = (await run()).decisions;
+    expect(d.wouldCharge).toBe(false);
+    expect(d.priceCents).toBe(0);
+  });
+
+  it("isenta gravada vence até a guarda de ciclo trocado", async () => {
+    // No motor a guarda da disposição vem antes de tudo: numa linha isenta o
+    // ciclo é irrelevante porque não há preço a recalcular.
+    state.obligations = [
+      pendente({ disposition: "LEGACY_WAIVED", cycle: "MONTHLY" }),
+    ];
+    state.subscriptions = [defaultSubscription({ billingCycle: "YEARLY" })];
+
+    const [d] = (await run()).decisions;
+    expect(d.reason).toBe("legacy_waived");
+    expect(d.wouldCharge).toBe(false);
+  });
 
   it("cortesia concedida DEPOIS da materialização: o motor quitaria, então não cobraria", async () => {
     // 🔑 O furo que a revisão pegou. Lendo `disposition` gravado ("CHARGE"), o
