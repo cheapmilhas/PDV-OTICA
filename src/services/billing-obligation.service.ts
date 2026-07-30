@@ -278,6 +278,38 @@ export async function runObligationForCompany(
     // cair no caminho de emissão e cobrar um período que o dono declarou
     // encerrado.
     if (obligation.disposition !== "CHARGE") {
+      // ⚠️ E se essa linha isenta ainda estiver `PLANNED`? Ela TRAVA a assinatura.
+      //
+      // As obrigações isentas que este serviço cria já nascem `PAID`
+      // (`reserveObligationOnce`), mas o bootstrap da etapa 2 e as ferramentas da
+      // Task 9 escrevem `disposition` à mão e podem deixar a linha `PLANNED`.
+      // Nesse estado a precedência de "trabalho pendente antes de trabalho novo"
+      // devolve SEMPRE a mesma obrigação, a rodada devolve `settled`, e a
+      // assinatura nunca gera o período seguinte — o cliente para de ser cobrado
+      // em silêncio, com o outcome dizendo "quitada". Provado por teste: seis
+      // rodadas seguidas, uma obrigação só, nenhuma nova.
+      //
+      // Quitar é a resposta certa e não é palpite: isenta é isenta em qualquer
+      // uma das três disposições, e sem cobrança nenhuma pendurada (o caminho de
+      // emissão nunca a alcançou, logo não há fatura nem PIX). Carimba `paidAt`
+      // e deixa `issuedAt`/`dueAt` nulos, que é o que impede I1 de restringir.
+      if (obligation.state === "PLANNED") {
+        const quitada = await prisma.billingObligation.updateMany({
+          where: { id: obligation.id, state: "PLANNED" },
+          data: { state: "PAID", paidAt: now },
+        });
+        log.info("Obrigação isenta estava PLANNED — quitada para destravar a fila", {
+          companyId,
+          obligationId: obligation.id,
+          disposition: obligation.disposition,
+          alterada: quitada.count,
+        });
+        return {
+          kind: "settled",
+          obligation: { ...obligation, state: "PAID" },
+          created,
+        };
+      }
       return { kind: "settled", obligation, created };
     }
 
@@ -680,6 +712,32 @@ async function reserveAttempt(
       return done({ kind: "skipped", reason: "already_settled", obligation: snapshot(fresh) });
     }
 
+    // 🔑 DISPOSIÇÃO RELIDA DENTRO DO LOCK — a segunda camada de guarda contra
+    // cobrar um período que o dono declarou encerrado.
+    //
+    // A fase 1 já barra o que não é `CHARGE` (`runObligationForCompany`), mas com
+    // o dado que ela leu ANTES de commitar. A fase 2 abre transação NOVA e não
+    // reaproveita aquele `disposition`: ela RECALCULA a partir de cortesias e
+    // preço do plano, e `resolveObligationDisposition` só sabe devolver
+    // `CHARGE`/`COURTESY`/`INTERNAL` — nunca `LEGACY_WAIVED`. Sem esta linha, uma
+    // obrigação marcada `LEGACY_WAIVED` (ou `COURTESY` à mão) entre a fase 1 e a
+    // fase 2 seria recalculada como `CHARGE` e COBRADA no gateway, deixando a
+    // linha contraditória: `disposition = LEGACY_WAIVED` e `state = ISSUED`.
+    //
+    // Não é hipótese de laboratório: o bootstrap da etapa 2 e as ferramentas da
+    // Task 9 escrevem `disposition` direto, e a janela entre as fases é
+    // exatamente onde uma rodada do cron em andamento cruza com a mão do dono.
+    // Fail-closed: divergência não cobra.
+    if (fresh.disposition !== "CHARGE") {
+      return done({
+        kind: "failed",
+        reason: "needs_review",
+        detail: `disposição mudou para ${fresh.disposition} entre as fases — não cobra`,
+        retryable: false,
+        obligation: snapshot(fresh),
+      });
+    }
+
     const sub = fresh.subscription;
 
     // A obrigação continua sendo desta empresa? A fase 2 chega aqui com um
@@ -845,6 +903,9 @@ async function reserveAttempt(
             subscriptionId: true,
             billingObligationId: true,
             asaasPaymentId: true,
+            // Necessário para manter `obligation.dueAt` e `invoice.dueDate` no
+            // MESMO instante na retomada — ver a nota do `dueDate` abaixo.
+            dueDate: true,
           },
         })
       : null;
@@ -915,13 +976,38 @@ async function reserveAttempt(
         }
         await tx.invoice.update({
           where: { id: existingAttempt.id },
-          data: { subtotal: priceCents, total: priceCents, dueDate: dueAt },
+          data: { subtotal: priceCents, total: priceCents },
+        });
+      }
+
+      // 🔑 `dueDate` FORA do `if` do preço. Antes ele só era corrigido quando o
+      // valor mudava — e a linha logo abaixo grava `dueAt` na obrigação SEMPRE.
+      // Com o preço igual e a fatura carregando um `dueDate` errado (fallback de
+      // "agora + 3 dias úteis" de uma reserva antiga, ou fatura importada), os
+      // dois lados divergiam em silêncio: a obrigação afirmando um vencimento e o
+      // gateway cobrando outro. Isso quebra dos dois lados — I1 restringe pelo
+      // `dueAt` da obrigação, e o dunning/Asaas usa o `dueDate` da fatura
+      // (`ensureInvoiceCharge` manda esse campo para o Asaas). Um cliente podia
+      // ser restringido numa data que a cobrança dele nunca teve.
+      //
+      // Só reescreve `dueDate` enquanto a tentativa NÃO foi ao gateway: depois de
+      // `asaasPaymentId` o vencimento está fixado lá e mudar o local só criaria a
+      // divergência oposta. Nesse caso a obrigação segue o que a FATURA diz.
+      const naoFoiAoGateway = existingAttempt.asaasPaymentId === null;
+      if (naoFoiAoGateway && existingAttempt.dueDate?.getTime() !== dueAt.getTime()) {
+        await tx.invoice.update({
+          where: { id: existingAttempt.id },
+          data: { dueDate: dueAt },
         });
       }
 
       const refreshed = await tx.billingObligation.update({
         where: { id: fresh.id },
-        data: { priceCents, planId: sub.plan.id, dueAt },
+        data: {
+          priceCents,
+          planId: sub.plan.id,
+          dueAt: naoFoiAoGateway ? dueAt : (existingAttempt.dueDate ?? dueAt),
+        },
         select: SNAPSHOT_SELECT,
       });
       return {
@@ -929,6 +1015,29 @@ async function reserveAttempt(
         obligation: refreshed,
         invoiceId: existingAttempt.id,
       };
+    }
+
+    // 🔑 PONTEIRO PENDURADO — barra ANTES de gastar número de fatura.
+    //
+    // Se `invoiceId` está ocupado mas a fatura não existe mais (apagada à mão,
+    // restore parcial, migração), `existingAttempt` é `null` e o fluxo cairia no
+    // `create` abaixo. O CAS seguinte exige `invoiceId: null`, então ele NUNCA
+    // casa: a rodada devolve `attempt_race` e a fatura recém-criada fica órfã e
+    // `PENDING`, para sempre. E como o cron repete todo dia, cada rodada queima
+    // um número de `INV-` do contador GLOBAL e deixa mais uma órfã — provado por
+    // teste: quatro rodadas, quatro faturas.
+    //
+    // `attempt_race` também mentiria: ele diz `retryable: true` ("é fila"), e o
+    // operador esperaria a contenção passar sozinha em vez de consertar o
+    // ponteiro. Isto é revisão humana, e nunca é corrida.
+    if (fresh.invoiceId) {
+      return done({
+        kind: "failed",
+        reason: "needs_review",
+        detail: `obrigação aponta para a fatura ${fresh.invoiceId}, que não existe`,
+        retryable: false,
+        obligation: snapshot(fresh),
+      });
     }
 
     const invoice = await tx.invoice.create({

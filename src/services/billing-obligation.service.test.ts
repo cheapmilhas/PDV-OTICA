@@ -819,6 +819,88 @@ describe("runObligationForCompany — cortesia e plano interno", () => {
     expect(invoiceCreate).not.toHaveBeenCalled();
   });
 
+  it("obrigação isenta escrita à mão como PLANNED é QUITADA — senão trava a assinatura para sempre", async () => {
+    // 🔑 O bug que este teste tranca: o motor cria isenta já `PAID`, mas o
+    // bootstrap da etapa 2 e a Task 9 escrevem `disposition` à mão e podem
+    // deixar `PLANNED`. Nessa situação a precedência de "pendente antes de novo"
+    // devolvia a MESMA obrigação todo dia, o outcome dizia `settled`, e a
+    // assinatura NUNCA gerava o período seguinte — o cliente parava de ser
+    // cobrado em silêncio, com o resultado afirmando "quitada".
+    state.obligations = [
+      obligationRow({ disposition: "LEGACY_WAIVED", state: "PLANNED" }),
+    ];
+
+    const r = await run();
+
+    expect(r).toMatchObject({
+      kind: "settled",
+      obligation: { disposition: "LEGACY_WAIVED", state: "PAID" },
+    });
+    // O banco também: não basta o outcome mentir bonito.
+    expect(state.obligations[0].state).toBe("PAID");
+    expect(state.obligations[0].paidAt).toEqual(NOW);
+    // I1 nunca pode restringir por causa dela.
+    expect(state.obligations[0].issuedAt ?? null).toBeNull();
+    expect(state.obligations[0].dueAt ?? null).toBeNull();
+  });
+
+  it("depois de destravada, a assinatura VOLTA a gerar o período seguinte", async () => {
+    // A prova de que o destravamento serve para algo: com a isenta quitada, a
+    // rodada seguinte encadeia o período novo em vez de devolver a mesma linha.
+    state.obligations = [
+      obligationRow({
+        disposition: "COURTESY",
+        state: "PLANNED",
+        periodStart: new Date("2026-08-04T00:00:00Z"),
+        periodEnd: ANCHOR,
+      }),
+    ];
+
+    const primeira = await run();
+    expect(primeira.kind).toBe("settled");
+
+    const segunda = await run();
+
+    expect(segunda.kind).toBe("issued");
+    expect(state.obligations).toHaveLength(2);
+    // Encadeou do FIM da anterior, com sequence nova.
+    expect(state.obligations[1]).toMatchObject({
+      sequence: 2,
+      periodStart: ANCHOR,
+      disposition: "CHARGE",
+    });
+  });
+
+  it("disposição virada para LEGACY_WAIVED ENTRE as fases NÃO é cobrada (2ª camada)", async () => {
+    // 🔑 A fase 1 barra o que não é `CHARGE`, mas com o dado que ela leu antes de
+    // commitar. A fase 2 abre transação NOVA e RECALCULA a disposição — e
+    // `resolveObligationDisposition` só sabe devolver CHARGE/COURTESY/INTERNAL,
+    // nunca LEGACY_WAIVED. Sem a releitura de `fresh.disposition`, o dono declarar
+    // o período encerrado no meio da rodada resultava em cobrança REAL no
+    // gateway, com a linha contraditória `LEGACY_WAIVED` + `ISSUED`.
+    state.obligations = [obligationRow({ disposition: "CHARGE", state: "PLANNED" })];
+
+    const prismaClient = makePrisma()!;
+    const original = prismaClient.billingObligation.findUnique;
+    let leituras = 0;
+    prismaClient.billingObligation.findUnique = (async (args: never) => {
+      leituras++;
+      // A primeira `findUnique` é a releitura da fase 2: o dono acabou de
+      // regularizar o período à mão, entre as duas transações.
+      if (leituras === 1) state.obligations[0].disposition = "LEGACY_WAIVED";
+      return original(args);
+    }) as typeof original;
+
+    const r = await run({ prismaClient });
+
+    expect(r).toMatchObject({ kind: "failed", reason: "needs_review" });
+    expect((r as { detail: string }).detail).toContain("LEGACY_WAIVED");
+    // O que realmente importa: nada de dinheiro.
+    expect(ensureChargeFn).not.toHaveBeenCalled();
+    expect(invoiceCreate).not.toHaveBeenCalled();
+    expect(state.obligations[0].state).toBe("PLANNED");
+  });
+
   it("plano de preço zero é INTERNAL, sem cobrança e com priceCents 0", async () => {
     state.subscriptions = [
       defaultSubscription({
@@ -1308,6 +1390,99 @@ describe("runObligationForCompany — contrato que muda antes da emissão", () =
     // O invariante: os dois lados batem.
     expect(state.invoices[0].total).toBe(29990);
     expect(state.invoices[0].subtotal).toBe(29990);
+  });
+
+  it("na retomada, dueAt da obrigação e dueDate da fatura continuam o MESMO instante", async () => {
+    // 🔑 O bug: `dueDate` da fatura só era corrigido DENTRO do `if` do preço,
+    // enquanto `dueAt` da obrigação era gravado sempre. Com o preço igual e a
+    // fatura carregando um vencimento velho, os dois lados divergiam em silêncio
+    // — e I1 restringe pelo `dueAt` da obrigação enquanto o Asaas cobra pelo
+    // `dueDate` da fatura. O cliente podia ser restringido numa data que a
+    // cobrança dele nunca teve.
+    const VENCIMENTO_VELHO = new Date("2001-01-01T00:00:00Z");
+    state.obligations = [
+      obligationRow({ invoiceId: "inv-reservada", dueAt: VENCIMENTO_VELHO }),
+    ];
+    state.invoices = [
+      {
+        id: "inv-reservada",
+        number: "INV-000030",
+        subscriptionId: SUB_ID,
+        billingObligationId: "obl-1",
+        isManual: false,
+        status: "PENDING",
+        // MESMO preço de agora: é o caminho que passava batido.
+        total: 18990,
+        subtotal: 18990,
+        asaasPaymentId: null,
+        dueDate: VENCIMENTO_VELHO,
+        periodStart: ANCHOR,
+        periodEnd: ANCHOR_END,
+      },
+    ];
+
+    const r = await run();
+
+    expect(r.kind).toBe("issued");
+    expect(state.invoices[0].dueDate).toEqual(ANCHOR);
+    expect(state.obligations[0].dueAt).toEqual(ANCHOR);
+    // O invariante, escrito como invariante: os dois lados batem.
+    expect(state.obligations[0].dueAt).toEqual(state.invoices[0].dueDate);
+  });
+
+  it("tentativa JÁ no gateway: a obrigação segue o dueDate da FATURA, não o recalculado", async () => {
+    // Depois de `asaasPaymentId` o vencimento está fixado no Asaas e o cliente já
+    // recebeu o PIX com aquela data. Reescrever o local criaria a divergência
+    // oposta — a obrigação afirmando um vencimento que a cobrança não tem.
+    const VENCIMENTO_NO_GATEWAY = new Date("2026-09-10T00:00:00Z");
+    state.obligations = [obligationRow({ invoiceId: "inv-no-asaas", dueAt: null })];
+    state.invoices = [
+      {
+        id: "inv-no-asaas",
+        number: "INV-000031",
+        subscriptionId: SUB_ID,
+        billingObligationId: "obl-1",
+        isManual: false,
+        status: "PENDING",
+        total: 18990,
+        subtotal: 18990,
+        asaasPaymentId: "pay_123",
+        dueDate: VENCIMENTO_NO_GATEWAY,
+        periodStart: ANCHOR,
+        periodEnd: ANCHOR_END,
+      },
+    ];
+
+    const r = await run();
+
+    expect(r.kind).toBe("issued");
+    expect(state.invoices[0].dueDate).toEqual(VENCIMENTO_NO_GATEWAY);
+    expect(state.obligations[0].dueAt).toEqual(VENCIMENTO_NO_GATEWAY);
+  });
+
+  it("ponteiro de fatura PENDURADO exige revisão e NÃO cria fatura órfã por rodada", async () => {
+    // 🔑 O bug: com `invoiceId` ocupado e a fatura inexistente, o fluxo criava
+    // uma fatura NOVA (queimando um número do contador global `INV-`), o CAS
+    // exigia `invoiceId: null` e nunca casava, e a rodada devolvia
+    // `attempt_race` com `retryable: true` — "é fila, espera passar". O cron
+    // repetia todo dia: quatro rodadas, quatro faturas órfãs `PENDING`.
+    state.obligations = [obligationRow({ invoiceId: "inv-que-nao-existe" })];
+    state.invoices = [];
+
+    const resultados: ObligationOutcome[] = [];
+    for (let rodada = 0; rodada < 3; rodada++) resultados.push(await run());
+
+    for (const r of resultados) {
+      expect(r).toMatchObject({ kind: "failed", reason: "needs_review" });
+      // NÃO é corrida: dizer `retryable` mandaria o operador esperar em vez de
+      // consertar o ponteiro.
+      expect(r).toMatchObject({ retryable: false });
+    }
+    // A PROVA: nenhuma fatura criada, nenhum número de `INV-` queimado.
+    expect(state.invoices).toHaveLength(0);
+    expect(invoiceCreate).not.toHaveBeenCalled();
+    expect(nextSaasInvoiceNumber).not.toHaveBeenCalled();
+    expect(ensureChargeFn).not.toHaveBeenCalled();
   });
 
   it("preço novo em tentativa JÁ enviada ao gateway exige revisão (não reescreve por baixo)", async () => {
