@@ -253,7 +253,7 @@ export function PricingSection() {
                   {badge && (
                     <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 z-10">
                       <span
-                        className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-bold tracking-wide"
+                        className="inline-flex items-center gap-1.5 rounded-full px-3.5 py-1 text-xs font-bold tracking-wide whitespace-nowrap max-w-full"
                         style={{
                           background: "var(--gradient-brand-vivid)",
                           color: "white",
@@ -293,11 +293,6 @@ export function PricingSection() {
                       >
                         {plan.name}
                       </h3>
-                      {plan.description && (
-                        <p style={{ color: "var(--lp-subtle)", fontSize: "0.8125rem", lineHeight: 1.4 }}>
-                          {plan.description}
-                        </p>
-                      )}
                     </div>
                   </div>
 
@@ -312,7 +307,7 @@ export function PricingSection() {
                             animate={{ opacity: 1, y: 0 }}
                             exit={{ opacity: 0, y: 8 }}
                             transition={{ duration: 0.22 }}
-                            className="flex items-baseline gap-1.5"
+                            className="flex items-baseline gap-1.5 whitespace-nowrap"
                           >
                             <span
                               className="font-heading font-extrabold"
@@ -357,6 +352,19 @@ export function PricingSection() {
                       </div>
                     )}
                   </div>
+
+                  {/* Descrição DEPOIS do preço: no card estreito ela empurrava o
+                      valor para baixo, e o preço é o que o visitante procura
+                      primeiro. Vale em todos os breakpoints — reordenar só no
+                      mobile exigiria `order-*` num wrapper que não existe. */}
+                  {plan.description && (
+                    <p
+                      className="mb-6"
+                      style={{ color: "var(--lp-subtle)", fontSize: "0.8125rem", lineHeight: 1.4 }}
+                    >
+                      {plan.description}
+                    </p>
+                  )}
 
                   {/* CTA — planos "Em breve" são filtrados para a faixa "No radar"
                       abaixo, então aqui o plano é sempre disponível. */}
@@ -434,7 +442,7 @@ export function PricingSection() {
                     <motion.div
                       key={plan.id}
                       variants={fadeInUp}
-                      className="relative rounded-2xl p-7 flex flex-col"
+                      className="relative rounded-2xl p-7 flex flex-row items-center gap-3 sm:flex-col sm:items-start sm:gap-0"
                       style={{
                         background: "var(--lp-background)",
                         border: "1px dashed var(--lp-border-hover)",
@@ -463,16 +471,23 @@ export function PricingSection() {
                         </span>
                       </div>
 
+                      {/* Sem margem no topo enquanto o card é uma linha: o `mt-5`
+                          empurraria o nome para baixo do ícone e quebraria o
+                          alinhamento vertical. */}
                       <h3
-                        className="font-heading font-bold mt-5"
+                        className="font-heading font-bold sm:mt-5"
                         style={{ color: "var(--lp-foreground)", fontSize: "1.125rem" }}
                       >
                         {plan.name}
                       </h3>
 
+                      {/* No mobile o card vira uma LINHA (ícone + nome + selo):
+                          descrição e nota de rodapé sairiam empurrando para baixo
+                          o que importa — e o selo "Em breve" já diz o mesmo que a
+                          nota, em menos espaço. De `sm` para cima, tudo volta. */}
                       {plan.description && (
                         <p
-                          className="mt-2 text-sm"
+                          className="mt-2 text-sm hidden sm:block"
                           style={{ color: "var(--lp-muted)", lineHeight: 1.6 }}
                         >
                           {plan.description}
@@ -482,7 +497,7 @@ export function PricingSection() {
                       {/* Empurra a nota para o rodapé do card, alinhando-a entre
                           os cards mesmo com descrições de tamanhos diferentes. */}
                       <p
-                        className="mt-auto pt-6 text-xs"
+                        className="mt-auto pt-6 text-xs hidden sm:block"
                         style={{ color: "var(--lp-subtle)" }}
                       >
                         Ainda não disponível para contratação.
