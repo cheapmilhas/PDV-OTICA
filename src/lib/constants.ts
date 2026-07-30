@@ -14,6 +14,22 @@ export const REGISTER_URL = "/registro";
 export const LOGIN_URL = "/login";
 
 /**
+ * Login da aplicação MEDICAL. Vive em OUTRO domínio: o site é aquisição,
+ * medical.vis.app.br é a aplicação. Por isso o link abre em nova aba.
+ *
+ * `NEXT_PUBLIC_` é obrigatório: quem consome isto é o header, que é client
+ * component. A env `MEDICAL_APP_URL` (sem prefixo) usada em
+ * provisioning-outbox.service.ts:51 é de SERVIDOR e inlinearia como `undefined`
+ * no cliente.
+ *
+ * O fallback cobre o estado atual (env não configurada) e está verificado no ar:
+ * medical.vis.app.br/authentication responde 200.
+ */
+export const MEDICAL_LOGIN_URL = `${
+  process.env.NEXT_PUBLIC_MEDICAL_APP_URL ?? "https://medical.vis.app.br"
+}/authentication`;
+
+/**
  * Meta description da home. É CONSUMIDA pelo RootLayout — não duplicar o texto lá.
  *
  * Ficou órfã por um tempo (o layout tinha a própria string hardcoded), e a
