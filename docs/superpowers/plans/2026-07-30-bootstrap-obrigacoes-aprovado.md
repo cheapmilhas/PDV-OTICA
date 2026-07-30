@@ -51,6 +51,35 @@ carência que ele já concedia informalmente via `accessEnabled`.
 | cortesia | `24/02/2026 → 24/02/2027`, motivo "ótica do dono" |
 | 4 faturas | `VOID` — lixo de teste |
 
+### ⚠️ Emenda de 2026-07-30 (o dry-run barrou e o dono decidiu)
+
+O dry-run **recusou** e deu ROLLBACK: duas das quatro faturas são **manuais**
+(`isManual = true`), e o script se recusa a cancelar lançamento manual por conta própria —
+lançamento manual é decisão de alguém. Foi o dry-run fazendo exatamente o trabalho dele.
+
+O levantamento (leitura apenas) mostrou o que são:
+
+| Fatura | `isManual` | Valor | Descrição | PIX | Pago |
+|---|---|---|---|---|---|
+| `cmq8wvms3000112j053nia271` | `false` | R$ 149,90 | — | **nunca foi ao gateway** | não |
+| `cmqa0trpo0001zthyw53zmupv` | `false` | R$ 149,90 | — | `pay_7q8qptpcuqwj21yd` | não |
+| `cmqa5j96l0003mndw7n7hdqe6` (INV-000005) | **`true`** | R$ 5,00 | `"TESTE"` | `pay_nfmlisx8urjclfid` | não |
+| `cmqabuwzf00014brjd91vvspg` (INV-000006) | **`true`** | R$ 5,00 | `"MENSALIDADE JJULHO"` | `pay_8q0tv3vfmuva0a2w` | não |
+
+**Decisão do dono (2026-07-30): as duas manuais são teste dele e podem ser anuladas.**
+R$ 5,00 numa assinatura ANUAL de R$ 1.499,00, descrições `"TESTE"` e `"MENSALIDADE JJULHO"`
+(com o typo), criadas em 11 e 12/06 — é lançamento manual de teste.
+
+O script passa a anular as 4, com `voidReason` distinguindo as manuais das automáticas.
+⚠️ **A exceção vale SÓ para esta assinatura** (`cmm1993ga000c90ezc38kk28n`), declarada
+explicitamente. A guarda geral continua valendo para qualquer outra: o script **não** cancela
+lançamento manual por conta própria.
+
+🚨 **O PIX das duas manuais continua VIVO no Asaas.** Anular a fatura local **não** cancela a
+cobrança no gateway — o cliente ainda consegue pagar os R$ 5,00. Se o dono quiser fechar de
+verdade, tem que cancelar no painel do Asaas. Fora do escopo deste script, que por regra não
+chama o gateway.
+
 ## Decisão 2 — Óticas Ultra (`cmn8ww0yy0008m25s5avfmk23`)
 
 **Estado:** `ACTIVE`, plano Básico MENSAL R$ 149,90. Uma fatura **PAGA** de R$ 99,90 (maio,
