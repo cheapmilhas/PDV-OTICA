@@ -16,6 +16,22 @@ import { resolveConversionPriceCents } from "@/lib/trial-conversion-charge";
  * gateway que NÃO tem sandbox.
  */
 
+/**
+ * Quantos dias antes do início do período a obrigação é materializada e a
+ * cobrança emitida. A emissão acontece ANTES do período começar para o cliente
+ * pagar antes de estar devendo (spec §4.5) — e é o mesmo número que define o
+ * horizonte de geração, para que nunca exista obrigação materializada que ainda
+ * não pode ser emitida.
+ *
+ * 🔑 Mora AQUI, no módulo puro, e não no serviço que emite. O modo sombra
+ * (`billing-shadow.service.ts`) precisa deste número para calcular o mesmo
+ * horizonte, e importá-lo do serviço arrastaria para dentro do grafo do sombra
+ * toda a cadeia do gateway (`asaas.ts`, `invoice-charge`, `invoice-send`) — o
+ * que apagaria justamente a garantia estrutural de que o modo sombra não
+ * alcança o Asaas. Um teste de grafo de imports trava essa fronteira.
+ */
+export const ISSUE_LEAD_DAYS = 5;
+
 /** Obrigação já existente que serve de âncora para a próxima. */
 export interface ObligationAnchor {
   sequence: number;

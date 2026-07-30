@@ -14,6 +14,7 @@ import { sendInvoiceCharge } from "@/services/invoice-send.service";
 import { resolveEffectiveSubscription } from "@/lib/effective-subscription";
 import { resolveObligationDisposition } from "@/lib/billing-courtesy";
 import {
+  ISSUE_LEAD_DAYS,
   periodsOverlap,
   resolveNextObligationPlan,
   resolveObligationPriceCents,
@@ -155,13 +156,11 @@ export interface ObligationDeps {
 }
 
 /**
- * Quantos dias antes do início do período a obrigação é materializada e a
- * cobrança emitida. A emissão acontece ANTES do período começar para o cliente
- * pagar antes de estar devendo (spec §4.5) — e é o mesmo número que define o
- * horizonte de geração, para que nunca exista obrigação materializada que ainda
- * não pode ser emitida.
+ * Reexportado de `@/lib/billing-obligation`, onde a constante passou a morar
+ * para que o modo sombra a leia sem importar este serviço (e, com ele, toda a
+ * cadeia do gateway). Mantido aqui porque é parte da API pública deste módulo.
  */
-export const ISSUE_LEAD_DAYS = 5;
+export { ISSUE_LEAD_DAYS };
 
 /**
  * Teto da transação interativa. Mais alto que o default do Prisma (5s) porque o
