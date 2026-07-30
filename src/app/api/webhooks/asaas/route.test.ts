@@ -84,10 +84,14 @@ vi.mock("@/lib/posthog-server", () => ({
   trackServer: (...a: unknown[]) => trackServer(...a),
 }));
 
-// sentry — no-op
-vi.mock("@/lib/sentry", () => ({
-  captureMessage: vi.fn(),
-}));
+// sentry — spy COMPARTILHADO (hoistado), não `vi.fn()` anônimo dentro da
+// factory. Os três ramos de ALERTA da Task 8 (`paid_but_unresolved`,
+// `needs_review`, estorno sobre obrigação quitada) não escrevem nada no banco:
+// o alerta É o efeito observável. Com a fn presa dentro da factory nenhum teste
+// conseguia afirmar sobre ela, e desligar o ramo `paid_but_unresolved` inteiro
+// mantinha a suíte VERDE — o alarme mais crítico da task sem um único teste.
+const { captureMessage } = vi.hoisted(() => ({ captureMessage: vi.fn() }));
+vi.mock("@/lib/sentry", () => ({ captureMessage }));
 
 // logger — no-op
 vi.mock("@/lib/logger", () => ({
@@ -702,6 +706,20 @@ describe("POST /api/webhooks/asaas — Task 8: obrigação de cobrança", () => 
     // a fatura é marcada paga (dinheiro entrou), a obrigação anulada NÃO
     expect(invoiceUpdate).toHaveBeenCalled();
     expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+
+    // `needs_review` → alerta em `warning`: dinheiro entrou sobre um período
+    // anulado e alguém precisa dizer a que acerto ele pertence. Menos grave que
+    // `paid_but_unresolved` (a obrigação VOID não dispara I1), por isso
+    // `warning` e não `error` — mas silêncio aqui perderia o pagamento órfão.
+    expect(captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining("pagamento não quitou a obrigação"),
+      expect.objectContaining({
+        level: "warning",
+        extra: expect.objectContaining({ invoiceId: INVOICE_ID, companyId: COMPANY_ID }),
+      }),
+    );
+    const [msg] = captureMessage.mock.calls.at(-1) as [string, unknown];
+    expect(msg).toContain("VOID");
   });
 
   it("obrigação já PAID → não reescreve (idempotente em reenvio)", async () => {
@@ -735,15 +753,37 @@ describe("POST /api/webhooks/asaas — Task 8: obrigação de cobrança", () => 
     expect(billingObligationUpdateMany).not.toHaveBeenCalled();
   });
 
-  it("🔥 tentativa SUPERADA paga → não promove, mas ALERTA (não é noop silencioso)", async () => {
+  it("🔥 tentativa SUPERADA paga → não promove, mas ALERTA em nível `error` (não é noop silencioso)", async () => {
     // A obrigação foi reemitida: a tentativa vigente é outra fatura. O cliente
     // pagou a antiga — se ficar em silêncio, I1 restringe quem pagou E a
     // tentativa vigente segue cobrável.
+    //
+    // ⚠️ Não basta afirmar que o banco NÃO foi escrito: recusar a escrita é
+    // fail-closed para o BANCO e fail-OPEN para a restrição. O alerta alto é o
+    // contrato explícito do módulo puro
+    // (`asaas-obligation-arbitration.ts` → `paid_but_unresolved`) e é o ÚNICO
+    // efeito observável deste ramo. Sem esta asserção, apagar o ramo inteiro
+    // deixa a suíte verde.
     comObrigacao({ state: "ISSUED", invoiceId: "inv-outra-tentativa" });
 
     const res = await POST(makeRequest(pagoEvent));
     expect(res.status).toBe(200);
     expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+
+    // `error`, não `warning`: é o cenário em que o cliente pode ser bloqueado E
+    // cobrado de novo pelo mesmo período. Rebaixar o nível some com o alarme na
+    // triagem do Sentry.
+    expect(captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining("PAGOU e a obrigação seguiu em aberto"),
+      expect.objectContaining({
+        level: "error",
+        extra: expect.objectContaining({ invoiceId: INVOICE_ID, companyId: COMPANY_ID }),
+      }),
+    );
+    // e o motivo carrega a tentativa vigente, que é o que o operador precisa
+    // para reconciliar
+    const [msg] = captureMessage.mock.calls.at(-1) as [string, unknown];
+    expect(msg).toContain("inv-outra-tentativa");
   });
 
   // ── Evento FORA DE ORDEM: o cenário central da task ────────────────────────
@@ -851,5 +891,22 @@ describe("POST /api/webhooks/asaas — Task 8: obrigação de cobrança", () => 
       expect.objectContaining({ where: { id: INVOICE_ID }, data: { status: "REFUNDED" } }),
     );
     expect(billingObligationUpdateMany).not.toHaveBeenCalled();
+
+    // 🔴 O alerta é a ÚNICA mitigação da dívida assumida em
+    // `REFUND_KEEPS_OBLIGATION_PAID`: manter a obrigação `PAID` faz `PAID`
+    // significar "houve pagamento", não "está quitada", e quem estorna todo mês
+    // fica com acesso de graça sem nenhum relatório enxergar. Sem este alerta a
+    // divergência (`obligation PAID` × `Invoice REFUNDED`) morre silenciosa.
+    // `warning`: não há restrição indevida em curso, só receita revertida a
+    // revisar.
+    expect(captureMessage).toHaveBeenCalledWith(
+      expect.stringContaining("estorno sobre obrigação quitada"),
+      expect.objectContaining({
+        level: "warning",
+        extra: expect.objectContaining({ invoiceId: INVOICE_ID, companyId: COMPANY_ID }),
+      }),
+    );
+    const [msg] = captureMessage.mock.calls.at(-1) as [string, unknown];
+    expect(msg).toContain(OBLIGATION_ID);
   });
 });
