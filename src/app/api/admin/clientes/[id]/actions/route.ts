@@ -10,6 +10,7 @@ import { planValueForCycle } from "@/lib/plan-pricing";
 import { schedulePublishEntitlement } from "@/lib/vis-domus-publisher";
 import { checkCanResendMedicalInvite } from "../resend-invite-guard";
 import { createTrialConversionCharge } from "@/services/trial-conversion-charge.service";
+import { applyContractChangeToObligations } from "@/services/obligation-recalc.service";
 
 const log = logger.child({ route: "admin/clientes/[id]/actions" });
 
@@ -84,9 +85,30 @@ export async function POST(
       case "extend_trial": {
         const subscription = await prisma.subscription.findFirst({ where: { companyId, status: "TRIAL" } });
         if (!subscription) return NextResponse.json({ error: "Trial não encontrado" }, { status: 400 });
-        const newEnd = new Date(subscription.trialEndsAt ?? new Date());
+        const oldTrialEnd = subscription.trialEndsAt;
+        const newEnd = new Date(oldTrialEnd ?? new Date());
         newEnd.setDate(newEnd.getDate() + 7);
         await prisma.subscription.update({ where: { id: subscription.id }, data: { trialEndsAt: newEnd } });
+
+        // Task 9 / spec §4.1.3 — os dias entre o fim ANTIGO e o novo voltaram a
+        // ser gratuitos. Sem isto, uma obrigação já materializada para esse
+        // intervalo seguiria cobrando dias que o dono acabou de dar de graça.
+        // DEPOIS da escrita do `trialEndsAt` e fora da transação: o contrato é a
+        // fonte de verdade e já está commitado; a reavaliação nunca desfaz a
+        // extensão (ver "NUNCA LANÇA" no serviço).
+        const efeitoTrial = await applyContractChangeToObligations(
+          subscription.id,
+          companyId,
+          { kind: "trial_extension", oldTrialEndsAt: oldTrialEnd, newTrialEndsAt: newEnd },
+        );
+        if (efeitoTrial.kind === "failed") {
+          log.error("Trial estendido, mas a reavaliação das obrigações falhou", {
+            companyId,
+            subscriptionId: subscription.id,
+            detail: efeitoTrial.detail,
+          });
+        }
+
         await prisma.globalAudit.create({
           data: { actorType: "ADMIN_USER", actorId: admin.id, companyId, action: "TRIAL_EXTENDED", metadata: { newTrialEnd: newEnd.toISOString() } },
         });
@@ -168,6 +190,29 @@ export async function POST(
         // veja o novo plano (sem esperar TTL de 5min). Coerente com gate em layout
         // e withPlanFeatureGuard que consomem o mesmo cache.
         invalidatePlanFeaturesCache(companyId);
+
+        // Task 9 / spec §4.1.2 — a emissão é ANTECIPADA, então pode existir
+        // obrigação já materializada com o plano ANTIGO congelado. A não emitida
+        // é invalidada (a fase 2 do motor refaz a conta); a já emitida é MANTIDA
+        // com o preço antigo, com a decisão registrada e alerta ao operador —
+        // reemitir por cima de um PIX vivo cobraria duas vezes de verdade.
+        //
+        // Vale nos dois sentidos: o painel permite downgrade (o self-service do
+        // Domus é que o recusa com 501), e um downgrade sobre obrigação emitida é
+        // o caso em que o cliente pagaria o plano CARO por um período em que já
+        // está no barato — precisa aparecer para alguém, não sumir.
+        const efeitoPlano = await applyContractChangeToObligations(
+          subscription.id,
+          companyId,
+          { kind: "plan_change", fromPlanId: oldPlan.id, toPlanId: newPlan.id },
+        );
+        if (efeitoPlano.kind === "failed") {
+          log.error("Plano trocado, mas a reavaliação das obrigações falhou", {
+            companyId,
+            subscriptionId: subscription.id,
+            detail: efeitoPlano.detail,
+          });
+        }
 
         // Sincroniza o valor da assinatura recorrente no Asaas.
         // Fail-soft: se o Asaas falhar, NÃO revertemos o acesso local —

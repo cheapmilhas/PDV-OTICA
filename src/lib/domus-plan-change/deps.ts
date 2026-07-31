@@ -3,6 +3,8 @@ import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
 import { schedulePublishEntitlement } from "@/lib/vis-domus-publisher";
 import { invalidatePlanFeaturesCache } from "@/lib/plan-features-cache";
+import { logger } from "@/lib/logger";
+import { applyContractChangeToObligations } from "@/services/obligation-recalc.service";
 import type { SagaDeps, SagaOp, ClaimedSagaOp, CasResult } from "./executor";
 import type { SagaState } from "./saga";
 
@@ -281,6 +283,13 @@ export function buildSagaDeps(): SagaDeps {
       });
       if (!newPlan) throw new Error("Plano-alvo não encontrado.");
 
+      // Plano ANTIGO, lido antes da troca: é o `fromPlanId` da reavaliação de
+      // obrigações (Task 9). Lido aqui fora e não dentro da tx porque o valor
+      // que interessa é o do snapshot congelado; a tx relê a linha sob lock e
+      // aborta se ela divergiu, então "o plano mudou entre as duas leituras" é um
+      // caminho que nunca chega ao commit.
+      let planoAntesDaTroca: string | null = null;
+
       // Transação interativa: CAS PRIMEIRO, efeitos depois, tudo no mesmo commit.
       const applied = await prisma.$transaction(async (tx) => {
         // (1) CAS da op como PRIMEIRA escrita, com FENCING por leaseToken. count 0
@@ -320,6 +329,12 @@ export function buildSagaDeps(): SagaDeps {
         if (!ELIGIBLE_STATUS.includes(sub.status as (typeof ELIGIBLE_STATUS)[number])) {
           throw new Error(`Assinatura inelegível no applyLocal: ${sub.status}.`);
         }
+
+        // Plano de ORIGEM, capturado da linha travada (`FOR UPDATE`) e não de uma
+        // leitura solta: é exatamente o valor que o `subscriptionHistory` abaixo
+        // grava como `fromPlanId`, então a reavaliação de obrigações e a trilha
+        // de auditoria contam a MESMA história.
+        planoAntesDaTroca = sub.planId;
 
         // (3) Efeitos no MESMO commit. history/audit carregam planChangeOpId →
         //     a 2ª linha da mesma op pega P2002 (trava de banco além do CAS).
@@ -364,6 +379,56 @@ export function buildSagaDeps(): SagaDeps {
 
       // Cache em memória: FORA da tx, só após commit (não é transacional).
       if (applied) invalidatePlanFeaturesCache(op.visCompanyId);
+
+      // Task 9 / spec §4.1.2 — reavalia a obrigação já materializada contra o
+      // plano novo. FORA da tx e só APÓS o commit, pelas mesmas duas razões do
+      // `invalidatePlanFeaturesCache` logo acima: (a) a saga é Asaas-first e o
+      // CAS `BILLING_CONFIRMED → LOCAL_APPLIED` tem que ser a PRIMEIRA escrita da
+      // transação — enfiar escritas de outra tabela lá dentro alargaria a janela
+      // do lock por causa de algo que não é o efeito principal; (b) se `applied`
+      // for `false`, a tx sofreu rollback e NADA mudou, então não há contrato
+      // novo a propagar. `applied === false` é o caminho normal de uma retomada
+      // que perdeu a corrida, não um erro.
+      //
+      // ⚠️ As DUAS condições abaixo são deliberadas, e uma delas é redundante
+      // HOJE — dito aqui para ninguém a "limpar" sem saber o que está removendo.
+      // Uma revisão por mutação mostrou que apagar `applied &&` não quebra teste
+      // nenhum, porque os dois caminhos de rollback já garantem
+      // `planoAntesDaTroca === null`: no CAS que não pega, a atribuição nem
+      // acontece (o `return false` vem antes); numa exceção depois dela, o throw
+      // sobe e este bloco inteiro é pulado.
+      //
+      // A redundância fica porque a coincidência é FRÁGIL: ela depende da ordem
+      // atual das linhas dentro da transação. Mover a atribuição para antes do
+      // CAS — algo que uma refatoração futura pode fazer sem malícia — faria o
+      // `planoAntesDaTroca !== null` passar a valer num rollback, e a reavaliação
+      // rodaria sobre uma troca que não aconteceu: invalidaria o congelamento de
+      // uma obrigação cujo plano não mudou e, se ela estivesse emitida, gravaria
+      // `voidReason` e alertaria o operador sobre um problema inexistente.
+      // `applied` é a condição SEMANTICAMENTE correta ("houve commit?");
+      // `planoAntesDaTroca !== null` é a que o compilador exige para estreitar o
+      // tipo. Manter as duas custa uma comparação booleana.
+      //
+      // E se `applied` for `true` com plano nulo, não inventamos um `fromPlanId`:
+      // sem plano de origem a decisão seria um chute sobre dinheiro. A obrigação
+      // `PLANNED` continua sendo recalculada pela fase 2 do motor de qualquer
+      // forma; perde-se só o alerta sobre a já emitida, e perder um alerta é
+      // melhor que emitir um alerta errado.
+      if (applied && planoAntesDaTroca !== null) {
+        const efeito = await applyContractChangeToObligations(
+          expectedSubId,
+          op.visCompanyId,
+          { kind: "plan_change", fromPlanId: planoAntesDaTroca, toPlanId: newPlan.id },
+        );
+        if (efeito.kind === "failed") {
+          logger.error("Troca self-service aplicada, mas a reavaliação de obrigações falhou", {
+            visCompanyId: op.visCompanyId,
+            subscriptionId: expectedSubId,
+            opId: op.id,
+            detail: efeito.detail,
+          });
+        }
+      }
       return { applied };
     },
 

@@ -27,8 +27,24 @@ vi.mock("@/lib/asaas", () => ({
 }));
 vi.mock("@/lib/vis-domus-publisher", () => ({ schedulePublishEntitlement: vi.fn() }));
 vi.mock("@/lib/plan-features-cache", () => ({ invalidatePlanFeaturesCache: vi.fn() }));
+// Task 9: a reavaliação de obrigações é dublada aqui. O que ela FAZ tem testes
+// próprios (`obligation-recalc.service.test.ts`); o que importa neste arquivo é
+// QUANDO ela é chamada e com quê — em particular, que ela não é chamada quando o
+// CAS não pegou (rollback: não há contrato novo a propagar).
+vi.mock("@/services/obligation-recalc.service", () => ({
+  applyContractChangeToObligations: vi.fn().mockResolvedValue({
+    kind: "applied",
+    recalculadas: [],
+    mantidas: [],
+    inalteradas: 0,
+  }),
+}));
+vi.mock("@/lib/logger", () => ({
+  logger: { child: () => ({ info: vi.fn(), warn: vi.fn(), error: vi.fn() }), error: vi.fn(), warn: vi.fn(), info: vi.fn() },
+}));
 
 import { buildSagaDeps, claimOp } from "./deps";
+import { applyContractChangeToObligations } from "@/services/obligation-recalc.service";
 import type { ClaimedSagaOp } from "./executor";
 import { prisma } from "@/lib/prisma";
 import { asaas } from "@/lib/asaas";
@@ -205,6 +221,11 @@ describe("confirmBilling — identidade persistida + preflight (Fase B)", () => 
 
 describe("applyLocal — atômico com CAS (Fase B)", () => {
   beforeEach(() => {
+    // Rearmado a cada teste: o caso "reavaliação falhou" abaixo troca o retorno,
+    // e sem este reset ele vazaria para os testes seguintes.
+    (applyContractChangeToObligations as unknown as ReturnType<typeof vi.fn>)
+      .mockReset()
+      .mockResolvedValue({ kind: "applied", recalculadas: [], mantidas: [], inalteradas: 0 });
     opFindUnique.mockResolvedValue({ subscriptionId: "sub1", asaasSubscriptionId: "asaas_1", billingCycle: "MONTHLY", targetPlanId: "plan_x" });
     planFindUnique.mockResolvedValue({ id: "plan_x", name: "Clínica", maxUsers: 10, maxProducts: 100, maxBranches: 5 });
     // FOR UPDATE traz companyId/asaasSubscriptionId/billingCycle para revalidar.
@@ -231,6 +252,14 @@ describe("applyLocal — atômico com CAS (Fase B)", () => {
     expect(txMock.globalAudit.create.mock.calls[0][0].data.planChangeOpId).toBe("op1");
     // cache invalidado FORA da tx, só após aplicar
     expect(invalidatePlanFeaturesCache).toHaveBeenCalledWith("co1");
+    // Task 9 (§4.1.2): a obrigação já materializada é reavaliada contra o plano
+    // novo, com o plano de ORIGEM lido da linha travada (`FOR UPDATE`) — o mesmo
+    // que o `subscriptionHistory` grava como `fromPlanId`.
+    expect(applyContractChangeToObligations).toHaveBeenCalledWith("sub1", "co1", {
+      kind: "plan_change",
+      fromPlanId: "plan_old",
+      toPlanId: "plan_x",
+    });
   });
 
   it("CAS NÃO pega (count 0: op já avançou) → NENHUM efeito, applied=false", async () => {
@@ -245,6 +274,49 @@ describe("applyLocal — atômico com CAS (Fase B)", () => {
     expect(txMock.subscriptionHistory.create).not.toHaveBeenCalled();
     expect(txMock.globalAudit.create).not.toHaveBeenCalled();
     expect(invalidatePlanFeaturesCache).not.toHaveBeenCalled(); // não aplicou → sem cache bust
+    // Task 9: rollback ⇒ NENHUM contrato novo existe. Reavaliar aqui invalidaria
+    // o congelamento de uma obrigação por uma troca que não aconteceu — e, se ela
+    // já estivesse emitida, alertaria o operador sobre um problema inexistente.
+    expect(applyContractChangeToObligations).not.toHaveBeenCalled();
+  });
+
+  it("🔥 Task 9: tx que aborta DEPOIS de ler o plano de origem não reavalia nada", async () => {
+    // O outro caminho de rollback: o CAS PEGOU, a leitura sob `FOR UPDATE`
+    // aconteceu (`planoAntesDaTroca` já está preenchido), e uma escrita seguinte
+    // falha. A transação inteira volta atrás — nenhum plano mudou —, então
+    // reavaliar obrigação aqui invalidaria o congelamento de um período cujo
+    // contrato é o mesmo de antes, e alertaria o operador sobre um problema
+    // inexistente se ela estivesse emitida.
+    //
+    // ⚠️ Ver a nota em `deps.ts`: hoje quem barra este caminho é o `throw`
+    // subindo, não a condição `applied`. A condição continua lá como guarda para
+    // o dia em que a ordem das linhas dentro da transação mudar; este teste trava
+    // o COMPORTAMENTO observável ("rollback ⇒ nenhuma reavaliação"),
+    // independentemente de qual das duas o garanta.
+    txMock.domusPlanChangeOp.updateMany.mockResolvedValue({ count: 1 });
+    txMock.subscription.update.mockRejectedValueOnce(new Error("deadlock na escrita"));
+
+    const deps = buildSagaDeps();
+    await expect(deps.applyLocal(makeOp())).rejects.toThrow(/deadlock/);
+
+    expect(applyContractChangeToObligations).not.toHaveBeenCalled();
+    expect(invalidatePlanFeaturesCache).not.toHaveBeenCalled();
+  });
+
+  it("Task 9: falha da reavaliação NÃO derruba a troca já commitada", async () => {
+    // A tx commitou: o plano JÁ mudou. Se a reavaliação lançasse (ou o `failed`
+    // virasse exceção), a saga marcaria a op como falha e tentaria de novo uma
+    // aplicação que já aconteceu.
+    txMock.domusPlanChangeOp.updateMany.mockResolvedValue({ count: 1 });
+    (applyContractChangeToObligations as unknown as ReturnType<typeof vi.fn>).mockResolvedValue({
+      kind: "failed",
+      detail: "banco fora",
+    });
+
+    const deps = buildSagaDeps();
+    const res = await deps.applyLocal(makeOp());
+
+    expect(res.applied).toBe(true);
   });
 
   // Achado Codex #5: entre o CAS e o FOR UPDATE, a assinatura pode ter sido
