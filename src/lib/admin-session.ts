@@ -3,6 +3,7 @@ import { jwtVerify } from "jose";
 import { redirect } from "next/navigation";
 import { prisma } from "@/lib/prisma";
 import { canAccessCompany } from "@/lib/admin-scope";
+import { FINANCE_ROLES } from "@/lib/admin-finance-roles";
 
 /**
  * Lê o segredo JWT em TEMPO DE REQUISIÇÃO (não no carregamento do módulo).
@@ -77,6 +78,21 @@ export async function requireAdminRole(allowedRoles: string[]): Promise<AdminPay
   const admin = await requireAdmin();
   if (!allowedRoles.includes(admin.role)) redirect("/admin?error=unauthorized");
   return admin;
+}
+
+/**
+ * Gate das telas de `/admin/(painel)/financeiro/**`.
+ *
+ * Existe como função nomeada (em vez de `requireAdminRole([...])` copiado em
+ * cada página) porque o buraco original nasceu de repetição: o array de papéis
+ * espalhado por N arquivos diverge com o tempo — foi assim que as rotas de API
+ * acabaram com duas convenções incompatíveis. Aqui há um ponto único: mudar a
+ * política financeira é editar `FINANCE_ROLES`, não caçar cinco telas.
+ *
+ * Ver `admin-finance-roles.ts` para a justificativa de cada papel.
+ */
+export async function requireFinanceAccess(): Promise<AdminPayload> {
+  return requireAdminRole([...FINANCE_ROLES]);
 }
 
 /**

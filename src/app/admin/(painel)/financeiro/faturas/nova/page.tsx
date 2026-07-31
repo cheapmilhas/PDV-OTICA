@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { NewInvoiceForm } from "./new-invoice-form";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -6,7 +6,8 @@ import { getProductContext } from "@/lib/admin-product-context";
 import { buildDashboardFilters } from "../../../dashboard-filters";
 
 export default async function NovaFaturaPage() {
-  await requireAdmin();
+  // Gate de PAPEL: emitir fatura é ação financeira, não de suporte.
+  await requireFinanceAccess();
 
   // Picker de empresa segue o produto ativo — senão o operador cobra uma empresa
   // do outro produto e o detalhe da fatura gerada cai no guard de produto (404).

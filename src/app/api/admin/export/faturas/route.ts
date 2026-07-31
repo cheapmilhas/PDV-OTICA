@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { getAdminSession, getAccessibleCompanyIds } from "@/lib/admin-session";
+import { isFinanceRole } from "@/lib/admin-finance-roles";
 import { prisma } from "@/lib/prisma";
 import { logger } from "@/lib/logger";
 import { csvRow } from "@/lib/csv-safe";
@@ -14,7 +15,11 @@ export async function GET(request: Request) {
   if (!admin) {
     return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
   }
-  if (!["SUPER_ADMIN", "ADMIN"].includes(admin.role)) {
+  // Mesma política de LEITURA das telas de /admin/financeiro (FINANCE_ROLES).
+  // Este export é o equivalente em CSV da tela de faturas — o array literal que
+  // estava aqui já divergia dela (excluía BILLING) e era exatamente o tipo de
+  // duplicação que faz as convenções desandarem. Fonte única agora.
+  if (!isFinanceRole(admin.role)) {
     return NextResponse.json({ error: "Sem permissão" }, { status: 403 });
   }
 

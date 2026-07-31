@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { notFound } from "next/navigation";
 import Link from "next/link";
@@ -21,7 +21,8 @@ export default async function InvoiceDetailPage({
 }: {
   params: Promise<{ id: string }>;
 }) {
-  const admin = await requireAdmin();
+  // Gate de PAPEL: o detalhe da fatura traz dados de cobrança do cliente.
+  const admin = await requireFinanceAccess();
   const { id } = await params;
 
   const invoice = await prisma.invoice.findUnique({

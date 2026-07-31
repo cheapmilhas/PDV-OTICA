@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { DollarSign, TrendingUp, AlertTriangle, Calendar, ArrowRight, Clock, CheckCircle2 } from "lucide-react";
@@ -10,7 +10,10 @@ import { getProductContext } from "@/lib/admin-product-context";
 import { buildDashboardFilters } from "../dashboard-filters";
 
 export default async function FinanceiroPage() {
-  await requireAdmin();
+  // Gate de PAPEL, não só de sessão: o gate antigo checava apenas que existia
+  // sessão, então qualquer conta autenticada (default do schema = SUPPORT) lia
+  // a receita consolidada da operadora.
+  await requireFinanceAccess();
 
   // Lente de produto: Invoice chega a Company por subscription.company (2 níveis).
   // `pf.invoiceCompany` já vem como { AND: [produto, soft-delete] }; compõe por

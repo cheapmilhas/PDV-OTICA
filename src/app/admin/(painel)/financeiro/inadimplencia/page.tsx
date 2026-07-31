@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { AlertTriangle, CheckCircle2 } from "lucide-react";
@@ -14,7 +14,8 @@ export default async function InadimplenciaPage({
 }: {
   searchParams: Promise<{ dias?: string }>;
 }) {
-  await requireAdmin();
+  // Gate de PAPEL: a régua de inadimplência nomeia quem está devendo e quanto.
+  await requireFinanceAccess();
 
   // Lente de produto (Invoice → subscription.company).
   const product = await getProductContext();

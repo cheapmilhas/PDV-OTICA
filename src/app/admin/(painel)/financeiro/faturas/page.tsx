@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import {
@@ -38,7 +38,9 @@ export default async function FaturasPage({
 }: {
   searchParams: Promise<{ status?: string; etapa?: string }>;
 }) {
-  await requireAdmin();
+  // Gate de PAPEL: a lista de faturas expõe cliente + valor + vencimento de
+  // toda a carteira. SUPPORT (default do schema) não entra.
+  await requireFinanceAccess();
 
   // Lente de produto. Invoice → subscription.company; a lista de empresas do
   // picker (Company) → filtro direto por platformProduct.
