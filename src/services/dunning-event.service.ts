@@ -81,6 +81,21 @@ export async function recordDunningNotice(
     });
     return true;
   } catch (error) {
+    // P2002 = violação do unique (invoiceId, action, stage). Isso NÃO é falha:
+    // é a idempotência funcionando. Significa que o aviso deste marco JÁ está
+    // registrado — o melhor cenário possível, não o pior.
+    //
+    // 🔑 Por que distinguir importa: tratar a colisão como erro faria o dia em
+    // que a trilha REALMENTE falhar (banco fora do ar) parecer idêntico ao dia
+    // em que ela funcionou perfeitamente. Ruído que mascara sinal — e esta
+    // trilha é a prova de I3, o que autoriza restringir a escrita de um tenant.
+    if (isUniqueViolation(error)) {
+      log.info("Trilha de dunning já registrada para este marco (idempotência)", {
+        companyId: input.companyId,
+        stage: input.stage,
+      });
+      return true;
+    }
     log.error("Falha ao gravar trilha de dunning", {
       companyId: input.companyId,
       stage: input.stage,
@@ -88,6 +103,21 @@ export async function recordDunningNotice(
     });
     return false;
   }
+}
+
+/**
+ * O erro é violação de constraint UNIQUE do Postgres?
+ *
+ * Checa o `code` do Prisma sem depender de `instanceof`: o cliente do Prisma é
+ * mockado nos testes, e um mock não produz instância de `PrismaClientKnownRequestError`.
+ */
+function isUniqueViolation(error: unknown): boolean {
+  return (
+    typeof error === "object" &&
+    error !== null &&
+    "code" in error &&
+    (error as { code: unknown }).code === "P2002"
+  );
 }
 
 /**

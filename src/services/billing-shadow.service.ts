@@ -723,9 +723,15 @@ async function planejarPeriodoNovo(
  * comportamento atual do cadeado. Medir o cadeado atual responderia a pergunta
  * de outra entrega.
  *
- * Fail-closed: qualquer erro de leitura devolve `false` (não restringe). Na
- * dúvida, o lado seguro é a favor do cliente — mesma política de
- * `hasDispatchedNotice`.
+ * ⚠️ **Fail-OPEN a favor do cliente** (não "fail-closed"): qualquer erro de
+ * leitura devolve `false`, ou seja, NÃO restringe. Na dúvida, o lado seguro é
+ * deixar o cliente escrever — mesma política de `hasDispatchedNotice`.
+ *
+ * A palavra importa porque no resto desta cadeia "fail-closed" significa "não
+ * cobra". Aqui a direção segura é a oposta: erro de leitura não pode virar
+ * bloqueio. Como esta função é exportada, alguém que a lesse rápido poderia
+ * achá-la apta a embasar enforcement — **não é**: um banco instável faria todo
+ * mundo parecer em dia.
  */
 export async function resolveWouldRestrict(
   companyId: string,

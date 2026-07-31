@@ -69,6 +69,30 @@ describe("recordDunningNotice", () => {
       recordDunningNotice({ companyId: "c1", invoiceId: "i1", stage: 3, delivered: true }, { db })
     ).resolves.toBe(false);
   });
+
+  it("🔑 colisão de unique (P2002) é IDEMPOTÊNCIA, não falha → true", async () => {
+    // O unique (invoiceId, action, stage) faz a reexecução do cron colidir em
+    // vez de gravar linha duplicada. Colidir significa "o aviso deste marco JÁ
+    // está registrado" — o melhor cenário, não o pior.
+    //
+    // Sem esta distinção, o dia em que a trilha REALMENTE falhar (banco fora)
+    // fica indistinguível do dia em que ela funcionou perfeitamente. E esta
+    // trilha é a prova de I3, que autoriza restringir a escrita de um tenant.
+    const p2002 = Object.assign(new Error("Unique constraint failed"), { code: "P2002" });
+    create.mockRejectedValue(p2002);
+    await expect(
+      recordDunningNotice({ companyId: "c1", invoiceId: "i1", stage: 14, delivered: true }, { db })
+    ).resolves.toBe(true);
+  });
+
+  it("erro com code diferente de P2002 continua sendo falha → false", async () => {
+    // Guarda contra afrouxar demais: só a violação de unicidade vira sucesso.
+    const outro = Object.assign(new Error("deadlock"), { code: "P2034" });
+    create.mockRejectedValue(outro);
+    await expect(
+      recordDunningNotice({ companyId: "c1", invoiceId: "i1", stage: 14, delivered: true }, { db })
+    ).resolves.toBe(false);
+  });
 });
 
 describe("hasDispatchedNotice", () => {
