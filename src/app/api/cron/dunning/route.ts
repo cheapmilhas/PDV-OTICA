@@ -21,6 +21,7 @@ import { notifyCompany } from "@/services/saas-notification.service";
 import { recordDunningNotice, hasDispatchedNotice } from "@/services/dunning-event.service";
 import { withHeartbeat } from "@/lib/cron-instrument";
 import { publishEntitlementForCompany } from "@/lib/vis-domus-publisher";
+import { sweepOverdueObligations } from "@/services/overdue-obligation-sweep.service";
 
 const log = logger.child({ route: "cron/dunning" });
 
@@ -66,6 +67,38 @@ export async function GET(request: Request) {
           lastDunningStage: true,
         },
       });
+
+      // ── Varredura de obrigações vencidas — I2 ────────────────────────────
+      //
+      // 🚨 A POSIÇÃO É A GARANTIA: esta chamada roda DEPOIS do `findMany` acima,
+      // NUNCA antes. Se rodasse antes, a assinatura recém-carimbada entraria no
+      // conjunto `overdue` no MESMO tick e poderia ser avisada e suspensa na
+      // mesma execução — atravessando os 14 dias de régua de uma vez, com o
+      // `daysOverdue` já alto porque o carimbo é o `dueAt` (que pode estar meses
+      // no passado). Rodando depois, a transição só vira restrição no tick
+      // SEGUINTE, e a régua conta os dias como deve.
+      //
+      // POR QUE AQUI, e não no `invoice-reminders` (10h): hospedar lá adicionaria
+      // 22h de latência gratuita e ficaria gateado por `invoiceGenerationEnabled`,
+      // que mora na tela de "E-mails" — o antipadrão que `billing-engine-flags.ts`
+      // rejeita explicitamente.
+      //
+      // Fecha o buraco do escritor único (o caso Óticas Ultra): até aqui só o
+      // webhook `PAYMENT_OVERDUE` do Asaas criava inadimplência, então uma
+      // obrigação que vencesse sem passar pelo gateway não fazia ninguém ficar
+      // `PAST_DUE`. Ver `overdue-obligation-sweep.service.ts`.
+      //
+      // Nunca lança: falha vira contador, não derruba a régua de quem já está
+      // marcado.
+      const sweep = await sweepOverdueObligations({ now });
+      if (sweep.marked.length > 0 || sweep.errors > 0) {
+        log.warn("Varredura de obrigações vencidas carimbou inadimplência", {
+          marked: sweep.marked.length,
+          skipped: sweep.skipped,
+          errors: sweep.errors,
+          companies: sweep.marked.map((s) => s.companyId),
+        });
+      }
 
       const summary = {
         total: overdue.length,
@@ -331,6 +364,14 @@ export async function GET(request: Request) {
         ok: true,
         ...summary,
         entitlementsAttempted: companies.length,
+        // Telemetria da varredura de I2. `swept` é o número de assinaturas que
+        // GANHARAM carimbo nesta rodada — nenhuma delas foi processada pela
+        // régua acima (elas entram no conjunto só amanhã), e é isso que o número
+        // separado torna visível: `total` e `swept` são conjuntos disjuntos
+        // dentro de uma mesma execução.
+        swept: sweep.marked.length,
+        sweptSkipped: sweep.skipped,
+        sweepErrors: sweep.errors,
         runAt: now.toISOString(),
       });
     });

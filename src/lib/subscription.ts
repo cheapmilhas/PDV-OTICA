@@ -259,7 +259,26 @@ export async function checkSubscription(
   // acesso ANTES de a régua terminar de avisar, o bug que esta mudança existe
   // para evitar.
   if (subscription.status === "PAST_DUE") {
-    const pastDueSince = subscription.pastDueSince ?? subscription.currentPeriodEnd ?? now;
+    // 🔑 I2 — o relógio da inadimplência conta a partir de um carimbo GRAVADO,
+    // nunca de um campo que só parece com um.
+    //
+    // Antes havia um fallback `?? currentPeriodEnd` aqui. Ele restringia com
+    // base num campo que NINGUÉM carimba como "início da inadimplência" e que
+    // tem 5+ escritores — inclusive `mark_paid`, que confirma pagamento sem
+    // avançá-lo. Uma assinatura `PAST_DUE` com `pastDueSince` nulo e
+    // `currentPeriodEnd` antigo era restringida por um vencimento de período
+    // que ninguém reconheceu como dívida. Isso é I2 violada: a decisão saía de
+    // uma data de calendário, não de um estado escrito.
+    //
+    // ⚠️ O `?? now` FICA, e a direção importa: ele faz `daysOverdue = 0`, ou
+    // seja NÃO restringe. É fail-OPEN a favor do cliente, coerente com o
+    // `hasDispatchedNotice` logo abaixo. Trocá-lo por algo mais estrito
+    // converteria fail-open em fail-closed no gate que decide se um profissional
+    // de saúde consegue escrever prontuário.
+    //
+    // `PAST_DUE` sem carimbo é dado inconsistente: o cliente não é restringido,
+    // e quem conserta é o cron (que grava o carimbo), não este gate.
+    const pastDueSince = subscription.pastDueSince ?? now;
     const daysOverdue = Math.floor(
       (now.getTime() - pastDueSince.getTime()) / (1000 * 60 * 60 * 24)
     );

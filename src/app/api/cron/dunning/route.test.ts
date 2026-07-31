@@ -71,6 +71,13 @@ vi.mock("@/lib/vis-domus-publisher", () => ({
   publishEntitlementForCompany: (...a: unknown[]) => publishEntitlementForCompany(...a),
 }));
 
+// Varredura de obrigações vencidas (I2) — mockada para testar a POSIÇÃO da
+// chamada dentro do cron, que é a garantia de segurança da entrega.
+const sweepOverdueObligations = vi.fn();
+vi.mock("@/services/overdue-obligation-sweep.service", () => ({
+  sweepOverdueObligations: (...a: unknown[]) => sweepOverdueObligations(...a),
+}));
+
 // ── Import AFTER mocks ─────────────────────────────────────────────────────────
 import { GET } from "./route";
 
@@ -107,6 +114,9 @@ beforeEach(() => {
   invoiceFindFirst.mockReset().mockResolvedValue({ id: "inv-1" });
   dunningEventCreate.mockReset().mockResolvedValue({ id: "evt-1" });
   dunningEventFindFirst.mockReset().mockResolvedValue({ id: "evt-1" });
+  sweepOverdueObligations
+    .mockReset()
+    .mockResolvedValue({ marked: [], skipped: 0, errors: 0 });
 });
 
 // ── Tests ─────────────────────────────────────────────────────────────────────
@@ -470,6 +480,100 @@ describe("GET /api/cron/dunning — notifyCompany email integration", () => {
       (c) => c[1] === "SUBSCRIPTION_SUSPENDED"
     );
     expect(suspendedCall).toBeUndefined();
+  });
+
+  // ── I2: a varredura de obrigações vencidas e a sua POSIÇÃO ────────────────
+
+  /**
+   * 🚨 O TESTE QUE TRAVA A DECISÃO DE SEGURANÇA DA FORJA.
+   *
+   * A varredura carimba `pastDueSince` com o `dueAt` da obrigação — que pode
+   * estar MESES no passado. Se ela rodasse ANTES do `findMany`, a assinatura
+   * recém-carimbada entraria no conjunto no MESMO tick já com `daysOverdue`
+   * alto, e a régua poderia avisar e suspender na mesma execução: os 14 dias
+   * atravessados de uma vez. O crítico de segurança matou a abordagem que fazia
+   * isso.
+   *
+   * Aqui a ordem é provada por gravação: quem chamou primeiro deixa marca.
+   */
+  it("🚨 a varredura roda DEPOIS do findMany — a transição só restringe no tick SEGUINTE", async () => {
+    const ordem: string[] = [];
+    subscriptionFindMany.mockImplementation(async () => {
+      ordem.push("findMany");
+      return [];
+    });
+    sweepOverdueObligations.mockImplementation(async () => {
+      ordem.push("sweep");
+      return { marked: [], skipped: 0, errors: 0 };
+    });
+
+    await GET(makeRequest());
+
+    expect(ordem).toEqual(["findMany", "sweep"]);
+  });
+
+  it("assinatura carimbada NESTA rodada NÃO é processada pela régua na mesma execução", async () => {
+    // A prova de consequência, não só de ordem: o conjunto `overdue` foi lido
+    // ANTES, então a recém-marcada não está nele. Nada de aviso, nada de
+    // suspensão, nada de publish para ela hoje.
+    subscriptionFindMany.mockResolvedValue([]); // ninguém marcado ANTES da varredura
+    sweepOverdueObligations.mockResolvedValue({
+      marked: [
+        {
+          subscriptionId: "sub-ultra",
+          companyId: "co-oticas-ultra",
+          // 90 dias no passado: se ela entrasse no conjunto deste tick, passaria
+          // dos 14 (suspensão) E dos 30 (cancelamento) numa execução só.
+          pastDueSince: daysAgo(90),
+        },
+      ],
+      skipped: 0,
+      errors: 0,
+    });
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+
+    expect(body.swept).toBe(1);
+    expect(body.total).toBe(0);
+    expect(body.suspended).toBe(0);
+    expect(body.canceled).toBe(0);
+    expect(body.noticeSent).toBe(0);
+    expect(notifyCompany).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+  });
+
+  it("a varredura recebe o MESMO `now` da rodada (um só relógio por execução)", async () => {
+    subscriptionFindMany.mockResolvedValue([]);
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+
+    const arg = sweepOverdueObligations.mock.calls[0][0] as { now: Date };
+    expect(arg.now).toBeInstanceOf(Date);
+    expect(arg.now.toISOString()).toBe(body.runAt);
+  });
+
+  it("varredura falhando não derruba a régua de quem já está marcado", async () => {
+    // O serviço nunca lança, mas o cron não pode DEPENDER disso: se um dia
+    // lançar, a suspensão de quem já está na régua não pode ser cancelada junto.
+    subscriptionFindMany.mockResolvedValue([
+      {
+        id: "sub-ja-marcado",
+        companyId: "co-ja-marcado",
+        pastDueSince: daysAgo(15),
+        status: "PAST_DUE",
+        lastDunningStage: 14,
+      },
+    ]);
+    sweepOverdueObligations.mockResolvedValue({ marked: [], skipped: 0, errors: 1 });
+
+    const res = await GET(makeRequest());
+    const body = await res.json();
+
+    expect(res.status).toBe(200);
+    expect(body.sweepErrors).toBe(1);
+    expect(body.suspended).toBe(1);
   });
 
   // ── Summary response ──────────────────────────────────────────────────────
