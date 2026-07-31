@@ -11,8 +11,19 @@ export const runtime = "nodejs";
 /**
  * GET /api/cron/invoice-reminders
  *
- * Dispara o motor de lembretes de fatura: envia e-mail de "fatura criada" para
- * assinantes com cobrança Asaas gerada no ciclo atual (dívida Fase 2 - Task 6).
+ * Duas coisas, nesta ordem:
+ *
+ * 1. **Fase de GERAÇÃO** (`billing-generation-phase.service.ts`) — o motor de
+ *    obrigação e o modo sombra, cada um atrás da sua própria env var. É o
+ *    chamador que faltava: até a Task 7, `runObligationsForCompanies` e
+ *    `runShadowForCompanies` não eram invocados de lugar nenhum.
+ * 2. **Lembretes de fatura** — "fatura criada" e "vence em breve", gateados por
+ *    `invoiceGenerationEnabled` (`SaasEmailConfig`).
+ *
+ * 🚨 A fase 1 roda ANTES do early return da fase 2, e isso é decisão, não
+ * acidente: `invoiceGenerationEnabled` é editada numa tela chamada "E-mails", e
+ * pendurar o motor de cobrança nela transformaria um botão de e-mail em
+ * "desligar o faturamento". Ver a nota em `runInvoiceReminders`.
  *
  * Autenticação: fail-CLOSED com CRON_SECRET (Bearer) — igual dunning/reconcile-billing.
  * vercel.json: { "path": "/api/cron/invoice-reminders", "schedule": "0 10 * * *" }

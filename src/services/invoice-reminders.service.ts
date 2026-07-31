@@ -4,6 +4,11 @@ import { getSaasEmailConfig } from "@/services/saas-email-config.service";
 import { syncInvoicesForSubscription } from "@/services/invoice-sync.service";
 import { notifyCompany } from "@/services/saas-notification.service";
 import { brl, dateBR } from "@/lib/format-brl";
+import {
+  runGenerationPhase,
+  type GenerationDeps,
+  type GenerationSummary,
+} from "@/services/billing-generation-phase.service";
 
 const log = logger.child({ service: "invoice-reminders" });
 
@@ -15,10 +20,42 @@ export interface RunSummary {
   skipped: "generation_disabled" | null;
   errors: number;
   runAt: string;
+  /**
+   * Resultado da fase de geração (motor de obrigação + modo sombra).
+   *
+   * 🔑 Fica FORA de `skipped` e de `errors` de propósito. `skipped` descreve as
+   * fases de LEMBRETE, gateadas por `invoiceGenerationEnabled`; a fase de
+   * geração tem as suas próprias quatro chaves e roda mesmo quando aquela está
+   * desligada. Somar os dois num campo só faria "lembretes desligados" e "motor
+   * desligado" virarem a mesma palavra no painel.
+   */
+  generation: GenerationSummary;
 }
 
-export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<RunSummary> {
+export async function runInvoiceReminders(
+  opts: { now?: Date; generationDeps?: GenerationDeps } = {},
+): Promise<RunSummary> {
   const now = opts.now ?? new Date();
+
+  // ═══════════════════════════════════════════════════════════════════════════
+  // FASE DE GERAÇÃO — antes de tudo, e a posição É a decisão
+  // ═══════════════════════════════════════════════════════════════════════════
+  //
+  // 🚨 ANTES DO EARLY RETURN LOGO ABAIXO. `invoiceGenerationEnabled` mora em
+  // `SaasEmailConfig`, nasce `false` e é editada numa tela chamada "E-mails".
+  // Se a geração ficasse depois daquele `return`, o motor de cobrança inteiro
+  // ficaria gateado por um botão de e-mail — desligar lembretes desligaria o
+  // faturamento do SaaS em silêncio. As quatro chaves do motor são env var
+  // exatamente para não depender dessa coluna (`billing-engine-flags.ts`), e
+  // esta ordem é o que faz a independência valer no código que roda.
+  //
+  // 🚨 E ANTES DAS FASES A E B (Passo 1 do plano): a fatura que o motor emitir
+  // agora já é varrida pelo lembrete de "fatura criada"/"vence em breve" do
+  // MESMO tick, em vez de esperar 24 horas pela rodada seguinte.
+  //
+  // Nunca lança — ver `runGenerationPhase`.
+  const generation = await runGenerationPhase({ ...opts.generationDeps, now });
+
   const summary: RunSummary = {
     subscriptionsScanned: 0,
     invoicesCreated: 0,
@@ -27,6 +64,7 @@ export async function runInvoiceReminders(opts: { now?: Date } = {}): Promise<Ru
     skipped: null,
     errors: 0,
     runAt: now.toISOString(),
+    generation,
   };
 
   // Gate: check master generation flag
