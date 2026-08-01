@@ -1177,7 +1177,27 @@ async function cancelarFaturas(tx, alvo, sub, vb) {
   // cobrança dupla já a ignora (`isManual: false`), então ela não travaria
   // emissão nenhuma. Cancelá-la seria o script desfazendo à revelia um
   // lançamento que alguém fez de propósito. Aborta e devolve a decisão ao dono.
-  const manuais = vivas.filter((i) => i.isManual);
+  //
+  // ⚠️ EXCEÇÃO NOMINAL, aprovada pelo dono em 2026-07-30 DEPOIS de o dry-run ter
+  // barrado e ele ter inspecionado as duas linhas. NÃO é afrouxamento da regra:
+  // a lista é de IDs LITERAIS, então qualquer outra fatura manual — nesta ou em
+  // outra assinatura, hoje ou amanhã — continua abortando.
+  //
+  // O que são: R$ 5,00 numa assinatura ANUAL de R$ 1.499,00, descritas "TESTE" e
+  // "MENSALIDADE JJULHO" (com o typo), criadas em 11 e 12/06/2026.
+  //
+  // 🚨 A guarda de PIX VIVO logo abaixo continua valendo para elas. Anular a
+  // fatura local NÃO cancela a cobrança no Asaas — o cliente ainda conseguiria
+  // pagar, e o webhook (que hoje mexe em obrigação) ressuscitaria a fatura como
+  // PAID. Por isso esta exceção sozinha NÃO destrava o script: o dono tem que
+  // cancelar os PIX no painel do Asaas primeiro. É de propósito.
+  const MANUAIS_APROVADAS_PARA_VOID = new Set([
+    "cmqa5j96l0003mndw7n7hdqe6", // INV-000005 "TESTE" — pay_nfmlisx8urjclfid
+    "cmqabuwzf00014brjd91vvspg", // INV-000006 "MENSALIDADE JJULHO" — pay_8q0tv3vfmuva0a2w
+  ]);
+  const manuais = vivas.filter(
+    (i) => i.isManual && !MANUAIS_APROVADAS_PARA_VOID.has(i.id)
+  );
   if (manuais.length > 0) {
     throw new Error(
       `${alvo.rotulo}: ${manuais.length} fatura(s) viva(s) são MANUAIS ` +
