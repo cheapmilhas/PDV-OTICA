@@ -197,13 +197,13 @@ export default function RegistroMedicalPage() {
   // pessoa para uma tela de login que ela não consegue usar seria um beco.
   if (done) {
     return (
-      <main className="flex min-h-screen items-center justify-center bg-teal-50/60 p-4">
+      <main className="flex min-h-screen items-center justify-center bg-background p-4">
         <Card className="w-full max-w-md">
           <CardContent className="pt-6 text-center">
-            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-teal-100">
-              <Mail className="h-7 w-7 text-teal-700" aria-hidden="true" />
+            <div className="mx-auto mb-4 flex h-14 w-14 items-center justify-center rounded-full bg-success/10">
+              <Mail className="h-7 w-7 text-success" aria-hidden="true" />
             </div>
-            <h1 className="text-xl font-semibold text-foreground">
+            <h1 className="text-2xl font-bold tracking-tight text-foreground">
               Clínica criada. Agora confira seu e-mail.
             </h1>
             <p className="mt-2 text-sm text-muted-foreground">
@@ -225,7 +225,7 @@ export default function RegistroMedicalPage() {
   }
 
   return (
-    <main className="flex min-h-screen items-center justify-center bg-teal-50/60 p-4">
+    <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
           <Link href="/" className="inline-flex items-center justify-center">
@@ -238,9 +238,23 @@ export default function RegistroMedicalPage() {
               style={{ height: 40, width: "auto" }}
             />
           </Link>
-          <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-teal-800">
+          {/* secondary-foreground, não muted-foreground: este último dá 4,39:1
+              contra o fundo — abaixo de AA para texto normal. */}
+          <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-secondary-foreground">
             <Stethoscope className="h-4 w-4" aria-hidden="true" />
             Gestão para clínicas e consultórios
+          </p>
+          {/* h1 real: antes o papel de título era do CardTitle, que é text-base
+              font-semibold — praticamente o tamanho do corpo. Sem um degrau de
+              topo a tela inteira ficava num só nível visual. */}
+          {/* Sem promessa de gratuidade no título: o trial é por plano
+              (`trialDays > 0`) e a API pode servir plano sem trial — quem
+              anuncia "grátis" é o card do plano que de fato tem. */}
+          <h1 className="mt-4 text-2xl font-bold tracking-tight text-foreground sm:text-3xl">
+            Crie a conta da sua clínica
+          </h1>
+          <p className="mt-2 text-sm text-secondary-foreground">
+            Três passos rápidos e você recebe o convite de acesso.
           </p>
         </div>
 
@@ -251,11 +265,15 @@ export default function RegistroMedicalPage() {
             <li key={s.title} className="flex items-center gap-2">
               <span
                 aria-current={i === step ? "step" : undefined}
+                // Três estados VISUALMENTE distintos: preenchido (atual),
+                // contornado (concluído) e neutro (pendente). Dois tons da
+                // mesma cor não bastam — e um tint claro no concluído o
+                // deixaria indistinguível do pendente (contraste 1,00:1).
                 className={`flex h-8 w-8 items-center justify-center rounded-full text-sm font-medium transition-colors ${
                   i < step
-                    ? "bg-teal-600 text-white"
+                    ? "border-2 border-primary bg-background text-primary"
                     : i === step
-                      ? "bg-teal-700 text-white"
+                      ? "bg-primary text-primary-foreground"
                       : "bg-muted text-muted-foreground"
                 }`}
               >
@@ -278,7 +296,7 @@ export default function RegistroMedicalPage() {
               {i < STEPS.length - 1 && (
                 <span
                   aria-hidden="true"
-                  className={`h-px w-8 ${i < step ? "bg-teal-600" : "bg-muted"}`}
+                  className={`h-px w-8 ${i < step ? "bg-primary" : "bg-muted"}`}
                 />
               )}
             </li>
@@ -370,10 +388,13 @@ export default function RegistroMedicalPage() {
                       type="button"
                       onClick={() => updateField("planId", plan.id)}
                       aria-pressed={ativo}
-                      className={`w-full cursor-pointer rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-teal-600 focus-visible:ring-offset-2 ${
+                      // Hover usa border-primary/50, não sólido: a borda sólida
+                      // é a pista de SELEÇÃO — dar a mesma ao card sob o mouse
+                      // apagaria a diferença entre "escolhido" e "sob o cursor".
+                      className={`w-full cursor-pointer rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                         ativo
-                          ? "border-teal-600 bg-teal-50"
-                          : "border-border hover:border-teal-300 hover:bg-muted/40"
+                          ? "border-primary bg-primary/5"
+                          : "border-border hover:border-primary/50 hover:bg-muted/40"
                       }`}
                     >
                       <div className="flex items-start justify-between gap-3">
@@ -393,7 +414,7 @@ export default function RegistroMedicalPage() {
                         </div>
                       </div>
                       {plan.trialDays > 0 && (
-                        <p className="mt-2 text-xs font-medium text-teal-700">
+                        <p className="mt-2 text-xs font-medium text-accent-foreground">
                           {plan.trialDays} dias grátis — sem cartão de crédito
                         </p>
                       )}
@@ -465,7 +486,7 @@ export default function RegistroMedicalPage() {
         </p>
         <p className="mt-2 text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
-          <Link href="/login" className="font-medium text-teal-700 hover:underline">
+          <Link href="/login" className="font-medium text-primary hover:underline">
             Entrar
           </Link>
         </p>
