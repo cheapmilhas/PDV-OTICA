@@ -228,9 +228,18 @@ export default function RegistroMedicalPage() {
     <main className="flex min-h-screen items-center justify-center bg-background p-4">
       <div className="w-full max-w-lg">
         <div className="mb-6 text-center">
-          <Link href="/" className="inline-flex items-center justify-center">
+          {/* `flex` (não inline-flex) porque o <p> seguinte precisa cair na
+              LINHA DE BAIXO. Com inline-flex os dois disputavam a mesma linha e
+              no mobile o subtítulo era espremido ao lado da marca. */}
+          <Link href="/" className="flex items-center justify-center">
+            {/* vis-logo-alpha.png, não vis-logo.png: o oficial não tem canal
+                alfa — é um retângulo sólido #FFFEFE que desenhava uma moldura
+                branca sobre o fundo #F5F7FA da página. O `VisLogo` contorna isso
+                pintando #FFFEFE atrás da arte, mas só funciona em fundo branco
+                (aqui a diferença de 6 níveis ainda aparecia). Este arquivo tem
+                transparência de verdade — e 7 KB em vez de 766 KB. */}
             <Image
-              src="/vis-logo.png"
+              src="/vis-logo-alpha.png"
               alt="Vis Medical — página inicial"
               width={120}
               height={40}
@@ -240,8 +249,11 @@ export default function RegistroMedicalPage() {
           </Link>
           {/* secondary-foreground, não muted-foreground: este último dá 4,39:1
               contra o fundo — abaixo de AA para texto normal. */}
-          <p className="mt-2 inline-flex items-center gap-1.5 text-sm text-secondary-foreground">
-            <Stethoscope className="h-4 w-4" aria-hidden="true" />
+          {/* Ícone no azul da marca (o mesmo do símbolo da logo, logo acima) —
+              é o detalhe que amarra o cabeçalho. O ciano `--brand-accent` daria
+              2,01:1 contra o fundo, abaixo do piso de 3:1 até para ícone. */}
+          <p className="mt-3 flex items-center justify-center gap-1.5 text-sm text-secondary-foreground">
+            <Stethoscope className="h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
             Gestão para clínicas e consultórios
           </p>
           {/* h1 real: antes o papel de título era do CardTitle, que é text-base
@@ -391,7 +403,10 @@ export default function RegistroMedicalPage() {
                       // Hover usa border-primary/50, não sólido: a borda sólida
                       // é a pista de SELEÇÃO — dar a mesma ao card sob o mouse
                       // apagaria a diferença entre "escolhido" e "sob o cursor".
-                      className={`w-full cursor-pointer rounded-lg border p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
+                      // `border-2` sempre (não só no ativo) para a largura da
+                      // borda não mudar entre estados — trocar 1px por 2px
+                      // deslocaria o conteúdo em 1px a cada seleção.
+                      className={`w-full cursor-pointer rounded-lg border-2 p-4 text-left transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 focus-visible:ring-offset-card ${
                         ativo
                           ? "border-primary bg-primary/5"
                           : "border-border hover:border-primary/50 hover:bg-muted/40"
@@ -399,7 +414,19 @@ export default function RegistroMedicalPage() {
                     >
                       <div className="flex items-start justify-between gap-3">
                         <div>
-                          <span className="font-medium text-foreground">{plan.name}</span>
+                          {/* Check visível na seleção: no CELULAR não existe
+                              hover, então a borda sozinha não diz qual card
+                              está escolhido — a pista precisa ser própria do
+                              estado, não do cursor. */}
+                          <span className="flex items-center gap-1.5 font-medium text-foreground">
+                            {ativo && (
+                              <Check
+                                className="h-4 w-4 shrink-0 text-primary"
+                                aria-hidden="true"
+                              />
+                            )}
+                            {plan.name}
+                          </span>
                           {plan.description && (
                             <p className="mt-0.5 text-sm text-muted-foreground">
                               {plan.description}
