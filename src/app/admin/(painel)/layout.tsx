@@ -6,6 +6,8 @@ import { AdminSidebar, AdminMobileMenu } from "@/components/admin/AdminSidebar";
 import { AdminBreadcrumb } from "./admin-breadcrumb";
 import { countOpenEvents } from "@/services/system-event.service";
 import { getProductContext } from "@/lib/admin-product-context";
+import { getAdminSession } from "@/lib/admin-session";
+import { isFinanceRole } from "@/lib/admin-finance-roles";
 
 export const metadata: Metadata = {
   title: "PDV Ótica - Admin",
@@ -20,10 +22,21 @@ export default async function AdminLayout({ children }: { children: React.ReactN
   // "Vis App" no reload enquanto o cookie está em "Vis Medical").
   const activeProduct = await getProductContext();
 
+  /**
+   * Papel do admin só para decidir QUAIS LINKS o menu mostra.
+   *
+   * ⚠️ Este layout NÃO é gate: `getAdminSession()` pode devolver null e mesmo
+   * assim renderizamos (quem barra sessão ausente é `src/proxy.ts` + o
+   * `requireAdmin()` de cada página). Esconder a seção financeira aqui é UX —
+   * a autorização de verdade está no Server Component de cada tela.
+   */
+  const session = await getAdminSession();
+  const canSeeFinance = isFinanceRole(session?.role);
+
   return (
     <div className="flex min-h-screen bg-background">
       {/* Sidebar (desktop fixa + drawer mobile) */}
-      <AdminSidebar activeProduct={activeProduct} />
+      <AdminSidebar activeProduct={activeProduct} canSeeFinance={canSeeFinance} />
 
       {/* Main */}
       <main className="flex-1 overflow-y-auto">
@@ -32,7 +45,7 @@ export default async function AdminLayout({ children }: { children: React.ReactN
         <header className="sticky top-0 z-30 flex items-center justify-between gap-4 h-14 px-4 sm:px-6 border-b border-border bg-background/80 backdrop-blur supports-[backdrop-filter]:bg-background/60">
           <div className="flex items-center gap-2 min-w-0">
             {/* Hambúrguer só aparece no mobile (lg:hidden no próprio botão) */}
-            <AdminMobileMenu activeProduct={activeProduct} />
+            <AdminMobileMenu activeProduct={activeProduct} canSeeFinance={canSeeFinance} />
             <AdminBreadcrumb />
           </div>
           <div className="flex items-center gap-1">

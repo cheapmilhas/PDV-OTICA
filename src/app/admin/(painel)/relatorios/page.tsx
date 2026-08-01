@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import Link from "next/link";
 import { Users, CreditCard, FileText, Ticket, Download, Heart, Activity, TrendingUp } from "lucide-react";
@@ -13,7 +13,11 @@ import { KPICard } from "@/components/admin/KPICard";
 import { DollarSign } from "lucide-react";
 
 export default async function RelatoriosPage() {
-  await requireAdmin();
+  // Tela DEDICADA a agregado financeiro: MRR, churn e conversão de trial da
+  // operadora inteira, mais os cards de export. Não há nada aqui que sobre para
+  // quem não tem papel financeiro — então barra a página, não esconde blocos
+  // (diferente do dashboard, que é a home e o alvo do redirect deste gate).
+  await requireFinanceAccess();
 
   // Lente de produto. Subscription e SupportTicket chegam a Company pela relação
   // `company` → mesma via do dashboard (pf.subscriptionCompany). Os helpers de

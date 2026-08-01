@@ -1,4 +1,4 @@
-import { requireAdmin } from "@/lib/admin-session";
+import { requireFinanceAccess } from "@/lib/admin-session";
 import { prisma } from "@/lib/prisma";
 import { Building2, CreditCard, Clock, DollarSign, Layers } from "lucide-react";
 import { PageHeader } from "@/components/admin/PageHeader";
@@ -29,7 +29,10 @@ function fmtBRL(centavos: number): string {
  * de manhã" (plano-mãe §5.5).
  */
 export default async function GrupoPage() {
-  await requireAdmin();
+  // "MRR do Grupo" é o agregado financeiro MAIS sensível do painel: soma a
+  // receita recorrente dos DOIS produtos. Barrar a tela inteira — o KPI de topo
+  // já é o dado protegido, não há versão degradada útil.
+  await requireFinanceAccess();
 
   const now = new Date();
 

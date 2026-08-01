@@ -1,4 +1,5 @@
 import { requireAdmin } from "@/lib/admin-session";
+import { isFinanceRole } from "@/lib/admin-finance-roles";
 import { prisma } from "@/lib/prisma";
 import { AlertTriangle, Building2, Clock, CreditCard, TrendingUp, DollarSign, Activity, CheckCircle2, Bell } from "lucide-react";
 import Link from "next/link";
@@ -19,30 +20,56 @@ import { buildDashboardFilters } from "./dashboard-filters";
 export default async function AdminDashboardPage() {
   const admin = await requireAdmin();
 
+  /**
+   * ─── Por que o dashboard ESCONDE em vez de BARRAR ──────────────────────────
+   *
+   * As telas dedicadas do financeiro (`/admin/financeiro/**`, `/admin/relatorios`,
+   * `/admin/grupo`) chamam `requireFinanceAccess()`, que redireciona para
+   * `/admin?error=unauthorized`. `/admin` é ESTA página. Colocar o mesmo gate
+   * aqui criaria um laço de redirecionamento infinito: SUPPORT abre
+   * `/admin/relatorios` → vai para `/admin` → gate barra → vai para `/admin`…
+   * (`src/proxy.ts` só checa `isAdmin`, nunca o papel, e o layout `(painel)` não
+   * tem gate — não há nada que interrompa o laço.)
+   *
+   * Além disso o dashboard é a HOME do painel: barrá-lo deixaria um SUPPORT
+   * legítimo sem nenhuma porta de entrada.
+   *
+   * Então a política aqui é: o papel decide se os dados financeiros são
+   * CONSULTADOS — não apenas se são renderizados. Esconder o JSX mantendo a
+   * query seria vazamento igual: o número viajaria no payload RSC (o `MrrChart`
+   * é Client Component e recebe a série como prop) e apareceria em qualquer
+   * inspeção de rede. Por isso `financeiro` abaixo é `null` para quem não tem
+   * papel, e as queries de Invoice/MRR nem chegam a sair.
+   */
+  const canSeeFinance = isFinanceRole(admin.role);
+
   const product = await getProductContext();
   const pf = buildDashboardFilters(product);
 
+  // Fase B: tendências mês atual vs. mês anterior (fuso SP — lição M2).
+  const nowDate = new Date();
+  const curStart = startOfLocalMonth(nowDate);
+  const curEnd = endOfLocalMonth(nowDate);
+  const prevRef = new Date(curStart.getTime() - 1); // 1ms antes do início do mês atual = mês anterior
+  const prevStart = startOfLocalMonth(prevRef);
+  const prevEnd = endOfLocalMonth(prevRef);
+
+  // ─── Bloco SEMPRE permitido: operação, não dinheiro ───────────────────────
   const [
     totalCompanies,
     activeCount,
     trialCount,
-    pastDueCount,
-    suspendedCount,
-    totalRevenue,
     recentCompanies,
     expiringTrials,
-    activeSubs,
     criticalHealthCount,
     atRiskHealthCount,
-    pendingInvoices,
     lastHealthCalc,
+    newCompaniesCur,
+    newCompaniesPrev,
   ] = await Promise.all([
     prisma.company.count({ where: { ...pf.company } }),
     prisma.subscription.count({ where: { status: "ACTIVE", ...pf.subscriptionCompany } }),
     prisma.subscription.count({ where: { status: "TRIAL", ...pf.subscriptionCompany } }),
-    prisma.subscription.count({ where: { status: "PAST_DUE", ...pf.subscriptionCompany } }),
-    prisma.subscription.count({ where: { status: "SUSPENDED", ...pf.subscriptionCompany } }),
-    prisma.invoice.aggregate({ where: { status: "PAID", ...pf.invoiceCompany }, _sum: { total: true } }),
     prisma.company.findMany({
       take: 10,
       where: { ...pf.company },
@@ -62,78 +89,86 @@ export default async function AdminDashboardPage() {
       },
       include: { company: { select: { id: true, name: true } }, plan: { select: { name: true } } },
     }),
-    prisma.subscription.findMany({ where: { status: "ACTIVE", ...pf.subscriptionCompany }, include: { plan: true } }),
     prisma.company.count({ where: { healthCategory: "CRITICAL", ...pf.company } }),
     prisma.company.count({ where: { healthCategory: "AT_RISK", ...pf.company } }),
-    prisma.invoice.findMany({
-      where: {
-        status: "PENDING",
-        dueDate: { lte: new Date(Date.now() + 7 * 86400000) }, // Vence em 7 dias
-        ...pf.invoiceCompany,
-      },
-      include: {
-        subscription: {
-          include: {
-            company: { select: { id: true, name: true } }
-          }
-        }
-      },
-      orderBy: { dueDate: "asc" },
-      take: 5,
-    }),
     // Fase A: data do health mais recente — mostra se os números de saúde estão frescos.
     prisma.company.findFirst({
       where: { healthUpdatedAt: { not: null }, ...pf.company },
       orderBy: { healthUpdatedAt: "desc" },
       select: { healthUpdatedAt: true },
     }),
-  ]);
-
-  // Fase B: tendências mês atual vs. mês anterior (fuso SP — lição M2).
-  const nowDate = new Date();
-  const curStart = startOfLocalMonth(nowDate);
-  const curEnd = endOfLocalMonth(nowDate);
-  const prevRef = new Date(curStart.getTime() - 1); // 1ms antes do início do mês atual = mês anterior
-  const prevStart = startOfLocalMonth(prevRef);
-  const prevEnd = endOfLocalMonth(prevRef);
-
-  const [
-    newCompaniesCur,
-    newCompaniesPrev,
-    revenueCur,
-    revenuePrev,
-  ] = await Promise.all([
     prisma.company.count({ where: { createdAt: { gte: curStart, lte: curEnd }, ...pf.company } }),
     prisma.company.count({ where: { createdAt: { gte: prevStart, lte: prevEnd }, ...pf.company } }),
-    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: curStart, lte: curEnd }, ...pf.invoiceCompany }, _sum: { total: true } }),
-    prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: prevStart, lte: prevEnd }, ...pf.invoiceCompany }, _sum: { total: true } }),
   ]);
 
-  const companiesTrend = computeTrend(newCompaniesCur, newCompaniesPrev);
-  const revenueTrend = computeTrend(
-    (revenueCur._sum?.total ?? 0) / 100,
-    (revenuePrev._sum?.total ?? 0) / 100
-  );
+  /**
+   * ─── Bloco FINANCEIRO: só roda com papel ──────────────────────────────────
+   *
+   * Escopo do bloco (o que conta como "financeiro" aqui): receita recebida,
+   * MRR e a série do MRR — os agregados consolidados da operadora — mais os
+   * sinais de cobrança (faturas vencidas e a vencer). Inadimplência e faturas
+   * pendentes entram porque são estado de cobrança da carteira inteira, o mesmo
+   * dado que `/admin/financeiro/inadimplencia` acabou de trancar; deixá-los no
+   * dashboard trocaria a tela pelo atalho.
+   *
+   * Ficam DE FORA de propósito (seguem visíveis a SUPPORT): contagens de
+   * empresas/assinaturas/trials, health score e empresas recentes. São sinais
+   * operacionais que o suporte precisa para trabalhar, e nenhum deles carrega
+   * valor em reais.
+   */
+  const financeiro = canSeeFinance
+    ? await (async () => {
+        const [pastDueCount, totalRevenue, activeSubs, pendingInvoicesCount, revenueCur, revenuePrev] =
+          await Promise.all([
+            prisma.subscription.count({ where: { status: "PAST_DUE", ...pf.subscriptionCompany } }),
+            prisma.invoice.aggregate({ where: { status: "PAID", ...pf.invoiceCompany }, _sum: { total: true } }),
+            prisma.subscription.findMany({ where: { status: "ACTIVE", ...pf.subscriptionCompany }, include: { plan: true } }),
+            // Só a CONTAGEM: o card mostra `.length` e nada mais. Trazer as
+            // faturas inteiras (com nome da empresa e vencimento) era over-fetch
+            // de dado sensível para renderizar um número.
+            prisma.invoice.count({
+              where: {
+                status: "PENDING",
+                dueDate: { lte: new Date(Date.now() + 7 * 86400000) }, // Vence em 7 dias
+                ...pf.invoiceCompany,
+              },
+            }),
+            prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: curStart, lte: curEnd }, ...pf.invoiceCompany }, _sum: { total: true } }),
+            prisma.invoice.aggregate({ where: { status: "PAID", paidAt: { gte: prevStart, lte: prevEnd }, ...pf.invoiceCompany }, _sum: { total: true } }),
+          ]);
 
-  const totalRevenueValue = ((totalRevenue._sum?.total) ?? 0) / 100;
-  // MRR com desconto vigente + ciclo normalizado (helper puro, centavos → reais).
-  const subsForMrr: SubscriptionForMRR[] = activeSubs.map((sub) => ({
-    priceMonthly: sub.plan.priceMonthly,
-    priceYearly: sub.plan.priceYearly,
-    billingCycle: sub.billingCycle,
-    discountPercent: sub.discountPercent,
-    discountExpiresAt: sub.discountExpiresAt,
-  }));
-  const mrrValue = computeMRR(subsForMrr, nowDate) / 100;
-  const subsForSeries: SubscriptionForSeries[] = activeSubs.map((sub) => ({
-    priceMonthly: sub.plan.priceMonthly,
-    priceYearly: sub.plan.priceYearly,
-    billingCycle: sub.billingCycle,
-    discountPercent: sub.discountPercent,
-    discountExpiresAt: sub.discountExpiresAt,
-    createdAt: sub.createdAt,
-  }));
-  const mrrSeries = computeMrrSeries(subsForSeries, nowDate, 6);
+        // MRR com desconto vigente + ciclo normalizado (helper puro, centavos → reais).
+        const subsForMrr: SubscriptionForMRR[] = activeSubs.map((sub) => ({
+          priceMonthly: sub.plan.priceMonthly,
+          priceYearly: sub.plan.priceYearly,
+          billingCycle: sub.billingCycle,
+          discountPercent: sub.discountPercent,
+          discountExpiresAt: sub.discountExpiresAt,
+        }));
+        const subsForSeries: SubscriptionForSeries[] = activeSubs.map((sub) => ({
+          priceMonthly: sub.plan.priceMonthly,
+          priceYearly: sub.plan.priceYearly,
+          billingCycle: sub.billingCycle,
+          discountPercent: sub.discountPercent,
+          discountExpiresAt: sub.discountExpiresAt,
+          createdAt: sub.createdAt,
+        }));
+
+        return {
+          pastDueCount,
+          pendingInvoicesCount,
+          totalRevenueValue: (totalRevenue._sum?.total ?? 0) / 100,
+          mrrValue: computeMRR(subsForMrr, nowDate) / 100,
+          mrrSeries: computeMrrSeries(subsForSeries, nowDate, 6),
+          revenueTrend: computeTrend(
+            (revenueCur._sum?.total ?? 0) / 100,
+            (revenuePrev._sum?.total ?? 0) / 100
+          ),
+        };
+      })()
+    : null;
+
+  const companiesTrend = computeTrend(newCompaniesCur, newCompaniesPrev);
 
   return (
     <div className="p-6">
@@ -169,36 +204,42 @@ export default async function AdminDashboardPage() {
             : undefined}
         />
         <KPICard label="Assinaturas Ativas" value={String(activeCount)} icon={CreditCard} />
-        <KPICard
-          label="MRR"
-          value={`R$ ${mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
-          icon={DollarSign}
-        />
+        {financeiro && (
+          <KPICard
+            label="MRR"
+            value={`R$ ${financeiro.mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+            icon={DollarSign}
+          />
+        )}
         <KPICard label="Em Trial" value={String(trialCount)} icon={Clock} />
-        <KPICard
-          label="Recebido Total"
-          value={`R$ ${totalRevenueValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
-          icon={TrendingUp}
-          hint="Soma das faturas pagas"
-          trend={revenueTrend.direction === "up" || revenueTrend.direction === "down"
-            ? { direction: revenueTrend.direction, label: `${formatTrend(revenueTrend)} · recebido vs. mês anterior` }
-            : undefined}
-        />
+        {financeiro && (
+          <KPICard
+            label="Recebido Total"
+            value={`R$ ${financeiro.totalRevenueValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}`}
+            icon={TrendingUp}
+            hint="Soma das faturas pagas"
+            trend={financeiro.revenueTrend.direction === "up" || financeiro.revenueTrend.direction === "down"
+              ? { direction: financeiro.revenueTrend.direction, label: `${formatTrend(financeiro.revenueTrend)} · recebido vs. mês anterior` }
+              : undefined}
+          />
+        )}
       </div>
 
-      {/* Evolução do MRR */}
-      <Card className="p-5 mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h2 className="text-sm font-semibold text-foreground">Evolução do MRR</h2>
-            <p className="text-xs text-muted-foreground">Últimos 6 meses · aproximado pela data de início das assinaturas ativas</p>
+      {/* Evolução do MRR — some inteiro sem papel financeiro (a série nem é consultada). */}
+      {financeiro && (
+        <Card className="p-5 mb-6">
+          <div className="flex items-center justify-between mb-4">
+            <div>
+              <h2 className="text-sm font-semibold text-foreground">Evolução do MRR</h2>
+              <p className="text-xs text-muted-foreground">Últimos 6 meses · aproximado pela data de início das assinaturas ativas</p>
+            </div>
+            <p className="text-lg font-semibold text-foreground">R$ {financeiro.mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
           </div>
-          <p className="text-lg font-semibold text-foreground">R$ {mrrValue.toLocaleString("pt-BR", { minimumFractionDigits: 2 })}</p>
-        </div>
-        <div className="h-56">
-          <MrrChart data={mrrSeries} />
-        </div>
-      </Card>
+          <div className="h-56">
+            <MrrChart data={financeiro.mrrSeries} />
+          </div>
+        </Card>
+      )}
 
       {/* Health Score Resumo — oculto para medical: o score é derivado de sinais
           óticos (não há feed clínico até a F6), então os números seriam falsos. */}
@@ -234,20 +275,24 @@ export default async function AdminDashboardPage() {
           </h2>
         </div>
         <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
-          {pastDueCount === 0 && expiringTrials.length === 0 && pendingInvoices.length === 0 && (
-            <AlertCard
-              tone="success"
-              icon={CheckCircle2}
-              title="Nenhuma ação pendente no momento"
-              className="md:col-span-3"
-            />
-          )}
-          {pastDueCount > 0 && (
+          {/* "Nada pendente" só é verdade sobre o que ESTE usuário pode ver: sem
+              papel financeiro os dois cards de cobrança nem existem, então a
+              condição não pode olhar para eles. */}
+          {(financeiro === null || (financeiro.pastDueCount === 0 && financeiro.pendingInvoicesCount === 0)) &&
+            expiringTrials.length === 0 && (
+              <AlertCard
+                tone="success"
+                icon={CheckCircle2}
+                title="Nenhuma ação pendente no momento"
+                className="md:col-span-3"
+              />
+            )}
+          {financeiro !== null && financeiro.pastDueCount > 0 && (
             <AlertCard
               tone="danger"
               icon={AlertTriangle}
               href="/admin/financeiro/inadimplencia"
-              title={`${pastDueCount} fatura${pastDueCount > 1 ? "s" : ""} vencida${pastDueCount > 1 ? "s" : ""}`}
+              title={`${financeiro.pastDueCount} fatura${financeiro.pastDueCount > 1 ? "s" : ""} vencida${financeiro.pastDueCount > 1 ? "s" : ""}`}
               description="Cobrar agora →"
             />
           )}
@@ -260,12 +305,12 @@ export default async function AdminDashboardPage() {
               description="Próximos 3 dias →"
             />
           )}
-          {pendingInvoices.length > 0 && (
+          {financeiro !== null && financeiro.pendingInvoicesCount > 0 && (
             <AlertCard
               tone="info"
               icon={CheckCircle2}
               href="/admin/financeiro/faturas?status=PENDING"
-              title={`${pendingInvoices.length} fatura${pendingInvoices.length > 1 ? "s" : ""} a vencer`}
+              title={`${financeiro.pendingInvoicesCount} fatura${financeiro.pendingInvoicesCount > 1 ? "s" : ""} a vencer`}
               description="Próximos 7 dias →"
             />
           )}

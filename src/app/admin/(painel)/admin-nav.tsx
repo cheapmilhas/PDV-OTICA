@@ -10,10 +10,21 @@ import {
 } from "lucide-react";
 import { CONFIG_SECTIONS } from "./configuracoes/sections";
 
+/**
+ * `finance: true` marca a seção cujas telas exigem papel financeiro
+ * (`requireFinanceAccess` — ver `src/lib/admin-finance-roles.ts`).
+ *
+ * ⚠️ Isto é CORTESIA DE UX, não segurança. A barreira real é o gate no Server
+ * Component de cada página; esconder o link só evita que um SUPPORT clique e
+ * seja devolvido em silêncio para o dashboard (o `?error=unauthorized` não é
+ * lido por ninguém hoje). Nunca tratar a ausência do link como proteção.
+ */
 const menuItems = [
   {
     // Cross-produto: consolida os dois produtos, NÃO é afetado pelo toggle abaixo.
+    // MRR do Grupo = agregado financeiro → seção com gate.
     section: "Grupo",
+    finance: true,
     items: [
       { href: "/admin/grupo", icon: Layers, label: "Consolidado", exact: true },
     ],
@@ -36,6 +47,10 @@ const menuItems = [
   },
   {
     section: "Financeiro",
+    // "Assinaturas" fica aqui junto: a tela mostra o valor mensal de cada
+    // assinatura. Ela ainda NÃO tem gate de papel (ver relatório desta entrega),
+    // mas esconder o link do menu é o passo de UX coerente com a seção.
+    finance: true,
     items: [
       { href: "/admin/assinaturas",       icon: CreditCard,      label: "Assinaturas",      exact: false },
       { href: "/admin/financeiro",        icon: Wallet,          label: "Visão Geral",      exact: true  },
@@ -45,6 +60,7 @@ const menuItems = [
   },
   {
     section: "Relatórios",
+    finance: true,
     items: [
       { href: "/admin/relatorios",        icon: FileBarChart,    label: "Relatórios",       exact: false },
     ],
@@ -66,8 +82,19 @@ const menuItems = [
   },
 ];
 
-export function AdminNav({ activeProduct = "VIS_APP" }: { activeProduct?: "VIS_APP" | "VIS_MEDICAL" }) {
+export function AdminNav({
+  activeProduct = "VIS_APP",
+  canSeeFinance = true,
+}: {
+  activeProduct?: "VIS_APP" | "VIS_MEDICAL";
+  // Default `true` para não esconder nada por engano se alguém montar o nav sem
+  // passar a prop: falhar ABERTO aqui é o comportamento certo, porque este menu
+  // não é a barreira de segurança — esconder o link de quem tem direito seria o
+  // único dano possível.
+  canSeeFinance?: boolean;
+}) {
   const pathname = usePathname();
+  const visibleSections = canSeeFinance ? menuItems : menuItems.filter((s) => !s.finance);
   // Nasce do cookie (via prop do Server Component), NÃO de um hardcode: senão o
   // botão volta a "Vis App" no reload enquanto o servidor usa "Vis Medical".
   const [product, setProduct] = useState<"VIS_APP" | "VIS_MEDICAL">(activeProduct);
@@ -121,7 +148,7 @@ export function AdminNav({ activeProduct = "VIS_APP" }: { activeProduct?: "VIS_A
           </button>
         </div>
       </div>
-      {menuItems.map((section) => (
+      {visibleSections.map((section) => (
         <div key={section.section} className="mb-6">
           <p className="px-3 mb-2 text-xs font-semibold text-muted-foreground uppercase tracking-wider">
             {section.section}

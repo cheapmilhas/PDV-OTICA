@@ -14,7 +14,7 @@ import { AdminLogoutButton } from "@/app/admin/(painel)/AdminLogoutButton";
  */
 type Product = "VIS_APP" | "VIS_MEDICAL";
 
-function SidebarContent({ activeProduct }: { activeProduct: Product }) {
+function SidebarContent({ activeProduct, canSeeFinance }: { activeProduct: Product; canSeeFinance: boolean }) {
   return (
     <>
       {/* Logo */}
@@ -31,7 +31,7 @@ function SidebarContent({ activeProduct }: { activeProduct: Product }) {
       </div>
 
       {/* Menu */}
-      <AdminNav activeProduct={activeProduct} />
+      <AdminNav activeProduct={activeProduct} canSeeFinance={canSeeFinance} />
 
       {/* Footer */}
       <div className="px-3 py-3 border-t border-border">
@@ -45,10 +45,10 @@ function SidebarContent({ activeProduct }: { activeProduct: Product }) {
  * Sidebar fixa do desktop (≥lg). Escondida no mobile.
  * Mantém exatamente os mesmos tokens/classes do <aside> original.
  */
-export function AdminSidebar({ activeProduct }: { activeProduct: Product }) {
+export function AdminSidebar({ activeProduct, canSeeFinance }: { activeProduct: Product; canSeeFinance: boolean }) {
   return (
     <aside className="hidden lg:flex w-60 flex-shrink-0 border-r border-border bg-card flex-col">
-      <SidebarContent activeProduct={activeProduct} />
+      <SidebarContent activeProduct={activeProduct} canSeeFinance={canSeeFinance} />
     </aside>
   );
 }
@@ -58,7 +58,7 @@ export function AdminSidebar({ activeProduct }: { activeProduct: Product }) {
  * Pensado para viver na top bar do layout. Escondido no desktop.
  * O drawer fecha automaticamente em qualquer troca de rota (usePathname).
  */
-export function AdminMobileMenu({ activeProduct }: { activeProduct: Product }) {
+export function AdminMobileMenu({ activeProduct, canSeeFinance }: { activeProduct: Product; canSeeFinance: boolean }) {
   const [open, setOpen] = useState(false);
   const pathname = usePathname();
 
@@ -80,7 +80,7 @@ export function AdminMobileMenu({ activeProduct }: { activeProduct: Product }) {
       </SheetTrigger>
       <SheetContent side="left" className="w-60 p-0 bg-card flex flex-col">
         <SheetTitle className="sr-only">Menu de navegação</SheetTitle>
-        <SidebarContent activeProduct={activeProduct} />
+        <SidebarContent activeProduct={activeProduct} canSeeFinance={canSeeFinance} />
       </SheetContent>
     </Sheet>
   );
