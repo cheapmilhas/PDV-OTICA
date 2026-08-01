@@ -105,7 +105,7 @@ export default function LoginPage() {
             <CardHeader className="space-y-4 text-center">
               <div className="mx-auto">
                 <Image
-                  src="/vis-logo.png"
+                  src="/vis-logo-alpha.png"
                   alt="Vis"
                   width={132}
                   height={44}

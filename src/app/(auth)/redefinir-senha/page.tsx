@@ -64,7 +64,7 @@ function Logo() {
   return (
     <div className="mx-auto">
       <Image
-        src="/vis-logo.png"
+        src="/vis-logo-alpha.png"
         alt="Vis"
         width={132}
         height={44}
