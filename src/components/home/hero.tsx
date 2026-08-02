@@ -4,7 +4,7 @@ import { useEffect, useState } from "react";
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, MessageCircle, Check, Sparkles } from "lucide-react";
-import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
+import { REGISTER_URL, WHATSAPP_ENABLED, WHATSAPP_URL } from "@/lib/constants";
 import { fadeInUp, staggerContainer, scaleIn } from "@/lib/animations";
 import { BrowserFrame } from "@/components/landing-layout/browser-frame";
 
@@ -142,6 +142,7 @@ export function Hero() {
               </Link>
             </motion.div>
 
+            {WHATSAPP_ENABLED && (
             <motion.div
               whileHover={{ scale: 1.02 }}
               whileTap={{ scale: 0.98 }}
@@ -164,6 +165,7 @@ export function Hero() {
                 Falar com consultor
               </a>
             </motion.div>
+            )}
           </motion.div>
 
           {/* Microcopy */}

@@ -51,8 +51,17 @@ export default async function PrecosPage({
       <div className="pt-16">
         <PricingProdutoSwitch inicial={inicial} />
       </div>
-      <FaqSection />
-      <FinalCta />
+      {/* FAQ e CTA final são ÓTICOS na copy ("Perguntas que todo dono de ótica
+          faz", "Sua ótica merece"). Quem chega por `?produto=clinica` terminava
+          a página de preços dentro do funil do outro produto — pior ainda por
+          ser o último bloco antes de sair. Na aba de clínica a página encerra
+          no próprio grid de planos, que já tem o CTA correto por card. */}
+      {inicial === "otica" && (
+        <>
+          <FaqSection />
+          <FinalCta />
+        </>
+      )}
     </>
   );
 }

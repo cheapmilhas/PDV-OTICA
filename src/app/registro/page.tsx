@@ -47,6 +47,7 @@ export default function RegistroPage() {
   const [isLoading, setIsLoading] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
   const [plans, setPlans] = useState<Plan[]>([]);
+  const [plansError, setPlansError] = useState(false);
   const [formData, setFormData] = useState({
     name: "",
     email: "",
@@ -59,7 +60,7 @@ export default function RegistroPage() {
 
   useEffect(() => {
     fetch("/api/public/plans")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("falha"))))
       .then((data) => {
         if (data.plans) {
           // Trial só pode oferecer planos lançados (ACTIVE). "Em breve"
@@ -76,7 +77,10 @@ export default function RegistroPage() {
           }
         }
       })
-      .catch(() => {});
+      // Engolir o erro deixava o passo 3 com um spinner ETERNO: `plans.length
+      // === 0` é indistinguível de "carregando" e de "a API caiu". O usuário
+      // ficava preso no último passo do funil sem saber o que houve.
+      .catch(() => setPlansError(true));
   }, []);
 
   const updateField = (field: string, value: string) => {
@@ -170,7 +174,10 @@ export default function RegistroPage() {
       });
 
       setTimeout(() => {
-        router.push("/login");
+        // Leva o e-mail recém-cadastrado para o login. Auto-login seria melhor,
+        // mas exige mexer no fluxo de autenticação — fora do escopo aqui. Isto
+        // já corta metade do atrito de quem acabou de digitar tudo.
+        router.push(`/login?email=${encodeURIComponent(formData.email.trim())}`);
       }, 1500);
     } catch {
       toast({
@@ -330,9 +337,23 @@ export default function RegistroPage() {
             {/* Step 3: Plano */}
             {step === 2 && (
               <div className="space-y-4">
-                {plans.length === 0 ? (
-                  <div className="flex items-center justify-center py-8">
+                {plansError ? (
+                  <div className="space-y-3 py-4 text-center">
+                    <p role="alert" className="text-sm text-destructive">
+                      Não foi possível carregar os planos.
+                    </p>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      onClick={() => window.location.reload()}
+                    >
+                      Tentar de novo
+                    </Button>
+                  </div>
+                ) : plans.length === 0 ? (
+                  <div className="flex items-center justify-center py-8" aria-busy="true">
                     <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                    <span className="sr-only">Carregando planos…</span>
                   </div>
                 ) : (
                   <>

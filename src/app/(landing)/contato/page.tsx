@@ -1,7 +1,23 @@
 "use client";
 
 import { useState } from "react";
-import { Phone, Mail, MapPin, Clock, MessageSquare, Loader2, CheckCircle } from "lucide-react";
+import Link from "next/link";
+import {
+  Phone,
+  Mail,
+  MapPin,
+  Clock,
+  MessageSquare,
+  Loader2,
+  CheckCircle,
+  ArrowRight,
+} from "lucide-react";
+import {
+  WHATSAPP_ENABLED,
+  WHATSAPP_NUMBER,
+  WHATSAPP_URL,
+  formatWhatsAppDisplay,
+} from "@/lib/constants";
 
 const inputClass =
   "w-full px-4 py-3 rounded-xl text-sm bg-[var(--lp-surface)] border border-[var(--lp-border-hover)] text-[var(--lp-foreground)] placeholder-[var(--lp-subtle)] focus:border-[var(--brand-primary)] focus:outline-none focus:ring-2 focus:ring-[color:rgba(46,107,255,0.15)] transition-colors";
@@ -59,9 +75,12 @@ export default function ContatoPage() {
               com a Vis
             </span>
           </h1>
+          {/* Neutra: esta página é o destino do "Deixar meu contato" da home
+              institucional, que serve os DOIS produtos. Falar em "sua ótica"
+              fazia o lead de clínica achar que estava na página errada. */}
           <p className="mt-4 text-lg max-w-xl mx-auto" style={{ color: "var(--lp-muted)" }}>
-            Quer ver o Vis funcionando na sua ótica? Peça uma demonstração ou tire
-            suas dúvidas — respondemos rápido.
+            Quer ver o Vis funcionando na sua ótica ou na sua clínica? Peça uma
+            demonstração ou tire suas dúvidas — respondemos rápido.
           </p>
         </div>
 
@@ -139,7 +158,7 @@ export default function ContatoPage() {
                     </div>
                     <div>
                       <label className="block text-sm font-medium mb-1.5" style={{ color: "var(--lp-foreground)" }}>
-                        Nome da ótica
+                        Nome da ótica ou clínica
                       </label>
                       <input
                         value={form.companyName}
@@ -195,21 +214,26 @@ export default function ContatoPage() {
                 Contato direto
               </h3>
               <ul className="space-y-5">
-                <li>
-                  <a
-                    href="https://wa.me/5585999999999"
-                    target="_blank"
-                    rel="noopener noreferrer"
-                    className="flex items-start gap-3 text-sm transition-colors"
-                    style={{ color: "var(--lp-muted)" }}
-                  >
-                    <Phone className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "var(--brand-primary)" }} />
-                    <div>
-                      <p className="font-medium" style={{ color: "var(--lp-foreground)" }}>WhatsApp</p>
-                      <p>(85) 99999-9999</p>
-                    </div>
-                  </a>
-                </li>
+                {/* Enquanto não há número de vendas, o item some por inteiro:
+                    aqui o placeholder era pior que nos botões, porque o número
+                    falso aparecia como TEXTO, convidando a ligar. */}
+                {WHATSAPP_ENABLED && (
+                  <li>
+                    <a
+                      href={WHATSAPP_URL}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="flex items-start gap-3 text-sm transition-colors"
+                      style={{ color: "var(--lp-muted)" }}
+                    >
+                      <Phone className="h-5 w-5 flex-shrink-0 mt-0.5" style={{ color: "var(--brand-primary)" }} />
+                      <div>
+                        <p className="font-medium" style={{ color: "var(--lp-foreground)" }}>WhatsApp</p>
+                        <p>{formatWhatsAppDisplay(WHATSAPP_NUMBER)}</p>
+                      </div>
+                    </a>
+                  </li>
+                )}
                 <li>
                   <a
                     href="mailto:contato@vis.app.br"
@@ -251,6 +275,30 @@ export default function ContatoPage() {
                 Não precisa esperar! Crie sua conta agora e comece a usar o Vis em
                 minutos — sem cartão de crédito e sem fidelidade.
               </p>
+              {/* O card convidava a criar conta e não oferecia como: dois links,
+                  um por produto, porque esta página recebe os dois públicos. */}
+              <div className="mt-4 flex flex-col gap-2 sm:flex-row">
+                <Link
+                  href="/registro"
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold text-white"
+                  style={{ background: "var(--gradient-brand-vivid)" }}
+                >
+                  Sou ótica
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+                <Link
+                  href="/registro-medical"
+                  className="inline-flex flex-1 items-center justify-center gap-1.5 rounded-lg px-4 py-2.5 text-sm font-semibold"
+                  style={{
+                    background: "var(--lp-surface)",
+                    border: "1px solid var(--lp-border-hover)",
+                    color: "var(--lp-foreground)",
+                  }}
+                >
+                  Sou clínica
+                  <ArrowRight className="h-3.5 w-3.5" aria-hidden="true" />
+                </Link>
+              </div>
             </div>
           </div>
         </div>

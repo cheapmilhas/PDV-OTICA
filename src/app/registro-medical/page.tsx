@@ -22,6 +22,7 @@ import {
   CardHeader,
   CardTitle,
 } from "@/components/ui/card";
+import { MEDICAL_LOGIN_URL } from "@/lib/constants";
 import { track } from "@/lib/analytics";
 
 /**
@@ -513,7 +514,15 @@ export default function RegistroMedicalPage() {
         </p>
         <p className="mt-2 text-center text-sm text-muted-foreground">
           Já tem conta?{" "}
-          <Link href="/login" className="font-medium text-primary hover:underline">
+          {/* MEDICAL_LOGIN_URL, não /login: o login ótico não autentica conta
+              médica — quem clicasse aqui caía num beco. Outro domínio, logo
+              abre em nova aba (mesmo tratamento do header). */}
+          <Link
+            href={MEDICAL_LOGIN_URL}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="font-medium text-primary hover:underline"
+          >
             Entrar
           </Link>
         </p>

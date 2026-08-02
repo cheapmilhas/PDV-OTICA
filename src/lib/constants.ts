@@ -1,14 +1,52 @@
 export const SITE_NAME = "Vis";
 export const SITE_URL = "https://vis.app.br";
 export const APP_URL = "https://vis.app.br";
-// ⚠️ TODO(dono): número de WhatsApp PLACEHOLDER — leads que clicam em "Falar com
-// consultor", no botão flutuante e no "Esqueci minha senha" caem num número
-// inexistente. Trocar por 55 + DDD + número real (ex.: "5585988887777").
+// ⚠️ TODO(dono): número de WhatsApp de VENDAS ainda é PLACEHOLDER.
+// (O 558599252772 que aparece em feature-gate/upgrade-banner é o de SUPORTE —
+// decisão do dono é não usá-lo no marketing.)
+//
+// Enquanto for placeholder, `WHATSAPP_ENABLED` é false e TODO CTA de WhatsApp do
+// site público some. É falha segura: mandar o lead para um número inexistente é
+// pior que não oferecer o canal. Ao preencher o número real, os CTAs voltam
+// sozinhos — nenhum outro arquivo precisa mudar.
 export const WHATSAPP_NUMBER = "5585999999999"; // TODO: TROCAR PELO NÚMERO REAL
+
+/** Sentinela histórica. Qualquer número igual a este conta como "não configurado". */
+const WHATSAPP_PLACEHOLDER = "5585999999999";
+/** 55 + DDD + 8/9 dígitos. Vazio ou malformado também reprova. */
+const REAL_PHONE = /^\d{12,15}$/;
+
+/**
+ * Fonte única da verdade sobre exibir (ou não) os CTAs de WhatsApp.
+ * Consumido pelo header, hero, footer, exit popup, botão flutuante, /contato e
+ * pelo card do plano Rede — o mesmo critério que `login-side-panel` já aplicava
+ * isolado.
+ */
+export const WHATSAPP_ENABLED =
+  REAL_PHONE.test(WHATSAPP_NUMBER) && WHATSAPP_NUMBER !== WHATSAPP_PLACEHOLDER;
+
+// Neutra de propósito: este link também é servido na /medical e na home
+// institucional, onde o visitante pode ser de clínica. Dizer "sistema para
+// óticas" fazia o lead de clínica se apresentar como lead do produto errado.
 export const WHATSAPP_MESSAGE = encodeURIComponent(
-  "Olá! Tenho interesse no Vis, o sistema de gestão para óticas. Pode me contar mais?"
+  "Olá! Tenho interesse no Vis. Pode me contar mais?"
 );
 export const WHATSAPP_URL = `https://wa.me/${WHATSAPP_NUMBER}?text=${WHATSAPP_MESSAGE}`;
+
+/**
+ * "5585988887777" → "(85) 98888-7777". Deriva do MESMO número que o link usa:
+ * a /contato exibia o telefone como texto digitado à mão, então o dia em que o
+ * número mudasse o link e o texto divergiriam sem ninguém notar.
+ */
+export function formatWhatsAppDisplay(raw: string): string {
+  const d = raw.replace(/\D/g, "").replace(/^55/, "");
+  if (d.length < 10) return raw;
+  const ddd = d.slice(0, 2);
+  const corpo = d.slice(2);
+  const meio = corpo.length === 9 ? corpo.slice(0, 5) : corpo.slice(0, 4);
+  const fim = corpo.length === 9 ? corpo.slice(5) : corpo.slice(4);
+  return `(${ddd}) ${meio}-${fim}`;
+}
 
 export const REGISTER_URL = "/registro";
 export const LOGIN_URL = "/login";
@@ -64,9 +102,11 @@ export const FOOTER_LINKS = {
     { label: "Leitura de receita por IA", href: "/funcionalidades/leitura-de-receita-ia" },
     { label: "Planos e Preços", href: "/precos" },
   ],
+  // O link de WhatsApp entra na lista só quando há número de vendas — este é
+  // um item de DADOS, não JSX, então não bastava esconder no componente.
   empresa: [
     { label: "Contato", href: "/contato" },
-    { label: "Falar no WhatsApp", href: WHATSAPP_URL },
+    ...(WHATSAPP_ENABLED ? [{ label: "Falar no WhatsApp", href: WHATSAPP_URL }] : []),
     { label: "Entrar", href: LOGIN_URL },
     { label: "Começar grátis", href: REGISTER_URL },
   ],
