@@ -7,7 +7,9 @@ export const faqItems: FaqItem[] = [
   {
     question: "Vou conseguir trazer os dados que já tenho (clientes, produtos)?",
     answer:
-      "Sim. Você pode importar seus cadastros, e nossa equipe ajuda na migração para você não começar do zero — sem interrupção da sua operação.",
+      // Sem o "sem interrupção da sua operação": não existe processo de
+      // migração formalizado que garanta isso. A ajuda existe; a garantia, não.
+      "Sim. Você pode importar seus cadastros, e nossa equipe ajuda na migração para você não começar do zero.",
   },
   {
     question: "É difícil de usar? Minha equipe vai aprender?",
