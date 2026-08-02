@@ -192,7 +192,7 @@ export default function RegistroPage() {
         <div className="mb-6 text-center">
           <Link href="/" className="inline-flex items-center justify-center">
             <Image
-              src="/vis-logo.png"
+              src="/vis-logo-alpha.png"
               alt="Vis"
               width={120}
               height={40}
