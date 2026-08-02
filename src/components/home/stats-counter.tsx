@@ -28,7 +28,10 @@ const facts = [
     color: "text-brand-success",
     bg: "bg-brand-success/10",
     title: "Suporte humano",
-    description: "Resposta de gente de verdade, em menos de 2 horas.",
+    // "menos de 2 horas" era um SLA que nada garante, e a própria FAQ
+    // (src/content/faq.ts) já respondia "em horário comercial". Duas promessas
+    // diferentes sobre a mesma coisa, no mesmo site.
+    description: "Você fala com gente de verdade, sem robô, em horário comercial.",
   },
   {
     icon: Shield,

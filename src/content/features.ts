@@ -368,7 +368,9 @@ export const features: Record<string, FeaturePage> = {
     eyebrow: "Leitura de receita por IA",
     title: "Fotografe a receita. A IA preenche o resto.",
     subtitle:
-      "Chega de digitar grau, eixo e DNP na mão. Tire uma foto da receita e a inteligência artificial extrai os dados automaticamente — um diferencial que só o Vis tem.",
+      // Era "um diferencial que só o Vis tem" — e três linhas abaixo o próprio
+      // bloco dizia "que poucos sistemas oferecem". Fica a versão sustentável.
+      "Chega de digitar grau, eixo e DNP na mão. Tire uma foto da receita e a inteligência artificial extrai os dados automaticamente — um recurso que poucos sistemas de ótica oferecem.",
     benefits: [
       {
         icon: "Camera",
@@ -382,7 +384,7 @@ export const features: Record<string, FeaturePage> = {
       },
       {
         icon: "Zap",
-        title: "Diferencial exclusivo",
+        title: "Poucos sistemas têm",
         desc: "Atenda mais rápido e com mais segurança com um recurso que poucos sistemas de ótica oferecem.",
       },
     ],

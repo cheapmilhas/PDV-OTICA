@@ -46,7 +46,10 @@ export function LabIntegration() {
           >
             <div className="inline-flex items-center gap-2 text-xs font-medium text-brand-primary bg-brand-primary/10 border border-brand-primary/20 rounded-full px-3 py-1 mb-6">
               <FlaskConical className="h-3 w-3" />
-              Diferencial exclusivo
+              {/* Era "Diferencial exclusivo". O recurso é um campo de
+                  laboratório na OS — não há integração nem parceria com as
+                  marcas exibidas abaixo, e "exclusivo" não se sustenta. */}
+              Feito para o fluxo da ótica
             </div>
             <h2
               className="font-heading font-bold text-foreground tracking-tight mb-4"
@@ -67,7 +70,10 @@ export function LabIntegration() {
               <span>Garantia e retrabalho ligados à OS original, com numeração rastreável</span>
             </div>
 
-            {/* Lab logos */}
+            {/* Nomes de laboratório como EXEMPLO de preenchimento do campo da
+                OS — não são parceiros nem há integração técnica com eles. A
+                legenda abaixo diz isso explicitamente: sem ela, a fileira de
+                marcas lia como selo de parceria. */}
             <div className="flex flex-wrap items-center gap-3">
               {[
                 "Essilor",
@@ -98,6 +104,10 @@ export function LabIntegration() {
                 + outros
               </span>
             </div>
+            <p className="mt-3 text-xs" style={{ color: "var(--lp-subtle)" }}>
+              Você registra o laboratório na OS — funciona com qualquer um.
+              Marcas citadas apenas como exemplo.
+            </p>
           </motion.div>
 
           {/* Steps */}

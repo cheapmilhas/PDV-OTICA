@@ -5,7 +5,7 @@ import { FinalCta } from "@/components/home/final-cta";
 import { ComparisonTable } from "@/components/funcionalidades/comparison-table";
 import { JsonLd, buildBreadcrumbJsonLd } from "@/components/seo/json-ld";
 import { Breadcrumb } from "@/components/seo/breadcrumb";
-import { SITE_URL } from "@/lib/constants";
+import { SITE_URL, OG_IMAGE } from "@/lib/constants";
 
 const TITLE = "Vis vs Planilha: Sistema para Ótica ou Excel?";
 const DESCRIPTION =
@@ -20,6 +20,7 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: "/vis-vs-planilha",
     type: "website",
+    images: [OG_IMAGE],
   },
 };
 
@@ -58,6 +59,7 @@ export default function VisVsPlanilhaPage() {
             ]}
           />
           <SectionHeading
+            as="h1"
             eyebrow="Comparativo"
             title="Planilha ou Vis? Veja a diferença na sua ótica."
             subtitle="A planilha funciona até o dia em que não funciona mais. Veja o que muda quando a gestão é de verdade."

@@ -3,7 +3,7 @@ import Link from "next/link";
 import { notFound } from "next/navigation";
 import { ArrowRight } from "lucide-react";
 import { blogSlugs, getPost } from "@/content/blog";
-import { REGISTER_URL, SITE_URL } from "@/lib/constants";
+import { REGISTER_URL, SITE_URL, OG_IMAGE } from "@/lib/constants";
 import {
   JsonLd,
   buildBreadcrumbJsonLd,
@@ -46,6 +46,7 @@ export async function generateMetadata({
       description: post.description,
       url,
       type: "article",
+      images: [OG_IMAGE],
       publishedTime: post.date,
       authors: [post.author],
     },

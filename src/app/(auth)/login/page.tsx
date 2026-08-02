@@ -23,10 +23,16 @@ export default function LoginPage() {
   const [showPassword, setShowPassword] = useState(false);
   const [showTrouble, setShowTrouble] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [formData, setFormData] = useState({
-    email: "",
+  // `?email=` vem do fim do cadastro: quem acabou de criar a conta não deve
+  // precisar redigitar o que digitou há 2 segundos. Lido do window (e não com
+  // useSearchParams) para não exigir um <Suspense> em volta da página inteira.
+  const [formData, setFormData] = useState(() => ({
+    email:
+      typeof window !== "undefined"
+        ? (new URLSearchParams(window.location.search).get("email") ?? "")
+        : "",
     password: "",
-  });
+  }));
 
   const handleClearSession = async () => {
     setIsClearing(true);
@@ -105,7 +111,7 @@ export default function LoginPage() {
             <CardHeader className="space-y-4 text-center">
               <div className="mx-auto">
                 <Image
-                  src="/vis-logo.png"
+                  src="/vis-logo-alpha.png"
                   alt="Vis"
                   width={132}
                   height={44}

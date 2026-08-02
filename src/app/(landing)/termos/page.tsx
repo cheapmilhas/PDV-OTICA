@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Termos de Uso",
   description: "Termos de uso da plataforma PDV Ótica.",
+  // Sem canonical próprio a página herdava o "/" do RootLayout, dizendo ao
+  // Google que é duplicata da home.
+  alternates: { canonical: "/termos" },
 };
 
 export default function TermosPage() {

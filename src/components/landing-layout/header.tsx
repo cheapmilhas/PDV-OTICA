@@ -2,15 +2,29 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
-import { Menu, X, ArrowRight } from "lucide-react";
-import { NAV_LINKS, REGISTER_URL, LOGIN_URL } from "@/lib/constants";
+import { Menu, X } from "lucide-react";
+import { NAV_LINKS } from "@/lib/constants";
 import { VisLogo } from "./vis-logo";
+import { ProductCta } from "./product-cta";
 
 export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+
+  // Dentro da /medical, "Planos" precisa abrir a /precos JÁ na aba de clínicas.
+  // Sem isso o visitante de clínica caía no grid ÓTICO (Básico R$ 149,90) e
+  // comparava com o preço do produto errado — exatamente o que o comentário do
+  // pricing-produto-switch diz querer evitar.
+  const pathname = usePathname() ?? "";
+  const emMedical = pathname === "/medical" || pathname.startsWith("/medical/");
+  const navLinks = emMedical
+    ? NAV_LINKS.map((l) =>
+        l.href === "/precos" ? { ...l, href: "/precos?produto=clinica" } : l,
+      )
+    : NAV_LINKS;
 
   useEffect(() => {
     // Offset the fixed header below the announcement bar while it's on screen, so
@@ -56,18 +70,26 @@ export function Header() {
       // on re-render (e.g. when `scrolled` toggles).
       className="fixed left-0 right-0 z-40 transition-all duration-300"
       style={{
+        // Opaco nos DOIS estados. A razão original era o PNG da logo sem canal
+        // alfa (o retângulo dela aparecia recortado sobre o gradiente) — isso
+        // deixou de valer quando a logo passou a ter alfa de verdade. O opaco
+        // permanece por outro motivo: garante contraste do texto da nav sobre
+        // qualquer hero, e evitar a mudança de cor no scroll reduz ruído.
+        //
+        // O header continua "acordando" na rolagem — o que muda é a borda, a
+        // sombra e o blur, não a cor de fundo.
+        background: "var(--lp-surface)",
         ...(scrolled
           ? {
-              background: "rgba(255, 255, 255, 0.85)",
               backdropFilter: "blur(20px) saturate(180%)",
               WebkitBackdropFilter: "blur(20px) saturate(180%)",
               borderBottom: "1px solid var(--lp-border)",
               boxShadow: "0 1px 2px rgba(10,31,68,0.05), 0 4px 24px rgba(10,31,68,0.06)",
             }
           : {
-              background: "transparent",
               backdropFilter: "none",
               borderBottom: "1px solid transparent",
+              boxShadow: "none",
             }),
       }}
     >
@@ -80,7 +102,7 @@ export function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {NAV_LINKS.map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -98,33 +120,18 @@ export function Header() {
                 {link.label}
               </Link>
             ))}
+
           </nav>
 
           {/* Desktop CTA */}
           <div className="hidden md:flex items-center gap-3">
-            <Link
-              href={LOGIN_URL}
-              className="text-sm font-medium transition-colors"
-              style={{ color: "var(--lp-muted)" }}
-            >
-              Entrar
-            </Link>
+            <ProductCta role="entrar" variant="desktop" />
             <motion.div
               whileHover={{ scale: 1.04 }}
               whileTap={{ scale: 0.96 }}
               transition={{ type: "spring", stiffness: 400, damping: 17 }}
             >
-              <Link
-                href={REGISTER_URL}
-                className="inline-flex items-center gap-1.5 rounded-lg px-4 py-2 text-sm font-bold text-white group transition-all"
-                style={{
-                  background: "var(--gradient-brand-vivid)",
-                  boxShadow: "0 2px 12px var(--brand-glow)",
-                }}
-              >
-                Começar grátis
-                <ArrowRight className="h-3.5 w-3.5 transition-transform duration-200 group-hover:translate-x-0.5" />
-              </Link>
+              <ProductCta role="cadastrar" variant="desktop" />
             </motion.div>
           </div>
 
@@ -134,7 +141,9 @@ export function Header() {
               onClick={() => setMenuOpen(!menuOpen)}
               className="p-2 rounded-lg transition-colors"
               style={{ color: "var(--lp-foreground)" }}
-              aria-label="Menu"
+              aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={menuOpen}
+              aria-controls="menu-mobile"
             >
               {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -150,15 +159,16 @@ export function Header() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.22 }}
+            id="menu-mobile"
             className="md:hidden overflow-hidden"
             style={{
-              background: "rgba(255, 255, 255, 0.97)",
+              background: "rgba(255, 254, 254, 0.97)",
               backdropFilter: "blur(20px)",
               borderBottom: "1px solid var(--lp-border)",
             }}
           >
             <div className="container-custom py-4 flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}
@@ -169,28 +179,13 @@ export function Header() {
                   {link.label}
                 </Link>
               ))}
+
               <div
                 className="pt-3 mt-2 flex flex-col gap-2"
                 style={{ borderTop: "1px solid var(--lp-border)" }}
               >
-                <Link
-                  href={LOGIN_URL}
-                  className="px-4 py-3 rounded-xl text-sm font-medium transition-colors"
-                  style={{ color: "var(--lp-muted)" }}
-                >
-                  Entrar
-                </Link>
-                <Link
-                  href={REGISTER_URL}
-                  className="flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold text-white"
-                  style={{
-                    background: "var(--gradient-brand-vivid)",
-                    boxShadow: "0 2px 12px var(--brand-glow)",
-                  }}
-                >
-                  Começar grátis
-                  <ArrowRight className="h-4 w-4" />
-                </Link>
+                <ProductCta role="entrar" variant="mobile" />
+                <ProductCta role="cadastrar" variant="mobile" />
               </div>
             </div>
           </motion.div>

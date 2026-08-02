@@ -2,9 +2,13 @@
 
 import { motion } from "framer-motion";
 import { MessageCircle } from "lucide-react";
-import { WHATSAPP_URL } from "@/lib/constants";
+import { WHATSAPP_ENABLED, WHATSAPP_URL } from "@/lib/constants";
 
 export function WhatsAppButton() {
+  // Sem número de vendas configurado, o botão não existe: um flutuante fixo em
+  // toda página que abre conversa com número inexistente é pior que ausência.
+  if (!WHATSAPP_ENABLED) return null;
+
   return (
     <motion.a
       href={WHATSAPP_URL}
