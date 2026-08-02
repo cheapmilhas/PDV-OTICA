@@ -47,6 +47,21 @@ export function PricingProdutoSwitch({ inicial = "otica" }: { inicial?: Produto 
           Você é de qual segmento?
         </p>
 
+        {/* h1 da /precos. A página ia ao ar SEM nenhum h1: os dois blocos de
+            preço trazem só títulos de seção, e as abas são controles. Um h1
+            aqui nomeia a página inteira, acima da escolha de produto. */}
+        <h1
+          className="font-heading mt-3 text-center font-extrabold tracking-tight"
+          style={{
+            fontSize: "var(--text-h2)",
+            lineHeight: 1.15,
+            letterSpacing: "-0.02em",
+            color: "var(--lp-foreground)",
+          }}
+        >
+          Planos e preços
+        </h1>
+
         <div
           className="mx-auto mt-5 flex w-fit gap-1 rounded-xl p-1"
           role="tablist"

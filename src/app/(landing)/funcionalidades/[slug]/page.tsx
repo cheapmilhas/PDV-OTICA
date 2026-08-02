@@ -4,7 +4,7 @@ import { featureSlugs, getFeature } from "@/content/features";
 import { FeaturePageView } from "@/components/funcionalidades/feature-page";
 import { JsonLd, buildBreadcrumbJsonLd } from "@/components/seo/json-ld";
 import { Breadcrumb } from "@/components/seo/breadcrumb";
-import { SITE_URL } from "@/lib/constants";
+import { SITE_URL, OG_IMAGE } from "@/lib/constants";
 
 interface FeatureSeo {
   title: string;
@@ -66,6 +66,7 @@ export async function generateMetadata({
       description,
       url,
       type: "website",
+      images: [OG_IMAGE],
     },
   };
 }

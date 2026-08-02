@@ -48,6 +48,22 @@ export function formatWhatsAppDisplay(raw: string): string {
   return `(${ddd}) ${meio}-${fim}`;
 }
 
+/**
+ * Imagem de compartilhamento padrão (a gerada por `src/app/opengraph-image.tsx`).
+ *
+ * PRECISA ser repetida em toda página que declara `openGraph` próprio: o Next
+ * SUBSTITUI o objeto inteiro do RootLayout, não faz merge. Sem isto, /oticas,
+ * /medical, /precos, /contato, /funcionalidades, /vis-vs-planilha e /blog iam
+ * ao ar sem NENHUM og:image — compartilhar qualquer uma no WhatsApp ou no
+ * LinkedIn gerava card sem imagem. Verificado no HTML de produção.
+ */
+export const OG_IMAGE = {
+  url: `${SITE_URL}/opengraph-image`,
+  width: 1200,
+  height: 630,
+  alt: "Vis — Sistemas de gestão para óticas e clínicas",
+} as const;
+
 export const REGISTER_URL = "/registro";
 export const LOGIN_URL = "/login";
 

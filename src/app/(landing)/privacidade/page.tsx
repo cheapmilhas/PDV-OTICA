@@ -3,6 +3,9 @@ import type { Metadata } from "next";
 export const metadata: Metadata = {
   title: "Política de Privacidade",
   description: "Política de privacidade e tratamento de dados pessoais.",
+  // Sem canonical próprio a página herdava o "/" do RootLayout, dizendo ao
+  // Google que é duplicata da home.
+  alternates: { canonical: "/privacidade" },
 };
 
 export default function PrivacidadePage() {

@@ -15,7 +15,7 @@ import {
 
 import { MedicalPricing } from "@/components/medical/medical-pricing";
 import { JsonLd, buildMedicalSoftwareApplicationJsonLd } from "@/components/seo/json-ld";
-import { SITE_URL } from "@/lib/constants";
+import { SITE_URL, OG_IMAGE } from "@/lib/constants";
 
 /**
  * Landing do VIS MEDICAL.
@@ -47,6 +47,7 @@ export const metadata: Metadata = {
     url: `${SITE_URL}/medical`,
     siteName: "Vis Medical",
     type: "website",
+    images: [OG_IMAGE],
     locale: "pt_BR",
   },
   twitter: {

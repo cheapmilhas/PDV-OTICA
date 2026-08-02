@@ -3,7 +3,7 @@ import dynamic from "next/dynamic";
 import { Hero } from "@/components/home/hero";
 import { ProblemsSolutions } from "@/components/home/problems-solutions";
 import { TESTIMONIALS_ARE_PLACEHOLDER } from "@/components/home/testimonials-flag";
-import { SITE_URL } from "@/lib/constants";
+import { SITE_URL, OG_IMAGE } from "@/lib/constants";
 
 /**
  * Landing do VIS PARA ÓTICAS.
@@ -30,6 +30,7 @@ export const metadata: Metadata = {
     url: `${SITE_URL}/oticas`,
     siteName: "Vis",
     type: "website",
+    images: [OG_IMAGE],
     locale: "pt_BR",
   },
 };
