@@ -22,6 +22,7 @@ import {
   decideObligationPromotion,
   type ObligationEvidence,
 } from "@/lib/asaas-obligation-arbitration";
+import { isWebhookAccessEffectEnabled } from "@/lib/billing-engine-flags";
 
 const log = logger.child({ webhook: "asaas" });
 
@@ -340,6 +341,16 @@ export async function POST(request: Request) {
     target.kind === "resolved" ? target.controlsAccess : false;
 
   /**
+   * Os efeitos de ACESSO deste webhook estão liberados? (modo observação)
+   *
+   * Lido UMA vez por evento, no topo, para que todos os ramos do `switch`
+   * enxerguem o mesmo valor — ler a env var em cada ramo abriria a porta para
+   * um ramo ser gateado e outro não, que é justamente o formato de bug que o
+   * gate existe para evitar.
+   */
+  const accessEffectEnabled = isWebhookAccessEffectEnabled();
+
+  /**
    * Obrigação vinculada à fatura deste evento — a segunda dimensão da decisão.
    *
    * 🔑 `controlsAccess` (acima) responde "esta cobrança é a MENSALIDADE?" pela
@@ -389,7 +400,25 @@ export async function POST(request: Request) {
         // `controlsAccess` false = cobrança AVULSA (taxa/hardware). A fatura é
         // marcada PAID abaixo, mas pagar uma taxa não compra mensalidade: nem
         // ativa, nem estende período, nem publica entitlement.
-        if (subscriptionDbId && controlsAccess) {
+        //
+        // 🔒 MODO OBSERVAÇÃO (`BILLING_WEBHOOK_ACCESS_ENABLED`): enquanto a flag
+        // estiver desligada, o evento é REGISTRADO e a fatura é marcada paga,
+        // mas nada que mexa em ACESSO acontece. Ver o docblock da flag: este
+        // caminho nunca rodou em produção (zero BillingEvent no histórico) e
+        // publica entitlement de prontuário médico. O primeiro evento real
+        // serve de ensaio; depois de conferido, liga-se a flag.
+        if (subscriptionDbId && controlsAccess && !accessEffectEnabled) {
+          log.warn("modo observação: efeitos de acesso SUPRIMIDOS", {
+            eventId: event.id,
+            eventType: event.event,
+            subscriptionId: subscriptionDbId,
+            companyId,
+            // O que TERIA acontecido, para conferência antes de ligar a flag:
+            wouldActivateOrRenew: true,
+            wouldPublishEntitlement: companyId !== null,
+          });
+        }
+        if (subscriptionDbId && controlsAccess && accessEffectEnabled) {
           // 🔑 `updateMany` com guarda de status, NÃO `update` incondicional.
           // O único estado que um pagamento NÃO recupera é CANCELED — decisão
           // deliberada (dono cancelou, ou dunning cancelou aos 30d após avisos).
@@ -627,8 +656,31 @@ export async function POST(request: Request) {
             reason: accessArbitration.reason,
           });
         }
+        // 🔒 MODO OBSERVAÇÃO: o rebaixamento é o espelho da ativação — em vez de
+        // liberar escrita clínica, ele a BLOQUEIA (PAST_DUE → writeAllowed=false
+        // no Domus). Gatear só o ramo do pagamento e deixar este solto seria o
+        // pior dos dois mundos: o webhook novo poderia TIRAR acesso sem nunca ter
+        // provado que sabe DEVOLVER. Mesma flag, mesma leitura do topo.
         const downgradesSubscription =
-          subscriptionDbId !== null && controlsAccess && accessArbitration.controls;
+          subscriptionDbId !== null &&
+          controlsAccess &&
+          accessArbitration.controls &&
+          accessEffectEnabled;
+        if (
+          !accessEffectEnabled &&
+          subscriptionDbId !== null &&
+          controlsAccess &&
+          accessArbitration.controls
+        ) {
+          log.warn("modo observação: rebaixamento SUPRIMIDO", {
+            eventId: event.id,
+            eventType: event.event,
+            subscriptionId: subscriptionDbId,
+            companyId,
+            wouldSetPastDue: true,
+            wouldBlockClinicalWrite: companyId !== null,
+          });
+        }
         if (downgradesSubscription) {
           // H6/idempotência: NÃO sobrescrever pastDueSince num reenvio do
           // mesmo OVERDUE — isso resetaria o relógio de dunning (suspensão/
@@ -769,8 +821,25 @@ export async function POST(request: Request) {
             { level: "warning", extra: { invoiceId: resolvedInvoiceId, companyId } },
           );
         }
+        // 🔒 MODO OBSERVAÇÃO — mesma razão do ramo OVERDUE (rebaixa acesso).
         const chargebackHitsSubscription =
-          subscriptionDbId !== null && controlsAccess && chargebackArbitration.controls;
+          subscriptionDbId !== null &&
+          controlsAccess &&
+          chargebackArbitration.controls &&
+          accessEffectEnabled;
+        if (
+          !accessEffectEnabled &&
+          subscriptionDbId !== null &&
+          controlsAccess &&
+          chargebackArbitration.controls
+        ) {
+          log.warn("modo observação: rebaixamento por chargeback SUPRIMIDO", {
+            eventId: event.id,
+            eventType: event.event,
+            subscriptionId: subscriptionDbId,
+            companyId,
+          });
+        }
         if (chargebackHitsSubscription) {
           await prisma.subscription.updateMany({
             where: { id: subscriptionDbId!, status: { notIn: ["SUSPENDED", "CANCELED"] } },
@@ -784,7 +853,20 @@ export async function POST(request: Request) {
       }
 
       case "SUBSCRIPTION_DELETED": {
-        if (subscriptionDbId) {
+        // 🔒 MODO OBSERVAÇÃO: cancelar a assinatura é o efeito de acesso mais
+        // severo do arquivo (CANCELED é terminal — nem um pagamento posterior a
+        // ressuscita, ver o guard de ACTIVATABLE_FROM no ramo CONFIRMED). Não
+        // pode ser o primeiro ato de um canal que nunca rodou.
+        if (subscriptionDbId && !accessEffectEnabled) {
+          log.warn("modo observação: cancelamento de assinatura SUPRIMIDO", {
+            eventId: event.id,
+            eventType: event.event,
+            subscriptionId: subscriptionDbId,
+            companyId,
+            wouldCancelSubscription: true,
+          });
+        }
+        if (subscriptionDbId && accessEffectEnabled) {
           await prisma.subscription.update({
             where: { id: subscriptionDbId },
             data: {

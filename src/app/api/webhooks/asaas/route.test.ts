@@ -153,6 +153,13 @@ const overdueEvent = {
 beforeEach(() => {
   vi.clearAllMocks();
 
+  // Efeitos de ACESSO ligados por padrão nesta suíte: ela foi escrita para
+  // exercitar o comportamento COMPLETO do webhook (ativar, rebaixar, publicar
+  // entitlement). O modo observação — flag AUSENTE, que é o default de produção
+  // — tem bloco próprio no fim do arquivo. Sem este stub, 10 testes passariam a
+  // afirmar apenas "nada aconteceu", o que esconderia regressão real.
+  vi.stubEnv("BILLING_WEBHOOK_ACCESS_ENABLED", "true");
+
   // default: token passes
   verifyWebhookToken.mockReturnValue(true);
 
@@ -908,5 +915,101 @@ describe("POST /api/webhooks/asaas — Task 8: obrigação de cobrança", () => 
     );
     const [msg] = captureMessage.mock.calls.at(-1) as [string, unknown];
     expect(msg).toContain(OBLIGATION_ID);
+  });
+});
+
+/**
+ * MODO OBSERVAÇÃO (`BILLING_WEBHOOK_ACCESS_ENABLED` ausente = default de produção).
+ *
+ * Contexto que justifica estes testes: medido em 2026-08-02, NUNCA houve webhook
+ * cadastrado no painel do Asaas — `BillingEvent` tem zero linhas em todo o
+ * histórico. Este caminho inteiro nunca rodou em produção, e um dos seus efeitos
+ * é `publishEntitlementForCompany`, que libera ESCRITA DE PRONTUÁRIO MÉDICO.
+ *
+ * A invariante que estes testes travam: com a flag desligada, o evento é
+ * REGISTRADO e a FATURA é marcada — mas NENHUM efeito de acesso acontece, em
+ * NENHUM dos quatro ramos. Gatear só o ramo do pagamento seria pior que não
+ * gatear: o canal poderia TIRAR acesso sem nunca ter provado que sabe DEVOLVER.
+ */
+describe("POST /api/webhooks/asaas — modo observação (flag de acesso DESLIGADA)", () => {
+  beforeEach(() => {
+    // Sobrescreve o stub do beforeEach global: aqui a flag NÃO está setada,
+    // que é exatamente o estado de produção no primeiro deploy.
+    vi.stubEnv("BILLING_WEBHOOK_ACCESS_ENABLED", "");
+  });
+
+  it("PAYMENT_CONFIRMED: marca a FATURA como paga (a verdade do dinheiro não é suprimida)", async () => {
+    const res = await POST(makeRequest(confirmEvent));
+
+    expect(res.status).toBe(200);
+    // O pedido explícito do dono: "pago no Asaas = PAGO no super admin".
+    // Isto continua valendo em modo observação — é a metade reversível.
+    const marcouPago =
+      invoiceUpdate.mock.calls.some(
+        (c) => (c[0] as { data?: { status?: string } })?.data?.status === "PAID",
+      ) ||
+      invoiceUpdateMany.mock.calls.some(
+        (c) => (c[0] as { data?: { status?: string } })?.data?.status === "PAID",
+      );
+    expect(marcouPago).toBe(true);
+  });
+
+  it("PAYMENT_CONFIRMED: NÃO ativa assinatura e NÃO publica entitlement", async () => {
+    const res = await POST(makeRequest(confirmEvent));
+
+    expect(res.status).toBe(200);
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+    const ativou = subscriptionUpdateMany.mock.calls.some(
+      (c) => (c[0] as { data?: { status?: string } })?.data?.status === "ACTIVE",
+    );
+    expect(ativou).toBe(false);
+  });
+
+  it("PAYMENT_OVERDUE: NÃO rebaixa para PAST_DUE e NÃO bloqueia escrita clínica", async () => {
+    const res = await POST(makeRequest(overdueEvent));
+
+    expect(res.status).toBe(200);
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+    const rebaixou = subscriptionUpdateMany.mock.calls.some(
+      (c) => (c[0] as { data?: { status?: string } })?.data?.status === "PAST_DUE",
+    );
+    expect(rebaixou).toBe(false);
+  });
+
+  it("PAYMENT_OVERDUE: ainda marca a FATURA como OVERDUE (o atraso é real)", async () => {
+    const res = await POST(makeRequest(overdueEvent));
+
+    expect(res.status).toBe(200);
+    const marcou =
+      invoiceUpdate.mock.calls.some(
+        (c) => (c[0] as { data?: { status?: string } })?.data?.status === "OVERDUE",
+      ) ||
+      invoiceUpdateMany.mock.calls.some(
+        (c) => (c[0] as { data?: { status?: string } })?.data?.status === "OVERDUE",
+      );
+    expect(marcou).toBe(true);
+  });
+
+  it("SUBSCRIPTION_DELETED: NÃO cancela a assinatura (CANCELED é terminal)", async () => {
+    const res = await POST(
+      makeRequest({
+        id: "evt-sub-deleted-obs",
+        event: "SUBSCRIPTION_DELETED",
+        subscription: { id: "asaas-sub-1" },
+      }),
+    );
+
+    expect(res.status).toBe(200);
+    expect(subscriptionUpdate).not.toHaveBeenCalled();
+    expect(publishEntitlementForCompany).not.toHaveBeenCalled();
+  });
+
+  it("o evento é REGISTRADO mesmo suprimido (auditoria não é gateada)", async () => {
+    const res = await POST(makeRequest(confirmEvent));
+
+    expect(res.status).toBe(200);
+    // Sem isto o modo observação seria cego: é o BillingEvent que prova ao dono
+    // que o webhook chegou e funcionou, antes de ele ligar a flag.
+    expect(billingEventUpsert).toHaveBeenCalled();
   });
 });

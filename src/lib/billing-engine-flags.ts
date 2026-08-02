@@ -102,3 +102,32 @@ export function isEnforcementEnabledForCompany(companyId: string): boolean {
   if (!companyId) return false;
   return parseCompanyIds(process.env.BILLING_ENFORCEMENT_COMPANY_IDS).includes(companyId);
 }
+
+/**
+ * Efeitos de ACESSO do webhook de pagamento estão liberados?
+ *
+ * ─── Por que esta flag existe, e por que ela é DIFERENTE das quatro acima ───
+ * As quatro anteriores gateiam o MOTOR (código que este plano escreveu). Esta
+ * gateia um caminho que já existia e nunca rodou: medido em 2026-08-02,
+ * `BillingEvent` tem ZERO linhas em todo o histórico de produção, porque nunca
+ * houve webhook cadastrado no painel do Asaas. Marcar a fatura como paga é
+ * seguro e reversível (`mark_paid` manual já faz isso hoje). Ativar assinatura,
+ * renovar período e **publicar entitlement para o Domus** não são: o último
+ * libera ESCRITA DE PRONTUÁRIO MÉDICO.
+ *
+ * Ligar o webhook sem isto significaria que o primeiro exercício dessa cadeia
+ * acontece com dinheiro real de cliente, sem ensaio possível — o Asaas deste
+ * projeto NÃO tem sandbox, então não há como testar antes com evento forjado.
+ *
+ * ─── O que fica DE FORA do gate, de propósito ───────────────────────────────
+ * A fatura continua sendo marcada `PAID` mesmo com a flag desligada. Esse é o
+ * objetivo declarado do dono ("se está pago no Asaas, tem que aparecer PAGO no
+ * super admin") e é a metade reversível: um operador desfaz por tela. O que o
+ * gate segura é só o que mexe em ACESSO DE CLIENTE.
+ *
+ * Nasce DESLIGADA como as outras: ausência da variável = `false`. Depois de um
+ * evento real chegar e ser conferido no `BillingEvent`, liga-se com um redeploy.
+ */
+export function isWebhookAccessEffectEnabled(): boolean {
+  return isOn(process.env.BILLING_WEBHOOK_ACCESS_ENABLED);
+}
