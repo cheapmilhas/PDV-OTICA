@@ -7,6 +7,8 @@ import { InvoiceActions } from "./invoice-actions";
 import { getProductContext } from "@/lib/admin-product-context";
 import { AdminStatusBadge } from "@/components/admin/AdminStatusBadge";
 import { ResendChargeButton } from "@/components/admin/resend-charge-button";
+import { CancelChargeButton } from "@/components/admin/cancel-charge-button";
+import { CANCELABLE_INVOICE_STATUSES } from "@/services/invoice-cancel-charge.service";
 
 function mesmoDia(a: Date | string | null | undefined, b: Date): boolean {
   if (!a) return false;
@@ -47,6 +49,17 @@ export default async function InvoiceDetailPage({
 
   const company = invoice.subscription.company;
   const plan = invoice.subscription.plan;
+
+  // Espelho das guardas de `cancelInvoiceCharge` + do gate da rota. Nada aqui é
+  // segurança (o servidor revalida tudo): é para não oferecer um botão que só
+  // vai devolver 403/409. `requireFinanceAccess` acima deixa passar ADMIN e
+  // BILLING, que NÃO podem cancelar cobrança.
+  const podeCancelarCobranca =
+    admin.role === "SUPER_ADMIN" &&
+    (CANCELABLE_INVOICE_STATUSES as readonly string[]).includes(invoice.status) &&
+    invoice.paidAt === null &&
+    !invoice.paymentConfirmed &&
+    invoice.billingObligationId === null;
 
   return (
     <div className="p-6 text-foreground max-w-4xl">
@@ -263,6 +276,23 @@ export default async function InvoiceDetailPage({
                 sentToday={mesmoDia(invoice.invoiceSentAt, new Date())}
               />
             </div>
+            {/*
+              Cancelar cobrança: espelha as guardas do servidor (que é quem
+              manda — a UI não é gate). Fora quando: papel não é SUPER_ADMIN,
+              status não cancelável, há evidência de pagamento, ou a fatura tem
+              obrigação vinculada (recusa explícita desta fatia — ver
+              `invoice-cancel-charge.service.ts`).
+            */}
+            {podeCancelarCobranca && (
+              <div className="mt-3 pt-3 border-t border-border">
+                <CancelChargeButton
+                  invoiceId={invoice.id}
+                  invoiceNumber={invoice.number}
+                  totalCents={invoice.total}
+                  asaasPaymentId={invoice.asaasPaymentId}
+                />
+              </div>
+            )}
           </div>
         </div>
       </div>
