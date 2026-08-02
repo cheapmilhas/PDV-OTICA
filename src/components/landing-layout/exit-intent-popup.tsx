@@ -5,7 +5,7 @@ import { X } from "lucide-react";
 import { useState } from "react";
 import { Button } from "@/components/ui/button";
 import { useExitIntent } from "@/hooks/use-exit-intent";
-import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
+import { REGISTER_URL, WHATSAPP_ENABLED, WHATSAPP_URL } from "@/lib/constants";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 
@@ -19,7 +19,9 @@ const OFERTA = {
   otica: {
     emoji: "👓",
     titulo: "Espera! Não saia sem testar.",
-    texto: "7 dias grátis, sem cartão, sem compromisso. Sua ótica no controle em minutos.",
+    // 14, não 7: `prisma/seed-plans.ts` dá trialDays 14 a TODOS os planos, e o
+    // resto do site já dizia 14. O visitante via dois prazos na mesma sessão.
+    texto: "14 dias grátis, sem cartão, sem compromisso. Sua ótica no controle em minutos.",
     href: REGISTER_URL,
   },
   medical: {
@@ -28,15 +30,28 @@ const OFERTA = {
     texto: "14 dias grátis, sem cartão, sem compromisso. Sua clínica organizada em minutos.",
     href: "/registro-medical",
   },
+  // Rotas institucionais (home, /precos, /contato, /blog) servem os DOIS
+  // públicos: assumir ótica ali mandava o visitante de clínica para o cadastro
+  // errado. Aqui a escolha do produto fica com ele.
+  neutra: {
+    emoji: "✨",
+    titulo: "Espera! Não saia sem testar.",
+    texto: "14 dias grátis, sem cartão, sem compromisso. Escolha o sistema da sua operação.",
+    href: "/precos",
+  },
 } as const;
+
+/** Rotas que pertencem inequivocamente ao produto ótico. */
+const ROTAS_OTICA = ["/oticas", "/funcionalidades", "/vis-vs-planilha"];
 
 export function ExitIntentPopup() {
   const { show, dismiss } = useExitIntent();
   const [submitted] = useState(false);
 
-  const pathname = usePathname();
-  const emMedical = pathname === "/medical" || pathname?.startsWith("/medical/") === true;
-  const oferta = emMedical ? OFERTA.medical : OFERTA.otica;
+  const pathname = usePathname() ?? "";
+  const emMedical = pathname === "/medical" || pathname.startsWith("/medical/");
+  const emOtica = ROTAS_OTICA.some((r) => pathname === r || pathname.startsWith(`${r}/`));
+  const oferta = emMedical ? OFERTA.medical : emOtica ? OFERTA.otica : OFERTA.neutra;
 
   return (
     <AnimatePresence>
@@ -81,11 +96,13 @@ export function ExitIntentPopup() {
                         Quero testar grátis agora
                       </Link>
                     </Button>
-                    <Button variant="secondary" size="default" className="w-full" asChild>
-                      <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
-                        Falar com consultor
-                      </a>
-                    </Button>
+                    {WHATSAPP_ENABLED && (
+                      <Button variant="secondary" size="default" className="w-full" asChild>
+                        <a href={WHATSAPP_URL} target="_blank" rel="noopener noreferrer">
+                          Falar com consultor
+                        </a>
+                      </Button>
+                    )}
                     <button
                       onClick={dismiss}
                       className="text-xs text-subtle hover:text-muted transition-colors"

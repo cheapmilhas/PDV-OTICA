@@ -148,7 +148,9 @@ export function RoiCalculator() {
             className="rounded-2xl border border-brand-primary/30 bg-brand-primary/5 p-6 flex flex-col justify-between"
           >
             <div>
-              <p className="text-sm text-muted mb-2">Você pode recuperar até</p>
+              {/* "Você pode recuperar até" lia como promessa de retorno; o
+                  disclaimer em letra miúda no fim do card não desfazia isso. */}
+              <p className="text-sm text-muted mb-2">Potencial estimado de</p>
               <motion.div
                 key={result}
                 initial={{ opacity: 0, y: 10 }}
@@ -159,8 +161,13 @@ export function RoiCalculator() {
                 {formatCurrency(result)}
                 <span className="text-xl font-normal text-muted">/mês</span>
               </motion.div>
+              {/* Os multiplicadores (60% / +5% / 30%) são premissas de
+                  simulação, não resultado medido em clientes. Sem dizer isso, o
+                  número virava promessa de retorno. */}
               <p className="text-sm text-muted mb-8">
-                Combinando economia de tempo, aumento de conversão e redução de inadimplência.
+                Simulação com base nos números que você informou, combinando
+                economia de tempo, aumento de conversão e redução de
+                inadimplência.
               </p>
 
               <div className="space-y-3 mb-8">

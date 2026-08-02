@@ -1,7 +1,10 @@
 import { ImageResponse } from "next/og";
 
 export const runtime = "edge";
-export const alt = "Vis — A gestão clara da sua ótica";
+// Esta é a imagem PADRÃO do site — servida na home institucional (dois
+// produtos) e em toda página que não define a sua. Falar só de ótica aqui fazia
+// o compartilhamento da home e do cadastro médico anunciar o produto errado.
+export const alt = "Vis — Sistemas de gestão para óticas e clínicas";
 export const size = { width: 1200, height: 630 };
 export const contentType = "image/png";
 
@@ -43,17 +46,26 @@ export default function OpengraphImage() {
             letterSpacing: "-0.02em",
           }}
         >
-          A gestão clara da sua ótica.
+          Dois sistemas. Uma gestão clara.
         </div>
+        {/* Dois divs em coluna, não <br />: o Satori (motor do ImageResponse)
+            não quebra linha dentro de um flex container. */}
         <div
           style={{
             display: "flex",
-            fontSize: 30,
+            flexDirection: "column",
+            fontSize: 28,
             color: "rgba(255,255,255,0.85)",
             marginTop: 24,
+            gap: 8,
           }}
         >
-          PDV · OS de lentes · Estoque · Financeiro · CRM
+          <div style={{ display: "flex" }}>
+            Óticas: PDV · OS de lentes · Estoque · Financeiro
+          </div>
+          <div style={{ display: "flex" }}>
+            Clínicas: prontuário · agenda · receituário
+          </div>
         </div>
         <div
           style={{

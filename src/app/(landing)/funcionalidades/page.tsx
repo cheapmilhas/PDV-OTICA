@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/constants";
 import Link from "next/link";
 import { ArrowRight, Sparkles } from "lucide-react";
 import { features, featureIcons } from "@/content/features";
@@ -18,6 +19,7 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: "/funcionalidades",
     type: "website",
+    images: [OG_IMAGE],
   },
 };
 
@@ -28,6 +30,7 @@ export default function FuncionalidadesPage() {
       <section className="pt-32 pb-12">
         <div className="container-custom">
           <SectionHeading
+            as="h1"
             eyebrow="Funcionalidades"
             title="Tudo o que sua ótica precisa, num só lugar"
             subtitle="Conheça em detalhe cada parte do Vis — do balcão ao laboratório."

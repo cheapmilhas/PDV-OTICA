@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, MessageCircle, ShieldCheck, Smartphone, Headset } from "lucide-react";
-import { WHATSAPP_URL } from "@/lib/constants";
+import { WHATSAPP_ENABLED, WHATSAPP_URL } from "@/lib/constants";
 import { fadeInUp, staggerContainer, viewportConfig } from "@/lib/animations";
 
 /**
@@ -133,29 +133,43 @@ export function InstitucionalConfianca() {
             </p>
 
             <div className="mt-8 flex flex-col justify-center gap-3 sm:flex-row">
-              <a
-                href={WHATSAPP_URL}
-                target="_blank"
-                rel="noopener noreferrer"
-                className="inline-flex items-center justify-center gap-2 rounded-xl px-7 text-sm font-bold text-white"
-                style={{
-                  minHeight: "52px",
-                  background: "var(--gradient-brand-vivid)",
-                  boxShadow: "0 6px 24px var(--brand-glow)",
-                }}
-              >
-                <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
-                Falar no WhatsApp
-              </a>
+              {WHATSAPP_ENABLED && (
+                <a
+                  href={WHATSAPP_URL}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center justify-center gap-2 rounded-xl px-7 text-sm font-bold text-white"
+                  style={{
+                    minHeight: "52px",
+                    background: "var(--gradient-brand-vivid)",
+                    boxShadow: "0 6px 24px var(--brand-glow)",
+                  }}
+                >
+                  <MessageCircle className="h-4 w-4 shrink-0" aria-hidden="true" />
+                  Falar no WhatsApp
+                </a>
+              )}
+              {/* Sem WhatsApp configurado este vira o CTA PRIMÁRIO da seção —
+                  senão a única ação sobrando seria um botão secundário órfão. */}
               <Link
                 href="/contato"
                 className="group inline-flex items-center justify-center gap-2 rounded-xl px-7 text-sm font-semibold"
-                style={{
-                  minHeight: "52px",
-                  background: "var(--lp-surface)",
-                  border: "1px solid var(--lp-border-hover)",
-                  color: "var(--lp-foreground)",
-                }}
+                style={
+                  WHATSAPP_ENABLED
+                    ? {
+                        minHeight: "52px",
+                        background: "var(--lp-surface)",
+                        border: "1px solid var(--lp-border-hover)",
+                        color: "var(--lp-foreground)",
+                      }
+                    : {
+                        minHeight: "52px",
+                        background: "var(--gradient-brand-vivid)",
+                        boxShadow: "0 6px 24px var(--brand-glow)",
+                        color: "#fff",
+                        fontWeight: 700,
+                      }
+                }
               >
                 Deixar meu contato
                 <ArrowRight
@@ -164,10 +178,6 @@ export function InstitucionalConfianca() {
                 />
               </Link>
             </div>
-
-            <p className="mt-6 text-xs" style={{ color: "var(--lp-subtle)" }}>
-              Sem cartão de crédito. Sem fidelidade.
-            </p>
           </motion.div>
         </motion.div>
       </div>

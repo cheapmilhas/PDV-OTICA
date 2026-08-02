@@ -3,7 +3,7 @@
 import { motion } from "framer-motion";
 import Link from "next/link";
 import { ArrowRight, MessageCircle } from "lucide-react";
-import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
+import { REGISTER_URL, WHATSAPP_ENABLED, WHATSAPP_URL } from "@/lib/constants";
 import { fadeInUp, staggerContainer, viewportConfig } from "@/lib/animations";
 
 export function FinalCta() {
@@ -94,6 +94,7 @@ export function FinalCta() {
                   <ArrowRight className="h-4 w-4 transition-transform duration-200 group-hover:translate-x-0.5" />
                 </Link>
               </motion.div>
+              {WHATSAPP_ENABLED && (
               <motion.div
                 whileHover={{ scale: 1.02 }}
                 whileTap={{ scale: 0.98 }}
@@ -115,6 +116,7 @@ export function FinalCta() {
                   Falar com consultor
                 </a>
               </motion.div>
+              )}
             </motion.div>
 
             <motion.p

@@ -25,8 +25,12 @@ const items = [
     icon: FileCheck,
     color: "text-brand-success",
     bg: "bg-brand-success/10",
-    title: "LGPD Compliant",
-    description: "Conformidade total com a Lei Geral de Proteção de Dados dos seus clientes.",
+    title: "Dados tratados conforme a LGPD",
+    // "LGPD Compliant / Conformidade TOTAL" é afirmação jurídica absoluta e
+    // inverificável — e o resto do site (registro-medical, /medical) já usa
+    // esta fórmula, que descreve a prática sem prometer certificação.
+    description:
+      "Controle de quem vê o quê e registro de quem acessou os dados dos seus clientes.",
   },
   {
     icon: BookOpen,
@@ -41,6 +45,9 @@ const items = [
     bg: "bg-brand-primary/10",
     title: "Certificado Digital",
     description: "Integração com certificado A1 e A3 para emissão fiscal sem complicação.",
+    // A emissão fiscal (NFC-e/NF-e) está no roadmap, não contratável hoje.
+    // Anunciar como pronto fazia o site prometer o que a assinatura não entrega.
+    emBreve: true,
   },
   {
     icon: Activity,
@@ -90,7 +97,25 @@ export function Security() {
                 <item.icon className={`h-5 w-5 ${item.color}`} />
               </div>
               <div>
-                <h3 className="font-semibold text-foreground text-sm mb-1">{item.title}</h3>
+                <h3
+                  className="font-semibold text-sm mb-1 flex items-center gap-2 flex-wrap"
+                  style={{ color: "var(--lp-foreground)" }}
+                >
+                  {item.title}
+                  {"emBreve" in item && item.emBreve && (
+                    <span
+                      className="inline-flex items-center rounded-full px-2 py-0.5 text-[0.625rem] font-bold uppercase tracking-wide"
+                      style={{
+                        background: "var(--lp-background)",
+                        border: "1px solid var(--lp-border)",
+                        color: "var(--lp-muted)",
+                        letterSpacing: "0.08em",
+                      }}
+                    >
+                      Em breve
+                    </span>
+                  )}
+                </h3>
                 <p className="text-xs text-muted leading-relaxed">{item.description}</p>
               </div>
             </motion.div>

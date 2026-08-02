@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef } from "react";
 import Link from "next/link";
+import { usePathname } from "next/navigation";
 import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { NAV_LINKS } from "@/lib/constants";
@@ -12,6 +13,18 @@ export function Header() {
   const [scrolled, setScrolled] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const headerRef = useRef<HTMLElement>(null);
+
+  // Dentro da /medical, "Planos" precisa abrir a /precos JÁ na aba de clínicas.
+  // Sem isso o visitante de clínica caía no grid ÓTICO (Básico R$ 149,90) e
+  // comparava com o preço do produto errado — exatamente o que o comentário do
+  // pricing-produto-switch diz querer evitar.
+  const pathname = usePathname() ?? "";
+  const emMedical = pathname === "/medical" || pathname.startsWith("/medical/");
+  const navLinks = emMedical
+    ? NAV_LINKS.map((l) =>
+        l.href === "/precos" ? { ...l, href: "/precos?produto=clinica" } : l,
+      )
+    : NAV_LINKS;
 
   useEffect(() => {
     // Offset the fixed header below the announcement bar while it's on screen, so
@@ -57,14 +70,15 @@ export function Header() {
       // on re-render (e.g. when `scrolled` toggles).
       className="fixed left-0 right-0 z-40 transition-all duration-300"
       style={{
-        // #FFFEFE OPACO nos DOIS estados — é a mesma cor do fundo embutido no
-        // PNG da logo, que não tem canal alfa (ver vis-logo.tsx). Com o header
-        // transparente no topo, a logo ficava sobre o gradiente da página e o
-        // retângulo dela aparecia recortado; só ao rolar é que sumia.
+        // Opaco nos DOIS estados. A razão original era o PNG da logo sem canal
+        // alfa (o retângulo dela aparecia recortado sobre o gradiente) — isso
+        // deixou de valer quando a logo passou a ter alfa de verdade. O opaco
+        // permanece por outro motivo: garante contraste do texto da nav sobre
+        // qualquer hero, e evitar a mudança de cor no scroll reduz ruído.
         //
-        // O header continua "acordando" na rolagem — o que muda agora é a borda,
-        // a sombra e o blur, não a cor de fundo.
-        background: "#FFFEFE",
+        // O header continua "acordando" na rolagem — o que muda é a borda, a
+        // sombra e o blur, não a cor de fundo.
+        background: "var(--lp-surface)",
         ...(scrolled
           ? {
               backdropFilter: "blur(20px) saturate(180%)",
@@ -88,7 +102,7 @@ export function Header() {
 
           {/* Desktop Nav */}
           <nav className="hidden md:flex items-center gap-1">
-            {NAV_LINKS.map((link) => (
+            {navLinks.map((link) => (
               <Link
                 key={link.href}
                 href={link.href}
@@ -127,7 +141,9 @@ export function Header() {
               onClick={() => setMenuOpen(!menuOpen)}
               className="p-2 rounded-lg transition-colors"
               style={{ color: "var(--lp-foreground)" }}
-              aria-label="Menu"
+              aria-label={menuOpen ? "Fechar menu" : "Abrir menu"}
+              aria-expanded={menuOpen}
+              aria-controls="menu-mobile"
             >
               {menuOpen ? <X className="h-5 w-5" /> : <Menu className="h-5 w-5" />}
             </button>
@@ -143,6 +159,7 @@ export function Header() {
             animate={{ opacity: 1, height: "auto" }}
             exit={{ opacity: 0, height: 0 }}
             transition={{ duration: 0.22 }}
+            id="menu-mobile"
             className="md:hidden overflow-hidden"
             style={{
               background: "rgba(255, 254, 254, 0.97)",
@@ -151,7 +168,7 @@ export function Header() {
             }}
           >
             <div className="container-custom py-4 flex flex-col gap-1">
-              {NAV_LINKS.map((link) => (
+              {navLinks.map((link) => (
                 <Link
                   key={link.href}
                   href={link.href}

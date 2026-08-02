@@ -10,7 +10,7 @@ import {
   type PublicPlan,
 } from "@/lib/plan-display";
 import { staggerContainer, fadeInUp, viewportConfig } from "@/lib/animations";
-import { REGISTER_URL, WHATSAPP_URL } from "@/lib/constants";
+import { REGISTER_URL, WHATSAPP_ENABLED, WHATSAPP_URL } from "@/lib/constants";
 
 const PLAN_ICONS = {
   basico: Zap,
@@ -21,13 +21,17 @@ const PLAN_ICONS = {
 
 export function PricingSection() {
   const [annual, setAnnual] = useState(false);
-  const [plans, setPlans] = useState<PublicPlan[]>([]);
+  // `null` = ainda carregando. Antes o estado inicial era `[]`, indistinguível
+  // de "a API respondeu vazio" e de "a API caiu" — nos três casos a página de
+  // preços mostrava o título com um vazio silencioso embaixo, para sempre.
+  const [plans, setPlans] = useState<PublicPlan[] | null>(null);
+  const [erro, setErro] = useState(false);
 
   useEffect(() => {
     fetch("/api/public/plans")
-      .then((r) => r.json())
+      .then((r) => (r.ok ? r.json() : Promise.reject(new Error("falha"))))
       .then((d) => setPlans(d.plans ?? []))
-      .catch(() => setPlans([]));
+      .catch(() => setErro(true));
   }, []);
 
   // A contagem de planos é DADO, não constante: `isActive` é editável pelo admin
@@ -37,7 +41,7 @@ export function PricingSection() {
   //
   // Destacar só faz sentido quando existe UM plano contratável. Qualquer outra
   // contagem cai no layout de 4 colunas — que é exatamente o que já roda hoje.
-  const ativos = plans.filter((p) => !isComingSoon(p));
+  const ativos = (plans ?? []).filter((p) => !isComingSoon(p));
   const destacar = ativos.length === 1;
   const classeGrid = destacar ? "lg:grid-cols-5" : "lg:grid-cols-4";
 
@@ -148,8 +152,26 @@ export function PricingSection() {
             MESMAS classes do caso de fallback do grid real. Não imita o
             destaque de propósito: o esqueleto renderiza antes do fetch e não
             sabe quantos planos virão — fingir que sabe daria um salto pior. */}
-        {plans.length === 0 ? (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch max-w-6xl mx-auto">
+        {erro ? (
+          <div className="mx-auto max-w-md space-y-3 py-8 text-center">
+            <p role="alert" className="text-sm" style={{ color: "var(--lp-muted)" }}>
+              Não foi possível carregar os planos agora.
+            </p>
+            <button
+              type="button"
+              onClick={() => window.location.reload()}
+              className="inline-flex items-center justify-center rounded-xl px-6 py-2.5 text-sm font-semibold"
+              style={{
+                background: "var(--lp-surface)",
+                border: "1px solid var(--lp-border-hover)",
+                color: "var(--lp-foreground)",
+              }}
+            >
+              Tentar de novo
+            </button>
+          </div>
+        ) : plans === null ? (
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-5 items-stretch max-w-6xl mx-auto" aria-busy="true">
             {[0, 1, 2, 3].map((i) => (
               <div
                 key={i}
@@ -374,10 +396,26 @@ export function PricingSection() {
                     transition={{ type: "spring", stiffness: 400, damping: 17 }}
                     className="mb-7"
                   >
+                    {/* O plano Rede é "fale conosco": vai ao WhatsApp quando há
+                        número de vendas configurado e cai na /contato quando não
+                        há — nunca fica sem destino, que seria o pior dos casos
+                        num card de preço. */}
                     <Link
-                      href={plan.slug === "rede" ? WHATSAPP_URL : REGISTER_URL}
-                      rel={plan.slug === "rede" ? "noopener noreferrer" : undefined}
-                      target={plan.slug === "rede" ? "_blank" : undefined}
+                      href={
+                        plan.slug === "rede"
+                          ? WHATSAPP_ENABLED
+                            ? WHATSAPP_URL
+                            : "/contato"
+                          : REGISTER_URL
+                      }
+                      rel={
+                        plan.slug === "rede" && WHATSAPP_ENABLED
+                          ? "noopener noreferrer"
+                          : undefined
+                      }
+                      target={
+                        plan.slug === "rede" && WHATSAPP_ENABLED ? "_blank" : undefined
+                      }
                       className="inline-flex items-center justify-center gap-2 w-full rounded-xl py-3 text-sm font-bold group transition-all"
                       style={
                         isHighlighted

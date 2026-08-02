@@ -2,7 +2,7 @@ import Image from "next/image";
 
 /**
  * Logo oficial da marca Vis (símbolo de duas lentes/olho em gradiente azul→ciano
- * + wordmark "Vis" em navy). Usa o PNG oficial em /public/vis-logo.png.
+ * + wordmark "Vis" em navy). Usa /public/vis-logo-alpha.png.
  *
  * Usa /public/vis-logo-alpha.png: a mesma arte COM canal alfa, gerada a partir
  * do PNG oficial (que é RGB puro — um retângulo sólido #FFFEFE que desenhava

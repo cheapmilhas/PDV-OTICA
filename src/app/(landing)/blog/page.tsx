@@ -1,4 +1,5 @@
 import type { Metadata } from "next";
+import { OG_IMAGE } from "@/lib/constants";
 import Link from "next/link";
 import { ArrowRight } from "lucide-react";
 import { blogPosts } from "@/content/blog";
@@ -17,6 +18,7 @@ export const metadata: Metadata = {
     description: DESCRIPTION,
     url: "/blog",
     type: "website",
+    images: [OG_IMAGE],
   },
 };
 
@@ -51,6 +53,7 @@ export default function BlogIndexPage() {
       <section className="pt-32 pb-12">
         <div className="container-custom">
           <SectionHeading
+            as="h1"
             eyebrow="Blog"
             title="Gestão de ótica, sem enrolação"
             subtitle="Conteúdo prático para quem toca uma ótica de verdade: vendas, OS de lentes, estoque e finanças."
