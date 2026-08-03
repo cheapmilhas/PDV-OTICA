@@ -5,7 +5,7 @@ import { FooterBrandLine, FooterMadeFor, FooterOtherProduct } from "./footer-tag
 
 export function Footer() {
   return (
-    <footer className="border-t border-[var(--border)] bg-[var(--background)]">
+    <footer className="border-t border-[var(--lp-border)] bg-[var(--lp-background)]">
       <div className="container-custom py-16">
         {/* Top */}
         <div className="grid grid-cols-2 gap-8 md:grid-cols-5 lg:gap-12">
@@ -131,7 +131,7 @@ export function Footer() {
         </div>
 
         {/* Bottom */}
-        <div className="mt-12 pt-8 border-t border-[var(--border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-subtle">
+        <div className="mt-12 pt-8 border-t border-[var(--lp-border)] flex flex-col sm:flex-row items-center justify-between gap-4 text-sm text-subtle">
           <p>© 2026 Vis — Todos os direitos reservados</p>
           <FooterMadeFor />
         </div>

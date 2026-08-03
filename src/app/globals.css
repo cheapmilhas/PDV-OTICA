@@ -425,22 +425,27 @@ html {
 }
 
 /* ===== UTILITÁRIOS DE SOMBRA ===== */
+/* Navy literal em vez de `hsl(var(--foreground))`: sob a landing essa var
+   guardava hex, então `hsl(#0A1F44 / 0.04)` era inválido e as três sombras
+   sumiam — o card do hero institucional e o cookie banner estavam sem sombra
+   nenhuma em produção. O literal vale nos dois escopos e não depende de qual
+   sistema de cor está ativo. */
 .shadow-card {
   box-shadow:
-    0 1px 3px hsl(var(--foreground) / 0.04),
-    0 2px 8px hsl(var(--foreground) / 0.04);
+    0 1px 3px rgba(10, 31, 68, 0.04),
+    0 2px 8px rgba(10, 31, 68, 0.04);
 }
 
 .shadow-card-hover {
   box-shadow:
-    0 4px 12px hsl(var(--foreground) / 0.08),
-    0 1px 3px hsl(var(--foreground) / 0.04);
+    0 4px 12px rgba(10, 31, 68, 0.08),
+    0 1px 3px rgba(10, 31, 68, 0.04);
 }
 
 .shadow-elevated {
   box-shadow:
-    0 8px 24px hsl(var(--foreground) / 0.08),
-    0 2px 8px hsl(var(--foreground) / 0.04);
+    0 8px 24px rgba(10, 31, 68, 0.08),
+    0 2px 8px rgba(10, 31, 68, 0.04);
 }
 
 /* ===== Hero: "momento de foco" ===== */
@@ -536,12 +541,31 @@ html {
     letter-spacing: -0.02em;
   }
 
-  /* ── Text Colors ── */
+  /* ── Text Colors ──
+     Sob a landing, os nomes que colidem com o Tailwind (`foreground`, `muted`)
+     precisam apontar para a paleta da marca, não para a do dashboard — o navy
+     da landing é #0A1F44, o do app logado é #151A28. `:where()` mantém a
+     especificidade em (0,1,0) de propósito: assim as variantes `hover:`
+     (0,2,0) continuam vencendo. Elevar isto para `.landing-scope .x` mataria
+     o hover dos links do rodapé. */
+  :where(.landing-scope) .text-foreground {
+    color: var(--lp-foreground);
+  }
+  :where(.landing-scope) .hover\:text-foreground:hover {
+    color: var(--lp-foreground);
+  }
   .text-muted {
+    color: var(--lp-muted);
+  }
+  :where(.landing-scope) .hover\:text-muted:hover {
     color: var(--lp-muted);
   }
   .text-subtle {
     color: var(--lp-subtle);
+  }
+  /* 60% de --lp-border, que já é rgba(14,42,71,0.08) → 0.08 × 0.6 = 0.048. */
+  :where(.landing-scope) .border-border\/60 {
+    border-color: rgba(14, 42, 71, 0.048);
   }
 
   /* ── Brand Color Utilities ── */
@@ -556,11 +580,16 @@ html {
   .bg-brand-primary\/10 { background-color: rgba(46, 107, 255, 0.10); }
   .bg-brand-primary\/5  { background-color: rgba(46, 107, 255, 0.05); }
   .bg-brand-accent\/10  { background-color: rgba(34, 195, 230, 0.10); }
-  .bg-brand-success\/10 { background-color: rgba(16, 185, 129, 0.10); }
+  /* #16A34A = --brand-success. Estava rgba(16,185,129) = #10B981 aqui e no
+     /20 abaixo: o mesmo token rendia dois verdes diferentes conforme a cor
+     fosse cheia ou translúcida. */
+  .bg-brand-success\/10 { background-color: rgba(22, 163, 74, 0.10); }
   .bg-brand-warning\/10 { background-color: rgba(245, 158, 11, 0.10); }
   .border-brand-primary { border-color: var(--brand-primary); }
+  .border-brand-primary\/30 { border-color: rgba(46, 107, 255, 0.30); }
+  .border-brand-primary\/20 { border-color: rgba(46, 107, 255, 0.20); }
   .border-brand-success { border-color: var(--brand-success); }
-  .border-brand-success\/20 { border-color: rgba(16, 185, 129, 0.20); }
+  .border-brand-success\/20 { border-color: rgba(22, 163, 74, 0.20); }
 
   /* ── Gradient Text — premium, non-cliché ── */
   /* REMOVED: old purple→cyan gradient (the "AI look")           */
@@ -650,6 +679,15 @@ html {
       0 2px 8px rgba(46, 107, 255, 0.10);
   }
 
+  /* Irmã mais forte da .shadow-glow, para o que flutua sobre a página (o exit
+     popup a usava sem que ela existisse, e ficava sem sombra nenhuma). */
+  .shadow-glow-lg {
+    box-shadow:
+      0 0 0 1px rgba(46, 107, 255, 0.28),
+      0 24px 64px rgba(10, 31, 68, 0.24),
+      0 8px 24px rgba(46, 107, 255, 0.16);
+  }
+
   /* ── Layout ── */
   .section-padding {
     padding-top: clamp(72px, 10vw, 128px);
@@ -698,17 +736,29 @@ html {
   }
 }
 
-/* Inline CSS variable overrides for landing components */
-/* These shadow the Tailwind CSS variables so that landing-specific var(--background) etc. work */
-/* Applied via the .landing-scope class on the layout wrapper */
-.landing-scope,
-.landing-scope * {
-  --background: var(--lp-background);
+/* Aliases da landing — SÓ os nomes que o Tailwind não usa como canal de cor.
+   Contrato (quebrá-lo foi o bug da Onda 4):
+   - `--lp-*` e `--brand-*` guardam COR COMPLETA (hex/rgba) e são consumidos
+     crus: `bg-[var(--lp-surface)]`.
+   - As vars do Shadcn (`--background`, `--foreground`, `--muted`, `--border`…)
+     guardam TRIPLA HSL e só são consumidas dentro de `hsl()`, porque é assim
+     que o tailwind.config as declara: `foreground: "hsl(var(--foreground))"`.
+   Redefinir um nome do segundo grupo com um valor do primeiro gera
+   `hsl(#0A1F44)` — CSS inválido, declaração descartada em silêncio. Era o que
+   este bloco fazia com --background/--foreground/--muted/--border, matando
+   `text-foreground`, `border-border` e as três utilities de sombra na landing.
+   Os quatro abaixo não colidem: o Tailwind não gera classe para nenhum deles. */
+.landing-scope {
   --surface: var(--lp-surface);
   --surface-hover: var(--lp-surface-hover);
-  --foreground: var(--lp-foreground);
-  --muted: var(--lp-muted);
   --subtle: var(--lp-subtle);
-  --border: var(--lp-border);
   --border-hover: var(--lp-border-hover);
 }
+
+/* Variantes de estado das utilities de marca. Ficam FORA de `@layer utilities`
+   de propósito: dentro do layer o Tailwind só emite a regra se o scanner casar
+   o seletor com um nome de classe que ele indexa, e `.hover\:bg-brand-hover:hover`
+   não casa — foi por isso que o hover do botão "Aceitar" do banner LGPD nunca
+   existiu no CSS compilado, mesmo com o call site presente no JSX. */
+.hover\:bg-brand-hover:hover { background-color: var(--brand-hover); }
+.hover\:bg-brand-primary:hover { background-color: var(--brand-primary); }

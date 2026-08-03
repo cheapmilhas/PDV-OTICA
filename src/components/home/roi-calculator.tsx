@@ -94,7 +94,7 @@ export function RoiCalculator() {
             whileInView={{ opacity: 1, x: 0 }}
             viewport={viewportConfig}
             transition={{ duration: 0.5 }}
-            className="rounded-2xl border border-[var(--border)] bg-[var(--background)] p-6 space-y-6"
+            className="rounded-2xl border border-[var(--lp-border)] bg-[var(--lp-background)] p-6 space-y-6"
           >
             <div className="flex items-center gap-2 mb-2">
               <Calculator className="h-4 w-4 text-brand-primary" />

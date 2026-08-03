@@ -94,7 +94,7 @@ export function TrustProof() {
           initial="hidden"
           whileInView="visible"
           viewport={viewportConfig}
-          className="grid grid-cols-2 md:grid-cols-4 divide-y divide-[var(--border)] sm:divide-y-0 sm:divide-x sm:divide-[var(--border)] rounded-2xl border border-[var(--border)] bg-[var(--surface)]/60"
+          className="grid grid-cols-2 md:grid-cols-4 divide-y divide-[var(--lp-border)] sm:divide-y-0 sm:divide-x sm:divide-[var(--lp-border)] rounded-2xl border border-[var(--lp-border)] bg-[rgba(255,255,255,0.6)]"
         >
           {metrics.map((m) => (
             <motion.div

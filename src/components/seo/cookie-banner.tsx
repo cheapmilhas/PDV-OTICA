@@ -63,7 +63,7 @@ export function CookieBanner() {
               </button>
               <button
                 onClick={reject}
-                className="flex-1 py-2 rounded-xl border border-[var(--border)] text-subtle text-xs font-medium hover:text-muted hover:border-[var(--border-hover)] transition-colors"
+                className="flex-1 py-2 rounded-xl border border-[var(--lp-border)] text-subtle text-xs font-medium hover:text-muted hover:border-[var(--border-hover)] transition-colors"
               >
                 Rejeitar
               </button>
