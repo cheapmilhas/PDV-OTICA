@@ -4,7 +4,7 @@
 
 **Goal:** Eliminar o caminho que cria fatura sem cobrança ("fatura fantasma") e remover código duplicado/órfão do super admin, sem quebrar menu, breadcrumb ou suíte.
 
-**Architecture:** Remoção cirúrgica. Apagamos a tela `/admin/financeiro/faturas/nova`, o formulário dela e a rota de API `/api/admin/faturas/create` que ela consome. O `QuickLink` "Nova Cobrança" do hub financeiro **não some** — passa a apontar para `/admin/financeiro/faturas`, onde vive o botão correto (`NovaCobrancaButton`, que cria no Asaas + PIX + e-mail). Dois testes que enumeram as páginas do financeiro precisam ser atualizados junto, senão a suíte quebra por ENOENT.
+**Architecture:** Remoção cirúrgica. Apagamos a tela `/admin/financeiro/faturas/nova`, o formulário dela e a rota de API `/api/admin/faturas/create` que ela consome. No hub financeiro, os cards "Todas as Faturas" e "Nova Cobrança" **viram um só** ("Faturas e Cobranças") apontando para `/admin/financeiro/faturas`, onde vive o botão correto (`NovaCobrancaButton`, que cria no Asaas + PIX + e-mail) — fundir em vez de redirecionar, porque os dois já teriam o mesmo destino. Dois testes que enumeram as páginas do financeiro precisam ser atualizados junto, senão a suíte quebra por ENOENT.
 
 **Tech Stack:** Next.js 16 (App Router), TypeScript, Vitest, Prisma.
 
@@ -43,24 +43,29 @@
 - `src/app/admin/(painel)/relatorios/export-buttons.tsx`
 
 **Modificar:**
-- `src/app/admin/(painel)/financeiro/page.tsx:185` — QuickLink passa a apontar para `/admin/financeiro/faturas`
+- `src/app/admin/(painel)/financeiro/page.tsx:179-188` — funde os 2 QuickLinks num só
 - `src/lib/admin-finance-roles.test.ts:164` — remover `"faturas/nova/page.tsx"` da lista
 
 ---
 
-## Task 1: Redirecionar o QuickLink para o caminho correto
+## Task 1: Fundir os QuickLinks do hub financeiro
 
 Feito ANTES de apagar, para que em nenhum commit intermediário o hub aponte para 404.
 
 **Files:**
-- Modify: `src/app/admin/(painel)/financeiro/page.tsx:184-188`
+- Modify: `src/app/admin/(painel)/financeiro/page.tsx:179-188`
 
-- [ ] **Step 1: Ler o bloco atual**
+- [ ] **Step 1: Ler os DOIS QuickLinks (eles se sobrepõem)**
 
-Run: `sed -n '184,189p' "src/app/admin/(painel)/financeiro/page.tsx"`
+Run: `sed -n '179,188p' "src/app/admin/(painel)/financeiro/page.tsx"`
 
-Esperado (exatamente):
+Esperado (exatamente 10 linhas):
 ```tsx
+            <QuickLink
+              href="/admin/financeiro/faturas"
+              title="Todas as Faturas"
+              description="Visualizar e gerenciar todas as faturas"
+            />
             <QuickLink
               href="/admin/financeiro/faturas/nova"
               title="Nova Cobrança"
@@ -68,21 +73,26 @@ Esperado (exatamente):
             />
 ```
 
-- [ ] **Step 2: Substituir o destino e a descrição**
+🚨 **Ponto que a 1ª versão deste plano errou:** o card "Todas as Faturas" **já aponta para
+`/admin/financeiro/faturas`**. Simplesmente redirecionar o "Nova Cobrança" para lá criaria **dois
+cards vizinhos com o mesmo destino** — trocaríamos um problema por outro.
 
-Trocar o bloco acima por:
+- [ ] **Step 2: Fundir os dois num só card**
+
+Substituir as 10 linhas acima por:
 
 ```tsx
             <QuickLink
               href="/admin/financeiro/faturas"
-              title="Nova Cobrança"
-              description="Criar cobrança no Asaas com PIX e e-mail para o cliente"
+              title="Faturas e Cobranças"
+              description="Ver todas as faturas e criar cobrança no Asaas (PIX + e-mail)"
             />
 ```
 
-🔑 O destino passa a ser a LISTA de faturas, onde o botão `NovaCobrancaButton` já existe
-(`faturas/page.tsx:140`) e é o caminho que fala com o gateway. A descrição muda porque a antiga
-("Criar cobrança manual") descrevia justamente o comportamento que estamos eliminando.
+🔑 Um card só, porque o destino é um só. A tela de faturas **é** onde se cria a cobrança
+(`NovaCobrancaButton` em `faturas/page.tsx:140`, com seletor de empresa). O título "Faturas e
+Cobranças" mantém a palavra "cobrança" visível para quem procurava o card antigo, e a descrição
+diz explicitamente o que o caminho certo faz — em oposição à "cobrança manual" que estamos matando.
 
 - [ ] **Step 3: Verificar que não sobrou referência à tela fantasma neste arquivo**
 
@@ -93,12 +103,16 @@ Esperado: **nenhuma saída** (exit 1).
 
 ```bash
 git add "src/app/admin/(painel)/financeiro/page.tsx"
-git commit -m "fix(admin): QuickLink 'Nova Cobranca' aponta para o caminho que cobra de verdade
+git commit -m "fix(admin): funde os QuickLinks de faturas no hub financeiro
 
-O link levava a /financeiro/faturas/nova, que cria fatura SEM falar com o Asaas
-(sem PIX, sem e-mail) — o operador era levado a uma fatura fantasma por um botao
-com o nome do caminho correto. Agora aponta para a lista de faturas, onde vive o
-NovaCobrancaButton (/api/admin/charges -> Asaas + PIX + e-mail)."
+'Nova Cobranca' levava a /financeiro/faturas/nova, que cria fatura SEM falar com
+o Asaas (sem PIX, sem e-mail) — o operador era levado a uma fatura fantasma por
+um card com o nome do caminho correto.
+
+Nao bastava redirecionar: o card 'Todas as Faturas' ao lado JA apontava para
+/admin/financeiro/faturas, entao os dois ficariam com o mesmo destino. Viraram
+um card so, 'Faturas e Cobrancas' — que e onde o NovaCobrancaButton vive
+(/api/admin/charges -> Asaas + PIX + e-mail)."
 ```
 
 ---
@@ -225,9 +239,12 @@ atualizadas no mesmo commit para a suite nunca ficar vermelha na historia."
 
 - [ ] **Step 1: Confirmar que é órfão — e que NÃO é o homônimo em uso**
 
-Run: `grep -rn "relatorios/export-buttons\|from \"./export-buttons\"" src/`
+Run: `grep -rn "export-buttons" src/app/admin/`
 
-Esperado: **nenhuma saída** (exit 1) — nada importa o arquivo de `(painel)/relatorios/`.
+Esperado: **nenhuma saída** (exit 1) — nada sob `src/app/admin/` importa o arquivo.
+
+🔑 Busca por `export-buttons` **em todo o `src/app/admin/`**, não só pelo caminho literal: um import
+relativo (`from "../relatorios/export-buttons"`) escaparia de um grep mais estreito.
 
 - [ ] **Step 2: Confirmar que o homônimo de `components/reports` CONTINUA em uso**
 
@@ -294,24 +311,32 @@ Esperado: `EXIT=0` e todos os arquivos passando. Baseline antes deste sprint: **
 396 arquivos**. Depois da remoção o número de testes **cai** (o `route.test.ts` apagado levava os
 seus junto) — isso é esperado; o que não pode haver é FALHA.
 
-- [ ] **Step 3: Build de produção**
+- [ ] **Step 3: Limpar o cache do Next ANTES do build**
+
+Run: `rm -rf .next`
+
+🔑 Obrigatório depois de apagar rotas: o `.next/` guarda a rota removida e o build pode passar
+usando artefato velho (a memória do projeto registra colisão de build por não limpar). Também
+garante que a rota morta não responda em dev.
+
+- [ ] **Step 4: Build de produção**
 
 Run: `npm run build > /tmp/build-sprint2.log 2>&1; echo "EXIT=$?"; tail -20 /tmp/build-sprint2.log`
 Esperado: `EXIT=0`. ⚠️ Conferir pelo EXIT CODE, não pelo texto — há ruído pré-existente de
 `/api/dashboard/onboarding-status` usando `headers`, que não é regressão.
 
-- [ ] **Step 4: Nenhuma referência órfã sobrou**
+- [ ] **Step 5: Nenhuma referência órfã sobrou**
 
 Run: `grep -rn "faturas/nova\|faturas/create\|relatorios/export-buttons" src/`
 Esperado: nenhuma saída (exit 1).
 
-- [ ] **Step 5: Sanidade do menu e do breadcrumb**
+- [ ] **Step 6: Sanidade do menu e do breadcrumb**
 
 Run: `grep -rn "assinaturas\|suporte" "src/app/admin/(painel)/admin-nav.tsx" "src/app/admin/(painel)/admin-breadcrumb.tsx"`
 Esperado: as entradas de `assinaturas` e `suporte` **continuam lá** — nenhuma delas era alvo deste
 sprint (D2.1 e a nota do `/admin/suporte`).
 
-- [ ] **Step 6: Commit final se sobrou algo**
+- [ ] **Step 7: Commit final se sobrou algo**
 
 ```bash
 git status --porcelain
@@ -325,7 +350,15 @@ git add -A && git commit -m "chore(admin): fecha Sprint 2 (podar o que engana)"
 > Não existe caminho — nem por menu, nem por URL — para criar fatura sem cobrança; suíte verde;
 > nenhum link ou breadcrumb quebrado.
 
-Verificado por: Task 5 Step 4 (nenhuma referência), Step 2 (suíte), Step 5 (menu/breadcrumb).
+Verificado por: Task 5 Step 5 (nenhuma referência), Step 2 (suíte), Step 6 (menu/breadcrumb).
+
+## Nota sobre documentação histórica
+
+`grep -rn "faturas/nova"` **fora de `src/`** ainda retorna ocorrências em documentos de auditoria e
+planos antigos (`docs/audit/mapping/02_rotas_e_paginas.md`, `docs/historico/AUDITORIA_ADMIN.md`,
+`docs/admin-redesign/PLANO-MELHORIAS-*.md`). **Não serão atualizados de propósito:** são registros
+datados do que existia à época, e reescrevê-los apagaria a história. Os `grep` deste plano são
+sempre restritos a `src/`.
 
 ## Fora deste plano (declarado)
 
