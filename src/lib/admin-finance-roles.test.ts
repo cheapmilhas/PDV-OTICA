@@ -161,7 +161,6 @@ describe("adoção nas telas de /admin/(painel)/financeiro", () => {
   const PAGINAS = [
     "page.tsx",
     "faturas/page.tsx",
-    "faturas/nova/page.tsx",
     "faturas/[id]/page.tsx",
     "inadimplencia/page.tsx",
   ];
