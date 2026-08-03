@@ -75,7 +75,7 @@ export function StatsCounter() {
             <motion.div
               key={f.title}
               variants={fadeInUp}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-hover)] transition-colors"
+              className="rounded-2xl border border-[var(--lp-border)] bg-[var(--surface)] p-6 hover:border-[var(--border-hover)] transition-colors"
             >
               <div className={`inline-flex h-11 w-11 items-center justify-center rounded-xl ${f.bg} mb-4`}>
                 <f.icon className={`h-5 w-5 ${f.color}`} />

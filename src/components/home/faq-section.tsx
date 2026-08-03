@@ -45,7 +45,7 @@ export function FaqSection() {
             <motion.div
               key={idx}
               variants={fadeInUp}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--background)] overflow-hidden hover:border-[var(--border-hover)] transition-colors"
+              className="rounded-2xl border border-[var(--lp-border)] bg-[var(--lp-background)] overflow-hidden hover:border-[var(--border-hover)] transition-colors"
             >
               <button
                 onClick={() => setOpen(open === idx ? null : idx)}

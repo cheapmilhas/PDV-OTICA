@@ -13,16 +13,30 @@ Precedência resolvida pelo **seletor CSS de escopo**, não por diretório de ro
 | `.landing-dark` | Variante escura da landing (não é o default) | 8 |
 | `:root` (bloco 2) | shadcn/ui em HSL | 36 |
 | `.dark` | Tema escuro do dashboard | 35 |
-| `.landing-scope, .landing-scope *` | **Shadowing** — ver abaixo | 8 |
+| `.landing-scope` | Aliases da landing que **não** colidem com o Tailwind | 4 |
 
-**Shadowing (importante):** `src/app/globals.css:704-714` faz `.landing-scope` redefinir
-`--background`, `--foreground`, `--muted`, `--border` com os valores `--lp-*`. O próprio
-arquivo comenta: *"These shadow the Tailwind CSS variables"*. Os dois sistemas **não são
-disjuntos** — um alimenta o outro sob os mesmos nomes.
+**A regra que não pode ser quebrada (custou 28 pontos errados em produção):**
+existem duas convenções de cor, e o mesmo identificador nunca pode servir às duas.
 
-**Consequência prática:** componente usado dentro e fora de `.landing-scope` é
-**escopo-agnóstico** — consome só `--background`/`--foreground`/`--muted`/`--border`,
-nunca `--lp-*` direto. É isso que o faz funcionar nos dois lugares.
+| Grupo | Formato | Como se consome |
+|---|---|---|
+| `--lp-*`, `--brand-*` | cor completa (hex/rgba) | crua: `bg-[var(--lp-surface)]` |
+| vars do shadcn (`--background`, `--foreground`, `--muted`, `--border`…) | tripla HSL | só dentro de `hsl()` — é o que o `tailwind.config` faz: `foreground: "hsl(var(--foreground))"` |
+
+Redefinir um nome do segundo grupo com um valor do primeiro produz `hsl(#0A1F44)`:
+CSS inválido, **declaração descartada em silêncio**. Sem erro de build, sem warning,
+sem teste vermelho — a cor cai para herança e só aparece no site, para o visitante.
+Era o que `.landing-scope *` fazia até 2026-08-02, matando `text-foreground`,
+`border-border` e as três utilities de sombra dentro da landing.
+
+**Consequência prática:** um componente que vive dentro e fora de `.landing-scope`
+deve consumir **os nomes do shadcn dentro de `hsl()`** e deixar o escopo escolher a
+paleta via utility (`:where(.landing-scope) .text-foreground`). Nunca redefina um
+nome do shadcn com valor de cor completa para "fazer funcionar nos dois lugares".
+
+`scripts/check-landing-colors.cjs` verifica as duas metades disso por compilação:
+nenhuma var de cor completa dentro de `hsl()`, e toda classe custom citada no JSX
+existindo no CSS de saída. Rode-o depois de mexer em cor.
 
 Marca: `--brand-primary #2E6BFF` (azul Vis, ações), `--brand-navy #0A1F44`,
 `--brand-accent #22C3E6` (ciano, realce raro).

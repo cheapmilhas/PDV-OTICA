@@ -122,7 +122,7 @@ export function LabIntegration() {
               <motion.div
                 key={s.step}
                 variants={fadeInUp}
-                className="flex gap-4 items-start rounded-2xl border border-[var(--border)] bg-[var(--background)] p-5 hover:border-[var(--border-hover)] transition-colors"
+                className="flex gap-4 items-start rounded-2xl border border-[var(--lp-border)] bg-[var(--lp-background)] p-5 hover:border-[var(--border-hover)] transition-colors"
               >
                 <div className={`shrink-0 inline-flex h-10 w-10 items-center justify-center rounded-xl ${s.bg}`}>
                   <s.icon className={`h-5 w-5 ${s.color}`} />

@@ -75,13 +75,13 @@ export function TargetAudience() {
               variants={fadeInUp}
               whileHover={{ y: -4 }}
               transition={{ duration: 0.2 }}
-              className="rounded-2xl border border-[var(--border)] bg-[var(--surface)] p-6 hover:border-[var(--border-hover)] hover:shadow-glow transition-all duration-300"
+              className="rounded-2xl border border-[var(--lp-border)] bg-[var(--surface)] p-6 hover:border-[var(--border-hover)] hover:shadow-glow transition-all duration-300"
             >
               <div className="flex items-center justify-between mb-4">
                 <div className={`inline-flex h-10 w-10 items-center justify-center rounded-xl ${p.bg}`}>
                   <p.icon className={`h-5 w-5 ${p.color}`} />
                 </div>
-                <span className="text-xs font-medium text-subtle border border-[var(--border)] rounded-full px-2.5 py-1">
+                <span className="text-xs font-medium text-subtle border border-[var(--lp-border)] rounded-full px-2.5 py-1">
                   {p.tag}
                 </span>
               </div>
