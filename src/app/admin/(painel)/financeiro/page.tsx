@@ -178,13 +178,8 @@ export default async function FinanceiroPage() {
           <div className="space-y-3">
             <QuickLink
               href="/admin/financeiro/faturas"
-              title="Todas as Faturas"
-              description="Visualizar e gerenciar todas as faturas"
-            />
-            <QuickLink
-              href="/admin/financeiro/faturas/nova"
-              title="Nova Cobrança"
-              description="Criar cobrança manual para um cliente"
+              title="Faturas e Cobranças"
+              description="Ver todas as faturas e criar cobrança no Asaas (PIX + e-mail)"
             />
             <QuickLink
               href="/admin/financeiro/inadimplencia"
